@@ -5,6 +5,8 @@
 //! feature `fuzzing`): each reads one body and checks what holds of every
 //! body it takes.
 
+use alloc::vec::Vec;
+
 /// A record's body: one it takes is in the strict form.
 pub fn record_body(data: &[u8]) {
     if crate::authority::Body::parse(data).is_ok() {

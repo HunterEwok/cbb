@@ -1,0 +1,20 @@
+# The 0.6 format's frozen vectors (tools/formatfreeze). Written by
+# "go run ./tools/formatfreeze -write"; once the state is "frozen", a listed
+# vector changes only with "-write -break REASON", which counts a format break.
+state: draft
+breaks: 0
+break: -
+
+sha256 d98814d61fde9829c52024be61fc560a1718911a399cb3ccb50df78e7f969938 commands.json
+sha256 afb9014ac59bc8ab08252d7241d5a550404581272c5940d51e40ca2e3ead2f61 container.json
+sha256 7b11e171f70098a0cf9ed1967fc01e696c7f15bea84fdcf3de37c52c04f60f06 copy.json
+sha256 69d6774a79d936e001e0b349527f22b830ef2817f670029d750a996e731fa8c9 credentials.json
+sha256 c2b9e6bfd6a61499d17ba09646f577540b4fab0ee9484bf9ce25a6420b9ee5ff frames.json
+sha256 44a17e19f5b7cb621c5c4eeac0618eb4a121186d0931ec371eb377d9e693ce45 grants.json
+sha256 e7c2f563f9f02f57bc7c89d41ad72f039186ea224d46ff3bcf832b2bb7c29577 keys.json
+sha256 6b2c12aa8e536221b8c012ffa397873c74805bebb44171a6a2650a76346695c9 messages3.json
+sha256 782da9622ada1c1c187da1bad5ece62e31e405f3f0dfb3e3a584443feb158027 profile.json
+sha256 be04d7e46087b42dbbca662216a1fabb3e477e82e3d03cd10a32cef13d849772 records.json
+sha256 039f007060fef5b8b4f7eabc16aa8bce95639f1e9c3354e69f7c7a60f6651568 statements.json
+sha256 411e721fb71475c52bed42543cdffccd733a37bf4caa0493db9c43359614771a wave4-mutants.json
+sha256 7fc2a1e28f3d91e47fd75f9480eaee7aad0e993d69fbf0367d6f3aac703b77a0 wave4.json

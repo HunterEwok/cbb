@@ -167,6 +167,7 @@ a key is not P-256	ключ не P-256
 %s is not signed by the project's key; not installing	%s не подписан ключом проекта; установка отменена
 keys.json holds a key whose use is empty; not installing	в keys.json ключ с пустым назначением; установка отменена
 checking for administrator rights	проверка прав администратора
+making a private folder for the download	создание закрытой папки для загрузки
 run it in a PowerShell opened with "Run as administrator"	запустите в PowerShell, открытом через «Запуск от имени администратора»
 finding the architecture	определение архитектуры
 finding the latest release	поиск последнего выпуска
@@ -255,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	у cbb для MIP
 --no-helper is for Linux	--no-helper только для Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	здесь cbb работает со своим помощником, который может хранить его ключи; без помощника cbb не сможет ими пользоваться. Сначала удалите его: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput требует помощника cbb, в котором работает коннектор рабочего стола
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	действия polkit для подтверждения админ-действий не записаны; приложения будут спрашивать пароль администратора
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	права для подтверждения админ-действий не записаны; приложение для Mac будет спрашивать пароль администратора

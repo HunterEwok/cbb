@@ -11,6 +11,8 @@ import "devices.js" as Devices
 // many are online, and the error colour when one inside is frozen.
 BackgroundItem {
     id: tile
+    // On a big screen a collection opens as the sidebar's section.
+    property var open: null
     property var collection // an item of App::arranged of kind "collection"
     readonly property bool attention: tile.collection.devices.some(function(d) { return d.frozen })
 
@@ -67,5 +69,5 @@ BackgroundItem {
         }
     }
 
-    onClicked: pageStack.push(Qt.resolvedUrl("CollectionPage.qml"), { collection: tile.collection.id })
+    onClicked: tile.open ? tile.open(tile.collection.id) : pageStack.push(Qt.resolvedUrl("CollectionPage.qml"), { collection: tile.collection.id })
 }

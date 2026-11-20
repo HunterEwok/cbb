@@ -8,25 +8,29 @@ files. For developers, the full comparison with its reasons is in
 ## What each device can do
 
 "Computers" are Linux, Windows and FreeBSD, and routers with OpenWrt or OPNsense, which run
-the same full member without a desktop.
+the same `cbb` without a desktop. A small device, a Raspberry Pi or a router, runs it too,
+usually without `cbb-helper` beside it: it then keeps its keys in files, so it is the root or
+an admin only where the group's [level](../guide/keys.md#the-three-levels) allows keys in files
+(a hub that only passes copies on needs none), and it has no Bluetooth keyboard or TV remotes; on MIPS routers it has no sync away from home yet
+([small devices](../../member/README.md)).
 
-| | Computers | Mac | Android | iPhone | Lite member |
-|---|---|---|---|---|---|
-| Sync the clipboard at home | yes | yes | yes | yes, with one gesture | yes (`cbb copy`, `paste`, `watch`) |
-| Gets copies without a tap | yes | yes | yes | no: iOS allows it only in front | yes |
-| Sends copies without a tap | yes | yes | with the accessibility service | no: one gesture | yes |
-| Images and files | yes, on a desktop | yes | yes | yes, while the app runs | no: it passes them on and takes their text |
-| Hold the group (root) | yes, [without the app](../guide/without-app.md) | yes | yes | yes | no |
-| Be an admin | yes | yes | yes | yes | no |
-| Be the hub | yes | yes | while the app is open, or in the background with "Keep the hub running in the background" | while the app is open | no |
-| Sync away from home | yes | yes | yes, also in the background | while the app is open | yes, plain WireGuard only; not on MIPS routers |
-| AmneziaWG and VLESS | yes | yes | yes | yes | no |
-| Join from afar by an invitation | yes | yes | not yet | not yet | no |
-| Use a blind relay | yes | yes | yes | yes | no |
-| Take remote paste | yes: X11, Wayland, GNOME and KDE, Windows, tmux, the text console | through the Mac app | yes, with the accessibility service | no: iOS allows no app to type into another | yes: tmux, the text console |
-| Take quick actions | yes, the presets and your own | yes | no | no | `reboot`, `cancel-shutdown`, `restart` |
-| Device keys | in the TPM on Linux when there is one, else in files | in files | in the security chip | in the Secure Enclave | in files |
-| Update itself ([how](../guide/install.md#updating)) | yes (`cbb update`, once a day if turned on); Homebrew, winget, Docker and packages through their own tools | yes, or Homebrew | the APK from a release, in Settings | through its store, once it is in one | yes, on Linux and OpenWrt |
+| | Computers | Mac | Android | iPhone |
+|---|---|---|---|---|
+| Sync the clipboard at home | yes | yes | yes | yes, with one gesture |
+| Gets copies without a tap | yes | yes | yes | no: iOS allows it only in front |
+| Sends copies without a tap | yes | yes | with the accessibility service | no: one gesture |
+| Images and files | yes, on a desktop | yes | yes | yes, while the app runs |
+| Hold the group (root) | yes, [without the app](../guide/without-app.md) | yes | yes | yes |
+| Be an admin | yes | yes | yes | yes |
+| Be the hub | yes | yes | while the app is open, or in the background with "Keep the hub running in the background" | while the app is open |
+| Sync away from home | yes | yes | yes, also in the background | while the app is open |
+| AmneziaWG and VLESS | yes | yes | yes | yes |
+| Join from afar by an invitation | yes | yes | not yet | not yet |
+| Use a blind relay | yes | yes | yes | yes |
+| Take remote paste | yes: X11, Wayland, GNOME and KDE, Windows, tmux, the text console | through the Mac app | yes, with the accessibility service | no: iOS allows no app to type into another |
+| Take quick actions | yes, the presets and your own | yes | no | no |
+| Device keys | in the TPM on Linux when there is one, else in files | in files | in the security chip | in the Secure Enclave |
+| Update itself ([how](../guide/install.md#updating)) | yes (`cbb update`, once a day if turned on); Homebrew, winget, Docker and packages through their own tools | yes, or Homebrew | the APK from a release, in Settings | through its store, once it is in one |
 
 Items that password managers mark as secret are not synced automatically. Each remote paste
 target and each quick action is off until the device's own user turns it on.
@@ -35,7 +39,7 @@ target and each quick action is off until the device's own user turns it on.
 
 | Port | Who listens | From where | What for |
 |---|---|---|---|
-| TCP 8764 | every computer and lite member | the home network | the devices' connections |
+| TCP 8764 | every computer and small device | the home network | the devices' connections |
 | UDP 5353 | every device | the home network | mDNS, to find each other |
 | UDP 8764 | the hub | the internet | the group's tunnel, with a router port forward |
 | UDP and TCP 8764 | a forwarder or a relay | the internet | [your own servers](../admin/self-hosting.md) |
@@ -44,7 +48,7 @@ target and each quick action is off until the device's own user turns it on.
 | TCP 6466 and 6467 | an Android TV or a Google TV | a computer at home | its remote and its pairing, for [`cbb remote`](cli.md) |
 | TCP 49153 | an Apple TV | a computer at home | the Companion protocol, its pairing and its remote, for [`cbb remote`](cli.md) |
 | TCP 8060 | a Roku | a computer at home | its External Control Protocol, for [`cbb remote`](cli.md) |
-| TCP 8769 | `cbb next link` on a ZX Spectrum Next's Pi | the loopback address only | the lite member's connections through the Next's ESP8266 |
+| TCP 8769 | `cbb next link` on a ZX Spectrum Next's Pi | the loopback address only | the connections of `cbb` on that Pi through the Next's ESP8266 |
 
 The member port can be changed when installing (`--port`, [settings](config.md)). The TVs' ports are
 on the TV; a computer only connects to them. The installers ask before they open any of the
@@ -59,7 +63,6 @@ others ([the firewall](../guide/install.md#the-firewall)).
 | OpenWrt | `/etc/cbb/state`, kept by sysupgrade | `/etc/config/cbb` | `logread -e cbb` |
 | Mac | `/Library/Application Support/cbb/state` | `/etc/cbb` | `/Library/Logs/cbb/service.log`, the agent's `~/Library/Logs/cbb/agent.log` |
 | Windows | `ProgramData\cbb\state` | the service's registry key ([settings](config.md#settings-files)) | `ProgramData\cbb\logs\service.log`, the agent's `LocalAppData\cbb\agent.log` |
-| Lite member | `/var/lib/cbb`; on OpenWrt `/etc/cbb/state` | `/etc/cbb` | `journalctl -u cbb`; on OpenWrt `logread -e cbb` |
 
 Keep the keys out of unencrypted backups, and encrypt the disk (LUKS, FileVault,
 BitLocker): whoever copies them can act as that device until you remove it from the group.

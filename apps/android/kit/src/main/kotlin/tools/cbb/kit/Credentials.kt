@@ -398,6 +398,19 @@ class CredentialStore(private val groupCA: ByteArray) {
     class Registration(val credentials: List<ServerCredentials.Credential>, val roots: List<ByteArray>, val names: Map<String, String>)
 
     /**
+     * What a hub registers with at its forwarder (docs/protocol.md,
+     * section 18): the hubs' credential, once it lists the hub's server
+     * key, which hashes to mine, and while it and the period of the current
+     * root, root, last; null until then.
+     */
+    fun hubRegistration(root: ByteArray, mine: ByteArray, nowMS: Long): List<ServerCredentials.Credential>? {
+        val (_, p) = period(root) ?: return null
+        val (hc, hb) = hubs() ?: return null
+        if (nowMS >= p.expiresMS || nowMS >= hb.expiresMS || hb.hubs.none { it.contentEquals(mine) }) return null
+        return listOf(hc)
+    }
+
+    /**
      * The registration with these credentials for the device whose server
      * key hashes to mine, or null until the members' credential lists it;
      * root is the current root's key, records the group's records.

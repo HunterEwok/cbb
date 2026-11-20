@@ -25,6 +25,7 @@ USE_PROCD=1
 
 PROG=/usr/bin/cbb
 RUNDIR=/var/run/cbb
+IFLIST=/var/run/cbb.interfaces
 STATEDIR=/etc/cbb/state
 HUBSTATE=/etc/cbb/firewall.hub
 TIMEFLAG=/var/state/cbb.time
@@ -114,9 +115,11 @@ start_service() {
 	chmod 0700 "$STATEDIR"
 
 	# cbb pair reads the list here; it is not started by
-	# procd.
-	echo "$devices" >"$RUNDIR/interfaces"
-	chmod 0644 "$RUNDIR/interfaces"
+	# procd. Root writes it in a folder only root may change, never in
+	# the service's own.
+	rm -f "$RUNDIR/interfaces"
+	echo "$devices" >"$IFLIST"
+	chmod 0644 "$IFLIST"
 
 	procd_open_instance
 	procd_set_param command "$PROG" service

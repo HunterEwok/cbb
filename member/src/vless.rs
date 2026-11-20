@@ -255,10 +255,10 @@ fn tls_config() -> Result<ClientConfig> {
     roots.add_parsable_certificates(certs);
     // The time-scaled bench build only, never a release: the CA of the
     // bench's web server in front of a forwarder too, whose certificate no
-    // public CA signs (docs/testbench-catalogue.md, W46). A file that is not
+    // public CA signs (docs/maintainers/testbench-catalogue.md, W46). A file that is not
     // there yet is skipped.
     #[cfg(feature = "benchtime")]
-    if let Some(file) = std::env::var_os("CBB_TEST_XHTTP_CA")
+    if let Some(file) = crate::testbuild::env_os("CBB_TEST_XHTTP_CA")
         && let Ok(extra) = read_roots(std::path::Path::new(&file))
     {
         roots.add_parsable_certificates(extra);
@@ -661,3 +661,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/vless.rs"]
+mod net_tests;

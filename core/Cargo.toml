@@ -28,6 +28,10 @@ web = ["tls", "dep:crypto-bigint", "dep:p384"]
 # fuzzing opens the readers of network input to the cargo fuzz targets in
 # fuzz/; nothing else turns it on.
 fuzzing = []
+# testkit opens the generator of groups at their ceilings (src/groupgen.rs) to
+# the tests in tests/, the board's measurements and the fuzzers; never a
+# release's.
+testkit = []
 # benchtime is the bench's time-scaled build (src/benchtime.rs), never a
 # release's.
 benchtime = []
@@ -63,9 +67,12 @@ subtle = { version = "2.6", default-features = false }
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
 x25519-dalek = { version = "3", default-features = false, features = ["static_secrets", "zeroize"] }
 x509-cert = { version = "0.3", default-features = false, features = ["hazmat"] }
-zeroize = { version = "1.8", default-features = false, features = ["alloc", "serde"] }
+# Wiping keys and secret texts from memory when they are dropped.
+zeroize = { version = "1.9", default-features = false, features = ["alloc", "serde"] }
 
 [dev-dependencies]
+# The tests in tests/ use the generator of groups (feature testkit).
+cbb-core = { path = ".", features = ["testkit"] }
 # Property tests (tests/props.rs): random inputs against the parsers and the
 # rules' promises, such as the order of records not changing the state.
 proptest = { version = "1", default-features = false, features = ["std"] }

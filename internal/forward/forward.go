@@ -26,9 +26,7 @@ import (
 	"container/list"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -126,7 +124,6 @@ type Forwarder struct {
 	netScans  *lru[scanKey, *bucket]          // NetworkScanRate
 	from      *budget.Count                   // registrations held or being set up, by source
 	setting   int                             // registrations being set up
-	pathKey   [32]byte                        // keys the groups' XHTTP paths, from the forwarder's key
 	overVLESS int                             // registrations over VLESS, held or being set up
 	vlessSet  int                             // of them, being set up from an address not known
 	mask      [32]byte                        // the key of the hellos' mask, given to every hub
@@ -387,12 +384,6 @@ func Listen(cfg Config) (*Forwarder, error) {
 		f.vlessCfg, f.byVLESS, f.vlessUser = v, map[string]*reg{}, f.vless.User
 	}
 	f.tlsCfg = f.serverTLS(cfg.Cert)
-	if der, err := x509.MarshalPKCS8PrivateKey(cfg.Cert.PrivateKey); err == nil {
-		f.pathKey = sha256.Sum256(append([]byte("cbb forwarder group paths\x00"), der...))
-	} else if _, err := rand.Read(f.pathKey[:]); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("forward: %w", err)
-	}
 	return f, nil
 }
 

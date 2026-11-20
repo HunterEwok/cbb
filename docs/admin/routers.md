@@ -21,7 +21,7 @@ mistake.
 | Linux, macOS | `CBB_INTERFACES` in `/etc/cbb/cbb.env` | every interface |
 
 `CBB_INTERFACES` takes interface names separated by commas or spaces (`igb1,igb1_vlan20`).
-Name it on any machine with a guest, IoT or internet interface. A full member also answers
+Name it on any machine with a guest, IoT or internet interface. A member also answers
 only on the home networks it knows ([hardening](hardening.md)); the list of interfaces is
 the firmer limit, as it does not depend on what a network looks like.
 
@@ -119,7 +119,7 @@ deletes them too.
 |---|---|---|---|
 | The service runs | `/etc/init.d/cbb status` | `service cbb status` | `systemctl status cbb` |
 | The group and the devices it sees | `cbb status` | `cbb status` | `cbb status` |
-| The interfaces it works on | `cat /var/run/cbb/interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
+| The interfaces it works on | `cat /var/run/cbb.interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
 | The firewall rules | `nft list ruleset \| grep cbb`; empty with only `lan`, which needs none | `pfctl -a cbb -s rules`, or `ipfw set 17 show` | as [the installer](../guide/install.md#the-firewall) reports them |
 | The log | `logread -e cbb` | `grep cbb /var/log/messages` | `journalctl -u cbb` |
 

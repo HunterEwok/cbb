@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The long times of the bench's time-scaled build (docs/testbench-catalogue.md,
+//! The long times of the bench's time-scaled build (docs/maintainers/testbench-catalogue.md,
 //! section 0.1, "time"), as Go's internal/benchtime. Built with the feature
 //! `benchtime`, never for a release, the certificates' and credential
 //! periods' times run `scale()` times faster, so expiry and renewal play out

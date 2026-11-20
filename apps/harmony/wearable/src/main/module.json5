@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+// The watch's CBB (docs/apps.md, "HarmonyOS watches"): the same app as the
+// phone's, a module for watches, which works only through the phone.
+{
+  "module": {
+    "name": "wearable",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "WearAbility",
+    "deviceTypes": ["wearable"],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "abilities": [
+      {
+        "name": "WearAbility",
+        "srcEntry": "./ets/wearability/WearAbility.ets",
+        "description": "$string:module_desc",
+        "icon": "$media:icon",
+        "label": "$string:app_name",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": true,
+        "skills": [
+          {
+            "entities": ["entity.system.home"],
+            "actions": ["action.system.home"]
+          }
+        ]
+      }
+    ],
+    // The phone's CBB, which Wear Engine lets this app talk to (common/Wear.ets);
+    // Wear Engine also wants the app's client_id from AppGallery Connect here,
+    // added with the signing config.
+    "metadata": [
+      { "name": "wearEngineRemoteAppNameList", "value": "tools.cbb.harmony" }
+    ]
+  }
+}

@@ -167,6 +167,7 @@ a key is not P-256	una clave no es P-256
 %s is not signed by the project's key; not installing	%s no está firmado con la clave del proyecto; no se instala
 keys.json holds a key whose use is empty; not installing	keys.json contiene una clave con uso vacío; no se instala
 checking for administrator rights	comprobando los derechos de administrador
+making a private folder for the download	creando una carpeta privada para la descarga
 run it in a PowerShell opened with "Run as administrator"	ejecútelo en un PowerShell abierto con "Ejecutar como administrador"
 finding the architecture	buscando la arquitectura
 finding the latest release	buscando la última versión
@@ -255,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb para MIPS aú
 --no-helper is for Linux	--no-helper es solo para Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	aquí cbb funciona con su ayudante, que puede guardar sus claves; sin él cbb no puede usarlas. Elimínalo primero: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput necesita el ayudante de cbb, que ejecuta el conector del escritorio
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	no se escribieron las acciones de polkit que confirman las acciones de administración; las aplicaciones piden en su lugar la contraseña del administrador
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	no se escribieron los derechos que confirman las acciones de administración; la app de Mac pide en su lugar la contraseña del administrador

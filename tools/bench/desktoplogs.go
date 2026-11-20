@@ -40,7 +40,7 @@ func deviceLogs(ctx context.Context, r *Report, devices []*Device) {
 				}
 				return nil
 			})
-		case "linux", "linux-lite":
+		case "linux":
 			r.Do(p+d.Name+"/journal", func() error {
 				out, err := Run(ctx, d, "sudo -n journalctl -u cbb -n 20 --no-pager -o cat", "")
 				if err != nil {

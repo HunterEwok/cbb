@@ -23,6 +23,12 @@ func TestEnclave(t *testing.T) {
 		}
 		t.Skipf("set %s=1 on a Mac with a Secure Enclave", testEnv)
 	}
+	checkKeys(t)
+}
+
+// checkKeys makes a key, signs with it, loads it again from its blob and
+// signs with that; a damaged blob does not load.
+func checkKeys(t *testing.T) {
 	k, err := New()
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +79,11 @@ func TestSeal(t *testing.T) {
 		}
 		t.Skipf("set %s=1 on a Mac with a Secure Enclave", testEnv)
 	}
+	checkSeal(t)
+}
+
+// checkSeal seals a secret and opens it again; a damaged box does not open.
+func checkSeal(t *testing.T) {
 	secret := []byte("the WireGuard key, 32 bytes long")
 	b, err := Seal(secret)
 	if err != nil {

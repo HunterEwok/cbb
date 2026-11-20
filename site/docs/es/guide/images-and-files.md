@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6f28736f9b01 -->
+<!-- source: d53ae85ecc83 -->
 # Imágenes, archivos y texto con formato
 
 Para quien copia algo más que texto sin formato. Una imagen, archivos de un gestor de archivos o texto con su formato, copiados en un dispositivo, pueden pegarse en los demás tal cual.
 
 ## Qué va adónde
 
-| Lo copiado | Ordenadores con escritorio | Teléfonos | Un ordenador sin escritorio | Miembro ligero |
-|---|---|---|---|---|
-| Texto con su formato (un navegador, un programa de ofimática) | se pega con su formato | se pega como texto sin formato | texto sin formato | texto sin formato |
-| Una imagen (PNG, JPEG; el TIFF de un Mac y el HEIC de un teléfono se convierten) | se pega como imagen | el botón de la app la pega; también llega sola, en el iPhone mientras la app se ejecuta | solo su texto; `cbb paste -o DIR` guarda la imagen | solo su texto; transmite la imagen |
-| Archivos y carpetas | se pegan como archivos copiados | la app los guarda: en Descargas en Android, en la carpeta de la app en Archivos en el iPhone | `cbb paste -o DIR` los guarda | los transmite, no guarda ninguno |
+| Lo copiado | Ordenadores con escritorio | Teléfonos | Un ordenador o dispositivo pequeño sin escritorio |
+|---|---|---|---|
+| Texto con su formato (un navegador, un programa de ofimática) | se pega con su formato | se pega como texto sin formato | texto sin formato |
+| Una imagen (PNG, JPEG; el TIFF de un Mac y el HEIC de un teléfono se convierten) | se pega como imagen | el botón de la app la pega; también llega sola, en el iPhone mientras la app se ejecuta | solo su texto; `cbb paste -o DIR` guarda la imagen |
+| Archivos y carpetas | se pegan como archivos copiados | la app los guarda: en Descargas en Android, en la carpeta de la app en Archivos en el iPhone | `cbb paste -o DIR` los guarda |
 
 Una copia con un texto y una imagen se envía como texto. Un cortar en un gestor de archivos se toma como una copia: no se borra nada en ningún sitio.
 

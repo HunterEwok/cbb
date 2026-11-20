@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-// A run's numbers and its repeated cases (docs/testbench.md, "Trends and
+// A run's numbers and its repeated cases (docs/maintainers/testbench.md, "Trends and
 // flaky cases"): the load cases record what they measure as metrics, which
 // -report writes to metrics.json and -baseline compares with an earlier
 // run's; -repeat runs a suite several times and lists the cases that both

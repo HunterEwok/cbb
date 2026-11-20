@@ -3,8 +3,8 @@
 
 For engineers and anyone binding the Rust core into another program: the one call through
 which every program uses the core's rules (`cbb_core::api`, `core/src/api.rs`). Every
-program reaches it through the same C functions of `ffi/`: the phone kits link them, Go
-through cgo or wasm. The rules themselves are in
+program reaches it through the same C functions of `ffi/`, which the phone kits link; the Go
+programs do not link it. The rules themselves are in
 [records-v2.md](records-v2.md).
 
 ## Requests and answers
@@ -37,7 +37,7 @@ bytes, also bytes that are not a request. A change an older caller would misread
 `cbb_call` takes the request's bytes and returns the answer's, which the caller gives back
 with `cbb_free`; `cbb_abi` gives the ABI. `ffi/bind.sh` builds the library for the
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
-`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
+`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call.
 
 Built with the feature `join` (only the Aurora app's library, `bind.sh aurora`), the library
 also lets a phone join by its QR code with a key the core does not hold, the Aurora app's key
@@ -65,7 +65,7 @@ moves the bytes.
 ### The member
 
 Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
-Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
+Aurora apps run it), the library runs `cbb`'s own node in the app's process once the phone
 is in a group (`ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
@@ -85,8 +85,20 @@ renewed the certificate or a takeover made a new root, which the app keeps in it
 the core keeps no identity file for a key it does not hold; `mute`, an admin muted the phone or
 ended its mute, with how long it lasts and who. The node signs its TLS handshakes
 and its copies through the callback and presents itself as a phone (role `phone`, key store
-`hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
+`hardware`, or `file` when the request's `key_store` says so), its hellos offering the
+request's `admin_key` (a SubjectPublicKeyInfo, optional) for the root to make it an admin; it dials the members mDNS finds
 (`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
+
+`cbb_member_servers` makes the member serve the group's servers itself, for an app that does
+not run them on its own (the Harmony app; the iPhone and Android apps do it in their kits): it
+keeps the group's server credentials (protocol.md, section 18) in `credentials.json`, takes the
+`credentials` and `hubs` messages in place of the app, refreshes them when the records change and
+every 12 hours, and runs the phone as a hub or at the blind relay (the ops `hub`, `hub_off`,
+`relay` and `servers`). Its server and period keys are the app's, through a `cbb_keys_fn`
+callback named `server TAG` or `period TAG`: op 0 answers whether the key is there, op 1 makes
+it if needed and gives its uncompressed P-256 point, op 2 signs a SHA-256 digest (DER), op 3
+keeps only the keys the request lists, one name a line; it returns 0, or a code the member
+names in its error.
 
 `cbb_member_call` asks it everything else, a request `{"op", "args"}` and its answer `{"ok"}`
 or `{"error"}` as `cbb_call`'s. `fetch`, `command` and `wait` wait for the network, so the app
@@ -131,14 +143,20 @@ after the header, and an operation that answers more than once marks the last an
 | `peers` | phone | `all` (optional: those that carry records only too) | `{"peers"}`: `[{device, name, role, caps, os, key_store, mode, muted, muted_for_ms, actions, info, admin_key, tunnel_key, tunnel_psk, reach, records_only, features, chain}]`, as their hellos and reach messages present them, `chain` the certificates the handshake checked, leaf first |
 | `answer` | phone | `token` (a `command` event's), `status` (`done`, `refused` or `failed`), `reason` | `{}`: the result the command's sender gets |
 | `check_command` | phone | `command` (a `command` event's record) | what `group_command` answers for it against the node's records, opened with the phone's key for sealed messages, and for a paste `clean`: its text as it may go in (newlines and tabs, no other control characters or terminal escapes); a command refused is an error. The app keeps the replay cache and its own switches |
+| `offer_admin_key` | phone | `key` (the phone's admin key, a SubjectPublicKeyInfo in base64, or none) | `{}`: what the hellos offer the root from the next connection on: the phone's admin key while it is no admin, none once it is one |
+| `take_admin_ca` | phone | `key` (the admin CA of the root's `admin` message, DER in base64) | `{}` once the member checked it: for the offered admin key, naming this phone, under the group's current root, not refused by the records; the hellos then offer the key no more. An error names what failed |
 | `tunnel_key` | phone | `key`, `psk` (32 bytes each, base64), or neither while sync away from home is off | `{}`: what the hellos offer the group's hubs; the phone connects to the members again |
 | `evidence` | phone | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `disconnect` | phone | `device` | `{}`: the connection to it ends with a goodbye; it is dialed again later |
 | `records` | phone | none | `{"records"}` |
 | `alerts` | phone | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
-| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
+| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day (the Aurora app; the iPhone and Android apps do it with their own tunnels and the tunnel's `guest_start`); only with the feature `tunnel` |
+| `servers` | phone | none | `{"period_due"}`: whether the group's server keys need a period the root key signs (protocol.md, section 18), after `cbb_member_servers`; the app of a root phone then signs it with `cbb_member_manage`'s `period` |
+| `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off` for `hub`; `anyway` for `hub_off` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, the root or an admin, is one of the group's hubs with the member's own WireGuard (`member/src/away/serve.rs`), registered with the forwarder, or stops being one; `hub_off` refuses while the group has no other hub unless `anyway` (protocol.md, section 11, "Stopping a hub"); only after `cbb_member_servers` and with the feature `tunnel` (the Harmony app; the iPhone and Android apps run their own hub through `cbb_tunnel`) |
+| `relay` | phone | `relay` (`host:port`, empty to leave it), `key` (its pin, `default` for the project's) | `{"away"}` with `relay` `{endpoint, connected, online, error, detail}`: the phone meets the group at the blind relay in place of a hub, registered with the group's server credentials (protocol.md, sections 14 and 18), once the app showed what a relay learns; leaving it turns sync away from home on again with new keys; only after `cbb_member_servers` and with the feature `tunnel` |
+| `attest_status`, `attest` | phone | `keys` and `status` for `attest_status`: the mirror's `keys.json` and `attest-status.json` as the app fetched them | `{"pending", "revoked"?}`: `attest_status` takes the revocation list of Android attestations when it checks out against the release keys and is not older than the one kept (`attest-status.json`, protocol.md section 17, "Revoked attestations"), and answers how many certificates it revokes; `pending` is how many Android peers' evidence waits for the root key, which `cbb_member_manage`'s `attest` records (`member/src/phone_attest.rs`, the core's `cbb_core::attest`); only with the feature `tunnel` |
 | `add_records` | phone | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | phone | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | phone | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
@@ -174,11 +192,13 @@ after the header, and an operation that answers more than once marks the last an
 | `entries_get` | computer | none | payload = the signed entry points this device holds, in the same JSON, or an error when it holds none or they have expired: `cbb global entries` shows them and `export` gives them as a string |
 | `release_want` | computer | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (protocol.md section 16). Only on the admin socket |
 | `update_way` | computer | none | payload = the VLESS settings (protocol.md section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (protocol.md section 16). Only on the admin socket |
+| `confirm` | computer | `value`: the operation to confirm | `{name, value}`: on Windows, `kept` while this user's last confirmation lasts (five minutes, not for what is confirmed each time), `register` when the user has no Windows Hello key registered, else `sign` with a 32-byte challenge in base64 in `value`, good for 120 seconds, for this user and this operation; elsewhere an error (protocol.md section 8) |
+| `confirm_key` | computer | `name`, `value`: a user's SID and the public key (PKCS #1 RSAPublicKey, base64) of the user's Windows Hello key | `{}`: the key that confirms this user's admin actions on Windows. Only on the admin socket |
 | `release_get` | computer | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{}`: the archive of the held release, from this device or fetched from its peers |
 | `watch` | computer | `kind`, `via`, `inject` (the remote paste target the watcher offers: `desktop`, `tmux` or `console`), `paste_only` (it holds no clipboard and only pastes, like the Mac app), `act` (it runs the quick actions in its session), `images`, `files`, `html` (it writes copies with images, files, formatted text) + payload = what the clipboard holds now (may be empty) | an answer `{"ok":{}}` without `done`; then the watcher protocol (protocol.md, section 8) |
 | `away` | computer | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate_off?, vless_off?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (protocol.md section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (protocol.md section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (protocol.md section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (protocol.md section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, protocol.md section 14), in place of a hub or its offer (protocol.md section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (protocol.md section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; with `hub`, `obfuscate_off` turns off the AmneziaWG a hub speaks by default and `vless_off` the VLESS it asks a forwarder for (protocol.md section 11; `obfuscate_off` goes with `vless_off` where there is a forwarder), and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (protocol.md section 11, "Stopping a hub"). The members connected learn the change from a `presence` message, without connecting again (protocol.md section 4, "Presence") |
 | `remove` | computer | `device`: a device ID, or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; protocol.md section 10, "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`take_over`) |
-| `make_admin` | computer | `device`: a device ID, or a name (case-insensitive); `allow_file_key`: the user agreed to the warning about an admin key in a file | `{name}`, the device's name, or an error. Only on the root computer: makes the connected member with `admin` an admin (protocol.md section 10, "Admins") |
+| `make_admin` | computer | `device`: a device ID, or a name (case-insensitive); `allow_file_key`: the user agreed to the warning about an admin key in a file | `{name}`, the device's name, or an error. Only on the root computer: makes the connected phone, or member with `admin`, an admin (protocol.md section 10, "Admins") |
 | `take_over` | computer | `device`: the lost root, a device ID or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it (protocol.md section 10, "Handing the group over") |
 | `takeover_delay` | computer | `{value}`: a duration from `0s` to `168h` | `{}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
 | `key_level` | computer | `{value}`: `proven`, `hardware` or `files` | `{below}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (protocol.md section 17) |
@@ -193,17 +213,18 @@ after the header, and an operation that answers more than once marks the last an
 A phone's node passes on a command for another device when it is connected to it, as
 protocol.md section 15 says: once until it expires, never one that has expired or claims to live
 longer than a command may. For itself it carries out the `mute` and `unmute` commands an
-admin sends, keeps both in `mute.json` as the lite member does, and tells the app (the `mute`
-event); every other command for the phone goes to the app as a `command` event, as the lite
-member refuses it. A phone takes tunnel offers and hub shares only from a device the records
+admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mute`
+event); every other command for the phone goes to the app as a `command` event, as `cbb`
+refuses it. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
-lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
+`cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
-listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
+listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the root makes an admin
+with the admin key its hellos offer, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
 root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 
@@ -225,13 +246,16 @@ device, its admin key among them; not the phone itself, nor the root's phone, wh
 over instead), a new name (a device record like its newest; an admin renames only a device the
 root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
 the member adds to its records and sends to the group, or a mute, an unmute or a turn of the
-device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a command sealed
+device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a remote paste
+(`paste`: `method` `paste` or `type`, `kind` `text`, `secret` or `media`, `text` cleaned as
+`cbb paste -on` cleans it, or the ID of the media copy `copy_media` made just before, and
+`enter`) or `paste_off`, a command sealed
 to the device's key when its record names one, which the member sends and whose result it
-answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
+answers. As the root it makes a connected phone or computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it
 renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
 phone's own, as the phone kits do when a peer connects; as the current root, also each connected
-admin's CA from an earlier root, as after a takeover. It takes the group over as the computers'
+admin's CA from an earlier root, as after a takeover. As the root, after `cbb_member_servers`, it signs the next period of the group's server credentials (`period`, protocol.md section 18) with the root key the request's `public` names, and answers `{"period_due"}`. As the root it also checks the evidence the Android peers sent (`attest`, `cbb_core::attest`, the same checks as Go's, the Swift and Kotlin kits', against `testdata/interop/go-attest.json`) with the revocation list the app handed in, records what each shows in its device record, and answers `{"recorded", "pending"}`. It takes the group over as the computers'
 service does (`cbb_core::takeover`): `root_ca` makes a root CA for a new key of the phone (on
 Aurora its admin key), which the app keeps before the claim; `take_over` (from the lost root
 `device`), `take_handed_over` (the root handed the group to this admin) or `recover` (signed with
@@ -267,6 +291,32 @@ records only and checks them before anything is signed, and answers `{"device", 
 manage then claims the group with `recover_with_sheet` (`sheet`, `root_ca`): the sheet's key signs
 the claim in the core and is not kept, and `finish_takeover` goes on as for any claim.
 `TestFFIPhoneRestore` restores a computer's group whose root was lost.
+
+An app without a PIV of its own (the HarmonyOS app) keeps the recovery key on a YubiKey through
+the core (`ffi/src/piv.rs`, `cbb_member::piv`): `cbb_piv` runs one step of PIV and the app's
+`cbb_transmit_fn` carries each APDU to the card (over NFC, IsoDep), answered with its status
+word last. `make` (`pin`) checks the PIN, authenticates with the factory AES-192 management key
+and makes a key in the first free retired slot, `{"slot", "key"}` (its SubjectPublicKeyInfo,
+for manage's `recovery_for`); `put` (`slot`, `cert`) stores the admin CA the root signed as
+the slot's certificate; `issue` (`pin`, `public`) has each recovery key on the card issue a
+member certificate for the phone's member key, `{"keys": [{"slot", "admin_ca", "device",
+"cert", "public"}]}`, which `cbb_restore` takes as `card` in place of `sheet`, browsing then
+for any group; `sign` (`pin`, `slot`, `public`, `digest`) signs a digest. The claim
+(`recover`) is then signed by the card with `cbb_member_manage_card`: manage's request with the
+key's `pin`, `slot`, `admin_ca` and its point as `public`, the card's error answered when it
+refused. `TestFFIPhoneYubiKey` puts the key on a fake card in `phone-on-linux` and restores and
+claims a phone's group with it.
+
+A root phone makes its watch an admin with manage's `add_watch` (`key`, the watch's admin key
+as a SubjectPublicKeyInfo; `name`, `os`): the core issues the watch's admin CA and adds its
+`device` record (role `watch`, `cbb_core::manage::add_watch`) and answers `{"device",
+"admin_ca", "group", "signer"}`; `watch_actions` (`device`, nothing signed) answers what the
+watch may do to a device. The watch signs on itself: `cbb_member_manage_watch` takes the
+watch's `action` for `device`, its device ID as `watch`, its key's point as `public` and its
+`admin_ca`, checks the action against `watch_actions`, and has the app's `cbb_sign_body_fn`
+carry each record or command whole to the watch, which checks it before it signs
+(`ExternalKey::sign_data`, `ffi/src/watch.rs`). `TestFFIPhoneWatch` makes a watch an admin in
+`phone-on-linux` and turns remote paste off on the laptop and removes it from the wrist.
 
 An admin phone makes a remote invitation with `cbb_invite_new` (`ffi/src/invite.rs`): the
 request names the public point of the key it issues with and its admin CA (none on the root),
@@ -326,7 +376,7 @@ the core's.
 | `group_hub_peer` | the set's arguments, `device`, `chain` | `{"hub"}`: whether the device may be a hub of the group, whose offers a member keeps: the root, an admin, or a device that only passes copies on ([protocol.md](protocol.md), section 11, "Two kinds of hub") |
 | `group_seal_copy` | the set's arguments, `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `kind`, `via` (optional), `text`, `media` (a manifest, optional), `blob` (`{size, sha256}`, optional) and `key` (base64, 32 bytes, the key that sealed the blob; optional without a blob) | `{"event", "to_sign", "readers", "key"}`: the copy sealed to the readers the set names ([protocol.md](protocol.md), section 4, "Sealing" and "Readers"), without `sig`; the caller signs `to_sign` (base64) with its member key, ECDSA P-256 with SHA-256 in DER, and puts it in the event's `sig`. `key` comes back when the core made it. A copy that cannot be sealed is code 17 |
 | `group_check_copy` | the set's arguments, `event` (a copy as the member protocol carries it) | `{}` when the copy's certificate, its issuer, its origin's key and its signature check against the set, as a member checks a copy before it passes it on; code 17 with the reason otherwise |
-| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself (the Go service); the caller signs `to_sign` |
+| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself; the caller signs `to_sign` |
 | `copy_verdict` | `receives`, `kind`, `mark`, `unread`, `has_text`, `has_media`, `takes_media`, `held` (booleans, false when left out but `receives`), `age_ms`, `window_ms`, `secret_ttl_ms` | `{"verdict"}`: whether the group's current copy goes into the member's clipboard (`write`), or why not: `mode`, `unread`, `secret_gone`, `no_text`, `held` or `old` (`cbb_core::rule`; the cases of `testdata/interop/copy-verdicts.json`) |
 | `open_copy` | `event`, `me` (the reader's device), `secret` (base64, its secret for sealed messages) | `{"kind", "via", "text", "media", "key"}`: what the copy holds, and the copy's key (base64), which opens its blob; code 17 when it is not sealed to `me`, does not open or breaks a rule of its content. It does not check the origin |
 | `seal_segment`, `open_segment` | `key` (base64, the copy's key), `index` (from 0), `last` (the blob's last segment), `data` (base64: at most 64 KiB to seal, 65 552 bytes to open) | `{"data"}`: the segment sealed or opened ([protocol.md](protocol.md), section 4, "The blob"); a segment that does not open is code 17 |
@@ -422,10 +472,22 @@ which shows the report as it would go. After the user allowed twice, the dialog 
 `bug_report` builds the report from what the app gives: what broke, the versions of CBB and the
 system, the device's model and architecture, the day, and CBB's own log, at most 300 lines of
 400 bytes, the oldest going first until the report fits in 160 KiB. Every field and line is
-filtered: addresses (IPv4, IPv6, MAC), e-mail addresses, long numbers (codes), long hex
-(device ids, fingerprints), base64 that looks random (keys, secrets, invitations), the user's
-name in home folders and every word of `names` are replaced. Clipboard texts never reach the
-log. The report is sealed to the robot's public key (`crate::seal`, HPKE with X-Wing,
+filtered: addresses (IPv4, IPv6, MAC, also inside a word such as `peer=...` or a URL), host
+names of the home network (`.local`, `.lan`, `.box` and the like), e-mail addresses, long numbers
+(codes), long hex (device ids, fingerprints), base64 that looks random (keys, secrets,
+invitations), the value of a name's field in `key=value`, `key:value` or `key: value` (`ssid`,
+`host`, `peer`, `server`, `device`, `user` and the like), to the field's end (a comma,
+semicolon, bracket or quote, or the line's end), an address after any key
+(`addr:...`), every word in a script other than Latin (the programs log in English, so such a word is
+the user's), the user's name in home folders and every word of `names`, in any case and as a
+host name (`Office PC` also as `office-pc`), are replaced. A panic's details keep only the kind
+of its message as the standard library words it (`index out of bounds`, `called
+Result::unwrap() on an Err value`), never the values after it, and "a panic" for a message the
+program wrote itself; its file, line and thread stay. Clipboard texts never reach the log.
+The filter works on free text by patterns, not on fields the log names: a name logged without
+one of those keys and in none of those forms (`ssid HomeNet`, a bare host name) still passes.
+What keeps it out is that the programs log names only in such fields and pass every device
+name they know in `names`; logging by field is left for a later version. The report is sealed to the robot's public key (`crate::seal`, HPKE with X-Wing,
 HKDF-SHA256 and ChaCha20-Poly1305, associated data `cbb bug report v1`), so the server stores
 what it cannot read; the robot opens it elsewhere. Until the robot's key is in the build,
 nothing is posted and `action` is `skip`.
@@ -448,8 +510,13 @@ On cbb.tools, nginx (`packaging/linux/nginx-bug.conf`, a server block of its own
 client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.service`) on a
 loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
 the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
-and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
-that no app sends them again. The robot opens the reports elsewhere with its secret:
+and version are kept each day; the rest are answered as taken and dropped, so that no app sends
+them again. Past 5000 reports in a day, or 2 GiB kept in all, it answers 503, and the apps keep
+their reports and send them later. One IPv4 address or IPv6 /64 has at most 100 reports kept a
+day and one IPv6 /48 at most 500, past which it answers 503 too, so no one source fills the day;
+nginx hands cbb-bug the prefix in a header, which it counts in memory for the day and never
+writes. A day's reports are removed after 30 days. nginx allows each IPv4 address and each
+IPv6 /64 six reports a minute. The robot opens the reports elsewhere with its secret:
 `cbb-bug keygen SECRET` makes the key once (the secret stays on the robot's computer, the public
 key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
 reports copied from the server.
@@ -470,7 +537,7 @@ cases both give the same answer.
 ## The record set
 
 The calls whose names start with `group_` work on the set of records a member keeps, which the
-phones store as the records file the lite member writes (`cbb_core::group::Records`):
+phones store as the records file `cbb` writes (`cbb_core::group::Records`):
 `{"v": 2, "records": [{body, sig, chain}], "first_seen": [{record, ms}]}`. The caller keeps the
 file and passes it in each call, base64; a call that changes the set answers the new file,
 which the caller saves in place of the old one. So the phones hold no rule of the group in
@@ -561,12 +628,11 @@ in through a change of root).
 release files in section 16, manifests in section 7): the strict form of signed bodies, then
 each field against its row. A release file's body is refused above 256 KiB, as its envelope
 allows. It checks the body alone; the signature, the signer and the time are the caller's, or
-`group_command`'s for a command. Go calls it in a build that links the core, as the release
-builds do, and decodes the fields from the bytes it checked; a build without the core reads the
-bodies with Go's own code, which the strict vectors keep the same. The phone kits call it for
+`group_command`'s for a command. Go reads the bodies with its own code, which the strict vectors
+keep the same. The phone kits call it for
 each command, credential and release file they take. A manifest comes inside a copy's sealed
 Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
-`clip.ParseManifest`, which asks `parse_body` first in a build that links the core, and the kits'
+`clip.ParseManifest`, and the kits'
 `Media.Manifest.parse` asks it for a manifest given as bytes.
 
 `seal_command` seals a command's orders to its receiver (protocol.md, section 15, "Sealed

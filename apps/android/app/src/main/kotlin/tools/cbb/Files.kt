@@ -3,6 +3,7 @@
 
 package tools.cbb
 
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -80,11 +81,29 @@ object Files {
     }
 
     /**
+     * Whether uri is one another app hands over through its own provider,
+     * which grants the read: content:// only. This app reads a URI with its
+     * own rights, so a file:// URI, or one of this app's own providers,
+     * could name the app's own files (the group's, its settings) and send
+     * them to the group.
+     */
+    fun foreign(context: Context, uri: Uri): Boolean {
+        if (!uri.scheme.equals(ContentResolver.SCHEME_CONTENT, ignoreCase = true)) return false
+        val own = context.packageName
+        // An authority may carry the user it is for, as "10@authority",
+        // and a provider may list several, separated by ';'.
+        val authorities = uri.authority?.substringAfter('@')?.split(';') ?: return false
+        return authorities.none { it.isEmpty() || it == own || it.startsWith("$own.") }
+    }
+
+    /**
      * Reads what another app shared, at most Images.MAX_COPY together; a
-     * single image goes as an image, so a computer can paste it.
+     * single image goes as an image, so a computer can paste it. Only what
+     * the sharing app's provider hands over is read (foreign).
      */
     fun read(context: Context, uris: List<Uri>): Shared {
         val cr = context.contentResolver
+        uris.firstOrNull { !foreign(context, it) }?.let { throw IOException("not a file another app shares: ${it.scheme}://${it.authority}") }
         if (uris.size == 1) {
             val type = runCatching { cr.getType(uris[0]) }.getOrNull()
             if (type != null && type.startsWith("image/")) {

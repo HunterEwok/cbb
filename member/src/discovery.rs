@@ -12,8 +12,8 @@
 
 use std::collections::HashMap;
 use std::io::Write as _;
-use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -88,6 +88,21 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<An
         .ok()?
         .enable_addr_auto();
     daemon.register(info).ok()?;
+    // A joiner waits for minutes: a daemon whose cache another device
+    // floods stops announcing it, and the QR code still works.
+    let watched = daemon.clone();
+    std::thread::spawn(move || {
+        let mut flood = Flood::default();
+        loop {
+            std::thread::sleep(CACHE_CHECK);
+            // A daemon shut down takes no more commands.
+            let Ok(rx) = watched.get_metrics() else { return };
+            if flood.check(rx.recv_timeout(CACHE_CHECK).ok().map(|m| sum_cached(&m))) {
+                let _ = watched.shutdown();
+                return;
+            }
+        }
+    });
     Some(Announcement(daemon))
 }
 
@@ -125,20 +140,35 @@ pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
     }
 }
 
-/// The devices that announce that they wait to join (TXT `j=1` with their
-/// certificate's fingerprint `f`, docs/protocol.md section 3), with their
-/// addresses, for cbb pair with a code alone, as Go's findJoiners.
-pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>, String)>> {
+/// The device that announces that it waits to join (TXT `j=1` with its
+/// certificate's fingerprint `f`, docs/protocol.md section 3), with its
+/// addresses, for cbb pair with a code alone, as Go's findJoiners. More
+/// than one is refused, as find_pairing refuses more than one window: the
+/// code serves one device, and each other one would be one more guess.
+pub fn find_joiner(wait: Duration) -> crate::error::Result<(Vec<SocketAddr>, String)> {
     let waiting = browse_txt(wait, |info| {
         let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
         (info.get_property_val_str("j") == Some("1")).then(|| fp.to_string())
     })?;
-    if waiting.is_empty() {
-        return Err(crate::error::Error::msg(
+    the_one_joiner(waiting.into_values().collect())
+}
+
+/// The one device of those that wait to join, its addresses cut to a QR
+/// code's.
+fn the_one_joiner(mut waiting: Vec<(Vec<SocketAddr>, String)>) -> crate::error::Result<(Vec<SocketAddr>, String)> {
+    match waiting.len() {
+        0 => Err(crate::error::Error::msg(
             "no device that waits to join was found; on the new device, choose to join a group (cbb pair there) and type the code it shows",
-        ));
+        )),
+        1 => {
+            let (mut addrs, fp) = waiting.remove(0);
+            addrs.truncate(cbb_core::pair::MAX_ADDRS);
+            Ok((addrs, fp))
+        }
+        n => Err(crate::error::Error::msg(format!(
+            "{n} devices wait to join on the network; scan the QR code that the new device shows, or give its address"
+        ))),
     }
-    Ok(waiting.into_values().collect())
 }
 
 /// The addresses of the members of the group tag that browsing finds, one
@@ -146,6 +176,13 @@ pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>
 /// recovery key: browsed for up to wait, then a moment more for the others.
 pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
     let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
+/// The members of any group that browsing finds for up to wait, by
+/// device, for a restore with a card's recovery key, which names no group.
+pub fn find_any_group(wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| info.get_property_val_str("g").filter(|g| !g.is_empty()).map(|_| ()))?;
     Ok(found.into_values().map(|(a, ())| a).collect())
 }
 
@@ -158,19 +195,22 @@ fn browse_txt<T>(
 ) -> crate::error::Result<std::collections::BTreeMap<String, (Vec<SocketAddr>, T)>> {
     use crate::error::Error;
     let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| Error::with("cannot browse with mDNS", e))?;
-    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
-    let only = interfaces::only();
-    if !only.is_empty() {
-        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
-        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
-    }
+    set_interfaces(&daemon);
     start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
     let mut deadline = std::time::Instant::now() + wait;
     let mut settled = false;
+    let mut checked = std::time::Instant::now();
+    let mut flood = Flood::default();
     while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
-        let Ok(ev) = rx.recv_timeout(left) else { break };
+        if checked.elapsed() >= CACHE_CHECK {
+            checked = std::time::Instant::now();
+            if flood.check(cached(&daemon)) {
+                break;
+            }
+        }
+        let Ok(ev) = rx.recv_timeout(left.min(CACHE_CHECK)) else { continue };
         trace(&format!("pairing browse: {ev:?}"));
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
@@ -178,7 +218,11 @@ fn browse_txt<T>(
         if addrs.is_empty() {
             continue;
         }
-        found.insert(instance(&info.fullname), (addrs, v));
+        let name = instance(&info.fullname);
+        if found.len() >= MAX_FOUND && !found.contains_key(&name) {
+            continue;
+        }
+        found.insert(name, (addrs, v));
         if !settled {
             settled = true;
             deadline = std::time::Instant::now() + PAIRING_SETTLE;
@@ -208,7 +252,7 @@ fn instance(fullname: &str) -> String {
 /// neither publishes itself nor dials what browsing finds, as the Go
 /// service's tests' hidden members.
 fn elsewhere(me: &DeviceId) -> bool {
-    std::env::var_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
+    crate::testbuild::env_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
 }
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
@@ -222,10 +266,68 @@ const FALLBACK: Duration = Duration::from_secs(30);
 /// port, so that only their fallback dials connect.
 fn test_fallback() -> Option<Duration> {
     static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
-    *AFTER.get_or_init(|| std::env::var("CBB_TEST_FALLBACK").ok()?.parse().ok().map(Duration::from_millis))
+    *AFTER.get_or_init(|| crate::testbuild::env("CBB_TEST_FALLBACK")?.parse().ok().map(Duration::from_millis))
 }
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
+/// At most this many of them from one source (crate::pair::source), other
+/// than the loopback address, which the tunnels' and relays' ports share.
+const MAX_HANDSHAKES_PER_SOURCE: usize = 4;
+/// How long a connection from another device has to start its TLS
+/// handshake: a member sends its client hello as soon as it connects.
+const HELLO_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// The connections in their handshake, in all and by source.
+#[derive(Default)]
+struct Handshakes {
+    all: usize,
+    by_source: HashMap<IpAddr, usize>,
+}
+
+impl Handshakes {
+    /// Takes a slot for a connection from ip, if one is free.
+    fn take(&mut self, ip: IpAddr) -> bool {
+        if self.all >= MAX_HANDSHAKES {
+            return false;
+        }
+        if !ip.to_canonical().is_loopback() {
+            let n = self.by_source.entry(crate::pair::source(ip)).or_default();
+            if *n >= MAX_HANDSHAKES_PER_SOURCE {
+                return false;
+            }
+            *n += 1;
+        }
+        self.all += 1;
+        true
+    }
+
+    /// Gives back the slot of a connection from ip.
+    fn give(&mut self, ip: IpAddr) {
+        self.all = self.all.saturating_sub(1);
+        if !ip.to_canonical().is_loopback() {
+            let k = crate::pair::source(ip);
+            if let Some(n) = self.by_source.get_mut(&k) {
+                *n -= 1;
+                if *n == 0 {
+                    self.by_source.remove(&k);
+                }
+            }
+        }
+    }
+}
+
+/// Whether a connection from another device starts its TLS handshake
+/// within HELLO_TIMEOUT; a loopback one has the handshake's whole time,
+/// since it may come from far through a tunnel or a relay.
+fn hello_comes(sock: &TcpStream, from: IpAddr) -> bool {
+    if from.to_canonical().is_loopback() {
+        return true;
+    }
+    if sock.set_read_timeout(Some(HELLO_TIMEOUT)).is_err() {
+        return false;
+    }
+    matches!(sock.peek(&mut [0u8; 1]), Ok(n) if n > 0)
+}
 /// The members found by browsing that are dialed at once, as Go's mDNS
 /// cache reports at most.
 const MAX_FOUND: usize = 64;
@@ -277,6 +379,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
     let mut last_failure = String::new();
+    // The device last found at an address given by hand (-peer), whose
+    // connection, while it is up, is left alone as one to peer is.
+    let mut found: Option<DeviceId> = None;
     loop {
         if node.is_closed() {
             return;
@@ -304,7 +409,10 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         }
         // A connection up to the peer is left alone; a loopback address
         // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
-        if node.is_paused() || peer.as_ref().is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
+        // Dialed again, the lower device ID's new connection would replace
+        // it every time.
+        let known = peer.as_ref().or(found.as_ref());
+        if node.is_paused() || known.is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
             node.nap(Duration::from_secs(1));
             continue;
         }
@@ -315,6 +423,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
             match node.dial_ended(a, peer.clone()) {
                 Ok(d) => {
                     (up, again) = (d.up, d.again);
+                    if peer.is_none() && d.id.is_some() {
+                        found = d.id;
+                    }
                     failed.clear();
                     break;
                 }
@@ -398,7 +509,7 @@ pub fn listen_until(
         }
     };
     let port = ln.local_addr().map(|a| a.port()).unwrap_or(port);
-    let busy = Arc::new(AtomicUsize::new(0));
+    let busy = Arc::new(Mutex::new(Handshakes::default()));
     std::thread::spawn(move || {
         for conn in ln.incoming() {
             if node.is_closed() || stop.load(Ordering::SeqCst) {
@@ -406,8 +517,7 @@ pub fn listen_until(
             }
             let Ok(sock) = conn else { continue };
             let Ok(addr) = sock.peer_addr() else { continue };
-            if !home_address(addr.ip()) || !interfaces::arrived(&sock) || busy.load(Ordering::SeqCst) >= MAX_HANDSHAKES
-            {
+            if !home_address(addr.ip()) || !interfaces::arrived(&sock) {
                 continue; // dropping the socket closes it
             }
             if let Ok(local) = sock.local_addr()
@@ -419,15 +529,21 @@ pub fn listen_until(
                 ));
                 continue;
             }
-            busy.fetch_add(1, Ordering::SeqCst);
+            if !busy.lock().unwrap().take(addr.ip()) {
+                continue;
+            }
             let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
             std::thread::spawn(move || {
                 let mut slot = Some(busy);
                 let mut release = || {
                     if let Some(b) = slot.take() {
-                        b.fetch_sub(1, Ordering::SeqCst);
+                        b.lock().unwrap().give(addr.ip());
                     }
                 };
+                if !hello_comes(&sock, addr.ip()) {
+                    release();
+                    return;
+                }
                 let res = node.accept_checked(sock, addr, &mut release, admit.as_ref());
                 release();
                 if let Err(e) = res {
@@ -567,6 +683,179 @@ pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send
     });
 }
 
+/// The most records an mDNS daemon of the service may cache. mdns-sd
+/// bounds its cache by nothing but the senders' TTLs, so any device on the
+/// network could grow it without end; past this many, the daemon is
+/// replaced by a new one, whose cache is empty, as Go's responder kept at
+/// most 1024 entries.
+const MAX_CACHED: i64 = 1024;
+/// How often the cache's size is checked, and how long the daemon has to
+/// answer.
+const CACHE_CHECK: Duration = Duration::from_millis(100);
+/// How many checks in a row the daemon may leave unanswered: one too busy
+/// to answer for that long is flooded.
+const MAX_MISSES: u32 = 10;
+/// After a flood, how long browsing pauses before a new daemon: nothing
+/// after the first, then twice as long after each one that comes within
+/// CALM of the last, up to MAX_PAUSE, so that a lasting flood does not have
+/// the daemon replaced, and this device announced again, every moment.
+const FIRST_PAUSE: Duration = Duration::from_secs(5);
+const MAX_PAUSE: Duration = Duration::from_secs(60);
+const CALM: Duration = Duration::from_secs(120);
+
+/// How many records the daemon caches, and the timers it keeps for them;
+/// None when it does not answer within CACHE_CHECK.
+fn cached(daemon: &mdns_sd::ServiceDaemon) -> Option<i64> {
+    let m = daemon.get_metrics().ok()?.recv_timeout(CACHE_CHECK).ok()?;
+    Some(sum_cached(&m))
+}
+
+/// The checks of the daemon's cache and the floods so far.
+#[derive(Default)]
+struct Flood {
+    misses: u32,
+    pause: Duration,
+    last: Option<Instant>,
+}
+
+impl Flood {
+    /// Whether a check that found cached records (None: no answer) shows
+    /// the daemon flooded.
+    fn check(&mut self, cached: Option<i64>) -> bool {
+        match cached {
+            Some(n) => {
+                self.misses = 0;
+                n > MAX_CACHED
+            }
+            None => {
+                self.misses += 1;
+                self.misses >= MAX_MISSES
+            }
+        }
+    }
+
+    /// How long browsing pauses after a flood at now.
+    fn pause(&mut self, now: Instant) -> Duration {
+        self.misses = 0;
+        let again = self.last.is_some_and(|t| now.duration_since(t) < CALM + self.pause);
+        self.pause = match (again, self.pause.is_zero()) {
+            (false, _) => Duration::ZERO,
+            (true, true) => FIRST_PAUSE,
+            (true, false) => (self.pause * 2).min(MAX_PAUSE),
+        };
+        self.last = Some(now);
+        self.pause
+    }
+}
+
+/// The records and timers among an mDNS daemon's metrics.
+fn sum_cached(m: &mdns_sd::Metrics) -> i64 {
+    m.iter().filter(|(k, _)| k.starts_with("cached-") || k.as_str() == "timer").map(|(_, v)| *v).sum()
+}
+
+/// Sets the interfaces a daemon uses: as Go's responder, no loopback
+/// interfaces, and on a router only the devices of the interface list.
+fn set_interfaces(daemon: &mdns_sd::ServiceDaemon) {
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+}
+
+/// How long after the first member found without its TXT record browsing
+/// asks for it, past the second in which mdns-sd's responder sends a record
+/// it has just multicast no more.
+const ASK_FIRST: Duration = Duration::from_millis(1500);
+
+/// The wait between later asks, doubled each time up to ASK_MAX; longer
+/// than ASK_FOR, so that one asker runs at a time.
+const ASK_GAP: Duration = Duration::from_secs(5);
+const ASK_MAX: Duration = Duration::from_secs(60);
+
+/// How long an asker browses.
+const ASK_FOR: Duration = Duration::from_secs(3);
+
+/// The members browsing found without their TXT record, and when to ask
+/// for it again.
+///
+/// mdns-sd resolves a member from its SRV and address records alone. A
+/// responder that multicast its TXT record within the last second leaves it
+/// out of its answer (mdns-sd's rate limit), so a daemon that started
+/// browsing just then resolves the member with no TXT, no group tag and no
+/// role. It never asks for the TXT again: it asks only for what has no SRV,
+/// and its own browse queries carry the PTR as a known answer, which the
+/// responders do not answer again; the TXT lives 75 minutes, and a member
+/// that dials never found the other.
+#[derive(Default)]
+struct Untold {
+    names: std::collections::HashSet<String>,
+    next: Option<Instant>,
+    gap: Duration,
+}
+
+impl Untold {
+    /// Notes a member resolved with no TXT record; true when it is new.
+    /// Anyone on the network can announce names, so they are bounded as
+    /// the members dialed are.
+    fn add(&mut self, fullname: &str, now: Instant) -> bool {
+        if self.names.len() >= MAX_FOUND && !self.names.contains(fullname) {
+            return false;
+        }
+        if self.names.is_empty() {
+            self.next = Some(now + ASK_FIRST);
+            self.gap = ASK_GAP;
+        }
+        self.names.insert(fullname.to_string())
+    }
+
+    /// Notes a member resolved with its TXT record, or gone.
+    fn remove(&mut self, fullname: &str) {
+        self.names.remove(fullname);
+        if self.names.is_empty() {
+            self.next = None;
+        }
+    }
+
+    /// Reports whether to ask now, and if so when to ask next.
+    fn due(&mut self, now: Instant) -> bool {
+        match self.next {
+            Some(t) if now >= t => {
+                self.next = Some(now + self.gap);
+                self.gap = (self.gap * 2).min(ASK_MAX);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Asks the members for their records again, from a daemon of its own:
+/// its first browse query carries no known answers, so every member answers
+/// it with its PTR, SRV, TXT and address records, multicast, which the
+/// browsing daemon takes too and resolves the members again with their TXT.
+fn ask_again() {
+    std::thread::spawn(|| {
+        let daemon = match mdns_sd::ServiceDaemon::new() {
+            Ok(d) => d,
+            Err(e) => return trace(&format!("asking for the TXT records: {e}")),
+        };
+        set_interfaces(&daemon);
+        match daemon.browse(SERVICE) {
+            Ok(rx) => {
+                let end = Instant::now() + ASK_FOR;
+                while let Some(left) = end.checked_duration_since(Instant::now()) {
+                    let Ok(ev) = rx.recv_timeout(left) else { break };
+                    trace(&format!("asking for the TXT records: {ev:?}"));
+                }
+            }
+            Err(e) => trace(&format!("asking for the TXT records: {e}")),
+        }
+        let _ = daemon.shutdown();
+    });
+}
+
 fn browse(
     node: Arc<Node>,
     tag: &str,
@@ -575,18 +864,65 @@ fn browse(
     log: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(), mdns_sd::Error> {
     let preopened = PREOPENED.lock().unwrap_or_else(|e| e.into_inner()).take();
-    let daemon = match preopened {
+    let mut daemon = match preopened {
         Some(d) => d,
         None => mdns_sd::ServiceDaemon::new()?,
     };
-    // As Go's responder: no loopback interfaces.
-    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
-    // On a router, only the devices of the interface list.
-    let only = interfaces::only();
-    if !only.is_empty() {
-        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
-        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    // The members found, whose dial loops outlive a daemon that is replaced.
+    let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
+    let mut said = false;
+    let mut flood = Flood::default();
+    loop {
+        if !browse_with(&node, tag, port, as_phone, log, &daemon, &mut found, &mut flood)? {
+            let _ = daemon.shutdown();
+            return Ok(());
+        }
+        if !said {
+            log(&format!(
+                "cbb: the mDNS cache holds more than {MAX_CACHED} records, or mDNS is too busy to answer, which \
+                 another device on the network causes; it starts again empty, and pauses while that lasts (said once)"
+            ));
+            said = true;
+        }
+        let _ = daemon.shutdown();
+        // The members found are still dialed meanwhile.
+        let pause = flood.pause(Instant::now());
+        if !pause.is_zero() {
+            node.nap(pause);
+        }
+        loop {
+            if node.is_closed() {
+                return Ok(());
+            }
+            match mdns_sd::ServiceDaemon::new() {
+                Ok(d) => {
+                    daemon = d;
+                    break;
+                }
+                Err(e) => {
+                    log(&format!("cbb: cannot start mDNS again: {e}; trying again in 10 s"));
+                    node.nap(Duration::from_secs(10));
+                }
+            }
+        }
     }
+}
+
+/// Publishes and browses with daemon until the node closes (false) or the
+/// daemon's cache is flooded (true), which the caller answers with a new
+/// daemon.
+#[allow(clippy::too_many_arguments)]
+fn browse_with(
+    node: &Arc<Node>,
+    tag: &str,
+    port: Option<u16>,
+    as_phone: bool,
+    log: &(dyn Fn(&str) + Send + Sync),
+    daemon: &mdns_sd::ServiceDaemon,
+    found: &mut HashMap<DeviceId, Addrs>,
+    flood: &mut Flood,
+) -> Result<bool, mdns_sd::Error> {
+    set_interfaces(daemon);
     start_trace();
     let me = node.identity().id.clone();
     if let Ok(events) = daemon.monitor() {
@@ -681,14 +1017,24 @@ fn browse(
     publish(window, &at)?;
     let mut checked = Instant::now();
     let mut published = Instant::now();
+    let mut cache_checked = Instant::now();
     let events = daemon.browse(SERVICE)?;
-    let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
+    let mut untold = Untold::default();
     loop {
-        let ev = events.recv_timeout(Duration::from_secs(1));
+        let ev = events.recv_timeout(CACHE_CHECK);
         if node.is_closed() {
             break;
         }
+        if cache_checked.elapsed() >= CACHE_CHECK {
+            cache_checked = Instant::now();
+            if flood.check(cached(daemon)) {
+                return Ok(true);
+            }
+        }
         let away = elsewhere(&me);
+        if !away && untold.due(Instant::now()) {
+            ask_again();
+        }
         if away && !found.is_empty() {
             for (_, a) in found.drain() {
                 *a.lock().unwrap() = None;
@@ -723,6 +1069,15 @@ fn browse(
                 if away {
                     continue;
                 }
+                // One resolved without its TXT record is asked for it
+                // again rather than taken for another group's.
+                if info.get_properties().is_empty() {
+                    if id != me && untold.add(&info.fullname, Instant::now()) {
+                        log(&format!("cbb: found {id} by mDNS without its TXT record; asking for it again"));
+                    }
+                    continue;
+                }
+                untold.remove(&info.fullname);
                 // Members of another group, or of a replaced CA, are ignored.
                 let r = info.get_property_val_str("r");
                 if id == me || info.get_property_val_str("g") != Some(tag) {
@@ -757,6 +1112,20 @@ fn browse(
                 } else {
                     addrs
                 };
+                // Anyone on the network can announce the group's tag, so
+                // the members dialed are bounded, as in Go; a device the
+                // records name takes the place of one they do not.
+                if !found.contains_key(&id) && found.len() >= MAX_FOUND {
+                    let known = node.records().lock().unwrap().known();
+                    match evicts(found.keys(), &known, &id) {
+                        Some(k) => {
+                            if let Some(a) = found.remove(&k) {
+                                *a.lock().unwrap() = None;
+                            }
+                        }
+                        None => continue,
+                    }
+                }
                 match found.get(&id) {
                     Some(cur) => {
                         node.found(&id, true);
@@ -765,15 +1134,19 @@ fn browse(
                         // the answer came on, which another interface's scope
                         // can make unreachable); its dial loop, maybe backing
                         // off after failing those, tries the new ones at once.
+                        // Anyone may answer for the member's name, so the new
+                        // addresses join those known rather than replace them,
+                        // and a connected member's stay as they are.
+                        if node.connected(&id) {
+                            continue;
+                        }
                         let mut cur = cur.lock().unwrap();
-                        if cur.as_ref() != Some(&addrs) {
-                            *cur = Some(addrs);
+                        let merged = merge_addrs(&addrs, cur.as_deref().unwrap_or_default());
+                        if cur.as_ref() != Some(&merged) {
+                            *cur = Some(merged);
                             node.kick();
                         }
                     }
-                    // Anyone on the network can announce the group's tag, so
-                    // the members dialed are bounded, as in Go.
-                    None if found.len() >= MAX_FOUND => continue,
                     None => {
                         node.found(&id, true);
                         log(&format!("cbb: found {id} at {}", addrs[0]));
@@ -785,18 +1158,63 @@ fn browse(
                 }
             }
             mdns_sd::ServiceEvent::ServiceRemoved(_, fullname) => {
-                if let Some(id) = instance_id(&fullname) {
-                    node.found(&id, false);
-                    if let Some(cur) = found.remove(&id) {
-                        *cur.lock().unwrap() = None;
-                    }
+                untold.remove(&fullname);
+                // Anyone may say goodbye for a member: a device the records
+                // name keeps its dial loop, which its own connection and
+                // the loop's back-off pace. It no longer counts as at home,
+                // though, so that sync away from home may reach it through
+                // the relay meanwhile (a false goodbye costs a call there).
+                let Some(id) = instance_id(&fullname) else { continue };
+                node.found(&id, false);
+                let known = node.records().lock().unwrap().known();
+                if goodbye_stops(&known, &id)
+                    && let Some(cur) = found.remove(&id)
+                {
+                    *cur.lock().unwrap() = None;
                 }
             }
             _ => {}
         }
     }
-    let _ = daemon.shutdown();
-    Ok(())
+    Ok(false)
+}
+
+/// The most addresses kept for one member found by mDNS.
+const MAX_ADDRS: usize = 8;
+
+/// The addresses of a member resolved again: up to half of MAX_ADDRS new
+/// ones first, then those known before, then the other new ones, at most
+/// MAX_ADDRS; anyone may answer for a member, so new addresses never push
+/// out all of those known.
+fn merge_addrs(new: &[SocketAddr], known: &[SocketAddr]) -> Vec<SocketAddr> {
+    let first = new.len().min(MAX_ADDRS / 2);
+    let mut out: Vec<SocketAddr> = Vec::new();
+    for a in new[..first].iter().chain(known).chain(&new[first..]) {
+        if !out.contains(a) {
+            out.push(*a);
+        }
+    }
+    out.truncate(MAX_ADDRS);
+    out
+}
+
+/// Which member found by mDNS gives its place to id when MAX_FOUND are
+/// found: one the records do not name, and only to one they name (known,
+/// sorted); None leaves id out.
+fn evicts<'a>(found: impl Iterator<Item = &'a DeviceId>, known: &[String], id: &DeviceId) -> Option<DeviceId> {
+    let names = |d: &DeviceId| known.binary_search(&d.to_string()).is_ok();
+    if !names(id) {
+        return None;
+    }
+    let mut found = found;
+    found.find(|d| !names(d)).cloned()
+}
+
+/// Whether an mDNS goodbye for id stops its dial loop: only for a device
+/// the records (known, sorted) do not name. Anyone may send one, so a
+/// member of the group stops being dialed only as its own connection says.
+fn goodbye_stops(known: &[String], id: &DeviceId) -> bool {
+    known.binary_search(&id.to_string()).is_err()
 }
 
 /// Reports whether a TXT `r` value names a member that does not dial,
@@ -856,15 +1274,25 @@ fn link_scope(a: std::net::Ipv6Addr, arrived: u32, own: &[interfaces::Iface]) ->
 }
 
 /// The addresses that would be published, IPv4 first, then routable IPv6,
-/// then link-local IPv6.
+/// then link-local IPv6. An IPv4 address written as IPv6 (::ffff:a.b.c.d)
+/// is taken as the IPv4 address it is, so every test here sees one form and
+/// one host is dialed once.
 fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
-    let mut out: Vec<SocketAddr> = addrs.filter(|a| home_address(a.ip()) && !a.ip().is_loopback()).collect();
+    let mut out: Vec<SocketAddr> = Vec::new();
+    for a in addrs {
+        let a = match a.ip().to_canonical() {
+            ip @ IpAddr::V4(_) => SocketAddr::new(ip, a.port()),
+            IpAddr::V6(_) => a,
+        };
+        if home_address(a.ip()) && !a.ip().is_loopback() && !out.contains(&a) {
+            out.push(a);
+        }
+    }
     out.sort_by_key(|a| match a.ip() {
         IpAddr::V4(_) => 0,
         IpAddr::V6(v6) if !v6.is_unicast_link_local() => 1,
         IpAddr::V6(_) => 2,
     });
-    out.dedup();
     out
 }
 
@@ -872,9 +1300,136 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 mod tests {
     use super::*;
 
+    /// A code alone admits only when one device waits: two would give a
+    /// device that only pretends to wait a guess at the code.
+    #[test]
+    fn a_code_alone_needs_one_waiting_device() {
+        let addr = |i: u8| SocketAddr::from(([192, 168, 1, i], 8764));
+        assert!(the_one_joiner(Vec::new()).is_err());
+        let many: Vec<SocketAddr> = (1..=9).map(addr).collect();
+        let (addrs, fp) = the_one_joiner(vec![(many, "f1".into())]).unwrap();
+        assert_eq!((addrs.len(), fp.as_str()), (cbb_core::pair::MAX_ADDRS, "f1"));
+        let two = vec![(vec![addr(1)], "f1".to_string()), (vec![addr(2)], "f2".to_string())];
+        let e = the_one_joiner(two).unwrap_err();
+        assert!(e.message().contains("2 devices wait to join"), "{e:?}");
+    }
+
+    /// One source holds at most MAX_HANDSHAKES_PER_SOURCE of the
+    /// handshake slots, so idle connections from one device leave the
+    /// others room; loopback connections only count in all.
+    #[test]
+    fn handshakes_by_source() {
+        let mut h = Handshakes::default();
+        let a: IpAddr = "192.168.1.7".parse().unwrap();
+        let a6: IpAddr = "2001:db8:2:3::1".parse().unwrap();
+        for _ in 0..MAX_HANDSHAKES_PER_SOURCE {
+            assert!(h.take(a));
+            assert!(h.take(a6));
+        }
+        assert!(!h.take(a));
+        // Another address of the same global IPv6 /64 is the same source;
+        // the devices of the home network's unique-local /64 are not.
+        assert!(!h.take("2001:db8:2:3::99".parse().unwrap()));
+        assert!(h.take("fd00:1:2:3::1".parse().unwrap()));
+        assert!(h.take("fd00:1:2:3::2".parse().unwrap()));
+        h.give("fd00:1:2:3::1".parse().unwrap());
+        h.give("fd00:1:2:3::2".parse().unwrap());
+        h.give(a);
+        assert!(h.take(a));
+        let lo: IpAddr = "127.0.0.1".parse().unwrap();
+        while h.take(lo) {}
+        assert_eq!(h.all, MAX_HANDSHAKES);
+        assert!(!h.take("192.168.1.8".parse().unwrap()));
+        for _ in 0..MAX_HANDSHAKES_PER_SOURCE {
+            h.give(a6);
+        }
+        assert!(!h.by_source.contains_key(&crate::pair::source(a6)));
+        assert!(h.take("192.168.1.8".parse().unwrap()));
+    }
+
+    /// A connection that sends nothing gives its slot back after
+    /// HELLO_TIMEOUT, not after the handshake's whole time.
+    #[test]
+    fn a_silent_connection_is_closed_soon() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _silent = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (sock, _) = l.accept().unwrap();
+        let other: IpAddr = "192.168.1.7".parse().unwrap();
+        let t = Instant::now();
+        assert!(!hello_comes(&sock, other));
+        assert!(t.elapsed() < HELLO_TIMEOUT + Duration::from_secs(2));
+        // From the loopback address it waits for the handshake instead.
+        assert!(hello_comes(&sock, "127.0.0.1".parse().unwrap()));
+    }
+
     /// A link-local address of this device's own is dialed through the
     /// interface that has it, whichever interface mDNS heard it on; another
     /// device's through the interface it was heard on.
+    /// The cache is checked often; a daemon too busy to answer counts as
+    /// flooded after MAX_MISSES checks; floods that keep coming pause
+    /// browsing longer each time, and a calm spell starts again.
+    #[test]
+    fn floods_of_the_mdns_cache() {
+        let mut f = Flood::default();
+        assert!(!f.check(Some(10)));
+        assert!(f.check(Some(MAX_CACHED + 1)));
+        for _ in 1..MAX_MISSES {
+            assert!(!f.check(None));
+        }
+        assert!(!f.check(Some(10)), "an answer starts the count again");
+        for _ in 1..MAX_MISSES {
+            assert!(!f.check(None));
+        }
+        assert!(f.check(None));
+        assert!(CACHE_CHECK * MAX_MISSES <= Duration::from_secs(1));
+
+        let t = Instant::now();
+        assert_eq!(f.pause(t), Duration::ZERO);
+        assert_eq!(f.misses, 0);
+        let mut at = t + Duration::from_secs(1);
+        let mut want = FIRST_PAUSE;
+        for _ in 0..8 {
+            assert_eq!(f.pause(at), want);
+            at += want + Duration::from_secs(1);
+            want = (want * 2).min(MAX_PAUSE);
+        }
+        assert_eq!(f.pause, MAX_PAUSE);
+        assert_eq!(f.pause(at + MAX_PAUSE + CALM), Duration::ZERO);
+    }
+
+    /// Anyone may answer for a member: its new addresses never push out all
+    /// of those known, and the list stays bounded.
+    #[test]
+    fn new_addresses_join_those_known() {
+        let a = |n: u8| SocketAddr::from(([192, 168, 1, n], 8764));
+        let known: Vec<_> = (1..=4).map(a).collect();
+        let forged: Vec<_> = (100..120).map(a).collect();
+        let merged = merge_addrs(&forged, &known);
+        assert_eq!(merged.len(), MAX_ADDRS);
+        assert!(known.iter().all(|k| merged.contains(k)), "{merged:?}");
+        assert_eq!(&merged[..MAX_ADDRS / 2], &forged[..MAX_ADDRS / 2]);
+        // A member that moved is tried at its new address first.
+        assert_eq!(merge_addrs(&[a(9)], &known), [a(9), a(1), a(2), a(3), a(4)]);
+        assert_eq!(merge_addrs(&[a(2)], &known), [a(2), a(1), a(3), a(4)]);
+    }
+
+    /// An mDNS goodbye stops dialing only a device the records do not
+    /// name; when MAX_FOUND are found, one the records name takes the place
+    /// of one they do not, and no other.
+    #[test]
+    fn goodbyes_and_places_of_found_members() {
+        let ids: Vec<DeviceId> = (0..4).map(|_| DeviceId::random()).collect();
+        let mut known: Vec<String> = ids[..2].iter().map(|d| d.to_string()).collect();
+        known.sort();
+        assert!(!goodbye_stops(&known, &ids[0]));
+        assert!(goodbye_stops(&known, &ids[2]));
+
+        let found = [ids[0].clone(), ids[2].clone()];
+        assert_eq!(evicts(found.iter(), &known, &ids[1]), Some(ids[2].clone()));
+        assert_eq!(evicts(found.iter(), &known, &ids[3]), None, "an unknown device takes no place");
+        assert_eq!(evicts(found[..1].iter(), &known, &ids[1]), None, "only known devices found");
+    }
+
     #[test]
     fn own_link_local_takes_its_interface() {
         let own = vec![
@@ -939,6 +1494,127 @@ mod tests {
         assert_eq!(w, FIRST_WAIT);
     }
 
+    /// A member resolved without its TXT record is asked for it after
+    /// ASK_FIRST, then again with a doubling wait up to ASK_MAX, until every
+    /// such member has its TXT or is gone.
+    #[test]
+    fn asks_again_for_a_missing_txt() {
+        let t0 = Instant::now();
+        let mut u = Untold::default();
+        assert!(!u.due(t0 + ASK_MAX * 10), "nothing to ask for");
+        assert!(u.add("a", t0));
+        assert!(!u.add("a", t0), "the same member again");
+        assert!(!u.due(t0));
+        assert!(u.due(t0 + ASK_FIRST));
+        assert!(!u.due(t0 + ASK_FIRST), "once per wait");
+        let mut at = t0 + ASK_FIRST;
+        let mut gap = ASK_GAP;
+        for _ in 0..8 {
+            assert!(!u.due(at + gap - Duration::from_millis(1)));
+            at += gap;
+            assert!(u.due(at));
+            gap = (gap * 2).min(ASK_MAX);
+        }
+        assert_eq!(gap, ASK_MAX);
+        assert!(ASK_GAP > ASK_FOR, "one asker at a time");
+        // A second member keeps the schedule; asking stops when both are told.
+        assert!(u.add("b", at));
+        u.remove("a");
+        assert!(u.due(at + ASK_MAX));
+        u.remove("b");
+        assert!(!u.due(at + ASK_MAX * 10));
+        // At most MAX_FOUND of them.
+        let mut many = Untold::default();
+        for i in 0..MAX_FOUND {
+            assert!(many.add(&i.to_string(), t0));
+        }
+        assert!(!many.add("one more", t0));
+        assert_eq!(many.names.len(), MAX_FOUND);
+        // A member found without TXT later starts again from ASK_FIRST.
+        let t1 = at + ASK_MAX * 20;
+        assert!(u.add("c", t1));
+        assert!(!u.due(t1 + ASK_FIRST - Duration::from_millis(1)));
+        assert!(u.due(t1 + ASK_FIRST));
+        assert!(u.due(t1 + ASK_FIRST + ASK_GAP));
+    }
+
+    /// A daemon that starts browsing within the second after a member
+    /// multicast its TXT record resolves it without one, since mdns-sd's
+    /// responder leaves the TXT out of its answer, and never asks for it;
+    /// ask_again gets it. TestFreezeAnAdmin failed so on the Rust cbb once:
+    /// a member restarted browsing just after another asked for the root's
+    /// TXT, and never dialed the root.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_missing_txt_comes_when_asked() {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+        start_trace();
+        let Some(ip) = if_addrs::get_if_addrs().unwrap_or_default().into_iter().find_map(|f| match f.ip() {
+            IpAddr::V4(v4) if !f.is_loopback() && interfaces::allowed(&f.name) => Some(v4),
+            _ => None,
+        }) else {
+            eprintln!("no interface for mDNS; skipped");
+            return;
+        };
+        let daemon = || {
+            let d = mdns_sd::ServiceDaemon::new().unwrap();
+            set_interfaces(&d);
+            d
+        };
+        let responder = daemon();
+        let nanos = std::time::SystemTime::UNIX_EPOCH.elapsed().unwrap_or_default().as_nanos() as u64;
+        let name = format!("{:016x}{nanos:016x}", std::process::id());
+        let txt = [("v", "1"), ("g", "txt-test")];
+        let info =
+            mdns_sd::ServiceInfo::new(SERVICE, &name, "cb-txt-test.local.", IpAddr::V4(ip), 4242, &txt[..]).unwrap();
+        let fullname = info.get_fullname().to_string();
+        responder.register(info).unwrap();
+        // Past its announcements and their second.
+        std::thread::sleep(Duration::from_millis(3500));
+        // Another device asks for the TXT record alone, as a daemon does
+        // that has the member's PTR and not its SRV, from port 5353, so that
+        // the answer is multicast.
+        let sock = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::DGRAM, None).unwrap();
+        sock.set_reuse_address(true).unwrap();
+        sock.set_reuse_port(true).unwrap();
+        sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 5353).into()).unwrap();
+        sock.set_multicast_if_v4(&ip).unwrap();
+        let mut q = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+        for label in fullname.trim_end_matches('.').split('.') {
+            q.push(label.len() as u8);
+            q.extend_from_slice(label.as_bytes());
+        }
+        q.extend_from_slice(&[0, 0, 16, 0, 1]);
+        sock.send_to(&q, &SocketAddrV4::new(Ipv4Addr::new(224, 0, 0, 251), 5353).into()).unwrap();
+        drop(sock);
+        std::thread::sleep(Duration::from_millis(300));
+        // A daemon that starts browsing now: resolved with no TXT.
+        let browser = daemon();
+        let rx = browser.browse(SERVICE).unwrap();
+        let resolved = |wait: Duration| {
+            let end = Instant::now() + wait;
+            let mut txt = None;
+            while let Some(left) = end.checked_duration_since(Instant::now()) {
+                let Ok(ev) = rx.recv_timeout(left) else { break };
+                if let mdns_sd::ServiceEvent::ServiceResolved(i) = ev
+                    && i.fullname == fullname
+                {
+                    txt = Some(i.get_property_val_str("g").map(str::to_string));
+                    if txt == Some(Some("txt-test".into())) {
+                        break;
+                    }
+                }
+            }
+            txt
+        };
+        assert_eq!(resolved(Duration::from_secs(4)), Some(None), "resolved at first without the TXT");
+        ask_again();
+        assert_eq!(resolved(ASK_FOR + Duration::from_secs(2)), Some(Some("txt-test".into())), "the TXT after asking");
+        for d in [browser, responder] {
+            let _ = d.shutdown();
+        }
+    }
+
     #[test]
     fn instance_names() {
         let id = "0123456789abcdef0123456789abcdef";
@@ -981,5 +1657,30 @@ mod tests {
         let want: Vec<SocketAddr> =
             ["192.168.1.5:8764", "[fd00::2]:8764", "[fe80::1]:8764"].iter().map(|s| s.parse().unwrap()).collect();
         assert_eq!(got, want);
+    }
+
+    #[test]
+    fn an_ipv4_address_written_as_ipv6_is_ordered_as_ipv4() {
+        let got = order(
+            [
+                "[fd00::2]:8764",
+                "[::ffff:192.168.1.5]:8764",
+                "192.168.1.5:8764",
+                "[::ffff:127.0.0.1]:8764",
+                "127.0.0.1:8764",
+                "[::1]:8764",
+                "[::ffff:8.8.8.8]:8764",
+                "192.168.1.6:8764",
+                "[fd00::2]:8764",
+            ]
+            .iter()
+            .map(|s| s.parse().unwrap()),
+        );
+        let want: Vec<SocketAddr> =
+            ["192.168.1.5:8764", "192.168.1.6:8764", "[fd00::2]:8764"].iter().map(|s| s.parse().unwrap()).collect();
+        assert_eq!(got, want);
+        // A link-local address keeps its scope.
+        let scoped: SocketAddr = "[fe80::1%3]:8764".parse().unwrap();
+        assert_eq!(order([scoped].into_iter()), vec![scoped]);
     }
 }

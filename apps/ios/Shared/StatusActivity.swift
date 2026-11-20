@@ -18,7 +18,7 @@ struct StatusActivity: ActivityAttributes {
         var line: String
         /// Since when it runs, for the timer of adding and away.
         var since: Date
-        /// The colour chosen in Settings, by its name in Tokens.colors.
-        var color: String
+        /// The theme chosen in Settings, by its name in Tokens.themes.
+        var theme: String
     }
 }

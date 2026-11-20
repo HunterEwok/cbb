@@ -18,7 +18,7 @@ it on from afar.
 | Windows | `cbb paste-receive on` in a terminal opened as administrator | the window that has the focus |
 | Mac | `sudo cbb paste-receive on`, and the Mac app open, allowed in System Settings, Privacy & Security, Accessibility | the app that has the focus |
 | Android phone or TV | Settings, "Let the group's admins paste here", and the app's accessibility service on | the text field that has the focus in another app |
-| Lite member | `sudo cbb paste-receive on`; with `-console`, the text console too | the tmux pane in use |
+| A small device without a desktop | `sudo cbb paste-receive on`; with `-console`, the text console too | the tmux pane in use |
 
 `-enter` (on a phone, "Let a paste press Enter") lets a paste press Enter after the text.
 Without it a text with a line break is refused, because a line break may run what comes

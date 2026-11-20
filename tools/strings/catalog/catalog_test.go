@@ -37,8 +37,8 @@ func reader(m map[string][]byte) func(string) ([]byte, error) {
 
 func TestGenerate(t *testing.T) {
 	en := `{
-  "Don't paste": {"in": ["android:no_paste", "aurora:Main", "ios", "tray"]},
-  "CBB": {"in": ["android:app_name", "ios"], "translate": false},
+  "Don't paste": {"in": ["android:no_paste", "aurora:Main", "harmony:no_paste", "ios", "tray"]},
+  "CBB": {"in": ["android:app_name", "harmony:app_name", "ios"], "translate": false},
   "Open %@ & %@": {"in": ["mac"]},
   "Open camera": {"en": "Scan the code", "in": ["ios-plist:NSCameraUsageDescription"]}
 }`
@@ -68,6 +68,10 @@ func TestGenerate(t *testing.T) {
 		"apps/ios/CBB/Resources/InfoPlist.xcstrings":        {`"NSCameraUsageDescription": {`, `"value": "ar: Scan the code"`},
 		"apps/macos/CBBMac/Resources/Localizable.xcstrings": {`"Open %@ & %@": {`, `"value": "es: Open %2$@ & %1$@"`},
 		"apps/desktop/frontend/l10n/sw.json":                {"{\n  \"Don't paste\": \"sw: Don't paste\"\n}\n"},
+		"apps/harmony/entry/src/main/resources/base/element/string.json": {
+			"{\n  \"string\": [\n    {\"name\": \"app_name\", \"value\": \"CBB\"},\n    {\"name\": \"no_paste\", \"value\": \"Don't paste\"}\n  ]\n}\n",
+		},
+		"apps/harmony/entry/src/main/resources/zh_CN/element/string.json": {`{"name": "no_paste", "value": "zh: Don't paste"}`},
 	} {
 		for _, w := range want {
 			if !strings.Contains(string(out[name]), w) {
@@ -75,13 +79,13 @@ func TestGenerate(t *testing.T) {
 			}
 		}
 	}
-	if strings.Contains(string(out["apps/android/app/src/main/res/values-ru/strings.xml"]), "app_name") {
+	if strings.Contains(string(out["apps/android/app/src/main/res/values-ru/strings.xml"]), "app_name") || strings.Contains(string(out["apps/harmony/entry/src/main/resources/ru/element/string.json"]), "app_name") {
 		t.Error("a name that stays as it is went into a language's strings")
 	}
 	// The source comes back in order, one string a line.
 	wantEN := `{
-  "CBB": {"in": ["android:app_name", "ios"], "translate": false},
-  "Don't paste": {"in": ["android:no_paste", "aurora:Main", "ios", "tray"]},
+  "CBB": {"in": ["android:app_name", "harmony:app_name", "ios"], "translate": false},
+  "Don't paste": {"in": ["android:no_paste", "aurora:Main", "harmony:no_paste", "ios", "tray"]},
   "Open %@ & %@": {"in": ["mac"]},
   "Open camera": {"en": "Scan the code", "in": ["ios-plist:NSCameraUsageDescription"]}
 }
@@ -109,6 +113,7 @@ func TestLoadProblems(t *testing.T) {
 	}{
 		{"unknown place", `{"A": {"in": ["web"]}}`, map[string]string{"A": "A"}, `unknown place "web"`},
 		{"no name", `{"A": {"in": ["android"]}}`, map[string]string{"A": "A"}, "needs a resource name"},
+		{"no HarmonyOS name", `{"A": {"in": ["harmony:A"]}}`, map[string]string{"A": "A"}, "needs a resource name"},
 		{"shown nowhere", `{"A": {"in": []}}`, map[string]string{"A": "A"}, "shown nowhere"},
 		{"taken twice", `{"A": {"in": ["android:a"]}, "B": {"in": ["android:a"]}}`, map[string]string{"A": "A", "B": "B"}, "with the same key"},
 		{"untranslated", `{"A": {"in": ["tray"]}, "B": {"in": ["tray"]}}`, map[string]string{"A": "A"}, `no translation of "B"`},

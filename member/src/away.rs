@@ -44,12 +44,14 @@ const STEADY: Duration = Duration::from_secs(30);
 const UP_CHECK_SECS: u64 = 300;
 
 /// How long a device stays on a hub below the first before it tries the
-/// ones above again, as Go's upCheck: five minutes, or CBB_UP_CHECK
+/// ones above again, as Go's upCheck: five minutes, or CBB_TEST_UP_CHECK
 /// seconds, which tests set shorter.
 fn up_check() -> Duration {
     static UP: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *UP.get_or_init(|| {
-        Duration::from_secs(std::env::var("CBB_UP_CHECK").ok().and_then(|v| v.parse().ok()).unwrap_or(UP_CHECK_SECS))
+        Duration::from_secs(
+            crate::testbuild::env("CBB_TEST_UP_CHECK").and_then(|v| v.parse().ok()).unwrap_or(UP_CHECK_SECS),
+        )
     })
 }
 /// How long discovery is given to find the hub at home after the service
@@ -473,7 +475,15 @@ impl Away {
                     }
                 }
                 if started.len() > 1 {
-                    let until = Instant::now() + KEYS_WAIT;
+                    // Each link goes through its ways in turn, so the one
+                    // that answers may answer only at its last way: over
+                    // VLESS after the hub's addresses, for one.
+                    let ways =
+                        tries.iter().map(|h| h.endpoints.len() + usize::from(h.vless.is_some())).max().unwrap_or(1);
+                    let until = Instant::now()
+                        + KEYS_WAIT
+                        + crate::tunnel::ENDPOINT_WAIT
+                            .saturating_mul(u32::try_from(ways.saturating_sub(1)).unwrap_or(u32::MAX));
                     while Instant::now() < until && !started.iter().any(|(_, l)| l.answered()) {
                         std::thread::sleep(Duration::from_millis(50));
                     }
@@ -647,3 +657,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/away.rs"]
+mod net_tests;

@@ -3,7 +3,7 @@
 
 //! The core's one entry point (docs/core-api.md): a request in bytes, an
 //! answer in bytes. Every program that uses the core's rules (the phones
-//! through its C functions, Go through cgo or wasm) calls `call` and nothing else,
+//! through its C functions) calls `call` and nothing else,
 //! so the bindings stay one function wide and the request's ABI version
 //! says which shape of request and answer both sides speak.
 //!

@@ -118,7 +118,7 @@ final class WatchLink: NSObject {
         }
         s.sync = s.hasGroup ? model.syncOff == nil : nil
         s.events = Notifier.shared.recent
-        s.color = UserDefaults.standard.string(forKey: AccentChoice.key) ?? Tokens.colors[0].name
+        s.theme = UserDefaults.standard.string(forKey: ThemeChoice.key) ?? Tokens.themes[0].name
         return s
     }
 }

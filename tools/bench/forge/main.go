@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Command forge is the bench's stand-in for an attacker on the member
-// protocol (docs/testbench-catalogue.md, T8, S17, S23): in a fleet
+// protocol (docs/maintainers/testbench-catalogue.md, T8, S17, S23): in a fleet
 // container, with a member's state copied from another, it connects to a
 // target as that member and sends it commands that an admin's state signs,
 // some of them replayed, changed or made for another group or device, and

@@ -26,12 +26,12 @@ use crate::wire::{self, Message, TunnelOffer};
 /// client, as Go's hubRecheck.
 pub(super) const HUB_RECHECK: Duration = Duration::from_secs(15 * 60);
 /// How long a hub that lost the hub above it tries the hubs above before
-/// it serves again, as Go's standbyGrace: a minute, or CBB_STANDBY_GRACE
+/// it serves again, as Go's standbyGrace: a minute, or CBB_TEST_STANDBY_GRACE
 /// seconds, which tests set shorter.
 pub(super) fn standby_grace() -> Duration {
     static GRACE: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *GRACE.get_or_init(|| {
-        let s = std::env::var("CBB_STANDBY_GRACE").ok().and_then(|v| v.parse().ok()).unwrap_or(60);
+        let s = crate::testbuild::env("CBB_TEST_STANDBY_GRACE").and_then(|v| v.parse().ok()).unwrap_or(60);
         Duration::from_secs(s)
     })
 }

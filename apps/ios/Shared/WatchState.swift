@@ -58,8 +58,8 @@ struct WatchState: Codable, Equatable {
     var sync: Bool?
     /// The latest events, newest first.
     var events: [String] = []
-    /// The phone's colour, by its name in Tokens.colors.
-    var color = "terminal"
+    /// The phone's theme, by its name in Tokens.themes.
+    var theme = Tokens.themes[0].name
 
     static let key = "state"
     /// The message that turns the phone's sync away from home on or off.

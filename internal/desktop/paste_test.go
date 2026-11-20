@@ -125,4 +125,33 @@ func TestKeysHelperPaste(t *testing.T) {
 	if err := keysInject(context.Background(), kb, board, "typed", "type", false, false); !errors.As(err, &r) {
 		t.Errorf("typing through the helper: %v", err)
 	}
+	if err := keysInject(unchecked, kb, board, "x", "shout", false, false); !errors.As(err, &r) {
+		t.Errorf("an unknown method: %v", err)
+	}
+
+	// Images and files: write puts them in, then the same keys.
+	keys.mu.Lock()
+	keys.keys, keys.seen = nil, nil
+	keys.mu.Unlock()
+	if err := keysInjectMedia(connector.WithKeysGrant(unchecked, "g7"), kb, func() error { return board.Write("an image", false) }, false); err != nil {
+		t.Fatal(err)
+	}
+	keys.mu.Lock()
+	got, seen = slices.Clone(keys.keys), slices.Clone(keys.seen)
+	keys.mu.Unlock()
+	if !slices.Equal(got, want[:4]) || len(seen) == 0 || seen[0] != "an image" {
+		t.Errorf("media: pressed %v with %q", got, seen)
+	}
+	if err := keysInjectMedia(connector.WithKeysGrant(unchecked, "g7"), kb, func() error { return errors.New("no image") }, false); err == nil {
+		t.Error("pasted media it could not write")
+	}
+	if err := keysInjectMedia(unchecked, kb, func() error { return nil }, true); !errors.As(err, &r) {
+		t.Errorf("media without the service's grant: %v", err)
+	}
+	if err := keysInjectMedia(context.Background(), kb, func() error { return nil }, true); !errors.As(err, &r) || r.Reason != lockcheck.Unknown {
+		t.Errorf("media where nothing tells whether the session is locked: %v", err)
+	}
+	if err := keysInjectMedia(connector.WithKeysGrant(unchecked, "g7"), kb, func() error { return nil }, true); err != nil {
+		t.Errorf("media with Enter: %v", err)
+	}
 }

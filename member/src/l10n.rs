@@ -27,6 +27,10 @@ const CATALOGS: &[(&str, &str)] = &[
     ("hi", include_str!("../l10n/hi.json")),
 ];
 
+/// The languages of the catalogs, besides English.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+pub const LANGS: [&str; 7] = ["zh", "es", "ru", "ar", "sw", "he", "hi"];
+
 /// The text in the user's language, or the English one as it is.
 macro_rules! tr {
     ($s:literal) => {

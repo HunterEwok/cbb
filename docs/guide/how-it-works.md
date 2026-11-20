@@ -16,8 +16,7 @@ device that only passes it on cannot read it, change it or forge one. Each devic
 |---|---|---|
 | **Root** | the phone that made the group (or the computer, [without the app](without-app.md)) | holds the group's key, adds and removes devices, makes admins |
 | **Admin** | a second phone, or a computer the root chose | adds and removes devices, like the root |
-| **Member** | every computer and phone | syncs the clipboard |
-| **Lite member** | a small Linux device: a router, a Raspberry Pi Zero | syncs, never adds anyone ([lite member](../../member/README.md)) |
+| **Member** | every computer, phone and small device (a router, a Raspberry Pi: [small devices](../../member/README.md)) | syncs the clipboard |
 | **Rootless member** | a Linux computer installed without `sudo` | syncs like a member, never the root, an admin or a hub ([below](#rootless-members)) |
 | **Hub** | a computer at home, or a phone while its app is open, if you want one | lets your devices sync when they are away from home; one that only passes copies on reads none |
 
@@ -68,7 +67,7 @@ and the others go on syncing.
 **Two networks at home**, for example a separate network for smart devices: mDNS does not
 cross the router, so devices on different networks do not find each other by themselves.
 The phone apps remember each computer's addresses from its QR code and still reach it; a
-lite member can be told a computer's address
+small device can be told a computer's address
 ([`-peer`](../../member/README.md#install)); and for
 everything else a hub (below) joins both sides.
 
@@ -119,13 +118,12 @@ Some networks (hotels, offices, some countries) block VPN traffic. The hub disgu
 group's tunnel unless you turn it off:
 
 - **Obfuscation**: the tunnel speaks AmneziaWG, which does not look like WireGuard on the
-  wire. Computers and both phone apps support it.
+  wire. Computers, small devices and both phone apps support it.
 - **VLESS** (through a forwarder): the devices reach the forwarder inside what looks like an
   ordinary HTTPS connection to the forwarder's website. For networks that block both of the
-  above. Computers and both phone apps support it.
+  above. Computers, small devices and both phone apps support it.
 
-`cbb global hub -no-vless` turns VLESS off, and `-no-obfuscate` with it plain WireGuard. The
-lite member speaks only plain WireGuard, so with either of these on it syncs at home only.
+`cbb global hub -no-vless` turns VLESS off, and `-no-obfuscate` with it plain WireGuard.
 
 ## Phones only: the phone as the hub
 
@@ -133,7 +131,7 @@ A group of just phones, or phones and a Mac, has no computer to be the hub. Two 
 syncing away from home:
 
 - **The phone as the hub**, while its app is open (Settings, **This phone as the hub**; on
-  from the start in a group made on a phone). The other phones, TVs and lite members connect
+  from the start in a group made on a phone). The other phones, TVs and small devices connect
   to it at home, and with a forwarder they reach it from afar too. On Android it can keep
   running in the background; an iPhone serves only while the app is open.
 - **A blind relay of your own** (`cbb relay` on your server). It stands in for the hub as

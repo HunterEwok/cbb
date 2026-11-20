@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!doctype html>
-<html lang="{{.Lang.Tag}}" dir="{{if .Lang.RTL}}rtl{{else}}ltr{{end}}" style="--fig: '{{t "Fig."}}'; --sheet: '{{t "Sheet"}}'">
+<html lang="{{.Lang.Tag}}" dir="{{if .Lang.RTL}}rtl{{else}}ltr{{end}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,13 +20,13 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="{{t "Copy Beyond Borders: copy here, paste on any of your devices."}}">
 <meta name="twitter:card" content="summary_large_image">
-{{end}}<meta name="theme-color" content="#0B2545" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F7FAFF" media="(prefers-color-scheme: light)">
-<script defer src="{{asset "site.js"}}"></script>
-<link rel="preload" href="/static/fonts/ibm-plex-sans-{{if eq .Lang.Code "ru"}}cyrillic{{else}}latin{{end}}.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="{{asset "style.css"}}" id="look-ink">
-<link rel="stylesheet" href="{{asset "board.css"}}" id="look-board" media="not all">
+{{end}}<meta name="theme-color" content="#0B1A20" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#DCD3C1" media="(prefers-color-scheme: light)">
 <script src="{{asset "theme.js"}}"></script>
+<script defer src="{{asset "site.js"}}"></script>
+<link rel="preload" href="/static/fonts/forum-400-{{if eq .Lang.Code "ru"}}cyrillic{{else}}latin{{end}}.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/jost-400-{{if eq .Lang.Code "ru"}}cyrillic{{else}}latin{{end}}.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "style.css"}}">
 <link rel="icon" href="/static/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
@@ -34,7 +34,7 @@
 {{block "head" .}}{{end}}</head>
 <body>
 {{block "sprites" .}}{{end}}<svg class="sprites" aria-hidden="true" focusable="false">
-<!-- For the chalkboard look. Chalk: the line stays whole; its edge is a little uneven and soft, its
+<!-- Chalk: the line stays whole; its edge is a little uneven and soft, its
      body a touch lighter in places, and a faint dust lies around it. -->
 <filter id="chalk" x="-3%" y="-3%" width="106%" height="106%" color-interpolation-filters="sRGB">
   <feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="1" seed="3" result="n"/>
@@ -56,7 +56,7 @@
   <feMerge><feMergeNode in="h"/><feMergeNode in="t"/></feMerge>
 </filter>
 <symbol id="yes" viewBox="0 0 28 28"><path d="M5 15.5 11.5 21.5 23 6.5"/></symbol>
-<symbol id="no" viewBox="0 0 28 28"><path d="M6 14H22"/></symbol>
+<symbol id="no" viewBox="0 0 28 28"><path d="M7 7 21 21M21 7 7 21"/></symbol>
 </svg>
 <a class="skip" href="#main">{{t "Skip to content"}}</a>
 <header class="top">
@@ -72,7 +72,7 @@
       <a href="https://github.com/HunterEwok/cbb">GitHub</a>
     </nav>
     <details class="langs">
-      <summary><span class="globe" aria-hidden="true">文A</span><span class="sr">{{t "Language"}}: </span><span class="lname">{{.Lang.Name}}</span></summary>
+      <summary><svg class="globe" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span class="sr">{{t "Language"}}: </span><span class="lname">{{.Lang.Name}}</span></summary>
       <ul>
         {{range .Langs}}<li><a href="/?lang={{.Code}}&amp;p={{$.Page}}" lang="{{.Tag}}" hreflang="{{.Tag}}"{{if eq .Code $.Lang.Code}} aria-current="true"{{end}}>{{.Name}}</a></li>
         {{end}}
@@ -81,14 +81,10 @@
     <button class="theme" type="button" hidden data-auto="{{t "Theme: as on this device"}}" data-light="{{t "Theme: light"}}" data-dark="{{t "Theme: dark"}}">
       <svg aria-hidden="true" viewBox="0 0 24 24"><g class="t-auto"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z"/></g><g class="t-light"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></g><g class="t-dark"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></g></svg>
     </button>
-    <button class="theme look" type="button" hidden data-ink="{{t "Look: blueprint"}}" data-board="{{t "Look: chalkboard"}}">
-      <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M10 10v9"/></svg>
-    </button>
   </div>
 </header>
-{{/* The four corner marks of a drawing sheet, and the four walnut rails of a
-     board's frame for the chalkboard look; each look hides the other's. */}}
-{{define "corners"}}<i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i><i class="rail t"></i><i class="rail b"></i><i class="rail l"></i><i class="rail r"></i>{{end}}
+{{/* The four walnut rails of a board's frame, meeting in mitred corners. */}}
+{{define "rails"}}<i class="rail t"></i><i class="rail b"></i><i class="rail l"></i><i class="rail r"></i>{{end}}
 <main id="main" data-copy="{{t "Copy"}}" data-copied="{{t "Copied"}}">
 {{template "content" .}}
 </main>

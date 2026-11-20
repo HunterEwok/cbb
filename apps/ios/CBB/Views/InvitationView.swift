@@ -13,6 +13,7 @@ struct InvitationView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
     @State private var typed = ""
     @State private var picking = false
 
@@ -21,7 +22,7 @@ struct InvitationView: View {
             VStack(spacing: Tokens.spacingLarge) {
                 if QRScanner.available {
                     QRScanner { text in read(text) }
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                         .frame(maxHeight: 360)
                     Text("Point the camera at the invitation's QR code.")
                         .multilineTextAlignment(.center)

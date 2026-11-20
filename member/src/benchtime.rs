@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The bench's time-scaled build (feature `benchtime`, never a release's;
-//! docs/testbench-catalogue.md, section 0.1, "time"), as Go's
+//! docs/maintainers/testbench-catalogue.md, section 0.1, "time"), as Go's
 //! internal/benchtime: the core's long times run CBB_TEST_SCALE times
 //! faster (100000 without it, 1 for the cases that move only the clock),
 //! and CBB_TEST_CLOCK, or the file CBB_TEST_CLOCK_FILE names, moves the
@@ -12,15 +12,15 @@
 /// Sets the core's scale from CBB_TEST_SCALE; the time-scaled build only.
 #[cfg(feature = "benchtime")]
 pub fn start() {
-    let scale = match std::env::var("CBB_TEST_SCALE") {
-        Ok(s) => match s.trim().parse::<u32>() {
+    let scale = match crate::testbuild::env("CBB_TEST_SCALE") {
+        Some(s) => match s.trim().parse::<u32>() {
             Ok(n) if n >= 1 => n,
             _ => {
                 eprintln!("benchtime: CBB_TEST_SCALE {s:?} is not a whole number of 1 or more");
                 std::process::exit(2);
             }
         },
-        Err(_) => cbb_core::benchtime::DEFAULT_SCALE,
+        None => cbb_core::benchtime::DEFAULT_SCALE,
     };
     cbb_core::benchtime::set_scale(scale);
     let _ = clock_offset_ms();
@@ -34,9 +34,9 @@ pub fn start() {}
 pub fn clock_offset_ms() -> i64 {
     static OFFSET: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
     *OFFSET.get_or_init(|| {
-        let mut s = std::env::var("CBB_TEST_CLOCK").unwrap_or_default();
+        let mut s = crate::testbuild::env("CBB_TEST_CLOCK").unwrap_or_default();
         if s.is_empty()
-            && let Some(file) = std::env::var_os("CBB_TEST_CLOCK_FILE")
+            && let Some(file) = crate::testbuild::env_os("CBB_TEST_CLOCK_FILE")
         {
             match std::fs::read_to_string(&file) {
                 Ok(t) => s = t,

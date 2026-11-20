@@ -15,7 +15,7 @@ can check it, and which level of strictness to choose. The exact rules are in th
 
 | Where | Devices | What a thief gets |
 |---|---|---|
-| **In a file** | Intel Macs without the T2 chip, Windows PCs and Linux computers without a TPM, the lite member | a copy of the file, which works anywhere until an admin removes the device |
+| **In a file** | Intel Macs without the T2 chip, Windows PCs and Linux computers without a TPM, small devices | a copy of the file, which works anywhere until an admin removes the device |
 | **In hardware** | iPhones (Secure Enclave), Android phones (Keystore: StrongBox or the TEE), Macs with Apple silicon or the T2 chip (Secure Enclave), Linux computers and Windows PCs with a TPM | nothing to copy: the key signs only on that device, and on a phone the root's and admins' keys only after your face, fingerprint or passcode |
 | **Proven hardware** | an Android phone whose key the group's root checked | the same as hardware, and the group knows it is true, not only that the device says so |
 

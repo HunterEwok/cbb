@@ -159,3 +159,23 @@ func TestDeskArrange(t *testing.T) {
 		t.Errorf("after ungroup: %+v", st.Arranged)
 	}
 }
+
+// TestOwnMute: this computer itself is muted and unmuted on the control
+// socket, without the administrator; another device takes cbb as the
+// administrator.
+func TestOwnMute(t *testing.T) {
+	d := &Desk{tr: map[string]string{}}
+	if _, ok := d.ownMute("me", false, 0); ok {
+		t.Fatal("a request for this computer before its status")
+	}
+	d.status = &control.Status{Device: "me", Group: "g1"}
+	if h, ok := d.ownMute("me", false, 0); !ok || h.Op != control.OpUnmute || h.Device != "me" {
+		t.Fatalf("unmute of this computer: %+v, %v", h, ok)
+	}
+	if h, ok := d.ownMute("me", true, 60000); !ok || h.Op != control.OpMute || h.ForMS != 60000 {
+		t.Fatalf("mute of this computer: %+v, %v", h, ok)
+	}
+	if _, ok := d.ownMute("a", false, 0); ok {
+		t.Fatal("another device on the control socket")
+	}
+}

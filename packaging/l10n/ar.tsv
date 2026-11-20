@@ -167,6 +167,7 @@ a key is not P-256	أحد المفاتيح ليس P-256
 %s is not signed by the project's key; not installing	%s غير موقّع بمفتاح المشروع؛ لن يُثبَّت
 keys.json holds a key whose use is empty; not installing	يحتوي keys.json على مفتاح استخدامه فارغ؛ لن يُثبَّت
 checking for administrator rights	التحقق من صلاحيات المسؤول
+making a private folder for the download	إنشاء مجلد خاص للتنزيل
 run it in a PowerShell opened with "Run as administrator"	شغّله في PowerShell مفتوح عبر "تشغيل كمسؤول"
 finding the architecture	تحديد المعمارية
 finding the latest release	البحث عن أحدث إصدار
@@ -255,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	لا يدعم cbb
 --no-helper is for Linux	‏--no-helper مخصص لـ Linux فقط
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	يعمل cbb هنا مع مساعده، الذي قد يحفظ مفاتيحه؛ ومن دونه لا يستطيع cbb استخدامها. أزِله أولًا: %s
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput يحتاج إلى مساعد cbb، الذي يشغّل موصل سطح المكتب
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	لم تُكتب إجراءات polkit التي تؤكد إجراءات الإدارة؛ ستطلب التطبيقات كلمة مرور المسؤول بدلًا من ذلك
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	لم تُكتب الصلاحيات التي تؤكد إجراءات الإدارة؛ سيطلب تطبيق Mac كلمة مرور المسؤول بدلًا من ذلك

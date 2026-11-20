@@ -775,3 +775,92 @@ pub fn check_zxnext(keys: &File, list: &File, roots: &[&[u8]], now_ms: i64, inst
     }
     Ok(z)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+    use p256::ecdsa::{Signature, SigningKey, signature::Signer as _};
+    use p256::pkcs8::EncodePublicKey as _;
+
+    fn key(n: u8) -> (SigningKey, Vec<u8>) {
+        let k = SigningKey::from_slice(&[n; 32]).unwrap();
+        let spki = k.verifying_key().to_public_key_der().unwrap().as_bytes().to_vec();
+        (k, spki)
+    }
+
+    fn signed(by: &(SigningKey, Vec<u8>), body: String) -> File {
+        let sig: Signature = by.0.sign(body.as_bytes());
+        File { body: body.into_bytes(), sig: sig.to_der().as_bytes().to_vec(), key: sha256(&by.1).to_vec() }
+    }
+
+    /// keys.json signed by root at time_ms, naming the release key and the
+    /// status key.
+    fn keys(root: &(SigningKey, Vec<u8>), release: &[u8], status: &[u8], time_ms: i64) -> File {
+        let expires = time_ms + 90 * 24 * 3600 * 1000;
+        signed(
+            root,
+            format!(
+                r#"{{"v":1,"type":"keys","seq":3,"time_ms":{time_ms},"expires_ms":{expires},"keys":[{{"key":"{}","name":"release key"}},{{"key":"{}","name":"status key","use":"status"}}]}}"#,
+                STANDARD.encode(release),
+                STANDARD.encode(status)
+            ),
+        )
+    }
+
+    /// A channel and its release, or attest-status.json, signed at a time
+    /// a day ahead of the device's clock is refused once that clock is
+    /// plausible, taken at exactly a day ahead, and taken whatever its time
+    /// while the clock reads before 2026.
+    #[test]
+    fn files_signed_ahead_of_the_clock() {
+        let (root, release, status) = (key(1), key(2), key(3));
+        let roots: [&[u8]; 1] = [&root.1];
+        let t: i64 = 1_800_000_000_000;
+        let keys = keys(&root, &release.1, &status.1, t - 2 * MAX_AHEAD_MS);
+        let rel = signed(
+            &release,
+            format!(
+                r#"{{"v":1,"type":"release","version":"0.6.0","channel":"stable","time_ms":{t},"files":[{{"name":"SHA256SUMS","size":100,"sha256":"{}"}}]}}"#,
+                "ef".repeat(32)
+            ),
+        );
+        let channel = signed(
+            &release,
+            format!(
+                r#"{{"v":1,"type":"channel","channel":"stable","seq":7,"time_ms":{t},"expires_ms":{},"release":"0.6.0","release_sha256":"{}"}}"#,
+                t + 30 * 24 * 3600 * 1000,
+                hex(&rel.hash())
+            ),
+        );
+        let att = signed(
+            &status,
+            format!(
+                r#"{{"v":1,"type":"attest-status","seq":40,"time_ms":{t},"expires_ms":{},"android_revoked":[]}}"#,
+                t + 7 * 24 * 3600 * 1000
+            ),
+        );
+        let seen = Seen::default();
+        let check_channel = |now: i64| check(&keys, &channel, &rel, &roots, "stable", now, &seen).map(|_| ());
+        let check_att = |now: i64| check_status(&keys, &att, &roots, now, &seen).map(|_| ());
+
+        let ahead = t - MAX_AHEAD_MS - 1;
+        let e = check_channel(ahead).unwrap_err();
+        assert!(e.message().contains("stable.json was signed ahead"), "{}", e.message());
+        let e = check_att(ahead).unwrap_err();
+        assert!(e.message().contains("attest-status.json was signed ahead"), "{}", e.message());
+
+        check_channel(t - MAX_AHEAD_MS).unwrap();
+        check_att(t - MAX_AHEAD_MS).unwrap();
+        check_channel(t).unwrap();
+        check_att(t).unwrap();
+
+        // A clock before 2026 is not trusted to refuse a file for its time.
+        let unknown = PLAUSIBLE - 1;
+        check_channel(unknown).unwrap();
+        check_att(unknown).unwrap();
+        assert!(signed_ahead(PLAUSIBLE + MAX_AHEAD_MS + 1, PLAUSIBLE));
+        assert!(!signed_ahead(PLAUSIBLE + MAX_AHEAD_MS + 1, PLAUSIBLE - 1));
+    }
+}

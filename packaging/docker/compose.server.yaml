@@ -13,7 +13,8 @@
 # ["relay", "-group", "TAG", "-listen", ":8764"] (cbb status shows a group's tag).
 services:
   forward:
-    image: ghcr.io/hunterewok/cbb:latest # pin a release by its digest
+    # latest is only ever a signed release; pin one by its digest (README.md).
+    image: ghcr.io/hunterewok/cbb:latest
     command: ["forward", "-listen", ":8764"]
     # With VLESS behind the host's web server: add "-vless-xhttp", "vpn.example.org",
     # "-vless-listen", ":3276" and publish "127.0.0.1:3276:3276/tcp" for it
@@ -22,6 +23,10 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    # A relay's tunnel connections cost three open files each
+    # (docs/relay-budget.md); the forwarder's connections one.
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
     ports:
       - "8764:8764/udp"
       - "8764:8764/tcp"

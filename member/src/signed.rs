@@ -92,6 +92,7 @@ const RESIGNABLE: &[&str] = &[
 /// counts in the log, for the user to do again what was theirs.
 pub fn resign_voided(dir: &Path, node: &Node) {
     let log = |s: &str| node.logf(s);
+    let _settled = crate::admin::no_takeover_finishing();
     let Ok(Some(s)) = signer(dir, &node.identity()) else { return };
     let me = s.hash();
     let voided = {

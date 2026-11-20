@@ -3,6 +3,10 @@
 
 package tools.cbb
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import android.Manifest
 import android.icu.text.MeasureFormat
 import android.icu.util.Measure
@@ -32,7 +36,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -46,7 +49,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +61,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -89,14 +93,14 @@ enum class DeviceLayout(val key: String, val symbol: String, @StringRes val titl
     }
 }
 
-private enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, INVITE, COLLECTION }
+internal enum class HomePage { MAIN, DEVICE, SETTINGS, ADD, INVITE, COLLECTION }
 
 /**
  * The one page (docs/apps.md, Home): the house and the globe beside how
  * many devices are online, an alert only when there is one, and every
  * device of the group as tiles or a list; a device opens its details. On a big
- * screen (a tablet, a foldable's inner screen) the devices may stand on
- * orbits around this phone, and the details open beside them.
+ * screen (a tablet, a foldable's inner screen, a wide window) the sidebar
+ * and the devices with the details beside them (TabletHome).
  */
 @Composable
 internal fun HomeScreen(model: AppModel) {
@@ -118,9 +122,11 @@ internal fun HomeScreen(model: AppModel) {
         model.group.signDue()
     }
     BackgroundSync()
-    val wide = LocalConfiguration.current.screenWidthDp >= 720
+    // The window's width decides, as Material's medium and expanded
+    // classes do: a tablet's half of a split screen gets the phone's page.
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
     val main = { page = if (collection != null) HomePage.COLLECTION else HomePage.MAIN }
-    CompositionLocalProvider(LocalArrange provides arrange) {
+    CompositionLocalProvider(LocalArrange provides arrange, LocalModel provides model) {
         when (page) {
             HomePage.DEVICE -> {
                 val id = selected
@@ -146,10 +152,9 @@ internal fun HomeScreen(model: AppModel) {
                     page = HomePage.MAIN
                 }
                 BackHandler { leave() }
-                if (id == null) {
+                if (id == null || wide) {
+                    // A big screen opens a collection from its sidebar.
                     LaunchedEffect(Unit) { leave() }
-                } else if (wide) {
-                    Beside(model, selected, { selected = it }) { CollectionPage(model, id, leave) { selected = it } }
                 } else {
                     CollectionPage(model, id, leave) {
                         selected = it
@@ -164,7 +169,7 @@ internal fun HomeScreen(model: AppModel) {
                     page = HomePage.COLLECTION
                 }
                 if (wide) {
-                    WideHome(model, selected, select = { selected = it }, open = { page = it }, openCollection)
+                    TabletHome(model, open = { page = it })
                 } else {
                     HomeMain(model, open = { page = it }, openCollection) {
                         selected = it
@@ -196,59 +201,17 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
     }
 }
 
-/** The big screen's page: the devices, and the chosen one's details beside them. */
-@Composable
-private fun WideHome(model: AppModel, selected: String?, select: (String?) -> Unit, open: (HomePage) -> Unit, openCollection: (String) -> Unit) {
-    var layout by remember { mutableStateOf(model.settings.wideLayout) }
-    val search = rememberDeviceSearch(model)
-    val arrange = LocalArrange.current
-    Beside(model, selected, select) {
-        Column(Modifier.fillMaxSize().padding(Tokens.spacingLarge), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-            TopBar(model, layout, DeviceLayout.entries.sortedBy { it != DeviceLayout.ORBIT }, open) {
-                layout = it
-                model.settings.wideLayout = it
-            }
-            Summary(model)
-            Alerts(model)
-            LostPhoneCard(model)
-            model.message?.let { NoteText(it, dim = true) }
-            FallbackSend(model)
-            // The orbit keeps the group's order; Arrange mode and a search show tiles.
-            if (layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
-                Orbit(
-                    model.devices,
-                    selected,
-                    select = { select(it) },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                )
-            } else {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-                    Devices(model, search, if (layout == DeviceLayout.ORBIT) DeviceLayout.TILES else layout, { select(it) }, openCollection)
-                }
-            }
-        }
-    }
-}
-
-/** A big screen's page, and the chosen device's details beside it. */
-@Composable
-private fun Beside(model: AppModel, selected: String?, select: (String?) -> Unit, content: @Composable () -> Unit) {
-    Row(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxHeight()) { content() }
-        if (selected != null) {
-            VerticalDivider(color = LocalPalette.current.line)
-            Column(Modifier.width(400.dp).fillMaxHeight()) {
-                DeviceDetail(model, selected, close = { select(null) }, back = { select(null) })
-            }
-        }
-    }
-}
-
 /** Home's search and filters, offered once there are more devices than fit a screen. */
 @Stable
-private class DeviceSearch {
+internal class DeviceSearch {
     var query by mutableStateOf("")
     var filter by mutableStateOf<DeviceFilter?>(null)
+
+    /** The search field's focus, which Ctrl+F asks for on a big screen. */
+    val field = FocusRequester()
+    fun focus() {
+        runCatching { field.requestFocus() }
+    }
 
     /** Whether Home offers them: more than 12 devices. */
     var offered = false
@@ -264,10 +227,10 @@ private class DeviceSearch {
     }
 }
 
-private enum class DeviceFilter { ONLINE, ATTENTION }
+internal enum class DeviceFilter { ONLINE, ATTENTION }
 
 @Composable
-private fun rememberDeviceSearch(model: AppModel): DeviceSearch {
+internal fun rememberDeviceSearch(model: AppModel): DeviceSearch {
     val search = remember { DeviceSearch() }
     search.offered = model.devices.size > 12
     // Arrange mode is off while a search or a filter is on.
@@ -281,7 +244,7 @@ private fun rememberDeviceSearch(model: AppModel): DeviceSearch {
  * search or a filter is on.
  */
 @Composable
-private fun Devices(model: AppModel, search: DeviceSearch, layout: DeviceLayout, select: (String) -> Unit, openCollection: (String) -> Unit) {
+internal fun Devices(model: AppModel, search: DeviceSearch, layout: DeviceLayout, select: (String) -> Unit, openCollection: (String) -> Unit) {
     if (LocalArrange.current.on) ArrangeBar()
     if (search.offered) SearchBar(search)
     if (search.active) {
@@ -305,7 +268,7 @@ private fun SearchBar(search: DeviceSearch) {
             onValueChange = { search.query = it },
             singleLine = true,
             label = { Text(stringResource(R.string.search_devices)) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(search.field),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
             for ((f, text) in listOf(DeviceFilter.ONLINE to R.string.filter_online, DeviceFilter.ATTENTION to R.string.needs_attention)) {
@@ -387,7 +350,7 @@ private fun TopBar(model: AppModel, layout: DeviceLayout, layouts: List<DeviceLa
 
 /** How many devices are online, of how many, beside the house and the globe; under them what stands out. */
 @Composable
-private fun Summary(model: AppModel) {
+internal fun Summary(model: AppModel) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             stringResource(R.string.online_count, model.devices.count { it.online }, model.devices.size),
@@ -548,14 +511,29 @@ private fun SwitchFace(
  * cancelling a claim, or removing one of two admins that removed each other.
  */
 @Composable
-private fun Alerts(model: AppModel) {
+internal fun Alerts(model: AppModel) {
     RemovedCard(model)
     Handed(model)
-    if (model.alerts.isEmpty()) return
-    val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
+    AlertList(
+        model.alerts,
+        model.isRoot,
+        resolve = { alert -> scope.launch { model.resolve(alert) } },
+        remove = { id -> scope.launch { model.remove(id) } },
+    )
+}
+
+/**
+ * The alerts' card: each alert in a sentence and, on the root phone, what
+ * ends it. Apart from Alerts so that the sheet of the dangerous screens
+ * (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun AlertList(alerts: List<GroupAlert>, isRoot: Boolean, resolve: (GroupAlert) -> Unit, remove: (String) -> Unit) {
+    if (alerts.isEmpty()) return
+    val palette = LocalPalette.current
     Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        for (alert in model.alerts) {
+        for (alert in alerts) {
             Text(
                 alertText(alert),
                 style = MaterialTheme.typography.bodyMedium,
@@ -563,21 +541,21 @@ private fun Alerts(model: AppModel) {
             )
             when (alert.kind) {
                 GroupAlert.Kind.TWO_HISTORIES ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.void_both_histories), onClick = { scope.launch { model.resolve(alert) } })
+                    if (isRoot) {
+                        QuietButton(stringResource(R.string.void_both_histories), onClick = { resolve(alert) })
                     } else {
                         RootDecides()
                     }
                 GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.cancel_claim), onClick = { scope.launch { model.resolve(alert) } })
+                    if (isRoot) {
+                        QuietButton(stringResource(R.string.cancel_claim), onClick = { resolve(alert) })
                     } else {
                         RootDecides()
                     }
                 GroupAlert.Kind.ADMINS ->
-                    if (model.isRoot) {
+                    if (isRoot) {
                         for ((id, name) in alert.devices.zip(alert.names)) {
-                            QuietButton(stringResource(R.string.remove_device, name), onClick = { scope.launch { model.remove(id) } })
+                            QuietButton(stringResource(R.string.remove_device, name), onClick = { remove(id) })
                         }
                     } else {
                         RootDecides()
@@ -598,6 +576,9 @@ private fun Handed(model: AppModel) {
     Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
         Text(stringResource(R.string.handed_title), style = MaterialTheme.typography.titleMedium, color = palette.text)
         Text(stringResource(R.string.handed_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        // Taking the group makes this device its main one: a device that guards its keys less well than a phone says so first.
+        LaunchedEffect(Unit) { model.checkKeys() }
+        if (model.guardsLikeAPhone == false) Text(stringResource(R.string.key_guard_weak), style = MaterialTheme.typography.bodySmall, color = palette.danger)
         AccentButton(stringResource(R.string.handed_take), enabled = !busy, onClick = {
             busy = true
             scope.launch {
@@ -656,7 +637,7 @@ private fun alertText(alert: GroupAlert): String {
  * second phone becomes an admin. Closed once, it stays closed.
  */
 @Composable
-private fun LostPhoneCard(model: AppModel) {
+internal fun LostPhoneCard(model: AppModel) {
     if (!model.isAdmin || model.devices.count { it.admin } != 1) return
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("tips", android.content.Context.MODE_PRIVATE) }
@@ -681,7 +662,7 @@ private fun LostPhoneCard(model: AppModel) {
  * one small button sends it.
  */
 @Composable
-private fun FallbackSend(model: AppModel) {
+internal fun FallbackSend(model: AppModel) {
     if (!model.sendFailed) return
     val scope = rememberCoroutineScope()
     QuietButton(stringResource(R.string.send_copy), enabled = !model.busy, onClick = { scope.launch { model.sync() } })
@@ -689,7 +670,7 @@ private fun FallbackSend(model: AppModel) {
 
 /** The devices as tiles or as a list; each one opens its details. */
 @Composable
-private fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayout, select: (String) -> Unit) {
+internal fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayout, select: (String) -> Unit) {
     if (devices.isEmpty()) {
         Text(stringResource(R.string.no_computers), color = LocalPalette.current.textDim)
         return
@@ -716,17 +697,90 @@ private fun DeviceCollection(devices: List<LiveGroup.Device>, layout: DeviceLayo
 /** A device as a tile: its icon and live dot, its name, its system and where it stands. */
 @Composable
 internal fun DeviceTile(d: LiveGroup.Device, modifier: Modifier, open: (() -> Unit)?, menu: (() -> Unit)? = null) {
-    Column(
-        modifier.glassTile().focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
-        verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
-    ) {
-        Row(verticalAlignment = Alignment.Top) {
-            DeviceIcon(d)
-            Spacer(Modifier.weight(1f))
-            OnlineDot(d.online)
+    val model = LocalModel.current
+    val muted = model?.shownMuted(d) == true
+    val corner = model?.mayMute(d) == true
+    Box(modifier.chosen(d).pasteDrop(d)) {
+        Column(
+            Modifier.fillMaxWidth().glassTile()
+                .then(if (muted) Modifier.dashedOutline(LocalPalette.current.danger, LocalStyle.current.radiusTile) else Modifier)
+                .focusRing().tap(open, menu).padding(Tokens.spacingMedium).liveState(d),
+            verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
+        ) {
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                DeviceIcon(d)
+                OnlineDot(d.online)
+                Spacer(Modifier.weight(1f))
+                if (corner) Spacer(Modifier.width(28.dp))
+            }
+            Text(d.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            DeviceSubtitle(d)
         }
-        Text(d.name, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        DeviceSubtitle(d)
+        if (model != null && corner) MuteCorner(model, d, muted, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+/** The app's model for the tiles, which reach it through the composition. */
+internal val LocalModel = staticCompositionLocalOf<AppModel?> { null }
+
+/**
+ * The small button in a tile's corner (docs/apps.md, "Muting from the
+ * tile"): on this phone's own tile it turns sync off or on, on another
+ * device's an admin mutes it for the group or unmutes it. A tap holds until
+ * undone; a long press picks a time. The tile shows the new state at once.
+ */
+@Composable
+private fun MuteCorner(model: AppModel, d: LiveGroup.Device, muted: Boolean, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val style = LocalStyle.current
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    var times by remember { mutableStateOf(false) }
+    val label = when {
+        d.isSelf && muted -> d.syncOff?.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off)
+        d.isSelf -> stringResource(R.string.sync_on)
+        muted -> stringResource(R.string.unmute)
+        else -> stringResource(R.string.mute)
+    }
+    val shape = RoundedCornerShape(style.radiusChip)
+    Box(modifier) {
+        Box(
+            Modifier.size(44.dp)
+                .combinedClickable(
+                    role = Role.Switch,
+                    onClickLabel = label,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                        scope.launch { model.muteFromTile(d, !muted) }
+                    },
+                    onLongClickLabel = if (muted) null else stringResource(R.string.pause_for_a_time),
+                    onLongClick = if (muted) null else ({ times = true }),
+                )
+                .semantics {
+                    contentDescription = "$label, ${d.name}"
+                    stateDescription = label
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier.size(28.dp).clip(shape).background(if (muted) palette.danger else Color.Transparent)
+                    .border(maxOf(style.stroke, 1.dp), if (muted) palette.danger else palette.line, shape),
+                contentAlignment = Alignment.Center,
+            ) {
+                SwitchGlyph(if (muted) "speaker-off" else "speaker", if (muted) palette.onAccent else palette.textDim, 16.dp)
+            }
+        }
+        DropdownMenu(expanded = times, onDismissRequest = { times = false }) {
+            for (t in PauseTime.entries) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(if (t == PauseTime.EVER && !d.isSelf) R.string.mute_ever else t.title)) },
+                    onClick = {
+                        times = false
+                        scope.launch { model.muteFromTile(d, true, t.ms) }
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -735,7 +789,7 @@ internal fun DeviceTile(d: LiveGroup.Device, modifier: Modifier, open: (() -> Un
 internal fun DeviceRow(d: LiveGroup.Device, modifier: Modifier = Modifier, open: (() -> Unit)?, menu: (() -> Unit)? = null) {
     val palette = LocalPalette.current
     Row(
-        modifier.fillMaxWidth().heightIn(min = 60.dp).card().focusRing().tap(open, menu)
+        modifier.fillMaxWidth().heightIn(min = 60.dp).chosen(d).pasteDrop(d).card().focusRing().tap(open, menu)
             .padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall).liveState(d),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -760,12 +814,18 @@ internal fun DeviceSubtitle(d: LiveGroup.Device) {
         null -> standing
     }
     val palette = LocalPalette.current
-    if (d.muted != null) {
-        // Muted shows in the danger colour, after where it stands.
+    val off = d.syncOff?.takeIf { d.isSelf }
+    val mark = when {
+        d.muted != null -> stringResource(R.string.muted_mark)
+        off != null -> off.until?.let { stringResource(R.string.sync_off_until, shortTime(it)) } ?: stringResource(R.string.sync_off)
+        else -> null
+    }
+    if (mark != null) {
+        // Muted, or this phone's sync off, shows in the danger colour, after where it stands.
         Text(
             buildAnnotatedString {
                 append("$text · ")
-                withStyle(SpanStyle(color = palette.danger)) { append(stringResource(R.string.muted_mark)) }
+                withStyle(SpanStyle(color = palette.danger)) { append(mark) }
             },
             style = MaterialTheme.typography.bodySmall, color = palette.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )

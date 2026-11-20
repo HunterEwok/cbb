@@ -20,7 +20,7 @@ Page {
 
     function use(text) {
         if (text !== "")
-            app.startAdmit(text, app.root && makeAdmin.checked)
+            app.startAdmit(text)
     }
 
     Camera {
@@ -49,15 +49,6 @@ Page {
             spacing: Theme.paddingLarge
 
             PageHeader { title: qsTr("Add a device") }
-
-            // Only the root makes admins: a phone that joins as an admin
-            // offers its admin key, which this phone then certifies.
-            TextSwitch {
-                id: makeAdmin
-                visible: app.root && page.scanning
-                text: qsTr("Make it an admin")
-                description: qsTr("For a phone that joins as an admin")
-            }
 
             Label {
                 x: Theme.horizontalPageMargin

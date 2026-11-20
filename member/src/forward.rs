@@ -20,7 +20,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
@@ -172,6 +172,10 @@ fn vless_ways(addr: std::net::IpAddr, id: &str, learned: Option<&Value>, ways: &
     out
 }
 
+/// What the forwarder answers when another group registered the hub's VLESS
+/// user ID (internal/forward's register.go).
+pub const VLESS_ID_TAKEN: &str = "another group registered that VLESS user ID";
+
 /// The hubs' credential a hub registers with in place of its member
 /// certificate and the records (docs/protocol.md, section 18).
 #[derive(Clone)]
@@ -279,7 +283,8 @@ pub(crate) struct SystemClock;
 
 impl rustls::time_provider::TimeProvider for SystemClock {
     fn current_time(&self) -> Option<UnixTime> {
-        SystemTime::now().duration_since(UNIX_EPOCH).ok().map(UnixTime::since_unix_epoch)
+        // The service's one wall clock, which the tests move.
+        u64::try_from(crate::uptime::wall_ms()).ok().map(|ms| UnixTime::since_unix_epoch(Duration::from_millis(ms)))
     }
 }
 
@@ -466,7 +471,7 @@ fn once(
             {
                 return Ok(true);
             }
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+            let now = u64::try_from(crate::uptime::wall_ms()).unwrap_or(0).saturating_mul(1_000_000);
             counter = counter.saturating_add(1).max(now);
             (cfg.send)(hello_to, &hello(&mask, &hello_key, a.id, counter));
             next = Instant::now() + every;
@@ -512,6 +517,13 @@ pub(crate) struct Registrar {
 }
 
 impl Registrar {
+    /// Writes bytes as they are, for the tests of a server's setup.
+    #[cfg(test)]
+    pub(crate) fn raw_write(&mut self, b: &[u8]) -> Result<()> {
+        use std::io::Write as _;
+        self.s.write_all(b).and_then(|()| self.s.flush()).map_err(|e| Error::msg(format!("{e}")))
+    }
+
     pub(crate) fn connect(
         endpoint: SocketAddr,
         pins: &[certs::KeyHash],
@@ -718,3 +730,7 @@ mod tests {
         assert_eq!(h[20..], m.finalize().into_bytes()[..16]);
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/forward.rs"]
+mod net_tests;

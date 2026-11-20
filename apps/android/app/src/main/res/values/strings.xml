@@ -34,6 +34,7 @@
     <string name="alert_stopped">The group is stopped: its devices exchange only their records, no clipboard, until the group\'s root decides.</string>
     <string name="alert_two_histories">%1$s signed two histories with one key, as a stolen key or a restore from a backup would.</string>
     <string name="alert_unknown_devices">devices unknown here</string>
+    <string name="all_devices">All devices</string>
     <string name="app_info">App info</string>
     <string name="app_name" translatable="false">CBB</string>
     <string name="appearance">Appearance</string>
@@ -93,21 +94,13 @@
     <string name="collection_state">collection, %1$d of %2$d online</string>
     <string name="collection_state_attention">collection, %1$d of %2$d online, needs attention</string>
     <string name="collection_ungroup">Ungroup</string>
-    <string name="color_amber">Amber</string>
-    <string name="color_coral">Coral</string>
-    <string name="color_graphite">Graphite</string>
-    <string name="color_lime">Lime</string>
-    <string name="color_midnight">Midnight</string>
-    <string name="color_ocean">Ocean</string>
-    <string name="color_rose">Rose</string>
-    <string name="color_ruby">Ruby</string>
-    <string name="color_teal">Teal</string>
-    <string name="color_terminal">Terminal</string>
     <string name="connecting">Connecting to the device…</string>
     <string name="copies">Copies</string>
     <string name="copies_forward_only">Passes them on, reads none</string>
     <string name="create_group">Create a group</string>
+    <string name="create_group_main_hint">The device that makes the group holds its main key: best one that is always with you, such as your phone.</string>
     <string name="device_id">Device ID</string>
+    <string name="devices">Devices</string>
     <string name="error_action_refused">The device did not run the action.</string>
     <string name="error_arrangement">The tiles stay as they were: that change does not fit.</string>
     <string name="error_below_key_level">The group\'s admin keys setting does not let this device\'s keys be an admin. Change it in Settings, Admin keys.</string>
@@ -175,6 +168,7 @@
     <string name="filter_online">Online</string>
     <string name="frozen">frozen</string>
     <string name="full_name" translatable="false">Copy Beyond Borders</string>
+    <string name="group">Group</string>
     <string name="group_hub">The group\'s hub</string>
     <string name="group_hub_in_use">The group\'s hub, in use now</string>
     <string name="handed_body">The computer that held the group handed it to this phone. Take it to make this phone the group\'s root; the computer stays in the group.</string>
@@ -269,9 +263,6 @@
     <string name="invite_share">Share the invitation</string>
     <string name="invite_title">Invite a device from afar</string>
     <string name="invite_too_many">The invitation closed after three failed attempts. Make a new one.</string>
-    <string name="join_admin">Join as an admin</string>
-    <string name="join_admin_hint">On the group\'s root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.</string>
-    <string name="join_admin_title">Join as an admin</string>
     <string name="join_group">Join a group</string>
     <string name="join_hint">On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</string>
     <string name="join_hint_tv">On your phone, open CBB, tap + and scan this code. Keep this screen open.</string>
@@ -279,6 +270,7 @@
     <string name="join_title">Join a group</string>
     <string name="join_tv">Join a phone\'s group</string>
     <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
+    <string name="key_guard_weak">This device has no secure key chip or no strong fingerprint or face sensor: as the group\'s main device it guards the group less well than a phone that has both.</string>
     <string name="key_level_body">Which devices may be the group\'s admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.</string>
     <string name="key_level_files">Keys in files too</string>
     <string name="key_level_hardware">Keys in hardware</string>
@@ -349,6 +341,7 @@
     <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
     <string name="make_admin_files_body">The group then lets keys in files be admins and hubs (Settings, Admin keys).</string>
     <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.</string>
+    <string name="make_admin_phone_body">It can then add and remove devices, and take the group over if this phone is lost.</string>
     <string name="make_admin_title">Make %1$s an admin?</string>
     <string name="make_hub">Make it a hub</string>
     <string name="make_hub_body">Your devices then reach the group through it when they are away from home, through the project\'s forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.</string>
@@ -357,6 +350,7 @@
     <string name="make_hub_reads">A hub that reads the copies</string>
     <string name="make_hub_refused">The computer did not become a hub.</string>
     <string name="make_hub_title">Make %1$s a hub?</string>
+    <string name="menu">Menu</string>
     <string name="more">More</string>
     <string name="move_earlier">Move earlier</string>
     <string name="move_end">Move to end</string>
@@ -427,7 +421,7 @@
     <string name="reason_incoming">Change how long a copy from another device lasts</string>
     <string name="reason_join">Join the group as an admin</string>
     <string name="reason_key_level">Change which keys may be admins</string>
-    <string name="reason_make_admin">Make a computer an admin</string>
+    <string name="reason_make_admin">Make a device an admin</string>
     <string name="reason_make_hub">Make a computer a hub</string>
     <string name="reason_make_recovery">Make a recovery key</string>
     <string name="reason_move_hub">Move the hub to a computer</string>
@@ -539,6 +533,7 @@
     <string name="share_files_title">Send to your computers?</string>
     <string name="share_forget">Ask every app again</string>
     <string name="share_unknown_app">An app</string>
+    <string name="shortcuts_hint">Ctrl+1 to 9 open these sections, Ctrl+N adds a device, the arrows choose a device and Esc closes its details.</string>
     <string name="signature_n">Signature %1$d</string>
     <string name="signature_of">Signature %1$d of %2$d</string>
     <string name="source">Source code and license (AGPL-3.0)</string>
@@ -551,10 +546,21 @@
     <string name="sync_turned_off">Sync is off: nothing goes out or comes in.</string>
     <string name="sync_turned_on">Sync is on.</string>
     <string name="tagline">One clipboard for this phone and your computers.</string>
+    <string name="theme_blueprint">Blueprint</string>
+    <string name="theme_board">Chalkboard</string>
     <string name="theme_dark">Dark</string>
+    <string name="theme_deco">Art Deco</string>
+    <string name="theme_glass">Glass</string>
+    <string name="theme_hardware">Hardware</string>
     <string name="theme_light">Light</string>
+    <string name="theme_liquid">Liquid Glass</string>
     <string name="theme_material">Material You</string>
+    <string name="theme_precise">Precise</string>
+    <string name="theme_retro">Retro</string>
+    <string name="theme_soft">Soft</string>
+    <string name="theme_swiss">Swiss</string>
     <string name="theme_system">System</string>
+    <string name="theme_terminal">Terminal</string>
     <string name="this_phone">This phone</string>
     <string name="this_phone_admin">This phone · admin</string>
     <string name="tile_label">Send clipboard</string>

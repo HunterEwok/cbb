@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 8cc314e35203 -->
+<!-- source: e2b4fea9b2db -->
 # Privacidad: quién ve qué
 
 Para quien quiera saber qué sale de sus dispositivos. Copy Beyond Borders no tiene cuentas, ni
@@ -56,7 +56,7 @@ Las dos dependen de ti:
 
 | Quién | Qué puede ver | Cómo evitarlo |
 |---|---|---|
-| Otros en tu red doméstica | que hay dispositivos que ejecutan Copy Beyond Borders, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce (un miembro ligero, en todas las redes) |
+| Otros en tu red doméstica | que hay dispositivos que ejecutan Copy Beyond Borders, sus ID de dispositivo aleatorios y la etiqueta de tu grupo en mDNS, y cuáles se comunican y cuánto; nunca los nombres de los dispositivos ni los contenidos | nada que hacer; un ordenador publica solo en las redes domésticas que conoce |
 | Otros en una red fuera de casa (una cafetería, un hotel) | que el dispositivo habla WireGuard, o que con VLESS abre una conexión TLS a tu hub o reenviador, cuándo y cuánto | una VPN del sistema oculta incluso eso |
 | El reenviador (el tuyo, o el del proyecto en `cbb.tools`) | las direcciones de las que vienen los paquetes cifrados y que van a tu hub, cuándo y de qué tamaño; no a qué grupo o dispositivo pertenecen | ejecutar el tuyo, o redirigir un puerto a tu hub y no usar ninguno |
 | Un relé ciego | cuáles de los dispositivos de un grupo están en línea ahora y se comunican entre sí, cuándo y cuánto; no guarda nada de ello | ejecutar el tuyo, o usar un hub |

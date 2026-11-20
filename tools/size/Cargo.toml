@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# What each part of the core costs in a small device's flash: one program per
+# part for the ESP32-C6's RISC-V, measured by size.sh (docs/testing.md,
+# "Firmware size"). On the host it is an empty program.
+[package]
+name = "cbb-size"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "AGPL-3.0-only"
+publish = false
+
+[[bin]]
+name = "cbb-size"
+path = "src/main.rs"
+test = false
+bench = false
+
+[features]
+# Each part, alone or together; none is the program around them.
+p256 = []
+json = []
+records = []
+seal = []
+copy = []
+pair = []
+tls = ["cbb-core/tls", "dep:rustls"]
+api = ["cbb-core/tls"]
+
+[dependencies]
+cbb-core = { path = "../../core" }
+getrandom = { version = "0.4", default-features = false }
+rustls = { version = "0.23.46", default-features = false, optional = true }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

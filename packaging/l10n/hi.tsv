@@ -167,6 +167,7 @@ a key is not P-256	एक कुंजी P-256 नहीं है
 %s is not signed by the project's key; not installing	%s प्रोजेक्ट की कुंजी से हस्ताक्षरित नहीं है; इंस्टॉल नहीं किया जा रहा
 keys.json holds a key whose use is empty; not installing	keys.json में एक कुंजी है जिसका उपयोग खाली है; इंस्टॉल नहीं किया जा रहा
 checking for administrator rights	व्यवस्थापक अधिकार जाँचे जा रहे हैं
+making a private folder for the download	डाउनलोड के लिए निजी फ़ोल्डर बनाया जा रहा है
 run it in a PowerShell opened with "Run as administrator"	इसे "Run as administrator" से खोले गए PowerShell में चलाएँ
 finding the architecture	आर्किटेक्चर पता किया जा रहा है
 finding the latest release	नवीनतम रिलीज़ खोजी जा रही है
@@ -255,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS के ल�
 --no-helper is for Linux	--no-helper केवल Linux के लिए है
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	यहाँ cbb अपने सहायक के साथ चलता है, जिसमें इसकी कुंजियाँ हो सकती हैं; उसके बिना cbb उनका उपयोग नहीं कर सकता। पहले इसे हटाएँ: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput को cbb का सहायक चाहिए, जो डेस्कटॉप कनेक्टर चलाता है
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	व्यवस्थापक क्रियाओं की पुष्टि करने वाली polkit क्रियाएँ नहीं लिखी गईं; ऐप्स इसके बजाय व्यवस्थापक का पासवर्ड पूछेंगे
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	व्यवस्थापक क्रियाओं की पुष्टि करने वाले अधिकार नहीं लिखे गए; Mac ऐप इसके बजाय व्यवस्थापक का पासवर्ड पूछेगा

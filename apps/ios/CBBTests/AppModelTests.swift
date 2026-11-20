@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 @testable import CBB
+import AppIntents
 import CBBKit
+import LocalAuthentication
 import SwiftUI
 import XCTest
 
@@ -49,6 +51,45 @@ final class AppModelTests: XCTestCase {
         let m = AppModel(group: g, defaults: freshDefaults())
         let said = await m.syncFromShortcut(wait: .seconds(1))
         XCTAssertEqual(said, String(localized: "Sent to the computers.", bundle: .app))
+    }
+
+    /// The Shortcuts action can run on a locked phone's lock screen, so its
+    /// answer names the device a copy came from but never shows the copy.
+    func testSyncFromShortcutDoesNotShowTheCopy() async {
+        let g = FakeGroup()
+        g.hasGroup = true
+        g.computers = [.init(id: "a", name: "pi", online: true)]
+        g.syncResult = .fetched(from: "Mac.lan", preview: "hunter2")
+        let m = AppModel(group: g, defaults: freshDefaults())
+        let said = await m.syncFromShortcut(wait: .seconds(1))
+        XCTAssertEqual(said, String(localized: "Ready to paste, from \("Mac.lan").", bundle: .app))
+        XCTAssertFalse(said.contains("hunter2"))
+        XCTAssertTrue(String(describing: SyncClipboardIntent.authenticationPolicy).contains("requiresAuthentication"),
+                      "the shortcut runs on a locked phone")
+    }
+
+    /// The keys sign without asking only for the window after a Face ID
+    /// check: then, or when the window is ended, the renewer's copy of the
+    /// context stops too.
+    func testFaceIDWindowEndsForEveryHolder() {
+        var now = Date(timeIntervalSince1970: 1_000)
+        let auth = LiveGroup.Authorization(lasts: 300, now: { now })
+        XCTAssertNil(auth.context())
+        let first = LAContext()
+        auth.keep(first)
+        XCTAssertTrue(auth.context() === first)
+        now += 299
+        XCTAssertTrue(auth.context() === first)
+        now += 1
+        XCTAssertNil(auth.context(), "the window ends after its time")
+        XCTAssertNil(auth.context())
+        auth.keep(LAContext())
+        XCTAssertNotNil(auth.context())
+        auth.end()
+        XCTAssertNil(auth.context(), "going to the background ends it at once")
+        auth.keep(LAContext())
+        now -= 10
+        XCTAssertNil(auth.context(), "a clock set back does not stretch it")
     }
 
     func testSaidNamesWhereAndWhat() {
@@ -115,7 +156,7 @@ final class AppModelTests: XCTestCase {
         func prepare() throws { prepared += 1 }
         var joinCode = JoinCode(code: "135790", addrs: ["192.168.1.30:50000"], fingerprint: "fp")
         var shown: [JoinCode] = []
-        func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws {
+        func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
             show(joinCode)
             shown.append(joinCode)
             hasGroup = true
@@ -128,7 +169,8 @@ final class AppModelTests: XCTestCase {
             hasGroup = true
             computers = [.init(id: "a", name: "pi", online: true)]
         }
-        func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: []) }
+        var syncResult: AppModel.SyncResult = .sent(to: [])
+        func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { syncResult }
         var refreshed = 0
         func refresh() async { refreshed += 1 }
         var devices: [AppModel.Computer] { computers + [.init(id: "me", name: "iPhone", online: true, role: "phone", isSelf: true, syncOff: syncOff)] }
@@ -348,20 +390,25 @@ final class AppModelTests: XCTestCase {
     }
 
     func testThemes() {
-        XCTAssertEqual(Tokens.colors.count, 10)
-        XCTAssertEqual(Appearance.system.palette("terminal", for: .dark), Tokens.colors[0].dark)
-        XCTAssertEqual(Appearance.system.palette("terminal", for: .light), Tokens.colors[0].light)
-        XCTAssertEqual(Appearance.dark.palette("amber", for: .light), AccentChoice.pair("amber").dark)
-        XCTAssertEqual(Appearance.light.palette("unknown", for: .dark), Tokens.colors[0].light)
-        XCTAssertEqual(Set(Appearance.allCases.map { $0.palette("ocean", for: .dark).dark }), [true, false])
+        XCTAssertEqual(Tokens.themes.count, 11)
+        XCTAssertEqual(Tokens.themes[0].name, "board")
+        let first = Tokens.themes[0]
+        XCTAssertEqual(Appearance.system.palette(first.name, for: .dark), first.dark)
+        XCTAssertEqual(Appearance.system.palette(first.name, for: .light), first.light)
+        XCTAssertEqual(Appearance.dark.palette("swiss", for: .light), ThemeChoice.theme("swiss").dark)
+        XCTAssertEqual(Appearance.light.palette("unknown", for: .dark), first.light)
+        XCTAssertEqual(Set(Appearance.allCases.map { $0.palette("precise", for: .dark).dark }), [true, false])
+        XCTAssertTrue(ThemeChoice.theme("glass").style.material.isGlass)
+        XCTAssertEqual(ThemeChoice.theme("swiss").style.radius(.card), 0)
+        XCTAssertEqual(ThemeChoice.theme("swiss").style.radius(.fixed(20)), 20)
     }
 
-    /// The one theme setting of the first versions is not read: the
-    /// colour and the appearance stay unset.
+    /// The colour of the first versions, kept under the same key, is no
+    /// theme's name: the default theme shows.
     func testThemeMigration() {
         let d = freshDefaults()
-        d.set("midnight", forKey: "theme")
-        XCTAssertNil(d.string(forKey: AccentChoice.key))
+        d.set("midnight", forKey: ThemeChoice.key)
+        XCTAssertEqual(ThemeChoice.theme(d.string(forKey: ThemeChoice.key) ?? "").name, Tokens.themes[0].name)
         XCTAssertNil(d.string(forKey: Appearance.key))
     }
 

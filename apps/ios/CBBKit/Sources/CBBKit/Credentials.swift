@@ -449,6 +449,16 @@ public struct CredentialStore: Sendable {
         public var names: [String: String]
     }
 
+    /// What a hub registers with at its forwarder (docs/protocol.md,
+    /// section 18): the hubs' credential, once it lists the hub's server
+    /// key, which hashes to mine, and while the period of the current root,
+    /// root, lasts; nil until then.
+    public func hubRegistration(root: Data, mine: Data, nowMS: Int64) -> [Credential]? {
+        guard let (_, p) = period(root: root), nowMS < p.expires_ms, let (hc, hb) = hubs, nowMS < hb.expires_ms, hb.hubs.contains(mine)
+        else { return nil }
+        return [hc]
+    }
+
     /// The registration with these credentials for the device whose server
     /// key hashes to mine, or nil until the members' credential lists it;
     /// root is the current root's key, records the group's records.

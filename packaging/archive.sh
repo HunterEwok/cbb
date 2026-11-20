@@ -21,7 +21,7 @@
 # and its helper"); so do cbb-forward and cbb-relay, the servers that cbb
 # forward and cbb relay run. Each Go program packed adds its modules' notices.
 # The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
-# of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
+# of the Rust cbb's crates (packaging/notices.sh TARGET) come first.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -147,6 +147,13 @@ fi
 if [ "$os" = linux ]; then
 	cp -R "$root/packaging/openwrt" "$work/cbb/packaging/"
 fi
-# No AppleDouble files from macOS tar.
-COPYFILE_DISABLE=1 tar -czf "$out/cbb-$os-$name.tar.gz" -C "$work" cbb
+# No AppleDouble files from macOS tar; every file root's, not the uid of
+# the computer that packs it.
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+	owner="--owner=0 --group=0 --numeric-owner"
+else
+	owner="--uid 0 --gid 0"
+fi
+# shellcheck disable=SC2086 # $owner is several words
+COPYFILE_DISABLE=1 tar $owner -czf "$out/cbb-$os-$name.tar.gz" -C "$work" cbb
 echo "$out/cbb-$os-$name.tar.gz"

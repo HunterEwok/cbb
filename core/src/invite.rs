@@ -598,6 +598,23 @@ mod tests {
     }
 
     #[test]
+    fn debug_leaves_the_keys_out() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/invites.json");
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for c in v["valid"].as_array().unwrap() {
+            let inv = parse(c["text"].as_str().unwrap()).unwrap();
+            let text = format!("{inv:?}");
+            assert!(text.contains(&inv.group), "{text}");
+            for secret in [&inv.secret[..], &inv.guest_key[..], &inv.guest_psk[..]] {
+                assert!(!text.contains(&format!("{secret:?}")), "{text}");
+            }
+            if let Some(x) = &inv.vless {
+                assert!(!text.contains(&x.id), "{text}");
+            }
+        }
+    }
+
+    #[test]
     fn expiry() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/invites.json");
         let v: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();

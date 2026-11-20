@@ -6,9 +6,9 @@
 //! inside the tunnel at the relay's member port, where each connection
 //! starts with one request and the relay answers with notes.
 
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -126,25 +126,99 @@ pub fn read_frame(c: &mut impl Read, max: usize) -> Result<Vec<u8>> {
     Ok(body)
 }
 
+/// A connection with one deadline for all it reads and writes, as Go's
+/// SetDeadline: each read or write waits only for the time left, so a peer
+/// that sends or takes a byte now and then still runs out of time.
+pub struct Deadline {
+    pub s: TcpStream,
+    until: Option<Instant>,
+}
+
+impl Deadline {
+    pub fn new(s: TcpStream, d: Duration) -> Deadline {
+        Deadline { s, until: Some(Instant::now() + d) }
+    }
+
+    /// Ends the deadline: the connection waits as long as it needs from now.
+    pub fn clear(&mut self) {
+        self.until = None;
+        let _ = self.s.set_read_timeout(None);
+        let _ = self.s.set_write_timeout(None);
+    }
+
+    /// The time left, or an error once it is up.
+    fn left(&self) -> io::Result<Option<Duration>> {
+        let Some(until) = self.until else { return Ok(None) };
+        let left = until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "the deadline passed"));
+        }
+        Ok(Some(left))
+    }
+}
+
+impl Read for Deadline {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let left = self.left()?;
+        self.s.set_read_timeout(left)?;
+        self.s.read(buf)
+    }
+}
+
+impl Write for Deadline {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let left = self.left()?;
+        self.s.set_write_timeout(left)?;
+        self.s.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.s.flush()
+    }
+}
+
 /// Sends a note on a connection in a tunnel, within d.
 pub fn send_note(c: &TcpStream, n: &Note, d: Duration) -> Result<()> {
-    let _ = c.set_write_timeout(Some(d));
-    let mut w = c;
+    let mut w = Deadline::new(c.try_clone().map_err(|e| Error::msg(format!("cannot send a frame: {e}")))?, d);
     write_frame(&mut w, n, MAX_LINE)
 }
 
-/// Reads the request of a connection in a tunnel, waiting at most d.
+/// Reads the request of a connection in a tunnel, within d.
 pub fn read_request(c: &TcpStream, d: Duration) -> Result<Request> {
-    let _ = c.set_read_timeout(Some(d));
-    let mut r = c;
+    let mut r = Deadline::new(c.try_clone().map_err(|e| Error::msg(format!("cannot read a frame: {e}")))?, d);
     let f = read_frame(&mut r, MAX_LINE)?;
-    let _ = c.set_read_timeout(None);
+    r.clear();
     serde_json::from_slice(&f).map_err(|_| Error::msg("a request that does not decode"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A peer that sends a byte now and then, each well within the time a
+    /// read may wait, still runs out of the request's time.
+    #[test]
+    fn a_request_has_one_deadline() {
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut peer = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        let (c, _) = ln.accept().unwrap();
+        let dribble = std::thread::spawn(move || {
+            // A frame of 1000 bytes, one byte every 100 ms.
+            let _ = peer.write_all(&1000u32.to_be_bytes());
+            for _ in 0..30 {
+                std::thread::sleep(Duration::from_millis(100));
+                if peer.write_all(b" ").is_err() {
+                    return;
+                }
+            }
+        });
+        let start = Instant::now();
+        assert!(read_request(&c, Duration::from_millis(600)).is_err());
+        let took = start.elapsed();
+        assert!(took < Duration::from_millis(1500), "the request took {took:?}");
+        drop(c);
+        dribble.join().unwrap();
+    }
 
     /// The notes as Go's encoding/json writes them, which the devices' Go
     /// side in the tests reads: fields left out when empty, but

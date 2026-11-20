@@ -9,7 +9,7 @@
 # certificate in the secrets, the signed Windows programs, and with the
 # feed's key, the OpenWrt apk feed.
 # It makes a draft release, only after the iPhone app's CodeQL analysis
-# (codeql-swift.yml) passes on the tag, which takes about 45 minutes. The
+# (codeql-swift.yml) passes on the tag, which takes about half an hour. The
 # maintainer signs and publishes it with release-sign publish; published.yml
 # then updates the Homebrew tap.
 name: release
@@ -55,7 +55,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     # The Windows certificate's secrets live in the environment release, which
-    # only release tags and main may use (docs/maintaining.md, "Release secrets").
+    # only release tags and main may use (docs/maintainers/maintaining.md, "Release secrets").
     environment: release
     env:
       CGO_ENABLED: ${{ matrix.cgo }}
@@ -79,14 +79,16 @@ jobs:
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
           if [ -n "$GOMIPS" ]; then
-            rustup toolchain install "$(sed -n 's/^nightly="\(.*\)"$/\1/p' member/packaging/mips.sh)" --profile minimal --component rust-src
+            rustup toolchain install "$(sed -n 's/^nightly="\(.*\)"$/\1/p' packaging/mips.sh)" --profile minimal --component rust-src
           fi
-      - name: cbb, the Rust program (member/packaging/build.sh), with its crates' notices
+      - name: cbb, the Rust program (packaging/build.sh), with its crates' notices
         env:
           CBB_SOURCE: ${{ github.sha }}
+          # A build for tests only does not compile with it (member/src/testbuild.rs).
+          CBB_RELEASE_BUILD: "1"
         run: |
           rustup toolchain install stable --profile minimal
-          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
+          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
           if [ "$GOOS" = windows ]; then
             cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
           elif [ -z "$GOMIPS" ]; then
@@ -95,7 +97,16 @@ jobs:
           else
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
-          sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
+          sh packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
+          # The second guard: a build for tests only carries this text
+          # (member/src/testbuild.rs), a release's never.
+          for f in "$dir"/cbb "$dir"/cbb.exe "$dir"/cbbw.exe "$dir"/cbb-relay "$dir"/cbb-relay.exe; do
+            [ -f "$f" ] || continue
+            if grep -aqF cbb-test-build-not-for-release "$f"; then
+              echo "::error::$f is a build for tests only" >&2
+              exit 1
+            fi
+          done
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
           ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
@@ -115,6 +126,13 @@ jobs:
               go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
               # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
               grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
+              # Never a build for tests: the bench's time-scaled one
+              # (internal/benchtime) or one that reads the tests' hooks
+              # (internal/testhook).
+              if go version -m "$RUNNER_TEMP/$p$exe" | grep -qE -- '-tags=.*(benchtime|testhooks)'; then
+                echo "::error::$p is a build for tests only" >&2
+                exit 1
+              fi
             done
             ;;
           esac
@@ -130,7 +148,7 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/cbb-desktop" .
       - name: sign the Windows programs (Authenticode), with a certificate in the secrets
         # A code signing certificate as a base64 PKCS#12 file and its password
-        # (docs/maintaining.md, "Signing for Windows"); without them the
+        # (docs/maintainers/maintaining.md, "Signing for Windows"); without them the
         # programs stay unsigned, as before.
         if: matrix.goos == 'windows'
         env:
@@ -158,7 +176,7 @@ jobs:
       - name: sign cbb with the Developer ID and notarize it, with the certificate in the secrets
         # The Developer ID Application certificate as a base64 PKCS#12 file and
         # its password, and the App Store Connect API key that notarytool signs
-        # in with (docs/maintaining.md, "Signing for macOS"); without them cbb
+        # in with (docs/maintainers/maintaining.md, "Signing for macOS"); without them cbb
         # is signed ad hoc, as before, and Gatekeeper asks before it first runs.
         if: matrix.goos == 'darwin'
         env:
@@ -201,7 +219,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     # The Developer ID certificates and the App Store Connect key live in the
-    # environment release (docs/maintaining.md, "Signing for macOS").
+    # environment release (docs/maintainers/maintaining.md, "Signing for macOS").
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -290,7 +308,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     # The Apple Distribution certificate, the App Store profiles and the App
-    # Store Connect key live in the environment release (docs/maintaining.md,
+    # Store Connect key live in the environment release (docs/maintainers/maintaining.md,
     # "Signing for macOS"). A tag uploads the build to TestFlight; a run by
     # hand from main only builds and signs it.
     environment: release
@@ -424,7 +442,7 @@ jobs:
 
   openwrt-feed:
     # The apk feed for OpenWrt from the Linux archives above, signed with
-    # the feed's ECDSA P-256 key (docs/maintaining.md, "The OpenWrt feed"),
+    # the feed's ECDSA P-256 key (docs/maintainers/maintaining.md, "The OpenWrt feed"),
     # as openwrt-feed.tar.gz, which goes to cbb.tools/openwrt/. Without the
     # key in the secrets there is no feed.
     needs: [build]
@@ -535,7 +553,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      - name: the software bills of materials (tools/sbom, docs/maintaining.md)
+      - name: the software bills of materials (tools/sbom, docs/maintainers/maintaining.md)
         # The Go programs' modules from the programs themselves; the crates of
         # cbb (the Rust program) and of the phones'
         # Rust core on their targets; the Swift kit's packages. The Android
@@ -565,16 +583,29 @@ jobs:
       - name: the winget manifest, from SHA256SUMS
         # For winget's repository, published with the release, which is
         # immutable once published; it goes to microsoft/winget-pkgs by a pull
-        # request (docs/maintaining.md, "winget"). A pre-release stays out, as
+        # request (docs/maintainers/maintaining.md, "winget"). A pre-release stays out, as
         # it does from the tap.
         if: ${{ !contains(github.ref_name, '-') }}
         run: |
           out="$RUNNER_TEMP/winget"
           sh packaging/winget/manifest.sh "$GITHUB_REF_NAME" dist/SHA256SUMS "$out"
           (cd "$out" && zip -qX "$GITHUB_WORKSPACE/dist/winget-manifest.zip" ./*.yaml)
+          # Every file of release.json has a line in SHA256SUMS (release-sign
+          # verify and mirror check it), this one too.
+          (cd dist && sha256sum winget-manifest.zip >>SHA256SUMS)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: provenance
         with:
           subject-path: dist/*
+      - name: the provenance as a file of the release
+        # The same signed attestation, on one line, for those who check a
+        # release without GitHub's API (and for OpenSSF Scorecard, which
+        # looks for *.intoto.jsonl among a release's files). It describes the
+        # files, so it is not one of them: release-sign leaves it out of
+        # release.json.
+        env:
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: jq -c . "$BUNDLE" >dist/provenance.intoto.jsonl
       - name: the draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -586,14 +617,15 @@ jobs:
           # of the merged pull requests.
           sh packaging/release-notes.sh "$GITHUB_REF_NAME" >"$RUNNER_TEMP/notes.md"
           # A draft: the maintainer signs it and publishes it on their Mac with
-          # release-sign publish (docs/maintaining.md, "Signed releases").
+          # release-sign publish (docs/maintainers/maintaining.md, "Signed releases").
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "cbb $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes --verify-tag --draft $prerelease
 
   docker:
     # The image of packaging/docker, from the release's own Linux archives, so
-    # it holds the binaries the release attests.
+    # it holds the binaries the release attests. It is tagged VERSION-unsigned;
+    # published.yml tags the digest release.json names as VERSION and latest.
     if: github.ref_type == 'tag'
     needs: [release]
     runs-on: ubuntu-latest
@@ -639,8 +671,10 @@ jobs:
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker buildx create --use --name cbb >/dev/null
           version=${GITHUB_REF_NAME#v}
-          set -- -t "$IMAGE:$version"
-          case $GITHUB_REF_NAME in *-*) ;; *) set -- "$@" -t "$IMAGE:latest" ;; esac
+          # Only a tag of its own until the release key signs the release:
+          # published.yml then gives the signed digest the version and latest,
+          # so that nothing unsigned reaches them.
+          set -- -t "$IMAGE:$version-unsigned"
           # The attestations below are GitHub's, the provenance and the bill of
           # materials; buildx's own would add a platform "unknown" to the
           # index, which confuses some NAS systems.

@@ -33,15 +33,30 @@ const testEnv = "CBB_SE_TEST"
 type Key struct {
 	blob []byte
 	pub  *ecdsa.PublicKey
-	ref  ref // the loaded key
+	ref  keyRef // the loaded key
 }
+
+// keyRef is a loaded key: the enclave's (ref), or a test's software key.
+type keyRef interface {
+	release()
+	sign(digest []byte) ([]byte, error)
+	agree(pub []byte) ([]byte, error)
+}
+
+// The enclave's functions: the system's, which a test may replace with a
+// software enclave (soft_test.go) to run the code around it on any system.
+var (
+	enclaveAvailable = available
+	enclaveCreate    = func() (keyRef, []byte, []byte, error) { r, blob, pub, err := create(); return r, blob, pub, err }
+	enclaveLoad      = func(blob []byte) (keyRef, []byte, error) { r, pub, err := load(blob); return r, pub, err }
+)
 
 // Available tells whether New can make keys here.
 func Available() bool {
 	if testing.Testing() && os.Getenv(testEnv) != "1" {
 		return false
 	}
-	return available()
+	return enclaveAvailable()
 }
 
 // New makes a key in the enclave.
@@ -49,7 +64,7 @@ func New() (*Key, error) {
 	if !Available() {
 		return nil, ErrNoEnclave
 	}
-	r, blob, pub, err := create()
+	r, blob, pub, err := enclaveCreate()
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +77,10 @@ func Load(blob []byte) (*Key, error) {
 	if testing.Testing() && os.Getenv(testEnv) != "1" {
 		return nil, ErrNoEnclave
 	}
-	if !available() {
+	if !enclaveAvailable() {
 		return nil, ErrNoEnclave
 	}
-	r, pub, err := load(blob)
+	r, pub, err := enclaveLoad(blob)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +98,7 @@ func Load(blob []byte) (*Key, error) {
 	return k, nil
 }
 
-func newKey(r ref, blob, pub []byte) (*Key, error) {
+func newKey(r keyRef, blob, pub []byte) (*Key, error) {
 	p, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), pub)
 	if err != nil {
 		r.release()

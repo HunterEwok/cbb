@@ -58,7 +58,7 @@ rm -f /etc/cbb/firewall.hub
 /etc/init.d/firewall reload >/dev/null 2>&1 || true
 rm -f /etc/init.d/cbb /etc/hotplug.d/ntp/50-cbb /lib/upgrade/keep.d/cbb \
 	/etc/capabilities/cbb.json /etc/config/cbb /usr/bin/cbb /var/state/cbb.time
-rm -rf /usr/share/cbb /var/run/cbb /etc/cbb-update /tmp/cbb-update
+rm -rf /usr/share/cbb /var/run/cbb /var/run/cbb.interfaces /etc/cbb-update /tmp/cbb-update
 if grep -q '# cbb-update$' /etc/crontabs/root 2>/dev/null; then
 	grep -v '# cbb-update$' /etc/crontabs/root >/etc/crontabs/root.new || true
 	mv -f /etc/crontabs/root.new /etc/crontabs/root

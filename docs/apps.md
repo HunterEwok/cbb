@@ -36,10 +36,10 @@ they look, so both apps are built to the same plan.
    waits on a screen of its own, with its group, its hub and when it expires, to be joined
    or declined, and declining sends nothing; joined, the phone shows the words the inviting
    admin compares, docs/protocol.md, section 12), and, small, **Restore with the recovery
-   key**. Admin rights come from the device that
-   admits the phone, not from a separate button. On Aurora the settings and the language are
-   in the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
-   as an admin**.
+   key**. A phone always joins as a member; the root makes it an admin later from the
+   phone's device page ("Make it an admin"), with the admin key its hellos offer
+   (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
+   the pull-down menu, as in every Silica app.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
@@ -95,6 +95,17 @@ they look, so both apps are built to the same plan.
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 
+   **Muting from the tile**: every tile has a small button in its corner (the end of the
+   line, so on the left in Arabic and Hebrew): a 28 pt face in a 44 pt target, while the rest
+   of the tile still opens the device. On this phone's own tile it is the house: a tap turns
+   sync off until turned on again, or on. On another device's tile it shows only on an admin
+   and mutes the device for the group, or unmutes it. A long press (a right click on a
+   computer) picks the time, as the house does. Muted, the button fills with the warning
+   colour and the tile's line turns dashed; the tile shows the new state at once and goes
+   back, with the error, only when the change is refused, so it never blinks or leaves the
+   list while the command goes out. The Mac, the tray app, Android and Aurora have the same
+   button (Aurora knows another device's mute while it is connected).
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is
@@ -118,19 +129,21 @@ they look, so both apps are built to the same plan.
    computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
    address, role, ID) under More, and "…" with rename, make it an admin or a hub, unfreeze
    and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
-   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware; a lite member is
-   marked so), a "root", "admin" or "frozen" mark, a live dot when it is online and
+   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
-   "Make it an admin" (phones only, on the root phone), "Unfreeze" for an admin computer
+   "Make it an admin" (on the root phone), "Unfreeze" for an admin computer
    that another admin froze (design.md, "Who may remove an admin"), and "Remove", which asks once, then
    needs Face ID, the fingerprint or the passcode, and is done; removing an admin phone shows
-   the devices it had admitted, which stay. On the root phone a computer's row also offers
-   "Make it an admin" when the computer offers an admin key (docs/protocol.md, section 10,
-   "Admins"): it asks once, warns that the key is a file on the computer, needs
-   Face ID, and the computer then adds and removes devices with `cbb pair` and
-   `cbb remove`. If the removed phone held the root, this phone
+   the devices it had admitted, which stay. On the root phone the row of a phone or a computer
+   that is no admin offers "Make it an admin" when its hellos offer an admin key
+   (docs/protocol.md, section 10, "Admins"): it asks once, for a computer whose key is a file
+   it warns of that, needs Face ID, and the device then adds and removes devices (a computer
+   with `cbb pair` and `cbb remove`). A phone offers its admin key from the moment it is in
+   the group, and takes the admin CA from the root's admin message once it names its key, its
+   device and the current root; a TV offers none. On a computer that is the root, the Mac app
+   and the tray offer the same for a phone. If the removed phone held the root, this phone
    takes it over in the same step. On an admin phone a connected computer's house turns its sync
    on or off: the phone signs a `mode` command (docs/protocol.md, section 15) after
    Face ID or the fingerprint and sends it to that computer, which answers done or why it refused.
@@ -144,24 +157,26 @@ they look, so both apps are built to the same plan.
    device's page says "The group's hub", and Settings, "Away from home", names the hub the
    phone is connected to through the tunnel. The Mac app and the tray app say the same on a
    device's page, from `hub` in the service's device list.
-   On an admin phone, the page of a computer or a lite member also offers "Paste on it…"
+   On an admin phone, the page of a computer or a small device also offers "Paste on it…"
    (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
    through the system's Paste button, which asks nothing), pasted or typed key by key, with
    Enter after it and as a secret if asked. The phone signs a `paste` command after Face ID or
    the fingerprint, and a member connected to the computer passes it on when the phone is not.
    The computer answers once the text is in, or why it would not.
-   While a computer or a lite member is online, its page also offers "Quick actions"
+   While a computer or a small device is online, its page also offers "Quick actions"
    (docs/protocol.md, section 15): the actions its hello says are on, the presets by their
    names in words and the user's own by theirs. A tap runs one, after Face ID or the
    fingerprint; reboot and shut down ask again first. "Turn all off" signs `actions-off`,
    after which only the device's own user turns them on again. A phone that is not an admin shows the list without
    actions and says which phones are admins.
 5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
-   (System, Dark or Light) as icons with the language in a row and the ten colours, without
+   (System, Dark or Light) as icons with the language in a row and the ten themes, without
    a heading, the notifications, the watch, the recovery key on the root, the switch
-   "Advanced settings", leaving the group, and about (seven taps on the version show the
+   "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
+   the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
-   on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
+   on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
+   extra in debug builds only, since any app can start the activity with one).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
    computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
    networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
@@ -275,33 +290,132 @@ shows its code and the member's own words.
 Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
 computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
 they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
-Android and Aurora; the others have no screen in the apps). The settings show only what most
+Android, Aurora and HarmonyOS; the others have no screen in the apps). The settings show only what most
 people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
 forwarder show only with the advanced settings on, on every app.
 
 ## Big screens
 
-- **iPad** (the same app, universal): an iPad is a phone for the group. It joins as an
-  admin, or makes its own group, and its root key lives in its Secure Enclave. Its Home
-  shows the devices on **orbits** around it, or as tiles or a list (the "…" menu switches
-  them). Its centre is the sync button, the toolbar holds the sync button too, and a device
-  opens its details in a pane beside the devices, which a cross closes. With a keyboard,
-  Command-R sends or fetches, Command-N adds a device, Command-comma opens Settings from
-  the "…" menu, and Escape closes the details. An iPad pairs with no Apple Watch, so its
-  Settings leave the watch out.
+The layout follows the window's width, never the kind of device or its rights; the rights
+follow how the device keeps its key (docs/design.md: a key in a secure chip with strong
+biometrics gets a phone's set, else a computer's). An Android or HarmonyOS tablet whose key
+is in software gets the same big-screen layout with a computer's rights.
+
+- **iPad** (the same app, universal; `Views/PadHome.swift`): an iPad is a phone for the
+  group, with a phone's rights: it joins as an admin, or makes its own group, and its root
+  key lives in its Secure Enclave. On Start, under "Create a group", it says that the device
+  that makes the group holds its main key, best one always at hand, such as a phone. In a
+  regular-width window Home is a split view:
+  - **The sidebar** (280 to 400 points, 320 by default): the group's line, how many devices
+    are online with the two switches (the house and the globe, which go under the count when
+    the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
+    and each collection, each with its count (a collection's menu renames or ungroups it);
+    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
+    not sync, and About with leaving the group. A part opens in the detail column; there is no
+    switch for the advanced settings, each has its own part. In portrait the sidebar folds
+    away behind its button, and "+" moves to the detail's toolbar.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
+    toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
+    (growing with the text size, at most 520), and the chosen tile is outlined; when the window
+    leaves less than 360 points for the devices beside it, the card is the next page instead.
+    Another section closes the card.
+  - **The keyboard**: Command-1 to 9 open the sidebar's sections in its order, Command-comma
+    the settings, Command-N adds a device; the arrows choose the device before or after, as
+    they stand; Escape closes the card. Holding Command lists them.
+  - **The pointer**: a tile lifts under it; its menu (a right-click, or touch and hold) pastes
+    on the device and mutes or unmutes it for an admin, besides Arrange's moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there, as from its card (an admin's); text or a picture dropped beside the
+    tiles goes to the group, as a copy on the iPad would.
+  - **A narrow window** (Slide Over, a third of the screen, a compact width in Stage Manager)
+    gets the phone's page, the card as the next page.
+  - Start and Join stand in a column at most 560 points wide. One window; the app is not
+    offered on a Mac or a Vision Pro as an iPad app (the Mac has its own). An iPad pairs with no
+    Apple Watch, so its Settings leave the watch out; nothing can paste on an iPad, as on an
+    iPhone.
 - **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
-  screen is a big screen like the iPad's: the orbits, the details beside them, and in
-  landscape the system moves the toolbar (sync, "+", the menu) to the strip at the right
-  edge. A phone's screen stays upright; a big one turns.
-- **Android tablets and foldables** do the same from 720 dp wide: the orbits (or tiles or a
-  list, which the view button switches), and a device's details in a pane beside them.
+  screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
+  and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
+- **Android tablets, foldables and wide windows** (`TabletHome.kt`) follow the iPad from
+  600 dp wide (Material's medium width class): a tablet's half of a split screen at less gets
+  the phone's page.
+  - **The sidebar** (300 dp, a little wider with a larger font): the group's line with the two
+    switches; **Devices**: "All devices", "Needs attention" while a device does, each
+    collection, each with its count; **Settings**: Appearance, Notifications (with sending by
+    itself and the watch), the recovery key (on the root), away from home (the hub, the
+    relay), remote paste (what may paste here, Share's question and the lab), the group (the
+    copies' time, the admin keys, leaving), why it does not sync, and About with the update. A
+    part opens beside the sidebar; the phone's Settings page shows them all, the advanced ones
+    behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
+    and the details (as in landscape); else it slides in from the edge behind ☰ (as in
+    portrait). A short line at its foot names the keys.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
+    with + beside it on an admin. A tap chooses a device: its details stand at the trailing
+    edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
+    when the window leaves less than 360 dp for the devices beside them, the details are a
+    page of their own, which back closes. Another section closes them.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's sections in its order, Ctrl+, the settings,
+    Ctrl+N adds a device, Ctrl+F finds one (once the search is offered); the arrows choose the
+    device before or after; Esc closes the details.
+  - **The pointer**: a right click on a tile (or a touch and hold, on a phone too) opens its
+    menu, which for an admin pastes on the device and mutes or unmutes it, besides Arrange's
+    moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's), as from its details; dropped beside the tiles they go
+    to the group, as Share sends them.
+  - **The rights** follow the keys, one rule for phones and tablets (`Keys.guardsLikeAPhone`):
+    the keys in secure hardware (StrongBox or the TEE) and a strong fingerprint or face sensor
+    make it a phone for the group; without one of them Start says, under "Create a group",
+    restoring with the recovery key and a handed-over group say, before it becomes the group's
+    main device, that it guards the group less well than a phone with both. A tablet that has
+    both says on Start, as an iPad does, that the main device is best one always at hand.
+
+- **Aurora tablets** (and an Aurora phone turned on its side, which is as wide), in
+  `MainPage.qml` by the page's width in Silica's units (`Theme.pixelRatio`): from 760 the
+  chosen device's card (`DeviceCard.qml`, the same card `DevicePage.qml` shows as a page)
+  stands at the trailing edge, 400 wide, with Close in its header and its pull-down menu, and
+  the chosen tile is lit; from 1060 the sidebar stands before the tiles too: "All devices",
+  "Needs attention" while a device does, each collection with its count, and Settings, which
+  opens as a page, since Aurora's Settings are one short page. Narrower, it is the phone's
+  page. Aurora gives an app no fingerprint (its keys wait for the app's own PIN), so making a
+  group and restoring one always say that the device guards the group less well than a phone
+  with both. No keyboard shortcuts or drag and drop: Silica has neither.
+
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide
+  (`pages/Main.ets`): the orbits (only for all devices), tiles or a list, which the "…" menu
+  switches and the app keeps, and a device's details in a pane beside them, 400 vp, the page a
+  phone's screen opens (`DeviceDetail`), with the chosen tile outlined. Folding the phone closes
+  the pane and goes back to the phone's page.
+  - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
+    devices", "Needs attention" while a device does, each collection, each with its count;
+    **Settings**: the language and the error details, notifications, the recovery key (on the
+    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
+    phone's Settings page shows whole, the advanced parts behind their switch). It stands from
+    1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
+    short line at its foot names the keys. Another section closes the details.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's rows in its order, Ctrl+, the settings,
+    Ctrl+N adds a device (an admin's scan), the arrows choose the device before or after, Esc
+    closes the details.
+  - **The pointer**: a right click on a tile opens its menu, which for an admin pastes on the
+    device and mutes or unmutes it, besides Arrange; a long press still arranges it.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's); dropped beside the tiles they go to the group.
+  - **The rights** follow the keys as on Android (`Keys.guardsLikeAPhone`): HUKS keeps them in
+    the TEE, so a fingerprint or face sensor at ATL3, enrolled or not yet, makes it a phone for
+    the group; without one Start under "Create a group", restoring and taking the group over say
+    that it guards the group less well than a phone with both, and a big screen that has one
+    says on Start that the main device is best one always at hand.
 
 ## Dynamic Island
 
-A Live Activity (iPhone, iOS 17) shows what runs in the Dynamic Island and on the Lock
-Screen, in the colour chosen in Settings, and never what was copied:
+A Live Activity (iPhone, iOS 17; Live View on HarmonyOS) shows what runs in the Dynamic
+Island and on the Lock Screen, in the colour chosen in Settings, and never what was copied:
 
 - **Adding a device**: from the scan until the device is in the group, with a timer; then
   "The device is in the group." or "The device was not added." for a moment.
@@ -317,8 +431,7 @@ in Settings, all on by default: a device joined or was removed, became an admin,
 or unfrozen, the group was taken over, and the hub does not answer through the tunnel for
 two minutes while away from home. The app compares the devices with what it saw last time
 (`GroupEvent`, `Notifier`), so it hears of an event while it runs and syncs. An iPhone app
-has no background sync: until it has push notifications, which need the Apple developer
-account, it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
+has no background sync: until it has push notifications (not built yet), it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
 few seconds now and then, at times it picks from how the phone is used. It then waits up to
 20 seconds for a computer, takes the records and notifies of what changed; it leaves the
 clipboard alone, which only the app in front may read. So an event may come within the
@@ -449,9 +562,10 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   problem, a group, another device online), which macOS draws white or black for the menu
   bar. The app makes itself a login item on its first run (`SMAppService`); Settings, "Open
   at sign-in", turns that off.
-- **Settings**: the appearance as icons, the colour and the language in a row (the phones'
-  `Theme.swift` and `Tokens.swift`, shared; the language through `AppleLanguages`, shown once
-  the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
+- **Settings**, a sheet on the window (the menu bar item's "Settings…" and Command-comma
+  open the window with it): the appearance as icons, the colour and the language in a row
+  (the phones' `Theme.swift` and `Tokens.swift`, shared; the language through
+  `AppleLanguages`, shown once the app opens again), "Open at sign-in", "Advanced settings" (whether the app may press
   keys for remote paste, the recovery key), and about: the version, where seven clicks show
   error details (on in debug builds, off in release ones, and the `ShowErrorDetails` default
   either way).
@@ -470,8 +584,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
   its question says that a hub needs it and turns it on in the same step (`cbb global hub
   -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
-  dimmed with the reason: a phone is a hub only from its own app's Settings, a lite member,
-  a watch and a computer without root never, a frozen device once the root unfreezes it, and
+  dimmed with the reason: a phone is a hub only from its own app's Settings, a member without
+  `hub` among its capabilities, a watch and a computer without root never, a frozen device once the root unfreezes it, and
   a computer that is no admin once the root makes it one.
 - **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
   Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its
@@ -498,7 +612,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the second; Cancel removes the first file, and cbb ends the invitation.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
-notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
+notarized (docs/maintainers/maintaining.md, "Signing for macOS"). CI's `test and build (macOS), homebrew, Mac app` job builds it and runs
 its tests, signed ad hoc, and installs and removes the package. It runs on a real Mac when built with a
 developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
 from the iPhone, at home and away from home.
@@ -534,7 +648,7 @@ service and its clipboard agent keep syncing without it.
   in the same three states, single-colour: on Windows a black and a white ICO, which the
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the appearance and the language as icons and a list, the ten colours
+- **Settings**: the appearance and the language as icons and a list, the ten themes
   (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
@@ -813,6 +927,57 @@ The tests run against a fake Android TV (`androidtv/atvtest`), a fake Apple TV
 (`appletv/atvtest`) and a fake Roku; the Go remotes are not yet tried on real TVs. Samsung
 and LG follow (roadmap item 25).
 
+## The admin PIN on Aurora
+
+Aurora OS 5.1.5 gives a regular app no way to have the user confirm an action: its
+authentication service (authd) is outside the app's sandbox, the phone's unlock code is not
+offered, and the fingerprint has no API (a probe on the R570E, and Open Mobile Platform's
+answer of 2026-11-09). So the Aurora app asks for a PIN of its own wherever the iPhone asks
+for Face ID (D-94, docs/protocol.md section 3):
+
+- **The keys.** The member key stays in the token QCA initializes for the app (label "CBB",
+  PIN `0000`), so sync, copies and the keyboard need no PIN. The app makes that token only on its first
+  run; once it saw the token, or while the phone is in a group, a TEE that does not answer is an
+  error the app retries and shows, never a reason to make the token again, which would wipe the
+  member key. The root or admin key sits in a
+  second token of the app, the TEE's slot "APP", which the app initializes itself
+  (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
+  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Whether it
+  did is the token's to say, not the app's settings, which can be cleared while the token
+  stays: an SO PIN that no longer matches the user PIN counts as random. Another app
+  sees neither token.
+- **When it asks.** Before the admin key is made or signs: making a group, or joining a
+  group, which makes the admin key the member's hellos offer the root for its "Make an
+  admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
+  twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
+  short patterns such as 111111, 123456, 121212 or 112233, no five equal digits, two simple
+  pieces (111222, 123400), palindromes, counting pairs (131415), dates (DDMMYY, MMDDYY,
+  YYMMDD and their eight-digit forms) nor common keypad PINs: about one six-digit PIN in ten;
+  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key, and a
+  token stopped halfway through its first PIN is finished with that PIN; a new or changed one
+  must pass it. A user who cancels it joins as a member whose hellos offer
+  no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
+  page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
+  to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
+  last use and is logged out when the app leaves the screen; renewals of the members'
+  certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
+  code. Settings change it ("Change the
+  admin PIN"), after the current one.
+- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left,
+  from the token's flags (a wrong PIN tried, one try left) and the app's count between them;
+  when the app's count was lost, it says that some tries are used up, never a full seven.
+  The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
+  member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
+  new device. A lost root is taken over by an admin phone or with the recovery key.
+- **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
+  useless without the PIN, and the next admin key replaces it.
+- **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
+  root certified that key; the app makes no new key beside it but asks to leave the group and
+  join again, which sets the PIN, for the root to make the phone an admin again.
+- **The root's admin CA** comes in its `admin` message once the root made the phone an admin;
+  the member checks it (ffi's `take_admin_ca`) before the app keeps it in `member.json`.
+- Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
+
 ## Collections and the order of the tiles
 
 The user can put the device tiles in their own order and gather devices into
@@ -954,11 +1119,144 @@ them), keeps it and answers as `view`; a change that does not fit is refused and
 nothing. Devices that left the group leave the arrangement when the member answers. No app
 keeps an order of its own or works one out.
 
+## HarmonyOS
+
+The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
+Android's layer, is the Aurora app's twin and ported from it: its own interface around the
+Rust core, which does the protocol, the pairing, sync, the member's view of the tiles and the
+tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
+`ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
+system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
+joining by the phone's QR code, always as a member, or by an invitation, restoring), Home with the tiles
+or the list, a device's page with the admin's actions, adding a device by its QR code,
+invitations, the recovery key, the takeover, the arrangement and collections, and Settings
+with the error details, the notifications, the root's settings and, under the advanced
+settings, why it does not sync and the lab.
+
+- **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
+  asking; the admin key (the root's in a group the phone made) only after the user's face,
+  fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
+  that one action that signs several times (a new group signs three times) asks once.
+- **Clipboard**: the app writes an incoming copy freely (a secret only on this device, cleared
+  when its time ends unless the user copied something else), but reads the clipboard only
+  when the user taps the system's Paste button (`PasteButton`) on Home, or with the
+  restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
+  Sending is therefore a tap, as on the iPhone. **Share → CBB** from another app sends the
+  text, the link, or images and files (up to 50 MB together) without opening the app, as the
+  iPhone's share extension: a sheet in the share panel (`ShareExtensionAbility`,
+  `shareextability/`) starts the phone's member in a folder of its own beside the app's
+  (`model/OneShot.ets`), waits up to 8 seconds for a computer of the group, hands it the copy
+  (and for files up to a minute for the computers to fetch them), stops, and says how it went.
+  A single image that arrives goes into the clipboard, other images and files wait for the
+  user to save them where they choose.
+- **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
+  phone's own code for joining is drawn from the core's modules.
+- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+  page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
+  system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
+  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
+  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
+  as Aurora does.
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
+  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
+  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
+  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  the server and period keys in HUKS; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it renews the
+  certificates, after the face, fingerprint or PIN.
+- **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
+  sends of its member key, with the revocation list the app fetches from the mirror once a
+  day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
+  core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
+- **YubiKey**: as on the iPhone and Android, the root puts the group's recovery key on a
+  YubiKey held to the back of the phone (firmware 5.7 or later with the factory management key
+  and a free retired PIV slot), and a new phone restores the group with it and its PIN, the card
+  held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
+  the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
+  carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
+- **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
+  Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
+  how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
+  has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
+  Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
+  since HarmonyOS lets it read the clipboard only in front, and with the system's paste
+  button or `READ_PASTEBOARD` alone: without either, a quick sync takes what the group copied
+  and sends nothing. Live View (Live View Kit), the Live Activity's twin, shows adding a
+  device with a timer and its result, and sync away from home through the hub's tunnel with
+  the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
+  until then it shows nothing.
+- **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
+  GATT server and its advertising) with the core's report map and reports, as Aurora does
+  through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,
+  and takes the clipboard at a tap or an admin's remote paste. HarmonyOS names a
+  characteristic by its UUID alone, so the service has the input report and not the LEDs'
+  output report. Whether the system lets an app serve the HID service is known only on a
+  phone.
+- **Background**: the system freezes an app soon after it leaves the screen. While the member
+  runs, the app keeps it going as a continuous task of the kind "multi-device connection",
+  with the system's notification; where the system or the store refuses that, it asks for the
+  short delay the system grants, so that a copy on its way arrives, and syncs while it is open,
+  as on the iPhone.
+- **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
+  takeover, frozen), each kind with its switch, and the received files.
+- **Errors**: the core's message, and in debug mode its details under it; the details switch
+  in Settings turns them on in a release build. A member that panics is started again, and in
+  release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
+- **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
+  DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
+  profile from AppGallery Connect, so both need a Huawei developer account. `check.sh` checks
+  the ArkTS with OpenHarmony's compiler and linter without one. DevEco Studio's emulator runs
+  on a Mac with Apple silicon, and Huawei offers its ready-made images only in mainland China
+  for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
+  the same models elsewhere run HarmonyOS 4, where the Android app works).
+
+Not yet: a run on a phone.
+
+### HarmonyOS watches
+
+The watch app (`apps/harmony/wearable`, the module of the same project, for the watches with
+HarmonyOS 5 or later, such as the Huawei Watch 5) is the Apple Watch and Wear OS apps' twin:
+it works only through its phone, over Wear Engine's messages between the phone app and the
+watch app of the same name, and shows the same page in the dark palette: how many devices are
+online, the house (sync on the phone) and the globe (Everywhere) with where it stands, each
+device with its glyph and live dot by collection, the latest events.
+
+- The phone (`model/Watch.ets`) looks for a connected watch with the app every 30 seconds and
+  sends it the state (`common/WatchState.ets`: devices, away, sync, events; never the
+  clipboard) whenever it changes. A Wear Engine message carries about a kilobyte, so the
+  state that does not fit drops the events and then the last devices, and says how many it
+  left out.
+- The watch (`model/Link.ets`) asks for the state when it opens, keeps the last one it got,
+  and sends `sync` and `away` with on or off; the phone turns its sync or its Everywhere on or
+  off as Home's switches do, and the new state comes back. Without a phone in reach the watch
+  says so and shows the last state.
+- `common/WatchState.ets` and `common/Wear.ets`, the only caller of Wear Engine, are the
+  same file in both modules, which `check.sh` checks, with the stub of Wear Engine in `check/`.
+- Wear Engine needs the developer's access from Huawei, the app's client ID from AppGallery
+  Connect in `module.json5`, and the signing certificate's fingerprint in
+  `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
+
+- The watch as an admin (docs/protocol.md, section 10, "Watches"): with a watch connected, the
+  root's Settings offer "Make the watch an admin". The watch asks its wearer, makes a P-256 key
+  in HUKS that needs the watch's screen lock (`model/AdminKey.ets`) and hands the phone its
+  public key; the root key certifies it (manage `add_watch`), and the phone keeps the watch's
+  device ID and admin CA and tells the watch its device ID, the group's tag and its key's hash.
+  The phone's state then carries, for each device, what the watch may do to it (manage
+  `watch_actions`: freeze an admin without `remove-admins`, remove a device that is no admin,
+  turn remote paste, quick actions and sync away from home off); the watch shows them under
+  the device, asks once, and sends `act`. The phone has the core sign it on the watch
+  (`cbb_member_manage_watch`): the record or command goes to the watch whole, in parts of 600
+  bytes, and the watch signs it only when it is that action, for that device, by this watch,
+  in this group; a second watch is replaced only after the first is removed.
+
+Not yet: a run on a watch.
+
 ## Releasing the Android app
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
 `cbb-wear-X.Y.Z.apk`, both signed with the project's release key; the key and
-its secrets are in [maintaining.md](maintaining.md#android-signing-key). The watch app is
+its secrets are in [maintaining.md](maintainers/maintaining.md#android-signing-key). The watch app is
 installed on the watch with `adb install` over the watch's wireless debugging until the apps
 are on Google Play.
 
@@ -1019,7 +1317,8 @@ the app on real devices.
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
   String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
-  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  Android, Qt's `.ts` files on Aurora, `resources/*/element/string.json` on HarmonyOS,
+  `frontend/l10n` in the tray app. No string literal in
   views.
 - All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
   `en.json` lists each string once with the apps that show it (`"in"`), each other language's
@@ -1039,19 +1338,33 @@ the app on real devices.
 
 ## Themes
 
-- Colours, type, spacing and corner radii are design tokens, defined once in
-  `apps/design/tokens.json` and generated into Swift and Kotlin, so both apps match.
-- One style, **Glass**, in ten colours: Terminal (the default, green), Midnight, Amber,
-  Ocean, Teal, Coral, Rose, Lime, Graphite and Ruby. Each colour has a dark and a light
-  palette; the theme is System (the system's light or dark mode), Dark or Light.
-- `tokens.json` holds each colour's accent for dark and light and the two neutral bases; the
-  generator mixes a little of the accent into the background and the surfaces, so adding a
-  colour is one line of data.
+- Eleven themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
+  generated into Swift, Kotlin and JavaScript, so every app matches: **Chalkboard** (the
+  default, the look of the website: chalk on slate over felt in the dark, graphite on pale
+  slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
+  drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
+  **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
+  accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
+  **Terminal** and **Retro**.
+- A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width
+  of its lines, its material: flat, glass, liquid or metal, whether large surfaces show a
+  grid, whether something off or waiting is dashed, whether small labels are in capitals)
+  and a palette for the dark and the light appearance. The appearance is System (the
+  system's light or dark mode), Dark or Light.
+- `tokens.json` names the default theme in one field, `default`; the generated files list it
+  first and every app starts with it, so changing the default is one word.
+- A theme draws only the app's own surfaces: the background, the tiles, the cards, the
+  lines, the type and the accent. The system's controls (switches, menus, sheets, the
+  keyboard, dialogs, Face ID) keep the system's look in every theme.
+- Glass and Liquid Glass use Liquid Glass from iOS 26 on Apple's systems; the flat themes
+  draw their surface with their line instead. Android has no Liquid Glass: its glass tiles
+  are the palette's glass colour with a hairline, over the same glow of the accent.
 - On Android 12 and later a further choice, **Wallpaper** (Material You), takes the colours
-  from the wallpaper through dynamic colour, in place of one of the ten.
-- Android has no Liquid Glass: its tiles and cards are the palette's glass colour with a
-  hairline, as the iPhone app draws them before iOS 26, over the same glow of the accent.
-- Contrast meets WCAG AA for text in every palette; the generator checks it.
+  from the wallpaper through dynamic colour, in the Precise theme's shape.
+- The watches and the Live Activity take only the theme's dark colours.
+- Contrast meets WCAG AA for text in every palette, 4.5:1 on the background and on a
+  surface, the dim text, the danger colour and the accent (badges and links) included; the
+  generator checks it.
 
 ## Layout of the repository
 
@@ -1077,11 +1390,9 @@ the app on real devices.
   waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
   Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
   of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
-  in "Add a device". The screen has two buttons on both phones (docs/protocol.md, section 6): "Join"
-  ("I already use CBB on another phone" on the iPhone), answered by any admin of the group,
-  which admits the phone as a plain member, and "Join as an admin", which makes an admin key
-  and offers it, answered only by the root phone, which makes the phone an admin. Both
-  phones make the group, admit and join through the Rust core's admission (each kit's
+  in "Add a device". The Start screen has one button for it on every phone, "Join a group",
+  answered by any admin of the group, which admits the phone as a member; the root makes it
+  an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
   `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
   kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
   admin phone that removes the root

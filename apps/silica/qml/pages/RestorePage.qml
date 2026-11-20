@@ -54,6 +54,16 @@ Page {
             spacing: Theme.paddingLarge
 
             PageHeader { title: qsTr("Restore the group") }
+            // Restoring makes this device the group's main one (NewGroupPage).
+            Label {
+                visible: !app.root
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.errorColor
+                text: qsTr("This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.")
+            }
 
             Label {
                 x: Theme.horizontalPageMargin
