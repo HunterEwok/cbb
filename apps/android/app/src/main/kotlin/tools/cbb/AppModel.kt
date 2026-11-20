@@ -24,7 +24,6 @@ import tools.cbb.kit.Core
 import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.InvitationWindow
-import tools.cbb.kit.JoinCode
 import tools.cbb.kit.CorePairing
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
@@ -118,13 +117,6 @@ class AppModel(private val app: Context) {
     var busy by mutableStateOf(false)
         private set
 
-    /** How many times a device being added that has not answered yet was dialed again; 0 before that. */
-    var retries by mutableStateOf(0)
-        private set
-
-    /** The QR code this phone shows while it waits to join a group. */
-    var joinCode by mutableStateOf<JoinCode?>(null)
-        private set
     var isAdmin by mutableStateOf(group.isAdmin)
         private set
 
@@ -292,33 +284,6 @@ class AppModel(private val app: Context) {
         this.appearance = appearance
     }
 
-    /** Admits a scanned or pasted device; on success the app goes Home. */
-    suspend fun scanned(text: String): Boolean {
-        if (text.trim().startsWith(RECOVERY_QR)) return restore(text.trim())
-        val jc = read(text)
-        if (jc == null) {
-            message = Note(R.string.not_a_code, error = true)
-            return false
-        }
-        busy = true
-        retries = 0
-        try {
-            group.admit(jc) { retries++ }
-            phase = Phase.HOME
-            message = null
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            busy = false
-            retries = 0
-            update()
-        }
-    }
-
     /**
      * Restores the group with the recovery key from the sheet's QR code, on
      * a phone without a group: the claim goes out, the app goes Home, and
@@ -466,25 +431,6 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /**
-     * Joins another phone's group: shows this phone's QR code until an
-     * admin phone scans it, then goes Home. The join screen runs it as its
-     * effect, so leaving the screen cancels it and stops listening.
-     */
-    suspend fun join() {
-        try {
-            group.join { code -> joinCode = code }
-            update()
-            phase = Phase.HOME
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-        } finally {
-            joinCode = null
-        }
-    }
-
     // Pairing on 0.6: the window and the joiner
 
     /** The recovery sheet of the group of 0.6 this phone just made, shown once until the person says it is kept. */
@@ -500,7 +446,7 @@ class AppModel(private val app: Context) {
 
     private var pairAnswer: CompletableDeferred<Boolean>? = null
 
-    /** Whether "Add a device" opens a window of 0.6: a phone without a group makes one, a group of 0.5 keeps its scanner. */
+    /** Whether the phone pairs on 0.6: without a group (a new one is of 0.6) or in a group of 0.6. */
     val pairsOn06: Boolean get() = !group.hasGroup || group.isV06
 
     /** Asks the person whether the code both screens show matches, for up to 5 minutes. */
@@ -586,7 +532,6 @@ class AppModel(private val app: Context) {
 
     /** Leaves the join screen without joining. */
     fun cancelJoin() {
-        joinCode = null
         joiningInvite = null
         inviteFingerprint = null
         message = null
@@ -1479,14 +1424,6 @@ class AppModel(private val app: Context) {
         /** How the QR code of a pairing window of 0.6 starts (docs/protocol.md, section 7, "The window's QR code"). */
         const val WINDOW_QR = "cbb://pair?"
 
-        /** How the QR code of a recovery sheet starts (docs/protocol.md, section 10, "The recovery key"). */
-        const val RECOVERY_QR = "cbb://recover?"
-
-        /** Reads what the camera saw, or what the user pasted: the text of the QR code of cbb pair or of another phone. */
-        fun read(text: String): JoinCode? {
-            val jc = JoinCode.parse(text) ?: return null
-            return if (jc.codeIsValid && jc.addrs.isNotEmpty() && jc.fingerprint.isNotEmpty()) jc else null
-        }
 
         @StringRes
         fun summary(e: Exception): Int = when (e) {

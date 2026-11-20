@@ -284,8 +284,6 @@
     <string name="join_asks">جارٍ الانضمام إلى مجموعة %1$s.</string>
     <string name="join_go">انضمام</string>
     <string name="join_group">الانضمام إلى مجموعة</string>
-    <string name="join_hint">على هاتف من المجموعة، اضغط + وامسح هذا الرمز. على حاسوب من المجموعة، اضغط + واكتب الأرقام. أبقِ هذه الشاشة مفتوحة.</string>
-    <string name="join_hint_tv">على هاتفك، افتح CBB، واضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="join_qr_label">رمز QR للانضمام إلى المجموعة</string>
     <string name="join_scan_hint">على هاتف من المجموعة، اضغط + وامسح الرمز الذي يعرضه. أبقِ الهاتفين على الشبكة نفسها.</string>
     <string name="join_title">الانضمام إلى مجموعة</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">يحتاج إلى انتباه</string>
     <string name="no_computers">لا توجد حواسيب متصلة.</string>
     <string name="no_devices_match">لا توجد أجهزة مطابقة.</string>
-    <string name="not_a_code">ليس رمز QR خاصًا بـ CBB.</string>
     <string name="not_a_window_code">هذا ليس رمز QR لنافذة إقران. على هاتف من المجموعة، اضغط + لعرض واحد.</string>
-    <string name="not_ready_yet">الجهاز ليس جاهزًا بعد. جارٍ المحاولة مرة أخرى (%1$d)…</string>
     <string name="nothing_new">لا جديد للإرسال أو الجلب.</string>
     <string name="notice_ack_owed">لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف.</string>
     <string name="notice_admins_silent">لا أخبار من المشرف %1$s منذ وقت طويل: تنتهي صلاحياته كمشرف بعد %2$d يومًا ما لم يتصل.</string>
@@ -570,7 +566,6 @@
     <string name="save">حفظ</string>
     <string name="saved_to_gallery">حُفظ في المعرض، في الألبوم CBB.</string>
     <string name="scan_code">مسح رمز</string>
-    <string name="scan_hint">وجّه الكاميرا إلى رمز QR الخاص بـ cbb pair، أو إلى الرمز الذي يعرضه هاتفك الآخر.</string>
     <string name="search_devices">البحث في الأجهزة</string>
     <string name="send">إرسال</string>
     <string name="send_copy">إرسال ما نسخته</string>

@@ -284,8 +284,6 @@
     <string name="join_asks">Uniéndose al grupo de %1$s.</string>
     <string name="join_go">Unirse</string>
     <string name="join_group">Unirse a un grupo</string>
-    <string name="join_hint">En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta.</string>
-    <string name="join_hint_tv">En tu teléfono, abre CBB, toca + y escanea este código. Mantén esta pantalla abierta.</string>
     <string name="join_qr_label">Código QR para unirse al grupo</string>
     <string name="join_scan_hint">En un teléfono del grupo, toca + y escanea el código que muestra. Mantén ambos teléfonos en la misma red.</string>
     <string name="join_title">Unirse a un grupo</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">Requiere atención</string>
     <string name="no_computers">No hay ordenadores conectados.</string>
     <string name="no_devices_match">Ningún dispositivo coincide.</string>
-    <string name="not_a_code">No es un código QR de CBB.</string>
     <string name="not_a_window_code">Este no es el código QR de una ventana de emparejamiento. En un teléfono del grupo, toca + para mostrar uno.</string>
-    <string name="not_ready_yet">El dispositivo aún no está listo. Reintentando (%1$d)…</string>
     <string name="nothing_new">Nada nuevo que enviar ni obtener.</string>
     <string name="notice_ack_owed">Este teléfono tiene una eliminación que confirmar; lo hace con tu próxima acción de administrador.</string>
     <string name="notice_admins_silent">No hay noticias del administrador %1$s desde hace mucho: sus derechos de administrador terminan en %2$d días si no se conecta.</string>
@@ -570,7 +566,6 @@
     <string name="save">Guardar</string>
     <string name="saved_to_gallery">Guardado en la galería, en el álbum CBB.</string>
     <string name="scan_code">Escanear un código</string>
-    <string name="scan_hint">Apunta la cámara al código QR de cbb pair, o al que muestra tu otro teléfono.</string>
     <string name="search_devices">Buscar dispositivos</string>
     <string name="send">Enviar</string>
     <string name="send_copy">Enviar lo que copié</string>

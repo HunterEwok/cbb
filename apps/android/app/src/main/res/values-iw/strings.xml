@@ -284,8 +284,6 @@
     <string name="join_asks">מצטרפים לקבוצה של %1$s.</string>
     <string name="join_go">הצטרפות</string>
     <string name="join_group">הצטרפות לקבוצה</string>
-    <string name="join_hint">בטלפון של הקבוצה, הקישו על + וסרקו את הקוד הזה. במחשב של הקבוצה, הקישו על + והקלידו את המספרים. השאירו את המסך הזה פתוח.</string>
-    <string name="join_hint_tv">בטלפון שלכם, פתחו את CBB, הקישו על + וסרקו את הקוד הזה. השאירו את המסך הזה פתוח.</string>
     <string name="join_qr_label">קוד QR להצטרפות לקבוצה</string>
     <string name="join_scan_hint">בטלפון של הקבוצה, הקישו על + וסרקו את הקוד שהוא מציג. השאירו את שני הטלפונים באותה רשת.</string>
     <string name="join_title">הצטרפות לקבוצה</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">דורש תשומת לב</string>
     <string name="no_computers">אין מחשבים מחוברים.</string>
     <string name="no_devices_match">אין מכשירים תואמים.</string>
-    <string name="not_a_code">זה לא קוד QR של CBB.</string>
     <string name="not_a_window_code">זה לא קוד QR של חלון צימוד. בטלפון של הקבוצה, הקישו על + כדי להציג אחד.</string>
-    <string name="not_ready_yet">המכשיר עדיין לא מוכן. מנסה שוב (%1$d)…</string>
     <string name="nothing_new">אין שום דבר חדש לשלוח או להביא.</string>
     <string name="notice_ack_owed">לטלפון הזה יש הסרה לאשר; הוא יעשה זאת בפעולת הניהול הבאה שלכם.</string>
     <string name="notice_admins_silent">אין חדשות מהמנהל %1$s כבר זמן רב: הרשאות הניהול שלו יסתיימו בעוד %2$d ימים אם לא יתחבר.</string>
@@ -570,7 +566,6 @@
     <string name="save">שמירה</string>
     <string name="saved_to_gallery">נשמר בגלריה, באלבום CBB.</string>
     <string name="scan_code">סריקת קוד</string>
-    <string name="scan_hint">כוונו את המצלמה לקוד ה-QR של cbb pair, או לזה שהטלפון האחר שלכם מציג.</string>
     <string name="search_devices">חיפוש מכשירים</string>
     <string name="send">שליחה</string>
     <string name="send_copy">שליחת מה שהעתקתי</string>

@@ -287,8 +287,6 @@
     <string name="join_asks">Joining the group of %1$s.</string>
     <string name="join_go">Join</string>
     <string name="join_group">Join a group</string>
-    <string name="join_hint">On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</string>
-    <string name="join_hint_tv">On your phone, open CBB, tap + and scan this code. Keep this screen open.</string>
     <string name="join_qr_label">QR code to join the group</string>
     <string name="join_scan_hint">On a phone of the group, tap + and scan the code it shows. Keep both phones on the same network.</string>
     <string name="join_title">Join a group</string>
@@ -393,9 +391,7 @@
     <string name="needs_attention">Needs attention</string>
     <string name="no_computers">No computers connected.</string>
     <string name="no_devices_match">No devices match.</string>
-    <string name="not_a_code">Not a CBB QR code.</string>
     <string name="not_a_window_code">This is not the QR code of a pairing window. On a phone of the group, tap + to show one.</string>
-    <string name="not_ready_yet">The device is not ready yet. Trying again (%1$d)…</string>
     <string name="nothing_new">Nothing new to send or fetch.</string>
     <string name="notice_ack_owed">This phone has a removal to confirm; it does so with your next admin action.</string>
     <string name="notice_admins_silent">No word from the admin %1$s for a long time: its admin rights end in %2$d days unless it connects.</string>
@@ -573,7 +569,6 @@
     <string name="save">Save</string>
     <string name="saved_to_gallery">Saved in the gallery, in the album CBB.</string>
     <string name="scan_code">Scan a code</string>
-    <string name="scan_hint">Point the camera at the QR code of cbb pair, or at the one your other phone shows.</string>
     <string name="search_devices">Search devices</string>
     <string name="send">Send</string>
     <string name="send_copy">Send what I copied</string>

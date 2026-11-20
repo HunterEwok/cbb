@@ -284,8 +284,6 @@
     <string name="join_asks">正在加入 %1$s 的群组。</string>
     <string name="join_go">加入</string>
     <string name="join_group">加入群组</string>
-    <string name="join_hint">在群组的手机上，点按 + 并扫描此代码。在群组的电脑上，点按 + 并输入这些数字。请保持此屏幕打开。</string>
-    <string name="join_hint_tv">在你的手机上打开 CBB，点按 + 并扫描此代码。请保持此屏幕打开。</string>
     <string name="join_qr_label">加入群组的二维码</string>
     <string name="join_scan_hint">在群组中的手机上点 +，然后扫描它显示的代码。让两部手机连在同一网络上。</string>
     <string name="join_title">加入群组</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">需要关注</string>
     <string name="no_computers">没有已连接的电脑。</string>
     <string name="no_devices_match">没有匹配的设备。</string>
-    <string name="not_a_code">不是 CBB 二维码。</string>
     <string name="not_a_window_code">这不是配对窗口的二维码。请在群组中的手机上点 + 来显示一个。</string>
-    <string name="not_ready_yet">设备尚未就绪。正在重试（%1$d）…</string>
     <string name="nothing_new">没有新的内容需要发送或获取。</string>
     <string name="notice_ack_owed">这部手机有一项移除待确认；它会在你下一次管理操作时确认。</string>
     <string name="notice_admins_silent">管理员 %1$s 已很久没有消息：除非它连接，否则其管理员权限将在 %2$d 天后结束。</string>
@@ -570,7 +566,6 @@
     <string name="save">保存</string>
     <string name="saved_to_gallery">已保存到图库的 CBB 相册中。</string>
     <string name="scan_code">扫描代码</string>
-    <string name="scan_hint">将相机对准 cbb pair 的二维码，或你另一部手机显示的二维码。</string>
     <string name="search_devices">搜索设备</string>
     <string name="send">发送</string>
     <string name="send_copy">发送我复制的内容</string>

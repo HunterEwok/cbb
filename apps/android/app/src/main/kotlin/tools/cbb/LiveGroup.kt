@@ -73,10 +73,7 @@ import java.io.File
 import java.io.IOException
 import java.net.Inet4Address
 import java.net.InetSocketAddress
-import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketException
-import java.net.SocketTimeoutException
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Signature
@@ -942,120 +939,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         authenticator.authorize(ui, ui.getString(reason), listOfNotNull(subtitle, which).joinToString(" · ").ifEmpty { null }, s)
     }
 
-    // Admitting
-
-    /**
-     * Admits the device whose QR code the user scanned. A device that takes
-     * no connection yet is dialed again for DIAL_RETRY_MS, retrying told
-     * each time: one scanned the moment it shows its code may not listen
-     * yet (the ZX Next's network starts a moment later).
-     */
-    suspend fun admit(code: JoinCode, retrying: () -> Unit = {}) {
-        val existing = withContext(Dispatchers.IO) { copyOfState() }
-        // A new group gets a new root key; one left from before goes. Making
-        // the group signs three times, admitting the computer twice.
-        val prompts = Prompts(if (existing == null) 5 else 2)
-        val ca = if (existing == null) {
-            if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
-            withContext(Dispatchers.IO) { newRootKey("", R.string.reason_add, prompts) }
-        } else {
-            caSigner(R.string.reason_add, prompts = prompts)
-        }
-        if (existing == null) {
-            // The core makes the group, and the phone's member runs before it
-            // admits: the device's record joins the member's records.
-            withContext(Dispatchers.IO) {
-                val member = memberSigner()
-                val made = CorePairing.newGroup(
-                    PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, ca.publicKeyDER, member.publicKeyDER, sealKey(), ca::signDigest,
-                )
-                adopt(PhoneGroup.of(made, root = true))
-                // A group made on this phone has it as its hub from the start (D-64).
-                setPhoneHub(true)
-            }
-        }
-        try {
-            admitWithCore(code, ca, retrying)
-        } catch (e: Exception) {
-            // A first device that did not join leaves no group of one behind.
-            if (existing == null && e !is NotConfirmed) withContext(NonCancellable + Dispatchers.IO) { runCatching { leave() } }
-            if (e is NotConfirmed) throw Failure(Failure.Kind.NOT_CONFIRMED)
-            throw e
-        }
-    }
-
-    /** The device joined, but did not say that it stored its identity: it may still hold it, so the group stays. */
-    private class NotConfirmed : Exception()
-
-    /** Admits the device of code through the core's admission (CorePairing.Admitting), dialing its addresses. */
-    private suspend fun admitWithCore(code: JoinCode, ca: KeystoreSigner, retrying: () -> Unit) {
-        val g = withContext(Dispatchers.IO) { copyOfState() } ?: throw Failure(Failure.Kind.NO_GROUP)
-        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-        // The root makes a phone that asks to be an admin one (docs/protocol.md, section 6).
-        val admitting = withContext(Dispatchers.IO) { CorePairing.Admitting(n, code.qrText, ca.publicKeyDER, g.adminCA, g.isRoot, ca::signDigest) }
-        try {
-            var failure: Exception? = null
-            val until = System.nanoTime() + DIAL_RETRY_MS * 1_000_000
-            while (true) {
-                var answered = false
-                for (addr in SyncRule.ordered(code.addrs)) {
-                    currentCoroutineContext().ensureActive()
-                    val (host, port) = SyncRule.split(addr) ?: continue
-                    val socket = Socket()
-                    try {
-                        withContext(Dispatchers.IO) { socket.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS) }
-                    } catch (e: CancellationException) {
-                        socket.close()
-                        throw e
-                    } catch (e: Exception) {
-                        socket.close()
-                        failure = telling(failure, e)
-                        continue
-                    }
-                    answered = true
-                    try {
-                        val admitted = withTimeoutOrNull(PAIRING_DEADLINE_MS) {
-                            // Closing the connection ends a pairing that takes too
-                            // long or that the user cancelled: the pending read fails.
-                            closingOnCancel({ socket.close() }) {
-                                socket.use {
-                                    it.soTimeout = PAIRING_DEADLINE_MS.toInt()
-                                    admitting.admit(it)
-                                }
-                            }
-                        } ?: throw Failure(Failure.Kind.UNREACHABLE)
-                        withContext(Dispatchers.IO) {
-                            if (admitted.role != "phone") {
-                                synchronized(lock) {
-                                    // The address that answered goes first, for dialing when mDNS does not find the computer.
-                                    state?.noteComputer(admitted.device, admitted.name, admitted.os, listOf(addr) + code.addrs.filter { it != addr }, Instant.now())
-                                    state?.save(file)
-                                }
-                            }
-                            takeRecords(n)
-                        }
-                        if (!admitted.confirmed) throw NotConfirmed()
-                        return
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: CorePairing.Failure) {
-                        throw e // the device answered: a wrong code is not worth another address
-                    } catch (e: NotConfirmed) {
-                        throw e
-                    } catch (e: Exception) {
-                        failure = telling(failure, e)
-                    }
-                }
-                // No address took the connection: the device may not listen yet.
-                if (answered || System.nanoTime() >= until) throw failure ?: Failure(Failure.Kind.UNREACHABLE)
-                retrying()
-                delay(DIAL_PAUSE_MS)
-            }
-        } finally {
-            admitting.close()
-        }
-    }
-
     // Inviting from afar
 
     /** An open remote invitation: its text, as a file of one line holds it, when it expires, and how to cancel it. */
@@ -1184,95 +1067,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     // Joining
-
-    /**
-     * Joins another phone's group (docs/protocol.md, section 6, "The joiner
-     * listens") through the core (CorePairing.Joining): listens, hands show
-     * the QR code to put on screen, and waits up to five minutes for an
-     * admin phone to scan it and admit this one, always as a member: the root
-     * makes it an admin later with the admin key its hellos offer
-     * ([offeredAdminKey]). Three wrong codes end it, as does cancelling.
-     */
-    suspend fun join(show: (JoinCode) -> Unit) {
-        if (hasGroup) return
-        val (listener, joining) = withContext(Dispatchers.IO) {
-            val member = memberSigner()
-            val listener = ServerSocket(0)
-            val addrs = LocalAddresses.current().map { JoinCode.address(it, listener.localPort) }
-            if (addrs.isEmpty()) {
-                listener.close()
-                throw Failure(Failure.Kind.NO_NETWORK)
-            }
-            val joining = try {
-                CorePairing.Joining(
-                    PhoneGroup.validName(deviceName), "android", member.publicKeyDER, sealKey(), addrs, member::signDigest,
-                )
-            } catch (e: Exception) {
-                listener.close()
-                throw e
-            }
-            listener to joining
-        }
-        // Announced while it waits, so that a computer of the group finds
-        // it by the code typed there (docs/protocol.md, section 6).
-        val announced = NsdPublisher(context, joining.device, listener.localPort, Discovery.joinerTXT(joining.fingerprint))
-        announced.start()
-        show(JoinCode(joining.code, JoinCode.parse(joining.qr)?.addrs.orEmpty(), joining.fingerprint))
-        val stopped = AtomicBoolean(false)
-        val stop = {
-            stopped.set(true)
-            listener.close()
-        }
-        val joined = try {
-            withTimeoutOrNull(JOIN_WINDOW_MS) {
-                closingOnCancel(stop) { accept(listener, stopped, joining) }
-            }
-        } finally {
-            stop()
-            joining.close()
-            announced.stop()
-        }
-        if (joined == null) throw Failure(Failure.Kind.TIMED_OUT)
-        withContext(Dispatchers.IO) {
-            synchronized(lock) {
-                newDeviceMode()
-                state = joined
-            }
-            startSync()
-        }
-    }
-
-    /** Takes connections until an admin phone admits this one, saving the group it joined; blocks. */
-    private fun accept(listener: ServerSocket, stopped: AtomicBoolean, joining: CorePairing.Joining): PhoneGroup {
-        var wrong = 0
-        while (true) {
-            val socket = try {
-                listener.accept()
-            } catch (e: IOException) {
-                if (stopped.get()) throw e
-                continue
-            }
-            try {
-                socket.soTimeout = PAIRING_DEADLINE_MS.toInt()
-                var group: PhoneGroup? = null
-                joining.attempt(socket) { joined ->
-                    PhoneGroup.of(joined, root = false).also { it.save(file); group = it }
-                    true
-                }
-                return group ?: continue
-            } catch (e: CorePairing.Failure) {
-                if (e.wrongCode) {
-                    wrong++
-                    if (wrong >= JOIN_ATTEMPTS) throw Failure(Failure.Kind.TOO_MANY_WRONG_CODES)
-                }
-            } catch (e: Exception) {
-                if (stopped.get()) throw e
-                // a dropped connection: the code is not spent
-            } finally {
-                socket.close()
-            }
-        }
-    }
 
     /**
      * Joins a group from afar by a remote invitation's text
@@ -3449,23 +3243,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long a member that browsing finds counts as at home without a connection to it. */
         private const val NEAR_GRACE_MS = 30_000L
 
-        /**
-         * How long admitting a device may take once it is dialed: a computer that stops answering mid-pairing fails then.
-         * Two minutes, as a slow member takes its time: a ZX Next gets the group's records through its ESP at about 2K a
-         * second, and confirms only after them.
-         */
-        const val PAIRING_DEADLINE_MS = 120_000L
-
-        /** How long dialing a device's address may take before the next one is tried. */
-        const val CONNECT_TIMEOUT_MS = 5_000
-
-        /** How long, and how often, admit dials a device that does not take the connection yet. */
-        const val DIAL_RETRY_MS = 20_000L
+        /** The pause between two dials of the invitation's guest tunnel. */
         const val DIAL_PAUSE_MS = 2_000L
-
-        /** How long the join QR code is good for, and how many wrong codes it takes, as for cbb pair (docs/protocol.md, section 6). */
-        const val JOIN_WINDOW_MS = 300_000L
-        const val JOIN_ATTEMPTS = 3
 
         /** How many times joinByInvite dials the guest tunnel, and how long one attempt may take with the admin's confirmation. */
         const val INVITE_ATTEMPTS = 5
@@ -3486,19 +3265,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         fun defaultFile(context: Context) = File(context.filesDir, "cbb/group.json")
 
-        /**
-         * Of two failures on different addresses, the one that says more: an
-         * address that answered, as with a failed handshake, over one that
-         * did not.
-         */
-        fun telling(earlier: Exception?, later: Exception): Exception {
-            if (earlier == null) return later
-            if (unreachable(earlier) && !unreachable(later)) return later
-            return earlier
-        }
-
-        private fun unreachable(e: Exception): Boolean =
-            (e is Failure && e.kind == Failure.Kind.UNREACHABLE) || e.cause is SocketException || e.cause is SocketTimeoutException
 
         /**
          * Runs block on Dispatchers.IO and calls close when the caller is

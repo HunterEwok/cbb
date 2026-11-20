@@ -284,8 +284,6 @@
     <string name="join_asks">Inajiunga na kikundi cha %1$s.</string>
     <string name="join_go">Jiunge</string>
     <string name="join_group">Jiunge na kikundi</string>
-    <string name="join_hint">Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha skrini hii wazi.</string>
-    <string name="join_hint_tv">Kwenye simu yako, fungua CBB, gusa + na uchanganue msimbo huu. Acha skrini hii wazi.</string>
     <string name="join_qr_label">Msimbo wa QR wa kujiunga na kikundi</string>
     <string name="join_scan_hint">Kwenye simu ya kikundi, gusa + na uchanganue msimbo inaoonyesha. Weka simu zote mbili kwenye mtandao mmoja.</string>
     <string name="join_title">Jiunge na kikundi</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">Inahitaji uangalifu</string>
     <string name="no_computers">Hakuna kompyuta zilizounganishwa.</string>
     <string name="no_devices_match">Hakuna vifaa vinavyolingana.</string>
-    <string name="not_a_code">Si msimbo wa QR wa CBB.</string>
     <string name="not_a_window_code">Huu si msimbo wa QR wa dirisha la kuoanisha. Kwenye simu ya kikundi, gusa + ili kuonyesha mmoja.</string>
-    <string name="not_ready_yet">Kifaa bado hakiko tayari. Inajaribu tena (%1$d)…</string>
     <string name="nothing_new">Hakuna kipya cha kutuma au kuleta.</string>
     <string name="notice_ack_owed">Simu hii ina uondoaji wa kuthibitisha; itafanya hivyo kwa hatua yako ijayo ya msimamizi.</string>
     <string name="notice_admins_silent">Hakuna habari kutoka kwa msimamizi %1$s kwa muda mrefu: haki zake za msimamizi zinaisha baada ya siku %2$d isipounganishwa.</string>
@@ -570,7 +566,6 @@
     <string name="save">Hifadhi</string>
     <string name="saved_to_gallery">Imehifadhiwa kwenye matunzio, katika albamu CBB.</string>
     <string name="scan_code">Changanua msimbo</string>
-    <string name="scan_hint">Elekeza kamera kwenye msimbo wa QR wa cbb pair, au ule unaoonyeshwa na simu yako nyingine.</string>
     <string name="search_devices">Tafuta vifaa</string>
     <string name="send">Tuma</string>
     <string name="send_copy">Tuma nilichonakili</string>

@@ -284,8 +284,6 @@
     <string name="join_asks">Присоединение к группе устройства %1$s.</string>
     <string name="join_go">Вступить</string>
     <string name="join_group">Войти в группу</string>
-    <string name="join_hint">На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</string>
-    <string name="join_hint_tv">На телефоне откройте CBB, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
     <string name="join_qr_label">QR-код для входа в группу</string>
     <string name="join_scan_hint">На телефоне группы нажмите + и отсканируйте показанный код. Оба телефона должны быть в одной сети.</string>
     <string name="join_title">Войти в группу</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">Требует внимания</string>
     <string name="no_computers">Компьютеры не подключены.</string>
     <string name="no_devices_match">Подходящих устройств нет.</string>
-    <string name="not_a_code">Это не QR-код CBB.</string>
     <string name="not_a_window_code">Это не QR-код окна сопряжения. На телефоне группы нажмите +, чтобы показать его.</string>
-    <string name="not_ready_yet">Устройство ещё не готово. Пробую снова (%1$d)…</string>
     <string name="nothing_new">Нечего отправить или получить.</string>
     <string name="notice_ack_owed">Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора.</string>
     <string name="notice_admins_silent">От администратора %1$s давно нет вестей: его права администратора закончатся через %2$d дн., если он не подключится.</string>
@@ -570,7 +566,6 @@
     <string name="save">Сохранить</string>
     <string name="saved_to_gallery">Сохранено в галерее, в альбоме CBB.</string>
     <string name="scan_code">Сканировать код</string>
-    <string name="scan_hint">Наведите камеру на QR-код cbb pair или на код, который показывает ваш другой телефон.</string>
     <string name="search_devices">Поиск устройств</string>
     <string name="send">Отправить</string>
     <string name="send_copy">Отправить скопированное</string>

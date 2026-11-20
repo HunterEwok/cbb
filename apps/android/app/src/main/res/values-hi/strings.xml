@@ -284,8 +284,6 @@
     <string name="join_asks">%1$s के समूह से जुड़ रहे हैं।</string>
     <string name="join_go">जुड़ें</string>
     <string name="join_group">समूह से जुड़ें</string>
-    <string name="join_hint">समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह स्क्रीन खुली रखें।</string>
-    <string name="join_hint_tv">अपने फ़ोन पर CBB खोलें, + टैप करें और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</string>
     <string name="join_qr_label">समूह से जुड़ने का QR कोड</string>
     <string name="join_scan_hint">समूह के किसी फ़ोन पर + टैप करें और जो कोड वह दिखाए उसे स्कैन करें। दोनों फ़ोन एक ही नेटवर्क पर रखें।</string>
     <string name="join_title">समूह से जुड़ें</string>
@@ -390,9 +388,7 @@
     <string name="needs_attention">ध्यान चाहिए</string>
     <string name="no_computers">कोई कंप्यूटर जुड़ा नहीं है।</string>
     <string name="no_devices_match">कोई डिवाइस मेल नहीं खाता।</string>
-    <string name="not_a_code">यह CBB का QR कोड नहीं है।</string>
     <string name="not_a_window_code">यह पेयरिंग विंडो का QR कोड नहीं है। समूह के किसी फ़ोन पर + टैप करके एक दिखाएँ।</string>
-    <string name="not_ready_yet">डिवाइस अभी तैयार नहीं है। फिर से कोशिश की जा रही है (%1$d)…</string>
     <string name="nothing_new">भेजने या लाने के लिए कुछ नया नहीं।</string>
     <string name="notice_ack_owed">इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।</string>
     <string name="notice_admins_silent">एडमिन %1$s से बहुत समय से कोई खबर नहीं: अगर वह नहीं जुड़ता तो उसके एडमिन अधिकार %2$d दिनों में खत्म हो जाएँगे।</string>
@@ -570,7 +566,6 @@
     <string name="save">सहेजें</string>
     <string name="saved_to_gallery">गैलरी में, CBB एल्बम में सहेजा गया।</string>
     <string name="scan_code">कोड स्कैन करें</string>
-    <string name="scan_hint">कैमरा cbb pair के QR कोड की ओर करें, या उस कोड की ओर जो आपका दूसरा फ़ोन दिखाता है।</string>
     <string name="search_devices">डिवाइस खोजें</string>
     <string name="send">भेजें</string>
     <string name="send_copy">मैंने जो कॉपी किया वह भेजें</string>
