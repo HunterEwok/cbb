@@ -278,7 +278,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 |------|-------|--------|
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `internal/group/cert.go` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
-| Group tag | first 8 bytes of SHA-256 over the group CA certificate (DER), as 16 lowercase hex characters | `group.Tag` |
+| Group tag | on the records of 0.6, the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters; in a group of 0.5, the first 8 bytes of SHA-256 over the group CA certificate (DER) | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |

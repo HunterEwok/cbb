@@ -59,6 +59,31 @@ pub struct Write {
 /// Gets each copy to write.
 pub type OnWrite = Box<dyn Fn(Write) + Send + Sync>;
 
+/// What the service does on a group of 0.5 and does not do yet on the
+/// records of 0.6, while its parts move over: the cause of the error it
+/// answers with, which debug mode shows.
+#[derive(Debug)]
+pub struct NotYet(pub String);
+
+impl std::fmt::Display for NotYet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} is not on the records of 0.6 yet", self.0)
+    }
+}
+
+impl std::error::Error for NotYet {}
+
+/// The error for `what` that this build does not do on the records of 0.6
+/// yet: never a silent no-op.
+pub fn not_yet(what: &str) -> Error {
+    Error::with(
+        format!(
+            "{what} does not work in this build yet: this device's group is on the records of 0.6, and {what} is still moving to them"
+        ),
+        NotYet(what.to_string()),
+    )
+}
+
 /// The group's tag as mDNS publishes it (`g`): the first 8 bytes of the
 /// group ID in hex.
 pub fn tag(state: &State) -> String {
@@ -347,9 +372,7 @@ impl Peers for Live {
             return Err(Error::msg("the member is paused"));
         }
         if admit.is_some() {
-            return Err(Error::msg(
-                "a listener that checks its callers (a relay's) is not on the records of 0.6 yet",
-            ));
+            return Err(not_yet("a listener that checks its callers (a relay's)"));
         }
         self.mesh.accept_port_with(sock, handshaken).map(|_| ())
     }

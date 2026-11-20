@@ -44,6 +44,13 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- The service runs a device whose group is kept on the records of 0.6 (`group.cbor`) on the
+  member of 0.6 (`member/src/service/on_live.rs`): the clipboard watchers, `cbb copy` and
+  `cbb paste`, status, devices, the tiles, sync, muting this device, leaving, and removing,
+  renaming, freezing and thawing a device, the hubs and the window for incoming copies. Every
+  other operation answers that it is not on the records of 0.6 yet, with that as its cause
+  in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
+  8 bytes of the group ID.
 - `member/` runs a member of 0.6 for the service (`member/src/live.rs`): the member connection
   and the clipboard state together, a copy from the group written when the rule says so.
   Discovery finds, dials and takes peers for it and for the member of 0.5 alike, through one

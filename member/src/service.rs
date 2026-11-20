@@ -189,6 +189,9 @@ pub struct Config {
 
 struct Service {
     node: RwLock<Option<Arc<Node>>>,
+    /// The member of 0.6, on a group kept in its records (on_live.rs); the
+    /// old member does not run then.
+    live: RwLock<Option<Arc<crate::live::Live>>>,
     away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
     /// The pace of each user's confirmation prompts (confirm.rs).
@@ -337,40 +340,7 @@ pub fn run(cfg: Config) -> Result<()> {
             crate::records::OLD_GROUP_DIR
         ));
     }
-    let svc = Arc::new(Service {
-        node: RwLock::new(None),
-        away: RwLock::new(None),
-        watchers: Mutex::new(Vec::new()),
-        prompts: crate::confirm::Pace::new(),
-        grants: Mutex::new(HashMap::new()),
-        peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
-        next_watcher: AtomicUsize::new(0),
-        pastes: Mutex::new(remotepaste::Limiter::default()),
-        acts: Mutex::new(remotepaste::Limiter::default()),
-        pending: Mutex::new(None),
-        latest: Mutex::new(0),
-        media: Mutex::new(None),
-        fetch_failed: Mutex::new(String::new()),
-        limits: Mutex::new(copies::Limits::load(&cfg.state_dir).unwrap_or_else(|e| {
-            log(&format!("cbb: {}; the largest copy is the default", e.for_log()));
-            copies::Limits::default()
-        })),
-        state_dir: cfg.state_dir.clone(),
-        commands: Mutex::new(HashMap::new()),
-        started_ms: uptime::wall_ms(),
-        log: log.clone(),
-        helper: crate::helper::shared(),
-        name: cfg.name.clone(),
-        caps: cfg.caps.clone(),
-        left_old,
-        broken: Mutex::new(None),
-        creating: Mutex::new(()),
-        joined_at: Mutex::new(None),
-        pairing: Mutex::new(None),
-        port: Mutex::new(None),
-        bugs: crate::bugs::Bugs::new(&cfg.state_dir),
-        tiles: crate::view::Tiles::new(&cfg.state_dir),
-    });
+    let svc = Service::new(&cfg, log.clone(), left_old);
     {
         // The helper puts a keyboard that is on back on BlueZ.
         let p = svc.peripherals.clone();
@@ -415,6 +385,10 @@ pub fn run(cfg: Config) -> Result<()> {
                 return Err(Error::msg("restarting after leaving the group"));
             }
             return Ok(());
+        }
+        if on_live::in_group(&cfg.state_dir) {
+            *svc.broken.lock().unwrap() = None;
+            return run_live(&svc, &cfg, &admin_socket);
         }
         match Identity::load(&cfg.state_dir) {
             Ok(Some(id)) => break id,
@@ -680,6 +654,38 @@ pub fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
+/// Runs the service on the member of 0.6 until SIGTERM or SIGINT.
+fn run_live(svc: &Arc<Service>, cfg: &Config, admin_socket: &Path) -> Result<()> {
+    let started = svc.start_live(cfg);
+    let live = match started {
+        Ok(l) => Some(l),
+        Err(e) => {
+            // The group's files do not open: the service keeps answering,
+            // with why, until it stops; cbb leave still works.
+            (svc.log)(&format!("cbb: {BROKEN} ({})", e.for_log()));
+            *svc.broken.lock().unwrap() = Some(e.for_log());
+            None
+        }
+    };
+    while !STOP.load(Ordering::SeqCst) {
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    (svc.log)("cbb: stopping");
+    if let Some(l) = live {
+        l.close();
+    }
+    std::thread::sleep(Duration::from_millis(500));
+    let _ = std::fs::remove_file(&cfg.socket);
+    let _ = std::fs::remove_file(admin_socket);
+    if LEFT.load(Ordering::SeqCst) {
+        return Err(Error::msg("restarting after leaving the group"));
+    }
+    if RESTART.load(Ordering::SeqCst) {
+        return Err(Error::msg("restarting at an admin's request"));
+    }
+    Ok(())
+}
+
 /// How often the claims to take the group over are looked at again.
 const CLAIM_CHECK: Duration = Duration::from_secs(2);
 /// How often the root and the admins check whether certificates are due
@@ -857,7 +863,50 @@ fn via_name(v: Via) -> &'static str {
 }
 
 impl Service {
+    /// A service on cfg's state directory, in no group until it starts its
+    /// member.
+    fn new(cfg: &Config, log: Arc<dyn Fn(&str) + Send + Sync>, left_old: bool) -> Arc<Service> {
+        Arc::new(Service {
+            node: RwLock::new(None),
+            live: RwLock::new(None),
+            away: RwLock::new(None),
+            watchers: Mutex::new(Vec::new()),
+            prompts: crate::confirm::Pace::new(),
+            grants: Mutex::new(HashMap::new()),
+            peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
+            next_watcher: AtomicUsize::new(0),
+            pastes: Mutex::new(remotepaste::Limiter::default()),
+            acts: Mutex::new(remotepaste::Limiter::default()),
+            pending: Mutex::new(None),
+            latest: Mutex::new(0),
+            media: Mutex::new(None),
+            fetch_failed: Mutex::new(String::new()),
+            limits: Mutex::new(copies::Limits::load(&cfg.state_dir).unwrap_or_else(|e| {
+                log(&format!("cbb: {}; the largest copy is the default", e.for_log()));
+                copies::Limits::default()
+            })),
+            state_dir: cfg.state_dir.clone(),
+            commands: Mutex::new(HashMap::new()),
+            started_ms: uptime::wall_ms(),
+            log: log.clone(),
+            helper: crate::helper::shared(),
+            name: cfg.name.clone(),
+            caps: cfg.caps.clone(),
+            left_old,
+            broken: Mutex::new(None),
+            creating: Mutex::new(()),
+            joined_at: Mutex::new(None),
+            pairing: Mutex::new(None),
+            port: Mutex::new(None),
+            bugs: crate::bugs::Bugs::new(&cfg.state_dir),
+            tiles: crate::view::Tiles::new(&cfg.state_dir),
+        })
+    }
+
     fn node(&self) -> Result<Arc<Node>> {
+        if self.live.read().unwrap().is_some() {
+            return Err(crate::live::not_yet("this operation"));
+        }
         self.started(|| self.node.read().unwrap().clone())
     }
 
@@ -875,7 +924,7 @@ impl Service {
             if let Some(v) = get() {
                 return Ok(v);
             }
-            let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_)));
+            let in_group = matches!(Identity::load(&self.state_dir), Ok(Some(_))) || on_live::in_group(&self.state_dir);
             if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
                 return Err(Error::msg(if in_group {
                     "this device is still starting; try again in a moment"
@@ -2458,6 +2507,11 @@ impl Service {
     }
 
     fn request(&self, m: &Message) -> Result<Message> {
+        if let Some(live) = self.live()
+            && let Some(res) = self.live_request(&live, m)
+        {
+            return res;
+        }
         let h = &m.header;
         match h.op.as_str() {
             // Shows this device's settings, or sets the setting name to
@@ -3042,7 +3096,7 @@ impl Service {
     /// engine decides on go to it, and so do the remote pastes for the
     /// target it offers, each answered with injected.
     fn watch(&self, m: Message, mut r: control::Reader<UnixStream>, mut out: UnixStream) {
-        let node = match self.node() {
+        let group = match self.group() {
             Ok(n) => n,
             Err(e) => {
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -3080,7 +3134,7 @@ impl Service {
         // own text is still that, goes to this watcher in place of the
         // stale text its clipboard holds, as Go's.
         let missed = if board {
-            self.pending.lock().unwrap().take().filter(|w| node.engine.local().is_some_and(|(t, _, _)| t == w.text))
+            self.pending.lock().unwrap().take().filter(|w| group.local_text().is_some_and(|t| t == w.text))
         } else {
             None
         };
@@ -3088,7 +3142,7 @@ impl Service {
             && missed.is_none()
             && let (Ok(text), Ok(kind)) = (String::from_utf8(m.payload), kind_of(&m.header.kind))
         {
-            node.engine.clipboard_is(&text, kind);
+            group.clipboard_is(&text, kind);
         }
         let (tx, rx) = mpsc::sync_channel::<ToWatcher>(WATCH_QUEUE);
         if control::write(&mut out, &Message::new(Header { op: "reply".into(), ..Default::default() }, Vec::new()))
@@ -3192,11 +3246,11 @@ impl Service {
             };
             match m.header.op.as_str() {
                 "copied" => {
-                    if let Err(e) = node.copied(&text, kind, via) {
+                    if let Err(e) = group.copied(&text, kind, via) {
                         (self.log)(&format!("cbb: a copy from a watcher: {}", e.for_log()));
                     }
                 }
-                "clipboard" => node.engine.clipboard_is(&text, kind),
+                "clipboard" => group.clipboard_is(&text, kind),
                 op => (self.log)(&format!("cbb: a watcher sent {op:?}")),
             }
         }
@@ -3550,6 +3604,8 @@ fn act_takers<T>(
         .map(|(_, tx)| tx)
         .collect()
 }
+
+mod on_live;
 
 #[cfg(test)]
 mod tests {

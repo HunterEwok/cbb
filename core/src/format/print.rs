@@ -162,6 +162,12 @@ pub fn os_name(n: u64) -> &'static str {
     usize::try_from(n).ok().and_then(|i| OS.get(i)).copied().filter(|n| !n.is_empty()).unwrap_or("unknown")
 }
 
+/// The `os` number of a system's name, 0 for one this version does not
+/// name.
+pub fn os_number(name: &str) -> u64 {
+    OS.iter().position(|n| !n.is_empty() && *n == name).map_or(0, |i| i as u64)
+}
+
 fn record_field(typ: u64, k: u16) -> Option<&'static str> {
     let device = [
         "key",

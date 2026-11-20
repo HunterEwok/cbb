@@ -2907,7 +2907,6 @@ fn live_window(records: &Records) -> Duration {
     Duration::from_millis(records.state().incoming_ms.unwrap_or(0).max(0) as u64)
 }
 
-
 impl crate::discovery::Peers for Node {
     fn me(&self) -> DeviceId {
         self.identity().id.clone()
