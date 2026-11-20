@@ -94,6 +94,11 @@ pub struct State {
     /// The offers of the group's hubs, one per hub.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<Hub>,
+    /// On the records of 0.6, the pre-shared keys toward each hub this
+    /// device sent `tunnel` to (`cbb_core::hubkey::DeviceSide`), by the
+    /// hub's device ID in hex.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub toward: std::collections::BTreeMap<String, Toward>,
     /// The key sealed by the TPM or the Secure Enclave, as Go keeps it;
     /// key stays out of the file then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -245,6 +250,53 @@ mod b64_list {
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Vec<u8>>, D::Error> {
         let list: Option<Vec<String>> = Option::deserialize(d)?;
         list.unwrap_or_default().iter().map(|t| STANDARD.decode(t).map_err(serde::de::Error::custom)).collect()
+    }
+}
+
+/// The pre-shared keys toward one hub, as `tunnel.json` keeps
+/// `cbb_core::hubkey::DeviceSide`: the keys of the last connections it sent
+/// `tunnel` over with their tags, newest first, the one the hub confirmed and
+/// the last handshake's.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Toward {
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    sent: Vec<Vec<u8>>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    confirms: Vec<Vec<u8>>,
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    confirmed: Vec<u8>,
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    handshaked: Vec<u8>,
+}
+
+impl std::fmt::Debug for Toward {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Toward").field("sent", &self.sent.len()).finish_non_exhaustive()
+    }
+}
+
+impl Toward {
+    /// The keys as the core keeps them; a damaged entry is left out.
+    pub fn side(&self) -> cbb_core::hubkey::DeviceSide {
+        cbb_core::hubkey::DeviceSide {
+            handshaked: key32(&self.handshaked).ok(),
+            confirmed: key32(&self.confirmed).ok(),
+            sent: self
+                .sent
+                .iter()
+                .zip(&self.confirms)
+                .filter_map(|(k, c)| Some(cbb_core::hubkey::Psk { key: key32(k).ok()?, confirm: key32(c).ok()? }))
+                .collect(),
+        }
+    }
+
+    pub fn of(side: &cbb_core::hubkey::DeviceSide) -> Toward {
+        Toward {
+            sent: side.sent.iter().map(|p| p.key.to_vec()).collect(),
+            confirms: side.sent.iter().map(|p| p.confirm.to_vec()).collect(),
+            confirmed: side.confirmed.map(|k| k.to_vec()).unwrap_or_default(),
+            handshaked: side.handshaked.map(|k| k.to_vec()).unwrap_or_default(),
+        }
     }
 }
 
@@ -421,6 +473,7 @@ impl State {
             key: Vec::new(),
             psk: Vec::new(),
             hubs: Vec::new(),
+            toward: Default::default(),
             key_tpm: None,
             key_se: None,
             is_hub: false,
