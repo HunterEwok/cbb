@@ -8,7 +8,7 @@
 // the core a key that signs, runs on a worker thread and answers a Promise:
 // the admin key waits there for the user's face or fingerprint, which the
 // app asks for on its main thread (setAuth), so nothing that signs may run
-// on that thread. The handles (a member, a joiner, an admission, an
+// on that thread. The handles (a member, a join, a window, a joiner, an
 // invitation) are opaque objects the app gives back to free them.
 
 #include "keys.h"
@@ -684,7 +684,7 @@ napi_value memberStop(napi_env env, napi_callback_info info)
         [](napi_env env) { return undefined(env); });
 }
 
-// ---- joining by the phone's QR code or an invitation ----
+// ---- joining by an invitation ----
 
 // joinNew(request: string): Promise<{handle, answer}>; the phone joins as
 // a member, signing with its member key.
@@ -741,14 +741,6 @@ napi_value joinFinish(napi_env env, napi_callback_info info)
     });
 }
 
-// joinAnnounce(handle, port): boolean
-napi_value joinAnnounce(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return boolean(env, j && cbb_join_announce(j, uint16_t(intOf(env, a.v[1]))) == 1);
-}
-
 // joinAnswered(handle): boolean
 napi_value joinAnswered(napi_env env, napi_callback_info info)
 {
@@ -763,64 +755,6 @@ napi_value joinFree(napi_env env, napi_callback_info info)
     Args a(env, info);
     cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
     return later(env, [j]() { cbb_join_free(j); }, [](napi_env env) { return undefined(env); });
-}
-
-// ---- admitting a device as an admin ----
-
-// admitNew(member, request: string, which): Promise<{handle, answer}>
-napi_value admitNew(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string req = stringOf(env, a.v[1]);
-    const cbb_sign_fn sign = signerOf(whichOf(env, a.v[2]));
-    auto admit = std::make_shared<cbb_admit *>(nullptr);
-    auto answer = std::make_shared<std::string>();
-    return later(
-        env,
-        [member, req, sign, admit, answer]() {
-            if (!member) {
-                *answer = errorAnswer({"", "admit: no member"});
-                return;
-            }
-            uint8_t *out = nullptr;
-            size_t len = 0;
-            *admit = cbb_admit_new(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &out, &len);
-            *answer = take(out, len);
-        },
-        [admit, answer](napi_env env) { return made(env, *admit, *answer); });
-}
-
-// admitDial(handle): Promise<string>
-napi_value admitDial(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    return laterString(env, [ad]() {
-        size_t len = 0;
-        return take(cbb_admit_dial(ad, &len), len);
-    });
-}
-
-// admitFeed(handle, data: ArrayBuffer, nowMs): Promise<string>
-napi_value admitFeed(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    const std::vector<uint8_t> data = bytesOf(env, a.v[1]);
-    const int64_t now = intOf(env, a.v[2]);
-    return laterString(env, [ad, data, now]() {
-        size_t len = 0;
-        return take(cbb_admit_feed(ad, data.data(), data.size(), now, &len), len);
-    });
-}
-
-// admitFree(handle): Promise<void>
-napi_value admitFree(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    return later(env, [ad]() { cbb_admit_free(ad); }, [](napi_env env) { return undefined(env); });
 }
 
 // ---- remote invitations ----
@@ -1051,13 +985,8 @@ napi_value init(napi_env env, napi_value exports)
         {"joinAccept", nullptr, joinAccept, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinFeed", nullptr, joinFeed, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinFinish", nullptr, joinFinish, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAnnounce", nullptr, joinAnnounce, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinAnswered", nullptr, joinAnswered, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinFree", nullptr, joinFree, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitNew", nullptr, admitNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitDial", nullptr, admitDial, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitFeed", nullptr, admitFeed, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitFree", nullptr, admitFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNew", nullptr, inviteNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNext", nullptr, inviteNext, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteAnswer", nullptr, inviteAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},

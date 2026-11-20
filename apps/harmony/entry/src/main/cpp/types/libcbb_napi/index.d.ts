@@ -53,14 +53,8 @@ export const joinNew: (request: string) => Promise<Made>;
 export const joinAccept: (join: Handle) => Promise<string>;
 export const joinFeed: (join: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
 export const joinFinish: (join: Handle, saved: boolean) => Promise<string>;
-export const joinAnnounce: (join: Handle, port: number) => boolean;
 export const joinAnswered: (join: Handle) => boolean;
 export const joinFree: (join: Handle) => Promise<void>;
-
-export const admitNew: (member: Handle, request: string, which: Which) => Promise<Made>;
-export const admitDial: (admit: Handle) => Promise<string>;
-export const admitFeed: (admit: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const admitFree: (admit: Handle) => Promise<void>;
 
 export const inviteNew: (member: Handle, request: string, which: Which) => Promise<Made>;
 export const inviteNext: (invite: Handle, version: number, timeoutMs: number) => Promise<string>;
