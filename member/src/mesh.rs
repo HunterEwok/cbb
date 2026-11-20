@@ -62,6 +62,10 @@ pub type OnCopy = Box<dyn Fn(&Content, &DeviceId, u64) + Send + Sync>;
 /// A command taken here, for the caller to carry out; an error is
 /// answered as failed.
 pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
+/// A message the member connection passes to the service: credentials,
+/// tunnel, hubs, guest, reach, evidence, waiting and dismiss (its type and
+/// body), from the peer named.
+pub type OnOther = Box<dyn Fn(&DeviceId, u64, &[u8]) + Send + Sync>;
 /// The set changed (new records came, or this device wrote one).
 pub type OnSet = Box<dyn Fn(&RecordSet) + Send + Sync>;
 
@@ -93,6 +97,7 @@ pub struct Mesh {
     on_copy: RwLock<Option<OnCopy>>,
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
+    on_other: RwLock<Option<OnOther>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
     /// The signed release and entry points this member holds and passes on.
     releases: RwLock<Option<Arc<Releases>>>,
@@ -214,6 +219,7 @@ impl Mesh {
             on_copy: RwLock::new(None),
             on_command: RwLock::new(None),
             on_set: RwLock::new(None),
+            on_other: RwLock::new(None),
             waiting: Mutex::new(HashMap::new()),
             releases: RwLock::new(None),
             entries: RwLock::new(None),
@@ -252,6 +258,24 @@ impl Mesh {
 
     pub fn on_set(&self, f: OnSet) {
         *self.on_set.write().unwrap() = Some(f);
+    }
+
+    pub fn on_other(&self, f: OnOther) {
+        *self.on_other.write().unwrap() = Some(f);
+    }
+
+    /// Sends a frame to a connected device: false when it is not connected
+    /// or its queue is full.
+    pub fn send(&self, to: &DeviceId, frame: Vec<u8>) -> bool {
+        self.send_to(to, frame)
+    }
+
+    /// Whether a device may be a hub of this one: a device of the group,
+    /// not frozen, that holds an admin key or that the root's hubs record
+    /// names.
+    pub fn may_be_hub(&self, id: &DeviceId) -> bool {
+        let st = self.state();
+        st.device(id).is_some_and(|d| !d.frozen && (d.admin.is_some() || st.hubs.contains(id)))
     }
 
     /// What this device's hellos say of it beyond the exchange's fields.
@@ -590,8 +614,33 @@ impl Mesh {
                 Ok(())
             }
             Some(copies::T_RESEAL) => self.take_reseal(conn, msg),
-            // The rest comes with the service's switch; a member passes
-            // over what it does not take.
+            // A tunnel offer or a hub share only from a device that may be
+            // a hub, by the records, not by what its hello claims.
+            Some(t @ (cbb_core::msg::tables::T_TUNNEL | cbb_core::msg::tables::T_HUBS))
+                if !self.may_be_hub(&conn.peer) =>
+            {
+                self.logf(&format!(
+                    "ignored message {t} from {}: it may not be a hub of the group",
+                    hex(&conn.peer.0[..4])
+                ));
+                Ok(())
+            }
+            Some(
+                t @ (cbb_core::msg::tables::T_CREDENTIALS
+                | cbb_core::msg::tables::T_TUNNEL
+                | cbb_core::msg::tables::T_HUBS
+                | cbb_core::msg::tables::T_GUEST
+                | m::T_REACH
+                | m::T_EVIDENCE
+                | cbb_core::msg::tables::T_WAITING
+                | cbb_core::msg::tables::T_DISMISS),
+            ) => {
+                if let Some(f) = &*self.on_other.read().unwrap() {
+                    f(&conn.peer, t, msg);
+                }
+                Ok(())
+            }
+            // A message of a later version, or one a member does not take.
             Some(_) => Ok(()),
         }
     }

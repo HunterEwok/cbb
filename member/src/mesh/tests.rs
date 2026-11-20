@@ -168,3 +168,34 @@ fn the_signed_files_travel_as_published() {
     // A set without one of its files is no message.
     assert!(files_frame(m::T_ENTRIES, ENTRIES_FILES, &v).is_none());
 }
+
+#[test]
+fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
+    let (a, b) = two("other");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_other(Box::new(move |from, t, _| {
+        let _ = tx.lock().unwrap().send((*from, t));
+    }));
+    connect(&a, &b);
+    until("the connection", || b.connected().contains(&a.device()));
+    let reach = frame::write(&Value::Map(vec![
+        (frame::FIELD_T, Value::Uint(m::T_REACH)),
+        (2, Value::Array(vec![Value::Bytes(&[3; 16])])),
+    ]));
+    // b holds no admin key and no hubs record names it: its tunnel offer is
+    // dropped, its reach goes on.
+    let tunnel = frame::write(&Value::Map(vec![
+        (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_TUNNEL)),
+        (2, cbb_core::format::Key::new(cbb_core::format::Alg::X25519, &[4; 32]).to_value()),
+        (3, Value::Bytes(&[5; 32])),
+    ]));
+    assert_eq!(cbb_core::msg::check(&tunnel[4..]), Ok(cbb_core::msg::tables::T_TUNNEL));
+    assert!(!a.may_be_hub(&b.device()));
+    assert!(b.send(&a.device(), tunnel));
+    assert!(b.send(&a.device(), reach));
+    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), m::T_REACH));
+    assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+    a.close();
+    b.close();
+}
