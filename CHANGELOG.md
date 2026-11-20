@@ -23,6 +23,9 @@ made with 0.5 is set up again once. The details follow.
 - The core reads the member connection's own messages of 0.6 (`hello`, `ping`, `bye`, `have`,
   `release`, `entries`, `get`, `missing`, `reach`, `evidence`) and the new message `want`
   (t 30), by which a member asks a peer for the records and the list its set names and lacks.
+- The core runs one pairing session of 0.6 at each end (`join::session`): the joiner's and the
+  member's steps from message 64 to the Welcome and message 68, at home with both persons'
+  answers or by an invitation, for `member/` and the phones alike.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.

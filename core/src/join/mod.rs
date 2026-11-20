@@ -19,6 +19,7 @@ pub mod decide;
 pub mod info;
 pub mod intro;
 pub mod invitation;
+pub mod session;
 pub mod waiting;
 pub mod welcome;
 
