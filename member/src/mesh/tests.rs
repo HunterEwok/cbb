@@ -305,3 +305,78 @@ fn the_member_port_takes_members_and_pairings() {
     a.close();
     b.close();
 }
+
+/// The two devices of `two`, with every line each logs kept.
+fn two_logged(name: &str) -> (Arc<Mesh>, Arc<Mesh>, Arc<Mutex<Vec<String>>>) {
+    let (da, db) = two_dirs(name);
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let l = lines.clone();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()));
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    (a, b, lines)
+}
+
+/// The root writes a device record on a: a's set changes while it is
+/// connected, and a says so in a hello.
+fn write_on(a: &Mesh, name: &str) {
+    {
+        let shared = a.set();
+        let mut set = shared.lock().unwrap();
+        let st = set.state();
+        let key = Key::es256(K(SigningKey::from_slice(&[9; 32]).unwrap()).public());
+        let mut d = Device::new(key, name, body::ROLE_MEMBER);
+        d.rights = body::RIGHT_READ;
+        set.write_record(&st, &root(), Kind::device(d), crate::uptime::wall_ms() as u64).unwrap();
+    }
+    a.changed().unwrap();
+}
+
+#[test]
+fn a_record_written_while_connected_reaches_the_peer_without_a_reconnect() {
+    let (a, b, lines) = two_logged("written");
+    connect(&a, &b);
+    until("the sets to settle", || a.set().lock().unwrap().digest() == b.set().lock().unwrap().digest());
+    // Only a sends a new hello; b answers with its have, and a with its own.
+    write_on(&a, "d");
+    until("the record to reach b", || b.state().devices.iter().any(|d| d.name == "d"));
+    assert_eq!(a.set().lock().unwrap().digest(), b.set().lock().unwrap().digest());
+    let ended: Vec<String> = lines.lock().unwrap().iter().filter(|l| l.contains("ended")).cloned().collect();
+    assert!(ended.is_empty(), "the connection ended: {ended:?}");
+    a.close();
+    b.close();
+}
+
+#[test]
+fn two_members_that_dial_each_other_at_once_keep_one_connection() {
+    let (a, b, _) = two_logged("double");
+    for _ in 0..5 {
+        // Each listens and dials the other at the same moment.
+        let (la, lb) = (TcpListener::bind("127.0.0.1:0").unwrap(), TcpListener::bind("127.0.0.1:0").unwrap());
+        let (aa, ab) = (la.local_addr().unwrap(), lb.local_addr().unwrap());
+        for (m, ln) in [(a.clone(), la), (b.clone(), lb)] {
+            std::thread::spawn(move || {
+                let (sock, _) = ln.accept().unwrap();
+                let _ = m.accept(sock);
+            });
+        }
+        let go = Arc::new(std::sync::Barrier::new(2));
+        for (m, to, id) in [(a.clone(), ab, b.device()), (b.clone(), aa, a.device())] {
+            let go = go.clone();
+            std::thread::spawn(move || {
+                go.wait();
+                let _ = m.dial(to, Some(id));
+            });
+        }
+        until("both to be connected", || a.connected() == [b.device()] && b.connected() == [a.device()]);
+        // The one kept carries the records both ways.
+        until("the sets to settle", || a.set().lock().unwrap().digest() == b.set().lock().unwrap().digest());
+        std::thread::sleep(Duration::from_millis(300));
+        assert_eq!(a.connected(), [b.device()], "a lost its connection");
+        assert_eq!(b.connected(), [a.device()], "b lost its connection");
+        a.close_connections();
+        until("both to be apart", || a.connected().is_empty() && b.connected().is_empty());
+    }
+    a.close();
+    b.close();
+}
