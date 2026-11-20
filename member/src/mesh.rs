@@ -920,7 +920,11 @@ impl Mesh {
                 };
                 let f = match r {
                     Ok(()) => result_frame(&t.id, &self.device(), 1, ""),
-                    Err(e) => result_frame(&t.id, &self.device(), 3, &e.to_string()),
+                    Err(e) => {
+                        let status =
+                            if e.find::<commands::Refuse>().is_some() { cbb_core::commands::STATUS_REFUSED } else { 3 };
+                        result_frame(&t.id, &self.device(), status, &e.to_string())
+                    }
                 };
                 let _ = conn.tx.try_send(f);
             }

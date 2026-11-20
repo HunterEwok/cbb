@@ -67,6 +67,11 @@ made with 0.5 is set up again once. The details follow.
   other operation answers that it is not on the records of 0.6 yet, with that as its cause
   in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
   8 bytes of the group ID.
+- The service sends and carries out commands on the records of 0.6
+  (`member/src/service/on_live/orders.rs`): muting another device and ending its mute, its
+  sync, remote paste, quick actions, turning remote paste or the quick actions off there or on
+  every device, and sync away from home off, signed by the root or an admin key; the receiver
+  checks its user's switches as before and answers refused or failed with why.
 - A phone's app runs the member of 0.6 when its data directory holds the group's `group.cbor`
   (`ffi/src/member/live.rs`): the member key signs through the app's callback, the clipboard,
   the devices, sync, the mute, why, and removing, renaming, freezing and thawing a device

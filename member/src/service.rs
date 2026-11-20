@@ -1308,6 +1308,24 @@ impl Service {
     /// limits per sender.
     fn act(&self, node: &Node, c: &crate::records::Record, body: crate::records::Command) -> wire::CommandResult {
         let from = Sender::of(node, c, &body);
+        self.act_from(&from, &body, || {
+            let (dev, root) = node.records().lock().unwrap().command_signer(c);
+            actions::Signer {
+                root,
+                role: dev.as_ref().map(|d| d.role.clone()).unwrap_or_default(),
+                store: dev.map(|d| d.store).unwrap_or_default(),
+            }
+        })
+    }
+
+    /// Carries out an action command from `from`, whose signer `signer`
+    /// tells, on the old records or on those of 0.6 alike.
+    fn act_from(
+        &self,
+        from: &Sender,
+        body: &crate::records::Command,
+        signer: impl FnOnce() -> actions::Signer,
+    ) -> wire::CommandResult {
         let mut res = wire::CommandResult {
             id: body.id.clone(),
             by: String::new(),
@@ -1324,28 +1342,23 @@ impl Service {
                 res.reason = format!("this device has no action {:?}", body.action);
             }
             Ok(set) => {
-                let (dev, root) = node.records().lock().unwrap().command_signer(c);
-                let signer = actions::Signer {
-                    root,
-                    role: dev.as_ref().map(|d| d.role.clone()).unwrap_or_default(),
-                    store: dev.map(|d| d.store).unwrap_or_default(),
-                };
+                let signer = signer();
                 if let Some(why) = actions::check(&set.get(&body.action), &signer) {
                     res.reason = why;
                 } else if !self.acts.lock().unwrap().allow(&from.key, uptime::wall_ms()) {
                     res.reason = "too many actions: at most one a second and 30 a minute from one device".into();
                 } else {
-                    res = self.run_action(&body, &set.get(&body.action).command);
+                    res = self.run_action(body, &set.get(&body.action).command);
                 }
             }
         }
         if res.status == "done" {
-            (self.log)(&format!("cbb: {} ran the action {} here", from.who(&body), body.action));
+            (self.log)(&format!("cbb: {} ran the action {} here", from.who(body), body.action));
         } else {
             (self.log)(&format!(
                 "cbb: the action {} from {}: {}: {}",
                 body.action,
-                from.who(&body),
+                from.who(body),
                 res.status,
                 res.reason
             ));
@@ -1353,7 +1366,7 @@ impl Service {
         let e = actions::Entry {
             time_ms: uptime::wall_ms(),
             by: body.by.clone(),
-            name: from.name,
+            name: from.name.clone(),
             unverified: !from.verified,
             action: body.action.clone(),
             result: res.status.clone(),
@@ -1460,7 +1473,7 @@ impl Service {
     /// cbb action enable and disable: only this device's own user sets its
     /// actions, on the admin socket.
     fn set_action(&self, h: &Header) -> Result<Message> {
-        let node = self.node()?;
+        self.group()?;
         let [a] = h.actions.as_slice() else {
             return Err(Error::msg("set one quick action at a time"));
         };
@@ -1490,7 +1503,7 @@ impl Service {
         };
         set.set(actions::Action { name: a.name.clone(), on: a.on, by: by.clone(), any_key: a.any_key, command });
         actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
-        node.set_actions(set.on());
+        self.announce_actions(set.on());
         (self.log)(&format!(
             "cbb: the action {} is {} here (by {by:?}, any key {})",
             a.name,
@@ -1502,7 +1515,7 @@ impl Service {
 
     /// cbb action remove: the user's own action goes.
     fn remove_action(&self, h: &Header) -> Result<Message> {
-        let node = self.node()?;
+        self.group()?;
         let mut set = actions::load(&self.state_dir)?;
         if !set.remove(&h.name) {
             if actions::PRESETS.contains(&h.name.as_str()) {
@@ -1514,9 +1527,19 @@ impl Service {
             return Err(Error::msg(format!("this device has no action of its user's own named {:?}", h.name)));
         }
         actions::save(&self.state_dir, &set).map_err(|e| e.context("saving the quick actions"))?;
-        node.set_actions(set.on());
+        self.announce_actions(set.on());
         (self.log)(&format!("cbb: the action {} is removed here", h.name));
         Ok(self.action_reply(&set))
+    }
+
+    /// Says which quick actions are on in this device's hellos, on the
+    /// member that runs.
+    fn announce_actions(&self, on: Vec<String>) {
+        if let Some(l) = self.live() {
+            self.live_hello(&l);
+        } else if let Ok(n) = self.node() {
+            n.set_actions(on);
+        }
     }
 
     fn action_reply(&self, set: &actions::Settings) -> Message {
@@ -1528,6 +1551,26 @@ impl Service {
     /// member does (internal/service/paste.go).
     fn pasted(&self, node: &Node, c: &crate::records::Record, body: crate::records::Command) -> wire::CommandResult {
         let from = Sender::of(node, c, &body);
+        self.paste_from(
+            &from,
+            &body,
+            node.secrets_stopped(),
+            &|set| self.paste_copy(node, &body, set, &from.name),
+            &|len| self.watch_typing(c, &body, len),
+        )
+    }
+
+    /// Carries out a paste command from `from` on the old records or on
+    /// those of 0.6 alike: `media` pastes a copy of images or files, and
+    /// `typed` watches a paste a peripheral types after its answer.
+    fn paste_from(
+        &self,
+        from: &Sender,
+        body: &crate::records::Command,
+        secrets_stopped: bool,
+        media: &dyn Fn(remotepaste::Settings) -> wire::CommandResult,
+        typed: &dyn Fn(usize),
+    ) -> wire::CommandResult {
         let mut res = wire::CommandResult {
             id: body.id.clone(),
             by: String::new(),
@@ -1552,32 +1595,32 @@ impl Service {
                     crate::rootless::sudo()
                 );
             }
-            Ok(_) if body.paste_kind == "secret" && node.secrets_stopped() => {
+            Ok(_) if body.paste_kind == "secret" && secrets_stopped => {
                 res.reason = "the group's records stop secrets until its root decides (cbb status says why)".into();
             }
             Ok(_) if !self.pastes.lock().unwrap().allow(&from.key, uptime::wall_ms()) => {
                 res.reason = "too many pastes: at most one a second and 30 a minute from one device".into();
             }
-            Ok(set) if body.paste_kind == "media" => res = self.paste_copy(node, &body, set, &from.name),
+            Ok(set) if body.paste_kind == "media" => res = media(set),
             Ok(set) => {
                 let text = remotepaste::clean(&body.text);
                 match (!text.is_empty()).then(|| self.peripherals.paste(&text, set.enter, body.enter)).flatten() {
                     Some((status, reason)) => {
                         (res.status, res.reason) = (status, reason);
                         if res.status == "done" {
-                            self.watch_typing(c, &body, text.len());
+                            typed(text.len());
                         }
                     }
-                    None => res = self.inject(&body, &text, set, &from.name),
+                    None => res = self.inject(body, &text, set, &from.name),
                 }
             }
         }
         if res.status == "done" && body.paste_kind == "media" {
-            (self.log)(&format!("cbb: {} pasted the group's copy {} here", from.who(&body), body.text));
+            (self.log)(&format!("cbb: {} pasted the group's copy {} here", from.who(body), body.text));
         } else if res.status == "done" {
-            (self.log)(&format!("cbb: {} pasted {} bytes here", from.who(&body), body.text.len()));
+            (self.log)(&format!("cbb: {} pasted {} bytes here", from.who(body), body.text.len()));
         } else {
-            (self.log)(&format!("cbb: a paste from {}: {}: {}", from.who(&body), res.status, res.reason));
+            (self.log)(&format!("cbb: a paste from {}: {}: {}", from.who(body), res.status, res.reason));
         }
         if body.paste_kind != "secret" {
             let e = remotepaste::Entry {
@@ -1981,7 +2024,7 @@ impl Service {
         if h.name == "off" && (h.enter || h.console || h.no_lock_check) {
             return Err(Error::msg("-enter, -console and -no-lock-check go with on"));
         }
-        self.node()?;
+        self.group()?;
         if !h.device.is_empty() || h.all {
             let off_here = || {
                 remotepaste::save(&self.state_dir, remotepaste::Settings::default())

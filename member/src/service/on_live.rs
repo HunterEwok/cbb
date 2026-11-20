@@ -5,7 +5,8 @@
 //! kept in `group.cbor` runs the member of 0.6 in place of the old one.
 //! The clipboard (watchers, copy, paste), status, devices, sync, the mute
 //! of this device, leaving, and the records an admin writes (remove,
-//! rename, freeze, thaw, hubs, incoming) run here; every other operation
+//! rename, freeze, thaw, hubs, incoming) run here, and the commands one
+//! device sends another (orders.rs); every other operation
 //! answers that it is not on the records of 0.6 yet (`live::not_yet`),
 //! never a silent no-op, until its part moves over.
 
@@ -20,6 +21,8 @@ use cbb_core::records::body::{MAX_INCOMING_MS, MIN_INCOMING_MS};
 
 /// How often this device's sealing keys are checked for a new epoch.
 const ROTATE_EVERY: Duration = Duration::from_secs(3600);
+
+mod orders;
 
 /// Whether the device's group is kept on the records of 0.6.
 pub(super) fn in_group(dir: &Path) -> bool {
@@ -91,6 +94,13 @@ impl Service {
             let svc = self.clone();
             live.on_write(Box::new(move |w| svc.deliver_live(w)));
         }
+        {
+            let (svc, w) = (self.clone(), Arc::downgrade(&live));
+            live.mesh.on_command(Box::new(move |t| match w.upgrade() {
+                Some(l) => svc.live_command(&l, t),
+                None => Err(Error::msg("the service is stopping")),
+            }));
+        }
         self.live_hello(&live);
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         *self.live.write().unwrap() = Some(live.clone());
@@ -125,7 +135,7 @@ impl Service {
 
     /// What this device says of itself in its hellos: its name, system,
     /// version, mode and mute.
-    fn live_hello(&self, live: &Live) {
+    pub(super) fn live_hello(&self, live: &Live) {
         let muted = live.board.mute_left();
         live.mesh.set_hello(crate::hello::Hello {
             name: self.name.clone(),
@@ -135,6 +145,7 @@ impl Service {
             muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
             device: crate::hello::Device { version: VERSION.into(), ..Default::default() },
             features: crate::hello::FEATURE_MEDIA,
+            actions: actions::load(&self.state_dir).map(|s| s.on()).unwrap_or_default(),
             ..Default::default()
         });
     }
@@ -250,7 +261,7 @@ impl Service {
 
     /// Mutes this device until `until` (0 for until it is lifted), or ends
     /// its mute, saves it and says so in the hellos.
-    fn live_mute(&self, live: &Live, on: bool, until: i64, by: &str) -> Result<()> {
+    pub(super) fn live_mute(&self, live: &Live, on: bool, until: i64, by: &str) -> Result<()> {
         if on {
             live.board.set_mute(until);
         } else {
@@ -267,7 +278,7 @@ impl Service {
     }
 
     /// The answer to sync and muted.
-    fn live_standing(&self, live: &Live) -> Message {
+    pub(super) fn live_standing(&self, live: &Live) -> Message {
         let standing = crate::sync::standing(&live.board);
         control::reply(Header { standing: Some(standing), done: true, ..Default::default() }, Vec::new())
     }
@@ -278,6 +289,9 @@ impl Service {
         let h = &m.header;
         if let Some(why) = refusal(live, h) {
             return Some(Err(Error::msg(why)));
+        }
+        if let Some(r) = self.live_orders(live, h, &m.payload) {
+            return Some(r);
         }
         let res = match h.op.as_str() {
             op if needs_no_group(op) || op == "paste_receive" => return None,
@@ -397,9 +411,6 @@ impl Service {
     /// cbb sync on or off, on this device.
     fn live_sync(&self, live: &Live, h: &Header) -> Result<Message> {
         let on = h.on.ok_or_else(|| Error::msg("sync needs on, true or false"))?;
-        if !h.device.is_empty() {
-            return Err(not_yet("turning another device's sync on or off"));
-        }
         if on && h.for_ms != 0 {
             return Err(Error::msg("a time goes only with cbb sync off"));
         }
@@ -417,11 +428,8 @@ impl Service {
                 "cbb mute and cbb unmute name a device with -on, as an admin; cbb sync off turns this device's own sync off",
             ));
         }
+        // Another device gets a command (orders.rs); this one mutes here.
         let me = live.mesh.device();
-        let d = writers::find(&live.mesh.state(), &h.device)?.clone();
-        if d.id != me {
-            return Err(not_yet("muting another device"));
-        }
         let on = h.op == "mute";
         let until = crate::mute::until(h.for_ms)?;
         let me = id_text(&me);
@@ -628,12 +636,6 @@ const MOVING: &[&str] = &[
     "release_want",
     "release_held",
     "update_way",
-    "paste_receive",
-    "action_set",
-    "actions_off",
-    "action_on",
-    "action_remove",
-    "paste_on",
     control::op::MAKE_ADMIN,
     control::op::KEY_LEVEL,
     control::op::TAKEOVER_DELAY,

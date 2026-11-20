@@ -4008,6 +4008,15 @@ the receiver (section 11), which only its own user turns on again (D-45); `mute`
 receiver's copies from the group for a while or until `unmute` ends it (design.md, "Muting a
 device").
 
+On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-off`, `action`,
+`actions-off`, `away-off`, `mute` and `unmute` as commands of format section 6
+(`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
+checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
+receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
+carrying the command out went wrong. `hub` and a small device's own command answer that they
+are not on the records of 0.6 yet; `away-off` is done at once, as the member of 0.6 syncs only
+at home.
+
 ### The command
 
 It has the form of a record, `{body, sig, chain?}`. Its body is JSON, in the strict form of
