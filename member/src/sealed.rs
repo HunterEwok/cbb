@@ -227,7 +227,7 @@ pub enum Taken {
     /// New content for this device: the caller applies the rule of
     /// incoming copies with its age, then calls `Marks::wrote` when it
     /// writes it.
-    New { content: Box<Content>, origin: DeviceId, signed: Timestamp, age_ms: u64, blob: Option<Blob> },
+    New { id: [u8; 16], content: Box<Content>, origin: DeviceId, signed: Timestamp, age_ms: u64, blob: Option<Blob> },
     /// Opened, but not newer than what was written here, a secret seen
     /// before, or signed ahead of this clock.
     Old(fresh::Fresh),
@@ -269,7 +269,7 @@ pub fn take(
             let blob = c.blob().zip(blob_key).map(|((size, sha256), key)| Blob { size, sha256, key });
             match marks.judge(&seen, now_ms, state) {
                 fresh::Fresh::New { age_ms } => {
-                    Taken::New { content: Box::new(content), origin: c.origin, signed: c.time, age_ms, blob }
+                    Taken::New { id: c.id, content: Box::new(content), origin: c.origin, signed: c.time, age_ms, blob }
                 }
                 old => Taken::Old(old),
             }

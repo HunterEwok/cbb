@@ -61,6 +61,8 @@ pub const RESULT_WAIT: Duration = Duration::from_secs(30);
 /// New content a peer's copy brought.
 #[derive(Clone, Debug)]
 pub struct Arrived {
+    /// The copy's ID.
+    pub id: [u8; 16],
     pub content: Content,
     pub origin: DeviceId,
     /// Its age by the core's judgement of freshness.
@@ -732,14 +734,14 @@ impl Mesh {
             self.broadcast(&f, Some(&conn.peer));
         }
         match taken {
-            Taken::New { content, origin, signed, age_ms, blob } => {
+            Taken::New { id, content, origin, signed, age_ms, blob } => {
                 {
                     let mut marks = self.marks.lock().unwrap();
                     marks.wrote(&origin, signed);
                     let _ = crate::files::write_atomic(&self.dir.join(MARKS_FILE), &marks.encode(), 0o600);
                 }
                 if let Some(f) = &*self.on_copy.read().unwrap() {
-                    f(&Arrived { content: *content, origin, age_ms, blob, from: conn.peer });
+                    f(&Arrived { id, content: *content, origin, age_ms, blob, from: conn.peer });
                 }
             }
             Taken::Reseal(f) => {

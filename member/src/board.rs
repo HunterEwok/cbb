@@ -15,11 +15,14 @@ use std::sync::Mutex;
 
 use cbb_core::clip::{Kind, Mode, Via};
 use cbb_core::content::Content;
+use cbb_core::media::Manifest;
 use cbb_core::records::DeviceId;
 use cbb_core::rule::{self, Incoming, Verdict};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
+use crate::mesh::Arrived;
+use crate::sealed::Blob;
 
 /// How long after a copy content from another member still goes into the
 /// clipboard, unless the group sets its own window.
@@ -35,10 +38,25 @@ const WRITTEN: usize = 16;
 /// The group's current copy as this member took it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Current {
+    /// The copy's ID, which a paste of images or files names.
+    pub id: [u8; 16],
     pub content: Content,
     pub origin: DeviceId,
+    /// Its blob of images or files, and the member it came from.
+    pub blob: Option<Blob>,
+    pub from: DeviceId,
     /// When it became current here, on the wall clock.
     pub at_ms: i64,
+}
+
+/// What this member's own clipboard holds, as it knows it.
+#[derive(Clone)]
+struct Local {
+    sum: [u8; 32],
+    text: String,
+    kind: Kind,
+    media: Option<Manifest>,
+    at: i64,
 }
 
 struct Inner {
@@ -48,7 +66,7 @@ struct Inner {
     /// An admin's mute until a wall time, 0 for until it is lifted.
     mute: Option<i64>,
     /// What the clipboard holds as this member knows it, and since when.
-    local: Option<([u8; 32], i64)>,
+    local: Option<Local>,
     current: Option<Current>,
     written: VecDeque<([u8; 32], i64)>,
     window_ms: u64,
@@ -78,6 +96,10 @@ fn content(text: &str, kind: Kind, via: Via) -> Result<Content> {
         _ => 0,
     };
     Ok(c)
+}
+
+fn local(text: &str, kind: Kind, at: i64) -> Local {
+    Local { sum: sum(text), text: text.to_string(), kind, media: None, at }
 }
 
 impl Board {
@@ -185,10 +207,10 @@ impl Board {
         let now = (self.wall)();
         let s = sum(text);
         let echo = st.written.iter().any(|(w, at)| *w == s && now.saturating_sub(*at) <= ECHO_MS);
-        if echo || st.local.is_some_and(|(l, _)| l == s) {
+        if echo || st.local.as_ref().is_some_and(|l| l.sum == s && l.media.is_none()) {
             return Ok(None);
         }
-        st.local = Some((s, now));
+        st.local = Some(local(text, kind, now));
         if !self.mode_now(&mut st).sends() || self.muted(&mut st) {
             return Ok(None);
         }
@@ -204,18 +226,62 @@ impl Board {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
         let now = (self.wall)();
-        st.local = Some((sum(text), now));
+        st.local = Some(local(text, kind, now));
         Ok(c)
     }
 
+    /// The watcher says what the clipboard holds, without a copy: at its
+    /// start, or after a write of its own. Images or files are never only
+    /// told.
+    pub fn clipboard_is(&self, text: &str, kind: Kind) {
+        let mut st = self.inner.lock().unwrap();
+        st.local =
+            (kind != Kind::Media && cbb_core::clip::check_text(text).is_ok()).then(|| local(text, kind, (self.wall)()));
+    }
+
+    /// Images or files this member copied (`Mesh::copy_media` sends them):
+    /// they are the clipboard's content now, with their plain-text
+    /// alternative.
+    pub fn copied_media(&self, manifest: &Manifest, alt: &str) {
+        let mut st = self.inner.lock().unwrap();
+        let now = (self.wall)();
+        let mut l = local(alt, Kind::Media, now);
+        l.media = Some(manifest.clone());
+        st.local = Some(l);
+    }
+
+    /// The text of this member's own clipboard, its kind and when it was
+    /// copied, on the wall clock; None when unknown or a secret past its
+    /// lifetime. For images or files, their plain-text alternative.
+    pub fn local(&self) -> Option<(String, Kind, i64)> {
+        let st = self.inner.lock().unwrap();
+        let l = st.local.as_ref()?;
+        let gone = l.kind == Kind::Secret
+            && (self.wall)().saturating_sub(l.at) >= i64::try_from(st.secret_ms).unwrap_or(i64::MAX);
+        if gone || l.text.is_empty() {
+            return None;
+        }
+        let kind = if l.kind == Kind::Media { Kind::Text } else { l.kind };
+        Some((l.text.clone(), kind, l.at))
+    }
+
+    /// The images or files of this member's own clipboard, with their
+    /// plain-text alternative and when they were copied.
+    pub fn local_media(&self) -> Option<(Manifest, String, i64)> {
+        let st = self.inner.lock().unwrap();
+        let l = st.local.as_ref()?;
+        Some((l.media.clone()?, l.text.clone(), l.at))
+    }
+
     /// New content a peer's copy brought (the core judged it fresh, with
-    /// its age): the rule's verdict; on `Write` it is the group's current
-    /// copy and the caller writes its text to the clipboard.
-    pub fn received(&self, c: &Content, origin: &DeviceId, age_ms: u64) -> Verdict {
+    /// its age): the rule's verdict; it is the group's current copy, and on
+    /// `Write` the caller writes it to the clipboard.
+    pub fn received(&self, a: &Arrived) -> Verdict {
+        let (c, age_ms) = (&a.content, a.age_ms);
         let mut st = self.inner.lock().unwrap();
         let now = (self.wall)();
         let text = c.text.as_deref().unwrap_or_default();
-        let held = !text.is_empty() && st.local.is_some_and(|(l, _)| l == sum(text));
+        let held = !text.is_empty() && c.manifest.is_none() && st.local.as_ref().is_some_and(|l| l.sum == sum(text));
         let i = Incoming {
             receives: self.mode_now(&mut st).receives(),
             kind: if c.is_secret() { Kind::Secret } else { Kind::Text },
@@ -231,10 +297,16 @@ impl Board {
             secret_ttl_ms: i64::try_from(st.secret_ms).unwrap_or(i64::MAX),
         };
         let v = rule::incoming(&i);
-        st.current = Some(Current { content: c.clone(), origin: *origin, at_ms: now });
+        st.current =
+            Some(Current { id: a.id, content: c.clone(), origin: a.origin, blob: a.blob, from: a.from, at_ms: now });
         if v == Verdict::Write {
             let s = sum(text);
-            st.local = Some((s, now));
+            let mut l = local(text, if c.is_secret() { Kind::Secret } else { Kind::Text }, now);
+            if let Some(m) = &c.manifest {
+                l.kind = Kind::Media;
+                l.media = Some(m.clone());
+            }
+            st.local = Some(l);
             st.written.push_back((s, now));
             while st.written.len() > WRITTEN {
                 st.written.pop_front();
@@ -251,6 +323,10 @@ mod tests {
 
     use super::*;
 
+    fn arrived(c: Content, origin: DeviceId, age_ms: u64) -> Arrived {
+        Arrived { id: [3; 16], content: c, origin, age_ms, blob: None, from: origin }
+    }
+
     fn board() -> (Board, Arc<AtomicI64>) {
         let t = Arc::new(AtomicI64::new(1_000_000));
         let t2 = t.clone();
@@ -263,7 +339,7 @@ mod tests {
         assert!(b.copied("hello", Kind::Text, Via::Copy).unwrap().is_some());
         assert!(b.copied("hello", Kind::Text, Via::Copy).unwrap().is_none(), "the same text again");
         let peer = DeviceId([1; 16]);
-        assert_eq!(b.received(&Content::text("from peer", false), &peer, 10), Verdict::Write);
+        assert_eq!(b.received(&arrived(Content::text("from peer", false), peer, 10)), Verdict::Write);
         assert_eq!(b.current().unwrap().origin, peer);
         // The watcher sees the member's own write: not sent back.
         assert!(b.copied("from peer", Kind::Text, Via::Copy).unwrap().is_none());
@@ -274,7 +350,7 @@ mod tests {
         let (b, t) = board();
         b.set_sync(false, 1_000_500);
         assert!(b.copied("a", Kind::Text, Via::Copy).unwrap().is_none());
-        assert_eq!(b.received(&Content::text("x", false), &DeviceId([1; 16]), 0), Verdict::Mode);
+        assert_eq!(b.received(&arrived(Content::text("x", false), DeviceId([1; 16]), 0)), Verdict::Mode);
         t.store(1_000_600, Ordering::SeqCst);
         assert_eq!(b.sync(), (true, 0), "sync comes back on by itself");
         b.set_mute(0);
@@ -285,13 +361,29 @@ mod tests {
     }
 
     #[test]
+    fn the_board_knows_what_the_clipboard_holds() {
+        let (b, t) = board();
+        b.clipboard_is("told", Kind::Text);
+        assert_eq!(b.local().map(|l| l.0), Some("told".into()));
+        assert!(b.copied("told", Kind::Text, Via::Copy).unwrap().is_none(), "told already");
+        b.copied("pin", Kind::Secret, Via::Copy).unwrap();
+        assert_eq!(b.local().map(|l| l.1), Some(Kind::Secret));
+        t.fetch_add(SECRET_TTL_MS as i64, Ordering::SeqCst);
+        assert!(b.local().is_none(), "a secret past its lifetime");
+        let m = Manifest { size: 3, parts: Vec::new() };
+        b.copied_media(&m, "a picture");
+        assert_eq!(b.local_media().map(|l| (l.0, l.1)), Some((m, "a picture".into())));
+        assert_eq!(b.local().map(|l| l.1), Some(Kind::Text), "media shows as its alternative");
+    }
+
+    #[test]
     fn an_old_copy_or_a_state_is_not_written() {
         let (b, _) = board();
         let peer = DeviceId([1; 16]);
-        assert_eq!(b.received(&Content::text("old", false), &peer, LIVE_WINDOW_MS + 1), Verdict::Old);
-        assert_eq!(b.received(&Content::state(&[0xa0]), &peer, 0), Verdict::Unread);
+        assert_eq!(b.received(&arrived(Content::text("old", false), peer, LIVE_WINDOW_MS + 1)), Verdict::Old);
+        assert_eq!(b.received(&arrived(Content::state(&[0xa0]), peer, 0)), Verdict::Unread);
         let mut secret = Content::text("pin", true);
         secret.ttl = 0;
-        assert_eq!(b.received(&secret, &peer, SECRET_TTL_MS), Verdict::SecretGone);
+        assert_eq!(b.received(&arrived(secret, peer, SECRET_TTL_MS)), Verdict::SecretGone);
     }
 }
