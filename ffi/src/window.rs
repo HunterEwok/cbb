@@ -311,6 +311,11 @@ fn qr_text(hosts: &[String], port: u16, fp: &str) -> String {
     s
 }
 
+#[cfg(test)]
+pub(crate) fn qr_text_for_tests(hosts: &[String], port: u16, fp: &str) -> String {
+    qr_text(hosts, port, fp)
+}
+
 /// Percent-encodes all but the unreserved characters of a URL.
 fn percent(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

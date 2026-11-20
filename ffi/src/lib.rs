@@ -147,6 +147,8 @@ pub mod invite;
 #[cfg(feature = "join")]
 pub mod join;
 #[cfg(feature = "member")]
+pub mod joiner;
+#[cfg(feature = "member")]
 pub mod member;
 #[cfg(feature = "member")]
 pub(crate) mod pair06;
@@ -908,6 +910,94 @@ pub unsafe extern "C" fn cbb_window_free(w: *mut window::Window) {
     if !w.is_null() {
         // SAFETY: w is a box cbb_window_new let go of.
         guard::or(|| (), || drop(unsafe { Box::from_raw(w) }));
+    }
+}
+
+/// Joins a group of 0.6 by a pairing window's QR code (src/joiner.rs):
+/// `request` is `{"dir", "qr", "name", "os", "public"}`, `public` the
+/// phone's member key, which `sign` with `ctx` signs with until
+/// `cbb_joiner_free`. It dials on a thread of its own; the answer is the
+/// first state, as `cbb_joiner_next` gives it. Returns the joiner, or null
+/// when the answer is an error (a phone in a group already, a QR code that
+/// is not a window's).
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes; `answer` and `answer_len`
+/// writable; `ctx` valid for `sign` until `cbb_joiner_free`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_joiner_new(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut joiner::Joiner {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (j, ans) = guard::or(|| (None, guard::panicked()), || joiner::Joiner::new(req, sign, ctx as usize));
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
+}
+
+/// Waits up to `timeout_ms` for the joiner's state to pass `version` and
+/// answers it: `{"version", "state", "shown", "group", "device",
+/// "error"}`, state dialing, joining (ask the person whether `shown.code`
+/// matches the member's screen; `shown` also names the member's device and
+/// name), done (the set is kept in `dir`: start the member on it) or
+/// failed. It blocks, so the app calls it off its main thread.
+///
+/// # Safety
+///
+/// `j` must be a joiner of `cbb_joiner_new`, not freed; `answer_len`
+/// writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_joiner_next(
+    j: *const joiner::Joiner,
+    version: u64,
+    timeout_ms: u64,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(j) = (unsafe { j.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(guard::answer(|| j.next(version, timeout_ms)), answer_len)
+}
+
+/// The person's answer to the code of the state's `shown`: `yes` non-zero
+/// when the codes match.
+///
+/// # Safety
+///
+/// As `cbb_joiner_next`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_joiner_answer(j: *const joiner::Joiner, yes: i32) {
+    // SAFETY: as the function's contract says.
+    if let Some(j) = unsafe { j.as_ref() } {
+        guard::or(|| (), || j.answer(yes != 0));
+    }
+}
+
+/// Ends joining and frees the joiner; a session that waits for the person
+/// ends as "they do not match". Null does nothing.
+///
+/// # Safety
+///
+/// `j` must be null or a joiner of `cbb_joiner_new`, not freed before, with
+/// no other call on it running.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_joiner_free(j: *mut joiner::Joiner) {
+    if !j.is_null() {
+        // SAFETY: j is a box cbb_joiner_new let go of.
+        guard::or(|| (), || drop(unsafe { Box::from_raw(j) }));
     }
 }
 

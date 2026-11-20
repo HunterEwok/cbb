@@ -325,6 +325,26 @@ void cbb_window_answer(const cbb_window *w, int32_t yes);
 void cbb_window_free(cbb_window *w);
 
 /*
+ * A new phone joins a group of 0.6 by a pairing window's QR code
+ * (src/joiner.rs): request is {"dir","qr","name","os","public"}, public the
+ * member key, which sign with ctx signs with until cbb_joiner_free. It
+ * dials the code's addresses on a thread of its own and takes only the
+ * member whose key the code's fingerprint names. The answer is the first
+ * state; cbb_joiner_next waits up to timeout_ms for a state past version
+ * and answers {"version","state","shown","group","device","error"}, state
+ * dialing, joining (shown is {"device","name","code"}: the app asks its
+ * person whether the code matches the member's screen and answers with
+ * cbb_joiner_answer), done (the set is kept in dir: start the member on
+ * it) or failed. cbb_joiner_free ends it.
+ */
+typedef struct cbb_joiner cbb_joiner;
+cbb_joiner *cbb_joiner_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
+                           size_t *answer_len);
+uint8_t *cbb_joiner_next(const cbb_joiner *j, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
+void cbb_joiner_answer(const cbb_joiner *j, int32_t yes);
+void cbb_joiner_free(cbb_joiner *j);
+
+/*
  * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with
  * the feature tunnel (the iPhone and Android apps): request is JSON with its
  * "op" (new_key, public_key, start, status, stop, and hub_... for the phone

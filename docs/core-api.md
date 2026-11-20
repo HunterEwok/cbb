@@ -136,6 +136,14 @@ writes the device's record by the core's admission rules (`join::decide::joiner_
 home a member or a phone reads, sends and takes secrets, a watch only reads) and sends the
 Welcome (`ffi/src/pair06.rs`). One attempt at a time; another gets `busy`.
 
+The new phone joins with `cbb_joiner_new` (`ffi/src/joiner.rs`): the request names the app's
+folder, the scanned QR code, what the phone says of itself and its member key. It dials the
+code's addresses in turn over TLS of `cbb-pair/3`, takes only the member whose key the code's
+fingerprint names, and `cbb_joiner_next` gives its state: `dialing`, `joining` with the code and
+the member's device and name, `done` with the group and the phone's device ID once the checked
+set is kept in the folder (the app then starts its member there), or `failed`.
+`cbb_joiner_answer` gives the person's answer. A phone that holds a group already is refused.
+
 ### The member's operations
 
 A phone's `cbb_member_call` and a computer's control socket (protocol.md, section 8: the
