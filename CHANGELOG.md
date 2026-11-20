@@ -2499,6 +2499,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A Linux service that does not run as root no longer tries to write polkit's actions in
+  `/usr/share/polkit-1/actions` at every start and log the refusal: it leaves them to the
+  installer (`cbb confirm-setup`) and says once, at start, when they are not set up for its
+  user.
 - An admin phone pastes pictures and files on a device again: the iPhone and Android kits
   sign the paste command of kind `media` that names the group's copy, which they refused to
   build before.
