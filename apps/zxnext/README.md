@@ -317,7 +317,10 @@ through the ESP as well (member/README.md).
 Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
 `.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is
 open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
-computer's `cbb pair` says when the Pi has joined. Both ways, `.cbb pair` first asks the
+computer's `cbb pair` says when the Pi has joined. A home window of a group of 0.6 also
+announces its ID (TXT `i`) and the hash of its member's key (TXT `f`); the Next passes them
+on (`-window ID -fp HASH`), and the Pi's cbb joins with the six digits and that ID, and only
+the member with that key (docs/protocol.md, "Pairing in 0.6"). Both ways, `.cbb pair` first asks the
 Pi whether its state holds an identity: a Pi in a group already does not join another, so
 the Next says so instead of waiting: `.cbb leave` first.
 

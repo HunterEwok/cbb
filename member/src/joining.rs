@@ -80,6 +80,22 @@ pub fn at_home(
     invitation: Invitation,
     fp: Option<KeyHash>,
 ) -> Result<Box<Admitted>> {
+    let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
+        .map_err(|e| Error::with(format!("cannot reach {addr}"), e))?;
+    over(dir, sock, &addr.to_string(), me, invitation, fp)
+}
+
+/// at_home over a connection already made to the window's member, which
+/// `who` names in the errors: the ZX Spectrum Next's link joins through
+/// the Next's ESP this way (cbb next link -join).
+pub fn over(
+    dir: &Path,
+    sock: TcpStream,
+    who: &str,
+    me: &Me<'_>,
+    invitation: Invitation,
+    fp: Option<KeyHash>,
+) -> Result<Box<Admitted>> {
     std::fs::create_dir_all(dir).map_err(|e| Error::with(format!("cannot make {}", dir.display()), e))?;
     let local = crate::set::local_key(dir)?;
     if crate::set::load(dir, &local)?.is_some() {
@@ -98,15 +114,13 @@ pub fn at_home(
         cbb_core::alpn::PAIR,
         &tls::clock(),
     )?);
-    let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
-        .map_err(|e| Error::with(format!("cannot reach {addr}"), e))?;
     sock.set_read_timeout(Some(STEP_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
     let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
     tls::handshake(&mut s, &sock, "the handshake with the member failed")?;
     let member = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the member showed no key"))?;
     if fp.is_some_and(|fp| cbb_core::records::Key::es256(member.to_vec()).hash() != fp) {
         return Err(Error::msg(format!(
-            "{addr} is not the window's member: its key is not the one the window announces"
+            "{who} is not the window's member: its key is not the one the window announces"
         )));
     }
     let x = bykey::pairing_exporter(&s, &exporter)?;
@@ -140,7 +154,7 @@ pub fn at_home(
     got.map_err(|e| {
         let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
         if eof {
-            e.context(format!("{addr} has no pairing window open: run cbb pair there first, then join"))
+            e.context(format!("{who} has no pairing window open: run cbb pair there first, then join"))
         } else {
             e
         }

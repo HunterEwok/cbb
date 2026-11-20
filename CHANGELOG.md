@@ -2697,6 +2697,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The ZX Spectrum Next's `.cbb pair CODE` joins a group of 0.6: it passes the home window's
+  ID and member key from mDNS to the Pi's `cbb next link` (`-window`, `-fp`), which joins
+  with the six digits through the Next's ESP.
 - On the records of 0.6 `cbb pair` right after `cbb new` waits for the new group to start
   instead of answering that the device is still starting, and a pairing window that opens
   right after another closed announces its own ID by mDNS, not the closed one's.
