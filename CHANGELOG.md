@@ -36,6 +36,9 @@ made with 0.5 is set up again once. The details follow.
 - `member/` has its member connection of 0.6 (`member/src/mesh.rs`): members over TLS by key
   exchange records, keys statements, copies, commands and their results, built beside the
   connection of 0.5 until the service switches to it.
+- `member/` keeps its clipboard state of 0.6 (`member/src/board.rs`): sync on or off, an
+  admin's mute, its own copies going out once and the group's copies judged by the core's rule
+  of incoming copies, standing where the clipboard engine of 0.5 stands until the switch.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.
