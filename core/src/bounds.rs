@@ -218,6 +218,30 @@ pub const BOUNDS: &[Bound] = &[
         "",
         &["marks_keep_at_most_max_origins"],
     ),
+    b(
+        "copies::blob::SEGMENT",
+        crate::copies::blob::SEGMENT as u64,
+        Frozen,
+        "a blob's plaintext segment, the last one padded with zeros",
+        "",
+        &["a_copy_with_a_blob_seals_and_opens_with_its_bytes"],
+    ),
+    b(
+        "copies::blob::SEALED_SEGMENT",
+        crate::copies::blob::SEALED_SEGMENT as u64,
+        Frozen,
+        "a segment and its AES-256-GCM tag, the unit a fetch gets",
+        "",
+        &["a_copy_with_a_blob_seals_and_opens_with_its_bytes"],
+    ),
+    b(
+        "copies::blob::MAX_SEGMENTS",
+        crate::copies::blob::MAX_SEGMENTS,
+        Frozen,
+        "the largest media copy in segments",
+        "",
+        &["a_blob_holds_at_most_max_segments"],
+    ),
     // Contents.
     b(
         "content::MAX_STATE",

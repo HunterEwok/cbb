@@ -2240,8 +2240,9 @@ peer's `hello` sends `have` with the IDs of the records it holds for that peer, 
 `want` for what the other side's `have` lists and it lacks. A member that takes a peer's `have`
 while the peer's last `hello` still showed a digest other than its own sends its own `have`
 too, once for each `hello` of the peer's: a record written while two members are connected thus
-reaches the other side although only the writer sent a new `hello`. A connection answers at most
-64 differing digests (`link::MAX_ROUNDS`) and then logs that the exchange is stuck. When two
+reaches the other side although only the writer sent a new `hello`. A member sends its `have` at
+most 64 times on one connection (its own budget in `member/src/link.rs`, not a bound of the
+format) and then logs that the exchange is stuck. When two
 members dial each other at once, both keep the connection the one with the lower device ID
 dialed.
 
@@ -4957,6 +4958,9 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `copies::fresh::ALLOWANCE_MS` | 300000 | frozen | an origin's clock 5 minutes ahead; past it a copy is the verdict `ahead` (not written, not the newest), which depends on the reader's clock, so its vectors give the clock | `ahead` |
 | `copies::fresh::MAX_SECRETS` | 1024 | reader | secrets listed by ID above the floor |  |
 | `copies::fresh::MAX_ORIGINS` | 1024 | reader | origins with a newest time |  |
+| `copies::blob::SEGMENT` | 65536 | frozen | a blob's plaintext segment, the last one padded with zeros |  |
+| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its AES-256-GCM tag, the unit a fetch gets |  |
+| `copies::blob::MAX_SEGMENTS` | 16384 | frozen | the largest media copy in segments |  |
 | `content::MAX_STATE` | 4096 | frozen | a device's state | `content/data` |
 | `media::MAX_NAME` | 765 | stated | a file name of 255 characters of 3 bytes | `content/manifest` |
 | `media::MAX_PATH` | 16384 | stated | one path | `content/manifest` |

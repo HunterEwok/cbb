@@ -2530,11 +2530,13 @@ impl Service {
 
     fn request(&self, m: &Message) -> Result<Message> {
         // A group of 0.6 that is still starting: a request that needs the
-        // group waits for it, as on the old member.
+        // group waits for it, as on the old member. One whose files do not
+        // open never starts: cbb leave, all it takes, is answered below.
+        let starting = self.broken.lock().unwrap().is_none()
+            && on_live::in_group(&self.state_dir)
+            && !on_live::needs_no_group(&m.header.op);
         let live = match self.live() {
-            None if on_live::in_group(&self.state_dir) && !on_live::needs_no_group(&m.header.op) => {
-                Some(self.started(|| self.live())?)
-            }
+            None if starting => Some(self.started(|| self.live())?),
             l => l,
         };
         if let Some(live) = live

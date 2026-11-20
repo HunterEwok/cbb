@@ -175,6 +175,36 @@
     },
     {
       "class": "frozen",
+      "name": "copies::blob::SEGMENT",
+      "reached": [
+        "a_copy_with_a_blob_seals_and_opens_with_its_bytes"
+      ],
+      "refusal": "",
+      "value": 65536,
+      "widest": "a blob's plaintext segment, the last one padded with zeros"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::blob::SEALED_SEGMENT",
+      "reached": [
+        "a_copy_with_a_blob_seals_and_opens_with_its_bytes"
+      ],
+      "refusal": "",
+      "value": 65552,
+      "widest": "a segment and its AES-256-GCM tag, the unit a fetch gets"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::blob::MAX_SEGMENTS",
+      "reached": [
+        "a_blob_holds_at_most_max_segments"
+      ],
+      "refusal": "",
+      "value": 16384,
+      "widest": "the largest media copy in segments"
+    },
+    {
+      "class": "frozen",
       "name": "content::MAX_STATE",
       "reached": [
         "vec:wave4.json:state over 4 KiB"

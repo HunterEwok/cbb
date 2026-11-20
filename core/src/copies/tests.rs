@@ -853,3 +853,15 @@ fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
     // The parts must be what the manifest says.
     assert!(seal_media(&w.phone, &rs, &made(3), &content, &parts[1..]).is_err());
 }
+
+#[test]
+fn a_blob_holds_at_most_max_segments() {
+    let key = [3; 32];
+    let last = blob::MAX_SEGMENTS - 1;
+    assert!(blob::seal_segment(&key, last, true, b"end").is_ok());
+    assert!(blob::seal_segment(&key, blob::MAX_SEGMENTS, true, b"past").is_err());
+    let full = blob::MAX_SEGMENTS * blob::SEALED_SEGMENT as u64;
+    assert_eq!(blob::segments(full), Some(blob::MAX_SEGMENTS));
+    assert_eq!(blob::segments(full + blob::SEALED_SEGMENT as u64), None);
+    assert_eq!(blob::segments(full - 1), None);
+}
