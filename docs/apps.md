@@ -248,7 +248,8 @@ the group", not a status code), never a dialog that must be dismissed.
 ### Notices
 
 The member keeps a short list of things the person should know about the group's records
-(its `notices`), and Home shows each in a sentence of the app's own, under the alerts: a
+(its `notices`), and Home shows each in a sentence of the app's own, under the alerts, on the iPhone, Android
+and Aurora: a
 change of the main device on its way, an admin that has been silent so long that its admin
 rights end soon (35 days in all), removals waiting until every admin has seen them and how
 much of the main device's room they take, a removal this phone still has to confirm, a frozen
@@ -259,9 +260,9 @@ stay until what they say is over. A kind the app does not know is not shown.
 
 ### Changing the main device
 
-Only the group's recovery key changes the main device, and it does so at once. On a phone
-that is not the main device, Settings, under the recovery key, offers "Move the group to this
-phone". The person scans the code on the recovery sheet or types its text; the key stays on
+Only the group's recovery key changes the main device, and it does so at once. On an iPhone
+or an Android phone that is not the main device, Settings, in its recovery part, offers "Move
+the group to this phone". The person scans the code on the recovery sheet or types its text; the key stays on
 the phone only for this change. The core then writes the list of who stays, one row per
 device with what the change does to it (stays, stays an admin, stays without its admin
 rights, stays frozen until the new main device unfreezes it, removed, or removed earlier).

@@ -812,6 +812,81 @@
     </message>
 </context>
 <context>
+    <name>GroupNotices</name>
+    <message>
+        <source>%1 is now the group's main device, in place of %2.</source>
+        <translation>%1 sasa ni kifaa kikuu cha kikundi, mahali pa %2.</translation>
+    </message>
+    <message>
+        <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
+        <translation>%1 kiliondolewa kabla kifaa kikuu hakijabadilika, na sasa kinahesabiwa tena: kiondoe tena ikiwa hakipaswi kuwa kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>Mabadiliko ya kifaa kikuu cha kikundi yako njiani.</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>Ondoka kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>Inaondoka kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end in %2 days unless it connects.</source>
+        <translation>Hakuna habari kutoka kwa msimamizi %1 kwa muda mrefu: haki zake za msimamizi zinaisha baada ya siku %2 isipounganishwa.</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end now.</source>
+        <translation>Hakuna habari kutoka kwa msimamizi %1 kwa muda mrefu: haki zake za msimamizi zinaisha sasa.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>Sawa</translation>
+    </message>
+    <message>
+        <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
+        <translation>Ufunguo wa urejeshaji pekee ndio hubadilisha kifaa kikuu, na hakuna kinachotengua hilo. Ondoka kwenye kikundi kwenye kila kifaa chako, kisha unda kikundi kipya na uviunganishe nacho.</translation>
+    </message>
+    <message>
+        <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
+        <translation>Uondoaji unaosubiri wasimamizi unajaza %1 ya nafasi ya kifaa kikuu kwa rekodi: waunganishe wasimamizi hao.</translation>
+    </message>
+    <message>
+        <source>Removals wait until every admin has seen them.</source>
+        <translation>Uondoaji unasubiri hadi kila msimamizi auone.</translation>
+    </message>
+    <message>
+        <source>Someone has the group's recovery key</source>
+        <translation>Mtu fulani ana ufunguo wa urejeshaji wa kikundi</translation>
+    </message>
+    <message>
+        <source>The frozen admin %1 holds removals back: unfreeze it or remove it.</source>
+        <translation>Msimamizi aliyegandishwa %1 anazuia uondoaji: kiyeyushe au kiondoe.</translation>
+    </message>
+    <message>
+        <source>The group's main device changed</source>
+        <translation>Kifaa kikuu cha kikundi kimebadilika</translation>
+    </message>
+    <message>
+        <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
+        <translation>Ufunguo wa urejeshaji wa kikundi bado haujahifadhiwa: bila huo, kupoteza simu hii kunamaanisha kuunda kikundi upya.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>Rekodi za kifaa kikuu zinasubiri rekodi ambazo hakuna kifaa kimezipitisha.</translation>
+    </message>
+    <message>
+        <source>This phone has a removal to confirm; it does so with your next admin action.</source>
+        <translation>Simu hii ina uondoaji wa kuthibitisha; itafanya hivyo kwa hatua yako ijayo ya msimamizi.</translation>
+    </message>
+    <message>
+        <source>This wasn't me</source>
+        <translation>Si mimi</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Decline</source>

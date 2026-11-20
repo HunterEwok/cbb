@@ -812,6 +812,81 @@
     </message>
 </context>
 <context>
+    <name>GroupNotices</name>
+    <message>
+        <source>%1 is now the group's main device, in place of %2.</source>
+        <translation>%1 अब %2 की जगह समूह का मुख्य डिवाइस है।</translation>
+    </message>
+    <message>
+        <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
+        <translation>%1 को मुख्य डिवाइस बदलने से पहले हटाया गया था, और अब फिर गिना जाता है: अगर इसे समूह में नहीं होना चाहिए तो फिर से हटाएँ।</translation>
+    </message>
+    <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>समूह के मुख्य डिवाइस का बदलाव आ रहा है।</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>समूह छोड़ें</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>समूह छोड़ा जा रहा है</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end in %2 days unless it connects.</source>
+        <translation>एडमिन %1 से बहुत समय से कोई खबर नहीं: अगर वह नहीं जुड़ता तो उसके एडमिन अधिकार %2 दिनों में खत्म हो जाएँगे।</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end now.</source>
+        <translation>एडमिन %1 से बहुत समय से कोई खबर नहीं: उसके एडमिन अधिकार अभी खत्म होते हैं।</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>ठीक है</translation>
+    </message>
+    <message>
+        <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
+        <translation>केवल रिकवरी कुंजी ही मुख्य डिवाइस बदलती है, और कुछ भी इसे पलट नहीं सकता। अपने हर डिवाइस पर समूह छोड़ें, फिर नया समूह बनाएँ और उन्हें उसमें जोड़ें।</translation>
+    </message>
+    <message>
+        <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
+        <translation>एडमिन का इंतज़ार करते हटाने मुख्य डिवाइस की रिकॉर्ड जगह का %1 भरते हैं: उन एडमिन को ऑनलाइन लाएँ।</translation>
+    </message>
+    <message>
+        <source>Removals wait until every admin has seen them.</source>
+        <translation>हटाना तब तक रुका रहता है जब तक हर एडमिन उसे देख न ले।</translation>
+    </message>
+    <message>
+        <source>Someone has the group's recovery key</source>
+        <translation>किसी के पास समूह की रिकवरी कुंजी है</translation>
+    </message>
+    <message>
+        <source>The frozen admin %1 holds removals back: unfreeze it or remove it.</source>
+        <translation>फ़्रीज़ किया गया एडमिन %1 हटाने को रोक रहा है: उसे अनफ़्रीज़ करें या हटाएँ।</translation>
+    </message>
+    <message>
+        <source>The group's main device changed</source>
+        <translation>समूह का मुख्य डिवाइस बदल गया</translation>
+    </message>
+    <message>
+        <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
+        <translation>समूह की रिकवरी कुंजी अभी सहेजी नहीं गई है: इसके बिना यह फ़ोन खोने का मतलब है समूह फिर से बनाना।</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>मुख्य डिवाइस के रिकॉर्ड ऐसे रिकॉर्ड की प्रतीक्षा कर रहे हैं जिन्हें किसी डिवाइस ने आगे नहीं भेजा।</translation>
+    </message>
+    <message>
+        <source>This phone has a removal to confirm; it does so with your next admin action.</source>
+        <translation>इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।</translation>
+    </message>
+    <message>
+        <source>This wasn't me</source>
+        <translation>यह मैंने नहीं किया</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Decline</source>

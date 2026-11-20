@@ -440,6 +440,20 @@ void Member::event(const QByteArray &json)
         emit panicked(details);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
+    } else if (type == QStringLiteral("root_changed")) {
+        // Every device shows it until the person saw it, and nobody turns it off.
+        const QString from = e.value(QStringLiteral("from")).toString();
+        const QString to = e.value(QStringLiteral("to")).toString();
+        Errors::log(QStringLiteral("member: the group's root changed from %1 to %2").arg(from, to));
+        m_rootChanged = QVariantMap{
+            {QStringLiteral("from"), deviceName(from)},
+            {QStringLiteral("to"), deviceName(to)},
+            {QStringLiteral("seq"), e.value(QStringLiteral("seq")).toDouble()},
+        };
+        emit devicesChanged();
+        pollDevices();
+    } else if (type == QStringLiteral("state") || type == QStringLiteral("notice")) {
+        pollDevices();
     } else if (type == QStringLiteral("command")) {
         command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
                 e.value(QStringLiteral("command")).toObject());
@@ -753,13 +767,51 @@ void Member::pollDevices()
     Failure viewFailure;
     const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
     const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
-    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView) {
+    Failure noticesFailure;
+    const QJsonObject ns = call(m_member, QStringLiteral("notices"), QJsonObject(), &noticesFailure);
+    const QVariantList notices =
+        noticesFailure.isNull() ? ns.value(QStringLiteral("notices")).toArray().toVariantList() : m_notices;
+    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView || notices != m_notices) {
         m_devices = devices;
         m_alerts = alerts;
         m_why = why;
         m_rootView = rootView;
+        m_notices = notices;
         emit devicesChanged();
     }
+}
+
+void Member::dismissNotice(const QString &id)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    call(m_member, QStringLiteral("dismiss"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+    }
+    pollDevices();
+}
+
+void Member::rootChangeSeen()
+{
+    if (m_rootChanged.isEmpty())
+        return;
+    m_rootChanged.clear();
+    emit devicesChanged();
+}
+
+QString Member::deviceName(const QString &id) const
+{
+    for (const QVariant &v : m_devices) {
+        const QVariantMap d = v.toMap();
+        if (d.value(QStringLiteral("device")).toString() == id) {
+            const QString name = d.value(QStringLiteral("name")).toString();
+            return name.isEmpty() ? id : name;
+        }
+    }
+    return id;
 }
 
 QJsonObject Member::view(const QJsonValue &op, Failure *failure) const

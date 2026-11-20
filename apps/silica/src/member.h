@@ -47,6 +47,13 @@ class Member : public QObject
     // root_view op, cbb_core::root::view): delay_ms, key_level, recovery,
     // handed_to.
     Q_PROPERTY(QVariantMap rootView READ rootView NOTIFY devicesChanged)
+    // The member's notices about the group (docs/apps.md, "Notices"): maps
+    // with id, kind, args and dismissable.
+    Q_PROPERTY(QVariantList notices READ notices NOTIFY devicesChanged)
+    // The group's main device changed (docs/apps.md, "Changing the main
+    // device"), until the person saw it: from and to, the devices' names,
+    // and seq; empty when none.
+    Q_PROPERTY(QVariantMap rootChanged READ rootChanged NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // Sync turned off (design.md, "Sync on and off"): the clipboard is the
@@ -84,6 +91,8 @@ public:
     QVariantList alerts() const { return m_alerts; }
     QVariantList why() const { return m_why; }
     QVariantMap rootView() const { return m_rootView; }
+    QVariantList notices() const { return m_notices; }
+    QVariantMap rootChanged() const { return m_rootChanged; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
     QString error() const { return m_error; }
@@ -127,6 +136,10 @@ public:
     // Turns sync away from home on, with new tunnel keys that the hellos
     // offer the group's hubs, or off, forgetting them.
     Q_INVOKABLE void setAway(bool on);
+    // Hides a notice that may be hidden, until something about it changes.
+    Q_INVOKABLE void dismissNotice(const QString &id);
+    // The person saw that the group's main device changed.
+    Q_INVOKABLE void rootChangeSeen();
     // After joining by a remote invitation: turns sync away from home on
     // and offers the tunnel key through the invitation's guest tunnel.
     void joinedByInvite(const QString &invite);
@@ -171,6 +184,8 @@ private:
     // and signed after the member started.
     void command(double token, const QString &from, const QJsonObject &record);
     void pollPeers();
+    // A device's name as the member's devices list it, else its ID.
+    QString deviceName(const QString &id) const;
     void setLast(const QString &text, bool secret);
     // Takes the group's copy (as the core's copy JSON): a text into the
     // clipboard, images or files fetched into Downloads, one image into the
@@ -200,6 +215,8 @@ private:
     QVariantList m_alerts;
     QVariantList m_why;
     QVariantMap m_rootView;
+    QVariantList m_notices;
+    QVariantMap m_rootChanged;
     QString m_last;
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.

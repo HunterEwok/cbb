@@ -812,6 +812,81 @@
     </message>
 </context>
 <context>
+    <name>GroupNotices</name>
+    <message>
+        <source>%1 is now the group's main device, in place of %2.</source>
+        <translation>%1 现在是群组的主设备，取代了 %2。</translation>
+    </message>
+    <message>
+        <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
+        <translation>%1 在主设备更换前已被移除，现在又被计入：如果它不该在群组里，请再次移除。</translation>
+    </message>
+    <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>群组主设备的更换正在传来。</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>离开群组</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>正在退出群组</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end in %2 days unless it connects.</source>
+        <translation>管理员 %1 已很久没有消息：除非它连接，否则其管理员权限将在 %2 天后结束。</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end now.</source>
+        <translation>管理员 %1 已很久没有消息：其管理员权限现在结束。</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>好</translation>
+    </message>
+    <message>
+        <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
+        <translation>只有恢复密钥能更换主设备，且无法撤销。请在你的每台设备上退出群组，然后新建一个群组并让它们加入。</translation>
+    </message>
+    <message>
+        <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
+        <translation>等待管理员的移除操作占用了主设备记录空间的 %1：请让这些管理员上线。</translation>
+    </message>
+    <message>
+        <source>Removals wait until every admin has seen them.</source>
+        <translation>移除操作会等到每位管理员都看到为止。</translation>
+    </message>
+    <message>
+        <source>Someone has the group's recovery key</source>
+        <translation>有人拿到了群组的恢复密钥</translation>
+    </message>
+    <message>
+        <source>The frozen admin %1 holds removals back: unfreeze it or remove it.</source>
+        <translation>被冻结的管理员 %1 阻碍了移除操作：请解冻或移除它。</translation>
+    </message>
+    <message>
+        <source>The group's main device changed</source>
+        <translation>群组的主设备已更换</translation>
+    </message>
+    <message>
+        <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
+        <translation>群组的恢复密钥尚未保存：没有它，丢失这部手机就意味着要重新建立群组。</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>主设备的记录在等待尚无设备转发的记录。</translation>
+    </message>
+    <message>
+        <source>This phone has a removal to confirm; it does so with your next admin action.</source>
+        <translation>这部手机有一项移除待确认；它会在你下一次管理操作时确认。</translation>
+    </message>
+    <message>
+        <source>This wasn't me</source>
+        <translation>不是我做的</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Decline</source>

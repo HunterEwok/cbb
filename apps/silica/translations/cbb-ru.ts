@@ -812,6 +812,81 @@
     </message>
 </context>
 <context>
+    <name>GroupNotices</name>
+    <message>
+        <source>%1 is now the group's main device, in place of %2.</source>
+        <translation>%1 теперь главное устройство группы вместо %2.</translation>
+    </message>
+    <message>
+        <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
+        <translation>%1 было удалено до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе.</translation>
+    </message>
+    <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>Смена главного устройства группы уже в пути.</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>Выйти из группы</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>Выход из группы</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end in %2 days unless it connects.</source>
+        <translation>От администратора %1 давно нет вестей: его права администратора закончатся через %2 дн., если он не подключится.</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end now.</source>
+        <translation>От администратора %1 давно нет вестей: его права администратора заканчиваются сейчас.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
+        <translation>Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и подключите их к ней.</translation>
+    </message>
+    <message>
+        <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
+        <translation>Удаления, ждущие администраторов, занимают %1 места главного устройства для записей: подключите этих администраторов.</translation>
+    </message>
+    <message>
+        <source>Removals wait until every admin has seen them.</source>
+        <translation>Удаления ждут, пока их не увидит каждый администратор.</translation>
+    </message>
+    <message>
+        <source>Someone has the group's recovery key</source>
+        <translation>У кого-то есть ключ восстановления группы</translation>
+    </message>
+    <message>
+        <source>The frozen admin %1 holds removals back: unfreeze it or remove it.</source>
+        <translation>Замороженный администратор %1 задерживает удаления: разморозьте его или удалите.</translation>
+    </message>
+    <message>
+        <source>The group's main device changed</source>
+        <translation>Главное устройство группы сменилось</translation>
+    </message>
+    <message>
+        <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
+        <translation>Ключ восстановления группы ещё не сохранён: без него потеря этого телефона означает создавать группу заново.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>Записи главного устройства ждут записей, которые ещё ни одно устройство не передало.</translation>
+    </message>
+    <message>
+        <source>This phone has a removal to confirm; it does so with your next admin action.</source>
+        <translation>Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора.</translation>
+    </message>
+    <message>
+        <source>This wasn't me</source>
+        <translation>Это был не я</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Decline</source>

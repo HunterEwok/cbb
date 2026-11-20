@@ -371,6 +371,8 @@ Page {
 
             AlertsCard {}
 
+            GroupNotices {}
+
             // "Lost phone?" on the group's only admin: how a second phone
             // becomes one. Closed once, it stays closed.
             BackgroundItem {

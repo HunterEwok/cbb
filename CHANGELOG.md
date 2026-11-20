@@ -26,7 +26,8 @@ made with 0.5 is set up again once. The details follow.
 - The iPhone and Android apps show the member's notices about the group on Home, move the
   group's main device to the phone with the recovery key and the "who stays" list the core
   writes, and show on every device that the main device changed, with "This wasn't me"
-  ([phone apps](docs/apps.md), "Changing the main device").
+  ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
+  and the change too.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.

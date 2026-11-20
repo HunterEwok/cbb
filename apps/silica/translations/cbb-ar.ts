@@ -812,6 +812,81 @@
     </message>
 </context>
 <context>
+    <name>GroupNotices</name>
+    <message>
+        <source>%1 is now the group's main device, in place of %2.</source>
+        <translation>أصبح %1 الآن الجهاز الرئيسي للمجموعة بدلًا من %2.</translation>
+    </message>
+    <message>
+        <source>%1 was removed before the main device changed, and counts again now: remove it again if it should not be in the group.</source>
+        <translation>أُزيل %1 قبل تغيير الجهاز الرئيسي، وصار يُحسب مجددًا الآن: أزله مرة أخرى إن لم يكن مكانه في المجموعة.</translation>
+    </message>
+    <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>تغيير الجهاز الرئيسي للمجموعة في الطريق.</translation>
+    </message>
+    <message>
+        <source>Leave the group</source>
+        <translation>مغادرة المجموعة</translation>
+    </message>
+    <message>
+        <source>Leaving the group</source>
+        <translation>جارٍ مغادرة المجموعة</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end in %2 days unless it connects.</source>
+        <translation>لا أخبار من المشرف %1 منذ وقت طويل: تنتهي صلاحياته كمشرف بعد %2 يومًا ما لم يتصل.</translation>
+    </message>
+    <message>
+        <source>No word from the admin %1 for a long time: its admin rights end now.</source>
+        <translation>لا أخبار من المشرف %1 منذ وقت طويل: تنتهي صلاحياته كمشرف الآن.</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>حسنًا</translation>
+    </message>
+    <message>
+        <source>Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.</source>
+        <translation>وحده مفتاح الاسترداد يغيّر الجهاز الرئيسي، ولا شيء يتراجع عن ذلك. غادر المجموعة على كل جهاز من أجهزتك، ثم أنشئ مجموعة جديدة وضمّها إليها.</translation>
+    </message>
+    <message>
+        <source>Removals that wait for admins fill %1 of the main device's room for records: bring those admins online.</source>
+        <translation>تشغل عمليات الإزالة التي تنتظر المشرفين %1 من مساحة الجهاز الرئيسي للسجلات: اجعل هؤلاء المشرفين متصلين.</translation>
+    </message>
+    <message>
+        <source>Removals wait until every admin has seen them.</source>
+        <translation>تنتظر عمليات الإزالة حتى يراها كل مشرف.</translation>
+    </message>
+    <message>
+        <source>Someone has the group's recovery key</source>
+        <translation>شخص ما لديه مفتاح استرداد المجموعة</translation>
+    </message>
+    <message>
+        <source>The frozen admin %1 holds removals back: unfreeze it or remove it.</source>
+        <translation>المشرف المجمّد %1 يؤخر عمليات الإزالة: ألغِ تجميده أو أزله.</translation>
+    </message>
+    <message>
+        <source>The group's main device changed</source>
+        <translation>تغيّر الجهاز الرئيسي للمجموعة</translation>
+    </message>
+    <message>
+        <source>The group's recovery key is not saved yet: without it, losing this phone means making the group again.</source>
+        <translation>لم يُحفظ مفتاح استرداد المجموعة بعد: بدونه، فقدان هذا الهاتف يعني إنشاء المجموعة من جديد.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>سجلات الجهاز الرئيسي تنتظر سجلات لم يمرّرها أي جهاز بعد.</translation>
+    </message>
+    <message>
+        <source>This phone has a removal to confirm; it does so with your next admin action.</source>
+        <translation>لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف.</translation>
+    </message>
+    <message>
+        <source>This wasn't me</source>
+        <translation>لم أكن أنا</translation>
+    </message>
+</context>
+<context>
     <name>InvitationPage</name>
     <message>
         <source>Decline</source>
