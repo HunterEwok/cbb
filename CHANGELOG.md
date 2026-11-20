@@ -28,13 +28,15 @@ made with 0.5 is set up again once. The details follow.
   writes, and show on every device that the main device changed, with "This wasn't me"
   ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
   and the change too.
-- A phone of 0.6 opens a pairing window (`cbb_window_new`, docs/core-api.md): it shows a QR code
-  with its addresses and key fingerprint, both ends show the code the session commits to, and on
-  the person's "they match" its root or admin key admits the device by the core's admission rules
-  and sends the Welcome (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
-- A new phone joins a group of 0.6 by a window's QR code (`cbb_joiner_new`): it dials the member
-  whose key the code names, both persons compare the code, and the checked set is kept in the
-  app's folder before the member hears it was (`ffi/src/joiner.rs`). The iPhone's and Android's
+- A phone of 0.6 opens a home window (`cbb_window_new`, docs/core-api.md): it shows six digits
+  and a QR code with its addresses, key hash, window ID and the digits; a device that proves the
+  digits is admitted by its root or admin key under the core's admission rules and gets the
+  Welcome, with nobody asked; three wrong codes close the window, one success closes it too
+  (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
+- A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
+  (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
+  proves the digits, and the checked set is kept in the app's folder before the member hears it
+  was (`ffi/src/joiner.rs`). The iPhone's and Android's
   kits open the window and join by it (`CorePairing.Window`, `CorePairing.Joiner`).
 - A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
   its root key signs its own record, the set is kept for the member, and the recovery sheet goes
@@ -42,12 +44,13 @@ made with 0.5 is set up again once. The details follow.
   `group`, the state the apps show (the group, its root, the phone's place, the devices).
 - The Android and iPhone apps pair on 0.6: "Add a device" makes a group of 0.6 on a phone without one
   (its recovery sheet shown once) and opens the pairing window with its QR code, announced by
-  NSD or Bonjour; "Join a group" scans a window's code and dials it; both ends ask whether the code
-  matches ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
+  NSD or Bonjour; "Add a device" shows the window's six digits under the code;
+  "Join a group" scans a window's code, or takes the six digits typed, finds the window by NSD or
+  Bonjour and dials it; nobody is asked ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
 - The Aurora and HarmonyOS apps pair on 0.6 too: "Create a group" makes a group of 0.6 and shows
   its recovery sheet once, "Add a device" opens the pairing window, which the core announces by
-  mDNS, and "Join a group" finds that window on the home network by itself (or dials a window's
-  code, pasted on Aurora, scanned on HarmonyOS); both ends ask whether the code matches. The 0.6
+  mDNS, and "Join a group" takes the six digits the window shows and finds that window on the home
+  network (or dials a window's code, pasted on Aurora, scanned on HarmonyOS); nobody is asked. The 0.6
   recovery sheet's answer carries its QR code's modules for the apps to draw.
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and

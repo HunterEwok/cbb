@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Joining a group of 0.6 (docs/apps.md, "Screens"): the phone looks for the
-// one pairing window a phone of the group announces at home (its Add a
-// device), or Scan Kit reads the window's QR code, and the code both screens
-// show waits for the person's "they match".
+// Joining a group of 0.6 (docs/apps.md, "Screens"): Scan Kit reads the QR
+// code a phone of the group shows in its Add a device, or the person types
+// the six digits shown under it and the phone finds that window at home;
+// the phone then proves the digits, and nobody is asked.
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
@@ -14,7 +14,6 @@ import { scanQr } from '../common/Scan';
 import { app } from '../model/AppModel';
 import { Joiner, WINDOW_QR } from '../model/Pairing06';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
-import { CodeQuestion } from '../components/CodeQuestion';
 
 @Entry
 @ComponentV2
@@ -22,10 +21,9 @@ struct JoinWindow {
   // The model's joiner, a field so that the monitor sees its state.
   @Local joining: Joiner = app.joiner;
   @Local hint: string = '';
-
-  aboutToAppear(): void {
-    app.joinByWindow('');
-  }
+  @Local typed: string = '';
+  // The last text dialed, for Try again.
+  private last: string = '';
 
   aboutToDisappear(): void {
     if (app.joiner.state !== 'done') {
@@ -43,10 +41,12 @@ struct JoinWindow {
 
   async dial(text: string): Promise<void> {
     this.hint = '';
-    if (text.length > 0 && !text.trim().startsWith(WINDOW_QR)) {
-      this.hint = Errors.shown(new Failure(t('not_a_window_code'), 'joiner: the text does not start with cbb://pair?'));
+    const digits = text.replace(/\s/g, '');
+    if (!/^[0-9]{6}$/.test(digits) && !text.trim().startsWith(WINDOW_QR)) {
+      this.hint = Errors.shown(new Failure(t('not_a_window_code'), 'joiner: neither six digits nor a text that starts with cbb://pair?'));
       return;
     }
+    this.last = text;
     await app.joiner.stop();
     app.joinByWindow(text);
   }
@@ -66,35 +66,43 @@ struct JoinWindow {
         PageTitle({ title: $r('app.string.start_join'), back: () => {
           router.back();
         } })
-        if (app.joiner.state === 'joining') {
-          CodeQuestion({
-            who: t('join_asks', app.joiner.memberName),
-            code: app.joiner.code,
-            answered: (yes: boolean) => {
-              app.joiner.answer(yes);
-            }
-          })
-        }
         if (app.joiner.state === 'done') {
           Text($r('app.string.join_joined')).fontColor($r('app.color.text'))
         }
-        if (app.joiner.state === 'dialing' || app.joiner.state === 'idle') {
+        if (app.joiner.state === 'dialing') {
           BusyLine({ busy: true, label: $r('app.string.join_looking') })
         }
-        if (app.joiner.state === 'dialing' || app.joiner.state === 'idle' || app.joiner.state === 'failed') {
+        if (app.joiner.state === 'idle' || app.joiner.state === 'failed') {
           Text($r('app.string.join_window_hint')).fontColor($r('app.color.text'))
-          Button($r('app.string.scan'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.scan'), { type: ButtonType.Capsule })
             .width('100%')
             .onClick(() => {
               this.scan();
+            })
+          TextInput({ placeholder: $r('app.string.join_digits'), text: this.typed })
+            .fontFamily('monospace')
+            .onChange((v: string) => {
+              this.typed = v;
+            })
+            .onSubmit(() => {
+              this.dial(this.typed);
+            })
+          Button($r('app.string.start_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+            .width('100%')
+            .enabled(this.typed.trim().length > 0)
+            .onClick(() => {
+              this.dial(this.typed);
             })
         }
         ErrorText({ text: this.hint })
         ErrorText({ text: app.joiner.error })
         if (app.joiner.state === 'failed') {
-          Button($r('app.string.try_again'), { type: ButtonType.Capsule }).width('100%').onClick(() => {
-            this.dial('');
-          })
+          Button($r('app.string.try_again'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+            .width('100%')
+            .enabled(this.last.length > 0)
+            .onClick(() => {
+              this.dial(this.last);
+            })
         }
       }
       .padding(24)

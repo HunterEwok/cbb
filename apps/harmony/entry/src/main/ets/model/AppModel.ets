@@ -293,13 +293,19 @@ export class AppModel {
     this.window.open(this.member);
   }
 
-  // Without a group: joins a group of 0.6 by the window announced at home,
-  // or by a window's QR code text.
-  joinByWindow(qr: string): void {
+  // Without a group: joins a group of 0.6 by text, the six digits a window
+  // of the group shows (the window announced at home), or a window's QR code
+  // text, scanned or pasted.
+  joinByWindow(text: string): void {
     if (this.membership !== undefined) {
       return;
     }
-    this.joiner.start(this.dir, qr, phoneName(), OS);
+    const digits = text.replace(/\s/g, '');
+    if (/^[0-9]{6}$/.test(digits)) {
+      this.joiner.start(this.dir, '', digits, phoneName(), OS);
+    } else {
+      this.joiner.start(this.dir, text, '', phoneName(), OS);
+    }
   }
 
   isRoot(): boolean {

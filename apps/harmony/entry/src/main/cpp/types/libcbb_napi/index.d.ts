@@ -64,11 +64,9 @@ export const inviteFree: (invite: Handle) => Promise<void>;
 // Pairing in a group of 0.6: the admin's window and the new phone's joiner.
 export const windowNew: (member: Handle, request: string, which: Which) => Promise<Made>;
 export const windowNext: (window: Handle, version: number, timeoutMs: number) => Promise<string>;
-export const windowAnswer: (window: Handle, yes: boolean) => void;
 export const windowFree: (window: Handle) => Promise<void>;
 export const joinerNew: (request: string) => Promise<Made>;
 export const joinerNext: (joiner: Handle, version: number, timeoutMs: number) => Promise<string>;
-export const joinerAnswer: (joiner: Handle, yes: boolean) => void;
 export const joinerFree: (joiner: Handle) => Promise<void>;
 
 export const tunnel: (request: string) => Promise<string>;

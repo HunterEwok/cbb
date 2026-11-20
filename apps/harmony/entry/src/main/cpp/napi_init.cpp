@@ -853,16 +853,6 @@ napi_value windowNext(napi_env env, napi_callback_info info)
     });
 }
 
-// windowAnswer(handle, yes: boolean): void
-napi_value windowAnswer(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
-    if (w)
-        cbb_window_answer(w, boolOf(env, a.v[1]) ? 1 : 0);
-    return undefined(env);
-}
-
 // windowFree(handle): Promise<void>; closes the window.
 napi_value windowFree(napi_env env, napi_callback_info info)
 {
@@ -900,16 +890,6 @@ napi_value joinerNext(napi_env env, napi_callback_info info)
         size_t len = 0;
         return take(cbb_joiner_next(j, version, timeout, &len), len);
     });
-}
-
-// joinerAnswer(handle, yes: boolean): void
-napi_value joinerAnswer(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
-    if (j)
-        cbb_joiner_answer(j, boolOf(env, a.v[1]) ? 1 : 0);
-    return undefined(env);
 }
 
 // joinerFree(handle): Promise<void>
@@ -993,11 +973,9 @@ napi_value init(napi_env env, napi_value exports)
         {"inviteFree", nullptr, inviteFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"windowNew", nullptr, windowNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"windowNext", nullptr, windowNext, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"windowAnswer", nullptr, windowAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"windowFree", nullptr, windowFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinerNew", nullptr, joinerNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinerNext", nullptr, joinerNext, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinerAnswer", nullptr, joinerAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinerFree", nullptr, joinerFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnel", nullptr, tunnel, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnelRegister", nullptr, tunnelRegister, nullptr, nullptr, nullptr, napi_default, nullptr},

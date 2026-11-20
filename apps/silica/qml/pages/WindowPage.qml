@@ -5,10 +5,10 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // "Add a device" in a group of 0.6 (docs/apps.md, "Screens"): the admin
-// phone opens its pairing window, shows its QR code and announces it at
-// home; a new phone scans the code or finds the window by itself, and the
-// code both screens show waits for the person's "they match". Leaving the
-// page closes the window.
+// phone opens its home window, shows its QR code and six digits and
+// announces it at home; a new phone scans the code, or a device without a
+// camera finds the window and its person types the digits. Nobody is asked;
+// the window lets one device in. Leaving the page closes the window.
 Page {
     id: page
     readonly property string step: app.window.state
@@ -35,13 +35,6 @@ Page {
 
             PageHeader { title: qsTr("Add a device") }
 
-            CodeQuestion {
-                visible: page.step === "joining"
-                who: qsTr("%1 asks to join.").arg(app.window.joiningName)
-                code: app.window.code
-                onAnswered: app.window.answer(yes)
-            }
-
             Label {
                 visible: page.step === "done"
                 x: Theme.horizontalPageMargin
@@ -53,7 +46,7 @@ Page {
 
             // The QR code on white, with the quiet zone the scanners need.
             Rectangle {
-                visible: (page.step === "open" || page.step === "done") && app.window.modules.length > 0
+                visible: (page.step === "open" || page.step === "joining") && app.window.modules.length > 0
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: "white"
                 property int count: app.window.modules.length
@@ -78,17 +71,28 @@ Page {
                 }
             }
 
+            // The digits a device without a camera types, in two groups of three.
             Label {
-                visible: page.step === "open" || page.step === "done"
+                visible: (page.step === "open" || page.step === "joining") && app.window.digits !== ""
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: app.window.digits.substring(0, 3) + " " + app.window.digits.substring(3)
+                font.family: "monospace"
+                font.pixelSize: Theme.fontSizeHuge
+                font.bold: true
+                font.letterSpacing: Theme.paddingSmall
+            }
+
+            Label {
+                visible: page.step === "open" || page.step === "joining"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.secondaryHighlightColor
-                text: qsTr("On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.")
+                text: qsTr("On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.")
             }
 
             Row {
-                visible: page.step === "open" || page.step === "done" || page.step === "preparing"
+                visible: page.step === "open" || page.step === "joining" || page.step === "preparing"
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Theme.paddingMedium
                 BusyIndicator {
@@ -104,7 +108,7 @@ Page {
             }
 
             Label {
-                visible: page.step === "closed"
+                visible: page.step === "closed" && app.window.error === ""
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
@@ -122,9 +126,9 @@ Page {
             }
 
             Button {
-                visible: page.step === "failed" || page.step === "closed"
+                visible: page.step === "failed" || page.step === "closed" || page.step === "done"
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Try again")
+                text: page.step === "done" ? qsTr("Add a device") : qsTr("Try again")
                 onClicked: app.openWindow()
             }
         }

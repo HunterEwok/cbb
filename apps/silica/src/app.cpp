@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSysInfo>
 #include <QThread>
@@ -1150,7 +1151,7 @@ void App::openWindow()
     thread->start();
 }
 
-void App::joinByWindow(const QString &qr)
+void App::joinByWindow(const QString &text)
 {
     if (!m_member.isNull())
         return;
@@ -1158,7 +1159,14 @@ void App::joinByWindow(const QString &qr)
         m_joiner.fail({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("joiner: no key")});
         return;
     }
-    m_joiner.start(Membership::directory(), qr, phoneName(), phoneOs(), m_publicKey);
+    const QString t = text.trimmed();
+    QString digits = t;
+    digits.remove(QLatin1Char(' '));
+    static const QRegularExpression six(QStringLiteral("^[0-9]{6}$"));
+    if (six.match(digits).hasMatch())
+        m_joiner.start(Membership::directory(), QString(), digits, phoneName(), phoneOs(), m_publicKey);
+    else
+        m_joiner.start(Membership::directory(), t, QString(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::leave()

@@ -250,21 +250,6 @@
     </message>
 </context>
 <context>
-    <name>CodeQuestion</name>
-    <message>
-        <source>Does the other screen show this code?</source>
-        <translation>क्या दूसरी स्क्रीन पर यही कोड दिख रहा है?</translation>
-    </message>
-    <message>
-        <source>They don't match</source>
-        <translation>मेल नहीं खाते</translation>
-    </message>
-    <message>
-        <source>They match</source>
-        <translation>मेल खाते हैं</translation>
-    </message>
-</context>
-<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -942,20 +927,16 @@
         <translation>समूह में शामिल हों</translation>
     </message>
     <message>
-        <source>Joining the group of %1.</source>
-        <translation>%1 के समूह में जुड़ रहा है।</translation>
-    </message>
-    <message>
         <source>Looking for the group's phone on this network…</source>
         <translation>इस नेटवर्क पर समूह का फ़ोन खोजा जा रहा है…</translation>
     </message>
     <message>
-        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
-        <translation>समूह के किसी फ़ोन पर डिवाइस जोड़ें टैप करें: यह फ़ोन उसे अपने-आप ढूँढ लेगा। दोनों फ़ोन एक ही Wi-Fi पर रखें।</translation>
+        <source>On a phone of the group, tap Add a device and type the six digits it shows. Keep both phones on the same Wi-Fi.</source>
+        <translation>समूह के किसी फ़ोन पर डिवाइस जोड़ें टैप करें और वह जो छह अंक दिखाए, उन्हें लिखें। दोनों फ़ोन एक ही Wi-Fi पर रखें।</translation>
     </message>
     <message>
-        <source>Or paste the code's text, cbb://pair…</source>
-        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://pair…</translation>
+        <source>Six digits or the code's text</source>
+        <translation>छह अंक या कोड का टेक्स्ट</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -2049,10 +2030,6 @@
 <context>
     <name>WindowPage</name>
     <message>
-        <source>%1 asks to join.</source>
-        <translation>%1 जुड़ना चाहता है।</translation>
-    </message>
-    <message>
         <source>%1 is in the group now.</source>
         <translation>%1 अब समूह में है।</translation>
     </message>
@@ -2065,8 +2042,8 @@
         <translation>डिवाइस से जुड़ रहा है…</translation>
     </message>
     <message>
-        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
-        <translation>नए फ़ोन पर CBB खोलें, समूह से जुड़ें पर टैप करें और यह कोड स्कैन करें। नया कंप्यूटर जुड़ते समय यह विंडो अपने-आप ढूँढ लेता है। यह स्क्रीन खुली रखें।</translation>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</source>
+        <translation>नए फ़ोन पर CBB खोलें, समूह से जुड़ें पर टैप करें और यह कोड स्कैन करें। बिना कैमरे वाला डिवाइस, जैसे कंप्यूटर, ये छह अंक माँगता है। यह स्क्रीन खुली रखें।</translation>
     </message>
     <message>
         <source>The time to add a device is up.</source>

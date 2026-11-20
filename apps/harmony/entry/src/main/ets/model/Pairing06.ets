@@ -2,13 +2,13 @@
 // Copyright (C) 2026 HunterEwok
 
 // Pairing in a group of 0.6 (docs/apps.md, "Screens"; docs/protocol.md,
-// section 3). PairWindow: an admin phone opens its member's pairing window
-// (ffi's cbb_window_*), shows its QR code and has the core announce it by
-// mDNS; the code a dialing device shows waits for the person's "they
-// match". Joiner: a phone without a group finds the one window announced at
-// home, or dials the window whose QR code it scanned (cbb_joiner_*), shows
-// the same code, and keeps the group's set where its member then starts.
-// The Aurora app's PairWindow and Joiner, ported.
+// "Pairing in 0.6"). PairWindow: an admin phone opens its member's home
+// window (ffi's cbb_window_*), shows its QR code and six digits and has the
+// core announce it by mDNS; a dialing device proves the digits, and nobody
+// is asked. Joiner: a phone without a group dials the window whose QR code
+// it scanned, or finds the window announced at home and proves the six
+// digits the person typed (cbb_joiner_*), and keeps the group's set where
+// its member then starts. The Aurora app's PairWindow and Joiner, ported.
 
 import cbb, { Handle } from 'libcbb_napi.so';
 import { read } from '../core/Core';
@@ -25,6 +25,7 @@ export const WINDOW_QR: string = 'cbb://pair?';
 
 interface Opened {
   qr?: string;
+  digits?: string;
   modules?: string[];
   expires?: number;
 }
@@ -34,17 +35,9 @@ interface StateError {
   details?: string;
 }
 
-interface Asking {
-  device?: string;
-  name?: string;
-  os?: string;
-  code?: string;
-}
-
 interface WindowState {
   version?: number;
   state?: string;
-  joining?: Asking;
   name?: string;
   device?: string;
   error?: StateError;
@@ -53,9 +46,9 @@ interface WindowState {
 interface JoinerState {
   version?: number;
   state?: string;
-  shown?: Asking;
   group?: string;
   device?: string;
+  name?: string;
   error?: StateError;
 }
 
@@ -65,16 +58,15 @@ function failureOf(e: StateError | undefined, what: string): Failure {
 
 @ObservedV2
 export class PairWindow {
-  // idle, preparing (finding the admin key), open, joining (the person is
-  // asked), done (a device joined; the window stays open for the next),
-  // closed (its time is up) or failed.
+  // idle, preparing (finding the admin key), open, joining (a device
+  // pairs), done (a device joined; the window is closed), closed (its time
+  // is up, or three wrong codes: error) or failed.
   @Trace state: string = 'idle';
   @Trace qr: string = '';
   // The QR code's rows, '1' for a dark module.
   @Trace modules: string[] = [];
-  // The device that dialed and the code both screens show, while asked.
-  @Trace joiningName: string = '';
-  @Trace code: string = '';
+  // The six digits to show beside the QR code.
+  @Trace digits: string = '';
   // The name of the last device that joined.
   @Trace joined: string = '';
   @Trace error: string = '';
@@ -130,6 +122,7 @@ export class PairWindow {
     }
     this.handle = made.handle;
     this.qr = answer.ok.qr ?? '';
+    this.digits = answer.ok.digits ?? '';
     this.modules = answer.ok.modules ?? [];
     this.version = 0;
     Errors.log(`window: open for ${answer.ok.expires ?? 0} s`);
@@ -137,13 +130,6 @@ export class PairWindow {
     this.timer = setInterval(() => {
       this.poll();
     }, POLL_MS);
-  }
-
-  // The person's answer about the code.
-  answer(yes: boolean): void {
-    if (this.handle !== null) {
-      cbb.windowAnswer(this.handle, yes);
-    }
   }
 
   // Closes it, or forgets how the last one ended.
@@ -174,11 +160,10 @@ export class PairWindow {
       return;
     }
     this.version = version;
-    const j = st.ok.joining ?? ({} as Asking);
-    this.joiningName = j.name ?? '';
-    this.code = j.code ?? '';
     const state = st.ok.state ?? '';
     if (state === 'done') {
+      // One device per window: the core closed it.
+      await this.free();
       this.joined = st.ok.name ?? '';
       this.error = '';
       Errors.log(`window: ${st.ok.device ?? ''} joined`);
@@ -192,6 +177,8 @@ export class PairWindow {
       return;
     }
     if (state === 'closed') {
+      // Its time is up, or three wrong codes, which the core explains.
+      this.error = st.ok.error !== undefined ? Errors.shown(failureOf(st.ok.error, 'window')) : '';
       await this.free();
       this.state = 'closed';
       return;
@@ -217,8 +204,7 @@ export class PairWindow {
     this.handle = null;
     this.qr = '';
     this.modules = [];
-    this.joiningName = '';
-    this.code = '';
+    this.digits = '';
     if (h !== null) {
       await cbb.windowFree(h);
     }
@@ -227,11 +213,10 @@ export class PairWindow {
 
 @ObservedV2
 export class Joiner {
-  // idle, dialing, joining (the person is asked), done or failed.
+  // idle, dialing, done or failed.
   @Trace state: string = 'idle';
-  // The member that admits the phone, and the code both screens show.
+  // The member that let the phone in, once done.
   @Trace memberName: string = '';
-  @Trace code: string = '';
   @Trace error: string = '';
 
   // The phone joined the group (its ID in hex) as the device device.
@@ -244,17 +229,18 @@ export class Joiner {
 
   // Joins as the phone named name with system os, keeping the set in dir;
   // qr is a window's QR code text, or empty to find the one window
-  // announced at home.
-  async start(dir: string, qr: string, name: string, os: string): Promise<void> {
+  // announced at home and prove digits, the six the person typed.
+  async start(dir: string, qr: string, digits: string, name: string, os: string): Promise<void> {
     await this.free();
     this.error = '';
+    this.memberName = '';
     this.state = 'dialing';
     const key = await ensure('member');
     if (key.ok === undefined) {
       this.fail(key.failure as Failure);
       return;
     }
-    const request: Record<string, Object> = { 'dir': dir, 'qr': qr.trim(), 'name': name, 'os': os, 'public': key.ok.public };
+    const request: Record<string, Object> = { 'dir': dir, 'qr': qr.trim(), 'digits': digits, 'name': name, 'os': os, 'public': key.ok.public };
     const made = await cbb.joinerNew(JSON.stringify(request));
     if (this.state !== 'dialing') {
       if (made.handle !== null) {
@@ -273,12 +259,6 @@ export class Joiner {
     this.timer = setInterval(() => {
       this.poll();
     }, POLL_MS);
-  }
-
-  answer(yes: boolean): void {
-    if (this.handle !== null) {
-      cbb.joinerAnswer(this.handle, yes);
-    }
   }
 
   async stop(): Promise<void> {
@@ -307,11 +287,9 @@ export class Joiner {
       return;
     }
     this.version = version;
-    const shown = st.ok.shown ?? ({} as Asking);
-    this.memberName = shown.name ?? '';
-    this.code = shown.code ?? '';
     const state = st.ok.state ?? '';
     if (state === 'done') {
+      this.memberName = st.ok.name ?? '';
       const group = st.ok.group ?? '';
       const device = st.ok.device ?? '';
       await this.free();
@@ -340,8 +318,6 @@ export class Joiner {
     }
     const h = this.handle;
     this.handle = null;
-    this.memberName = '';
-    this.code = '';
     if (h !== null) {
       await cbb.joinerFree(h);
     }

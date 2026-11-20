@@ -98,9 +98,6 @@
     <string name="claim_cancelled">声明已取消。其他设备连接后就会得知。</string>
     <string name="close">关闭</string>
     <string name="close_tip">关闭提示</string>
-    <string name="code_differ">不一致</string>
-    <string name="code_match">一致</string>
-    <string name="code_question">另一块屏幕显示的是这个代码吗？</string>
     <string name="collection_drag_here">把设备拖到这里</string>
     <string name="collection_empty">把设备拖到这里，或在设备菜单中用“移到收藏夹”添加。</string>
     <string name="collection_into">移到合集</string>
@@ -281,11 +278,11 @@
     <string name="invite_share">分享邀请</string>
     <string name="invite_title">邀请远方的设备</string>
     <string name="invite_too_many">三次尝试失败后邀请已关闭。请新建一个。</string>
-    <string name="join_asks">正在加入 %1$s 的群组。</string>
+    <string name="join_digits">六位数字或码的文本</string>
     <string name="join_go">加入</string>
     <string name="join_group">加入群组</string>
     <string name="join_qr_label">加入群组的二维码</string>
-    <string name="join_scan_hint">在群组中的手机上点 +，然后扫描它显示的代码。让两部手机连在同一网络上。</string>
+    <string name="join_scan_hint">在群组中的一部手机上点按 +，扫描它显示的码，或输入码下方的六位数字。请让两部手机连接同一网络。</string>
     <string name="join_title">加入群组</string>
     <string name="join_tv">加入手机的群组</string>
     <string name="join_tv_hint">这台电视加入你手机的群组：它显示一个二维码，由手机扫描。</string>
@@ -388,7 +385,7 @@
     <string name="needs_attention">需要关注</string>
     <string name="no_computers">没有已连接的电脑。</string>
     <string name="no_devices_match">没有匹配的设备。</string>
-    <string name="not_a_window_code">这不是配对窗口的二维码。请在群组中的手机上点 + 来显示一个。</string>
+    <string name="not_a_window_code">这既不是配对窗口的二维码，也不是它的六位数字。请在群组中的一部手机上点按 + 来显示它们。</string>
     <string name="nothing_new">没有新的内容需要发送或获取。</string>
     <string name="notice_ack_owed">这部手机有一项移除待确认；它会在你下一次管理操作时确认。</string>
     <string name="notice_admins_silent">管理员 %1$s 已很久没有消息：除非它连接，否则其管理员权限将在 %2$d 天后结束。</string>
@@ -721,8 +718,7 @@
     <string name="why_unreached_t">家中的设备无法连接到此设备：%1$s。</string>
     <string name="why_update_t">CBB %1$s 已可用。</string>
     <string name="widget_description">轻点一下即可将这部手机复制的内容发送到你的电脑。</string>
-    <string name="window_asks">%1$s 请求加入。</string>
-    <string name="window_hint">在新手机上打开 CBB，点“加入群组”并扫描这个二维码。新电脑加入时会自己找到这个窗口。请保持此屏幕打开。</string>
+    <string name="window_hint">在新手机上打开 CBB，点按“加入群组”并扫描此码。没有摄像头的设备（例如电脑）会要求输入这六位数字。请保持此屏幕打开。</string>
     <string name="window_joined">设备已加入群组。</string>
     <string name="window_waiting">正在等待新设备…</string>
     <string name="yubikey_go">继续</string>

@@ -503,18 +503,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** A device that dialed this phone's window: what it says of itself, and the code both screens show. */
-    data class WindowAsk(val name: String, val os: String, val code: String)
-
     /**
-     * Opens this phone's pairing window on a group of 0.6 (docs/protocol.md,
-     * section 6, "The window and who dials"): the member port listens, the
-     * window is announced by NSD, shown gets the QR code, and for each device
-     * that dials ask gets the person's answer about the code. Returns the
-     * name of the device that joined; the window closes when it does, when
-     * its time is up, or when the caller is cancelled.
+     * Opens this phone's home window on a group of 0.6 (docs/protocol.md,
+     * "Pairing in 0.6"): the member port listens, the window is announced
+     * by NSD, and shown gets the QR code and the six digits. A device that
+     * dials proves the digits; nobody is asked. Returns the name of the
+     * device that joined; the window closes when it does, when its time is
+     * up, after three wrong codes, or when the caller is cancelled.
      */
-    suspend fun openWindow(shown: (String) -> Unit, ask: suspend (WindowAsk) -> Boolean): String {
+    suspend fun openWindow(shown: (qr: String, digits: String) -> Unit): String {
         val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
         if (!g.isV06 || !g.isAdmin) throw Failure(Failure.Kind.NO_GROUP)
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
@@ -525,21 +522,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             if (hosts.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
             CorePairing.Window(n, signer.publicKeyDER, hosts, sign = signer::signDigest) to port
         }
-        val announced = NsdPublisher(context, g.device, port, Discovery.windowTXT(g.tag, w.fingerprint))
+        val announced = NsdPublisher(context, g.device, port, Discovery.windowTXT(g.tag, w.fingerprint, w.id))
         announced.start()
         try {
-            shown(w.qr)
+            shown(w.qr, w.digits)
             var version = 0L
             while (true) {
                 val st = withContext(Dispatchers.IO) { w.next(version, 1000) }
                 version = st.version
                 when (st.state) {
-                    "joining" -> st.request?.let { r -> w.answer(ask(WindowAsk(r.name, r.os, r.code))) }
                     "done" -> {
                         hubWork.execute(::hubRecords)
                         return st.name
                     }
-                    "closed" -> throw Failure(Failure.Kind.TIMED_OUT)
+                    "closed" -> throw st.failure ?: Failure(Failure.Kind.TIMED_OUT)
                     "failed" -> st.failure?.let { Log.w(TAG, "a device did not join through the window", it) }
                 }
             }
@@ -552,16 +548,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Joins a group of 0.6 by a window's QR code (empty for the one window
-     * NSD finds): this phone dials, ask gets the person's answer about the
-     * code both screens show, and the member starts on the group it keeps.
+     * Joins a group of 0.6 by a home window's QR code, or by the six digits
+     * the person typed (qr empty: the one window NSD finds): this phone
+     * dials, proves the digits, and the member starts on the group it keeps.
      */
-    suspend fun joinByWindow(qr: String, ask: suspend (WindowAsk) -> Boolean) {
+    suspend fun joinByWindow(qr: String, digits: String = "") {
         if (hasGroup) return
+        val code = qr.ifEmpty { findHomeWindow(digits) }
         val j = withContext(Dispatchers.IO) {
             val member = memberSigner()
             nodeDir.mkdirs()
-            CorePairing.Joiner(nodeDir.path, qr, PhoneGroup.validName(deviceName), "android", member.publicKeyDER, member::signDigest)
+            CorePairing.Joiner(nodeDir.path, code, PhoneGroup.validName(deviceName), "android", member.publicKeyDER, member::signDigest)
         }
         try {
             var version = 0L
@@ -569,7 +566,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 val st = withContext(Dispatchers.IO) { j.next(version, 1000) }
                 version = st.version
                 when (st.state) {
-                    "joining" -> st.shown?.let { s -> j.answer(ask(WindowAsk(s.name, "", s.code))) }
                     "done" -> {
                         withContext(Dispatchers.IO) {
                             synchronized(lock) {
@@ -1295,6 +1291,31 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             // The others that answer a moment later.
             delay(PAIRING_SETTLE_MS)
             return members.get().mapNotNull { b.address(it) }.ifEmpty { throw Failure(Failure.Kind.NO_GROUP_COMPUTER) }
+        } finally {
+            b.stop()
+        }
+    }
+
+    /**
+     * The QR code text of the one home window NSD finds (p=1 with its ID
+     * and key hash), with the six digits the person typed from its screen.
+     */
+    private suspend fun findHomeWindow(digits: String): String {
+        val windows = java.util.concurrent.atomic.AtomicReference<Set<FoundMember>>(emptySet())
+        val b = NsdBrowser(context) { members -> windows.set(members.filter { it.pairing && it.windowID != null && it.fingerprint != null }.toSet()) }
+        try {
+            b.start()
+            withTimeoutOrNull(BROWSE_MS) {
+                while (windows.get().isEmpty()) delay(100)
+            } ?: throw Failure(Failure.Kind.NO_WINDOW)
+            delay(PAIRING_SETTLE_MS)
+            val found = windows.get()
+            if (found.size > 1) throw Failure(Failure.Kind.TWO_WINDOWS)
+            val w = found.first()
+            val a = b.address(w.device) ?: throw Failure(Failure.Kind.NO_WINDOW)
+            val host = a.address.hostAddress?.substringBefore('%') ?: throw Failure(Failure.Kind.NO_WINDOW)
+            val hostPort = if (host.contains(':')) "[$host]:${a.port}" else "$host:${a.port}"
+            return Discovery.windowLink(hostPort, w.fingerprint!!, w.windowID!!, digits.filter { it.isDigit() })
         } finally {
             b.stop()
         }

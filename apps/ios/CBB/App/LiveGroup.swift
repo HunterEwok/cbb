@@ -419,14 +419,13 @@ final class LiveGroup: GroupController {
         return Core.RecoverySheet(qr: made.recovery.qr, text: text, admin: Data())
     }
 
-    /// Opens this phone's pairing window on a group of 0.6 (docs/protocol.md,
-    /// section 6, "The window and who dials"): the member port listens, the
-    /// window is announced by Bonjour, shown gets the QR code, and for each
-    /// device that dials ask gets the person's answer about the code.
-    /// Returns the name of the device that joined; the window closes when it
-    /// does, when its time is up, or when the task is cancelled.
-    func openWindow(shown: @escaping @MainActor (String) -> Void,
-                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String {
+    /// Opens this phone's home window on a group of 0.6 (docs/protocol.md,
+    /// "Pairing in 0.6"): the member port listens, the window is announced
+    /// by Bonjour, and shown gets the QR code and the six digits. A device
+    /// that dials proves the digits; nobody is asked. Returns the name of
+    /// the device that joined; the window closes when it does, when its
+    /// time is up, after three wrong codes, or when the task is cancelled.
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String {
         guard let g = state, g.isV06, g.isAdmin else { throw Failure.noGroup }
         guard let node else { throw Failure.unreachable }
         let signer = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
@@ -436,9 +435,9 @@ final class LiveGroup: GroupController {
         guard !hosts.isEmpty else { throw Failure.noNetwork }
         let w = try CorePairing.Window(member: node, publicKey: signer.publicKeyDER, addrs: hosts) { try signer.signature(digest: $0) }
         defer { w.close() }
-        let announced = try? BonjourPublisher(name: g.device, port: port, txt: Discovery.windowTXT(group: g.tag, fingerprint: w.fingerprint))
+        let announced = try? BonjourPublisher(name: g.device, port: port, txt: Discovery.windowTXT(group: g.tag, fingerprint: w.fingerprint, id: w.id))
         defer { announced?.stop() }
-        shown(w.qr)
+        shown(w.qr, w.digits)
         var version: UInt64 = 0
         while true {
             try Task.checkCancellation()
@@ -446,13 +445,11 @@ final class LiveGroup: GroupController {
             let st = try await Task.detached { try w.next(after: v) }.value
             version = st.version
             switch st.state {
-            case "joining":
-                if let r = st.request { w.answer(await ask(AppModel.CodeAsk(name: r.name, code: r.code))) }
             case "done":
                 await refresh()
                 return st.name
             case "closed":
-                throw Failure.timedOut
+                throw st.failure ?? Failure.timedOut
             case "failed":
                 if let f = st.failure { pairLog.error("a device did not join through the window: \(String(reflecting: f), privacy: .public)") }
             default:
@@ -461,14 +458,16 @@ final class LiveGroup: GroupController {
         }
     }
 
-    /// Joins a group of 0.6 by a window's QR code: this phone dials, ask
-    /// gets the person's answer about the code both screens show, and the
-    /// member starts on the group it keeps.
-    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws {
+    /// Joins a group of 0.6 by a home window's QR code, or by the six
+    /// digits the person typed (qr empty: the one window Bonjour finds):
+    /// this phone dials, proves the digits, and the member starts on the
+    /// group it keeps.
+    func joinByWindow(_ qr: String, digits: String = "") async throws {
         guard state == nil else { return }
         let member = try memberSigner()
         try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
-        let j = try CorePairing.Joiner(dir: memberDir, qr: qr, name: PhoneGroup.validName(UIDevice.current.name), os: "ios",
+        let code = qr.isEmpty ? try await findHomeWindow(digits: digits) : qr
+        let j = try CorePairing.Joiner(dir: memberDir, qr: code, name: PhoneGroup.validName(UIDevice.current.name), os: "ios",
                                        publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
         defer { j.close() }
         var version: UInt64 = 0
@@ -478,8 +477,6 @@ final class LiveGroup: GroupController {
             let st = try await Task.detached { try j.next(after: v) }.value
             version = st.version
             switch st.state {
-            case "joining":
-                if let s = st.shown { j.answer(await ask(AppModel.CodeAsk(name: s.name, code: s.code))) }
             case "done":
                 let g = PhoneGroup.of06(device: st.device, group: st.group, root: false)
                 try g.save(to: file)
@@ -1154,6 +1151,31 @@ final class LiveGroup: GroupController {
         guard found.count == 1 else { throw found.isEmpty ? Failure.noWindow : Failure.twoWindows }
         guard let endpoint = found.first.flatMap(b.endpoint(of:)) else { throw Failure.noWindow }
         return endpoint
+    }
+
+    /// The QR code text of the one home window Bonjour finds (p=1 with its
+    /// ID and key hash), with the six digits the person typed from its
+    /// screen. The app browses itself: the core's own mDNS would need the
+    /// multicast entitlement.
+    private func findHomeWindow(digits: String) async throws -> String {
+        let windows = OSAllocatedUnfairLock<Set<FoundMember>>(initialState: [])
+        let b = BonjourBrowser { found in
+            windows.withLock { $0 = found.filter { $0.pairing && $0.windowID != nil && $0.fingerprint != nil } }
+        }
+        b.start()
+        defer { b.stop() }
+        let deadline = Date().addingTimeInterval(Self.browseFor)
+        while windows.withLock({ $0.isEmpty }) {
+            guard Date() < deadline else { throw Failure.noWindow }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try await Task.sleep(for: .seconds(Self.pairingSettle))
+        let found = windows.withLock { $0 }
+        guard found.count == 1, let w = found.first, let id = w.windowID, let fp = w.fingerprint else {
+            throw found.isEmpty ? Failure.noWindow : Failure.twoWindows
+        }
+        guard let address = await b.addresses(of: w.device).first else { throw Failure.noWindow }
+        return Discovery.windowLink(address: address, fingerprint: fp, id: id, digits: digits.filter { $0.isASCII && $0.isNumber })
     }
 
     // MARK: Removing

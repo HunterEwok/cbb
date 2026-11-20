@@ -106,7 +106,6 @@ DISTFILES += \
     qml/pages/NewGroupPage.qml \
     qml/pages/WindowPage.qml \
     qml/pages/JoinWindowPage.qml \
-    qml/pages/CodeQuestion.qml \
     qml/pages/DevicePage.qml \
     qml/pages/DeviceCard.qml \
     qml/pages/AlertsCard.qml \

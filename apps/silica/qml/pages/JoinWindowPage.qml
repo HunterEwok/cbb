@@ -4,24 +4,25 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// Joining a group of 0.6 (docs/apps.md, "Screens"): the phone finds the one
-// pairing window a phone of the group announces at home (its Add a device),
-// or dials the window whose QR code text the person pasted, and the code both
-// screens show waits for the person's "they match".
+// Joining a group of 0.6 (docs/apps.md, "Screens"): the person types the six
+// digits a phone of the group shows in its Add a device, and the phone finds
+// that window at home and proves them; or the person pastes the window's QR
+// code text. The phone has no camera, so it scans nothing.
 Page {
     id: page
     readonly property string step: app.joiner.state
+    property string typed: ""
 
-    property bool started: false
-    onStatusChanged: {
-        if (status === PageStatus.Active && !started) {
-            started = true
-            app.joinByWindow("")
-        }
-    }
     Component.onDestruction: if (step !== "done") app.joiner.stop()
 
+    // Six digits, spaces aside, or a window's code text.
+    function usable(text) {
+        var t = text.trim()
+        return /^[0-9]{6}$/.test(t.replace(/ /g, "")) || t.indexOf("cbb://pair?") === 0
+    }
+
     function dial(text) {
+        page.typed = text
         app.joiner.stop()
         app.joinByWindow(text)
     }
@@ -36,13 +37,6 @@ Page {
             spacing: Theme.paddingLarge
 
             PageHeader { title: qsTr("Join a group") }
-
-            CodeQuestion {
-                visible: page.step === "joining"
-                who: qsTr("Joining the group of %1.").arg(app.joiner.memberName)
-                code: app.joiner.code
-                onAnswered: app.joiner.answer(yes)
-            }
 
             Label {
                 visible: page.step === "done"
@@ -70,21 +64,21 @@ Page {
             }
 
             Label {
-                visible: page.step === "dialing" || page.step === "failed"
+                visible: page.step !== "done"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
-                text: qsTr("On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.")
+                text: qsTr("On a phone of the group, tap Add a device and type the six digits it shows. Keep both phones on the same Wi-Fi.")
             }
 
             TextField {
-                visible: page.step === "dialing" || page.step === "failed"
+                visible: page.step !== "dialing" && page.step !== "done"
                 width: parent.width
-                label: qsTr("Or paste the code's text, cbb://pair…")
+                label: qsTr("Six digits or the code's text")
                 placeholderText: label
-                inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhUrlCharactersOnly
-                EnterKey.enabled: text.trim().indexOf("cbb://pair?") === 0
+                inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                EnterKey.enabled: page.usable(text)
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                 EnterKey.onClicked: page.dial(text.trim())
             }
@@ -102,7 +96,7 @@ Page {
                 visible: page.step === "failed"
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Try again")
-                onClicked: page.dial("")
+                onClicked: page.dial(page.typed)
             }
         }
         VerticalScrollDecorator {}

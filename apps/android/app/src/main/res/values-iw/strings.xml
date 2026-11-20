@@ -98,9 +98,6 @@
     <string name="claim_cancelled">התביעה בוטלה. המכשירים האחרים שומעים על כך ברגע שהם מתחברים.</string>
     <string name="close">סגירה</string>
     <string name="close_tip">סגירת הטיפ</string>
-    <string name="code_differ">לא תואמים</string>
-    <string name="code_match">תואמים</string>
-    <string name="code_question">האם המסך השני מציג את הקוד הזה?</string>
     <string name="collection_drag_here">גררו מכשירים לכאן</string>
     <string name="collection_empty">גררו מכשירים לכאן, או הוסיפו אותם עם ״העברה לאוסף״ בתפריט של מכשיר.</string>
     <string name="collection_into">העברה לאוסף</string>
@@ -281,11 +278,11 @@
     <string name="invite_share">שיתוף ההזמנה</string>
     <string name="invite_title">הזמנת מכשיר מרחוק</string>
     <string name="invite_too_many">ההזמנה נסגרה אחרי שלושה ניסיונות כושלים. צרו חדשה.</string>
-    <string name="join_asks">מצטרפים לקבוצה של %1$s.</string>
+    <string name="join_digits">שש ספרות או הטקסט של הקוד</string>
     <string name="join_go">הצטרפות</string>
     <string name="join_group">הצטרפות לקבוצה</string>
     <string name="join_qr_label">קוד QR להצטרפות לקבוצה</string>
-    <string name="join_scan_hint">בטלפון של הקבוצה, הקישו על + וסרקו את הקוד שהוא מציג. השאירו את שני הטלפונים באותה רשת.</string>
+    <string name="join_scan_hint">בטלפון של הקבוצה, הקישו על + וסרקו את הקוד שהוא מציג, או הקלידו את שש הספרות שמתחתיו. השאירו את שני הטלפונים באותה רשת.</string>
     <string name="join_title">הצטרפות לקבוצה</string>
     <string name="join_tv">הצטרפות לקבוצה של טלפון</string>
     <string name="join_tv_hint">הטלוויזיה הזו מצטרפת לקבוצה של הטלפון שלכם: היא מציגה קוד QR, והטלפון סורק אותו.</string>
@@ -388,7 +385,7 @@
     <string name="needs_attention">דורש תשומת לב</string>
     <string name="no_computers">אין מחשבים מחוברים.</string>
     <string name="no_devices_match">אין מכשירים תואמים.</string>
-    <string name="not_a_window_code">זה לא קוד QR של חלון צימוד. בטלפון של הקבוצה, הקישו על + כדי להציג אחד.</string>
+    <string name="not_a_window_code">זה לא קוד ה-QR של חלון צימוד וגם לא שש הספרות שלו. בטלפון של הקבוצה, הקישו על + כדי להציג אותם.</string>
     <string name="nothing_new">אין שום דבר חדש לשלוח או להביא.</string>
     <string name="notice_ack_owed">לטלפון הזה יש הסרה לאשר; הוא יעשה זאת בפעולת הניהול הבאה שלכם.</string>
     <string name="notice_admins_silent">אין חדשות מהמנהל %1$s כבר זמן רב: הרשאות הניהול שלו יסתיימו בעוד %2$d ימים אם לא יתחבר.</string>
@@ -721,8 +718,7 @@
     <string name="why_unreached_t">מכשירים בבית לא מצליחים להתחבר למכשיר הזה: %1$s.</string>
     <string name="why_update_t">CBB %1$s זמין.</string>
     <string name="widget_description">הקשה אחת שולחת למחשבים שלכם את מה שהטלפון הזה העתיק.</string>
-    <string name="window_asks">%1$s מבקש להצטרף.</string>
-    <string name="window_hint">בטלפון החדש, פתחו את CBB, הקישו על הצטרפות לקבוצה וסרקו את הקוד הזה. מחשב חדש מוצא את החלון הזה בעצמו כשהוא מצטרף. השאירו את המסך הזה פתוח.</string>
+    <string name="window_hint">בטלפון החדש, פתחו את CBB, הקישו על הצטרפות לקבוצה וסרקו את הקוד הזה. מכשיר בלי מצלמה, כמו מחשב, מבקש את שש הספרות האלה. השאירו את המסך הזה פתוח.</string>
     <string name="window_joined">המכשיר הצטרף לקבוצה.</string>
     <string name="window_waiting">ממתינים למכשיר החדש…</string>
     <string name="yubikey_go">המשך</string>

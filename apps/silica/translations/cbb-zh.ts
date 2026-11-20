@@ -250,21 +250,6 @@
     </message>
 </context>
 <context>
-    <name>CodeQuestion</name>
-    <message>
-        <source>Does the other screen show this code?</source>
-        <translation>另一块屏幕显示的是这个代码吗？</translation>
-    </message>
-    <message>
-        <source>They don't match</source>
-        <translation>不一致</translation>
-    </message>
-    <message>
-        <source>They match</source>
-        <translation>一致</translation>
-    </message>
-</context>
-<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -942,20 +927,16 @@
         <translation>加入群组</translation>
     </message>
     <message>
-        <source>Joining the group of %1.</source>
-        <translation>正在加入 %1 的群组。</translation>
-    </message>
-    <message>
         <source>Looking for the group's phone on this network…</source>
         <translation>正在此网络中查找群组的手机…</translation>
     </message>
     <message>
-        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
-        <translation>在群组的一部手机上点按“添加设备”：这部手机会自动找到它。请让两部手机连接同一个 Wi-Fi。</translation>
+        <source>On a phone of the group, tap Add a device and type the six digits it shows. Keep both phones on the same Wi-Fi.</source>
+        <translation>在群组中的一部手机上点按“添加设备”，然后输入它显示的六位数字。请让两部手机连接同一 Wi-Fi。</translation>
     </message>
     <message>
-        <source>Or paste the code's text, cbb://pair…</source>
-        <translation>或粘贴代码的文本，cbb://pair…</translation>
+        <source>Six digits or the code's text</source>
+        <translation>六位数字或码的文本</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -2049,10 +2030,6 @@
 <context>
     <name>WindowPage</name>
     <message>
-        <source>%1 asks to join.</source>
-        <translation>%1 请求加入。</translation>
-    </message>
-    <message>
         <source>%1 is in the group now.</source>
         <translation>%1 已加入群组。</translation>
     </message>
@@ -2065,8 +2042,8 @@
         <translation>正在连接设备…</translation>
     </message>
     <message>
-        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
-        <translation>在新手机上打开 CBB，点“加入群组”并扫描这个二维码。新电脑加入时会自己找到这个窗口。请保持此屏幕打开。</translation>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</source>
+        <translation>在新手机上打开 CBB，点按“加入群组”并扫描此码。没有摄像头的设备（例如电脑）会要求输入这六位数字。请保持此屏幕打开。</translation>
     </message>
     <message>
         <source>The time to add a device is up.</source>

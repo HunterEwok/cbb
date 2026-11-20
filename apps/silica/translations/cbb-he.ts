@@ -250,21 +250,6 @@
     </message>
 </context>
 <context>
-    <name>CodeQuestion</name>
-    <message>
-        <source>Does the other screen show this code?</source>
-        <translation>האם המסך השני מציג את הקוד הזה?</translation>
-    </message>
-    <message>
-        <source>They don't match</source>
-        <translation>לא תואמים</translation>
-    </message>
-    <message>
-        <source>They match</source>
-        <translation>תואמים</translation>
-    </message>
-</context>
-<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -942,20 +927,16 @@
         <translation>הצטרפות לקבוצה</translation>
     </message>
     <message>
-        <source>Joining the group of %1.</source>
-        <translation>מצטרף לקבוצה של %1.</translation>
-    </message>
-    <message>
         <source>Looking for the group's phone on this network…</source>
         <translation>מחפש את הטלפון של הקבוצה ברשת הזו…</translation>
     </message>
     <message>
-        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
-        <translation>בטלפון של הקבוצה, הקישו על „הוספת מכשיר”: הטלפון הזה ימצא אותו בעצמו. השאירו את שני הטלפונים באותה רשת Wi-Fi.</translation>
+        <source>On a phone of the group, tap Add a device and type the six digits it shows. Keep both phones on the same Wi-Fi.</source>
+        <translation>בטלפון של הקבוצה, הקישו על הוספת מכשיר והקלידו את שש הספרות שהוא מציג. השאירו את שני הטלפונים באותה רשת Wi-Fi.</translation>
     </message>
     <message>
-        <source>Or paste the code's text, cbb://pair…</source>
-        <translation>או הדביקו את טקסט הקוד, cbb://pair…</translation>
+        <source>Six digits or the code's text</source>
+        <translation>שש ספרות או הטקסט של הקוד</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -2049,10 +2030,6 @@
 <context>
     <name>WindowPage</name>
     <message>
-        <source>%1 asks to join.</source>
-        <translation>%1 מבקש להצטרף.</translation>
-    </message>
-    <message>
         <source>%1 is in the group now.</source>
         <translation>%1 בקבוצה עכשיו.</translation>
     </message>
@@ -2065,8 +2042,8 @@
         <translation>מתחבר למכשיר…</translation>
     </message>
     <message>
-        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
-        <translation>בטלפון החדש, פתחו את CBB, הקישו על הצטרפות לקבוצה וסרקו את הקוד הזה. מחשב חדש מוצא את החלון הזה בעצמו כשהוא מצטרף. השאירו את המסך הזה פתוח.</translation>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</source>
+        <translation>בטלפון החדש, פתחו את CBB, הקישו על הצטרפות לקבוצה וסרקו את הקוד הזה. מכשיר בלי מצלמה, כמו מחשב, מבקש את שש הספרות האלה. השאירו את המסך הזה פתוח.</translation>
     </message>
     <message>
         <source>The time to add a device is up.</source>

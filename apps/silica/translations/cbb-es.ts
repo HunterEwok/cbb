@@ -250,21 +250,6 @@
     </message>
 </context>
 <context>
-    <name>CodeQuestion</name>
-    <message>
-        <source>Does the other screen show this code?</source>
-        <translation>¿La otra pantalla muestra este código?</translation>
-    </message>
-    <message>
-        <source>They don't match</source>
-        <translation>No coinciden</translation>
-    </message>
-    <message>
-        <source>They match</source>
-        <translation>Coinciden</translation>
-    </message>
-</context>
-<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -942,20 +927,16 @@
         <translation>Unirse a un grupo</translation>
     </message>
     <message>
-        <source>Joining the group of %1.</source>
-        <translation>Uniéndose al grupo de %1.</translation>
-    </message>
-    <message>
         <source>Looking for the group's phone on this network…</source>
         <translation>Buscando el teléfono del grupo en esta red…</translation>
     </message>
     <message>
-        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
-        <translation>En un teléfono del grupo, toca Añadir un dispositivo: este teléfono lo encuentra solo. Mantén ambos teléfonos en la misma Wi-Fi.</translation>
+        <source>On a phone of the group, tap Add a device and type the six digits it shows. Keep both phones on the same Wi-Fi.</source>
+        <translation>En un teléfono del grupo, toca Añadir un dispositivo y escribe los seis dígitos que muestra. Mantén ambos teléfonos en la misma Wi-Fi.</translation>
     </message>
     <message>
-        <source>Or paste the code's text, cbb://pair…</source>
-        <translation>O pega el texto del código, cbb://pair…</translation>
+        <source>Six digits or the code's text</source>
+        <translation>Seis dígitos o el texto del código</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -2049,10 +2030,6 @@
 <context>
     <name>WindowPage</name>
     <message>
-        <source>%1 asks to join.</source>
-        <translation>%1 pide unirse.</translation>
-    </message>
-    <message>
         <source>%1 is in the group now.</source>
         <translation>%1 ya está en el grupo.</translation>
     </message>
@@ -2065,8 +2042,8 @@
         <translation>Conectando con el dispositivo…</translation>
     </message>
     <message>
-        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
-        <translation>En el teléfono nuevo, abre CBB, toca Unirse a un grupo y escanea este código. Un ordenador nuevo encuentra esta ventana por sí solo al unirse. Mantén esta pantalla abierta.</translation>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</source>
+        <translation>En el teléfono nuevo, abre CBB, toca Unirse a un grupo y escanea este código. Un dispositivo sin cámara, como un ordenador, pide estos seis dígitos. Mantén esta pantalla abierta.</translation>
     </message>
     <message>
         <source>The time to add a device is up.</source>

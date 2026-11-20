@@ -100,9 +100,6 @@
     <string name="claim_cancelled">The claim is cancelled. The other devices hear of it as soon as they connect.</string>
     <string name="close">Close</string>
     <string name="close_tip">Close the tip</string>
-    <string name="code_differ">They don\'t match</string>
-    <string name="code_match">They match</string>
-    <string name="code_question">Does the other screen show this code?</string>
     <string name="collection_drag_here">Drag devices here</string>
     <string name="collection_empty">Drag devices here, or add them with Move to collection in a device\'s menu.</string>
     <string name="collection_into">Move to collection</string>
@@ -284,11 +281,11 @@
     <string name="invite_share">Share the invitation</string>
     <string name="invite_title">Invite a device from afar</string>
     <string name="invite_too_many">The invitation closed after three failed attempts. Make a new one.</string>
-    <string name="join_asks">Joining the group of %1$s.</string>
+    <string name="join_digits">Six digits or the code\'s text</string>
     <string name="join_go">Join</string>
     <string name="join_group">Join a group</string>
     <string name="join_qr_label">QR code to join the group</string>
-    <string name="join_scan_hint">On a phone of the group, tap + and scan the code it shows. Keep both phones on the same network.</string>
+    <string name="join_scan_hint">On a phone of the group, tap + and scan the code it shows, or type the six digits under it. Keep both phones on the same network.</string>
     <string name="join_title">Join a group</string>
     <string name="join_tv">Join a phone\'s group</string>
     <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
@@ -391,7 +388,7 @@
     <string name="needs_attention">Needs attention</string>
     <string name="no_computers">No computers connected.</string>
     <string name="no_devices_match">No devices match.</string>
-    <string name="not_a_window_code">This is not the QR code of a pairing window. On a phone of the group, tap + to show one.</string>
+    <string name="not_a_window_code">This is neither a pairing window\'s QR code nor its six digits. On a phone of the group, tap + to show them.</string>
     <string name="nothing_new">Nothing new to send or fetch.</string>
     <string name="notice_ack_owed">This phone has a removal to confirm; it does so with your next admin action.</string>
     <string name="notice_admins_silent">No word from the admin %1$s for a long time: its admin rights end in %2$d days unless it connects.</string>
@@ -725,8 +722,7 @@
     <string name="why_unreached_t">Devices at home cannot connect to this one: %1$s.</string>
     <string name="why_update_t">CBB %1$s is available.</string>
     <string name="widget_description">One tap sends what this phone copied to your computers.</string>
-    <string name="window_asks">%1$s asks to join.</string>
-    <string name="window_hint">On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</string>
+    <string name="window_hint">On the new phone, open CBB, tap Join a group and scan this code. A device without a camera, such as a computer, asks for these six digits. Keep this screen open.</string>
     <string name="window_joined">The device joined the group.</string>
     <string name="window_waiting">Waiting for the new device…</string>
     <string name="yubikey_go">Continue</string>

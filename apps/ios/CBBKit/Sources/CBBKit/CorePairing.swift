@@ -519,12 +519,13 @@ public enum CorePairing {
         }
     }
 
-    /// A pairing window of a phone of 0.6 (docs/protocol.md, section 6,
-    /// "The window and who dials"): the member port listens, the app shows
-    /// the QR code, the new device dials, and both screens show one code
-    /// the person compares. publicKey is the admitting key sign holds (the
-    /// admin key, or the root's); addrs the phone's home addresses without
-    /// a port; expires in seconds (five minutes when 0, an hour at most).
+    /// A home window of a phone of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+    /// the member port listens, the app shows the QR code and the six
+    /// digits, the new device dials and proves the digits; nobody is asked.
+    /// publicKey is the admitting key sign holds (the admin key, or the
+    /// root's); addrs the phone's home addresses without a port; expires in
+    /// seconds (five minutes when 0, an hour at most). The app announces the
+    /// window with Bonjour (p=1, f=fingerprint, i=id), never the digits.
     public final class Window: @unchecked Sendable {
         private let handle: OpaquePointer
         private let signer: UnsafeMutableRawPointer
@@ -533,34 +534,32 @@ public enum CorePairing {
         private var closed = false
         private var calls = 0
 
-        /// The QR code's text, cbb://pair?addr=…&fp=….
+        /// The QR code's text, cbb://pair?addr=…&fp=…&i=…&c=….
         public let qr: String
-        /// The phone's key fingerprint, as the QR code's fp and the mDNS f.
+        /// The six digits to show, for a device that types them.
+        public let digits: String
+        /// The window's ID in hex, as the QR code's i and the mDNS i.
+        public let id: String
+        /// The hash of the phone's member key in hex, as the QR code's fp
+        /// and the mDNS f.
         public let fingerprint: String
         public let expires: Int
 
-        /// The device whose code is shown, as it says of itself.
-        public struct Request: Decodable, Equatable, Sendable {
-            public var device: String
-            public var name: String
-            public var os: String
-            public var code: String
-        }
-
-        /// open, joining (ask about request), done (name joined), failed
-        /// (that attempt; the window stays open) or closed.
+        /// open, joining (a device pairs), done (name joined; the window is
+        /// closed), failed (that attempt; the window stays open) or closed
+        /// (its time is up, or three wrong codes: failure).
         public struct State: Sendable {
             public var version: UInt64
             public var state: String
-            public var request: Request?
             public var name: String
+            public var device: String
             public var failure: Failure?
         }
 
         public init(member: CoreMember, publicKey: Data, addrs: [String], expires: Int = 0,
                     sign: @escaping (Data) throws -> Data) throws {
             struct Args: Encodable { var `public`: Data, addrs: [String], expires: Int, mdns: Bool }
-            struct Answer: Decodable { var qr: String?, fingerprint: String?, expires: Int? }
+            struct Answer: Decodable { var qr: String?, digits: String?, id: String?, fingerprint: String?, expires: Int? }
             let request = try JSONEncoder().encode(Args(public: try point(publicKey), addrs: addrs, expires: expires, mdns: false))
             let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
             var answer: UnsafeMutablePointer<UInt8>?
@@ -582,7 +581,8 @@ public enum CorePairing {
                 throw error
             }
             (signer, self.member) = (s, member)
-            (qr, fingerprint, self.expires) = (o.qr ?? "", o.fingerprint ?? "", o.expires ?? 0)
+            (qr, digits, id) = (o.qr ?? "", o.digits ?? "", o.id ?? "")
+            (fingerprint, self.expires) = (o.fingerprint ?? "", o.expires ?? 0)
         }
 
         deinit { close() }
@@ -591,20 +591,13 @@ public enum CorePairing {
         /// app calls it off its main thread.
         public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
             struct Answer: Decodable {
-                var version: UInt64?, state: String?, joining: Request?, name: String?, error: Refused?
+                var version: UInt64?, state: String?, name: String?, device: String?, error: Refused?
             }
             try enter()
             defer { leave() }
             let a = try ok("window", call { cbb_window_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
-            return State(version: a.version ?? version, state: a.state ?? "open", request: a.joining, name: a.name ?? "",
+            return State(version: a.version ?? version, state: a.state ?? "open", name: a.name ?? "", device: a.device ?? "",
                          failure: a.error.map { Failure($0.message, details: $0.details) })
-        }
-
-        /// The person's answer: whether the codes match.
-        public func answer(_ yes: Bool) {
-            guard (try? enter()) != nil else { return }
-            defer { leave() }
-            cbb_window_answer(handle, yes ? 1 : 0)
         }
 
         private func enter() throws {
@@ -634,10 +627,12 @@ public enum CorePairing {
         }
     }
 
-    /// A new phone that joins a group of 0.6 by a window's QR code (empty
-    /// for the one window found by mDNS): it dials, both screens show one
-    /// code, and on "they match" the group is kept in dir, where the app
-    /// then starts its member. publicKey is the member key sign holds.
+    /// A new phone that joins a group of 0.6 by a home window's QR code, or
+    /// by the six digits the person typed (qr empty: the one window the
+    /// core finds by mDNS; the iPhone app builds the code from its own
+    /// Bonjour browse instead, `Discovery.windowLink`): it dials, proves the
+    /// digits, and the group is kept in dir, where the app then starts its
+    /// member. publicKey is the member key sign holds.
     public final class Joiner: @unchecked Sendable {
         private let handle: OpaquePointer
         private let signer: UnsafeMutableRawPointer
@@ -645,28 +640,22 @@ public enum CorePairing {
         private var closed = false
         private var calls = 0
 
-        /// The member whose code is shown, as it says of itself.
-        public struct Shown: Decodable, Equatable, Sendable {
-            public var device: String
-            public var name: String
-            public var code: String
-        }
-
-        /// dialing, joining (ask about shown), done (group, device) or
-        /// failed.
+        /// dialing, done (group, device, and name, the member that let the
+        /// phone in) or failed.
         public struct State: Sendable {
             public var version: UInt64
             public var state: String
-            public var shown: Shown?
             public var group: String
             public var device: String
+            public var name: String
             public var failure: Failure?
         }
 
-        public init(dir: URL, qr: String, name: String, os: String, publicKey: Data,
+        public init(dir: URL, qr: String, digits: String = "", name: String, os: String, publicKey: Data,
                     sign: @escaping (Data) throws -> Data) throws {
-            struct Args: Encodable { var dir: String, qr: String, name: String, os: String, `public`: Data }
-            let request = try JSONEncoder().encode(Args(dir: dir.path, qr: qr, name: name, os: os, public: try point(publicKey)))
+            struct Args: Encodable { var dir: String, qr: String, digits: String, name: String, os: String, `public`: Data }
+            let request = try JSONEncoder().encode(Args(dir: dir.path, qr: qr, digits: digits, name: name, os: os,
+                                                        public: try point(publicKey)))
             let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
             var answer: UnsafeMutablePointer<UInt8>?
             var count = 0
@@ -695,20 +684,14 @@ public enum CorePairing {
         /// app calls it off its main thread.
         public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
             struct Answer: Decodable {
-                var version: UInt64?, state: String?, shown: Shown?, group: String?, device: String?, error: Refused?
+                var version: UInt64?, state: String?, group: String?, device: String?, name: String?, error: Refused?
             }
             try enter()
             defer { leave() }
             let a = try ok("join", call { cbb_joiner_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
-            return State(version: a.version ?? version, state: a.state ?? "dialing", shown: a.shown, group: a.group ?? "",
-                         device: a.device ?? "", failure: a.error.map { Failure($0.message, details: $0.details) })
-        }
-
-        /// The person's answer: whether the codes match.
-        public func answer(_ yes: Bool) {
-            guard (try? enter()) != nil else { return }
-            defer { leave() }
-            cbb_joiner_answer(handle, yes ? 1 : 0)
+            return State(version: a.version ?? version, state: a.state ?? "dialing", group: a.group ?? "",
+                         device: a.device ?? "", name: a.name ?? "",
+                         failure: a.error.map { Failure($0.message, details: $0.details) })
         }
 
         private func enter() throws {
@@ -725,8 +708,7 @@ public enum CorePairing {
             lock.unlock()
         }
 
-        /// Ends joining; a code waiting for the person counts as "they do
-        /// not match".
+        /// Ends joining.
         public func close() {
             lock.lock()
             let first = !closed

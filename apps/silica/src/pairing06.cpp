@@ -94,6 +94,7 @@ void PairWindow::open(cbb_member *member, const QByteArray &publicKey)
     if (!m_window)
         return fail(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "This build of CBB is broken."), QStringLiteral("window: no window")} : failure);
     m_qr = made.value(QStringLiteral("qr")).toString();
+    m_digits = made.value(QStringLiteral("digits")).toString();
     m_modules.clear();
     for (const QJsonValue &row : made.value(QStringLiteral("modules")).toArray())
         m_modules.append(row.toString());
@@ -117,10 +118,9 @@ void PairWindow::poll()
         return;
     m_version = version;
     const QString state = st.value(QStringLiteral("state")).toString();
-    const QJsonObject j = st.value(QStringLiteral("joining")).toObject();
-    m_joiningName = j.value(QStringLiteral("name")).toString();
-    m_code = j.value(QStringLiteral("code")).toString();
     if (state == QStringLiteral("done")) {
+        // One device per window: the core closed it.
+        free();
         m_joined = st.value(QStringLiteral("name")).toString();
         m_error.clear();
         Errors::log(QStringLiteral("window: %1 joined").arg(st.value(QStringLiteral("device")).toString()));
@@ -135,18 +135,15 @@ void PairWindow::poll()
         return setState(QStringLiteral("open"));
     }
     if (state == QStringLiteral("closed")) {
+        // Its time is up, or three wrong codes, which the core explains.
+        if (st.contains(QStringLiteral("error")))
+            m_error = Errors::shown(failureOf(st, QStringLiteral("window")));
         free();
         return setState(state);
     }
     if (state == QStringLiteral("joining"))
         m_error.clear();
     setState(state);
-}
-
-void PairWindow::answer(bool yes)
-{
-    if (m_window)
-        cbb_window_answer(m_window, yes ? 1 : 0);
 }
 
 void PairWindow::close()
@@ -173,8 +170,7 @@ void PairWindow::free()
     }
     m_qr.clear();
     m_modules.clear();
-    m_joiningName.clear();
-    m_code.clear();
+    m_digits.clear();
 }
 
 void PairWindow::setState(const QString &state)
@@ -194,13 +190,16 @@ Joiner::~Joiner()
     free();
 }
 
-void Joiner::start(const QString &dir, const QString &qr, const QString &name, const QString &os, const QByteArray &publicKey)
+void Joiner::start(const QString &dir, const QString &qr, const QString &digits, const QString &name, const QString &os,
+                   const QByteArray &publicKey)
 {
     free();
     m_error.clear();
+    m_memberName.clear();
     const QByteArray req = compact(QJsonObject{
         {QStringLiteral("dir"), dir},
         {QStringLiteral("qr"), qr.trimmed()},
+        {QStringLiteral("digits"), QString(digits).remove(QLatin1Char(' '))},
         {QStringLiteral("name"), name},
         {QStringLiteral("os"), os},
         {QStringLiteral("public"), QString::fromLatin1(publicKey.toBase64())},
@@ -232,10 +231,8 @@ void Joiner::poll()
         return;
     m_version = version;
     const QString state = st.value(QStringLiteral("state")).toString();
-    const QJsonObject shown = st.value(QStringLiteral("shown")).toObject();
-    m_memberName = shown.value(QStringLiteral("name")).toString();
-    m_code = shown.value(QStringLiteral("code")).toString();
     if (state == QStringLiteral("done")) {
+        m_memberName = st.value(QStringLiteral("name")).toString();
         const QString group = st.value(QStringLiteral("group")).toString();
         const QString device = st.value(QStringLiteral("device")).toString();
         free();
@@ -247,12 +244,6 @@ void Joiner::poll()
     if (state == QStringLiteral("failed"))
         return fail(failureOf(st, QStringLiteral("joiner")));
     setState(state);
-}
-
-void Joiner::answer(bool yes)
-{
-    if (m_joiner)
-        cbb_joiner_answer(m_joiner, yes ? 1 : 0);
 }
 
 void Joiner::stop()
@@ -276,8 +267,6 @@ void Joiner::free()
         cbb_joiner_free(m_joiner);
         m_joiner = nullptr;
     }
-    m_memberName.clear();
-    m_code.clear();
 }
 
 void Joiner::setState(const QString &state)

@@ -436,34 +436,14 @@ class AppModel(private val app: Context) {
     /** The recovery sheet of the group of 0.6 this phone just made, shown once until the person says it is kept. */
     var newSheet by mutableStateOf<Core.RecoverySheet?>(null)
 
-    /** The open window's QR code, while "Add a device" shows it. */
+    /** The open window's QR code and its six digits, while "Add a device" shows them. */
     var windowQr by mutableStateOf<String?>(null)
         private set
-
-    /** The device whose code waits for the person's answer, on either end. */
-    var pairAsk by mutableStateOf<LiveGroup.WindowAsk?>(null)
+    var windowDigits by mutableStateOf<String?>(null)
         private set
-
-    private var pairAnswer: CompletableDeferred<Boolean>? = null
 
     /** Whether the phone pairs on 0.6: without a group (a new one is of 0.6) or in a group of 0.6. */
     val pairsOn06: Boolean get() = !group.hasGroup || group.isV06
-
-    /** Asks the person whether the code both screens show matches, for up to 5 minutes. */
-    private suspend fun askCode(a: LiveGroup.WindowAsk): Boolean = withContext(Dispatchers.Main) {
-        val d = CompletableDeferred<Boolean>()
-        pairAnswer = d
-        pairAsk = a
-        val yes = withTimeoutOrNull(CONFIRM_MS) { d.await() } ?: false
-        pairAsk = null
-        yes
-    }
-
-    /** The person's answer about the code. */
-    fun answerCode(yes: Boolean) {
-        pairAnswer?.complete(yes)
-        pairAnswer = null
-    }
 
     /**
      * "Add a device" on 0.6: makes the group first on a phone without one
@@ -481,7 +461,12 @@ class AppModel(private val app: Context) {
                 update()
                 phase = Phase.HOME
             }
-            val name = group.openWindow({ qr -> main.post { windowQr = qr } }, ::askCode)
+            val name = group.openWindow { qr, digits ->
+                main.post {
+                    windowQr = qr
+                    windowDigits = digits
+                }
+            }
             message = Note(R.string.window_joined)
             Log.i(TAG, "$name joined through this phone's window")
             update()
@@ -494,26 +479,28 @@ class AppModel(private val app: Context) {
         } finally {
             busy = false
             windowQr = null
-            pairAsk = null
-            pairAnswer?.complete(false)
-            pairAnswer = null
+            windowDigits = null
         }
     }
 
     /**
-     * Joins a group of 0.6 by a window's scanned or pasted QR code: the
-     * code both screens show waits for the person's answer, then the app
-     * goes Home. The join screen runs it, so leaving the screen cancels it.
+     * Joins a group of 0.6 by a window's scanned or pasted QR code, or by
+     * the six digits the person typed from the window's screen (the window
+     * is then found on the home network), then goes Home. The join screen
+     * runs it, so leaving the screen cancels it.
      */
-    suspend fun joinByWindow(qr: String): Boolean {
-        if (!qr.trim().startsWith(WINDOW_QR)) {
+    suspend fun joinByWindow(text: String): Boolean {
+        val t = text.trim()
+        val digits = t.filter { !it.isWhitespace() }
+        val typed = digits.length == 6 && digits.all { it in '0'..'9' }
+        if (!typed && !t.startsWith(WINDOW_QR)) {
             message = Note(R.string.not_a_window_code, error = true)
             return false
         }
         message = null
         busy = true
         try {
-            group.joinByWindow(qr.trim(), ::askCode)
+            if (typed) group.joinByWindow("", digits) else group.joinByWindow(t)
             update()
             phase = Phase.HOME
             return true
@@ -524,9 +511,6 @@ class AppModel(private val app: Context) {
             return false
         } finally {
             busy = false
-            pairAsk = null
-            pairAnswer?.complete(false)
-            pairAnswer = null
         }
     }
 

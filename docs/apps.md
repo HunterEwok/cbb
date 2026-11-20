@@ -45,16 +45,19 @@ they look, so both apps are built to the same plan.
    (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
    without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
    set kept where the member runs) and shows its recovery sheet once; on the root phone, or a
-   phone the records name an admin, it then opens the pairing window: its QR code on screen,
-   announced by NSD (Bonjour on the iPhone) with `p=1` and `f`, open for five minutes. **Join a group** opens the
-   camera (or takes the code's text pasted) and dials the window. On both ends the code the
-   session commits to then shows with **They match** and **They don't match**, and the device
-   joins only when both persons say they match. The device list, who is the root and who is
+   phone the records name an admin, it then opens the home window: its QR code and six digits
+   on screen, announced by NSD (Bonjour on the iPhone) with `p=1`, `f` and `i` (never the
+   digits), open for five minutes. **Join a group** opens the camera and dials the window of the
+   code it reads; where scanning fails, or there is no camera, the person types the six digits
+   (or pastes the code's text), and the app finds the window with `p=1` and `i` by NSD or
+   Bonjour and builds the code itself (`Discovery.windowLink`). The new device proves the digits
+   and joins; nobody is asked anything. A wrong code joins no one and writes nothing; three
+   close the window, and so does the device that joins. The device list, who is the root and who is
    an admin come from the member's `group` (docs/core-api.md). On Aurora and HarmonyOS, whose
    apps have no DNS-SD of the system here, **Create a group** makes the group of 0.6 and shows
    the sheet, **Add a device** has the core announce the window by mDNS, and **Join a group**
-   first finds the one window announced on the home network by itself; a window's code can
-   still be pasted (Aurora) or scanned (HarmonyOS). Who is an admin comes from the member's
+   takes the six digits the window shows and has the core find that window on the home
+   network; a window's code can still be pasted (Aurora) or scanned (HarmonyOS). Who is an admin comes from the member's
    `devices` there. No app listens any more for a device that scans the
    phone's own code: joining at home always goes through the window. A remote invitation and
    a restore keep their own screens.

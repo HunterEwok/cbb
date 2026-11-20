@@ -167,9 +167,10 @@ public:
     // As an admin of a group of 0.6: opens the member's pairing window with
     // the admin key, found off the GUI thread behind the admin PIN.
     Q_INVOKABLE void openWindow();
-    // Without a group: joins a group of 0.6 by the window announced at
-    // home, or by a window's QR code text when qr is given.
-    Q_INVOKABLE void joinByWindow(const QString &qr = QString());
+    // Without a group: joins a group of 0.6 by text, the six digits a
+    // window of the group shows (the window announced at home), or a
+    // window's QR code text.
+    Q_INVOKABLE void joinByWindow(const QString &text);
     // An admin's change to a device of the group (remove, rename, thaw,
     // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.

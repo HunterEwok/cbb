@@ -9,14 +9,17 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
-    /// A pairing window's QR code (docs/protocol.md, section 7, "The window's QR code").
-    let qr = "cbb://pair?addr=192.168.1.20%3A8764&fp=" + String(repeating: "ab", count: 32)
+    /// A home window's QR code (docs/protocol.md, "Pairing in 0.6").
+    let qr = "cbb://pair?addr=192.168.1.20:8764&fp=" + String(repeating: "ab", count: 32) + "&i=" + String(repeating: "11", count: 16)
+        + "&c=123456"
 
-    /// Only a window's code is dialed; anything else says why, with nothing joined.
+    /// Only a window's code or six digits are dialed; anything else says
+    /// why, with nothing joined.
     func testJoinByWindowRefusesOtherCodes() async {
         let g = FakeGroup()
         let m = AppModel(group: g)
-        for text in ["", "https://example.com", "cbb://join?code=246802&addr=192.168.1.20:8767&fp=x", "cbb://invite#x"] {
+        for text in ["", "https://example.com", "cbb://join?code=246802&addr=192.168.1.20:8767&fp=x", "cbb://invite#x", "12345", "1234567",
+                     "12a456", "١٢٣٤٥٦"] {
             let ok = await m.joinByWindow(text)
             XCTAssertFalse(ok, text)
             XCTAssertNotNil(m.message, text)
@@ -27,6 +30,17 @@ final class AppModelTests: XCTestCase {
         let ok = await m.joinByWindow(" " + qr + "\n")
         XCTAssertTrue(ok)
         XCTAssertEqual(g.windows, [qr])
+    }
+
+    /// Six digits typed from a window's screen, spaces aside, go to the
+    /// window found at home.
+    func testJoinByWindowTakesSixDigits() async {
+        let g = FakeGroup()
+        let m = AppModel(group: g)
+        let ok = await m.joinByWindow(" 123 456 ")
+        XCTAssertTrue(ok)
+        XCTAssertEqual(g.windows, [""])
+        XCTAssertEqual(g.digits, ["123456"])
     }
 
     func testSyncFromShortcut() async {
@@ -140,10 +154,13 @@ final class AppModelTests: XCTestCase {
         var prepared = 0
         func prepare() throws { prepared += 1 }
         var computers: [AppModel.Computer] = []
-        /// The windows' codes dialed: joining one puts the phone in its group, as a member.
+        /// The windows' codes dialed and the digits typed: joining one puts
+        /// the phone in its group, as a member.
         var windows: [String] = []
-        func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws {
+        var digits: [String] = []
+        func joinByWindow(_ qr: String, digits typed: String) async throws {
             windows.append(qr)
+            if !typed.isEmpty { digits.append(typed) }
             hasGroup = true
             isAdmin = false
             computers = [.init(id: "a", name: "pi", online: true)]

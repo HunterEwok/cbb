@@ -98,9 +98,6 @@
     <string name="claim_cancelled">Dai limeghairiwa. Vifaa vingine hulisikia mara tu vinapounganishwa.</string>
     <string name="close">Funga</string>
     <string name="close_tip">Funga kidokezo</string>
-    <string name="code_differ">Hazilingani</string>
-    <string name="code_match">Zinalingana</string>
-    <string name="code_question">Je, skrini nyingine inaonyesha msimbo huu?</string>
     <string name="collection_drag_here">Buruta vifaa hapa</string>
     <string name="collection_empty">Buruta vifaa hapa, au uviongeze kwa Hamishia kwenye mkusanyiko katika menyu ya kifaa.</string>
     <string name="collection_into">Hamishia kwenye mkusanyiko</string>
@@ -281,11 +278,11 @@
     <string name="invite_share">Shiriki mwaliko</string>
     <string name="invite_title">Alika kifaa kilicho mbali</string>
     <string name="invite_too_many">Mwaliko ulifungwa baada ya majaribio matatu yaliyoshindwa. Unda mpya.</string>
-    <string name="join_asks">Inajiunga na kikundi cha %1$s.</string>
+    <string name="join_digits">Tarakimu sita au maandishi ya msimbo</string>
     <string name="join_go">Jiunge</string>
     <string name="join_group">Jiunge na kikundi</string>
     <string name="join_qr_label">Msimbo wa QR wa kujiunga na kikundi</string>
-    <string name="join_scan_hint">Kwenye simu ya kikundi, gusa + na uchanganue msimbo inaoonyesha. Weka simu zote mbili kwenye mtandao mmoja.</string>
+    <string name="join_scan_hint">Kwenye simu ya kikundi, gusa + kisha changanua msimbo inaoonyesha, au andika tarakimu sita zilizo chini yake. Weka simu zote mbili kwenye mtandao mmoja.</string>
     <string name="join_title">Jiunge na kikundi</string>
     <string name="join_tv">Jiunge na kikundi cha simu</string>
     <string name="join_tv_hint">TV hii inajiunga na kikundi cha simu yako: inaonyesha msimbo wa QR, na simu inauchanganua.</string>
@@ -388,7 +385,7 @@
     <string name="needs_attention">Inahitaji uangalifu</string>
     <string name="no_computers">Hakuna kompyuta zilizounganishwa.</string>
     <string name="no_devices_match">Hakuna vifaa vinavyolingana.</string>
-    <string name="not_a_window_code">Huu si msimbo wa QR wa dirisha la kuoanisha. Kwenye simu ya kikundi, gusa + ili kuonyesha mmoja.</string>
+    <string name="not_a_window_code">Huu si msimbo wa QR wa dirisha la kuoanisha wala tarakimu zake sita. Kwenye simu ya kikundi, gusa + ili kuzionyesha.</string>
     <string name="nothing_new">Hakuna kipya cha kutuma au kuleta.</string>
     <string name="notice_ack_owed">Simu hii ina uondoaji wa kuthibitisha; itafanya hivyo kwa hatua yako ijayo ya msimamizi.</string>
     <string name="notice_admins_silent">Hakuna habari kutoka kwa msimamizi %1$s kwa muda mrefu: haki zake za msimamizi zinaisha baada ya siku %2$d isipounganishwa.</string>
@@ -721,8 +718,7 @@
     <string name="why_unreached_t">Vifaa vya nyumbani haviwezi kuunganishwa na hiki: %1$s.</string>
     <string name="why_update_t">CBB %1$s inapatikana.</string>
     <string name="widget_description">Mguso mmoja hutuma kwenye kompyuta zako kile simu hii ilinakili.</string>
-    <string name="window_asks">%1$s inaomba kujiunga.</string>
-    <string name="window_hint">Kwenye simu mpya, fungua CBB, gusa Jiunge na kikundi na uchanganue msimbo huu. Kompyuta mpya hupata dirisha hili yenyewe inapojiunga. Acha skrini hii wazi.</string>
+    <string name="window_hint">Kwenye simu mpya, fungua CBB, gusa Jiunge na kikundi kisha changanua msimbo huu. Kifaa kisicho na kamera, kama kompyuta, huomba tarakimu hizi sita. Acha skrini hii wazi.</string>
     <string name="window_joined">Kifaa kimejiunga na kikundi.</string>
     <string name="window_waiting">Inasubiri kifaa kipya…</string>
     <string name="yubikey_go">Endelea</string>

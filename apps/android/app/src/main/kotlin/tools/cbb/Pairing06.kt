@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -56,8 +55,9 @@ import java.time.Instant
 /**
  * "Add a device" on 0.6 (docs/apps.md, "Add a device"): a phone without a
  * group makes one first and shows its recovery sheet; then the window is
- * open, its QR code on screen, and the code a device shows when it dials
- * waits for the person's "they match". Leaving the page closes the window.
+ * open, its QR code and six digits on screen. The new device scans the
+ * code, or its person types the digits; nobody is asked anything. Leaving
+ * the page closes the window.
  */
 @Composable
 internal fun WindowScreen(model: AppModel, close: () -> Unit) {
@@ -66,9 +66,7 @@ internal fun WindowScreen(model: AppModel, close: () -> Unit) {
     BackHandler { close() }
     Page(stringResource(R.string.add_device), close) {
         val qr = model.windowQr
-        val ask = model.pairAsk
         when {
-            ask != null -> CodeQuestion(model, stringResource(R.string.window_asks, ask.name), ask.code)
             qr != null -> {
                 val label = stringResource(R.string.join_qr_label)
                 QrCode(
@@ -77,6 +75,7 @@ internal fun WindowScreen(model: AppModel, close: () -> Unit) {
                         .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                         .semantics { contentDescription = label },
                 )
+                model.windowDigits?.let { Digits(it) }
                 Text(stringResource(R.string.window_hint), textAlign = TextAlign.Center, color = palette.textDim, modifier = Modifier.fillMaxWidth())
                 Waiting(stringResource(R.string.window_waiting))
             }
@@ -89,8 +88,8 @@ internal fun WindowScreen(model: AppModel, close: () -> Unit) {
 
 /**
  * Joining a group of 0.6: the camera reads the QR code a phone of the group
- * shows in "Add a device" (or its text is pasted), this phone dials it, and
- * the code both screens show waits for the person's "they match".
+ * shows in "Add a device", or the person types the six digits shown under
+ * it (or pastes the code's text), and this phone joins.
  */
 @Composable
 internal fun JoinByWindowScreen(model: AppModel) {
@@ -125,9 +124,7 @@ internal fun JoinByWindowScreen(model: AppModel) {
             fontWeight = FontWeight.Bold,
             color = palette.accent,
         )
-        val ask = model.pairAsk
         when {
-            ask != null -> CodeQuestion(model, stringResource(R.string.join_asks, ask.name), ask.code)
             joining != null -> Waiting(stringResource(R.string.connecting))
             else -> {
                 ScanOrPaste(model) { join(it) }
@@ -142,21 +139,18 @@ internal fun JoinByWindowScreen(model: AppModel) {
     }
 }
 
-/** The code both screens show, and the person's answer. */
+/** The window's six digits, large, read out one by one. */
 @Composable
-private fun ColumnScope.CodeQuestion(model: AppModel, who: String, code: String) {
-    Text(who, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+private fun Digits(digits: String) {
+    val shown = digits.chunked(3).joinToString(" ")
     Text(
-        code,
+        shown,
         style = MaterialTheme.typography.headlineLarge,
         fontFamily = FontFamily.Monospace,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth().semantics { contentDescription = code.toList().joinToString(" ") },
+        modifier = Modifier.fillMaxWidth().semantics { contentDescription = digits.toList().joinToString(" ") },
     )
-    Text(stringResource(R.string.code_question), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-    AccentButton(stringResource(R.string.code_match), onClick = { model.answerCode(true) }, modifier = Modifier.fillMaxWidth())
-    QuietButton(stringResource(R.string.code_differ), onClick = { model.answerCode(false) }, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -168,7 +162,7 @@ private fun Waiting(text: String) {
     }
 }
 
-/** The camera, when there is one and it is allowed, and the QR code's text by hand. */
+/** The camera, when there is one and it is allowed, and the six digits (or the QR code's text) by hand. */
 @Composable
 private fun ScanOrPaste(model: AppModel, found: (String) -> Unit) {
     val context = LocalContext.current
@@ -198,7 +192,7 @@ private fun ScanOrPaste(model: AppModel, found: (String) -> Unit) {
     OutlinedTextField(
         value = typed,
         onValueChange = { typed = it },
-        label = { Text(stringResource(R.string.qr_text)) },
+        label = { Text(stringResource(R.string.join_digits)) },
         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
         modifier = Modifier.fillMaxWidth(),

@@ -177,24 +177,21 @@ protocol GroupController: AnyObject {
     /// Makes a group of 0.6 on this phone and returns its recovery sheet,
     /// which the app shows once.
     func newGroup06() async throws -> Core.RecoverySheet
-    /// Opens the pairing window of a group of 0.6: shown gets its QR code,
-    /// ask the person's answer about each code; returns the name of the
-    /// device that joined.
-    func openWindow(shown: @escaping @MainActor (String) -> Void,
-                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String
-    /// Joins a group of 0.6 by a window's QR code; ask gets the person's
-    /// answer about the code.
-    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws
+    /// Opens the home window of a group of 0.6: shown gets its QR code and
+    /// six digits; returns the name of the device that joined.
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String
+    /// Joins a group of 0.6 by a window's QR code, or by the six digits
+    /// typed from its screen (qr empty).
+    func joinByWindow(_ qr: String, digits: String) async throws
 }
 
 extension GroupController {
     var isV06: Bool { false }
     func newGroup06() async throws -> Core.RecoverySheet { throw PendingGroup.Failure.notReady }
-    func openWindow(shown: @escaping @MainActor (String) -> Void,
-                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String { throw PendingGroup.Failure.notReady }
-    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws {
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String {
         throw PendingGroup.Failure.notReady
     }
+    func joinByWindow(_ qr: String, digits: String) async throws { throw PendingGroup.Failure.notReady }
     var notices: [Notice] { [] }
     func dismissNotice(_ id: String) async throws {}
     var rootChanged: AppModel.RootChange? { nil }
@@ -840,45 +837,17 @@ final class AppModel: ObservableObject {
     /// Leaves the join screen without joining.
     // MARK: Pairing on 0.6: the window and the joiner
 
-    /// A device whose code waits for the person's answer: the name it
-    /// gives, and the code both screens show.
-    struct CodeAsk: Equatable, Sendable {
-        let name: String
-        let code: String
-    }
-
     /// The recovery sheet of the group of 0.6 this phone just made, shown
     /// once until the person says it is kept.
     @Published var newSheet: Core.RecoverySheet?
-    /// The open window's QR code, while "Add a device" shows it.
+    /// The open window's QR code and its six digits, while "Add a device"
+    /// shows them.
     @Published private(set) var windowQr: String?
-    /// The code that waits for the person's answer, on either end.
-    @Published private(set) var pairAsk: CodeAsk?
-    private var pairAnswer: CheckedContinuation<Bool, Never>?
-
-
-    /// Asks the person whether the code both screens show matches; a new
-    /// question answers the one before it no.
-    private func askCode(_ a: CodeAsk) async -> Bool {
-        pairAnswer?.resume(returning: false)
-        pairAnswer = nil
-        pairAsk = a
-        let yes = await withCheckedContinuation { pairAnswer = $0 }
-        pairAsk = nil
-        return yes
-    }
-
-    /// The person's answer about the code.
-    func answerCode(_ yes: Bool) {
-        pairAnswer?.resume(returning: yes)
-        pairAnswer = nil
-    }
+    @Published private(set) var windowDigits: String?
 
     private func endPairing() {
         windowQr = nil
-        pairAsk = nil
-        pairAnswer?.resume(returning: false)
-        pairAnswer = nil
+        windowDigits = nil
     }
 
     /// "Add a device" on 0.6: makes the group first on a phone without one
@@ -897,8 +866,9 @@ final class AppModel: ObservableObject {
                 isAdmin = group.isAdmin
                 phase = .home
             }
-            let name = try await group.openWindow(shown: { [weak self] qr in self?.windowQr = qr }) { [weak self] a in
-                await self?.askCode(a) ?? false
+            let name = try await group.openWindow { [weak self] qr, digits in
+                self?.windowQr = qr
+                self?.windowDigits = digits
             }
             log.info("\(name, privacy: .public) joined through this phone's window")
             await refresh()
@@ -912,13 +882,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Joins a group of 0.6 by a window's scanned or pasted QR code: the
-    /// code both screens show waits for the person's answer, then the app
-    /// goes Home. The join screen runs it, so leaving it cancels it.
+    /// Joins a group of 0.6 by a window's scanned or pasted QR code, or by
+    /// the six digits the person typed from the window's screen (the window
+    /// is then found on the home network), then goes Home. The join screen
+    /// runs it, so leaving it cancels it.
     func joinByWindow(_ text: String) async -> Bool {
         let qr = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard qr.hasPrefix(Self.windowQR) else {
-            message = String(localized: "This is not the QR code of a pairing window. On a phone of the group, tap + to show one.", bundle: .app)
+        let digits = qr.filter { !$0.isWhitespace }
+        let typed = digits.count == 6 && digits.allSatisfy { $0.isASCII && $0.isNumber }
+        guard typed || qr.hasPrefix(Self.windowQR) else {
+            message = String(localized: "This is neither a pairing window's QR code nor its six digits. On a phone of the group, tap + to show them.", bundle: .app)
             return false
         }
         message = nil
@@ -928,7 +901,7 @@ final class AppModel: ObservableObject {
             endPairing()
         }
         do {
-            try await group.joinByWindow(qr) { [weak self] a in await self?.askCode(a) ?? false }
+            try await group.joinByWindow(typed ? "" : qr, digits: typed ? digits : "")
             await refresh()
             // A member: the root makes it an admin later.
             isAdmin = group.isAdmin
