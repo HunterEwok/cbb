@@ -38,6 +38,7 @@ use crate::content::Store;
 use crate::entries::Entries;
 use crate::epochs::FileStore;
 use crate::error::{Error, Result};
+use crate::faces::{Faces, Signers};
 use crate::hello::Hello;
 use crate::link::{self, Exchange};
 use crate::own::Own;
@@ -129,6 +130,9 @@ pub struct Mesh {
     /// The signed release and entry points this member holds and passes on.
     releases: RwLock<Option<Arc<Releases>>>,
     entries: RwLock<Option<Arc<Entries>>>,
+    /// The group's server credentials, which this member keeps, brings up
+    /// to date and passes on (`crate::faces`).
+    faces: Faces,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
 }
@@ -230,6 +234,7 @@ impl Mesh {
             Err(e) => return Err(Error::with(format!("cannot read {MARKS_FILE}"), e)),
         };
         let clock = Clock::new(Box::new(crate::uptime::wall_ms), Timestamp::default(), None);
+        let faces = Faces::open(dir, &set.state(), log.clone())?;
         let mesh = Mesh {
             statements: Mutex::new(Statements::load(dir)?),
             book: Mutex::new(Book::load(dir)?),
@@ -256,6 +261,7 @@ impl Mesh {
             waiting: Mutex::new(HashMap::new()),
             releases: RwLock::new(None),
             entries: RwLock::new(None),
+            faces,
             log,
             closed: AtomicBool::new(false),
         };
@@ -416,6 +422,8 @@ impl Mesh {
     /// Keeps this device's sealing keys current (`keystore::rotate`); a new
     /// epoch's statement is kept and goes to every peer.
     pub fn rotate(&self) -> Result<()> {
+        // The server credentials' period is renewed on the same beat.
+        self.refresh_faces(&self.state());
         let group = self.state().group;
         let now = crate::uptime::wall_ms().max(0) as u64;
         let made = keystore::rotate(&mut *self.store.lock().unwrap(), &group, now, Some(now))
@@ -431,6 +439,42 @@ impl Mesh {
             for f in msgs {
                 self.broadcast(&f, None);
             }
+        }
+        Ok(())
+    }
+
+    /// The group's server credentials this member keeps.
+    pub fn faces(&self) -> &Faces {
+        &self.faces
+    }
+
+    /// Brings the server credentials up to date as far as this device can
+    /// (`Faces::refresh`) and sends what it signed to every peer.
+    pub fn refresh_faces(&self, state: &State) {
+        let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
+        let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
+        match self.faces.refresh(state, &s) {
+            Ok(signed) => {
+                for f in Faces::messages(&signed) {
+                    self.broadcast(&f, None);
+                }
+            }
+            Err(e) => self.logf(&format!("cbb: the server credentials: {}", e.for_log())),
+        }
+    }
+
+    /// Takes message `member-credentials` from a peer: the new ones go on
+    /// to the other peers, and may want this device's server key or new
+    /// lists.
+    fn take_credentials(&self, conn: &Conn, msg: &[u8]) -> Result<()> {
+        let envs = Faces::read_message(msg)?;
+        let state = self.state();
+        let fresh = self.faces.add(&state, &hex(&conn.peer.0[..4]), &envs);
+        if !fresh.is_empty() {
+            for f in Faces::messages(&fresh) {
+                self.broadcast(&f, Some(&conn.peer));
+            }
+            self.refresh_faces(&state);
         }
         Ok(())
     }
@@ -476,6 +520,7 @@ impl Mesh {
         if let Some(f) = &*self.on_set.read().unwrap() {
             f(&set);
         }
+        self.refresh_faces(&set.state());
         let hello = self.hello_frame(&set);
         drop(set);
         self.broadcast(&hello, None);
@@ -758,6 +803,9 @@ impl Mesh {
         for f in self.statements.lock().unwrap().messages() {
             let _ = conn.tx.try_send(f);
         }
+        for f in Faces::messages(&self.faces.kept().envelopes()) {
+            let _ = conn.tx.try_send(f);
+        }
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
         let end = loop {
@@ -797,6 +845,7 @@ impl Mesh {
                 if let Some(f) = &*self.on_set.read().unwrap() {
                     f(&set);
                 }
+                self.refresh_faces(&set.state());
             }
             out
         };
@@ -822,6 +871,7 @@ impl Mesh {
                 Ok(())
             }
             Some(m::T_PING) => Ok(()),
+            Some(cbb_core::msg::tables::T_CREDENTIALS) => self.take_credentials(conn, msg),
             Some(t @ (m::T_RELEASE | m::T_ENTRIES)) => self.take_signed(conn, t, msg),
             Some(m::T_BYE) => Err(Error::msg("the peer said goodbye")),
             Some(cbb_core::msg::wave4::T_KEYS) => self.take_keys(conn, msg),
@@ -849,8 +899,7 @@ impl Mesh {
                 Ok(())
             }
             Some(
-                t @ (cbb_core::msg::tables::T_CREDENTIALS
-                | cbb_core::msg::tables::T_TUNNEL
+                t @ (cbb_core::msg::tables::T_TUNNEL
                 | cbb_core::msg::tables::T_HUBS
                 | cbb_core::msg::tables::T_GUEST
                 | m::T_REACH

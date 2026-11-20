@@ -380,3 +380,29 @@ fn two_members_that_dial_each_other_at_once_keep_one_connection() {
     a.close();
     b.close();
 }
+
+/// The root's device starts the servers' period; the other member takes it,
+/// adds its server key, and the root lists it in the members' credential.
+#[test]
+fn server_credentials_go_round_the_group() {
+    let (da, db) = two_dirs("faces");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let mut oa = own(&da);
+    oa.root = Some(Arc::new(root()));
+    let a = Mesh::open(&da, oa, log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    a.refresh_faces(&a.state());
+    let tag = a.faces().kept().tag();
+    assert!(tag.is_some(), "the root started a period");
+    assert!(b.faces().kept().tag().is_none());
+    connect(&a, &b);
+    until("b takes the period", || b.faces().kept().tag() == tag);
+    let bk = b.own().hash();
+    until("the root lists b", || {
+        let k = a.faces().kept();
+        k.envelopes().len() == 5 && k.lists_member(&bk)
+    });
+    until("b holds the new members' credential", || b.faces().kept().lists_member(&bk));
+    a.close();
+    b.close();
+}

@@ -80,6 +80,56 @@ fn credentials_of_the_vectors() {
     assert!(period.live(period.expires_ms - 1) && !period.live(period.expires_ms));
 }
 
+/// The writer is the reader's inverse: each credential of the vectors
+/// gives back its body's exact bytes (but for the optional zone and a second signer), and one signed anew reads back the
+/// same, with its lists padded.
+#[test]
+fn credentials_written_as_the_vectors() {
+    let v = load("credentials.json");
+    for t in v["take"].as_array().unwrap() {
+        let c = Credential::read(&unhex(t["envelope"].as_str().unwrap())).unwrap();
+        // A field of the optional zone, or a second signer, is the
+        // signer's to add; the writer makes neither, so that body differs.
+        let env = unhex(t["envelope"].as_str().unwrap());
+        let env = crate::format::Envelope::parse_limited(&env, credential::MAX_BODY).unwrap();
+        let optional =
+            env.map.as_map().unwrap().iter().any(|(k, _)| *k >= 256 || *k == crate::format::envelope::FIELD_SIGNER2);
+        assert_eq!(hex(&c.body()) == t["body"].as_str().unwrap(), !optional, "{}", t["name"]);
+        let by = k(t["name"].as_str().unwrap());
+        let again = Credential::read(&c.clone().sign(&by).unwrap()).unwrap();
+        assert_eq!(again.signer, by.public());
+        assert_eq!(
+            (again.kind, again.group, again.version, again.expires_ms),
+            (c.kind, c.group, c.version, c.expires_ms)
+        );
+        assert_eq!(
+            (&again.tag, &again.key, &again.hubs, &again.admins, &again.members),
+            (&c.tag, &c.key, &c.hubs, &c.admins, &c.members)
+        );
+    }
+    let by = k("period");
+    let short = Credential {
+        kind: credential::TYPE_MEMBERS,
+        group: [3; 16],
+        signer: Vec::new(),
+        version: 9,
+        expires_ms: 1_000,
+        tag: None,
+        key: None,
+        hubs: Vec::new(),
+        admins: Vec::new(),
+        members: vec![[5; 32]; 5],
+        id: [0; 32],
+    };
+    let read = Credential::read(&short.clone().sign(&by).unwrap()).unwrap();
+    assert_eq!(read.members.len(), 8, "padded to the next length");
+    assert_eq!(read.members[..5], [[5; 32]; 5], "real entries first");
+    let long = Credential { members: vec![[5; 32]; 257], ..short.clone() };
+    assert!(long.sign(&by).is_err(), "more members than a credential lists");
+    let no_tag = Credential { kind: credential::TYPE_PERIOD, key: Some(by.public()), ..short };
+    assert!(no_tag.sign(&by).is_err(), "a period needs its tag");
+}
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|c| format!("{c:02x}")).collect()
 }

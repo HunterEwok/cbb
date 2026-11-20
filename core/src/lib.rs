@@ -75,6 +75,7 @@ pub mod invite;
 pub mod issue;
 pub mod join;
 pub mod keyboard;
+pub mod keylevel;
 pub mod keystore;
 #[cfg(test)]
 mod longrules;
