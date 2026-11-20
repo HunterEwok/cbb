@@ -16,6 +16,8 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- The core writes server credentials of 0.6 (`blind::credential::Credential::sign`), the
+  inverse of their reader, checked against the format's vectors.
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
   written, with the root's and admins' keys signing where the device keeps them, the change of
