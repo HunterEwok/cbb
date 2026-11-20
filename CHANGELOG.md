@@ -27,6 +27,10 @@ made with 0.5 is set up again once. The details follow.
   member's steps from message 64 to the Welcome and message 68, at home with both persons'
   answers or by an invitation, for `member/` and the phones alike; `member/` runs it over the
   core's TLS of `cbb-pair/3` (`member/src/join.rs`), ready for the service's switch to 0.6.
+- `member/` keeps its sealing keys of 0.6 by epoch in `epochs.json`, each sealed under the
+  device's local key, holds the group's keys statements and passes them on in message `keys`,
+  and seals, checks, opens and judges copies of 0.6 on the core (`member/src/sealed.rs`),
+  ready for the service's switch to 0.6.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.
