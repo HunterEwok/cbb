@@ -43,6 +43,7 @@ use crate::own::Own;
 use crate::releases::Releases;
 use crate::sealed::{self, Lifetimes, Statements, Taken};
 use crate::tls;
+use serde_json::value::RawValue;
 
 const PING_EVERY: Duration = Duration::from_secs(5);
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -747,24 +748,31 @@ const ENTRIES_FILES: &[(&str, u16)] = &[("keys", 2), ("entries", 3)];
 
 /// Message `release` or `entries` from the files held, `{name: file}`:
 /// each file's bytes as published.
-fn files_frame(t: u64, files: &[(&str, u16)], v: &serde_json::Value) -> Option<Vec<u8>> {
-    let bytes: Vec<Vec<u8>> = files.iter().map(|(n, _)| serde_json::to_vec(v.get(*n)?).ok()).collect::<Option<_>>()?;
+fn files_frame(t: u64, files: &[(&str, u16)], v: &RawValue) -> Option<Vec<u8>> {
+    let map: HashMap<&str, &RawValue> = serde_json::from_str(v.get()).ok()?;
     let mut f = vec![(frame::FIELD_T, Value::Uint(t))];
-    for ((_, n), b) in files.iter().zip(&bytes) {
-        f.push((*n, Value::Bytes(b)));
+    for (name, n) in files {
+        f.push((*n, Value::Bytes(map.get(name)?.get().as_bytes())));
     }
     Some(frame::write(&Value::Map(f)))
 }
 
-/// The files of message `release` or `entries` (its body) as `{name: file}`.
-fn files_value(msg: &[u8], files: &[(&str, u16)]) -> Option<serde_json::Value> {
+/// The files of message `release` or `entries` (its body) as `{name: file}`,
+/// each file's bytes kept as they came.
+fn files_value(msg: &[u8], files: &[(&str, u16)]) -> Option<Box<RawValue>> {
     let (_, v, _) = cbb_core::msg::read_noted(msg).ok()?;
-    let mut out = serde_json::Map::new();
-    for (name, n) in files {
-        let b = v.get(*n)?.as_bytes()?;
-        out.insert((*name).to_string(), serde_json::from_slice(b).ok()?);
+    let mut out = String::from("{");
+    for (i, (name, n)) in files.iter().enumerate() {
+        let file = RawValue::from_string(String::from_utf8(v.get(*n)?.as_bytes()?.to_vec()).ok()?).ok()?;
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&serde_json::to_string(name).ok()?);
+        out.push(':');
+        out.push_str(file.get());
     }
-    Some(serde_json::Value::Object(out))
+    out.push('}');
+    RawValue::from_string(out).ok()
 }
 
 /// A command's ID from its message frame.

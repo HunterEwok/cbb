@@ -159,14 +159,12 @@ fn the_root_commands_a_member_and_gets_its_result() {
 
 #[test]
 fn the_signed_files_travel_as_published() {
-    let v = serde_json::json!({
-        "keys": {"body": "AAE=", "sig": "AgM=", "key": "BAU="},
-        "channel": {"body": "Bg==", "sig": "Bw==", "key": "CA=="},
-        "release": {"body": "CQ==", "sig": "Cg==", "key": "Cw=="},
-    });
+    let text = r#"{"keys":{"body":"AAE=", "sig":"AgM=","key":"BAU="},"channel":{"body":"Bg==","sig":"Bw==","key":"CA=="},"release":{"body":"CQ==","sig":"Cg==","key":"Cw=="}}"#;
+    let v = serde_json::value::RawValue::from_string(text.into()).unwrap();
     let f = files_frame(m::T_RELEASE, RELEASE_FILES, &v).unwrap();
     assert_eq!(cbb_core::msg::check(&f[4..]), Ok(m::T_RELEASE));
-    assert_eq!(files_value(&f[4..], RELEASE_FILES).unwrap(), v);
+    // Each file's bytes as published, its spacing too.
+    assert_eq!(files_value(&f[4..], RELEASE_FILES).unwrap().get(), text);
     // A set without one of its files is no message.
     assert!(files_frame(m::T_ENTRIES, ENTRIES_FILES, &v).is_none());
 }
