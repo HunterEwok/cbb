@@ -1550,11 +1550,13 @@ mod tests {
         let port = ln.local_addr().unwrap().port();
         let took = Arc::new(AtomicUsize::new(0));
         let n = took.clone();
-        // The app ends every connection at once.
+        // The app ends every connection at once. It counts the connection
+        // before it ends it, so the client never reads the end before the
+        // count.
         std::thread::spawn(move || {
             for c in ln.incoming() {
-                drop(c);
                 n.fetch_add(1, Ordering::SeqCst);
+                drop(c);
             }
         });
         let limits = Limits { bridges: 64, per_client: 4, floor: 0, ..DEVICE_LIMITS };

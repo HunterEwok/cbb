@@ -41,7 +41,7 @@ use crate::identity::ExternalKey;
 use crate::records::body::*;
 use crate::records::eval::{Input, State, evaluate};
 use crate::records::pq::PqKey;
-use crate::records::set::RecordSet;
+use crate::records::set::{RecordSet, Refused};
 use crate::records::{
     ADMIN_KEYS_MAX, Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId,
     Recovery, group_id, keep,
@@ -128,6 +128,20 @@ pub struct Group {
     pub new_roots: Vec<KeyHash>,
     /// The devices removed.
     pub removed: Vec<KeyHash>,
+    /// The first root's admin keys.
+    pub admins: Vec<KeyHash>,
+}
+
+/// Whether every record refused is one an admin of the first root signed,
+/// refused for a signer the set does not know, after a change of root: a
+/// change revokes the earlier roots' admin keys for good, so their records
+/// count no more (rule 33). Any other refusal is a fault of the group.
+fn only_cut_admins(refused: &[(RecordId, Refused)], records: &[Record], admins: &[KeyHash], changed: bool) -> bool {
+    refused.iter().all(|(id, why)| {
+        changed
+            && *why == Refused::UnknownSigner
+            && records.iter().any(|r| r.id() == *id && admins.contains(&r.body().signer))
+    })
 }
 
 impl Group {
@@ -173,7 +187,10 @@ impl Group {
             set.insert_list(l).expect("a change's list is taken");
         }
         let (_, refused) = set.insert_all(self.records.iter().cloned());
-        assert!(refused.is_empty(), "groupgen: records refused: {refused:?}");
+        assert!(
+            only_cut_admins(&refused, &self.records, &self.admins, !self.lists.is_empty()),
+            "groupgen: records refused: {refused:?}"
+        );
     }
 }
 
@@ -384,13 +401,18 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
         let mut set = RecordSet::new(root.key.clone(), recovery_pair.clone());
         // Records, lists, then the records again: a new root's first
-        // records wait for its head's list. Nothing may be refused then.
+        // records wait for its head's list. Nothing may be refused then
+        // but the records of admin keys an earlier change revoked.
         set.insert_all(b.records.iter().cloned());
         for l in &lists {
             set.insert_list(l).expect("a change's list is taken");
         }
         let (_, refused) = set.insert_all(b.records.iter().cloned());
-        assert!(refused.is_empty(), "groupgen: records refused: {refused:?}");
+        let admins: Vec<KeyHash> = admin_keys.iter().map(|a| a.hash).collect();
+        assert!(
+            only_cut_admins(&refused, &b.records, &admins, !lists.is_empty()),
+            "groupgen: records refused: {refused:?}"
+        );
         let state = set.state();
         // A change written from a valid group never fails.
         let lost: Vec<KeyHash> = holder.take().into_iter().filter(|_| remove_holder).collect();
@@ -407,14 +429,15 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         last_root = Some(n);
     }
 
-    // The newest root fills its own room too, up to its ceiling and inside
-    // the set's room: the earlier roots' records stay in the reserve for
-    // cut roots, so that a group at the ceilings fills every part of it.
+    // The newest root fills its own room too, up to its ceiling. The last
+    // root only: after the change nothing an earlier root or its admins
+    // signed counts or takes room, so the newest root's records are what
+    // the set's room holds.
     if let Some(n) = &last_root {
         let mut f = 0;
         while f < spec.root_fill {
             let mine = b.units.get(&n.hash).copied().unwrap_or(0);
-            if mine + 1 > MAX_ROOT_RECORDS as u64 || b.total + 1 > keep::ROOM {
+            if mine + 1 > MAX_ROOT_RECORDS as u64 || mine + 1 > keep::ROOM {
                 break;
             }
             b.fill(n, f, true);
@@ -422,7 +445,8 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         }
     }
 
-    Group { spec, root: root.key, recovery: recovery_pair, records: b.records, lists, new_roots, removed }
+    let admins = admin_keys.iter().map(|a| a.hash).collect();
+    Group { spec, root: root.key, recovery: recovery_pair, records: b.records, lists, new_roots, removed, admins }
 }
 
 /// A root checkpoint at the root's head that keeps the live devices'
@@ -493,13 +517,21 @@ mod tests {
         assert_eq!(s.roots.len(), 1 + spec.takeovers, "{spec:?}");
         assert_eq!(&s.roots[1..], &g.new_roots[..]);
         assert_eq!(s.devices.len() + g.removed.len(), spec.devices.min(MAX_DEVICES), "{spec:?}");
+        // A removed device is revoked; after a change of root, one an
+        // admin of the first root removed is no device of the new root
+        // instead (the change carries over only the devices that stay).
         for h in &g.removed {
-            assert!(s.revoked.contains(h), "{spec:?}");
+            if spec.takeovers == 0 {
+                assert!(s.revoked.contains(h), "{spec:?}");
+            } else {
+                assert!(s.revoked.contains(h) || s.device_by_key(h).is_none(), "{spec:?}");
+            }
         }
         // Every record counts, except, after a change of root, an earlier
         // root's settings, copies and checkpoints that something newer
-        // replaced, and the device record of a phone the change removed:
-        // the change's list carries only what counts (rule 33).
+        // replaced and the device record of a phone the change removed;
+        // under the last root only, anything an earlier root or its admins
+        // signed (rule 33).
         let old: Vec<&KeyHash> = s.roots.iter().rev().skip(1).collect();
         for i in &s.ignored {
             let r = g.records.iter().find(|r| r.id() == i.record).expect("an ignored record is the group's");
@@ -509,7 +541,15 @@ mod tests {
                 Kind::Device(d) => g.removed.contains(&d.key.hash()),
                 _ => false,
             };
-            assert!(old.contains(&&r.body().signer) && replaced, "{spec:?}: {i:?}");
+            // The last root only: after a change, nothing an earlier root's
+            // admins signed counts (their keys are revoked for good), and
+            // the new root carries the group over as its own records, so an
+            // earlier root's records may be cut too.
+            let cut = spec.takeovers > 0 && (g.admins.contains(&r.body().signer) || old.contains(&&r.body().signer));
+            // The admission of a device removed later: the removal takes
+            // it out, whoever signed it.
+            let removed_admission = matches!(&r.body().kind, Kind::Device(d) if g.removed.contains(&d.key.hash()));
+            assert!((old.contains(&&r.body().signer) && replaced) || cut || removed_admission, "{spec:?}: {i:?}");
         }
         if spec.takeovers > 0 {
             assert!(s.root_device.is_some());
@@ -535,7 +575,9 @@ mod tests {
         let removed = build_with(spec, true);
         let s = removed.evaluate();
         check(&removed, &s);
-        assert!(s.device_by_key(&phone).is_none() && s.revoked.contains(&phone));
+        // The last root only: a change names no removal; the phone it
+        // leaves out is simply no device of the new root.
+        assert!(s.device_by_key(&phone).is_none());
     }
 
     /// Units signer's records take in g.
@@ -545,48 +587,63 @@ mod tests {
 
     /// The group at the ceilings is at each limit of table A, and the
     /// core's writer refuses one record past each: an admin's next record,
-    /// the newest root's and a 17th admin key (a 257th device below).
+    /// the newest root's and a 17th admin key (a 257th device below). The
+    /// last root only: a change of root revokes the admin keys for good, so
+    /// the admins' limits are checked on the same group before its
+    /// changes, the root's room after them.
     #[test]
     fn the_ceilings_refuse_one_record_past_each_limit() {
         let spec = ceilings(1);
-        let g = build(spec);
+        let copies = || Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: Vec::new() };
+
+        // Before any change: every admin at its ceiling, 16 admin keys,
+        // 256 devices, and an admin's next record refused.
+        let first = Spec { takeovers: 0, ..spec };
+        let g = build(first);
         let (mut set, state) = g.set();
         check(&g, &state);
-        // At the limits: the set's room, every admin's ceiling, the newest
-        // root's, 16 admin keys and 256 devices.
-        assert!(g.units() <= keep::ROOM && g.units() + 32 >= keep::ROOM, "{} units", g.units());
         let admins: Vec<NamedKey> = (0..ADMIN_KEYS_MAX).map(|i| key(spec.seed, &format!("admin {i}"))).collect();
         for a in &admins {
             let u = units_of(&g, &a.hash);
             assert!(u <= MAX_ADMIN_RECORDS as u64 && u + 2 >= MAX_ADMIN_RECORDS as u64, "an admin at {u} units");
         }
-        let newest = key(spec.seed, &format!("new root {}", spec.takeovers - 1));
-        let u = units_of(&g, &newest.hash);
-        assert!(u <= MAX_ROOT_RECORDS as u64 && u + 3 >= MAX_ROOT_RECORDS as u64, "the root at {u} units");
+        // Rooms are fixed shares: the root's and the 16 admins' are full
+        // (the reserve is for cut roots, which the last root only never
+        // keeps).
+        let shares = MAX_ROOT_RECORDS as u64 + (ADMIN_KEYS_MAX * MAX_ADMIN_RECORDS) as u64;
+        assert!(g.units() <= keep::ROOM && g.units() + 32 >= shares, "{} units", g.units());
         let admin_keys = state.devices.iter().filter(|d| d.admin.is_some()).count();
         assert_eq!(admin_keys, ADMIN_KEYS_MAX);
         assert_eq!(state.devices.len() + g.removed.len(), MAX_DEVICES);
-
-        // One past each.
-        let copies = || Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: Vec::new() };
         let before = set.len();
         let e = set.write_record(&state, &admins[0], copies(), 0).expect_err("an admin's record past its ceiling");
         assert!(format!("{e:?}").contains("pass its room"), "{e:?}");
+        assert_eq!(set.len(), before, "a refused record leaves the set as it was");
+
+        // After the changes: the newest root at its ceiling, and its next
+        // record refused.
+        let g = build(spec);
+        let (mut set, state) = g.set();
+        check(&g, &state);
+        let newest = key(spec.seed, &format!("new root {}", spec.takeovers - 1));
+        let u = units_of(&g, &newest.hash);
+        assert!(u <= MAX_ROOT_RECORDS as u64 && u + 3 >= MAX_ROOT_RECORDS as u64, "the root at {u} units");
+        let before = set.len();
         let e = set.write_record(&state, &newest, copies(), 0).expect_err("the root's record past its ceiling");
         assert!(format!("{e:?}").contains("pass its room"), "{e:?}");
         assert_eq!(set.len(), before, "a refused record leaves the set as it was");
 
         // With room in the root's ceiling and for devices: the 17th admin
         // key is refused for itself.
-        let roomy = Spec { root_fill: 0, admin_fill: 0, removals: 0, devices: MAX_DEVICES - 8, ..spec };
+        let roomy = Spec { root_fill: 0, admin_fill: 0, removals: 0, devices: MAX_DEVICES - 8, ..first };
         let g = build(roomy);
         let (mut set, state) = g.set();
         assert_eq!(state.devices.len(), MAX_DEVICES - 8);
-        let newest = key(roomy.seed, &format!("new root {}", roomy.takeovers - 1));
+        let root = key(roomy.seed, "root");
         let extra = key(roomy.seed, "admin 16");
         let mut d = Device::new(key(roomy.seed, "admin phone 16").key.clone(), "admin phone 16", ROLE_PHONE);
         d.admin = Some(extra.key.clone());
-        let e = set.write_record(&state, &newest, Kind::device(d), 0).expect_err("a 17th admin key");
+        let e = set.write_record(&state, &root, Kind::device(d), 0).expect_err("a 17th admin key");
         assert!(format!("{e:?}").contains("admin keys already"), "{e:?}");
     }
 
