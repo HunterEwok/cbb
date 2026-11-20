@@ -498,7 +498,7 @@ fn open_relay_forgets_strangers() {
 /// the forwarder; docs/relay-budget.md, "Abuse reports").
 #[test]
 fn refused_groups() {
-    let (a, b, c) = ("0123456789abcdef", "fedcba9876543210", "00112233445566ff");
+    let (a, b, c) = ("0123456789abcdef", "fedcba9876543210", "00112233445566778899aabbccddeeff");
     let dir = std::env::temp_dir().join(format!("cbb-relay-refused-{}", certs::random_id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("refused-groups");

@@ -1333,14 +1333,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   group.
 - **Keys.** The hub's WireGuard key lives in the phone's keychain or Keystore for this device
   only (Curve25519 does not fit the Secure Enclave), and the clients hand their keys to it in
-  their hellos at home, as with any hub. The phone's root or admin key signs only after
-  Face ID, so the hub registers with the forwarder by its member key instead, which signs
-  without the user: the group's records show the forwarder that this member key is the
-  root's or an admin's (docs/protocol.md, section 13). Asking for Face ID on every
-  registration (each time the app opens or the network changes) would make the phone hub
-  useless. Stealing the member key would let someone displace the registration, which a
-  root or admin computer's key in a file allows too, and nothing more: the clients take
-  only the hub key of the offer they met at home. A device far away joins with a remote invitation
+  their hellos at home, as with any hub. The hub registers with the forwarder by its server
+  key of the period, which signs without the user, and the period's hubs' credential that
+  lists it (docs/protocol.md, section 13); asking for Face ID on every registration (each
+  time the app opens or the network changes) would make the phone hub useless. Stealing the
+  server key would let someone displace the registration until the period ends, and
+  nothing more: the clients take only the hub key of the offer they met at home. A device far away joins with a remote invitation
   made on the phone, which is then both the admin who confirms the device and the hub that
   serves the guest tunnel, so no invitation has to be handed over.
 - **Android** may keep the hub running in its foreground service while the app is in the
@@ -1508,10 +1506,9 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
   restart. The files of earlier versions, one per group with its roots and removals, are
-  deleted. Built in Go, in the Rust hub and in both phone kits, whose hub registers by the
-  credential once it lists the phone's server key; hubs from before the credentials still
-  register with their member certificate, a signature by the root or an admin CA, and the group's authority records,
-  which the forwarder keeps in memory only.
+  deleted. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
+  and in the Rust hub, which the phones run too; a hub registers once the credential lists
+  its server key, and shows that credential alone (`cbb-forward/3`, D-106).
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
   memory. A group that reaches a limit is slowed down alone. Limits per source: registrations
   per address, per network (/24, /64), per wide network (/16, /48) and per IPv6 provider

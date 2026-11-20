@@ -398,15 +398,12 @@ fn the_root_makes_stops_and_moves_hubs() {
     let _ = home.join();
 }
 
-/// A hub with a forwarder and VLESS, of a group not on the core of 0.6
-/// yet, serves without registering there: the forwarder takes hubs of 0.6
-/// alone (`cbb-forward/3`), so the hub's status says it waits for its
-/// group's credentials for the forwarder, and it never dials. Set again
-/// keeping its settings, it keeps its VLESS user ID. (The registration
-/// itself is tested in `forward::net_tests`; the hub of a group of 0.6
-/// registers once away from home runs on that group, wave 5, item D.)
+/// A hub with a forwarder and VLESS registers there while it serves:
+/// its status shows the forwarder registered and where it saw the hub,
+/// it keeps the VLESS settings the forwarder gave and its update way names
+/// them; a forwarder that refuses shows why in short.
 #[test]
-fn a_hub_waits_for_its_forwarder_credentials() {
+fn a_hub_registers_with_its_forwarder() {
     use base64::Engine;
     let g = Group::new(1);
     let f =
@@ -428,21 +425,48 @@ fn a_hub_waits_for_its_forwarder_credentials() {
         wait_for(Duration::from_secs(20), || away
             .status(&a.node)
             .and_then(|s| s.forwarder)
-            .is_some_and(|fw| !fw.registered && fw.error == crate::forward::NOT_LISTED)),
+            .is_some_and(|fw| fw.registered && fw.seen == "203.0.113.9:51820")),
         "{:?} {:?}",
         away.status(&a.node),
         a.logs.lock().unwrap()
     );
-    assert!(f.claims().is_empty() && f.hello_keys.lock().unwrap().is_empty(), "the hub never dialed");
-    let id = away.st.lock().unwrap().as_ref().unwrap().forwarder.as_ref().unwrap().vless_id.clone();
-    assert!(!id.is_empty(), "VLESS comes with a user ID of the group's");
+    let claim = f.claims()[0].register.clone();
+    assert!(claim.vless.is_some() && claim.obfuscation.is_some(), "VLESS comes with AmneziaWG");
+    let user = claim.vless.unwrap();
+    let id_of = |s: &str| cbb_core::vless::parse_id(s).unwrap();
+    away.vless_learned(&a.node);
+    assert!(a.logged("come over VLESS to the forwarder"), "{:?}", a.logs.lock().unwrap());
+    let way = away.update_way(&a.node).unwrap();
+    assert_eq!(id_of(way["id"].as_str().unwrap()), user);
     // Set again keeping its settings: the same VLESS user ID.
     let again = Header { keep: true, forwarder: String::new(), forwarder_key: String::new(), port: 0, ..h.clone() };
     away.make_hub(&again).unwrap();
     let st = away.st.lock().unwrap().clone().unwrap();
-    assert_eq!(st.forwarder.as_ref().unwrap().vless_id, id);
+    assert_eq!(id_of(&st.forwarder.as_ref().unwrap().vless_id), user);
     drop(st);
     away.stop_serving();
+
+    // A forwarder that refuses.
+    let no = crate::nettest::forwarder::Forwarder::start(
+        Arc::new(|_: &crate::forward::v3::Register| crate::nettest::forwarder::Answer::Refused("full".into())),
+        None,
+    );
+    let h = Header {
+        forwarder: no.addr.to_string(),
+        forwarder_key: base64::engine::general_purpose::STANDARD.encode(no.pin),
+        vless_off: true,
+        ..h
+    };
+    away.make_hub(&h).unwrap();
+    away.serve_if_first(&a.node);
+    assert!(
+        wait_for(Duration::from_secs(20), || away
+            .status(&a.node)
+            .and_then(|s| s.forwarder)
+            .is_some_and(|fw| fw.error.contains("refused the registration: full"))),
+        "{:?}",
+        away.status(&a.node)
+    );
     a.node.close();
 }
 

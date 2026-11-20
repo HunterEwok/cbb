@@ -27,19 +27,16 @@ A source address pays at each of its levels, and all sources together at one mor
 
 A charge goes to all the levels of its source at once, and is refused when any level would
 pass its cap; a refusal charges nothing. Besides the sources, some state is charged to the
-group (its devices, its records) or to a VLESS user ID (the handshakes of its clients).
-State that is held (registrations, entries, records) is counted by `budget.Count`; work that
-is done (setups, record checks) is paid for by the second, with a burst, by `budget.Rates`.
+group (its devices) or to a VLESS user ID (the handshakes of its clients).
+State that is held (registrations, entries) is counted by `budget.Count`; work that
+is done (setups, credential checks) is paid for by the second, with a burst, by `budget.Rates`.
 
 ## Rules
 
-1. **Refuse the new.** When a cap is full, the new registration, entry or record is refused.
-   Nothing a source or a group holds is taken from it to make room for another. The one
-   exception is memory nobody holds: the records the forwarder remembers of groups that are
-   not registered now, which are forgotten once 32 MiB are held, from the provider that
-   holds the most of them.
+1. **Refuse the new.** When a cap is full, the new registration or entry is refused.
+   Nothing a source or a group holds is taken from it to make room for another.
 2. **A refusal leaves the server as it was.** A refused registration, for any reason, keeps
-   nothing of the refused group: no period, version, record or count; the devices and groups
+   nothing of the refused group: no period, version or count; the devices and groups
    registered before stay as they were.
 3. **Every cap has a payer that cannot be spread thin.** A stranger who wants more needs more
    wide networks, not more addresses inside one; and over IPv6 more providers, not more /48s
@@ -135,7 +132,6 @@ calls, members) and serves no stranger's group at all.
 | A group's clients | an entry per address, handshake and session | 10 s a handshake, 200 s a session | the group | 16 addresses, 64 handshakes waiting | | dropped |
 | A group's packets | forwarding | | the group | 1000 packets and 2 MiB a second | | dropped |
 | Credential version (a period's entry) | about 400 bytes in memory, 200 on disk | until the last credential it saw expires, 35 days at most | the network, wide network and provider it came from | 256, 1024, 4096 | 100,000 | refused |
-| Remembered records (hubs from before the credentials) | their bytes | while the group is registered; after, until 32 MiB of the groups that are away are held | the group; the network, wide network and provider that brought them; while the group is away, the provider that brought most of them | 256 KiB a group; 1 MiB a network, 4 MiB a wide network, 16 MiB a provider | 32 MiB and 100,000 groups that are away; the groups registered now are not counted | refused; of the groups that are away, the provider that holds the most forgets its oldest |
 | VLESS user ID | a user of the VLESS server | with its registration | the registration | one per group | as registrations | refused |
 | Handshake to a group not known for its address | one keyed BLAKE2s per registered group | | the source address; its network; all | 10 handshakes a second; 1/16 of all; 500,000 checks a second | | dropped |
 | Handshake over VLESS | one check, against the group of its user ID | | the VLESS user ID | 10 handshakes a second | | dropped |
@@ -145,7 +141,8 @@ calls, members) and serves no stranger's group at all.
 What the forwarder guarantees:
 
 - **A group that registered before cannot be pushed out**: nothing strangers do removes a
-  registration, a credential's version or a registered group's records.
+  registration or a credential's version. The forwarder keeps nothing else of a group: no
+  list of its devices and no records, whatever a hub sends (`TestRegistrationKeepsNoRecords`).
 - **A group that renews on time finds room** for its new period unless the table holds
   100,000 versions, which takes at least 98 wide networks (100,000 / 1024) keeping them for
   their whole lifetime, over IPv6 in at least 25 providers (100,000 / 4096); a network of
@@ -160,14 +157,7 @@ What the forwarder guarantees:
   can spend from anywhere; a network gets a sixteenth of it, and the client's own retries
   every 5 s get through once the flood pauses. This is the accepted bound.
 - The memory that strangers leave is bounded by the table's numbers: 100,000 versions of
-  about 400 bytes (`TestVersionsMemoryBounded`), 32 MiB of remembered records.
-- **The records of a group that is away stay** while strangers register groups with records,
-  however many: the groups registered now are not counted against the 32 MiB. Once strangers'
-  groups are away too, the forwarder forgets from the provider (an IPv6 /32, an IPv4 /16)
-  that holds the most of them, so a genuine group's few kilobytes go only once every other
-  provider holds no more than that: for 10 KiB of records, over 3000 providers (32 MiB /
-  10 KiB), unless the strangers are in the group's own provider
-  (`TestMemoryKeepsGroupsThatAreAway`).
+  about 400 bytes (`TestVersionsMemoryBounded`).
 
 ### XHTTP
 
@@ -246,7 +236,8 @@ decided in advance is to refuse the group the report names, by its tag, and noth
   their key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
   characters a line, as `cbb status` shows it; `#` begins a comment, and anything after a
   tag on its line is skipped, such as the date of the report. A line `period TAG` names a
-  period's tag, for a group that registers with credentials (protocol.md, section 18).
+  period's tag, 32 hex characters, for a group that registers with credentials
+  (protocol.md, section 18).
 - They read it again within ten seconds of a change, without a restart. A group on it is
   refused at registration with a message that names the operator's terms, and its devices
   already registered are dropped; every other group goes on as before. A file that cannot be
@@ -277,11 +268,10 @@ The guarantees above are tested, the forwarder's in Go and the relay's in Rust
   out one that came before, with random sources, groups and orders under a fixed seed:
   `TestCountProperty`, `open_relay_budget_property`, `TestVersionsBudgetProperty`;
 - what strangers leave behind is bounded and measured: `open_relay_forgets_strangers`,
-  `TestVersionsMemoryBounded`;
+  `TestVersionsMemoryBounded`, `TestRegistrationKeepsNoRecords`;
 - the payers of each kind: `TestCountProvider`, `TestVersionsWideNetworkLeavesRoom`,
   `TestVersionsProviderLeavesRoom`, `registrations_bound_by_provider`,
-  `TestMemoryChargesTheSource`,
-  `TestMemoryKeepsGroupsThatAreAway`, `requests_bound_by_wide_network`,
+  `TestRegistrationsBoundByEveryLevel`, `requests_bound_by_wide_network`,
   `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
 - XHTTP takes no upload over its limit and queues no more than its limit for a session
   that no client opened: `TestXHTTPHoldsLittleForStrangers`.

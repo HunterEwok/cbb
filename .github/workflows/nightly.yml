@@ -58,6 +58,8 @@ jobs:
           - { package: ./internal/group, target: FuzzRecordBody }
           - { package: ./internal/group, target: FuzzCommand }
           - { package: ./internal/forward, target: FuzzForwardWire }
+          - { package: ./internal/forward, target: FuzzRegister }
+          - { package: ./internal/blind, target: FuzzCredential }
           - { package: ./internal/pasteboard, target: FuzzDecodeDIB }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzUnpack }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzDecodePlist }

@@ -3535,8 +3535,8 @@ joiner against the window of both kits.
 
 A server that holds no keys and passes the encrypted WireGuard packets of a group's clients
 to that group's hub, for hubs that clients cannot reach directly ([design.md](design.md),
-"The forwarder"). Implemented in Go (`internal/forward`, `cbb forward`, and on the hub
-`internal/service/forwarder.go`). Routing is by `mac1`; the fallback by a computed port is
+"The forwarder"). Implemented in Go (`internal/forward`, `cbb forward`, which reads the
+format with `internal/blind`, D-106), and on the hub in Rust (`member/src/forward`). Routing is by `mac1`; the fallback by a computed port is
 not built.
 
 - The forwarder listens on one port number, UDP for packets and TCP for registrations.
@@ -3620,7 +3620,9 @@ the connection beyond that:
      its tag, at a version no older than the one it keeps ("What it keeps"). It then keeps
      the version for the period, whose tag names the group there (`period <tag in hex>`).
    - An obfuscated hub adds its group's `obfuscation` settings (section 11, "Obfuscation");
-     a plain hub leaves them out. A hub whose clients come over VLESS adds the group's VLESS
+     a plain hub leaves them out. Settings of the table that the forwarder cannot route by
+     (with no header protection key, for one) make its way unusable, not the message: it
+     refuses them as "the obfuscation settings are not usable". A hub whose clients come over VLESS adds the group's VLESS
      user ID as `vless` (section 11, "VLESS").
 4. The forwarder answers `forward/registered`, a random registration ID and the key of the
    hellos' mask, the same for every hub, or `forward/error` and closes: the frame or a
@@ -3638,7 +3640,8 @@ the connection beyond that:
    replaces the old, whose connection closes.
 5. The registration lasts while the connection does; the hub sends nothing more on it. The
    forwarder sends `forward/seen` whenever it learns a new address of the hub's WireGuard
-   port. The hub registers again whenever the connection breaks, with a backoff of 1 s
+   port, in the address's one written form (no zone, no IPv4-mapped IPv6 address, a port
+   that is not 0); a hub refuses another form (`forward/seen/addr`). The hub registers again whenever the connection breaks, with a backoff of 1 s
    doubling to 60 s, and at once when the face's hubs' credential changes, so that the
    forwarder learns the new version, and under a new period's tag when it serves with its
    key for that period (section 11, "The hub's key").
@@ -3785,9 +3788,9 @@ HMAC-SHA256 under the forwarder's private key (PKCS #8) of `cbb forwarder
 state`, so the file names no group by itself, and a period lasts about a month, so the file
 cannot link one month of a group to the next. A registration with a credential is refused
 when another period key signed it or its version is below the one kept. At start it deletes the files earlier versions kept, one per group with its roots
-and removals (`-records`, `groups` next to the key by default). Groups, addresses, sessions
-and the records of the hubs that register with them live in memory while the connections
-last, and the forwarder logs none of them; a forwarder SHOULD NOT write any of them to disk
+and removals (`-records`, `groups` next to the key by default). Groups, addresses and sessions
+live in memory while the connections last, and nothing else of a group: whatever a hub
+sends in fields the forwarder passes over is not kept; and the forwarder logs none of them; a forwarder SHOULD NOT write any of them to disk
 or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 
 ## 14. The blind relay

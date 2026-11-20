@@ -280,7 +280,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -345,7 +345,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -430,7 +430,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -495,7 +495,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -1209,28 +1209,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1255,22 +1240,12 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheWideNetwork"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestVersionsWideNetworkLeavesRoom"
    },
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
     "name": "TestRefusedRegistrationLeavesForwarder"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsGroupsThatAreAway"
    }
   ]
  },
@@ -1279,28 +1254,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1329,28 +1289,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -2530,12 +2475,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2595,12 +2535,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2904,28 +2839,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -2990,12 +2910,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",

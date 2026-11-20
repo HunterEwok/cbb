@@ -37,6 +37,18 @@ made with 0.5 is set up again once. The details follow.
   dial and its status says it waits for it; a hub of a group of 0.5 stays so. The JSON claim,
   member certificates and records are gone, `hub_set_records` with them, and
   `cbb_tunnel_hub_credentials` takes the face's hubs' credential (an envelope).
+- The forwarder (`cbb forward`) serves hubs of 0.6 alone, by `cbb-forward/3`: it takes the
+  certificate of a hub's server key alone and its group's hubs' credential alone, checks it as
+  before (live, listing the key, the first period key for the tag, no older version) and keeps
+  nothing else of a group. Registering with member certificates, an admin's signature and the
+  group's records is gone, with the records it kept in memory; `TestRegistrationKeepsNoRecords`
+  and the tests of the credentials take the place of their tests. It reads the format with a
+  package of its own, `internal/blind` (the CBOR profile, frames, ES256 envelopes and server
+  credentials), held to the Rust core by `testdata/format` (D-106); the nightly run fuzzes it
+  (`FuzzCredential`) and the registration (`FuzzRegister`). A hub refuses a `forward/seen` not
+  in the address's one written form.
+- The list of refused groups (`refused-groups` of `cbb forward` and `cbb relay`) names a
+  period of 0.6 by its tag of 32 hex characters (`period TAG`).
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

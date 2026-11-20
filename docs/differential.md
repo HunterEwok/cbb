@@ -62,8 +62,11 @@ kits), so a reader that fails in another way also shows as a difference.
   it on Linux.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
-  (`internal/group`), `FuzzForwardWire`
-  (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
+  (`internal/group`), `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
+  registration and the forwarder's answers of `cbb-forward/3`, seeded from
+  `testdata/format/messages3.json`), `FuzzCredential` (`internal/blind`, the forwarder's
+  reader of the format's profile, frames and credentials, seeded from
+  `testdata/format/credentials.json` and `frames.json`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
   `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
   which no bytes may pass), `sheet` (the recovery sheet's text and QR code, each one taken
