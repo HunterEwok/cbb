@@ -880,6 +880,112 @@ napi_value inviteFree(napi_env env, napi_callback_info info)
     return later(env, [i]() { cbb_invite_free(i); }, [](napi_env env) { return undefined(env); });
 }
 
+// ---- pairing in a group of 0.6 ----
+
+// windowNew(member, request: string, which): Promise<{handle, answer}>
+napi_value windowNew(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    Member *member = handleOf<Member>(env, a.v[0]);
+    const std::string req = stringOf(env, a.v[1]);
+    const cbb_sign_fn sign = signerOf(whichOf(env, a.v[2]));
+    auto window = std::make_shared<cbb_window *>(nullptr);
+    auto answer = std::make_shared<std::string>();
+    return later(
+        env,
+        [member, req, sign, window, answer]() {
+            if (!member) {
+                *answer = errorAnswer({"", "window: no member"});
+                return;
+            }
+            uint8_t *out = nullptr;
+            size_t len = 0;
+            *window = cbb_window_new(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &out, &len);
+            *answer = take(out, len);
+        },
+        [window, answer](napi_env env) { return made(env, *window, *answer); });
+}
+
+// windowNext(handle, version, timeoutMs): Promise<string>
+napi_value windowNext(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
+    const auto version = uint64_t(intOf(env, a.v[1]));
+    const auto timeout = uint64_t(intOf(env, a.v[2]));
+    return laterString(env, [w, version, timeout]() {
+        size_t len = 0;
+        return take(cbb_window_next(w, version, timeout, &len), len);
+    });
+}
+
+// windowAnswer(handle, yes: boolean): void
+napi_value windowAnswer(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
+    if (w)
+        cbb_window_answer(w, boolOf(env, a.v[1]) ? 1 : 0);
+    return undefined(env);
+}
+
+// windowFree(handle): Promise<void>; closes the window.
+napi_value windowFree(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
+    return later(env, [w]() { cbb_window_free(w); }, [](napi_env env) { return undefined(env); });
+}
+
+// joinerNew(request: string): Promise<{handle, answer}>, signing with the member key.
+napi_value joinerNew(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const std::string req = stringOf(env, a.v[0]);
+    auto joiner = std::make_shared<cbb_joiner *>(nullptr);
+    auto answer = std::make_shared<std::string>();
+    return later(
+        env,
+        [req, joiner, answer]() {
+            uint8_t *out = nullptr;
+            size_t len = 0;
+            *joiner = cbb_joiner_new(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &out, &len);
+            *answer = take(out, len);
+        },
+        [joiner, answer](napi_env env) { return made(env, *joiner, *answer); });
+}
+
+// joinerNext(handle, version, timeoutMs): Promise<string>
+napi_value joinerNext(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
+    const auto version = uint64_t(intOf(env, a.v[1]));
+    const auto timeout = uint64_t(intOf(env, a.v[2]));
+    return laterString(env, [j, version, timeout]() {
+        size_t len = 0;
+        return take(cbb_joiner_next(j, version, timeout, &len), len);
+    });
+}
+
+// joinerAnswer(handle, yes: boolean): void
+napi_value joinerAnswer(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
+    if (j)
+        cbb_joiner_answer(j, boolOf(env, a.v[1]) ? 1 : 0);
+    return undefined(env);
+}
+
+// joinerFree(handle): Promise<void>
+napi_value joinerFree(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
+    return later(env, [j]() { cbb_joiner_free(j); }, [](napi_env env) { return undefined(env); });
+}
+
 // ---- away from home ----
 
 // tunnel(request: string): Promise<string>
@@ -956,6 +1062,14 @@ napi_value init(napi_env env, napi_value exports)
         {"inviteNext", nullptr, inviteNext, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteAnswer", nullptr, inviteAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteFree", nullptr, inviteFree, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowNew", nullptr, windowNew, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowNext", nullptr, windowNext, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowAnswer", nullptr, windowAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowFree", nullptr, windowFree, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerNew", nullptr, joinerNew, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerNext", nullptr, joinerNext, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerAnswer", nullptr, joinerAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerFree", nullptr, joinerFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnel", nullptr, tunnel, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnelRegister", nullptr, tunnelRegister, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"tunnelRelay", nullptr, tunnelRelay, nullptr, nullptr, nullptr, napi_default, nullptr},

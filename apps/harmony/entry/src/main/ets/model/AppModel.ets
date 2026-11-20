@@ -21,6 +21,7 @@ import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
 import { Join } from './Join';
+import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
 import { CheckedPaste, Paste, PasteAnswer } from './Paste';
@@ -122,6 +123,19 @@ function restoreFailure(f: Failure): Failure {
   return new Failure(shown, `${f.details} (${f.message})`);
 }
 
+// The core's answer of a new group of 0.6 (ffi's found.rs).
+interface Sheet06 {
+  qr?: string;
+  text?: string[];
+  modules?: string[];
+}
+
+interface Made06 {
+  group?: string;
+  device?: string;
+  recovery?: Sheet06;
+}
+
 @ObservedV2
 export class AppModel {
   @Trace membership: Membership | undefined = undefined;
@@ -158,6 +172,9 @@ export class AppModel {
 
   readonly member: Member = new Member();
   readonly join: Join = new Join();
+  // Pairing in a group of 0.6: the admin's window and the new phone's joiner.
+  readonly window: PairWindow = new PairWindow();
+  readonly joiner: Joiner = new Joiner();
   readonly admit: Admit = new Admit();
   readonly invite: Invite = new Invite();
   readonly events: Events = new Events();
@@ -195,6 +212,7 @@ export class AppModel {
     }
     this.member.onDevices = (devices: Device[]) => {
       this.events.observe(devices);
+      this.adminFromRecords(devices);
     };
     // A member that broke stops and starts again; the user sees what
     // broke, the details only in debug mode (Errors.shown).
@@ -226,6 +244,12 @@ export class AppModel {
     this.member.onAdminCa = (ca: string, from: string) => {
       this.adminCaArrived(ca, from);
     };
+    // A phone that joined a group of 0.6: the set is in the app's files.
+    this.joiner.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
+      }
+    };
     this.join.onJoined = (j: Membership) => {
       this.membership = j;
       this.startMember().then(() => {
@@ -241,6 +265,51 @@ export class AppModel {
 
   isAdmin(): boolean {
     return this.membership !== undefined && this.membership.isAdmin();
+  }
+
+  // Which pages pair: those of 0.6 without a group, as a new group is one
+  // of 0.6, and in a group of 0.6.
+  pairsOn06(): boolean {
+    return this.membership === undefined || this.membership.isV06();
+  }
+
+  // On 0.6 the group's records say who is an admin; the member's devices
+  // list them.
+  private adminFromRecords(devices: Device[]): void {
+    const m = this.membership;
+    if (m === undefined || !m.isV06()) {
+      return;
+    }
+    const self = devices.find((d: Device) => d.self === true);
+    if (self === undefined) {
+      return;
+    }
+    const admin = self.admin === true;
+    if (admin === (m.member.admin06 === true)) {
+      return;
+    }
+    const next = m.copy();
+    next.member.admin06 = admin;
+    if (this.keep(next)) {
+      Errors.log(`admin: the records ${admin ? 'make' : 'no longer make'} this phone an admin`);
+    }
+  }
+
+  // As an admin of a group of 0.6: opens the member's pairing window.
+  openWindow(): void {
+    if (this.membership === undefined || !this.membership.isV06() || !this.membership.isAdmin()) {
+      return;
+    }
+    this.window.open(this.member);
+  }
+
+  // Without a group: joins a group of 0.6 by the window announced at home,
+  // or by a window's QR code text.
+  joinByWindow(qr: string): void {
+    if (this.membership !== undefined) {
+      return;
+    }
+    this.joiner.start(this.dir, qr, phoneName(), OS);
   }
 
   isRoot(): boolean {
@@ -304,11 +373,10 @@ export class AppModel {
     return true;
   }
 
+  // A group of 0.6: the set is kept in the app's files, where the member
+  // then starts on it (ffi's cbb_group_new with dir), and its recovery
+  // sheet is shown once (pages/Recovery).
   private async newGroup(): Promise<Failure | undefined> {
-    const seal = this.sealKey();
-    if (seal instanceof Failure) {
-      return seal;
-    }
     const member = await ensure('member');
     if (member.ok === undefined) {
       return member.failure;
@@ -318,25 +386,29 @@ export class AppModel {
       return root.failure;
     }
     const request: Record<string, Object> = {
+      'dir': this.dir,
       'name': phoneName(),
       'os': OS,
       'store': STORE,
       'public': member.ok.public,
-      'root_public': root.ok.public,
-      'seal': seal
+      'root_public': root.ok.public
     };
-    const group = read<Joined>(await cbb.groupNew(JSON.stringify(request)), 'group');
+    const group = read<Made06>(await cbb.groupNew(JSON.stringify(request)), 'group');
     if (group.ok === undefined) {
       return group.failure;
     }
-    const m = new Membership(group.ok);
-    m.member.root = true;
+    const m = Membership.of06(group.ok.device ?? '', group.ok.group ?? '', true);
+    if (!m.isV06() || m.member.device.length === 0) {
+      return new Failure(t('error_broken'), 'group: no device in the answer');
+    }
     const saved = m.save(this.dir);
     if (saved !== undefined) {
       return saved;
     }
     Errors.log(`group: made ${m.groupTag()} as its root`);
     this.membership = m;
+    this.recoveryText = (group.ok.recovery?.text ?? []).join('\n');
+    this.recoveryModules = group.ok.recovery?.modules ?? [];
     return undefined;
   }
 

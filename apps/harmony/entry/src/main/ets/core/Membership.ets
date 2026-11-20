@@ -24,6 +24,11 @@ export interface Joined {
   records: string;
   root?: boolean;
   claim?: string;
+  // A group of 0.6 (docs/apps.md, "Screens"): its ID in hex, and whether
+  // its records make this phone an admin, as the member's devices say. The
+  // member keeps the group's set itself (group.cbor), with no certificates.
+  group06?: string;
+  admin06?: boolean;
 }
 
 interface Stored {
@@ -42,15 +47,23 @@ export class Membership {
     return this.member.root === true;
   }
 
-  // An admin: through its admin CA, or as the group's root, which issues
-  // with the root key itself.
-  isAdmin(): boolean {
-    return this.isRoot() || (this.member.admin_ca !== undefined && this.member.admin_ca.length > 0);
+  isV06(): boolean {
+    return this.member.group06 !== undefined && this.member.group06.length > 0;
   }
 
-  // The first eight bytes of SHA-256 over the group CA, in hex, as the other
-  // apps name the group in the log.
+  // An admin: through its admin CA, as the group's root, which issues with
+  // the root key itself, or as its records say on 0.6.
+  isAdmin(): boolean {
+    return this.isRoot() || (this.member.admin_ca !== undefined && this.member.admin_ca.length > 0) ||
+      (this.isV06() && this.member.admin06 === true);
+  }
+
+  // The first eight bytes of the group ID on 0.6, else of SHA-256 over the
+  // group CA, in hex, as the other apps name the group in the log.
   groupTag(): string {
+    if (this.isV06()) {
+      return (this.member.group06 as string).substring(0, 16);
+    }
     const md = cryptoFramework.createMd('SHA256');
     md.updateSync({ data: new util.Base64Helper().decodeSync(this.member.group_ca) });
     const sum = md.digestSync().data;
@@ -64,6 +77,9 @@ export class Membership {
   // Saves it: the records first (records.json, which the member reads and
   // keeps up to date once it runs), then member.json, each written whole.
   save(dir: string): Failure | undefined {
+    if (this.isV06()) {
+      return this.saveIdentity(dir);
+    }
     const records = new util.Base64Helper().decodeSync(this.member.records);
     const failure = writeFile(dir, 'records.json', records.buffer.slice(records.byteOffset, records.byteOffset + records.byteLength) as ArrayBuffer);
     return failure ?? this.saveIdentity(dir);
@@ -80,7 +96,9 @@ export class Membership {
       roots: this.member.roots,
       records: '',
       root: this.member.root,
-      claim: this.member.claim
+      claim: this.member.claim,
+      group06: this.member.group06,
+      admin06: this.member.admin06
     };
     const stored: Stored = { v: FILE_VERSION, member: member };
     return writeFile(dir, 'member.json', JSON.stringify(stored));
@@ -97,9 +115,16 @@ export class Membership {
       roots: this.member.roots.slice(),
       records: this.member.records,
       root: this.member.root,
-      claim: this.member.claim
+      claim: this.member.claim,
+      group06: this.member.group06,
+      admin06: this.member.admin06
     };
     return new Membership(j);
+  }
+
+  // A group of 0.6 that this phone made or joined, as the device device.
+  static of06(device: string, group: string, root: boolean): Membership {
+    return new Membership({ device: device, cert: '', group_ca: '', roots: [], records: '', root: root, group06: group });
   }
 
   static load(dir: string): Membership | Failure | undefined {
@@ -118,11 +143,12 @@ export class Membership {
     }
   }
 
-  // Leaves the group on this phone: deletes member.json and the records.
+  // Leaves the group on this phone: deletes member.json, the records and the
+  // set of 0.6.
   // The key for sealed messages stays, as the member keeps it for the run.
   static remove(dir: string): Failure | undefined {
     try {
-      for (const name of ['member.json', 'records.json']) {
+      for (const name of ['member.json', 'records.json', 'group.cbor', 'local.json']) {
         const path = `${dir}/${name}`;
         if (fileIo.accessSync(path)) {
           fileIo.unlinkSync(path);

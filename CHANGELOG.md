@@ -44,11 +44,11 @@ made with 0.5 is set up again once. The details follow.
   (its recovery sheet shown once) and opens the pairing window with its QR code, announced by
   NSD or Bonjour; "Join a group" scans a window's code and dials it; both ends ask whether the code
   matches ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
-- The Aurora app pairs on 0.6 too: "Create a group" makes a group of 0.6 and shows its recovery
-  sheet once, "Add a device" opens the pairing window, which the core announces by mDNS, and "Join
-  a group" finds that window on the home network by itself (or dials a pasted `cbb://pair` code);
-  both ends ask whether the code matches. The 0.6 recovery sheet's answer carries its QR code's
-  modules for the app to draw.
+- The Aurora and HarmonyOS apps pair on 0.6 too: "Create a group" makes a group of 0.6 and shows
+  its recovery sheet once, "Add a device" opens the pairing window, which the core announces by
+  mDNS, and "Join a group" finds that window on the home network by itself (or dials a window's
+  code, pasted on Aurora, scanned on HarmonyOS); both ends ask whether the code matches. The 0.6
+  recovery sheet's answer carries its QR code's modules for the apps to draw.
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
   written, with the root's and admins' keys signing where the device keeps them, the change of

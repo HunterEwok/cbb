@@ -384,8 +384,14 @@ struct Main {
     });
   }
 
-  // Scans a code: a device's join code adds it, an invitation opens its page.
+  // Adds a device: in a group of 0.6 by this phone's pairing window, else by
+  // scanning a code: a device's join code adds it, an invitation opens its page.
   async scanCode(): Promise<void> {
+    // In a group of 0.6 the new device dials this phone's pairing window.
+    if (app.pairsOn06()) {
+      router.pushUrl({ url: 'pages/OpenWindow' });
+      return;
+    }
     const s = await scanQr(getContext(this) as common.UIAbilityContext);
     if (s.text === undefined) {
       if (s.failure !== undefined) {
@@ -449,7 +455,7 @@ struct Main {
   menu(): MenuElement[] {
     const items: MenuElement[] = [];
     if (app.isAdmin()) {
-      items.push({ value: t('main_scan'), action: () => { this.scanCode(); } });
+      items.push({ value: app.pairsOn06() ? t('admit_title') : t('main_scan'), action: () => { this.scanCode(); } });
       items.push({ value: t('main_invite'), action: () => { router.pushUrl({ url: 'pages/Invite' }); } });
     }
     items.push({ value: t('collection_new'), action: () => { router.pushUrl({ url: 'pages/CollectionName' }); } });

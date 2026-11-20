@@ -7,6 +7,8 @@
     "pages/Restore",
     "pages/Device",
     "pages/AddDevice",
+    "pages/OpenWindow",
+    "pages/JoinWindow",
     "pages/Invite",
     "pages/Recovery",
     "pages/Settings",
