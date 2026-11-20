@@ -4,9 +4,6 @@
 package service
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -39,12 +36,24 @@ func TestFFIPhoneAttest(t *testing.T) {
 	// The release root that signs the list's keys, and the attestation
 	// roots in place of Google's.
 	dir := t.TempDir()
-	rootKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	statusKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	rootSPKI, _ := x509.MarshalPKIXPublicKey(&rootKey.PublicKey)
-	statusSPKI, _ := x509.MarshalPKIXPublicKey(&statusKey.PublicKey)
+	rootKey, err := release.GenerateSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusKey, err := release.GenerateSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusKeys, err := statusKey.Keys("status", release.UseStatus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPEM, err := release.PublicPEM(rootKey, "root-1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	releaseRoots := filepath.Join(dir, "release-roots.pem")
-	if err := os.WriteFile(releaseRoots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: rootSPKI}), 0o644); err != nil {
+	if err := os.WriteFile(releaseRoots, rootPEM, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	attestRoots := filepath.Join(dir, "attest-roots.pem")
@@ -121,7 +130,7 @@ func TestFFIPhoneAttest(t *testing.T) {
 	}
 	now := time.Now().UnixMilli()
 	keys, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: now, ExpiresMS: now + 3600_000,
-		Keys: []release.Key{{Key: statusSPKI, Name: "status", Use: release.UseStatus}}}, rootKey)
+		Keys: statusKeys}, rootKey)
 	if err != nil {
 		t.Fatal(err)
 	}

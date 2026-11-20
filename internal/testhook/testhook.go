@@ -29,3 +29,17 @@ func LookupEnv(name string) (string, bool) {
 	}
 	return os.LookupEnv(name)
 }
+
+// Marker is the line a build with the tag testhooks carries and says, the
+// same words as member/src/testbuild.rs's MARKER: the release workflow
+// looks for it in every program it publishes (.github/hooks-marker.sh).
+const Marker = "cbb-test-build-not-for-release"
+
+// Note is what cbb-helper version and its first log line say of the
+// hooks: "" in a release build.
+func Note() string {
+	if !tagged {
+		return ""
+	}
+	return "a build for tests (" + Marker + "): it reads the test hooks; never install it"
+}

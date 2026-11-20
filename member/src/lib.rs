@@ -1878,12 +1878,20 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let (roots, sources) = match testbuild::env_os("CBB_RELEASE_DIR") {
             Some(d) => {
                 let roots = match testbuild::env_os("CBB_RELEASE_ROOTS") {
-                    Some(f) => update::read_roots(std::path::Path::new(&f))?,
-                    None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
+                    Some(f) => {
+                        let f = std::path::Path::new(&f);
+                        let roots = update::read_roots(f)?;
+                        eprintln!(
+                            "cbb: release files are checked against the roots in {}, not the built-in ones (CBB_RELEASE_ROOTS, for tests only)",
+                            f.display()
+                        );
+                        roots
+                    }
+                    None => cbb_core::release::pinned_roots(),
                 };
                 (roots, vec![update::Source::Dir(PathBuf::from(d))])
             }
-            None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
+            None => (cbb_core::release::pinned_roots(), update::Source::defaults(&st.mirror)?),
         };
         let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
@@ -2003,13 +2011,11 @@ impl ServiceLink<'_> {
 }
 
 impl update::Group for ServiceLink<'_> {
-    fn share(&self, set: &serde_json::Value) {
-        if let Ok(data) = serde_json::to_vec(set) {
-            let _ = self.ask("release", data);
-        }
+    fn share(&self, set: &serde_json::value::RawValue) {
+        let _ = self.ask("release", set.get().as_bytes().to_vec());
     }
 
-    fn held(&self) -> Result<serde_json::Value> {
+    fn held(&self) -> Result<Box<serde_json::value::RawValue>> {
         let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }

@@ -73,7 +73,7 @@ struct Kept {
 /// The revocations of a kept list under roots at now_ms, and why it is not
 /// current when it is not: a list that checked out when it was signed
 /// still counts once it has run out, since no list would revoke nothing.
-fn kept_revocations(k: &Kept, roots: &[&[u8]], now_ms: i64) -> Option<(Vec<String>, Option<String>)> {
+fn kept_revocations(k: &Kept, roots: &[release::Key], now_ms: i64) -> Option<(Vec<String>, Option<String>)> {
     match release::check_status(&k.keys, &k.status, roots, now_ms, &Seen::default()) {
         Ok((st, _)) => Some((st.android_revoked, None)),
         Err(e) => {
@@ -292,7 +292,6 @@ impl Attestations {
         let Ok(data) = std::fs::read(self.dir.join(STATUS_FILE)) else { return };
         let Ok(k) = serde_json::from_slice::<Kept>(&data) else { return };
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         if let Some((revoked, stale)) = kept_revocations(&k, &roots, crate::update::now_ms()) {
             if let Some(why) = stale {
                 eprintln!(
@@ -321,7 +320,6 @@ impl Attestations {
         let f: Files = serde_json::from_slice(&call("attest-status", &serde_json::json!({}))?)
             .context("the revocation list's files do not decode")?;
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         let (st, seen) = release::check_status(&f.keys, &f.status, &roots, crate::update::now_ms(), &kept_seen)?;
         if seen == kept_seen {
             return Ok(()); // the same list
@@ -385,45 +383,30 @@ mod tests {
     use std::sync::atomic::AtomicBool;
 
     use super::{Kept, Opening, kept_revocations};
-    use cbb_core::release::{File, Seen};
-    use p256::ecdsa::signature::Signer;
-    use p256::ecdsa::{Signature, SigningKey};
-    use p256::pkcs8::EncodePublicKey;
-    use sha2::{Digest, Sha256};
-
-    fn spki(k: &SigningKey) -> Vec<u8> {
-        k.verifying_key().to_public_key_der().unwrap().as_bytes().to_vec()
-    }
-
-    fn sign(body: serde_json::Value, k: &SigningKey) -> File {
-        let body = serde_json::to_vec(&body).unwrap();
-        let sig: Signature = k.sign(&body);
-        File { body, sig: sig.to_der().as_bytes().to_vec(), key: Sha256::digest(spki(k)).to_vec() }
-    }
+    use cbb_core::release::Seen;
+    use cbb_core::release::testing::TestKey;
 
     /// A kept list counts after it ran out, as at its signing, so a restart
     /// without the mirror drops no revocation; one that never checked out
     /// counts not at all.
     #[test]
     fn an_old_list_still_revokes() {
-        use base64::Engine as _;
-        let b64 = |d: &[u8]| base64::engine::general_purpose::STANDARD.encode(d);
-        let (root, status) = (SigningKey::from_slice(&[1; 32]).unwrap(), SigningKey::from_slice(&[2; 32]).unwrap());
+        let (root, status) = (TestKey::new(1), TestKey::new(2));
+        let sign = |k: &TestKey, v: serde_json::Value| k.sign(&serde_json::to_vec(&v).unwrap());
         let at: i64 = 1_800_000_000_000;
         let day = 86_400_000;
         let keys = sign(
-            serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": at, "expires_ms": at + 90 * day,
-                "keys": [{"key": b64(&spki(&status)), "name": "status", "use": "status"}]}),
             &root,
+            serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": at, "expires_ms": at + 90 * day,
+                "keys": status.keys("status", "status")}),
         );
         let list = sign(
+            &status,
             serde_json::json!({"v": 1, "type": "attest-status", "seq": 1, "time_ms": at, "expires_ms": at + 7 * day,
                 "android_revoked": ["1f", "2a"]}),
-            &status,
         );
         let k = Kept { keys, status: list, seen: Seen::default() };
-        let r = spki(&root);
-        let roots: Vec<&[u8]> = vec![&r];
+        let roots = root.root("root-1");
         let (now, stale) = kept_revocations(&k, &roots, at + day).unwrap();
         assert_eq!(now, ["1f", "2a"]);
         assert!(stale.is_none());
@@ -431,8 +414,7 @@ mod tests {
         assert_eq!(later, ["1f", "2a"]);
         assert!(stale.is_some());
         // Not under other roots.
-        let other = spki(&status);
-        assert!(kept_revocations(&k, &[&other], at + day).is_none());
+        assert!(kept_revocations(&k, &status.root("root-2"), at + day).is_none());
     }
 
     /// The TPM opens one credential at a time: a second waits for none,

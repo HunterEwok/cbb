@@ -89,8 +89,10 @@ fn run(g: &Group, budget: &Budget) {
     for s in [&state, &set_state] {
         assert_eq!(s.stop, Stop::None, "{:?}", s.conflicts);
         assert_eq!(s.roots.len(), 1 + g.spec.takeovers);
+        // A removed device is revoked; after a change of root (the last
+        // root only) it is simply no device of the new root.
         for h in &g.removed {
-            assert!(s.revoked.contains(h));
+            assert!(s.revoked.contains(h) || (g.spec.takeovers > 0 && s.device_by_key(h).is_none()));
         }
     }
     assert!(set.len() <= MAX_RECORDS && set.bytes() <= MAX_SET_BYTES);
@@ -121,10 +123,11 @@ fn groups_of_5_100_and_1000_records() {
 fn a_group_at_the_ceilings() {
     let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
     let g = groupgen::build(groupgen::ceilings(1));
-    // Within a few units of the room, and inside it, so that every record
-    // counts and the set's sharing still keeps them all.
+    // At least a whole room of records offered: under the last root only
+    // what the earlier roots and their admins signed is offered too and
+    // counts no more, so the set keeps at most its room (run checks it).
     let room = MAX_RECORDS as u64;
-    assert!(g.units() <= room && g.units() + 32 >= room, "{} units are not at the room's {room}", g.units());
+    assert!(g.units() + 32 >= room, "{} units are not at the room's {room}", g.units());
     let devices: usize = g.evaluate().devices.len() + g.removed.len();
     assert_eq!(devices, MAX_DEVICES);
     run(&g, &Budget { time: Duration::from_secs(60), factor: 16 });

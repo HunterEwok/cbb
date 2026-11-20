@@ -3,7 +3,8 @@
 
 //! SLH-DSA-SHA2-128s (FIPS 205), pure, as the core's one post-quantum
 //! signature verifier: the second half of the release files' signatures
-//! and of the recovery key. Each use passes its own context, so that a signature of one never
+//! (docs/protocol.md, section 16, "Two signatures") and of the recovery
+//! key. Each use passes its own context, so that a signature of one never
 //! stands for the other.
 
 use slh_dsa::{Sha2_128s, Signature, VerifyingKey};

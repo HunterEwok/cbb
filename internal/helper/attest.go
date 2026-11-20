@@ -13,7 +13,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -68,10 +67,6 @@ func statusURL() string {
 	return "https://cbb.tools/attest/"
 }
 
-// The most a fetched file may hold: a little more than a release file's
-// body in its envelope.
-const maxStatusFile = 2 * release.MaxBody
-
 func fetchStatus(req *control.Message) (*control.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -89,7 +84,7 @@ func fetchStatus(req *control.Message) (*control.Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxStatusFile))
+		data, err := release.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			return nil, err
@@ -196,7 +191,7 @@ type attestation struct {
 }
 
 // The roots attestations must lead to: Google's and the TPM makers', but
-// in tests the PEM files CBB_TEST_ATTEST_ROOTS (the roots' public keys,
+// in a build with the test hooks (internal/testhook) the PEM files CBB_TEST_ATTEST_ROOTS (the roots' public keys,
 // as the policy takes them, or their certificates) and CBB_TEST_TPM_ROOTS
 // (certificates) name.
 func androidRoots() ([][]byte, error) {

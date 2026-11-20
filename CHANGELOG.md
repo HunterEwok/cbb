@@ -89,6 +89,26 @@ made with 0.5 is set up again once. The details follow.
   registration, and turns push off in a group it leaves. The Android app does the same, its push vault sealed
   under an Android Keystore key: the full build through FCM (Firebase's identifiers given at
   build time), the F-Droid build through UnifiedPush. HarmonyOS and Aurora follow.
+- `cbb-forward version` prints the forwarder's version, as `cbb-helper version` does.
+- Every release file carries two signatures, ES256 and SLH-DSA-SHA2-128s (FIPS 205), and
+  every program from 0.6 takes a file only with both, with no switch to turn either off
+  (docs/protocol.md, section 16, "Two signatures"): a release stays trusted when a quantum
+  computer breaks P-256. Files list their signatures (`sigs`) and `keys.json` names each
+  half's algorithm (`alg`); unknown algorithms are passed over, so later versions can add
+  one. Each key's post-quantum half sits beside its P-256 half, sealed with the maintainer's passphrase and then encrypted with `age` to the
+  same YubiKey or Secure Enclave, or as an encrypted credential on cbb.tools
+  (`release-sign pq-new`, and `pq-check` to prove a pair; docs/maintainers/maintaining.md, "Two
+  signatures"). A release cannot be made while a pinned root lacks a half: `release-sign
+  publish` refuses and the release workflow checks the roots before it builds anything. The phone kits check
+  release files through the Rust core (`release_check`, `release_check_status`,
+  `release_check_entries`, and `release_named` for the version a channel file names), which
+  pins the roots and takes each file's bytes as they were fetched: the kits read nothing of a
+  release file. Every reader, `get.sh` and `get.ps1` among them, takes a file only as one
+  envelope in the canonical form of signed bodies with exactly its members, so all of them take
+  and refuse the same shapes; members keep and pass on the release and the entry points as the
+  bytes that came, and the installers check every key of `keys.json`, whatever its use. `get.sh` checks the SLH-DSA
+  signatures where OpenSSL 3.5 or later is installed and says which it checked; `get.ps1`
+  checks ES256 and says so.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
@@ -1932,6 +1952,10 @@ made with 0.5 is set up again once. The details follow.
   a kept revocation list of Android attestations still counts after a restart once it ran out;
   test roots in `CBB_RELEASE_ROOTS` are taken only from a file others cannot change. The
   cryptography page lists the sealed messages (HPKE with X-Wing) and their keys.
+- The variables the end-to-end tests set to change whom `cbb` and `cbb-helper` trust or their
+  clock (`CBB_RELEASE_ROOTS`, `CBB_HELPER`, `CBB_TEST_AHEAD_FILE`, `CBB_TEST_ATTEST_ROOTS`,
+  `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`) are read only by a build with the test hooks, which
+  says so in `cbb version` and its log; a release reads none of them.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

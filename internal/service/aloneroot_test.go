@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -1593,7 +1592,7 @@ func TestAloneRelayProject(t *testing.T) {
 	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
 	dir := joinAlone(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
-	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
+	if err := os.WriteFile(pemFile, signer.rootsPEM(t), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())

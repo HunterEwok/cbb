@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use cbb_core::release::{self, Asset, File, Seen};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::error::{Error, Result};
 use crate::files::write_atomic;
@@ -23,8 +23,9 @@ pub const FILE: &str = "release.json";
 /// The folder of the held release's archives, named by their SHA-256.
 pub const FILES_DIR: &str = "release-files";
 
-/// The largest release taken: three signed files of a few KB.
-const MAX: usize = 256 << 10;
+/// The largest release taken: its three files, each at most as large as
+/// any reader takes a release file, and the JSON around them.
+const MAX: usize = 3 * release::MAX_FILE + 64;
 
 #[derive(Deserialize)]
 struct Set {
@@ -34,7 +35,7 @@ struct Set {
 }
 
 struct Held {
-    set: Value,
+    set: Box<RawValue>,
     seen: Seen,
     version: String,
     files: Vec<Asset>,
@@ -44,7 +45,7 @@ struct Held {
 /// The release this member holds.
 pub struct Releases {
     dir: PathBuf,
-    roots: Vec<Vec<u8>>,
+    roots: Vec<cbb_core::release::Key>,
     held: Mutex<Option<Held>>,
 }
 
@@ -59,33 +60,39 @@ impl Releases {
     /// Opens the release kept in dir, checked again under roots, which may
     /// be others since; one that no longer checks out is dropped, and
     /// logged.
-    pub fn open(dir: &Path, roots: Vec<Vec<u8>>, now_ms: i64, log: &dyn Fn(&str)) -> Releases {
+    pub fn open(dir: &Path, roots: Vec<cbb_core::release::Key>, now_ms: i64, log: &dyn Fn(&str)) -> Releases {
         let r = Releases { dir: dir.to_path_buf(), roots, held: Mutex::new(None) };
         match std::fs::read(dir.join(FILE)) {
-            Ok(data) => match serde_json::from_slice::<Value>(&data).map_err(|_| Error::msg("it does not decode")) {
-                Ok(v) => match r.check(&v, now_ms, &Seen::default()) {
-                    Ok(h) => *r.held.lock().unwrap() = Some(h),
+            Ok(data) => {
+                match serde_json::from_slice::<Box<RawValue>>(&data).map_err(|_| Error::msg("it does not decode")) {
+                    Ok(v) => match r.check(&v, now_ms, &Seen::default()) {
+                        Ok(h) => *r.held.lock().unwrap() = Some(h),
+                        Err(err) => log(&format!("cbb: the release kept in {FILE}: {}", err.for_log())),
+                    },
                     Err(err) => log(&format!("cbb: the release kept in {FILE}: {}", err.for_log())),
-                },
-                Err(err) => log(&format!("cbb: the release kept in {FILE}: {}", err.for_log())),
-            },
+                }
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => log(&format!("cbb: cannot read {}: {err}", dir.join(FILE).display())),
         }
         r
     }
 
-    fn check(&self, v: &Value, now_ms: i64, seen: &Seen) -> Result<Held> {
+    fn check(&self, v: &RawValue, now_ms: i64, seen: &Seen) -> Result<Held> {
         if self.roots.is_empty() {
             return Err(Error::msg("this build pins no release keys"));
         }
-        let set: Set = serde_json::from_value(v.clone()).map_err(|_| Error::msg("the release does not decode"))?;
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
+        // The set in the strict form of signed bodies, each file read from
+        // the bytes that came, as it was signed.
+        cbb_core::strict::check(v.get().as_bytes(), &["keys", "channel", "release"])
+            .map_err(|e| Error::msg(format!("the release: {}", e.message())))?;
+        let set: Set = serde_json::from_str(v.get()).map_err(|_| Error::msg("the release does not decode"))?;
+        let roots = &self.roots;
         let seen = Seen { version: String::new(), ..seen.clone() };
         let (r, next) =
-            release::check(&set.keys, &set.channel, &set.release, &roots, crate::update::CHANNEL, now_ms, &seen)?;
+            release::check(&set.keys, &set.channel, &set.release, roots, crate::update::CHANNEL, now_ms, &seen)?;
         let c = release::decode_channel(&set.channel.body)?;
-        Ok(Held { set: v.clone(), seen: next, version: r.version, files: r.files, expires_ms: c.expires_ms })
+        Ok(Held { set: v.to_owned(), seen: next, version: r.version, files: r.files, expires_ms: c.expires_ms })
     }
 
     /// The keys.json and channel seqs of the release held, which a hello
@@ -99,7 +106,7 @@ impl Releases {
 
     /// The release held, `{keys, channel, release}`, while its channel file
     /// has not expired.
-    pub fn current(&self, now_ms: i64) -> Option<Value> {
+    pub fn current(&self, now_ms: i64) -> Option<Box<RawValue>> {
         self.held.lock().unwrap().as_ref().filter(|h| now_ms < h.expires_ms).map(|h| h.set.clone())
     }
 
@@ -179,8 +186,8 @@ impl Releases {
     /// Takes a release when it checks out and is newer than the one held,
     /// keeps it in the file and reports whether it did; the archives of
     /// the older one go.
-    pub fn take(&self, v: &Value, now_ms: i64) -> Result<bool> {
-        if serde_json::to_vec(v).map_or(true, |d| d.len() > MAX) {
+    pub fn take(&self, v: &RawValue, now_ms: i64) -> Result<bool> {
+        if v.get().len() > MAX {
             return Err(Error::msg("the release is too large"));
         }
         let mut held = self.held.lock().unwrap();
@@ -191,8 +198,7 @@ impl Releases {
         if !newer((h.seen.keys_seq, h.seen.channel_seq), have) {
             return Ok(false);
         }
-        let data = serde_json::to_vec(v).map_err(|_| Error::msg("cannot encode the release"))?;
-        write_atomic(&self.dir.join(FILE), &data, 0o600)?;
+        write_atomic(&self.dir.join(FILE), v.get().as_bytes(), 0o600)?;
         let keep: Vec<String> = h.files.iter().map(|f| f.sha256.clone()).collect();
         *held = Some(h);
         drop(held);
@@ -230,4 +236,49 @@ pub fn unhex(s: &str) -> Option<Vec<u8>> {
 pub fn offered(v: &str) -> bool {
     let own = crate::service::VERSION.trim_start_matches('v');
     own != "dev" && release::compare(v, own) == std::cmp::Ordering::Greater
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The release is read from the bytes that came: the valid one of the
+    // Go vectors is taken as signed, and the same files with release.json
+    // in an envelope no reader takes, or a set not in the strict form, are
+    // refused.
+    #[test]
+    fn takes_only_the_canonical_envelope() {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-release.json");
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
+        let now = v["now_ms"].as_i64().unwrap();
+        let roots: Vec<cbb_core::release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
+        let c = &v["vectors"][0];
+        assert_eq!(c["name"], "valid");
+        let file = |n: &str| v["files"][c[n].as_u64().unwrap() as usize].clone();
+        let (keys, channel, rel) = (file("keys").to_string(), file("channel").to_string(), file("release"));
+        let set = |rel: &str| {
+            crate::entries::set_of(&[
+                ("keys", keys.as_bytes()),
+                ("channel", channel.as_bytes()),
+                ("release", rel.as_bytes()),
+            ])
+            .unwrap()
+        };
+        let dir = std::env::temp_dir().join(format!("cbb-releases-canonical-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let r = Releases::open(&dir, roots, now, &|_| {});
+        let (body, sigs) = (rel["body"].as_str().unwrap(), rel["sigs"].to_string());
+        for bad in [format!(r#"{{"sigs":{sigs},"body":"{body}"}}"#), format!(r#"{{ "body":"{body}","sigs":{sigs}}}"#)] {
+            assert!(r.take(&set(&bad), now).is_err(), "{bad:.40}");
+        }
+        let escaped = format!(r#"{{"k\u0065ys":{keys},"channel":{channel},"release":{rel}}}"#);
+        assert!(r.take(&RawValue::from_string(escaped).unwrap(), now).is_err());
+        assert_eq!(r.order(now), (0, 0));
+        let good = set(&rel.to_string());
+        assert!(r.take(&good, now).unwrap());
+        assert_eq!(std::fs::read(dir.join(FILE)).unwrap(), good.get().as_bytes());
+        assert_eq!(r.version(now).as_deref(), Some("0.6.0"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

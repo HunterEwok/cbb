@@ -323,6 +323,10 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
+    let note = crate::testbuild::version_note();
+    if !note.is_empty() {
+        log(&format!("cbb: a build for tests{note}: it reads the test hooks; never install it"));
+    }
     // A panic ends the service (panic = "abort"); the hook keeps what broke
     // for the bug report after the restart (src/bugs.rs).
     crate::bugs::install(&cfg.state_dir);
@@ -2562,7 +2566,7 @@ impl Service {
             // Signed entry points the user gives (cbb update brings them on
             // a Go member), kept and passed on as Go's putEntries.
             "entries" => {
-                let set: serde_json::Value = serde_json::from_slice(&m.payload)
+                let set: Box<serde_json::value::RawValue> = serde_json::from_slice(&m.payload)
                     .map_err(|e| Error::with("the request carries no entry points", e))?;
                 self.node()?.put_entries(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
@@ -2573,7 +2577,7 @@ impl Service {
                     .entries()
                     .current(uptime::wall_ms())
                     .ok_or_else(|| Error::msg("this device holds no signed entry points"))?;
-                let data = serde_json::to_vec(&set).context("cannot encode the entry points")?;
+                let data = set.get().as_bytes().to_vec();
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
             "hubs" => {
@@ -2581,7 +2585,7 @@ impl Service {
                 Ok(control::reply(Header::default(), Vec::new()))
             }
             "release" => {
-                let set: serde_json::Value =
+                let set: Box<serde_json::value::RawValue> =
                     serde_json::from_slice(&m.payload).map_err(|e| Error::with("the request carries no release", e))?;
                 self.node()?.put_release(&set)?;
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
@@ -2596,7 +2600,7 @@ impl Service {
                     .releases()
                     .current(uptime::wall_ms())
                     .ok_or_else(|| Error::msg("this device holds no signed release"))?;
-                let data = serde_json::to_vec(&set).context("cannot encode the release")?;
+                let data = set.get().as_bytes().to_vec();
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
             "update_way" => {

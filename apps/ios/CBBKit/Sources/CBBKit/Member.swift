@@ -755,9 +755,6 @@ public enum Member {
         /// The group's server credentials the sender keeps, or new ones it
         /// passes on (section 18).
         case credentials([ServerCredentials.Credential])
-        /// The newest signed entry points the sender holds (section 16,
-        /// "Entry points").
-        case entries(Releases.EntriesSet)
         /// From the root: the receiver's admin CA, DER, for the admin key
         /// its hello offered.
         case admin(Data)
@@ -878,7 +875,6 @@ public enum Member {
         case "cert": return .cert(w.cert ?? Data(), issuer: w.issuer)
         case "records": return .records(w.records ?? [])
         case "credentials": return .credentials(w.credentials ?? [])
-        case "entries": return w.entries?.value.map { .entries($0) } ?? .unknown(w.t)
         case "admin": return .admin(w.admin_ca ?? Data())
         case "tunnel": return .tunnel(w.tunnel?.value)
         case "hubs": return w.hubs?.value.map { .hubs($0) } ?? .unknown(w.t)
@@ -936,7 +932,6 @@ public enum Member {
         var result: Lenient<CommandResult>?
         var evidence: Lenient<Evidence>?
         var get: Lenient<Get>?
-        var entries: Lenient<Releases.EntriesSet>?
         var reach: Lenient<[String]>?
     }
 
@@ -944,7 +939,7 @@ public enum Member {
         let m: Message
         init(_ m: Message) { self.m = m }
 
-        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, entries, reach }
+        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, reach }
         enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq, muted, muted_for_ms }
 
         func encode(to encoder: Encoder) throws {
@@ -989,9 +984,6 @@ public enum Member {
             case let .credentials(cs):
                 try c.encode("credentials", forKey: .t)
                 try c.encode(cs, forKey: .credentials)
-            case let .entries(e):
-                try c.encode("entries", forKey: .t)
-                try c.encode(e, forKey: .entries)
             case let .admin(ca):
                 try c.encode("admin", forKey: .t)
                 try c.encode(ca, forKey: .admin_ca)

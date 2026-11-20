@@ -53,7 +53,7 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 		}
 	}
 	for _, r := range relays {
-		k.Keys = append(k.Keys, release.Key{Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
+		k.Keys = append(k.Keys, release.Key{Alg: release.AlgES256, Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
 	}
 	var err error
 	if set.Keys, err = release.Sign(k, s.root); err != nil {
@@ -73,7 +73,11 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 func TestProjectRelayNewKey(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1")
+	// The project relay's own name resolves to nothing, as offline: when
+	// the test's relay drops the registration, the device looks the relay
+	// up again, and with a network it would reach the live relay, whose
+	// key is another.
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	group := pi.status(t).Group

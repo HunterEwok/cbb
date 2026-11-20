@@ -157,8 +157,8 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings
 CBB_FULL_SIZE=1 cargo test -p cbb-core --features std,tls,web records   # the records' tests at real size too (minutes; CI's rust job)
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
-cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
-  go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+cargo build --release -p cbb-member --features testhooks && go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper && \
+  CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
 Every test of `internal/service` at once, in parts that run in Docker containers side by side
@@ -167,6 +167,19 @@ Every test of `internal/service` at once, in parts that run in Docker containers
 ```sh
 sh tools/e2e/parallel.sh -n 6 IMAGE
 ```
+
+The end-to-end tests run `cbb` and `cbb-helper` built with the test hooks (the feature and
+build tag `testhooks`; `member/src/testbuild.rs`, `internal/testhook`): only such a build reads the variables that change whom they trust or
+their clock (`CBB_TEST_AHEAD_FILE`, `CBB_RELEASE_ROOTS`, `CBB_HELPER`,
+`CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`, `CBB_TEST_LISTS_MIRROR`), and says so in `cbb version`
+and its log. Never install one; a release never has them. CI's `hooks` job runs
+`.github/release-ignores-hooks.sh` on `cbb` and `cbb-helper` built as the release builds them:
+with every hook set they answer as without, and `tools/hookprobe` checks that the helper still
+refuses an attestation under the roots `CBB_TEST_ATTEST_ROOTS` names. The release workflow does
+not run them; it looks with `.github/hooks-marker.sh` for the line a hooks build says itself
+with in every program it publishes, and the `hooks` job checks that the same script finds that
+line in a hooks build. A new hook that changes whom they trust or their clock goes into the
+list in `.github/release-ignores-hooks.sh`.
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 

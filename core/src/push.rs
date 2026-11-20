@@ -119,9 +119,11 @@ pub const SENT_AHEAD: u64 = 8;
 /// The longest wait a service asks of a sender: a day.
 pub const MAX_RETRY_MS: u64 = 86_400_000;
 /// The longest send key's public part and signature a service may take
-/// later (the format's bound of a second signature).
-pub const MAX_SEND_KEY: usize = crate::format::envelope::MAX_SIG2;
-pub const MAX_SEND_SIG: usize = crate::format::envelope::MAX_SIG2;
+/// later: 4096 bytes, fixed for push on its own, so that the longest send
+/// still fits one frame of [`MAX_SERVICE_FRAME`] whatever the bound of a
+/// second signature elsewhere.
+pub const MAX_SEND_KEY: usize = 4096;
+pub const MAX_SEND_SIG: usize = 4096;
 
 /// The nonce and the tag around a body's plaintext.
 pub const NONCE_LEN: usize = 12;
