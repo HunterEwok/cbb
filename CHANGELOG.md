@@ -23,6 +23,9 @@ made with 0.5 is set up again once. The details follow.
 - The core reads the member connection's own messages of 0.6 (`hello`, `ping`, `bye`, `have`,
   `release`, `entries`, `get`, `missing`, `reach`, `evidence`) and the new message `want`
   (t 30), by which a member asks a peer for the records and the list its set names and lacks.
+- A model of the record rules of 0.6 in Quint, written from the rules rather than the code
+  (`docs/model/records-v3.qnt`); its scenarios run on the core in
+  `core/tests/records_model.rs`.
 - A change of root in 0.6 counts only the last root ("the last root only"): after it, nothing an
   earlier root or its admins signed counts or takes room, and the new root carries the group
   over as its own records (every device but those the person leaves out, the settings, hubs,
