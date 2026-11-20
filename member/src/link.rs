@@ -219,5 +219,76 @@ fn want(ids: &[RecordId], list: Option<[u8; 32]>, out: &mut Out) {
     }
 }
 
+/// Reads one frame's message from a connection: its length, checked
+/// against the grid and the member connection's limit, then the message.
+pub fn read_frame(r: &mut impl std::io::Read) -> Result<Vec<u8>> {
+    let mut head = [0u8; 4];
+    r.read_exact(&mut head).map_err(|e| Error::with("cannot read a frame", e))?;
+    let n = frame::length(head, frame::LIMIT_MEMBER).map_err(|rule| Error::msg(format!("a frame breaks {rule}")))?;
+    let mut body = vec![0u8; n];
+    r.read_exact(&mut body).map_err(|e| Error::with("cannot read a frame", e))?;
+    frame::message(&body).map_err(|rule| Error::msg(format!("a frame breaks {rule}")))?;
+    Ok(body)
+}
+
+/// Runs the exchange on a connection until it ends: a hello first, then
+/// each message taken under the set's lock; changed is called with the set
+/// after every change (to save it and tell the other connections), and a
+/// hello goes after it. A message the exchange does not read goes to
+/// other; log takes a line for the log. It returns the error that ended
+/// the connection.
+pub fn run(
+    conn: &mut (impl std::io::Read + std::io::Write),
+    x: &mut Exchange,
+    set: &std::sync::Mutex<RecordSet>,
+    changed: &mut dyn FnMut(&RecordSet),
+    other: &mut dyn FnMut(u64, &[u8]),
+    log: &mut dyn FnMut(&str),
+) -> Error {
+    let first = hello(&set.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+    if let Err(e) = conn.write_all(&first) {
+        return Error::with("cannot send the hello", e);
+    }
+    loop {
+        let msg = match read_frame(conn) {
+            Ok(m) => m,
+            Err(e) => return e,
+        };
+        let mut send = Vec::new();
+        {
+            let mut s = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let out = match x.take(&mut s, &msg) {
+                Ok(o) => o,
+                Err(e) => return e,
+            };
+            if let Some((theirs, ours)) = out.stuck {
+                log(&format!(
+                    "the records' exchange passed its {MAX_ROUNDS} rounds: the peer's digest {}, ours {}",
+                    hex(&theirs),
+                    hex(&ours)
+                ));
+            }
+            send.extend(out.send);
+            if out.changed {
+                changed(&s);
+                send.push(hello(&s));
+            }
+            if let Some(t) = out.other {
+                drop(s);
+                other(t, &msg);
+            }
+        }
+        for f in send {
+            if let Err(e) = conn.write_all(&f) {
+                return Error::with("cannot send", e);
+            }
+        }
+    }
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
 #[cfg(test)]
 mod tests;

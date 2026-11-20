@@ -52,7 +52,7 @@ fn admit(set: &mut RecordSet, root: &K, key: &K, name: &str, time_ms: u64) {
 
 /// Runs both sides until nothing is in flight: each opens with its hello
 /// and sends one again after every change. Returns how many messages went.
-fn run(a: (&mut RecordSet, &mut Exchange), b: (&mut RecordSet, &mut Exchange)) -> usize {
+fn settle(a: (&mut RecordSet, &mut Exchange), b: (&mut RecordSet, &mut Exchange)) -> usize {
     let (sa, xa) = a;
     let (sb, xb) = b;
     // In flight: (to b?, frame).
@@ -92,12 +92,12 @@ fn two_members_end_with_the_same_set() {
 
     let mut xa = Exchange::new(a.key().hash(), b.point());
     let mut xb = Exchange::new(b.key().hash(), a.point());
-    run((&mut full, &mut xa), (&mut sb, &mut xb));
+    settle((&mut full, &mut xa), (&mut sb, &mut xb));
     assert_eq!(full.digest(), sb.digest());
     assert_eq!(sb.state().devices.len(), full.state().devices.len());
 
     // Equal sets: hellos only, and a want for nothing is never sent.
-    let n = run((&mut full, &mut xa), (&mut sb, &mut xb));
+    let n = settle((&mut full, &mut xa), (&mut sb, &mut xb));
     assert_eq!(n, 2);
 }
 
@@ -112,12 +112,12 @@ fn a_record_written_while_connected_reaches_the_peer() {
     sb.take_part(&recs, &[]);
     let mut xa = Exchange::new(a.key().hash(), b.point());
     let mut xb = Exchange::new(b.key().hash(), a.point());
-    assert_eq!(run((&mut sa, &mut xa), (&mut sb, &mut xb)), 2);
+    assert_eq!(settle((&mut sa, &mut xa), (&mut sb, &mut xb)), 2);
     // The root writes on a; a's next hello carries the new digest.
     admit(&mut sa, &root, &c, "c", 3);
     let out = xb.take(&mut sb, &hello(&sa)[4..]).unwrap();
     assert_eq!(out.send.len(), 1, "b answers with its have");
-    run((&mut sa, &mut xa), (&mut sb, &mut xb));
+    settle((&mut sa, &mut xa), (&mut sb, &mut xb));
     assert_eq!(sa.digest(), sb.digest());
 }
 
@@ -166,4 +166,122 @@ fn a_bad_message_is_an_error() {
     assert!(xa.take(&mut sa, &write(m::T_WANT, Vec::new())[4..]).is_err());
     // A message this exchange does not read goes to the caller.
     assert_eq!(xa.take(&mut sa, &write(m::T_PING, Vec::new())[4..]).unwrap().other, Some(m::T_PING));
+}
+
+/// Two members over TCP with TLS by key: each judges the other by its
+/// standing in its own set, and the exchange runs on the TLS stream until
+/// both sets are equal.
+#[test]
+fn two_members_sync_over_tls_by_key() {
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use cbb_core::alpn;
+    use cbb_core::tls::Session;
+    use cbb_core::tls::bykey;
+
+    let (root, a, b, c) = (K::new(1), K::new(2), K::new(3), K::new(4));
+    let mut sa = empty(&root);
+    admit(&mut sa, &root, &a, "a", 1);
+    admit(&mut sa, &root, &b, "b", 2);
+    let mut sb = empty(&root);
+    let recs: Vec<Record> = sa.in_dependency_order().into_iter().cloned().collect();
+    sb.take_part(&recs, &[]);
+    admit(&mut sa, &root, &c, "c", 3);
+    let want = sa.digest();
+
+    let pkcs8 = |n: u8| {
+        use p256::pkcs8::EncodePrivateKey as _;
+        SigningKey::from_slice(&[n; 32]).unwrap().to_pkcs8_der().unwrap().as_bytes().to_vec()
+    };
+    let judge = |set: Arc<Mutex<RecordSet>>, own: KeyHash| {
+        bykey::by_standing(move |p| standing(&set.lock().unwrap().state(), &own, p), false)
+    };
+    let sa = Arc::new(Mutex::new(sa));
+    let sb = Arc::new(Mutex::new(sb));
+    let clock = crate::tls::clock();
+    let scfg = bykey::server(
+        &bykey::OwnKey::pkcs8(&pkcs8(2)).unwrap(),
+        judge(sa.clone(), a.key().hash()),
+        alpn::MEMBER,
+        &clock,
+    )
+    .unwrap();
+    let ccfg = bykey::client(
+        &bykey::OwnKey::pkcs8(&pkcs8(3)).unwrap(),
+        Some(cbb_core::format::Key::new(cbb_core::format::Alg::Es256, &a.point()).hash().id()),
+        judge(sb.clone(), b.key().hash()),
+        alpn::MEMBER,
+        &clock,
+    )
+    .unwrap();
+
+    let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap();
+    let (a_hash, a_point) = (a.key().hash(), a.point());
+    let server = {
+        let sa = sa.clone();
+        std::thread::spawn(move || {
+            let (sock, _) = ln.accept().unwrap();
+            sock.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+            let mut s = Session::server(Arc::new(scfg)).unwrap();
+            crate::tls::handshake(&mut s, &sock, "the handshake").unwrap();
+            let peer = bykey::peer_key(s.peer_certificates()).unwrap();
+            let mut x = Exchange::new(a_hash, peer);
+            let mut stream = crate::tls::Stream::new(s, sock);
+            run(&mut stream, &mut x, &sa, &mut |_| {}, &mut |_, _| {}, &mut |l| panic!("{l}"));
+        })
+    };
+    let sock = std::net::TcpStream::connect(addr).unwrap();
+    sock.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    let mut s = Session::client(Arc::new(ccfg), bykey::unsent_name()).unwrap();
+    crate::tls::handshake(&mut s, &sock, "the handshake").unwrap();
+    let peer = bykey::peer_key(s.peer_certificates()).unwrap();
+    assert_eq!(peer, a_point);
+    let mut x = Exchange::new(b.key().hash(), peer);
+    let mut stream = crate::tls::Stream::new(s, sock);
+    let mut saved = 0;
+    // The connection ends when the reads time out, the sets settled.
+    run(&mut stream, &mut x, &sb, &mut |_| saved += 1, &mut |_, _| {}, &mut |l| panic!("{l}"));
+    drop(stream);
+    server.join().unwrap();
+    assert!(saved >= 1);
+    assert_eq!(sb.lock().unwrap().digest(), want);
+}
+
+/// A key the set does not know is refused in the handshake.
+#[test]
+fn a_stranger_is_refused_in_the_handshake() {
+    use std::sync::{Arc, Mutex};
+
+    use cbb_core::alpn;
+    use cbb_core::tls::Session;
+    use cbb_core::tls::bykey;
+
+    let (root, a) = (K::new(1), K::new(2));
+    let mut sa = empty(&root);
+    admit(&mut sa, &root, &a, "a", 1);
+    let sa = Arc::new(Mutex::new(sa));
+    let pkcs8 = |n: u8| {
+        use p256::pkcs8::EncodePrivateKey as _;
+        SigningKey::from_slice(&[n; 32]).unwrap().to_pkcs8_der().unwrap().as_bytes().to_vec()
+    };
+    let own = a.key().hash();
+    let set = sa.clone();
+    let judge = bykey::by_standing(move |p| standing(&set.lock().unwrap().state(), &own, p), false);
+    let clock = crate::tls::clock();
+    let scfg = bykey::server(&bykey::OwnKey::pkcs8(&pkcs8(2)).unwrap(), judge, alpn::MEMBER, &clock).unwrap();
+    let ccfg =
+        bykey::client(&bykey::OwnKey::pkcs8(&pkcs8(9)).unwrap(), None, bykey::any_key(), alpn::MEMBER, &clock).unwrap();
+    let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (sock, _) = ln.accept().unwrap();
+        let mut s = Session::server(Arc::new(scfg)).unwrap();
+        crate::tls::handshake(&mut s, &sock, "the handshake").is_err()
+    });
+    let sock = std::net::TcpStream::connect(addr).unwrap();
+    let mut s = Session::client(Arc::new(ccfg), bykey::unsent_name()).unwrap();
+    let _ = crate::tls::handshake(&mut s, &sock, "the handshake");
+    assert!(server.join().unwrap(), "the server took a stranger");
 }
