@@ -390,7 +390,7 @@ pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State)
     if content.is_secret() && state.too_old {
         return Ok(Opened::TooOld);
     }
-    let blob_key = c.copy.header.get(5).map(|_| fcopy::blob_key(&k, &c.copy.h));
+    let blob_key = c.copy.header.get(5).map(|_| fcopy::blob_key(&k));
     Ok(Opened::Content { content, blob_key })
 }
 

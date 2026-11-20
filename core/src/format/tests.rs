@@ -634,7 +634,7 @@ fn copies() {
     assert_eq!(hex(&copy::header_hash(&unhex(s(&c, "hdr")))), s(&c, "h"));
     assert_eq!(hex(&copy::commit(&k)), s(&c, "commit"));
     assert_eq!(hex(&copy::payload_key(&k, &h)), s(&c, "payload_key"));
-    assert_eq!(hex(&copy::blob_key(&k, &h)), s(&c, "blob_key"));
+    assert_eq!(hex(&copy::blob_key(&k)), s(&c, "blob_key"));
     for form in ["copy", "reduced_copy_for_board"] {
         let b = unhex(s(&c, form));
         let v = cbor::decode(&b).unwrap();
