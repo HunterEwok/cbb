@@ -93,6 +93,43 @@ public enum CorePairing {
         return try ok("new group", take(answer, count), as: Group.self)
     }
 
+    /// A group of 0.6 this phone made: its ID, this phone's device ID and
+    /// the recovery sheet, which the person keeps and the app keeps nowhere.
+    public struct Made: Decodable, Sendable {
+        public struct Sheet: Decodable, Sendable {
+            public var qr: String
+            public var text: [String]
+        }
+
+        public var group: String
+        public var device: String
+        public var recovery: Sheet
+    }
+
+    /// Makes a group of 0.6 with this phone's root key (cbb_group_new with
+    /// dir): the core writes this phone's record under the root and keeps
+    /// the set in dir, where the member then reads it. rootPublic and
+    /// publicKey are the root and member keys (SubjectPublicKeyInfo or
+    /// point), store where the member key lives (Records.hardware or
+    /// Records.file); signRoot signs a digest with the root key, during
+    /// this call only.
+    public static func newGroup06(dir: URL, name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data,
+                                  signRoot: @escaping (Data) throws -> Data) throws -> Made {
+        struct Request: Encodable {
+            var dir: String, name: String, os: String, store: String, root_public: Data, `public`: Data
+        }
+        let request = try JSONEncoder().encode(Request(dir: dir.path, name: name, os: os, store: store, root_public: try point(rootPublic),
+                                                       public: try point(publicKey)))
+        let signer = Signer(signRoot)
+        let raw = Unmanaged.passRetained(signer).toOpaque()
+        defer { Unmanaged<Signer>.fromOpaque(raw).release() }
+        var count = 0
+        let answer: UnsafeMutablePointer<UInt8>? = request.withUnsafeBytes { r in
+            cbb_group_new(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, raw, &count)
+        }
+        return try ok("new group", take(answer, count), as: Made.self)
+    }
+
     /// Runs one connection's exchange: sends what the core gives, reads
     /// what comes and hands it in, until feed says the exchange ended. A
     /// connection that closes before then throws Closed.

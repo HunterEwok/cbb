@@ -34,7 +34,11 @@ made with 0.5 is set up again once. The details follow.
   and sends the Welcome (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
 - A new phone joins a group of 0.6 by a window's QR code (`cbb_joiner_new`): it dials the member
   whose key the code names, both persons compare the code, and the checked set is kept in the
-  app's folder before the member hears it was (`ffi/src/joiner.rs`).
+  app's folder before the member hears it was (`ffi/src/joiner.rs`). The iPhone's and Android's
+  kits open the window and join by it (`CorePairing.Window`, `CorePairing.Joiner`).
+- A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
+  its root key signs its own record, the set is kept for the member, and the recovery sheet goes
+  to the app once (`CorePairing.newGroup06` in both kits).
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
   written, with the root's and admins' keys signing where the device keeps them, the change of
