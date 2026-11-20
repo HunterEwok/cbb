@@ -125,7 +125,10 @@ Its operations are `copy`, `current`, `waiting`, `took` and `sends` (the button'
 update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
 hub}]}`: `admin` is whether the admin key the records name for the device is one of the
 group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
-`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
+`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge,
+and `mute` (`for_ms`), `unmute`, `sync_off` and `sync_on`, commands for another device signed
+with that key and sent over the phone's connection to it, as the service sends them; the answer
+is that device's.
 Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
 `cbb_invite_new`, answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. Images and files
@@ -284,8 +287,8 @@ home window, sync both ways, a pause and an admin's mute against a Go member thr
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerMadeAdmin` a phone that joins by the root's window offering its admin key and
 that the root makes an admin with it later, `TestFFIJoinerAdmin` that admin phone opening its
-own window, by which a Go computer joins, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
-root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
+own window, by which a Go computer joins, `TestFFIPhoneRoot` a phone that makes its own group of 0.6, lets a Go computer join by its
+window and renames, mutes, turns the sync off and on and removes it as its root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 
 `cbb_qr_read` (feature `join`, `src/qr.rs`) reads the QR codes in a grey camera frame with the

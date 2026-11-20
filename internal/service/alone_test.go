@@ -7,10 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -970,17 +967,18 @@ func TestFFIPhoneTakeover(t *testing.T) {
 	}
 }
 
-// TestFFIPhoneRoot: the Aurora app makes a group of its own, its root key
-// outside the core (cbb_group_new), and as the group's root admits a
-// computer that listens, as the app does when it scans the computer's QR
-// code: the computer takes the phone's group, a certificate from its root
-// and no issuer.
+// TestFFIPhoneRoot: the Aurora app makes a group of 0.6 of its own, its
+// root key outside the core (cbb_group_new), opens its home window with
+// that key, and a Go computer joins by the window's QR code, as the app's
+// "Add a device" does. The root phone then changes the computer through
+// cbb_member_manage: renames it, mutes it and turns its sync off and on by
+// commands the computer carries out, and removes it.
 func TestFFIPhoneRoot(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
 	made := strings.Fields(next("Group "))
 	if len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
@@ -991,28 +989,23 @@ func TestFFIPhoneRoot(t *testing.T) {
 	}
 
 	var h hub
-	laptop, qr := listeningJoin(t, &h, "laptop")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	admitted := next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
+	fmt.Fprintln(in, "WINDOW")
+	link := next("WINDOW ")
+	if !strings.HasPrefix(link, "cbb://pair?") {
+		t.Fatalf("the root phone's window: %q", link)
 	}
-	id := joinedIdentity(t, laptop, admitted)
-	if id.Issuer != nil {
-		t.Fatalf("the computer's identity: %+v", id)
+	laptop := startService(t, &h, "laptop")
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("the computer joining the root phone's window: %v; the phone: %s", err, next("WINDOW FAILED "))
 	}
-	if got := group.Tag(id.GroupCA.Cert); got != made[1] {
-		t.Fatalf("the computer joined group %s, not the phone's %s", got, made[1])
+	if got := next("WINDOW DONE "); got != "laptop" {
+		t.Fatalf("the phone's window admitted %q", got)
 	}
-	if !id.GroupCA.Cert.IsCA || !strings.HasPrefix(id.GroupCA.Cert.Subject.CommonName, "cbb group root ") {
-		t.Fatalf("the group's root: %+v", id.GroupCA.Cert.Subject)
+	st := laptop.status(t)
+	if !strings.HasPrefix(st.Group, made[1]) {
+		t.Fatalf("the computer joined group %s, not the phone's %s", st.Group, made[1])
 	}
-	if err := id.Cert.CheckSignatureFrom(id.GroupCA.Cert); err != nil {
-		t.Fatalf("the computer's certificate is not from the phone's root: %v", err)
-	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
-		t.Fatalf("the computer's certificate names %q: %v", got, err)
-	}
+	admitted := st.Device
 	fmt.Fprintln(in, "DEVICES")
 	if devices := next("DEVICES "); !strings.Contains(devices, `"laptop"`) {
 		t.Fatalf("the phone does not list the computer: %s", devices)
@@ -1023,145 +1016,49 @@ func TestFFIPhoneRoot(t *testing.T) {
 		fmt.Fprintln(in, "MANAGE "+req)
 		return next("MANAGED ")
 	}
-	if got := manage(`{"action":"rename","device":"` + admitted + `","name":"desk"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"rename","device":"` + admitted + `","name":"desk"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("renaming the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")
 	if devices := next("DEVICES "); !strings.Contains(devices, `"desk"`) || strings.Contains(devices, `"laptop"`) {
 		t.Fatalf("the phone does not list the computer's new name: %s", devices)
 	}
-	// The computer is not running, so a command for it finds no way there.
-	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("muting a computer that is not running: %s", got)
+	// Commands go over a connection to the computer: the phone dials the
+	// address it is handed, as the app hands in what the system's DNS-SD
+	// finds.
+	found, _ := json.Marshal(map[string]any{"op": "found", "args": map[string]any{
+		"key": "laptop", "addrs": []string{laptop.addr()}, "device": admitted,
+	}})
+	fmt.Fprintf(in, "CALL %s\n", found)
+	next("ANSWER ")
+	waitFor(t, "the root phone connected to the computer", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("muting the computer: %s", got)
 	}
-	// The device's house is a command too: sync_off and sync_on are mode commands.
-	if got := manage(`{"action":"sync_off","device":"` + admitted + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("turning the sync of a computer that is not running off: %s", got)
+	waitFor(t, "the computer muted", func() bool { return laptop.status(t).Muted })
+	if got := manage(`{"action":"unmute","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("ending the computer's mute: %s", got)
 	}
-	// Remote paste: the core checks the command before it looks for a way.
-	if got := manage(`{"action":"paste","device":"` + admitted + `","text":"ls","mode":"shout","timeout_ms":1000}`); !strings.Contains(got, "not paste or type") {
-		t.Fatalf("a paste by no way there is: %s", got)
+	waitFor(t, "the computer unmuted", func() bool { return !laptop.status(t).Muted })
+	if got := manage(`{"action":"sync_off","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("turning the computer's sync off: %s", got)
 	}
-	for _, req := range []string{
-		`"text":"ls","enter":true`,
-		`"text":"hunter2","mode":"type","kind":"secret"`,
-		`"text":"0123456789abcdef0123456789abcdef","kind":"media"`,
-	} {
-		if got := manage(`{"action":"paste","device":"` + admitted + `",` + req + `,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-			t.Fatalf("a paste (%s) for a computer that is not running: %s", req, got)
-		}
+	waitFor(t, "the computer's sync off", func() bool { return laptop.status(t).Mode == "own" })
+	if got := manage(`{"action":"sync_on","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("turning the computer's sync on: %s", got)
 	}
-	// The admin key comes from the computer's hello, so it must be connected.
-	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("making a computer that is not running an admin: %s", got)
+	waitFor(t, "the computer's sync on", func() bool { return laptop.status(t).Mode == "shared" })
+	if got := manage(`{"action":"mute","device":"` + made[0] + `"}`); !strings.Contains(got, "own switches") {
+		t.Fatalf("the phone muting itself by a command: %s", got)
 	}
-	// The root's own records, built and signed in the core (cbb_core::root).
-	if got := manage(`{"action":"takeover_delay","delay_ms":3600000}`); got != `{"ok":{}}` {
-		t.Fatalf("setting the takeover delay: %s", got)
-	}
-	if got := manage(`{"action":"takeover_delay","delay_ms":-1}`); !strings.Contains(got, "from 0 to 7 days") {
-		t.Fatalf("a negative takeover delay: %s", got)
-	}
-	if got := manage(`{"action":"key_level","level":"files"}`); got != `{"ok":{"below":[]}}` {
-		t.Fatalf("setting the key level: %s", got)
-	}
-	if got := manage(`{"action":"hand_over","device":"` + admitted + `"}`); !strings.Contains(got, "no admin") {
-		t.Fatalf("handing the group to a computer that is no admin: %s", got)
-	}
-	if got := manage(`{"action":"remove_recovery"}`); !strings.Contains(got, "no recovery key") {
-		t.Fatalf("removing a recovery key the group does not have: %s", got)
-	}
-	var sheet struct {
-		OK struct {
-			QR      string   `json:"qr"`
-			Text    string   `json:"text"`
-			Modules []string `json:"modules"`
-			Admin   []byte   `json:"admin"`
-		} `json:"ok"`
-	}
-	if got := manage(`{"action":"make_recovery"}`); json.Unmarshal([]byte(got), &sheet) != nil ||
-		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 ||
-		len(sheet.OK.Admin) != 32 {
-		t.Fatalf("making the recovery key: %s", got)
-	}
-	// A YubiKey's key, which never leaves the card: the root issues its admin CA.
-	card, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	spki, err := x509.MarshalPKIXPublicKey(&card.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var onCard struct {
-		OK struct {
-			AdminCA []byte `json:"admin_ca"`
-		} `json:"ok"`
-	}
-	got := manage(`{"action":"recovery_for","key":"` + base64.StdEncoding.EncodeToString(spki) + `"}`)
-	if json.Unmarshal([]byte(got), &onCard) != nil {
-		t.Fatalf("the card's recovery key: %s", got)
-	}
-	cardCA, err := x509.ParseCertificate(onCard.OK.AdminCA)
-	if err != nil || !cardCA.IsCA || !card.PublicKey.Equal(cardCA.PublicKey) || cardCA.CheckSignatureFrom(id.GroupCA.Cert) != nil {
-		t.Fatalf("the card's admin CA: %s, %v", got, err)
-	}
-	if got := manage(`{"action":"recovery_for","key":"AAAA"}`); !strings.Contains(got, "no P-256 key") {
-		t.Fatalf("a recovery key that is no key: %s", got)
-	}
-	fmt.Fprintln(in, `CALL {"op":"records"}`)
-	var recs struct {
-		OK struct {
-			Records []struct {
-				Body []byte `json:"body"`
-			} `json:"records"`
-		} `json:"ok"`
-	}
-	if err := json.Unmarshal([]byte(next("ANSWER ")), &recs); err != nil {
-		t.Fatal(err)
-	}
-	kinds := map[string]bool{}
-	for _, r := range recs.OK.Records {
-		var b struct {
-			Type  string `json:"type"`
-			Delay int64  `json:"takeover_delay_ms"`
-			Level string `json:"key_level"`
-		}
-		if err := json.Unmarshal(r.Body, &b); err != nil {
-			t.Fatal(err)
-		}
-		kinds[b.Type] = true
-		// The key level's settings record keeps the delay set before it.
-		if b.Type == "settings" && b.Level == "files" && b.Delay != 3600000 {
-			t.Fatalf("the key level's settings record dropped the delay: %+v", b)
-		}
-	}
-	if !kinds["settings"] || !kinds["recovery"] {
-		t.Fatalf("the records hold no settings or recovery record: %v", kinds)
-	}
-	fmt.Fprintln(in, `CALL {"op":"root_view"}`)
-	if got := next("ANSWER "); got != `{"ok":{"delay_ms":3600000,"handed_to":null,"key_level":"files","recovery":true}}` {
-		t.Fatalf("the root's settings: %s", got)
-	}
-	if got := manage(`{"action":"remove_recovery"}`); got != `{"ok":{}}` {
-		t.Fatalf("removing the recovery key: %s", got)
-	}
-	// A group made a moment ago stops nothing.
-	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
-	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {
-		t.Fatalf("the alerts: %s", got)
-	}
-	if got := manage(`{"action":"resolve","records":[]}`); !strings.Contains(got, "names the records") {
-		t.Fatalf("resolving nothing: %s", got)
-	}
-	// Nothing is due in a group made a moment ago.
-	if got := manage(`{"action":"renew"}`); got != `{"ok":{"renewed":0}}` {
-		t.Fatalf("renewing: %s", got)
-	}
+
 	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
 		t.Fatalf("the phone removing itself: %s", got)
 	}
-	if got := manage(`{"action":"remove","device":"` + admitted + `"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + admitted + `"}`); !strings.Contains(got, `"name":"desk"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")

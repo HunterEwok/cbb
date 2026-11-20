@@ -90,6 +90,9 @@ struct ManageArgs {
     device: String,
     #[serde(default)]
     name: String,
+    /// How long a mute lasts, 0 for until an admin ends it.
+    #[serde(default)]
+    for_ms: i64,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
 }
@@ -492,8 +495,10 @@ impl Phone {
     }
 
     /// An admin's change to a device, signed with the app's admin or root
-    /// key: remove, rename, freeze and thaw; the records judge whether the
-    /// key may.
+    /// key: remove, rename, freeze and thaw, or a command for another
+    /// device (mute, unmute, sync_off, sync_on), sent as the computer's
+    /// service sends it and answered by that device; the records judge
+    /// whether the key may.
     pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         answer((|| -> Result<Value> {
             if self.stopped.load(Ordering::SeqCst) {
@@ -519,6 +524,30 @@ impl Phone {
                     }
                     let on = a.action == "freeze";
                     mesh.write_by(&key, |set, k| writers::freeze(set, k, &a.device, on, now))?.0
+                }
+                "mute" | "unmute" | "sync_off" | "sync_on" => {
+                    use cbb_member::orders::Order;
+                    if named_me() {
+                        return Err(Error::msg("this phone's own sync and mute are its own switches, not a command"));
+                    }
+                    let o = match a.action.as_str() {
+                        "mute" => {
+                            cbb_member::mute::until(a.for_ms)?;
+                            Order::Mute((a.for_ms > 0).then_some(a.for_ms.unsigned_abs()))
+                        }
+                        "unmute" => Order::Unmute,
+                        "sync_off" => Order::Mode(cbb_core::clip::Mode::Own),
+                        _ => Order::Mode(cbb_core::clip::Mode::Shared),
+                    };
+                    let d = writers::find(&mesh.state(), &a.device)?.clone();
+                    let r = mesh
+                        .command(&key, d.id, o.kind(), o.orders()?.as_deref())
+                        .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
+                    if r.status != 1 {
+                        let status = if r.status == cbb_core::commands::STATUS_REFUSED { "refused" } else { "failed" };
+                        return Err(Error::msg(format!("{} {status} it: {}", d.name, r.reason)));
+                    }
+                    d
                 }
                 other => return Err(not_yet(&format!("the admin's action {other:?}"))),
             };

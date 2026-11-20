@@ -41,6 +41,10 @@ made with 0.5 is set up again once. The details follow.
 - A phone's member of 0.6 carries out the commands an admin sends it that the records let
   through, as the service does: mute, unmute and the sync mode, kept and sent in its next hello,
   with a `sync` event for the app; it follows the button's rule (`waiting`, `took`, `sends`).
+- A phone of 0.6 offers its admin key when it joins (`cbb_joiner_new_admin`), for the root to
+  make it an admin later; a root phone keeps the key a device offered through its window, lets a
+  computer that can be a hub be one, and mutes, unmutes and turns the sync of another device off
+  and on by command (`cbb_member_manage`).
 - A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
   its root key signs its own record, the set is kept for the member, and the recovery sheet goes
   to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers
