@@ -67,6 +67,8 @@ made with 0.5 is set up again once. The details follow.
   other operation answers that it is not on the records of 0.6 yet, with that as its cause
   in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
   8 bytes of the group ID.
+- `cbb keys` sets the group's key level on the records of 0.6, on its root, whose own keys
+  must meet it, and names the admins and hubs below it; status shows the level.
 - A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
   `p=1` by mDNS, as a phone's window does, so that a new device that browses for it dials the
   one window and checks its key (docs/protocol.md, section 3).

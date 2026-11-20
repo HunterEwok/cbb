@@ -215,6 +215,12 @@ impl Service {
             removed: mine.is_none(),
             frozen: mine.is_some_and(|d| d.frozen),
             media: Some(self.media_status()),
+            key_level: match st.settings.key_level {
+                cbb_core::records::body::LEVEL_PROVEN => "proven",
+                cbb_core::records::body::LEVEL_FILES => "files",
+                _ => "hardware",
+            }
+            .into(),
             incoming_ms: st.incoming_ms.map_or(cbb_core::authority::DEFAULT_INCOMING, |ms| ms as i64),
             unreached: live.unreached(),
             port: self.port.lock().unwrap().map_or(0, i64::from),
@@ -357,6 +363,7 @@ impl Service {
                     .map(|_| control::reply(Header::default(), Vec::new()))
             }
             "incoming" => self.live_incoming(live, &h.value),
+            control::op::KEY_LEVEL => self.live_key_level(live, &h.value),
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             op if !MOVING.contains(&op) => return None,
@@ -437,6 +444,39 @@ impl Service {
             if on { crate::mute::kept_by(&crate::mute::by(&self.state_dir, &live.board)?, &me) } else { me.clone() };
         self.live_mute(live, on, until, &saved)?;
         Ok(control::reply(Header::default(), Vec::new()))
+    }
+
+    /// cbb keys: the group's key level, on its root, which its own keys
+    /// must meet; the answer names the admins and hubs below it, which
+    /// stay until the user removes them.
+    fn live_key_level(&self, live: &Live, value: &str) -> Result<Message> {
+        use cbb_core::records::body::{LEVEL_FILES, LEVEL_HARDWARE, LEVEL_PROVEN};
+        let level = match value {
+            "proven" => LEVEL_PROVEN,
+            "hardware" => LEVEL_HARDWARE,
+            "files" => LEVEL_FILES,
+            _ => return Err(Error::msg("the key level is proven, hardware or files")),
+        };
+        let own = live.mesh.own();
+        let root_store = match own.root.as_ref().and_then(|k| k.held()) {
+            Some(_) => "hardware",
+            None => "file",
+        };
+        crate::admin::level_allows(value, root_store, "this device, the group's root,", "", true)?;
+        let now = uptime::wall_ms().max(0) as u64;
+        live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = level, now))?;
+        (self.log)(&format!("cbb: the group's key level is {value} now"));
+        let st = live.mesh.state();
+        let me = live.mesh.device();
+        let below = self
+            .live_devices(live)
+            .into_iter()
+            .filter(|d| d.id != id_text(&me))
+            .filter(|d| d.admin || st.hubs.iter().any(|h| id_text(h) == d.id))
+            .filter(|d| crate::admin::level_allows(value, &d.store, &d.name, "", true).is_err())
+            .map(|d| d.name)
+            .collect();
+        Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
     }
 
     /// cbb incoming: how long a copy from another device stays live.
@@ -637,7 +677,6 @@ const MOVING: &[&str] = &[
     "release_held",
     "update_way",
     control::op::MAKE_ADMIN,
-    control::op::KEY_LEVEL,
     control::op::TAKEOVER_DELAY,
     control::op::TAKE_OVER,
     control::op::RECOVER,
