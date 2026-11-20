@@ -24,6 +24,7 @@ pub const T_MISSING: u64 = 14;
 pub const T_REACH: u64 = 18;
 pub const T_EVIDENCE: u64 = 19;
 pub const T_ENTRIES: u64 = 25;
+pub const T_WANT: u64 = 30;
 
 /// The most action names a hello offers.
 pub const MAX_ACTIONS: usize = 64;
@@ -99,6 +100,19 @@ pub static HAVE: Table = Table {
     fields: &[f(2, "have/ids", Ty::Set { of: &B32, max: crate::records::sync::HAVE_IDS }, true)],
 };
 
+/// `want` (t 30): "give me these": the record IDs the asker's set names
+/// and lacks (`RecordSet::missing`) and the hash of the list a change of
+/// root waits for (`RecordSet::missing_list`), at least one of the two
+/// (rule `want/empty`). The answer is message `records`, built only from
+/// `RecordSet::for_peer_by_id` and `RecordSet::lists_for_peer`.
+pub static WANT: Table = Table {
+    shape: "want/shape",
+    fields: &[
+        f(2, "want/ids", Ty::Set { of: &B32, max: crate::records::sync::HAVE_IDS }, false),
+        f(3, "want/list", B32, false),
+    ],
+};
+
 /// `release` (t 12): the signed release a member passes on, its files as
 /// published (docs/protocol.md, "Signed releases").
 pub static RELEASE: Table = Table {
@@ -145,8 +159,8 @@ pub static EVIDENCE: Table = Table {
 };
 
 /// Every table of this file, for the vectors.
-pub static ALL: [&Table; 11] =
-    [&HELLO, &HELLO_DEVICE, &PING, &BYE, &HAVE, &RELEASE, &ENTRIES, &GET, &MISSING, &REACH, &EVIDENCE];
+pub static ALL: [&Table; 12] =
+    [&HELLO, &HELLO_DEVICE, &PING, &BYE, &HAVE, &WANT, &RELEASE, &ENTRIES, &GET, &MISSING, &REACH, &EVIDENCE];
 
 /// The table of message type t, if this file numbers it.
 pub fn of(t: u64) -> Option<&'static Table> {
@@ -155,6 +169,7 @@ pub fn of(t: u64) -> Option<&'static Table> {
         T_PING => &PING,
         T_BYE => &BYE,
         T_HAVE => &HAVE,
+        T_WANT => &WANT,
         T_RELEASE => &RELEASE,
         T_GET => &GET,
         T_MISSING => &MISSING,

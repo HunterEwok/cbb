@@ -2060,6 +2060,9 @@ def between_rule(name, v):
         named = [k[1] for k in v[9]]
         if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
             return "offer/endpoint-keys"
+    # A want asks for something.
+    if name == "want" and 2 not in v and 3 not in v:
+        return "want/empty"
     # A root's fork is two records.
     if name == "roots" and 3 in v and len(v[3]) != 2:
         return "roots/fork"
@@ -3048,6 +3051,7 @@ TABLES5 = {
     "ping": [],
     "bye": [],
     "have": [(2, "have/ids", "set 1..4096 of bytes 32", True)],
+    "want": [(2, "want/ids", "set 1..4096 of bytes 32", False), (3, "want/list", "bytes 32", False)],
     "release": [
         (2, "release/keys", "bytes 1..524288", True),
         (3, "release/channel", "bytes 1..524288", True),
@@ -3065,7 +3069,7 @@ TABLES5 = {
     ],
 }
 MESSAGE_TYPES5 = {1: "hello", 3: "ping", 4: "bye", 6: "have", 12: "release", 13: "get", 14: "missing",
-                  18: "reach", 19: "evidence", 25: "entries"}
+                  18: "reach", 19: "evidence", 25: "entries", 30: "want"}
 TABLES.update(TABLES5)
 
 MEDIA_TYPES = 4
@@ -3876,6 +3880,13 @@ def wave5_vectors():
     msg("have", {0: 6, 2: ids})
     bad("have, IDs out of order", {0: 6, 2: list(reversed(ids))}, "have/ids")
     bad("have, no IDs", {0: 6}, "have/ids")
+    msg("want", {0: 30, 2: ids, 3: fake("list", 32)})
+    msg("want of records", {0: 30, 2: ids})
+    msg("want of a list", {0: 30, 3: fake("list", 32)})
+    bad("want of nothing", {0: 30}, "want/empty")
+    bad("want, IDs out of order", {0: 30, 2: list(reversed(ids))}, "want/ids")
+    bad("want, an ID twice", {0: 30, 2: [ids[0], ids[0]]}, "want/ids")
+    bad("want, a list hash of 31 bytes", {0: 30, 3: fake("list", 31)}, "want/list")
     msg("release", release, "the files are placeholders; their own reader checks them")
     bad("release without its channel file", {k: v for k, v in release.items() if k != 3}, "release/channel")
     msg("entries", {0: 25, 2: b"{}", 3: b"{}"})

@@ -163,6 +163,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&m::MISSING, 3, Refuse, "absent is offset 0: another range"),
     o(&m::MISSING, 4, Refuse, "absent is the cancel's"),
     o(&m::REACH, 2, Refuse, "absent reaches nobody"),
+    o(&m::WANT, 2, Refuse, "absent asks for no record"),
+    o(&m::WANT, 3, Refuse, "absent asks for no list"),
 ];
 
 /// What a value out of range of field n of the table reads as: its row, or

@@ -274,6 +274,10 @@ fn between(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             seen.push(e);
         }
     }
+    // A want asks for something.
+    if core::ptr::eq(table, &member::WANT) && v.get(2).is_none() && v.get(3).is_none() {
+        return Err(Rule::field("want/empty"));
+    }
     // A root's fork is two records.
     if core::ptr::eq(table, &wave4::ROOTS) && v.get(3).and_then(Value::as_array).is_some_and(|a| a.len() != 2) {
         return Err(Rule::field("roots/fork"));

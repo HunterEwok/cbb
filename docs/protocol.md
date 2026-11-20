@@ -543,12 +543,13 @@ change the mode, or change what the person compares or approves.
 | 25 | `entries` | as `release`, for `entries.json` | 16 |
 | 26 | `waiting` | the holder (a hub) to a device that may admit | 12 |
 | 27 | `dismiss` | that admin to the holder | 12 |
+| 30 | `want` | 2 record IDs, sorted, each once, at most `records::sync::HAVE_IDS` (4096); 3 the hash of a list (32 bytes); at least one of the two: "give me these". The answer is `records`, built only from what the set gives that peer by ID and the lists it gives that peer | 10 |
 | 64–69 | pairing | `cbb-pair/3` only | 6 |
 | 80–84 | forwarder | device and forwarder | 13 |
 | 90–99 | relay | device and relay, and inside the relay's tunnel | 14 |
 
 0.5's `cert` and `admin` messages are gone, since there are no certificates. Each message's
-fields and their rules are in the core's tables (`msg::tables`, `msg::wave4`) and in the
+fields and their rules are in the core's tables (`msg::tables`, `msg::wave4`, `msg::member`) and in the
 vectors of `testdata/format`.
 
 **The hello** (`t` 1) is the first message of each side on a member connection. The core reads

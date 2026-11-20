@@ -159,6 +159,20 @@
     "needed": true
    }
   ],
+  "want": [
+   {
+    "n": 2,
+    "rule": "want/ids",
+    "type": "set 1..4096 of bytes 32",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "want/list",
+    "type": "bytes 32",
+    "needed": false
+   }
+  ],
   "release": [
    {
     "n": 2,
@@ -272,7 +286,8 @@
   "14": "missing",
   "18": "reach",
   "19": "evidence",
-  "25": "entries"
+  "25": "entries",
+  "30": "want"
  },
  "take": [
   {
@@ -315,6 +330,21 @@
    "name": "have",
    "t": 6,
    "message": "a2000602835820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b9582094d0ec3325206fe62ddbb468e948610004a71eea52d12b72d8752a1aa98760805820c70ae663a29b17f6b7350c1b268e438c30f40eed11b77d85e3816d6f09d5c996"
+  },
+  {
+   "name": "want",
+   "t": 30,
+   "message": "a300181e02835820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b9582094d0ec3325206fe62ddbb468e948610004a71eea52d12b72d8752a1aa98760805820c70ae663a29b17f6b7350c1b268e438c30f40eed11b77d85e3816d6f09d5c99603582091a52d7b2c4e19d0e926b125d2c494a7e0209c2402043fbf5634ec1405d202f1"
+  },
+  {
+   "name": "want of records",
+   "t": 30,
+   "message": "a200181e02835820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b9582094d0ec3325206fe62ddbb468e948610004a71eea52d12b72d8752a1aa98760805820c70ae663a29b17f6b7350c1b268e438c30f40eed11b77d85e3816d6f09d5c996"
+  },
+  {
+   "name": "want of a list",
+   "t": 30,
+   "message": "a200181e03582091a52d7b2c4e19d0e926b125d2c494a7e0209c2402043fbf5634ec1405d202f1"
   },
   {
    "name": "release",
@@ -429,6 +459,26 @@
    "name": "have, no IDs",
    "rule": "have/ids",
    "message": "a10006"
+  },
+  {
+   "name": "want of nothing",
+   "rule": "want/empty",
+   "message": "a100181e"
+  },
+  {
+   "name": "want, IDs out of order",
+   "rule": "want/ids",
+   "message": "a200181e02835820c70ae663a29b17f6b7350c1b268e438c30f40eed11b77d85e3816d6f09d5c996582094d0ec3325206fe62ddbb468e948610004a71eea52d12b72d8752a1aa98760805820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b9"
+  },
+  {
+   "name": "want, an ID twice",
+   "rule": "want/ids",
+   "message": "a200181e02825820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b95820107e13b074e060e6b5ddc1662e1fbbc9269e1c73be353b673e1e6c936c1fb2b9"
+  },
+  {
+   "name": "want, a list hash of 31 bytes",
+   "rule": "want/list",
+   "message": "a200181e03581f91a52d7b2c4e19d0e926b125d2c494a7e0209c2402043fbf5634ec1405d202"
   },
   {
    "name": "release without its channel file",

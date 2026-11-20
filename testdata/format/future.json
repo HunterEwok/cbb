@@ -428,6 +428,16 @@
    "later": "absent"
   },
   {
+   "table": "want",
+   "n": 2,
+   "later": "refuse"
+  },
+  {
+   "table": "want",
+   "n": 3,
+   "later": "refuse"
+  },
+  {
    "table": "get",
    "n": 3,
    "later": "refuse"
