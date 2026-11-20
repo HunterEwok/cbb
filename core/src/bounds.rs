@@ -1019,7 +1019,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "a release file of a 256 KiB body in base64 with its signature",
         "release/release",
-        &["vec:messages5.json:release, a file of 512 KiB and one byte"],
+        &["the_member_messages_hold_at_their_bounds"],
     ),
     b(
         "msg::member::MAX_EVIDENCE",
@@ -1027,7 +1027,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "an attestation's chain or a TPM's quote with its certificates",
         "evidence/data",
-        &["vec:messages5.json:evidence of 64 KiB", "vec:messages5.json:evidence of 64 KiB and one byte"],
+        &["the_member_messages_hold_at_their_bounds"],
     ),
     b(
         "sheet::MAX_INPUT",

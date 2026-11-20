@@ -1177,7 +1177,7 @@
       "class": "frozen",
       "name": "msg::member::MAX_RELEASE_FILE",
       "reached": [
-        "vec:messages5.json:release, a file of 512 KiB and one byte"
+        "the_member_messages_hold_at_their_bounds"
       ],
       "refusal": "release/release",
       "value": 524288,
@@ -1187,8 +1187,7 @@
       "class": "frozen",
       "name": "msg::member::MAX_EVIDENCE",
       "reached": [
-        "vec:messages5.json:evidence of 64 KiB",
-        "vec:messages5.json:evidence of 64 KiB and one byte"
+        "the_member_messages_hold_at_their_bounds"
       ],
       "refusal": "evidence/data",
       "value": 65536,

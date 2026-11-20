@@ -672,3 +672,40 @@ fn the_member_messages_are_the_vectors() {
         assert_eq!(check(&unhex(&r["message"])).err().map(|e| e.name()), Some(rule), "{}", r["name"]);
     }
 }
+
+/// The member messages at their widest and one past it, built here rather
+/// than written into messages5.json, where they would pass the
+/// repository's limit on one file.
+#[test]
+fn the_member_messages_hold_at_their_bounds() {
+    use crate::format::cbor::Encoder;
+    let have = |n: usize| {
+        let mut ids: Vec<[u8; 32]> = (0..n as u32).map(|i| crate::certs::sha256(&i.to_be_bytes())).collect();
+        ids.sort_unstable();
+        let mut e = Encoder::new();
+        e.map(2).uint(0).uint(member::T_HAVE).uint(2).array(n);
+        for id in &ids {
+            e.bytes(id);
+        }
+        e.finish()
+    };
+    assert_eq!(check(&have(crate::records::sync::HAVE_IDS)), Ok(member::T_HAVE));
+    assert_eq!(check(&have(crate::records::sync::HAVE_IDS + 1)).err().map(|e| e.name()), Some("have/ids"));
+
+    let release = |len: usize| {
+        let mut e = Encoder::new();
+        e.map(4).uint(0).uint(member::T_RELEASE);
+        e.uint(2).bytes(b"keys").uint(3).bytes(b"channel").uint(4).bytes(&vec![b'x'; len]);
+        e.finish()
+    };
+    assert_eq!(check(&release(member::MAX_RELEASE_FILE)), Ok(member::T_RELEASE));
+    assert_eq!(check(&release(member::MAX_RELEASE_FILE + 1)).err().map(|e| e.name()), Some("release/release"));
+
+    let evidence = |len: usize| {
+        let mut e = Encoder::new();
+        e.map(4).uint(0).uint(member::T_EVIDENCE).uint(2).uint(2).uint(3).bytes(&[7; 32]).uint(4).bytes(&vec![1; len]);
+        e.finish()
+    };
+    assert_eq!(check(&evidence(member::MAX_EVIDENCE)), Ok(member::T_EVIDENCE));
+    assert_eq!(check(&evidence(member::MAX_EVIDENCE + 1)).err().map(|e| e.name()), Some("evidence/data"));
+}

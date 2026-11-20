@@ -3874,13 +3874,10 @@ def wave5_vectors():
     msg("ping", {0: 3})
     msg("bye", {0: 4})
     msg("have", {0: 6, 2: ids})
-    msg("have 4096 IDs", {0: 6, 2: sorted(sha(b"id %d" % i) for i in range(4096))})
-    bad("have 4097 IDs", {0: 6, 2: sorted(sha(b"id %d" % i) for i in range(4097))}, "have/ids")
     bad("have, IDs out of order", {0: 6, 2: list(reversed(ids))}, "have/ids")
     bad("have, no IDs", {0: 6}, "have/ids")
     msg("release", release, "the files are placeholders; their own reader checks them")
     bad("release without its channel file", {k: v for k, v in release.items() if k != 3}, "release/channel")
-    bad("release, a file of 512 KiB and one byte", {**release, 4: b"x" * (512 * 1024 + 1)}, "release/release")
     msg("entries", {0: 25, 2: b"{}", 3: b"{}"})
     bad("entries without the keys file", {0: 25, 3: b"{}"}, "entries/keys")
     msg("get", {0: 13, 2: fake("blob", 32), 3: 4_194_304, 4: 4_194_304})
@@ -3895,11 +3892,12 @@ def wave5_vectors():
     bad("reach, devices out of order", {0: 18, 2: list(reversed(devs))}, "reach/devices")
     bad("reach of 257 devices", {0: 18, 2: sorted(sha(b"d %d" % i)[:16] for i in range(257))}, "reach/devices")
     msg("evidence", {0: 19, 2: 1, 3: fake("key hash", 32), 4: fake("attestation", 3000)})
-    msg("evidence of 64 KiB", {0: 19, 2: 2, 3: fake("key hash", 32), 4: fake("attestation", 65536)})
-    bad("evidence of 64 KiB and one byte", {0: 19, 2: 2, 3: fake("key hash", 32), 4: fake("attestation", 65537)},
-        "evidence/data")
     bad("evidence of a format of a later version", {0: 19, 2: 5, 3: fake("key hash", 32), 4: b"x"},
         "evidence/format")
+    # The widest have, a release file and evidence at their bounds and one
+    # past them are tested where they are built (core/src/msg/tests.rs,
+    # the_member_messages_hold_at_their_bounds): written out here they
+    # would pass the repository's limit on one file.
     out["take"], out["refuse"] = take, refuse
     return out
 
