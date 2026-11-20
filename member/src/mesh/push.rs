@@ -27,43 +27,123 @@ use crate::pusher::{self, Face, Role};
 pub(super) const FILE: &str = "push.cbor";
 
 /// The push service's face of the group, by the newest keys.json held
-/// (use `push`; no pin is built in) and the group's current period.
-pub(super) struct PushFaces(pub(super) Weak<Mesh>);
+/// (use `push`; no pin is built in) and the group's current period; and
+/// the previous period's, kept until its credentials expire for the
+/// registrations made under it (`Sender::needs_face`), never for a new one.
+pub(super) struct PushFaces {
+    mesh: Weak<Mesh>,
+    seen: Mutex<Seen>,
+}
+
+/// A face of the push service.
+#[derive(Clone)]
+struct Held {
+    addr: SocketAddr,
+    pin: [u8; 32],
+    key: Arc<crate::faces::ServerKey>,
+    credentials: Vec<Vec<u8>>,
+    tag: [u8; 16],
+    expires_ms: u64,
+}
+
+impl Held {
+    fn face(&self) -> Face {
+        Face {
+            addr: self.addr,
+            pin: self.pin,
+            key: self.key.clone(),
+            credentials: self.credentials.clone(),
+            tag: self.tag,
+            expires_ms: self.expires_ms,
+        }
+    }
+}
+
+/// The current face as last seen, and the one before it.
+#[derive(Default)]
+struct Seen {
+    current: Option<Held>,
+    previous: Option<Held>,
+}
+
+impl Seen {
+    /// The current face now: when its period changed, the one seen before
+    /// becomes the previous face. None (no face now) changes nothing.
+    fn see(&mut self, now: Option<Held>) {
+        let Some(now) = now else { return };
+        if let Some(old) = self.current.take()
+            && old.tag != now.tag
+        {
+            self.previous = Some(old);
+        }
+        self.current = Some(now);
+    }
+
+    /// The faces the sender may use at now_ms: the current one, and the
+    /// previous while `needed` says a registration names it and it has not
+    /// expired; once either fails it is dropped for good.
+    fn faces(&mut self, now_ms: u64, needed: impl Fn(&[u8; 16]) -> bool) -> Vec<Face> {
+        if self.previous.as_ref().is_some_and(|p| p.expires_ms <= now_ms || !needed(&p.tag)) {
+            self.previous = None;
+        }
+        self.current.iter().chain(self.previous.iter()).map(Held::face).collect()
+    }
+}
+
+impl PushFaces {
+    pub(super) fn new(mesh: Weak<Mesh>) -> PushFaces {
+        PushFaces { mesh, seen: Mutex::new(Seen::default()) }
+    }
+
+    /// Looks at the current face, so that the previous one is kept when
+    /// the period changes. The mesh calls it whenever the group's
+    /// credentials may have changed.
+    pub(super) fn look(&self, mesh: &Mesh, state: &State) {
+        let now = current(mesh, state);
+        self.seen.lock().unwrap().see(now);
+    }
+}
+
+/// The current period's face toward the push service, when the newest
+/// keys.json names the service and the period counts.
+fn current(mesh: &Mesh, state: &State) -> Option<Held> {
+    let now = crate::uptime::wall_ms();
+    let pins: Vec<[u8; 32]> = mesh
+        .entries()
+        .map(|e| e.keys_for("push", pusher::SERVICE, now))
+        .unwrap_or_default()
+        .iter()
+        .map(|spki| cbb_core::certs::sha256(spki))
+        .collect();
+    if pins.is_empty() {
+        return None;
+    }
+    let member = mesh.own.member.public();
+    let (server, shown) = mesh.faces.for_relay(state, &member, &pins, now.max(0) as u64)?;
+    let Some(addr) = resolve(&server.address) else {
+        mesh.logf(&format!("cbb: the push service {} could not be looked up", server.address));
+        return None;
+    };
+    Some(Held {
+        addr,
+        pin: server.pin,
+        key: Arc::new(shown.key),
+        credentials: shown.credentials,
+        tag: shown.tag,
+        expires_ms: shown.expires_ms,
+    })
+}
 
 impl pusher::Faces for PushFaces {
     fn faces(&self, group: &GroupId) -> Vec<Face> {
-        let Some(mesh) = self.0.upgrade() else { return Vec::new() };
+        let Some(mesh) = self.mesh.upgrade() else { return Vec::new() };
         let state = mesh.state();
         if state.group != *group {
             return Vec::new();
         }
-        let now = crate::uptime::wall_ms();
-        let pins: Vec<[u8; 32]> = mesh
-            .entries()
-            .map(|e| e.keys_for("push", pusher::SERVICE, now))
-            .unwrap_or_default()
-            .iter()
-            .map(|spki| cbb_core::certs::sha256(spki))
-            .collect();
-        let member = mesh.own.member.public();
-        let Some((server, shown)) = mesh.faces.for_relay(&state, &member, &pins, now.max(0) as u64) else {
-            return Vec::new();
-        };
-        let Some(addr) = resolve(&server.address) else {
-            mesh.logf(&format!("cbb: the push service {} could not be looked up", server.address));
-            return Vec::new();
-        };
-        // The previous period's face is not kept: a registration under it
-        // is asked to register again (pusher, "Under a face this member no
-        // longer has").
-        vec![Face {
-            addr,
-            pin: server.pin,
-            key: Arc::new(shown.key),
-            credentials: shown.credentials,
-            tag: shown.tag,
-            expires_ms: shown.expires_ms,
-        }]
+        self.look(&mesh, &state);
+        let now = crate::uptime::wall_ms().max(0) as u64;
+        self.seen.lock().unwrap().faces(now, |tag| mesh.push.needs_face(group, tag))
     }
 }
 
@@ -192,5 +272,180 @@ impl Mesh {
             Some(d) if !d.frozen && d.rights & cbb_core::records::body::RIGHT_HUB != 0 => Role::Hub,
             _ => Role::Neither,
         }
+    }
+}
+
+/// What the member had applied when it last looked for the phones' events:
+/// the records that counted, the recovery records of the chain and the
+/// devices by member key.
+#[derive(Clone, Default)]
+pub(super) struct Applied {
+    counting: std::collections::BTreeSet<cbb_core::records::key::RecordId>,
+    changes: std::collections::BTreeSet<cbb_core::records::key::RecordId>,
+    devices: Vec<(cbb_core::records::key::KeyHash, DeviceId)>,
+}
+
+impl Applied {
+    pub(super) fn of(state: &State) -> Applied {
+        Applied {
+            counting: state.counting.clone(),
+            changes: state.changes.iter().map(|c| c.record).collect(),
+            devices: state.devices.iter().map(|d| (d.key.hash(), d.id)).collect(),
+        }
+    }
+}
+
+/// One event a phone hears of (rule 33's): its ID, the first 16 bytes of
+/// the record's ID, so that every sender gives the same; what happened;
+/// the device it names; and the record's own time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Event {
+    pub id: [u8; 16],
+    pub event: u64,
+    pub device: Option<DeviceId>,
+    pub time_ms: Option<u64>,
+}
+
+fn event_id(r: &cbb_core::records::key::RecordId) -> [u8; 16] {
+    let mut id = [0; 16];
+    id.copy_from_slice(&r.0[..16]);
+    id
+}
+
+/// The events the records applied since `before` make, in `set` whose
+/// state is `state`: a device that joined, devices removed (the device
+/// named when one is), and a change of root that took effect.
+pub(super) fn events(before: &Applied, set: &cbb_core::records::RecordSet, state: &State) -> Vec<Event> {
+    use cbb_core::push::{EVENT_JOINED, EVENT_REMOVED, EVENT_ROOT};
+    use cbb_core::records::Kind;
+    let mut out = Vec::new();
+    let time = |ms: u64| (ms != 0).then_some(ms);
+    for id in state.counting.difference(&before.counting) {
+        let Some(r) = set.get(id) else { continue };
+        let b = r.body();
+        match &b.kind {
+            Kind::Device(d) => {
+                let Some(now) = state.device_by_key(&d.key.hash()) else { continue };
+                if before.devices.iter().all(|(_, was)| *was != now.id) {
+                    out.push(Event {
+                        id: event_id(id),
+                        event: EVENT_JOINED,
+                        device: Some(now.id),
+                        time_ms: time(b.time_ms),
+                    });
+                }
+            }
+            Kind::Revoke(rm) => {
+                let named: Vec<DeviceId> = rm
+                    .keys
+                    .iter()
+                    .filter_map(|k| before.devices.iter().find(|(h, _)| h == k).map(|(_, d)| *d))
+                    .collect();
+                if !named.is_empty() {
+                    let device = (named.len() == 1).then(|| named[0]);
+                    out.push(Event { id: event_id(id), event: EVENT_REMOVED, device, time_ms: time(b.time_ms) });
+                }
+            }
+            _ => {}
+        }
+    }
+    for c in &state.changes {
+        if c.state == cbb_core::records::eval::ChangeState::Effective && !before.changes.contains(&c.record) {
+            let time_ms = set.get(&c.record).and_then(|r| time(r.body().time_ms));
+            out.push(Event { id: event_id(&c.record), event: EVENT_ROOT, device: None, time_ms });
+        }
+    }
+    out
+}
+
+impl Mesh {
+    /// After records were applied: the phones' events they make go to the
+    /// push sender, from a hub, else from the root's or an admin's device
+    /// when the group has no hub.
+    pub(super) fn push_events(&self, set: &cbb_core::records::RecordSet) {
+        let state = set.state();
+        let before = std::mem::replace(&mut *self.applied.lock().unwrap(), Applied::of(&state));
+        if self.push.held() == 0 {
+            return;
+        }
+        let me = self.device();
+        let sends = if state.hubs.is_empty() {
+            state.root_device == Some(me) || state.device(&me).is_some_and(|d| d.admin.is_some() && !d.frozen)
+        } else {
+            state.hubs.contains(&me)
+        };
+        for e in events(&before, set, &state) {
+            self.push.event(&state.group, &e.id, e.event, e.device, sends, e.time_ms);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn held(tag: u8, expires_ms: u64) -> Held {
+        Held {
+            addr: "192.0.2.1:8767".parse().unwrap(),
+            pin: [1; 32],
+            key: Arc::new(crate::faces::ServerKey::from_scalar(&[tag; 32]).unwrap()),
+            credentials: vec![vec![tag]],
+            tag: [tag; 16],
+            expires_ms,
+        }
+    }
+
+    fn tags(f: &[Face]) -> Vec<u8> {
+        f.iter().map(|f| f.tag[0]).collect()
+    }
+
+    /// The previous period's face serves the registrations under it until
+    /// it expires, so that a phone on it is not asked to register again
+    /// before then (the sender asks only when a registration's face is not
+    /// given: pushd's tests, the_previous_face_serves_push_only_until_the_
+    /// phone_registers_again); a new period never brings it back.
+    #[test]
+    fn the_previous_face_stays_until_it_expires_or_nobody_needs_it() {
+        let mut s = Seen::default();
+        s.see(Some(held(1, 100)));
+        assert_eq!(tags(&s.faces(10, |_| true)), [1]);
+        // The period changes: the old face stays for those under it.
+        s.see(Some(held(2, 200)));
+        s.see(Some(held(2, 200)));
+        s.see(None);
+        assert_eq!(tags(&s.faces(50, |t| t == &[1; 16])), [2, 1]);
+        assert_eq!(tags(&s.faces(99, |t| t == &[1; 16])), [2, 1], "before it expires");
+        // Expired: gone for good.
+        assert_eq!(tags(&s.faces(100, |_| true)), [2]);
+        assert_eq!(tags(&s.faces(10, |_| true)), [2]);
+        // Nobody under it: gone as well.
+        s.see(Some(held(3, 300)));
+        assert_eq!(tags(&s.faces(150, |_| false)), [3]);
+        assert_eq!(tags(&s.faces(150, |_| true)), [3]);
+    }
+
+    /// Every device that applies a record gives the phones' event the same
+    /// ID, the first 16 bytes of the record's ID, so that a phone woken by
+    /// a hub and by the root shows it once.
+    #[test]
+    fn two_senders_give_one_event_id() {
+        let (da, db) = super::super::tests::two_dirs("push-events");
+        let load = |d: &Path| crate::set::load(d, &crate::set::local_key(d).unwrap()).unwrap().unwrap();
+        let (a, mut b) = (load(&da), load(&db));
+        // b lacks the record that adds c; a has it.
+        let before = Applied::of(&b.state());
+        let (sa, sb) = (a.state(), b.state());
+        let new: Vec<_> = sa.counting.difference(&sb.counting).copied().collect();
+        assert_eq!(new.len(), 1);
+        let at_a = events(&before, &a, &sa);
+        b.insert(a.get(&new[0]).unwrap().clone()).unwrap();
+        let at_b = events(&before, &b, &b.state());
+        assert_eq!(at_a, at_b);
+        assert_eq!(at_a.len(), 1);
+        assert_eq!(at_a[0].event, cbb_core::push::EVENT_JOINED);
+        assert_eq!(at_a[0].id[..], new[0].0[..16]);
+        assert!(at_a[0].device.is_some() && at_a[0].time_ms.is_some());
+        // Applied again: nothing new.
+        assert!(events(&Applied::of(&sa), &a, &sa).is_empty());
     }
 }

@@ -327,9 +327,11 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   set changes; a copy made here (the origin) or received by a device with the `hub` right is
   offered to the sender with `push::copy_body`. The push service's face is the group's face
   toward the service's pin in the newest `keys.json` (use `push`): the current period's
-  server key and its hubs' and members' credentials. The previous period's face is not kept
-  yet, so a registration made under it is asked to register again; events (rule 33) are not
-  sent yet.
+  server key and its hubs' and members' credentials, and the previous period's face, kept
+  until it expires for the registrations made under it and never for a new one. The phones'
+  events (rule 33: a device joined or was removed, the root changed) come from the records
+  applied, each with the first 16 bytes of its record's ID as its ID, sent by a hub, else
+  the root's or an admin's device ([core API](core-api.md), "Push").
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in

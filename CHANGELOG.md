@@ -65,7 +65,10 @@ made with 0.5 is set up again once. The details follow.
   `push.cbor`, across a restart), asks a phone to register again when the service found its
   registration stale, forgets a removed or frozen device's, and wakes a phone that is not
   connected for a copy it made or, with the `hub` right, received, under the group's face
-  toward the push service. Events and the previous period's face are still moving to 0.6.
+  toward the push service, the previous period's face kept until it expires for the
+  registrations under it. A hub (else the root's or an admin's device) wakes the phones for a
+  device that joined or was removed and a change of root, with the first 16 bytes of the
+  record's ID as the event's ID, so that every sender gives the same.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

@@ -137,6 +137,9 @@ pub struct Mesh {
     /// registrations (`mesh/push.rs`).
     push: crate::pusher::Sender,
     push_saved: Arc<push::PushSaved>,
+    push_faces: Arc<push::PushFaces>,
+    /// What was applied when the phones' events were last looked for.
+    applied: Mutex<push::Applied>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
 }
@@ -242,42 +245,42 @@ impl Mesh {
         let (saved, loaded) = push::PushSaved::open(dir, set.state().group, log.clone());
         let push_saved = Arc::new(saved);
         let (statements, book) = (Statements::load(dir)?, Book::load(dir)?);
-        Ok(Arc::new_cyclic(|me| Mesh {
-            push: crate::pusher::Sender::start(
-                Arc::new(push::PushFaces(me.clone())),
-                push_saved.clone(),
-                loaded,
-                log.clone(),
-            ),
-            push_saved,
-            statements: Mutex::new(statements),
-            book: Mutex::new(book),
-            store: Mutex::new(store),
-            marks: Mutex::new(marks),
-            own,
-            dir: dir.to_path_buf(),
-            local,
-            set: Arc::new(Mutex::new(set)),
-            kept: Mutex::new(HashMap::new()),
-            seen: Mutex::new((HashSet::new(), VecDeque::new())),
-            content: Arc::new(Store::open(dir)),
-            fetches: Mutex::new(HashMap::new()),
-            conns: Mutex::new(HashMap::new()),
-            hellos: Mutex::new(HashMap::new()),
-            clock,
-            hello: RwLock::new(Hello::default()),
-            lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
-            on_copy: RwLock::new(None),
-            on_command: RwLock::new(None),
-            on_set: RwLock::new(None),
-            on_other: RwLock::new(None),
-            on_pair: RwLock::new(None),
-            waiting: Mutex::new(HashMap::new()),
-            releases: RwLock::new(None),
-            entries: RwLock::new(None),
-            faces,
-            log,
-            closed: AtomicBool::new(false),
+        Ok(Arc::new_cyclic(|me| {
+            let push_faces = Arc::new(push::PushFaces::new(me.clone()));
+            Mesh {
+                push: crate::pusher::Sender::start(push_faces.clone(), push_saved.clone(), loaded, log.clone()),
+                push_faces,
+                push_saved,
+                applied: Mutex::new(push::Applied::of(&set.state())),
+                statements: Mutex::new(statements),
+                book: Mutex::new(book),
+                store: Mutex::new(store),
+                marks: Mutex::new(marks),
+                own,
+                dir: dir.to_path_buf(),
+                local,
+                set: Arc::new(Mutex::new(set)),
+                kept: Mutex::new(HashMap::new()),
+                seen: Mutex::new((HashSet::new(), VecDeque::new())),
+                content: Arc::new(Store::open(dir)),
+                fetches: Mutex::new(HashMap::new()),
+                conns: Mutex::new(HashMap::new()),
+                hellos: Mutex::new(HashMap::new()),
+                clock,
+                hello: RwLock::new(Hello::default()),
+                lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
+                on_copy: RwLock::new(None),
+                on_command: RwLock::new(None),
+                on_set: RwLock::new(None),
+                on_other: RwLock::new(None),
+                on_pair: RwLock::new(None),
+                waiting: Mutex::new(HashMap::new()),
+                releases: RwLock::new(None),
+                entries: RwLock::new(None),
+                faces,
+                log,
+                closed: AtomicBool::new(false),
+            }
         }))
     }
 
@@ -466,7 +469,8 @@ impl Mesh {
     /// project's and the group's own relays, `faces::group_servers`), and
     /// sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
-        // A removed or frozen device's push registration goes with it.
+        // A removed or frozen device's push registration goes with it,
+        // and the push service's previous face is kept for those under it.
         self.prune_push(state);
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
@@ -482,6 +486,7 @@ impl Mesh {
             }
             Err(e) => self.logf(&format!("cbb: the server credentials: {}", e.for_log())),
         }
+        self.push_faces.look(self, state);
     }
 
     /// Takes message `member-credentials` from a peer: the new ones go on
@@ -542,6 +547,7 @@ impl Mesh {
             f(&set);
         }
         self.refresh_faces(&set.state());
+        self.push_events(&set);
         let hello = self.hello_frame(&set);
         drop(set);
         self.broadcast(&hello, None);
@@ -875,6 +881,7 @@ impl Mesh {
                     f(&set);
                 }
                 self.refresh_faces(&set.state());
+                self.push_events(&set);
             }
             out
         };

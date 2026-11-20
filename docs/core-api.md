@@ -508,6 +508,15 @@ its clock), `forget` (a device removed or frozen), `copy` (with the copy's reade
 `event`, and the traits `Faces` (the push service's address, pin, server key and credentials
 of the group's face) and `Saved` (where the registrations are kept).
 
+On the records of 0.6 the mesh calls the seam (`member/src/mesh/push.rs`). Events (rule 33's,
+`pushbody/event`) come from the records a member applies: a device record that adds a device
+(`joined`, naming it), a `revoke` (`removed`, naming the device when it removes one) and a
+recovery record that changed the root (`root`), each with the record's own time. The event's
+`id` is the first 16 bytes of the record's ID, so every member that applies the record gives
+the same ID and a phone woken by a hub and by the root shows the event once (a copy's
+notification keeps the copy's random ID). A hub sends them, else the root's device or an
+admin's when the group has no hub. `waiting`, `own_record` and `stopped` are not sent yet.
+
 Every honest sender of one body makes the same bytes (the nonce is derived from the plaintext, a
 copy is reduced with age 0, an event carries its record's time), so the service drops a repeat by
 the bytes and a phone gets one notification; a repeat with a longer life than the first passes
