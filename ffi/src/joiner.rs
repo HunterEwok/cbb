@@ -1,31 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A new phone joins a group of 0.6 at home (format section 11.1): it scans
-//! the QR code of a member's pairing window (`cbb://pair?addr=…&fp=…`, a
-//! phone's `cbb_window_new` or a computer's), dials its addresses in turn
-//! over TLS of `cbb-pair/3` with the member key the app holds, and takes
-//! only the member whose key the code's fingerprint names. Both ends show
-//! the code the session commits to; the app asks its person and answers.
-//! On "they match" the member's Welcome is checked, the set is kept in the
-//! app's folder (`group.cbor`, as `cbb_member::set` writes it) and only
+//! A new phone joins a group of 0.6 at home (docs/protocol.md, "Pairing in
+//! 0.6"): it scans the QR code of a member's home window
+//! (`cbb://pair?addr=…&fp=…&i=…&c=…`, a phone's `cbb_window_new` or a
+//! computer's `cbb pair`), or its person types the six digits the window
+//! shows and the window is found by mDNS (its `i` and `f`). It dials the
+//! window's addresses in turn over TLS of `cbb-pair/3` with the member key
+//! the app holds, takes only the member whose key the window names, and
+//! proves the window's digits (CPace's password): nobody is asked whether
+//! anything matches. The member's Welcome is checked, the set is kept in
+//! the app's folder (`group.cbor`, as `cbb_member::set` writes it) and only
 //! then does the phone tell the member it kept it. The app then starts its
 //! member on that folder.
 
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, mpsc};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use cbb_core::certs;
 use cbb_core::error::{Error, Result};
-use cbb_core::format::frame;
+use cbb_core::format::{KeyHash, frame};
 use cbb_core::identity::ExternalKey;
 use cbb_core::join::PairError;
 use cbb_core::join::info::Info;
-use cbb_core::join::invitation::{ANSWER_MS, JoinerAttempts};
+use cbb_core::join::invitation::{Invitation, JoinerAttempts, WINDOW_PREFIX, WindowLink, home_secret};
 use cbb_core::join::session::{Joined, JoinerSession, error_frame};
 use cbb_core::join::welcome::Joining as WelcomeJoining;
 use cbb_core::records::Key;
@@ -37,19 +39,21 @@ use serde::{Deserialize, Serialize};
 use crate::join::{AppKey, ErrorAnswer, SignFn, answer};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
-/// How long each step of the machine may take; the person's answer has
-/// its own time.
+/// How long each step of the session may take.
 const STEP: Duration = Duration::from_secs(30);
 
 #[derive(Deserialize)]
 struct NewArgs {
     /// The app's folder, where the group's set is kept.
     dir: String,
-    /// The window's QR code, cbb://pair?addr=…&fp=…; empty to find the one
-    /// open window by mDNS (a phone without a camera, docs/protocol.md
-    /// section 6).
+    /// The window's QR code text; empty when the person typed the digits.
     #[serde(default)]
     qr: String,
+    /// The six digits the window shows, which the person typed: the window
+    /// is then found by mDNS (a phone without a camera, or a scan that
+    /// failed).
+    #[serde(default)]
+    digits: String,
     /// What the phone says of itself.
     name: String,
     os: String,
@@ -58,29 +62,19 @@ struct NewArgs {
     public: Vec<u8>,
 }
 
-/// The member whose code is shown, as it says of itself.
-#[derive(Clone, Serialize)]
-struct Shown {
-    /// The member's device ID and name.
-    device: String,
-    name: String,
-    /// The code both screens show, which the person compares.
-    code: String,
-}
-
 #[derive(Clone, Serialize)]
 struct StateAnswer {
     version: u64,
-    /// dialing, joining (the app asks its person whether `shown.code`
-    /// matches the member's screen), done (in the group: group, device)
-    /// or failed (error).
+    /// dialing (finding the window, dialing it and proving its digits),
+    /// done (in the group: group, device, and name, the member that let
+    /// the phone in) or failed (error).
     state: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    shown: Option<Shown>,
     #[serde(skip_serializing_if = "String::is_empty")]
     group: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     device: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<ErrorAnswer>,
 }
@@ -88,7 +82,6 @@ struct StateAnswer {
 struct Shared {
     st: Mutex<StateAnswer>,
     changed: Condvar,
-    answers: Mutex<Option<mpsc::SyncSender<bool>>>,
     cancelled: AtomicBool,
 }
 
@@ -105,68 +98,34 @@ impl Shared {
     }
 }
 
-/// A phone that joins a group by a window's QR code.
+/// A phone that joins a group by a home window.
 pub struct Joiner {
     shared: Arc<Shared>,
 }
 
-/// What a pairing window's QR code names: its addresses and the key
-/// fingerprint of the member that holds it.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct PairCode {
+/// The window to join: the addresses to dial in turn, its invitation (its
+/// ID and the secret of its digits), and the hash of its member's key when
+/// known.
+pub(crate) struct Target {
     pub(crate) addrs: Vec<SocketAddr>,
-    pub(crate) fingerprint: String,
+    pub(crate) invitation: Invitation,
+    pub(crate) fp: Option<KeyHash>,
 }
 
-/// Reads a window's QR code (`window::qr_text`): the scheme and host
-/// without regard to case, percent escapes decoded, at most four
-/// addresses, fields it does not know ignored.
-pub(crate) fn read_code(text: &str) -> Result<PairCode> {
+/// The window of a QR code's text (`WindowLink`), at most four of its
+/// addresses.
+pub(crate) fn read_code(text: &str) -> Result<Target> {
     let t = text.trim();
-    let rest = t
-        .get(..11)
-        .filter(|p| p.eq_ignore_ascii_case("cbb://pair?"))
-        .and_then(|_| t.get(11..))
-        .ok_or_else(|| Error::msg("this is not the QR code of a pairing window"))?;
-    let mut addrs = Vec::new();
-    let mut fingerprint = String::new();
-    for field in rest.split('&') {
-        let (k, v) = field.split_once('=').unwrap_or((field, ""));
-        let v = unpercent(v)?;
-        match k {
-            "addr" if addrs.len() < 4 => {
-                if let Ok(a) = v.parse() {
-                    addrs.push(a);
-                }
-            }
-            "fp" => fingerprint = v.to_ascii_lowercase(),
-            _ => {}
-        }
-    }
-    if fingerprint.len() != 64 || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(Error::msg("the QR code names no key fingerprint"));
-    }
+    let starts = t.get(..WINDOW_PREFIX.len()).is_some_and(|p| p.eq_ignore_ascii_case(WINDOW_PREFIX));
+    let link = starts.then(|| WindowLink::parse(t)).flatten();
+    let link = link.ok_or_else(|| Error::msg("this is not the QR code of a pairing window"))?;
+    let invitation = link.invitation().ok_or_else(|| Error::msg("this is not the QR code of a pairing window"))?;
+    let addrs: Vec<SocketAddr> =
+        link.addrs.iter().filter_map(|a| a.to_socket_addrs().ok().and_then(|mut i| i.next())).take(4).collect();
     if addrs.is_empty() {
         return Err(Error::msg("the QR code names no address to dial"));
     }
-    Ok(PairCode { addrs, fingerprint })
-}
-
-fn unpercent(s: &str) -> Result<String> {
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0usize;
-    while let Some(&c) = b.get(i) {
-        if c == b'%' {
-            let hex = s.get(i.saturating_add(1)..i.saturating_add(3)).ok_or_else(|| Error::msg("a broken escape"))?;
-            out.push(u8::from_str_radix(hex, 16).map_err(|_| Error::msg("a broken escape"))?);
-            i = i.saturating_add(3);
-        } else {
-            out.push(c);
-            i = i.saturating_add(1);
-        }
-    }
-    String::from_utf8(out).map_err(|_| Error::msg("a field that is not UTF-8"))
+    Ok(Target { addrs, invitation, fp: Some(link.fp) })
 }
 
 impl Joiner {
@@ -185,7 +144,15 @@ impl Joiner {
     fn start(request: &[u8], sign: SignFn, ctx: usize) -> Result<Joiner> {
         let a: NewArgs =
             serde_json::from_slice(request).map_err(|e| Error::msg(format!("the request does not decode: {e}")))?;
-        let code = if a.qr.trim().is_empty() { None } else { Some(read_code(&a.qr)?) };
+        let code = if a.qr.trim().is_empty() {
+            let digits: String = a.digits.chars().filter(|c| !c.is_whitespace()).collect();
+            if home_secret(&digits).is_none() {
+                return Err(Error::msg("type the six digits the pairing window shows"));
+            }
+            Err(digits)
+        } else {
+            Ok(read_code(&a.qr)?)
+        };
         let dir = PathBuf::from(&a.dir);
         std::fs::create_dir_all(&dir).map_err(|e| Error::with(format!("cannot make {}", dir.display()), e))?;
         let local = cbb_member::set::local_key(&dir)?;
@@ -197,13 +164,12 @@ impl Joiner {
             st: Mutex::new(StateAnswer {
                 version: 1,
                 state: "dialing",
-                shown: None,
                 group: String::new(),
                 device: String::new(),
+                name: String::new(),
                 error: None,
             }),
             changed: Condvar::new(),
-            answers: Mutex::new(None),
             cancelled: AtomicBool::new(false),
         });
         let sh = shared.clone();
@@ -213,18 +179,17 @@ impl Joiner {
             .name("pair-join".into())
             .spawn(move || {
                 let got = code
-                    .map_or_else(find, Ok)
-                    .and_then(|code| run(&code, key, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
+                    .or_else(|digits| find(&digits))
+                    .and_then(|t| run(t, key, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
                 match got {
-                    Ok((group, device)) => sh.set(|s| {
+                    Ok((group, device, name)) => sh.set(|s| {
                         s.state = "done";
-                        s.shown = None;
                         s.group = group;
                         s.device = device;
+                        s.name = name;
                     }),
                     Err(e) => sh.set(|s| {
                         s.state = "failed";
-                        s.shown = None;
                         s.error = Some(ErrorAnswer::of(&e));
                     }),
                 }
@@ -248,59 +213,48 @@ impl Joiner {
         }
         answer(Ok(st.clone()))
     }
-
-    /// The person's answer to the code of the state's `shown`.
-    pub fn answer(&self, yes: bool) {
-        if let Some(tx) = &*self.shared.answers.lock().unwrap_or_else(|e| e.into_inner()) {
-            let _ = tx.try_send(yes);
-        }
-    }
 }
 
 impl Drop for Joiner {
     fn drop(&mut self) {
-        // A session that waits for the person ends as "they do not match".
+        // The next address is not dialed.
         self.shared.cancelled.store(true, Ordering::SeqCst);
-        self.answer(false);
     }
 }
 
 /// How long a phone without a camera browses for an open window.
 const BROWSE: Duration = Duration::from_secs(10);
 
-/// The one window open on the network, found by mDNS.
-fn find() -> Result<PairCode> {
-    let (addrs, fp) = cbb_member::discovery::find_window(BROWSE)?;
-    let fingerprint = fp.to_ascii_lowercase();
-    if fingerprint.len() != 64 || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(Error::msg("the window announces no key fingerprint"));
-    }
-    Ok(PairCode { addrs, fingerprint })
+/// The one home window open on the network, found by mDNS, whose digits
+/// the person typed.
+fn find(digits: &str) -> Result<Target> {
+    let w = cbb_member::discovery::find_window(BROWSE, None)?;
+    let invitation = Invitation::typed(w.id, digits).ok_or_else(|| Error::msg("the window announces no ID"))?;
+    Ok(Target { addrs: w.addrs, invitation, fp: w.fp })
 }
 
 /// Dials the window's addresses in turn and runs the session with the
-/// first member whose key the fingerprint names: gives the group's and
-/// this phone's IDs once the set is kept.
+/// first member whose key the window names: gives the group's and this
+/// phone's IDs and the member's name once the set is kept.
 fn run(
-    code: &PairCode,
+    code: Target,
     key: Arc<dyn ExternalKey>,
     info: Info,
     sh: &Shared,
     store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
-) -> Result<(String, String)> {
+) -> Result<(String, String, String)> {
     let own_point: [u8; 65] =
         key.public().try_into().map_err(|_| Error::msg("the phone's member key is not a P-256 point"))?;
     let tls_key = bykey::OwnKey::external(key.clone())?;
-    let fp = code.fingerprint.clone();
-    let judge: bykey::Judge = Arc::new(move |point: &[u8; 65]| {
-        if certs::hex(&Key::es256(point.to_vec()).hash().0) == fp {
-            Ok(())
-        } else {
-            Err("not the device whose QR code was scanned".to_string())
-        }
+    let fp = code.fp;
+    let judge: bykey::Judge = Arc::new(move |point: &[u8; 65]| match fp {
+        Some(fp) if Key::es256(point.to_vec()).hash() != fp => Err("not the device whose window this is".to_string()),
+        _ => Ok(()),
     });
-    let mut last = Error::msg("no address of the QR code answered");
-    for addr in &code.addrs {
+    let Target { addrs, invitation, .. } = code;
+    let mut invitation = Some(invitation);
+    let mut last = Error::msg("no address of the window answered");
+    for addr in &addrs {
         if sh.cancelled.load(Ordering::SeqCst) {
             return Err(Error::msg("joining was cancelled"));
         }
@@ -329,7 +283,12 @@ fn run(
         let mut conn = cbb_member::tls::Stream::new(s, sock);
         // The first member that answered with the right key tried the
         // session: its outcome is the outcome.
-        return session(&mut conn, own_point, member, x, info, sh, store);
+        let invitation = invitation.take().ok_or_else(|| Error::msg("the window was tried already"))?;
+        return session(&mut conn, own_point, member, x, info, invitation, store).map_err(|e| {
+            // A member with no window open ends the connection at once.
+            let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
+            if eof { e.context(format!("{addr} has no pairing window open: open Add a device there again")) } else { e }
+        });
     }
     Err(last)
 }
@@ -340,26 +299,18 @@ fn session(
     member: [u8; 65],
     exporter: cbb_core::join::PairExporter,
     info: Info,
-    sh: &Shared,
+    invitation: Invitation,
     store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
-) -> Result<(String, String)> {
+) -> Result<(String, String, String)> {
     let now = || cbb_member::uptime::wall_ms().max(0).unsigned_abs();
     let mut attempts = JoinerAttempts::default();
-    let (mut s, m64) = JoinerSession::start(&mut attempts, info, None, WelcomeJoining::Ordinary, own, member, exporter)
-        .map_err(|e| failed("cannot start pairing", e))?;
+    let (mut s, m64) =
+        JoinerSession::start(&mut attempts, info, invitation, WelcomeJoining::Ordinary, own, member, exporter)
+            .map_err(|e| failed("cannot start pairing", e))?;
     send(conn, &m64)?;
     let m65 = read(conn, frame::LIMIT_PAIRING)?;
-    let r = s.reply(&mut attempts, &m65).map_err(|e| end(conn, e, "the pairing did not go on"))?;
+    let r = s.reply(&m65).map_err(|e| end(conn, e, why(e, "the pairing did not go on")))?;
     send(conn, &r.send)?;
-    let code = r.code.ok_or_else(|| Error::msg("no code to show"))?;
-    let (tx, rx) = mpsc::sync_channel(1);
-    *sh.answers.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
-    sh.set(|st| {
-        st.state = "joining";
-        st.shown = Some(Shown { device: id_text(&r.adb.device), name: r.adb.name.clone(), code });
-    });
-    let matched = rx.recv_timeout(Duration::from_millis(ANSWER_MS)).unwrap_or(false);
-    s.answered(&mut attempts, matched).map_err(|e| end(conn, e, "the codes do not match"))?;
     loop {
         // Message 67 and its parts come at the member connection's limit.
         let f = read(conn, frame::LIMIT_MEMBER)?;
@@ -370,10 +321,23 @@ fn session(
                 send(conn, &a.send)?;
                 conn.close();
                 let device = id_text(&Key::es256(own.to_vec()).device_id());
-                return Ok((id_text(&a.state.group), device));
+                return Ok((id_text(&a.state.group), device, r.adb.name.clone()));
             }
-            Err(e) => return Err(end(conn, e, "the group's answer did not hold")),
+            Err(e) => return Err(end(conn, e, why(e, "the group's answer did not hold"))),
         }
+    }
+}
+
+/// What the person reads when the session ends with e; other errors say
+/// what.
+fn why(e: PairError, other: &'static str) -> &'static str {
+    match e {
+        PairError::WrongCode => "the code is not the window's: check the six digits it shows and try again",
+        PairError::TooMany => "the window took three wrong codes and closed: open a new one",
+        PairError::Closed => "the window is closed: open a new one",
+        PairError::Expired => "the window's time is up: open a new one",
+        PairError::Busy => "another device is pairing with that window: try again in a moment",
+        _ => other,
     }
 }
 
@@ -383,9 +347,22 @@ fn end(conn: &mut impl Write, e: PairError, what: &str) -> Error {
     failed(what, e)
 }
 
+/// The message for the person; the pairing error's number in the details.
 fn failed(what: &str, e: PairError) -> Error {
-    Error::msg(format!("{what} (pairing error {})", e.code()))
+    Error::with(what, Code(e))
 }
+
+/// A pairing error with its number, as the details show it.
+#[derive(Debug)]
+struct Code(PairError);
+
+impl std::fmt::Display for Code {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "pairing error {}", self.0.code())
+    }
+}
+
+impl std::error::Error for Code {}
 
 fn send(conn: &mut impl Write, f: &[u8]) -> Result<()> {
     conn.write_all(f).and_then(|()| conn.flush()).map_err(|e| Error::with("cannot send to the member", e))

@@ -829,12 +829,12 @@ pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
     }
 }
 
-/// Opens a pairing window on a member of 0.6 (src/window.rs): `request` is
+/// Opens a home window on a member of 0.6 (src/window.rs): `request` is
 /// `{"public", "addrs", "expires", "mdns"}`, `public` the admitting key (the
 /// phone's admin key or the root's), which `sign` with `ctx` signs with
 /// until `cbb_window_free`; `addrs` the phone's home addresses without a
 /// port. The member port must listen (the member's `listen`). Writes the
-/// answer, `{"qr", "fingerprint", "expires", "modules"}`, to `answer` and
+/// answer, `{"qr", "digits", "id", "fingerprint", "expires", "modules"}`, to `answer` and
 /// `answer_len` and returns the window, or null when the answer is an
 /// error.
 ///
@@ -890,23 +890,7 @@ pub unsafe extern "C" fn cbb_window_next(
     to_c(guard::answer(|| w.next(version, timeout_ms)), answer_len)
 }
 
-/// The person's answer to the code of the state's `joining`: `yes`
-/// non-zero when the codes match.
-///
-/// # Safety
-///
-/// As `cbb_window_next`.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_window_answer(w: *const window::Window, yes: i32) {
-    // SAFETY: as the function's contract says.
-    if let Some(w) = unsafe { w.as_ref() } {
-        guard::or(|| (), || w.answer(yes != 0));
-    }
-}
-
-/// Closes a window and frees it; an attempt waiting for the person ends as
-/// "they do not match". Null does nothing.
+/// Closes a window and frees it. Null does nothing.
 ///
 /// # Safety
 ///
@@ -921,14 +905,14 @@ pub unsafe extern "C" fn cbb_window_free(w: *mut window::Window) {
     }
 }
 
-/// Joins a group of 0.6 by a pairing window's QR code (src/joiner.rs):
-/// `request` is `{"dir", "qr", "name", "os", "public"}` (`qr` empty finds
-/// the one window announced by mDNS), `public` the
+/// Joins a group of 0.6 by a home window (src/joiner.rs): `request` is
+/// `{"dir", "qr", "digits", "name", "os", "public"}` (`qr` empty: `digits`,
+/// the six the person typed, with the one window announced by mDNS), `public` the
 /// phone's member key, which `sign` with `ctx` signs with until
 /// `cbb_joiner_free`. It dials on a thread of its own; the answer is the
 /// first state, as `cbb_joiner_next` gives it. Returns the joiner, or null
 /// when the answer is an error (a phone in a group already, a QR code that
-/// is not a window's).
+/// is not a window's, digits that are not six).
 ///
 /// # Safety
 ///
@@ -979,23 +963,7 @@ pub unsafe extern "C" fn cbb_joiner_next(
     to_c(guard::answer(|| j.next(version, timeout_ms)), answer_len)
 }
 
-/// The person's answer to the code of the state's `shown`: `yes` non-zero
-/// when the codes match.
-///
-/// # Safety
-///
-/// As `cbb_joiner_next`.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_joiner_answer(j: *const joiner::Joiner, yes: i32) {
-    // SAFETY: as the function's contract says.
-    if let Some(j) = unsafe { j.as_ref() } {
-        guard::or(|| (), || j.answer(yes != 0));
-    }
-}
-
-/// Ends joining and frees the joiner; a session that waits for the person
-/// ends as "they do not match". Null does nothing.
+/// Ends joining and frees the joiner. Null does nothing.
 ///
 /// # Safety
 ///

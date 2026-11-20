@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use cbb_core::identity::{ExternalKey, FileKey};
-use cbb_member::own::Own;
 use serde_json::{Value, json};
 
 use super::*;
@@ -58,99 +57,13 @@ fn wait(next: &dyn Fn(u64) -> Value, want: &str) -> Value {
     panic!("no state {want}");
 }
 
-#[test]
-fn a_new_phone_joins_by_the_root_phones_window() {
-    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    let (root_dir, new_dir) = (tmp.join("root"), tmp.join("new"));
-    std::fs::create_dir_all(&root_dir).unwrap();
-    let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
-    let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
-    cbb_member::founding::found_with(&root_dir, &me, now, &|| None).unwrap();
-    let own = Own::load(&root_dir).unwrap();
-    let (member, root) = (leak(own.member.clone()), leak(own.root.clone().unwrap()));
-    let req = json!({
-        "dir": root_dir.to_string_lossy(), "name": "phone", "os": "ios",
-        "device": id_text(&own.device()), "public": b64(&own.member.public()), "mdns": false,
-    })
-    .to_string();
-    let (m, a) = Member::start(req.as_bytes(), sign, events, member);
-    ok(&a);
-    let m = m.unwrap();
-    let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
-
-    // No window while the port is closed.
-    let w = json!({ "public": b64(&own.root.as_ref().unwrap().public()), "addrs": ["127.0.0.1"] }).to_string();
-    let (none, a) = m.window(w.as_bytes(), sign, root);
-    assert!(none.is_none() && String::from_utf8_lossy(&a).contains("listen first"));
-    ok(&call("listen", json!({ "port": 0 })));
-    let (win, a) = m.window(w.as_bytes(), sign, root);
-    let qr = ok(&a)["qr"].as_str().unwrap().to_string();
-    let win = win.unwrap();
-    assert!(qr.starts_with("cbb://pair?addr=127.0.0.1%3A"), "{qr}");
-    let code = read_code(&qr).unwrap();
-    assert_eq!(code.fingerprint, certs::hex(&Key::es256(own.member.public()).hash().0));
-
-    let new_key: Arc<dyn ExternalKey> = Arc::new(FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap());
-    let j = json!({
-        "dir": new_dir.to_string_lossy(), "qr": qr, "name": "tablet", "os": "android",
-        "public": b64(&new_key.public()),
-    })
-    .to_string();
-    let (joiner, a) = Joiner::new(j.as_bytes(), sign, leak(new_key.clone()));
-    assert_eq!(ok(&a)["state"], "dialing");
-    let joiner = joiner.unwrap();
-
-    let wnext = |v: u64| ok(&win.next(v, 100));
-    let jnext = |v: u64| ok(&joiner.next(v, 100));
-    let at_window = wait(&wnext, "joining");
-    let at_joiner = wait(&jnext, "joining");
-    assert_eq!(at_window["joining"]["code"], at_joiner["shown"]["code"], "both screens show one code");
-    assert_eq!(at_window["joining"]["name"], "tablet");
-    assert_eq!(at_joiner["shown"]["name"], "phone");
-    win.answer(true);
-    joiner.answer(true);
-    let done = wait(&jnext, "done");
-    let admitted = wait(&wnext, "done");
-    assert_eq!(admitted["name"], "tablet");
-    assert_eq!(done["device"], admitted["device"]);
-
-    // The new phone keeps the group, and the root phone counts it.
-    let local = cbb_member::set::local_key(&new_dir).unwrap();
-    let kept = cbb_member::set::load(&new_dir, &local).unwrap().expect("the set is kept");
-    assert!(kept.state().device_by_key(&Key::es256(new_key.public()).hash()).is_some());
-    let devs = ok(&call("devices", Value::Null));
-    assert_eq!(devs["devices"].as_array().unwrap().len(), 2, "{devs}");
-
-    // A phone in a group does not join again.
-    let (again, _) = Joiner::new(j.as_bytes(), sign, leak(new_key));
-    assert!(again.is_none());
-    drop(win);
-    m.stop();
-    let _ = std::fs::remove_dir_all(&tmp);
-}
-
-#[test]
-fn a_pairing_code_reads_as_the_window_writes_it() {
-    let fp = "ab".repeat(32);
-    let t = crate::window::qr_text_for_tests(&["192.168.1.20".into(), "fd00::20".into()], 8764, &fp);
-    assert_eq!(t, format!("cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp={fp}"));
-    let c = read_code(&t).unwrap();
-    assert_eq!(c.addrs.len(), 2);
-    assert_eq!(c.fingerprint, fp);
-    assert!(read_code("CBB://PAIR?addr=1.2.3.4:1&fp=").is_err(), "a fingerprint is needed");
-    assert!(read_code(&format!("cbb://join?code=123456&fp={fp}")).is_err(), "a join code is not a window's");
-}
-
-#[test]
-fn a_phone_that_made_its_group_admits_a_new_phone_by_its_window() {
-    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-made-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
-    let (root_dir, new_dir) = (tmp.join("root"), tmp.join("new"));
+/// The phone's member of a group the phone made, its port open, with the
+/// root key's callback context.
+fn root_member(tmp: &std::path::Path) -> (Member, Arc<dyn ExternalKey>, usize) {
+    let root_dir = tmp.join("root");
     let key = || -> Arc<dyn ExternalKey> { Arc::new(FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap()) };
-    let (root_key, member_key, new_key) = (key(), key(), key());
+    let (root_key, member_key) = (key(), key());
     let (root, member) = (leak(root_key.clone()), leak(member_key.clone()));
-    // As the app makes its group: the root key signs, the set is kept in dir.
     let g = json!({
         "dir": root_dir.to_string_lossy(), "name": "phone", "os": "ios", "store": "hardware",
         "root_public": b64(&root_key.public()), "public": b64(&member_key.public()),
@@ -164,34 +77,170 @@ fn a_phone_that_made_its_group_admits_a_new_phone_by_its_window() {
     .to_string();
     let (m, a) = Member::start(req.as_bytes(), sign, events, member);
     ok(&a);
-    let m = m.unwrap();
+    (m.unwrap(), root_key, root)
+}
+
+fn new_key() -> Arc<dyn ExternalKey> {
+    Arc::new(FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap())
+}
+
+fn join_request(dir: &std::path::Path, qr: &str, digits: &str, key: &Arc<dyn ExternalKey>) -> String {
+    json!({
+        "dir": dir.to_string_lossy(), "qr": qr, "digits": digits, "name": "tablet", "os": "android",
+        "public": b64(&key.public()),
+    })
+    .to_string()
+}
+
+#[test]
+fn a_new_phone_joins_by_the_window_of_the_phone_that_made_the_group() {
+    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-made-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let (m, root_key, root) = root_member(&tmp);
+    let w = json!({ "public": b64(&root_key.public()), "addrs": ["127.0.0.1"] }).to_string();
+    // No window while the port is closed.
+    let (none, a) = m.window(w.as_bytes(), sign, root);
+    assert!(none.is_none() && String::from_utf8_lossy(&a).contains("listen first"));
+    ok(&m.call(json!({ "op": "listen", "args": { "port": 0 } }).to_string().as_bytes()));
+    let (win, a) = m.window(w.as_bytes(), sign, root);
+    let opened = ok(&a);
+    let win = win.unwrap();
+    let qr = opened["qr"].as_str().unwrap().to_string();
+    let digits = opened["digits"].as_str().unwrap();
+    assert_eq!(digits.len(), 6);
+    assert!(qr.starts_with("cbb://pair?addr=127.0.0.1:"), "{qr}");
+    assert!(qr.contains(&format!("c={digits}")) && qr.contains(&format!("i={}", opened["id"].as_str().unwrap())));
+    let t = read_code(&qr).unwrap();
+    assert_eq!(Some(certs::hex(&t.fp.unwrap().0)), opened["fingerprint"].as_str().map(String::from));
+
+    let new_dir = tmp.join("new");
+    let k = new_key();
+    let (joiner, a) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k.clone()));
+    assert_eq!(ok(&a)["state"], "dialing");
+    let joiner = joiner.unwrap();
+    let jnext = |v: u64| ok(&joiner.next(v, 100));
+    let wnext = |v: u64| ok(&win.next(v, 100));
+    let done = wait(&jnext, "done");
+    let admitted = wait(&wnext, "done");
+    assert_eq!(admitted["name"], "tablet");
+    assert_eq!(done["name"], "phone", "the member that let it in");
+    assert_eq!(done["device"], admitted["device"]);
+
+    // The new phone keeps the group, and the root phone counts it.
+    let local = cbb_member::set::local_key(&new_dir).unwrap();
+    let kept = cbb_member::set::load(&new_dir, &local).unwrap().expect("the set is kept");
+    assert!(kept.state().device_by_key(&Key::es256(k.public()).hash()).is_some());
+    let devs = ok(&m.call(json!({ "op": "devices", "args": null }).to_string().as_bytes()));
+    assert_eq!(devs["devices"].as_array().unwrap().len(), 2, "{devs}");
+
+    // One device joined: the window is closed to the next.
+    let other = tmp.join("other");
+    let k2 = new_key();
+    let (j2, _) = Joiner::new(join_request(&other, &qr, "", &k2).as_bytes(), sign, leak(k2));
+    let j2 = j2.unwrap();
+    let st = wait_end(&|v| ok(&j2.next(v, 100)));
+    assert_eq!(st["state"], "failed", "{st}");
+    // A phone in a group does not join again.
+    let (again, _) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k));
+    assert!(again.is_none());
+    drop(win);
+    m.stop();
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+/// The first state that ends the joiner: done or failed.
+fn wait_end(next: &dyn Fn(u64) -> Value) -> Value {
+    let mut v = 0;
+    for _ in 0..200 {
+        let st = next(v);
+        if st["state"] == "done" || st["state"] == "failed" {
+            return st;
+        }
+        v = st["version"].as_u64().unwrap();
+    }
+    panic!("the joiner did not end");
+}
+
+#[test]
+fn a_wrong_code_joins_no_one_and_writes_nothing() {
+    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-wrong-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let (m, root_key, root) = root_member(&tmp);
     ok(&m.call(json!({ "op": "listen", "args": { "port": 0 } }).to_string().as_bytes()));
     let w = json!({ "public": b64(&root_key.public()), "addrs": ["127.0.0.1"] }).to_string();
     let (win, a) = m.window(w.as_bytes(), sign, root);
-    let qr = ok(&a)["qr"].as_str().unwrap().to_string();
+    let opened = ok(&a);
     let win = win.unwrap();
-
-    let j = json!({
-        "dir": new_dir.to_string_lossy(), "qr": qr, "name": "tablet", "os": "android",
-        "public": b64(&new_key.public()),
-    })
-    .to_string();
-    let (joiner, a) = Joiner::new(j.as_bytes(), sign, leak(new_key.clone()));
-    ok(&a);
-    let joiner = joiner.unwrap();
+    let digits = opened["digits"].as_str().unwrap().to_string();
+    let wrong = if digits == "000000" { "000001" } else { "000000" };
+    // The QR code with other digits: the session proves the wrong secret.
+    let qr = opened["qr"].as_str().unwrap().replace(&format!("c={digits}"), &format!("c={wrong}"));
+    let devices = || -> Vec<Value> {
+        let d = ok(&m.call(json!({ "op": "devices", "args": null }).to_string().as_bytes()));
+        d["devices"].as_array().unwrap().iter().map(|d| d["id"].clone()).collect()
+    };
+    let before = devices();
     let wnext = |v: u64| ok(&win.next(v, 100));
-    let jnext = |v: u64| ok(&joiner.next(v, 100));
-    let at_window = wait(&wnext, "joining");
-    let at_joiner = wait(&jnext, "joining");
-    assert_eq!(at_window["joining"]["code"], at_joiner["shown"]["code"]);
-    win.answer(true);
-    joiner.answer(true);
-    let done = wait(&jnext, "done");
-    assert_eq!(done["group"], made["group"], "the new phone is in the group the phone made");
-    wait(&wnext, "done");
-    let devs = ok(&m.call(json!({ "op": "devices", "args": null }).to_string().as_bytes()));
-    assert_eq!(devs["devices"].as_array().unwrap().len(), 2, "{devs}");
+    for n in 1..=3 {
+        let dir = tmp.join(format!("wrong{n}"));
+        let k = new_key();
+        let (j, _) = Joiner::new(join_request(&dir, &qr, "", &k).as_bytes(), sign, leak(k));
+        let j = j.unwrap();
+        let st = wait_end(&|v| ok(&j.next(v, 100)));
+        assert_eq!(st["state"], "failed", "{st}");
+        assert!(st["error"]["message"].as_str().unwrap().contains("not the window's"), "{st}");
+        assert!(!dir.join("group.cbor").exists(), "the refused phone keeps no group");
+        assert_eq!(devices(), before, "nothing reached the records");
+        // The window says so too: open for the next attempt, closed after the third.
+        let mut v = 0;
+        let end = loop {
+            let s = wnext(v);
+            if (n < 3 && s["state"] == "failed") || s["state"] == "closed" {
+                break s;
+            }
+            v = s["version"].as_u64().unwrap();
+        };
+        assert_eq!(end["state"], if n < 3 { "failed" } else { "closed" }, "{end}");
+    }
+    // Closed, the window takes not even the right digits.
+    let dir = tmp.join("right");
+    let k = new_key();
+    let right = opened["qr"].as_str().unwrap();
+    let (j, _) = Joiner::new(join_request(&dir, right, "", &k).as_bytes(), sign, leak(k));
+    let st = wait_end(&|v| ok(&j.as_ref().unwrap().next(v, 100)));
+    assert_eq!(st["state"], "failed", "{st}");
+    assert_eq!(devices(), before);
     drop(win);
     m.stop();
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn a_pairing_code_reads_as_the_window_writes_it() {
+    use cbb_core::join::invitation::WindowLink;
+    let link = WindowLink {
+        addrs: vec!["192.168.1.20:8764".into(), "[fd00::20]:8764".into()],
+        fp: cbb_core::format::KeyHash([0xab; 32]),
+        id: [0x11; 16],
+        digits: "123456".into(),
+    };
+    let t = link.text();
+    let c = read_code(&t).unwrap();
+    assert_eq!(c.addrs.len(), 2);
+    assert_eq!(c.fp, Some(cbb_core::format::KeyHash([0xab; 32])));
+    assert_eq!(c.invitation.id, [0x11; 16]);
+    assert!(read_code("cbb://join?code=123456").is_err(), "a join code is not a window's");
+    assert!(read_code("cbb://pair?addr=1.2.3.4:1").is_err(), "a window's code names its key, ID and digits");
+}
+
+#[test]
+fn a_joiner_takes_six_digits_or_a_window_code() {
+    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-digits-{}", std::process::id()));
+    let k = new_key();
+    for digits in ["", "12345", "1234567", "12a456"] {
+        let (j, a) = Joiner::new(join_request(&tmp, "", digits, &k).as_bytes(), sign, leak(k.clone()));
+        assert!(j.is_none(), "{digits:?}");
+        assert!(String::from_utf8_lossy(&a).contains("six digits"), "{digits:?}");
+    }
     let _ = std::fs::remove_dir_all(&tmp);
 }

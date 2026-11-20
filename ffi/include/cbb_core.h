@@ -304,49 +304,47 @@ void cbb_invite_answer(const cbb_invite *i, int32_t yes);
 void cbb_invite_free(cbb_invite *i);
 
 /*
- * A pairing window on a member of 0.6 (src/window.rs): an admin phone, or
- * the root phone, lets a device join at home. The member port must listen
- * (the member's "listen"). request is {"public","addrs","expires","mdns"}: the
- * admitting key (admin or root), which sign with ctx signs with until
- * cbb_window_free; the phone's home addresses without a port; seconds open
- * (five minutes when 0, an hour at most); mdns to have the core announce it
- * (Aurora; the other apps announce p=1 and f with the system's DNS-SD). The answer is
- * {"qr","fingerprint","expires","modules"}, qr a cbb://pair link with the
- * addresses and the phone's key fingerprint, nothing secret. The new
- * device dials; cbb_window_next waits up to timeout_ms for a state past
- * version and answers {"version","state","joining","name","device",
- * "error"}, state open, joining (joining is {"device","name","os","code"}:
- * the app asks its person whether the code matches the device's screen and
- * answers with cbb_window_answer), done (a device joined: device, name),
- * failed (that attempt failed; the window stays open) or closed (its time
- * is up). cbb_window_free closes it.
+ * A home window on a member of 0.6 (src/window.rs): an admin phone, or the
+ * root phone, lets a device join at home by six digits. The member port
+ * must listen (the member's "listen"). request is
+ * {"public","addrs","expires","mdns"}: the admitting key (admin or root),
+ * which sign with ctx signs with until cbb_window_free; the phone's home
+ * addresses without a port; seconds open (five minutes when 0, an hour at
+ * most); mdns to have the core announce it (Aurora; the other apps announce
+ * p=1, f and i with the system's DNS-SD). The answer is
+ * {"qr","digits","id","fingerprint","expires","modules"}: qr a
+ * cbb://pair link with the addresses, the phone's key hash, the window's ID
+ * and its digits; digits the six to show for a device that types them. The
+ * new device dials and proves the digits; nobody is asked. cbb_window_next
+ * waits up to timeout_ms for a state past version and answers
+ * {"version","state","name","device","error"}, state open, joining (a
+ * device pairs), done (a device joined: device, name; the window is
+ * closed), failed (that attempt failed; the window stays open) or closed
+ * (its time is up, or three wrong codes: error). cbb_window_free closes it.
  */
 typedef struct cbb_window cbb_window;
 cbb_window *cbb_window_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            uint8_t **answer, size_t *answer_len);
 uint8_t *cbb_window_next(const cbb_window *w, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
-void cbb_window_answer(const cbb_window *w, int32_t yes);
 void cbb_window_free(cbb_window *w);
 
 /*
- * A new phone joins a group of 0.6 by a pairing window's QR code
- * (src/joiner.rs): request is {"dir","qr","name","os","public"} (qr empty
- * finds the one window announced by mDNS), public the
- * member key, which sign with ctx signs with until cbb_joiner_free. It
- * dials the code's addresses on a thread of its own and takes only the
- * member whose key the code's fingerprint names. The answer is the first
- * state; cbb_joiner_next waits up to timeout_ms for a state past version
- * and answers {"version","state","shown","group","device","error"}, state
- * dialing, joining (shown is {"device","name","code"}: the app asks its
- * person whether the code matches the member's screen and answers with
- * cbb_joiner_answer), done (the set is kept in dir: start the member on
- * it) or failed. cbb_joiner_free ends it.
+ * A new phone joins a group of 0.6 by a home window (src/joiner.rs):
+ * request is {"dir","qr","digits","name","os","public"}: qr the window's QR
+ * code text, or empty with digits the six the person typed (the core then
+ * finds the one window announced by mDNS); public the member key, which
+ * sign with ctx signs with until cbb_joiner_free. It dials the window's
+ * addresses on a thread of its own, takes only the member whose key the
+ * window names and proves the digits. The answer is the first state;
+ * cbb_joiner_next waits up to timeout_ms for a state past version and
+ * answers {"version","state","group","device","name","error"}, state
+ * dialing, done (the set is kept in dir: start the member on it; name is
+ * the member that let it in) or failed. cbb_joiner_free ends it.
  */
 typedef struct cbb_joiner cbb_joiner;
 cbb_joiner *cbb_joiner_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
                            size_t *answer_len);
 uint8_t *cbb_joiner_next(const cbb_joiner *j, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
-void cbb_joiner_answer(const cbb_joiner *j, int32_t yes);
 void cbb_joiner_free(cbb_joiner *j);
 
 /*

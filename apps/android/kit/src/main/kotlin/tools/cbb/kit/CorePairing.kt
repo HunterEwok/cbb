@@ -445,13 +445,13 @@ object CorePairing {
     }
 
     /**
-     * A pairing window of a phone of 0.6 (docs/protocol.md, section 6, "The
-     * window and who dials"): the member port listens, the app shows [qr],
-     * the new device dials, and both screens show one code the person
-     * compares. public is the admitting key sign holds (the admin key, or
-     * the root's); addrs the phone's home addresses without a port;
-     * expiresS in seconds (five minutes when 0, an hour at most). The app
-     * announces the window itself with NSD (p=1, f=[fingerprint]).
+     * A home window of a phone of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+     * the member port listens, the app shows [qr] and [digits], the new
+     * device dials and proves the digits; nobody is asked. public is the
+     * admitting key sign holds (the admin key, or the root's); addrs the
+     * phone's home addresses without a port; expiresS in seconds (five
+     * minutes when 0, an hour at most). The app announces the window itself
+     * with NSD (p=1, f=[fingerprint], i=[id]), never the digits.
      */
     class Window(member: CoreMember, public: ByteArray, addrs: List<String>, expiresS: Int = 0, sign: (ByteArray) -> ByteArray) : Closeable {
         private val signFn = CoreMember.signFn(sign)
@@ -460,14 +460,19 @@ object CorePairing {
         private val lock = Object()
         private var calls = 0
 
-        /** The device whose code is shown, as it says of itself. */
-        data class Request(val device: String, val name: String, val os: String, val code: String)
+        /**
+         * open, joining (a device pairs), done (name joined; the window is closed), failed (that attempt; the
+         * window stays open) or closed (its time is up, or three wrong codes: failure).
+         */
+        data class State(val version: Long, val state: String, val name: String, val device: String, val failure: Failure?)
 
-        /** open, joining (answer about request), done (name joined), failed (that attempt; the window stays open) or closed. */
-        data class State(val version: Long, val state: String, val request: Request?, val name: String, val failure: Failure?)
-
-        /** The QR code's text, cbb://pair?addr=...&fp=..., the key fingerprint it names, and how long it is open, in seconds. */
+        /**
+         * The QR code's text, cbb://pair?addr=...&fp=...&i=...&c=..., the six digits to show, the window's ID
+         * and the key hash it names in hex, and how long it is open, in seconds.
+         */
         val qr: String
+        val digits: String
+        val id: String
         val fingerprint: String
         val expires: Int
 
@@ -492,6 +497,8 @@ object CorePairing {
             }
             handle = h ?: throw Core.Mismatch("the core opened no window")
             qr = o.optString("qr") ?: ""
+            digits = o.optString("digits") ?: ""
+            id = o.optString("id") ?: ""
             fingerprint = o.optString("fingerprint") ?: ""
             expires = (o.optLong("expires") ?: 0).toInt()
         }
@@ -501,21 +508,8 @@ object CorePairing {
             enter()
             try {
                 val o = ok("window", call { c -> lib.cbb_window_next(handle, version, timeoutMS, c) })
-                val r = o.optObject("joining")?.let {
-                    Request(it.optString("device") ?: "", it.optString("name") ?: "", it.optString("os") ?: "", it.optString("code") ?: "")
-                }
                 val f = o.optObject("error")?.let { Failure(it.optString("message") ?: "the pairing failed", it.optString("details")) }
-                return State(o.optLong("version") ?: version, o.optString("state") ?: "open", r, o.optString("name") ?: "", f)
-            } finally {
-                leave()
-            }
-        }
-
-        /** The person's answer: whether the codes match. */
-        fun answer(yes: Boolean) {
-            if (runCatching { enter() }.isFailure) return
-            try {
-                lib.cbb_window_answer(handle, if (yes) 1 else 0)
+                return State(o.optLong("version") ?: version, o.optString("state") ?: "open", o.optString("name") ?: "", o.optString("device") ?: "", f)
             } finally {
                 leave()
             }
@@ -542,29 +536,28 @@ object CorePairing {
     }
 
     /**
-     * A new phone that joins a group of 0.6 by a window's QR code ("" for
-     * the one window found by mDNS): it dials, both screens show one code,
-     * and on "they match" the group is kept in dir, where the app then
-     * starts its member. public is the member key sign holds.
+     * A new phone that joins a group of 0.6 by a home window's QR code, or
+     * by the six digits the person typed (qr "", the one window found by
+     * mDNS): it dials, proves the digits, and the group is kept in dir,
+     * where the app then starts its member. public is the member key sign
+     * holds.
      */
-    class Joiner(dir: String, qr: String, name: String, os: String, public: ByteArray, sign: (ByteArray) -> ByteArray) : Closeable {
+    class Joiner(dir: String, qr: String, name: String, os: String, public: ByteArray, sign: (ByteArray) -> ByteArray, digits: String = "") : Closeable {
         private val signFn = CoreMember.signFn(sign)
         private val handle: Pointer
         private val closed = AtomicBoolean(false)
         private val lock = Object()
         private var calls = 0
 
-        /** The member whose code is shown, as it says of itself. */
-        data class Shown(val device: String, val name: String, val code: String)
-
-        /** dialing, joining (answer about shown), done (group, device) or failed. */
-        data class State(val version: Long, val state: String, val shown: Shown?, val group: String, val device: String, val failure: Failure?)
+        /** dialing, done (group, device, and name, the member that let the phone in) or failed. */
+        data class State(val version: Long, val state: String, val group: String, val device: String, val name: String, val failure: Failure?)
 
         init {
             val request = Wire.encode(
                 Wire.obj(
                     "dir" to Wire.str(dir),
                     "qr" to Wire.str(qr),
+                    "digits" to Wire.str(digits),
                     "name" to Wire.str(name),
                     "os" to Wire.str(os),
                     "public" to Wire.bytes(CoreMember.point(public)),
@@ -588,19 +581,15 @@ object CorePairing {
             enter()
             try {
                 val o = ok("join", call { c -> lib.cbb_joiner_next(handle, version, timeoutMS, c) })
-                val s = o.optObject("shown")?.let { Shown(it.optString("device") ?: "", it.optString("name") ?: "", it.optString("code") ?: "") }
                 val f = o.optObject("error")?.let { Failure(it.optString("message") ?: "the pairing failed", it.optString("details")) }
-                return State(o.optLong("version") ?: version, o.optString("state") ?: "dialing", s, o.optString("group") ?: "", o.optString("device") ?: "", f)
-            } finally {
-                leave()
-            }
-        }
-
-        /** The person's answer: whether the codes match. */
-        fun answer(yes: Boolean) {
-            if (runCatching { enter() }.isFailure) return
-            try {
-                lib.cbb_joiner_answer(handle, if (yes) 1 else 0)
+                return State(
+                    o.optLong("version") ?: version,
+                    o.optString("state") ?: "dialing",
+                    o.optString("group") ?: "",
+                    o.optString("device") ?: "",
+                    o.optString("name") ?: "",
+                    f,
+                )
             } finally {
                 leave()
             }
@@ -616,7 +605,7 @@ object CorePairing {
             lock.notifyAll()
         }
 
-        /** Ends joining; a code waiting for the person counts as "they do not match". */
+        /** Ends joining. */
         override fun close() {
             synchronized(lock) {
                 if (closed.getAndSet(true)) return
@@ -696,15 +685,11 @@ object CorePairing {
 
         fun cbb_window_next(w: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
 
-        fun cbb_window_answer(w: Pointer, yes: Int)
-
         fun cbb_window_free(w: Pointer)
 
         fun cbb_joiner_new(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
 
         fun cbb_joiner_next(j: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
-
-        fun cbb_joiner_answer(j: Pointer, yes: Int)
 
         fun cbb_joiner_free(j: Pointer)
     }

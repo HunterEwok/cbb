@@ -53,12 +53,12 @@
 //!
 //! On a group of 0.6: -group06 makes one in -dir (the admin key standing
 //! for the root key) and prints "Group <device> <group tag>"; -join-window
-//! <QR code text> (empty: the one window announced at home) joins one by
-//! its pairing window, keeping the set in -dir, prints "Code <name>
-//! <code>", answers that they match (not with -refuse-code) and prints
-//! "Joined <device> <group tag>" or "JOIN FAILED <message>". The member of
-//! 0.6 then runs in -dir and takes "WINDOW", which opens its pairing window
-//! (at once with -window): see window_new for what it prints and takes.
+//! <QR code text> joins one by its home window, or -join-digits <six
+//! digits> by the one window announced at home, keeping the set in -dir,
+//! and prints "Joined <device> <group tag> <member's name>" or "JOIN FAILED
+//! <message>". The member of 0.6 then runs in -dir and takes "WINDOW",
+//! which opens its home window (at once with -window): see window_new for
+//! what it prints.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -71,10 +71,9 @@ use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
-    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_joiner_answer, cbb_joiner_free,
-    cbb_joiner_new, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_card,
-    cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore, cbb_window_answer,
-    cbb_window_free, cbb_window_new, cbb_window_next,
+    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_joiner_free, cbb_joiner_new, cbb_joiner_next,
+    cbb_member_call, cbb_member_manage, cbb_member_manage_card, cbb_member_manage_watch, cbb_member_servers,
+    cbb_member_start, cbb_piv, cbb_restore, cbb_window_free, cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -187,9 +186,10 @@ fn main() -> ExitCode {
     let peers: Vec<String> =
         args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
     // A group of 0.6 (-group06, the admin key standing for the root key)
-    // or joining one by a pairing window (-join-window <QR code text>, empty
-    // to find the one window announced at home); then the member of 0.6 runs
-    // in -dir, which takes "WINDOW" too (and opens it at once with -window).
+    // or joining one by a home window (-join-window <QR code text>, or
+    // -join-digits <six digits> with the one window announced at home); then
+    // the member of 0.6 runs in -dir, which takes "WINDOW" too (and opens it
+    // at once with -window).
     let window = args.iter().any(|a| a == "-window");
     if args.iter().any(|a| a == "-group06") {
         let Some(dir) = arg("-dir") else {
@@ -216,13 +216,14 @@ fn main() -> ExitCode {
         let admin = Some((&admin_key, admin_public.as_str()));
         return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
-    if let Some(qr) = arg("-join-window") {
+    let (qr, digits) = (arg("-join-window"), arg("-join-digits"));
+    if qr.is_some() || digits.is_some() {
         let Some(dir) = arg("-dir") else {
-            eprintln!("phone-on-linux: -join-window needs -dir");
+            eprintln!("phone-on-linux: -join-window and -join-digits need -dir");
             return ExitCode::FAILURE;
         };
-        let refuse = args.iter().any(|a| a == "-refuse-code");
-        let Some(device) = join_window(&key, &public_b64, &name, &dir, &qr, refuse) else {
+        let (qr, digits) = (qr.unwrap_or_default(), digits.unwrap_or_default());
+        let Some(device) = join_window(&key, &public_b64, &name, &dir, &qr, &digits) else {
             return ExitCode::FAILURE;
         };
         let admin = admin.then_some((&admin_key, admin_public.as_str()));
@@ -521,12 +522,7 @@ fn serve(
     }
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
-        if let Some(yes) = line.strip_prefix("WINDOW ANSWER ") {
-            if let Some(w) = &windows {
-                // SAFETY: the window lives until windows is dropped.
-                unsafe { cbb_window_answer(w.0, i32::from(yes == "yes")) };
-            }
-        } else if line == "WINDOW" {
+        if line == "WINDOW" {
             // The one open window closes before the next opens.
             drop(windows.take());
             windows = window_new(m, admin);
@@ -646,13 +642,14 @@ impl Drop for Windowing {
     }
 }
 
-/// Opens the member's pairing window of 0.6 with the admin key (the root
-/// key on a phone that made its group), as the app does: the member port
-/// listens first. It prints "WINDOW <QR code text>", then from a thread of
-/// its own "WINDOW JOINING <name> <code>" when a device dials it and the
-/// code waits for "WINDOW ANSWER <yes|no>", "WINDOW DONE <name>" for each
-/// device that joined, "WINDOW FAILED <message>" for an attempt that
-/// failed (the window stays open) and "WINDOW CLOSED" when its time is up.
+/// Opens the member's home window of 0.6 with the admin key (the root key
+/// on a phone that made its group), as the app does: the member port
+/// listens first. It prints "WINDOW <QR code text>" and "WINDOW DIGITS
+/// <six digits>", then from a thread of its own "WINDOW JOINING" when a
+/// device dials it, "WINDOW DONE <name>" when one joined (the window then
+/// closes), "WINDOW FAILED <message>" for an attempt that failed (the
+/// window stays open) and "WINDOW CLOSED <message>" when its time is up or
+/// it took three wrong codes.
 fn window_new(
     m: *const cbb_ffi::member::Member,
     admin: Option<(&SigningKey, &str)>,
@@ -681,6 +678,7 @@ fn window_new(
         return None;
     }
     println!("WINDOW {}", created["ok"]["qr"].as_str().unwrap_or_default());
+    println!("WINDOW DIGITS {}", created["ok"]["digits"].as_str().unwrap_or_default());
     let windowing = std::sync::Arc::new(Windowing(w));
     let held = std::sync::Arc::downgrade(&windowing);
     std::thread::spawn(move || {
@@ -701,17 +699,16 @@ fn window_new(
             version = v;
             let text = |k: &str| ok[k].as_str().unwrap_or_default().to_string();
             match ok["state"].as_str() {
-                Some("joining") => println!(
-                    "WINDOW JOINING {} {}",
-                    ok["joining"]["name"].as_str().unwrap_or_default(),
-                    ok["joining"]["code"].as_str().unwrap_or_default()
-                ),
-                Some("done") => println!("WINDOW DONE {}", text("name")),
+                Some("joining") => println!("WINDOW JOINING"),
+                Some("done") => {
+                    println!("WINDOW DONE {}", text("name"));
+                    return;
+                }
                 Some("failed") => {
                     println!("WINDOW FAILED {}", ok["error"]["message"].as_str().unwrap_or_default())
                 }
                 Some("closed") => {
-                    println!("WINDOW CLOSED");
+                    println!("WINDOW CLOSED {}", ok["error"]["message"].as_str().unwrap_or_default());
                     return;
                 }
                 _ => {}
@@ -721,16 +718,16 @@ fn window_new(
     Some(windowing)
 }
 
-/// Joins a group of 0.6 by a pairing window's QR code (empty: the one
-/// window announced at home), as the app does, keeping the set in dir: it
-/// prints "Code <name> <code>" with the admitting member's name and the
-/// code both screens show, answers that they match (they don't with
-/// -refuse-code), and prints "Joined <device> <group tag>", the tag the
-/// first 16 hex characters of the group's ID, or "JOIN FAILED <message>".
-/// It answers the device ID.
-fn join_window(key: &SigningKey, public_b64: &str, name: &str, dir: &str, qr: &str, refuse: bool) -> Option<String> {
-    let req =
-        serde_json::json!({ "dir": dir, "qr": qr, "name": name, "os": "aurora", "public": public_b64 }).to_string();
+/// Joins a group of 0.6 by a home window's QR code, or by its six digits
+/// with the one window announced at home, as the app does, keeping the set
+/// in dir: it prints "Joined <device> <group tag> <member's name>", the tag
+/// the first 16 hex characters of the group's ID, or "JOIN FAILED
+/// <message>". It answers the device ID.
+fn join_window(key: &SigningKey, public_b64: &str, name: &str, dir: &str, qr: &str, digits: &str) -> Option<String> {
+    let req = serde_json::json!({
+        "dir": dir, "qr": qr, "digits": digits, "name": name, "os": "aurora", "public": public_b64,
+    })
+    .to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
     // SAFETY: req, ans and n live for the call; the key outlives the joiner.
@@ -755,19 +752,14 @@ fn join_window(key: &SigningKey, public_b64: &str, name: &str, dir: &str, qr: &s
         }
         version = v;
         match ok["state"].as_str() {
-            Some("joining") => {
-                println!(
-                    "Code {} {}",
-                    ok["shown"]["name"].as_str().unwrap_or_default(),
-                    ok["shown"]["code"].as_str().unwrap_or_default()
-                );
-                // SAFETY: j as above.
-                unsafe { cbb_joiner_answer(j, i32::from(!refuse)) };
-            }
             Some("done") => {
                 let group = ok["group"].as_str().unwrap_or_default();
                 let device = ok["device"].as_str().unwrap_or_default().to_string();
-                println!("Joined {device} {}", group.get(..16).unwrap_or(group));
+                println!(
+                    "Joined {device} {} {}",
+                    group.get(..16).unwrap_or(group),
+                    ok["name"].as_str().unwrap_or_default()
+                );
                 break Some(device);
             }
             Some("failed") => {

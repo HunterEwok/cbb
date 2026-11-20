@@ -125,31 +125,34 @@ Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit
 `not on the records of 0.6 yet` in its details, until its part moves over. Images and files
 of a copy are not written yet: its text is, and the log says why the rest is not.
 
-A phone of 0.6 lets a device join at home through a pairing window, `cbb_window_new`
+A phone of 0.6 lets a device join at home through a home window, `cbb_window_new`
 (`ffi/src/window.rs`), while its member port listens: the request names the admitting key (the
 phone's admin key or the root's, signing through the callback until `cbb_window_free`), the
 phone's home addresses, how long the window stays open (five minutes by default, an hour at
 most) and whether the core announces it by mDNS (`mdns`, on Aurora; the iPhone and Android
-announce it with the system's DNS-SD, `p=1` and `f` from the answer). It answers the QR code `cbb://pair?addr=…&fp=…` (the addresses with the member port and
-the phone's key fingerprint, nothing secret) and its modules. The new device dials; its TLS
-session of `cbb-pair/3` reaches the window through the member port, and both ends show the code
-the session commits to. `cbb_window_next` waits for the next state: `open`, `joining` with the
-code and what the device says of itself (device, name, system), `done` with the device that
-joined, `failed` with the error of that attempt (the window stays open for another), `closed`
-when its time is up. `cbb_window_answer` gives the person's answer; on "they match" the phone
-writes the device's record by the core's admission rules (`join::decide::joiner_record`: at
-home a member or a phone reads, sends and takes secrets, a watch only reads) and sends the
-Welcome (`ffi/src/pair06.rs`). One attempt at a time; another gets `busy`.
+announce it with the system's DNS-SD, `p=1`, `f` and `i` from the answer). It answers the QR
+code `cbb://pair?addr=…&fp=…&i=…&c=…` (the addresses with the member port, the hash of the
+phone's member key, the window's ID and its six digits) and its modules, the six `digits` to
+show beside it for a device that types them, the window's `id` and the key's `fingerprint`.
+The new device dials; its TLS session of `cbb-pair/3` reaches the window through the member
+port and proves the digits (protocol.md, "Pairing in 0.6"): nobody is asked whether anything
+matches. `cbb_window_next` waits for the next state: `open`, `joining` while a device pairs,
+`done` with the device that joined (the window is then closed), `failed` with the error of that
+attempt (the window stays open for another), `closed` when its time is up or after three wrong
+codes (with the error). The phone writes the device's record by the core's admission rules
+(`join::decide::joiner_record`: at home a member or a phone reads, sends and takes secrets, a
+watch only reads) and sends the Welcome (`ffi/src/pair06.rs`). One attempt at a time; another
+gets `busy`.
 
 The new phone joins with `cbb_joiner_new` (`ffi/src/joiner.rs`): the request names the app's
-folder, the scanned QR code (empty on a phone without a camera: the core then finds the one
-window announced by mDNS, and refuses when there is more than one), what the phone says of
-itself and its member key. It dials the
-code's addresses in turn over TLS of `cbb-pair/3`, takes only the member whose key the code's
-fingerprint names, and `cbb_joiner_next` gives its state: `dialing`, `joining` with the code and
-the member's device and name, `done` with the group and the phone's device ID once the checked
-set is kept in the folder (the app then starts its member there), or `failed`.
-`cbb_joiner_answer` gives the person's answer. A phone that holds a group already is refused.
+folder, the scanned QR code, or the six digits the person typed (`digits`, with an empty `qr`:
+on a phone without a camera, or when the scan failed; the core then finds the one window
+announced by mDNS, and refuses when there is more than one), what the phone says of itself and
+its member key. It dials the window's addresses in turn over TLS of `cbb-pair/3`, takes only
+the member whose key the window names, proves the digits, and `cbb_joiner_next` gives its
+state: `dialing`, `done` with the group, the phone's device ID and the name of the member that
+let it in once the checked set is kept in the folder (the app then starts its member there), or
+`failed` (a wrong code says so). A phone that holds a group already is refused.
 
 ### The member's operations
 

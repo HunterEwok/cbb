@@ -14,7 +14,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
-/** A phone makes a group of 0.6, opens its pairing window, and a new phone joins by its QR code, through the Rust core as the apps do. */
+/** A phone makes a group of 0.6, opens its home window, and a new phone joins by its QR code or six digits, through the Rust core as the apps do. */
 class WindowTest {
     private val top: File = createTempDirectory("cbb-core-window").toFile()
     private val closing = mutableListOf<AutoCloseable>()
@@ -59,22 +59,16 @@ class WindowTest {
         ).closed()
         m.listen(CoreMember.Listen.HOME)
         val w = CorePairing.Window(m, root.publicKeyDER, listOf("127.0.0.1"), sign = root::signDigest).closed()
-        assertTrue(w.qr.startsWith("cbb://pair?addr=127.0.0.1%3A"), w.qr)
-        assertTrue(w.qr.endsWith("fp=${w.fingerprint}"))
+        assertTrue(w.qr.startsWith("cbb://pair?addr=127.0.0.1:"), w.qr)
+        assertTrue(w.qr.endsWith("fp=${w.fingerprint}&i=${w.id}&c=${w.digits}"), w.qr)
+        assertTrue(w.digits.length == 6 && w.digits.all { it.isDigit() })
 
         val newKey = SoftwareSigner()
         val j = CorePairing.Joiner(File(top, "new").path, w.qr, "Tablet", "android", newKey.publicKeyDER, newKey::signDigest).closed()
-        val atWindow = wait("joining", { it.state }, { it.version }, { it.failure }) { w.next(it, 100) }
-        val atJoiner = wait("joining", { it.state }, { it.version }, { it.failure }) { j.next(it, 100) }
-        val asked = assertNotNull(atWindow.request)
-        assertEquals(asked.code, assertNotNull(atJoiner.shown).code, "both screens show one code")
-        assertEquals("Tablet", asked.name)
-        assertEquals("Root phone", atJoiner.shown?.name)
-        w.answer(true)
-        j.answer(true)
         val done = wait("done", { it.state }, { it.version }, { it.failure }) { j.next(it, 100) }
         val admitted = wait("done", { it.state }, { it.version }, { it.failure }) { w.next(it, 100) }
         assertEquals(made.group, done.group, "the new phone is in the group the phone made")
+        assertEquals("Root phone", done.name, "the member that let it in")
         assertEquals("Tablet", admitted.name)
         // The new phone keeps the set where its member then starts.
         assertTrue(File(top, "new/group.cbor").isFile)
@@ -126,28 +120,67 @@ class WindowTest {
     }
 
     @Test
-    fun aCodeTheWindowsPersonSaysDoesNotMatchJoinsNoOneAndTheWindowTakesTheNextAttempt() {
+    fun aWrongCodeJoinsNoOneAndWritesNothingAndThreeCloseTheWindow() {
         val r = root()
         r.member.listen(CoreMember.Listen.HOME)
         val w = r.window()
-        val j = joiner("Tablet", w.qr)
-        until(setOf("joining"), { it.state }, { it.version }) { w.next(it, 100) }
-        until(setOf("joining"), { it.state }, { it.version }) { j.next(it, 100) }
-        j.answer(true)
-        w.answer(false)
-        assertEquals("failed", until(setOf("done", "failed"), { it.state }, { it.version }) { j.next(it, 100) }.state)
-        assertFalse(File(top, "Tablet/group.cbor").exists(), "the refused phone keeps no group")
+        val wrong = w.qr.replace("c=${w.digits}", "c=" + if (w.digits == "000000") "000001" else "000000")
+        var v = 0L
+        for (n in 1..3) {
+            val j = joiner("Wrong$n", wrong)
+            val st = until(setOf("done", "failed"), { it.state }, { it.version }) { j.next(it, 100) }
+            assertEquals("failed", st.state)
+            assertTrue(st.failure?.message?.contains("not the window's") == true, "${st.failure}")
+            assertFalse(File(top, "Wrong$n/group.cbor").exists(), "the refused phone keeps no group")
+            assertEquals(listOf("Root phone"), r.member.group().devices.map { it.name }, "nothing reached the records")
+            // The window stays open for the next attempt, and closes after the third.
+            val want = if (n < 3) "failed" else "closed"
+            val ws = run {
+                repeat(200) {
+                    val s = w.next(v, 100)
+                    v = s.version
+                    if (s.state == want) return@run s
+                }
+                fail("no state $want")
+            }
+            assertEquals(want, ws.state)
+        }
+        // Closed, the window takes not even the right digits.
+        val late = joiner("Late", w.qr)
+        assertEquals("failed", until(setOf("done", "failed"), { it.state }, { it.version }) { late.next(it, 100) }.state)
         assertEquals(listOf("Root phone"), r.member.group().devices.map { it.name })
+    }
 
-        // The window stays open for the next attempt.
+    @Test
+    fun aWindowLetsOneDeviceJoinAndThenCloses() {
+        val r = root()
+        r.member.listen(CoreMember.Listen.HOME)
+        val w = r.window()
+        val first = joiner("Tablet", w.qr)
+        assertEquals("done", until(setOf("done", "failed"), { it.state }, { it.version }) { first.next(it, 100) }.state)
         val second = joiner("Laptop", w.qr)
-        val again = until(setOf("joining"), { it.state }, { it.version }) { w.next(it, 100) }
-        assertEquals("Laptop", again.request?.name)
-        until(setOf("joining"), { it.state }, { it.version }) { second.next(it, 100) }
-        w.answer(true)
-        second.answer(true)
-        assertEquals("done", until(setOf("done", "failed"), { it.state }, { it.version }) { second.next(it, 100) }.state)
-        assertEquals(listOf("Laptop", "Root phone"), r.member.group().devices.map { it.name }.sorted())
+        assertEquals("failed", until(setOf("done", "failed"), { it.state }, { it.version }) { second.next(it, 100) }.state)
+        assertEquals(listOf("Root phone", "Tablet"), r.member.group().devices.map { it.name }.sorted())
+    }
+
+    @Test
+    fun aJoinerTakesSixDigits() {
+        val k = SoftwareSigner()
+        for (d in listOf("", "12345", "1234567", "12a456")) {
+            assertFailsWith<CorePairing.Failure>(d) {
+                CorePairing.Joiner(File(top, "x").path, "", "Tablet", "android", k.publicKeyDER, k::signDigest, digits = d).close()
+            }
+        }
+    }
+
+    @Test
+    fun aWindowFoundByMdnsMakesTheCodeTheCoreReads() {
+        val t = Discovery.windowLink("[fd00::20]:8764", "ab".repeat(32), "11".repeat(16), "123456")
+        assertEquals("cbb://pair?addr=[fd00::20]:8764&fp=${"ab".repeat(32)}&i=${"11".repeat(16)}&c=123456", t)
+        val f = assertNotNull(Discovery.member("0a".repeat(16), listOf("v=1", "g=x", "p=1", "f=${"ab".repeat(32)}", "i=${"11".repeat(16)}")))
+        assertTrue(f.pairing)
+        assertEquals("11".repeat(16), f.windowID)
+        assertEquals("ab".repeat(32), f.fingerprint)
     }
 
     @Test

@@ -77,7 +77,7 @@ mod tests {
 
     use cbb_core::identity::FileKey;
     use cbb_core::join::PairExporter;
-    use cbb_core::join::invitation::JoinerAttempts;
+    use cbb_core::join::invitation::{Invitation, JoinerAttempts, Network};
     use cbb_core::join::session::{Adb, Joined, JoinerSession};
     use cbb_core::join::welcome::Joining;
     use cbb_core::records::body::{ROLE_MEMBER, ROLE_PHONE};
@@ -116,10 +116,11 @@ mod tests {
         };
         let mut attempts = JoinerAttempts::default();
         let info = Info::new("laptop", 1, role);
+        let (mut open, digits) = cbb_member::admitting::home_window(now, std::time::Duration::from_secs(300));
         let (mut j, m64) = JoinerSession::start(
             &mut attempts,
             info.clone(),
-            None,
+            Invitation::typed(open.invitation.id, &digits).unwrap(),
             Joining::Ordinary,
             jp,
             mp,
@@ -127,12 +128,10 @@ mod tests {
         )
         .unwrap();
         let mut m = MemberSession::new(mp, jp, adb, PairExporter::exported_by_platform_tls(x));
-        let m65 = m.start_home(&m64).unwrap();
-        let r = j.reply(&mut attempts, &m65).unwrap();
-        let c = m.confirm(&r.send, None, now).unwrap();
-        assert_eq!(c.code, r.code, "both ends show one code");
-        m.answered(true).unwrap();
-        j.answered(&mut attempts, true).unwrap();
+        let m65 = m.start_invited(&mut open, Network::Home, &m64, now).unwrap();
+        let r = j.reply(&m65).unwrap();
+        m.confirm(&r.send, &mut open, now).unwrap();
+        assert!(m.approved(), "the window's digits approve the joiner");
         (set, own, j, attempts, m, info, jp)
     }
 
