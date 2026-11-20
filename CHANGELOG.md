@@ -124,6 +124,13 @@ made with 0.5 is set up again once. The details follow.
 - A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
   `p=1` by mDNS, as a phone's window does, so that a new device that browses for it dials the
   one window and checks its key (docs/protocol.md, section 3).
+- On the records of 0.6 the service copies, fetches and pastes images and files
+  (`cbb copy FILE`, a watcher's copied image, `cbb paste -o`, a copy from the group written to
+  the watchers that take it, and remote paste of the group's copy), keeps and passes on the
+  signed entry points and release (`entries`, `entries_get`, `release`, `release_held`,
+  `release_get`, `release_file`), and starts with the cache of the copies' blobs empty, as
+  the old member does. A member of 0.6 is no hub yet, so it wants no archives and has no way
+  to update away from home.
 - The service sends and carries out commands on the records of 0.6
   (`member/src/service/on_live/orders.rs`): muting another device and ending its mute, its
   sync, remote paste, quick actions, turning remote paste or the quick actions off there or on

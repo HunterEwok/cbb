@@ -40,6 +40,19 @@ pub(super) enum Got {
     Missing,
 }
 
+/// A copy with images or files this member sealed: its manifest, its
+/// blob (none when it has no bytes), which this member keeps and opens,
+/// and whether it went to the group (false: not to be sent, or the group
+/// has no reader for it).
+#[derive(Clone, Debug)]
+pub struct SentMedia {
+    pub manifest: Manifest,
+    pub blob: Option<Blob>,
+    pub sent: bool,
+    /// The copy's ID, once it went to the group.
+    pub id: Option<[u8; 16]>,
+}
+
 /// A frame as it arrives: a message, or a chunk of a blob.
 pub(super) enum In {
     Msg(Vec<u8>),
@@ -102,13 +115,14 @@ impl Drop for Fetching<'_> {
 
 impl Mesh {
     /// Seals a copy with images or files: the parts' bytes into a blob
-    /// under the copy's blob key, kept to serve, and the copy to the group.
-    /// `content` is of type media or files; its manifest is made from the
-    /// parts. False when the group has no reader for it.
-    pub fn copy_media(&self, content: &Content, parts: Vec<(Part, Source)>) -> Result<bool> {
+    /// under the copy's blob key, kept to serve, and, when `send`, the copy
+    /// to the group. `content` is of type media or files; its manifest is
+    /// made from the parts.
+    pub fn copy_media(&self, content: &Content, parts: Vec<(Part, Source)>, send: bool) -> Result<SentMedia> {
         let k = copies::new_key()?;
-        let (manifest, blob) = self.content.seal(parts, BlobKey::Blob(&blob_key(&k)))?;
-        let content = Content { manifest: Some(manifest), ..content.clone() };
+        let key = blob_key(&k);
+        let (manifest, blob) = self.content.seal(parts, BlobKey::Blob(&key))?;
+        let content = Content { manifest: Some(manifest.clone()), ..content.clone() };
         let blob = match blob {
             Some(b) => Some(SealedBlob {
                 k,
@@ -117,6 +131,11 @@ impl Mesh {
             }),
             None => None,
         };
+        let held = blob.as_ref().map(|b| Blob { size: b.size, sha256: b.sha256, key });
+        let mut out = SentMedia { manifest, blob: held, sent: false, id: None };
+        if !send {
+            return Ok(out);
+        }
         let state = self.state();
         let now = crate::uptime::wall_ms().max(0) as u64;
         let made = sealed::make_with(
@@ -128,11 +147,13 @@ impl Mesh {
             Some(now),
             blob,
         )?;
-        let Some((frame, kept)) = made else { return Ok(false) };
+        let Some((frame, kept)) = made else { return Ok(out) };
         self.see(&kept.made.id);
+        out.id = Some(kept.made.id);
         self.kept.lock().unwrap().insert(kept.made.id, kept);
         self.broadcast(&frame, None);
-        Ok(true)
+        out.sent = true;
+        Ok(out)
     }
 
     /// Fetches a copy's sealed blob, of at most `max` bytes, from `from`

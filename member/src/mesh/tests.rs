@@ -162,7 +162,7 @@ fn a_copy_with_images_brings_its_blob_and_it_opens() {
     let png: Vec<u8> = (0..(1 << 20) + 70_000).map(|i| (i % 253) as u8).collect();
     let content = Content { kind: TYPE_MEDIA, text: Some("a picture".into()), ..Content::default() };
     let parts = vec![(Part { kind: "image/png".into(), ..Part::default() }, Source::Bytes(png.clone()))];
-    assert!(b.copy_media(&content, parts).unwrap());
+    assert!(b.copy_media(&content, parts, true).unwrap().sent);
     let got = rx.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!((got.origin, got.from), (b.device(), b.device()));
     let blob = got.blob.expect("a blob");

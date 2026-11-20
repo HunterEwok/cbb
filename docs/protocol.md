@@ -391,11 +391,15 @@ TXT strings (each at most 255 bytes):
 | `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
 | `j` | `1` | until the switch to the core (wave 5): present only on a device that listens to join; it has no `g`, so no member dials it as one |
 | `f` | fingerprint | with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything; with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
+| `i` | window ID | with `p`, on the records of 0.6: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
 A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
-`f=<key hash>` (`member/src/discovery.rs`), so that a new device that browses for it (the
-Aurora app) dials the one window and checks its key. The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
+`f=<key hash>`, `i=<window ID>` (`member/src/discovery.rs`), so that a new device whose person
+typed the window's six digits (`cbb pair -code`, the Aurora app, the ZX Spectrum Next's `.cbb
+pair`) dials the one window, checks its key and joins with the digits and that ID; a device
+that scanned the window's QR code has all three from the code. Nobody compares a code on two
+screens. The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
 member without `dials` publishes `v=1`, `g=<tag>`, `r=listen`. A receiver MUST ignore keys it does not
 know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
@@ -1376,8 +1380,11 @@ joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
 
 ### Until the switch to the core (wave 5)
 
-What follows is pairing as the service in `member/`, the Go helper and the apps speak it today:
-JSON frames and a member certificate in the Welcome. It goes with that code in wave 5.
+What follows is pairing as the Go helper and the apps of 0.5 speak it: JSON frames and a
+member certificate in the Welcome. It goes with that code in wave 5. A home window of a group
+of 0.6 does not follow it: its six digits are typed on the new device or come in the QR code,
+and its mDNS announcement carries the window's ID (`i`), never the digits ("Pairing in 0.6"
+above, and section 3).
 
 #### Window
 

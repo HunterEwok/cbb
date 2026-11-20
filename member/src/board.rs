@@ -230,6 +230,20 @@ impl Board {
         Ok(c)
     }
 
+    /// Whether images or files this member copied go to the group: a
+    /// deliberate send always, unless muted (an error then); a watcher's
+    /// copy only while this member sends and is not muted.
+    pub fn sends_media(&self, deliberate: bool) -> Result<bool> {
+        let mut st = self.inner.lock().unwrap();
+        if deliberate {
+            if self.muted(&mut st) {
+                return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
+            }
+            return Ok(true);
+        }
+        Ok(self.mode_now(&mut st).sends() && !self.muted(&mut st))
+    }
+
     /// The watcher says what the clipboard holds, without a copy: at its
     /// start, or after a write of its own. Images or files are never only
     /// told.
