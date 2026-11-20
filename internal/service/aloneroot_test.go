@@ -369,10 +369,11 @@ func TestAloneRootWindow(t *testing.T) {
 	}
 }
 
-// isAdmin reports whether the records list the service as an admin and it
-// holds its admin CA: the records may reach it before the admin message
-// does, and until it has taken the CA it acts as no admin (slow under the
-// MIPS emulator, TestAloneTakeover).
+// isAdmin reports whether the records list the service as an admin and,
+// in an old group, it holds its admin CA: the records may reach it before
+// the admin message does, and until it has taken the CA it acts as no
+// admin (slow under the MIPS emulator, TestAloneTakeover). A group of 0.6
+// has no CA: the admin record is all.
 func (s *testService) isAdmin(t *testing.T) bool {
 	t.Helper()
 	m, err := s.do(t, control.Header{Op: control.OpDevices}, "")
@@ -381,8 +382,8 @@ func (s *testService) isAdmin(t *testing.T) bool {
 	}
 	for _, d := range m.Devices {
 		if d.Self {
-			if !d.Admin {
-				return false
+			if !d.Admin || s.on06() {
+				return d.Admin
 			}
 			id, err := group.Load(s.dir)
 			return err == nil && id.AdminCA != nil

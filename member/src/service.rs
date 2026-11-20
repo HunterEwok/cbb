@@ -2318,12 +2318,14 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
+        // A window of 0.6: right after cbb new, the group may still be
+        // starting, and the window waits for it as any request does.
         if m.header.op == "pair"
             && m.header.addrs.is_empty()
             && m.header.code.is_empty()
-            && let Some(live) = self.live()
+            && (self.live().is_some() || (self.broken.lock().unwrap().is_none() && on_live::in_group(&self.state_dir)))
         {
-            if let Err(e) = self.live_pair_window(&live, r, &mut out) {
+            if let Err(e) = self.started(|| self.live()).and_then(|live| self.live_pair_window(&live, r, &mut out)) {
                 (self.log)(&format!("cbb: pair: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }

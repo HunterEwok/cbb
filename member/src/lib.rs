@@ -424,7 +424,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
     a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|f| !f.is_empty())
 }
 
-fn host_name() -> String {
+pub(crate) fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
     if records::valid_name(&name) { name } else { "member".into() }

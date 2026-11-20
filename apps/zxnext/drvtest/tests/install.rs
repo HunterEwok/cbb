@@ -816,6 +816,23 @@ fn joins_with_a_computers_code() {
     );
 }
 
+/// A home window of 0.6 announces its ID and its member key's hash: the
+/// Pi's cbb joins by them and the six digits.
+#[test]
+fn joins_a_home_window_with_its_six_digits() {
+    let Some(kit) = kit("pairwindow") else { return };
+    let mut esp = Esp::new(kit.site.clone());
+    let (id, fp) = ("0123456789abcdef0123456789abcdef", "fedcba9876543210".repeat(4));
+    esp.members = vec![
+        ("192.168.0.177".into(), 8764, String::new()),
+        ("192.168.0.175".into(), 8764, format!("p=1,f={fp},i={id}")),
+    ];
+    let mut run = run_with(&kit, "pair 123-456", esp, Pi::new());
+    let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
+    let want = format!("next link -to 192.168.0.175:8764 -serve 8764:8764 -join 123-456 -window {id} -fp {fp} ");
+    assert!(pi.log.iter().any(|l| l.contains(&want)), "{:?}", pi.log);
+}
+
 #[test]
 fn finds_a_computer_with_a_client_left_on_the_server() {
     let Some(kit) = kit("findclient") else { return };
