@@ -654,17 +654,6 @@ impl Service {
     }
 }
 
-/// Asks the person at cbb pair whether the other device shows the same
-/// code: the code goes to the client, and its answer (`answer`, with
-/// consent for yes) comes back; a client that hangs up says no.
-fn ask_client(out: &mut UnixStream, r: &mut control::Reader<UnixStream>, code: &str) -> bool {
-    let h = Header { code: code.to_string(), ..Default::default() };
-    if control::write(out, &control::partial(h)).is_err() {
-        return false;
-    }
-    matches!(r.read(), Ok(Some(m)) if m.header.op == "answer" && m.header.consent)
-}
-
 /// Closes a pairing window of the member of 0.6 when dropped.
 struct LiveWindow<'a> {
     svc: &'a Service,
@@ -674,20 +663,23 @@ struct LiveWindow<'a> {
 impl Drop for LiveWindow<'_> {
     fn drop(&mut self) {
         self.live.mesh.on_pair(None);
-        self.live.set_window_open(false);
+        self.live.set_window(None);
         *self.svc.pairing.lock().unwrap() = None;
     }
 }
 
 impl Service {
-    /// cbb pair on the root or an admin of a group of 0.6: a pairing window
-    /// on the member port for one device, for five minutes. The answers:
-    /// the window opened; the code to compare once a device pairs, which
-    /// the client answers; the device's name once it is in the group.
+    /// cbb pair on the root or an admin of a group of 0.6: a home window on
+    /// the member port for one device, for five minutes (docs/protocol.md,
+    /// "Pairing in 0.6"). The answers: the window opened, with its six
+    /// digits (`code`), its QR code's text (`invite`) and an address; a
+    /// partial `refused` with why for each device that failed (a wrong
+    /// code spends one of three tries); the device's name once it is in
+    /// the group. The third failure closes the window.
     pub(super) fn live_pair_window(
         &self,
         live: &Arc<Live>,
-        mut r: control::Reader<UnixStream>,
+        _r: control::Reader<UnixStream>,
         out: &mut UnixStream,
     ) -> Result<()> {
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
@@ -707,15 +699,36 @@ impl Service {
         if let Some(n) = live.networks() {
             n.learn_all();
         }
+        let now = || crate::uptime::wall_ms().max(0) as u64;
+        let (mut open, digits) = crate::admitting::home_window(now(), window::LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
             // One device at a time; another is dropped.
             let _ = tx.try_send((sock, s, x));
         })));
-        live.set_window_open(true);
+        live.set_window(Some(open.invitation.id));
         let port = *self.port.lock().unwrap();
-        let address = port.and_then(|p| crate::pair::qr_addresses(p).into_iter().next()).unwrap_or_default();
-        let opened = Header { expires: window::LIFETIME.as_secs() as i64, address, ..Default::default() };
+        let addrs = port.map(crate::pair::qr_addresses).unwrap_or_default();
+        // A computer with no home address still gives its link, for this
+        // computer's own joiners; it shows no QR code (no `address`).
+        let link_addrs = match (addrs.is_empty(), port) {
+            (true, Some(p)) => vec![std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, p)).to_string()],
+            _ => addrs.iter().take(cbb_core::join::invitation::MAX_WINDOW_ADDRS).cloned().collect(),
+        };
+        let link = cbb_core::join::invitation::WindowLink {
+            addrs: link_addrs,
+            fp: live.mesh.own().hash(),
+            id: open.invitation.id,
+            digits: digits.clone(),
+        };
+        let opened = Header {
+            kind: crate::admit_cli::HOME_WINDOW.into(),
+            expires: window::LIFETIME.as_secs() as i64,
+            address: addrs.first().cloned().unwrap_or_default(),
+            code: digits,
+            invite: if link.addrs.is_empty() { String::new() } else { link.text() },
+            ..Default::default()
+        };
         control::write(out, &control::partial(opened))?;
         let end = Instant::now() + window::LIFETIME;
         loop {
@@ -724,29 +737,39 @@ impl Service {
                 return Err(Error::msg("the pairing window closed: no device paired within 5 minutes"));
             }
             match rx.recv_timeout(left.min(Duration::from_secs(1))) {
-                Ok((sock, s, x)) => {
-                    let info =
-                        crate::admitting::at_home(&live.mesh, sock, s, x, &mut |code| ask_client(out, &mut r, code))?;
-                    (self.log)(&format!("cbb: {} joined the group", info.name));
-                    let done = Header { name: info.name, done: true, ..Default::default() };
-                    return control::write(out, &control::reply(done, Vec::new()));
-                }
+                Ok((sock, s, x)) => match crate::admitting::at_home(&live.mesh, sock, s, x, &mut open) {
+                    Ok(info) => {
+                        (self.log)(&format!("cbb: {} joined the group", info.name));
+                        let done = Header { name: info.name, done: true, ..Default::default() };
+                        return control::write(out, &control::reply(done, Vec::new()));
+                    }
+                    Err(e) => {
+                        (self.log)(&format!("cbb: a device did not pair: {}", e.for_log()));
+                        if let Err(closed) = open.may_use(cbb_core::join::invitation::Network::Home, now()) {
+                            let why = match closed {
+                                cbb_core::join::PairError::TooMany => {
+                                    "the pairing window closed after three failed tries: run cbb pair again for a new code"
+                                }
+                                _ => "the pairing window closed",
+                            };
+                            return Err(e.context(why));
+                        }
+                        let tried = Header { refused: true, detail: e.for_log(), ..Default::default() };
+                        control::write(out, &control::partial(tried))?;
+                    }
+                },
                 Err(RecvTimeoutError::Timeout) if !STOP.load(Ordering::SeqCst) => {}
                 Err(_) => return Err(Error::msg("the service is stopping")),
             }
         }
     }
 
-    /// cbb pair -code on a computer in no group: joins the group of 0.6 whose
-    /// pairing window mDNS finds, or at the address given. The answers: the
-    /// code to compare, which the client answers, then done; the service
-    /// starts in the group it kept.
-    pub(super) fn live_join(
-        &self,
-        m: &Message,
-        mut r: control::Reader<UnixStream>,
-        out: &mut UnixStream,
-    ) -> Result<()> {
+    /// cbb pair -code on a computer in no group: joins the group of 0.6 by
+    /// its home window. `code` is the window's six digits, with the window
+    /// found by mDNS (at `address` when given), or the window's QR code
+    /// text, which names its addresses, ID and member key. Answers done;
+    /// the service starts in the group it kept.
+    pub(super) fn live_join(&self, m: &Message, _r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let h = &m.header;
         if in_group(&self.state_dir) || matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
             return Err(Error::msg("this device is already in a group"));
@@ -763,17 +786,14 @@ impl Service {
             os: cbb_core::format::print::os_number(crate::admin::os_name()),
             caps: roster::caps_number(&caps),
         };
-        let addrs = if h.address.is_empty() {
-            crate::discovery::find_pairing(crate::discovery::PAIRING_BROWSE)?
-        } else {
-            let a = crate::resolve(&h.address)?;
-            *self.joined_at.lock().unwrap() = Some(a);
-            vec![a]
-        };
+        let at = if h.address.is_empty() { None } else { Some(crate::resolve(&h.address)?) };
+        let (addrs, invitation, fp) = crate::joining::window_of(&h.code, at)?;
         let mut last = Error::msg("no address to dial");
         for a in addrs {
-            match crate::joining::at_home(&self.state_dir, a, &me, &mut |code| ask_client(out, &mut r, code)) {
+            match crate::joining::at_home(&self.state_dir, a, &me, invitation.clone(), fp) {
                 Ok(_) => {
+                    // The new member dials first the address it joined at.
+                    *self.joined_at.lock().unwrap() = Some(a);
                     (self.log)(&format!("cbb: joined a group of 0.6 as {name}"));
                     return control::write(
                         out,
@@ -781,7 +801,7 @@ impl Service {
                     );
                 }
                 // Another address of the same window, only when this one
-                // did not answer: once a session ran, the codes were shown.
+                // did not answer: once a session ran, it spent a try.
                 Err(e) if e.message().starts_with("cannot reach") => last = e,
                 Err(e) => return Err(e),
             }

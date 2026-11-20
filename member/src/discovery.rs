@@ -77,6 +77,13 @@ pub trait Peers: Send + Sync + 'static {
     fn window_fingerprint(&self) -> String {
         String::new()
     }
+    /// What a home window announces as `i` beside `p=1`: the hex of its ID,
+    /// by which the new device finds the window whose six digits its person
+    /// types (docs/protocol.md, "Pairing in 0.6"); never the digits. Empty
+    /// for none.
+    fn window_id(&self) -> String {
+        String::new()
+    }
     /// Discovery found the device on the home network, or lost it.
     fn found(&self, id: &DeviceId, here: bool);
     /// The devices of the group as their IDs show, sorted.
@@ -203,6 +210,7 @@ const PAIRING_SETTLE: Duration = Duration::from_secs(2);
 /// `p=1`), for a device that joins with a code alone: browsed for up to
 /// wait, then a moment more for the others; an error when none is found.
 /// More than one window is refused, as in Go: the code fits only one.
+/// A home window of 0.6 is found by [`find_window`].
 pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
     use crate::error::Error;
     let open = browse_txt(wait, |info| (info.get_property_val_str("p") == Some("1")).then_some(()))?;
@@ -214,6 +222,54 @@ pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
         n => Err(Error::msg(format!(
             "{n} devices announce a pairing window ({}); give the address that cbb pair showed",
             open.keys().cloned().collect::<Vec<_>>().join(", ")
+        ))),
+    }
+}
+
+/// A home window that mDNS finds (TXT `p=1` with `i`, docs/protocol.md,
+/// "Pairing in 0.6"): its addresses, its ID and the hash of the member's
+/// key (`f`), which the joiner checks the TLS key by.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Window {
+    pub addrs: Vec<SocketAddr>,
+    pub id: [u8; 16],
+    pub fp: Option<cbb_core::format::KeyHash>,
+}
+
+/// The home window to join with six digits: browsed for up to wait, then
+/// a moment more for the others. `at`, when given, is the address cbb pair
+/// -code was given: the window that announces it. More than one window is
+/// refused: the digits fit one, and each other would be one more guess.
+pub fn find_window(wait: Duration, at: Option<SocketAddr>) -> crate::error::Result<Window> {
+    use cbb_core::join::invitation::hex_bytes;
+
+    use crate::error::Error;
+    let open = browse_txt(wait, |info| {
+        let id = info.get_property_val_str("i").and_then(hex_bytes::<16>)?;
+        let fp = info.get_property_val_str("f").and_then(hex_bytes::<32>).map(cbb_core::format::KeyHash);
+        (info.get_property_val_str("p") == Some("1")).then_some((id, fp))
+    })?;
+    let mut found: Vec<Window> = open
+        .into_values()
+        .map(|(addrs, (id, fp))| Window { addrs, id, fp })
+        .filter(|w| at.is_none_or(|a| w.addrs.iter().any(|x| x.ip().to_canonical() == a.ip().to_canonical())))
+        .collect();
+    match found.len() {
+        0 if at.is_some() => Err(Error::msg(
+            "no pairing window announces itself at that address; give the link of the window's QR code instead (cbb pair -code 'cbb://pair?...')",
+        )),
+        0 => Err(Error::msg(
+            "no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address",
+        )),
+        1 => {
+            let mut w = found.remove(0);
+            if let Some(a) = at {
+                w.addrs = vec![a];
+            }
+            Ok(w)
+        }
+        n => Err(Error::msg(format!(
+            "{n} devices announce a pairing window; give the address that cbb pair showed, or the link of its QR code"
         ))),
     }
 }
@@ -1066,6 +1122,7 @@ fn browse_with<P: Peers>(
         // records, which mdns-sd takes for another device's and renames this
         // one ("ID (2)"), which nobody finds by its ID.
         let fp = if window { node.window_fingerprint() } else { String::new() };
+        let wid = if window { node.window_id() } else { String::new() };
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !dials && !as_phone {
             txt.push(("r", "listen"));
@@ -1074,6 +1131,9 @@ fn browse_with<P: Peers>(
             txt.push(("p", "1"));
             if !fp.is_empty() {
                 txt.push(("f", &fp));
+            }
+            if !wid.is_empty() {
+                txt.push(("i", &wid));
             }
         }
         let host = format!("{}.", me.host_name());

@@ -74,15 +74,9 @@ fn invitation() -> Invitation {
 }
 
 /// One pairing over TLS of `cbb-pair/3`: the laptop admits tv (key 3)
-/// with its root key. Gives the joiner's result, the member's, and the
-/// member's set.
-#[allow(clippy::type_complexity)]
-fn pair(
-    joiner_says: bool,
-    member_says: bool,
-    joiner_invitation: Option<Invitation>,
-    open: Option<Open>,
-) -> (Result<Box<Admitted>>, Result<Info>, RecordSet, Option<Open>) {
+/// with its root key, by the invitation it keeps open. Gives the joiner's
+/// result, the member's, the member's set and the open invitation.
+fn pair(joiner_invitation: Invitation, open: Open) -> (Result<Box<Admitted>>, Result<Info>, RecordSet, Open) {
     let (root, laptop, tv) = (Arc::new(K::new(1)), K::new(2), K::new(3));
     let set = Arc::new(Mutex::new(group(&root, &laptop)));
     let clock = crate::tls::clock();
@@ -111,12 +105,9 @@ fn pair(
         let ms = MemberSession::new(laptop_point, joiner, adb, exporter);
         let mut stream = crate::tls::Stream::new(s, sock);
         let mut open = open;
-        let way = match &mut open {
-            Some(o) => Way::Invited { open: o, network: Network::Home },
-            None => Way::Home,
-        };
+        let way = Way { open: &mut open, network: Network::Home };
         let joiner_key = Key::es256(joiner.to_vec());
-        let r = member(&mut stream, ms, way, &mut |_| member_says, &|| NOW, &mut |info, s| {
+        let r = member(&mut stream, ms, way, &|| NOW, &mut |info, s| {
             let mut set = member_set.lock().unwrap();
             let mut d = Device::new(joiner_key.clone(), &info.name, info.role);
             d.rights = body::RIGHT_READ | body::RIGHT_SEND;
@@ -146,7 +137,7 @@ fn pair(
         exporter,
     };
     let mut stored = false;
-    let jr = joiner(&mut stream, j, &mut |_| joiner_says, &|| NOW, &mut |_| {
+    let jr = joiner(&mut stream, j, &|| NOW, &mut |_| {
         stored = true;
         Ok(())
     });
@@ -172,33 +163,39 @@ fn open(inv: &Invitation) -> Open {
 }
 
 #[test]
-fn a_device_joins_at_home_over_tls() {
-    let (j, m, set, _) = pair(true, true, None, None);
+fn a_device_joins_a_home_window_over_tls() {
+    let (window, digits) = Invitation::home();
+    let typed = Invitation::typed(window.id, &digits).unwrap();
+    let (j, m, set, open) = pair(typed, open(&window));
     let a = j.unwrap();
     assert_eq!(m.unwrap().name, "tv");
     assert_eq!(a.set.digest(), set.digest());
     assert!(a.state.device_by_key(&K::new(3).key().hash()).is_some());
+    assert!(open.used && open.failures == 0, "one success closes the window");
 }
 
 #[test]
 fn a_device_joins_by_an_invitation_over_tls() {
     let inv = invitation();
-    let (j, m, set, open) = pair(false, false, Some(inv.clone()), Some(open(&inv)));
+    let (j, m, set, open) = pair(inv.clone(), open(&inv));
     // No one is asked: the invitation's secret binds the member.
     assert_eq!(j.unwrap().set.digest(), set.digest());
     assert!(m.is_ok());
-    assert!(open.unwrap().used);
+    assert!(open.used);
 }
 
+/// Wrong digits: both ends fail, the joiner learns why, nothing is
+/// written, and the window counts the try.
 #[test]
-fn a_no_at_either_end_ends_the_pairing() {
-    let (j, m, set, _) = pair(false, true, None, None);
-    assert!(j.is_err() && m.is_err());
-    assert!(set.state().device_by_key(&K::new(3).key().hash()).is_some(), "the member wrote before it sent 67");
-    let (j, m, set, _) = pair(true, false, None, None);
-    assert!(j.is_err());
+fn wrong_digits_let_nothing_in() {
+    let (window, digits) = Invitation::home();
+    let wrong = if digits == "000000" { "000001" } else { "000000" };
+    let (j, m, set, open) = pair(Invitation::typed(window.id, wrong).unwrap(), open(&window));
+    let e = j.err().unwrap();
+    assert!(e.message().contains("not the window's"), "{e:?}");
     assert!(m.is_err());
-    assert!(set.state().device_by_key(&K::new(3).key().hash()).is_none(), "nothing written without a yes");
+    assert!(set.state().device_by_key(&K::new(3).key().hash()).is_none(), "nothing written");
+    assert!(!open.used && open.failures == 1);
 }
 
 #[test]
@@ -206,8 +203,8 @@ fn a_wrong_invitation_lets_nothing_in() {
     let inv = invitation();
     let mut wrong = inv.clone();
     wrong.secret = [7; 32];
-    let (j, m, set, open) = pair(true, true, Some(wrong), Some(open(&inv)));
+    let (j, m, set, open) = pair(wrong, open(&inv));
     assert!(j.is_err() && m.is_err());
     assert!(set.state().device_by_key(&K::new(3).key().hash()).is_none());
-    assert!(!open.unwrap().used);
+    assert!(!open.used);
 }

@@ -1199,66 +1199,65 @@ describes, until wave 5 moves them onto the core; that subsection goes with that
 
 Pairing runs over TLS 1.3 with ALPN `cbb-pair/3` (section 19), each side presenting its key
 container (format section 12) for the key it keeps. Its messages are CBOR maps in frames
-(section 4, "The member protocol in 0.6"), the type in field 0 (section 19, "Member protocol messages"). Before the
-code is confirmed every frame takes the pairing limit, `format::frame::LIMIT_PAIRING` (1048576);
+(section 4, "The member protocol in 0.6"), the type in field 0 (section 19, "Member protocol messages"). Before
+CPace is confirmed every frame takes the pairing limit, `format::frame::LIMIT_PAIRING` (1048576);
 after it, message 67 alone may take the member limit, `format::frame::LIMIT_MEMBER` (7340032),
 and every other message still the pairing limit. A message 67 before the confirm is refused
 whatever its size (`pair/early-welcome`).
 
 | `t` | Direction | Fields |
 |---|---|---|
-| 64 `pair/start` | joiner to member | 2 `Ya` bytes, at most 256; 3 `ADa` bytes, at most 16 KiB: the encoding of the joiner's Info; 4 `commitment` bytes 32 |
-| 65 `pair/reply` | member to joiner | 2 `Yb` bytes, at most 256; 3 `ADb` bytes, at most 1 KiB: `{1 group ID (16), 2 the member's device ID (16), 3 its name}`; 4 `nonce` bytes 32 |
-| 66 `pair/confirm` | joiner to member | 2 `Ta` bytes, at most 64; 3 the joiner's nonce, bytes 32 |
+| 64 `pair/start` | joiner to member | 2 `Ya` bytes, at most 256; 3 `ADa` bytes, at most 16 KiB: the encoding of the joiner's Info |
+| 65 `pair/reply` | member to joiner | 2 `Yb` bytes, at most 256; 3 `ADb` bytes, at most 1 KiB: `{1 group ID (16), 2 the member's device ID (16), 3 its name}` |
+| 66 `pair/confirm` | joiner to member | 2 `Ta` bytes, at most 64 |
 | 67 `pair/welcome` | member to joiner | 2 `Tb` bytes, at most 64; 3 the Welcome; 4 `Tw` bytes 64 |
 | 68 `pair/done` | joiner to member | none: the joiner kept its identity |
 | 69 `pair/error` | either | 2 `code`: 1 wrong-code, 2 closed, 3 busy, 4 expired, 5 too-many, 6 refused, 7 declined, 8 taken |
 
-Every field is needed. An error code this version does not know is taken as `refused`.
+Every field is needed. An error code this version does not know is taken as `refused`. The short
+code's commitment and nonces of earlier drafts are retired and never given again: message 64
+with field 4, 65 with field 4 or 66 with field 3 is refused (`pair/start/retired`,
+`pair/reply/retired`, `pair/confirm/retired`). Code 7, `declined`, stays for an app's own
+refusal.
 
 **CPace.** Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21 with explicit key
 confirmation (Ta, Tb), the joiner the initiator. Its channel identifier is `cbb pair channel v3`
 0x00 ‖ the key hash of the member's TLS key ‖ that of the joiner's ‖ the ID of the invitation
-each side believes it is using, 16 bytes, all zero at home without an invitation (an ID no
-invitation has). The keys are those of the key containers the handshake saw, so a party in the
-middle with keys of its own gets another identifier and the exchange fails, and two ends in the
-flows of two invitations get two identifiers. Its session identifier is the session's TLS
-exporter: 32 bytes of the label `EXPERIMENTAL-cbb-pair-v3` with an empty context, exported only
-from a session that took `cbb-pair/3`. The short code and the session mark take the same 32
-bytes, kept apart by their own labels inside the hashes. With an invitation the password is its 32-byte
-secret (section 12); at home without one it is 32 zero bytes (`NO_SECRET`), which no
-invitation's secret is. An invitation ID and a password go together: both zero or neither, and
-one without the other is `refused`. The zero password is public, so CPace authenticates nothing
-by itself at home: there the pairing rests on the short code both people compare. The member
-sends message 67 only with an approval of this session for this joiner: either the joiner's `Ta`
-verified under an invitation's own secret (the joiner showed that it holds it), or the member's
-person said the codes match on the code of this attempt. A `Ta` that verifies under the zero
-password approves nothing. "They do not match", an answer past its time, and a second code for
-the same attempt give no approval and end the attempt; one approval makes one message 67. The
-joiner takes the Welcome at home only after its own person said the codes match (below, "The
-joiner's checks"). The vectors are `testdata/format/messages3.json`, `codes` (the passwords
-too).
+each side believes it is using, 16 bytes, never all zero (an ID no invitation has). The keys
+are those of the key containers the handshake saw, so a party in the middle with keys of its own
+gets another identifier and the exchange fails, and two ends in the flows of two invitations get
+two identifiers. Its session identifier is the session's TLS exporter: 32 bytes of the label
+`EXPERIMENTAL-cbb-pair-v3` with an empty context, exported only from a session that took
+`cbb-pair/3`. The session mark takes the same 32 bytes, kept apart by its own label inside the
+hash. The password is always an invitation's secret: a QR code's 32 random bytes (section 12),
+or a home window's, from its six digits (below). Neither the ID nor the secret is ever all zero;
+an end given one refuses (`refused`). The member sends message 67 only with an approval of this
+session for this joiner: the joiner's `Ta` verified under the invitation's secret, which shows
+that the joiner holds it. The joiner takes message 67 only once the member's `Tb` verified, which
+shows the member holds it too. One approval makes one message 67. The vectors are
+`testdata/format/messages3.json`, `codes`.
 
-**The short code**, for a device with a screen and no camera, is a committed one. The joiner
-draws a nonce `nj` of 32 bytes and sends `commitment` = SHA-256(`cbb short code commitment v1`
-0x00 ‖ `nj`) in message 64; the member answers with its own nonce `nm` in message 65; the
-joiner opens `nj` in message 66. Both show six digits: the first 4 bytes of SHA-256(`cbb short
-code v3` 0x00 ‖ the session's TLS exporter ‖ `nj` ‖ `nm` ‖ the invitation ID) as a big-endian
-number mod 1 000 000, zero-padded. Neither end can choose its part after it has seen the
-other's, so the codes of two sessions match by chance only, one in a million. Each nonce is new
-for its session, drawn by the core at each end and never kept. A nonce that does not open the
-commitment ends the attempt (`wrong-code`).
+**A home window** (owner, 11-20) is how a computer, a phone or a watch at home joins without a
+camera between them: an invitation that lives only at the member that opened it, never written
+as text. Its ID is 16 random bytes, never all zero; its code is six random digits, each code as
+likely; its secret is SHA-256(`cbb pair home code v1` 0x00 ‖ the six ASCII digits); its profile
+is home only, any role but a leaf's, with at most read, send, secrets, and hub for a member
+with the hub's capability. The member shows the six digits and a QR code
+`cbb://pair?addr=…&fp=…&i=<ID hex>&c=<digits>`; its mDNS announcement adds `i=<ID hex>`, never
+the digits. The joiner scans the QR code, or finds the window by mDNS and takes the digits its
+person types, and derives the same invitation. A wrong digit fails at `Ta` (`wrong-code`), with
+nothing written. At a home window the member's verified `Tb` is also the joiner's proof of that
+member in that session (`join::invitation::Proven`), made only there: it is a guarded leaf's
+only way to be bound to a new root after a change of root (`format::grant::read_bound`).
 
 **Attempts.** An invitation takes one attempt at a time (another gets `busy`). The machine's
-steps, from message 64 to the opening of `nj`, have `join::invitation::ATTEMPT_MS` (30000) at
-each end; once the codes are shown the person has `join::invitation::ANSWER_MS` (600000) of
-their own to compare and answer, and the attempt stays the open one meanwhile. An attempt counts
-as failed once the member has sent message 65, unless it ends in a Welcome; after
-`join::invitation::MAX_FAILURES` (3) failures the invitation answers `too-many`. The joiner
-counts too: at most three sessions per invitation, each started only by the person; a code once
-shown stays until the person answers; the app never retries by itself. Each attempt at the
-member has a number from its start, which the later steps name, so a late message of an earlier
-attempt changes nothing.
+steps, from message 64 to message 68, have `join::invitation::ATTEMPT_MS` (30000) at the
+member. An attempt counts as failed from its start, unless it ends in a Welcome; after
+`join::invitation::MAX_FAILURES` (3) failures the invitation answers `too-many`, and one
+Welcome closes it (`closed`). Six digits and three tries give three chances in a million. The
+joiner counts too: at most three sessions per invitation, each started only by the person; the
+app never retries by itself. Each attempt at the member has a number from its start, which the
+later steps name, so a late message of an earlier attempt changes nothing.
 
 #### Info
 
@@ -1329,10 +1328,8 @@ keeps nothing.
 `ADb` field 1; that the admitter's key, from the TLS handshake, is a device of the group; that
 the records hold its own record with its own key, signed by the root or by the admitter's admin
 key with the power to admit; and the path of roots the records lead to. What binds the member:
-with an invitation, its secret, CPace's password; at home without one, only the person's "they
-match" in this session, at the joiner, for this admitter (the core takes the answer once, with
-the session's TLS exporter; an answer of another session or another member takes nothing). A
-guarded leaf takes only a record the root signed itself. Only then does the joiner store the
+the invitation's secret, CPace's password, whose `Tb` verified. A guarded leaf takes only a
+record the root signed itself. Only then does the joiner store the
 set and its identity, and send message 68.
 
 #### The intro
@@ -4864,7 +4861,7 @@ does not know unless its section says it refuses it.
 
 | String | Use | Section |
 |---|---|---|
-| `EXPERIMENTAL-cbb-pair-v3` | TLS exporter label of a 0.6 pairing: CPace's `sid`, the exporter of the short code and of the session mark | 6 |
+| `EXPERIMENTAL-cbb-pair-v3` | TLS exporter label of a 0.6 pairing: CPace's `sid` and the exporter of the session mark | 6 |
 | `cbb pair channel v3` + `0x00` | CPace's channel identifier prefix in 0.6 | 6 |
 | `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` (0.5's pairing, until wave 5) | 6 |
 | `cbb pair v2` + `0x00` | CPace's channel identifier prefix (0.5's pairing, until wave 5) | 6 |
@@ -5051,8 +5048,10 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `join::invitation::MAX_ENDPOINTS` | 8 | frozen | endpoints of one path | `invite/path` |
 | `join::invitation::MAX_PATHS` | 4 | frozen | paths of an invitation | `invite/shape` |
 | `join::invitation::MAX_FAILURES` | 3 | reader | failed attempts before an open invitation closes |  |
+| `join::invitation::HOME_DIGITS` | 6 | frozen | the digits of a home window's code, CPace's password |  |
+| `join::invitation::MAX_WINDOW_ADDRS` | 4 | reader | addresses in a home window's QR code |  |
+| `join::invitation::MAX_WINDOW_TEXT` | 512 | reader | the text of a home window's QR code |  |
 | `join::invitation::ATTEMPT_MS` | 30000 | reader | the machine's steps of one attempt |  |
-| `join::invitation::ANSWER_MS` | 600000 | reader | the person comparing the codes |  |
 | `join::waiting::MAX_WAIT_MS` | 86400000 | frozen | a request held a day | `waiting/requests` |
 | `join::waiting::MAX_REQUESTS` | 16 | frozen | requests by guest paths | `waiting/requests` |
 | `join::waiting::MAX_PER_INVITATION` | 2 | reader | requests of one invitation |  |

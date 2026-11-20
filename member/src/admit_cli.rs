@@ -117,21 +117,21 @@ pub(crate) fn pair(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// What cbb pair takes, as Go's pairUsage.
-pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open a pairing window for a new computer;
+pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open a pairing window with a six-digit code;
                                 in no group: join by the phone's QR code or a typed code
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
        cbb pair -qr [-admin]    on a group of 0.5 only: admit the device that shows a QR
                                 code and a code and waits, the code or the QR code's text read
                                 from standard input; on 0.6 the new device dials the window
-       cbb pair -code [address:port]   join a pairing window; both show a code to compare";
+       cbb pair -code [address:port]   join a pairing window: type the six digits it shows";
 
 /// Opens a pairing window and waits for the device that joins with its
 /// code, as Go's admit.
 fn window(g: &Global, admins: bool) -> Result<()> {
-    let (mut w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
-    if m.header.code.is_empty() {
-        return compared_window(g, &mut w, &mut r, &m);
+    let (_w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
+    if m.header.kind == HOME_WINDOW {
+        return home_window(g, &mut r, &m);
     }
     if admins {
         println!("The phone that joins with this code becomes an admin of the group. It may then");
@@ -159,11 +159,22 @@ fn window(g: &Global, admins: bool) -> Result<()> {
     Ok(())
 }
 
-/// A pairing window of a group of 0.6: no code to type; once a device
-/// pairs, both show a code, and the person here says whether they match.
-fn compared_window(g: &Global, w: &mut UnixStream, r: &mut Reader<UnixStream>, m: &Message) -> Result<()> {
-    println!("A pairing window is open on this computer.\n");
-    println!("On the new computer run cbb pair -code.");
+/// The kind of the answer that opens a home window of a group of 0.6.
+pub(crate) const HOME_WINDOW: &str = "home-window";
+
+/// A home window of a group of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+/// its six digits and its QR code, which carries them for a phone; each
+/// device that fails is told here, and the third failure closes the
+/// window.
+fn home_window(g: &Global, r: &mut Reader<UnixStream>, m: &Message) -> Result<()> {
+    let code = &m.header.code;
+    let (a, b) = code.split_at(3.min(code.len()));
+    println!("Pairing code: {a} {b}\n");
+    if !m.header.invite.is_empty() && !m.header.address.is_empty() {
+        print!("{}", crate::qr(&m.header.invite));
+        println!("\nOn a phone, scan this QR code in the app.");
+    }
+    println!("On the new computer run cbb pair -code and type the code.");
     if !m.header.address.is_empty() {
         println!("If it cannot find this one: cbb pair -code {}", m.header.address);
     }
@@ -176,35 +187,32 @@ fn compared_window(g: &Global, w: &mut UnixStream, r: &mut Reader<UnixStream>, m
             admin_hint(g);
             return Ok(());
         }
-        if !m.header.code.is_empty() {
-            answer_code(w, &m.header.code)?;
+        if m.header.refused {
+            println!("A device did not pair: {}", m.header.detail);
+            println!("The window stays open; a wrong code spends one of three tries.");
         }
     }
 }
 
-/// Shows the code a pairing of 0.6 gives and sends the person's answer:
-/// yes only when the other device shows the same.
-pub(crate) fn answer_code(w: &mut UnixStream, code: &str) -> Result<()> {
-    let yes = same_code(code);
-    control::write(w, &Message::new(Header { op: "answer".into(), consent: yes, ..Default::default() }, Vec::new()))
-}
-
-/// Shows the code a pairing of 0.6 gives and asks the person whether the
-/// other device shows the same.
-pub(crate) fn same_code(code: &str) -> bool {
-    let shown = match code.len() {
-        6 => format!("{} {}", &code[..3], &code[3..]),
-        _ => code.to_string(),
-    };
-    println!("\nThis device shows the code:  {shown}");
-    println!("The other device shows a code too. Answer yes only if they are the same.");
-    print!("Are they the same? Type yes: ");
-    std::io::stdout().flush().ok();
-    let yes = read_line(256).is_ok_and(|l| l.trim().eq_ignore_ascii_case("yes"));
-    if !yes {
-        println!("Not paired: the codes were not the same.");
+/// The six digits a home window shows (spaces dropped), or its QR code's
+/// text, from standard input, with a prompt on a terminal.
+pub(crate) fn window_code() -> Result<cbb_core::secret::Zeroizing<String>> {
+    if interactive() {
+        print!("The six digits the pairing window shows (or its QR code's text): ");
+        std::io::stdout().flush().ok();
     }
-    yes
+    let line = cbb_core::secret::Zeroizing::new(read_line(MAX_QR_TEXT)?);
+    let text = line.trim();
+    if text.starts_with(cbb_core::join::invitation::WINDOW_PREFIX) {
+        return Ok(cbb_core::secret::Zeroizing::new(text.to_string()));
+    }
+    let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    if cbb_core::join::invitation::home_secret(&digits).is_none() {
+        return Err(Error::msg(
+            "type the six digits the pairing window shows (cbb pair on the group's root or an admin), or its QR code's text",
+        ));
+    }
+    Ok(cbb_core::secret::Zeroizing::new(digits))
 }
 
 /// Suggests a second admin when this computer, the root, is the group's

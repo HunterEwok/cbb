@@ -30,9 +30,10 @@ On the root:
 sudo cbb pair
 ```
 
-It opens a pairing window and waits. On the new computer run `sudo cbb pair -code`: it finds
-the window on the home network, and both computers show a six-digit code. Type `yes` on each
-when the codes are the same. The new computer joins within seconds.
+It opens a pairing window, shows a six-digit code and waits. On the new computer run
+`sudo cbb pair -code` and type that code: it finds the window on the home network and joins
+within seconds. A wrong code spends one of three tries; the window closes after the third, or
+once a computer joined.
 
 Each computer then syncs, as in the [quick start](quickstart.md#4-copy-on-one-paste-on-another).
 

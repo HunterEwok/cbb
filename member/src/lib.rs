@@ -538,23 +538,28 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     // -name and -caps unless cbb pair gives them. With an address and no
     // service running, cbb joins itself, into its state folder, before its
     // service starts.
-    // A group of 0.6 has no code to type: the window and this device each
-    // show one once they meet, and the person says whether they match.
-    if invite.is_none() && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g)) {
+    // A home window of 0.6: the six digits it shows, or its QR code's
+    // text, from standard input, never the command line, where other users
+    // could read them.
+    let code = match &code_addr {
+        Some(_) if invite.is_none() => Some(admit_cli::window_code()?),
+        _ => None,
+    };
+    if let Some(code) = &code
+        && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g))
+    {
         let h = control::Header {
             op: "join".into(),
             address: code_addr.unwrap_or_default(),
+            code: code.to_string(),
             name: given_name.unwrap_or_default(),
             caps: given_caps,
             ..Default::default()
         };
         println!("{}", tr!("Looking for the computer with the pairing window..."));
         std::io::stdout().flush().ok();
-        let (mut w, mut r, mut m) = admit_cli::stream(g, h)?;
+        let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
         while !m.header.done {
-            if !m.header.code.is_empty() {
-                admit_cli::answer_code(&mut w, &m.header.code)?;
-            }
             m = check(admit_cli::next(&mut r)?)?;
         }
         println!("{}", tr!("Joined the group."));
@@ -562,15 +567,15 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     }
     // With an address and no service running, cbb joins itself, into its
     // state folder, before its service starts.
-    if invite.is_none()
-        && let Some(a) = &code_addr
-    {
+    if let (Some(code), Some(a)) = (&code, &code_addr) {
         let me = joining::Me {
             name: &name,
             os: cbb_core::format::print::os_number(admin::os_name()),
             caps: roster::caps_number(&caps),
         };
-        joining::at_home(&g.state, resolve(a)?, &me, &mut admit_cli::same_code)?;
+        let (addrs, invitation, fp) = joining::window_of(code, Some(resolve(a)?))?;
+        let addr = addrs.first().copied().ok_or_else(|| Error::msg("no address to dial"))?;
+        joining::at_home(&g.state, addr, &me, invitation, fp)?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
     }

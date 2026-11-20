@@ -923,12 +923,13 @@ fn pair_with_a_code() {
     run_cases(
         "pair-code",
         vec![
-            // No code is typed: the window and this device each show one
-            // once they meet, which the service sends to compare.
+            // The window's six digits from standard input, never the
+            // command line; the service finds the window.
             Case {
                 name: "pair -code",
                 args: &["pair", "-code"],
-                sent: Some(("join", Some(|s| s.s("code").is_empty() && s.s("address").is_empty()))),
+                stdin: "123 456\n",
+                sent: Some(("join", Some(|s| s.s("code") == "123456" && s.s("address").is_empty()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -937,10 +938,11 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS",
                 args: &["pair", "-code", "127.0.0.1:1"],
+                stdin: "123456\n",
                 sent: Some((
                     "join",
                     Some(|s| {
-                        s.s("code").is_empty()
+                        s.s("code") == "123456"
                             && s.s("address") == "127.0.0.1:1"
                             && s.s("name").is_empty()
                             && s.h.get("caps").is_none()
@@ -952,6 +954,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -name -caps -code ADDRESS",
                 args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
                 stdout: "Joined the group",
                 ..Case::default()
@@ -959,7 +962,17 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -caps none -code",
                 args: &["pair", "-caps", "none", "-code"],
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // The window's QR code text goes as it is.
+            Case {
+                name: "pair -code with the QR code's text",
+                args: &["pair", "-code"],
+                stdin: WINDOW_LINK,
+                sent: Some(("join", Some(|s| s.s("code") == WINDOW_LINK.trim()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -967,6 +980,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS, no service",
                 args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
+                stdin: WINDOW_LINK,
                 code: 1,
                 stderr: "cannot reach 127.0.0.1:1",
                 ..Case::default()
@@ -1016,65 +1030,49 @@ fn pair_with_a_code() {
                 stderr: "invitation",
                 ..Case::default()
             },
-            // No code is read: what standard input holds never goes to the
-            // service.
+            // Not six digits: refused here, before the service hears of it.
             Case {
-                name: "digits on standard input",
+                name: "five digits on standard input",
                 args: &["pair", "-code"],
                 stdin: "12345\n",
-                sent: Some(("join", Some(|s| s.s("code").is_empty() && !text(s).contains("12345")))),
-                stdout: "Joined the group",
-                ..Case::default()
-            },
-            Case {
-                name: "digits on standard input, with an address",
-                args: &["pair", "-code", "127.0.0.1:1"],
-                stdin: "12345\n",
-                sent: Some(("join", Some(|s| s.s("code").is_empty() && s.s("address") == "127.0.0.1:1"))),
-                stdout: "Joined the group",
+                code: 1,
+                stderr: "six digits",
                 ..Case::default()
             },
         ],
     );
 }
 
-/// The answers of a join of 0.6 on a device in no group: the code to
-/// compare, then the end, which last gives.
-fn compared(code: &'static str, last: Value) -> Handler {
-    group_then("", move |s| match s.op() {
-        "answer" => Vec::new(),
-        _ => vec![(json!({"code": code}), Vec::new()), done(last.clone())],
-    })
-}
+/// A home window's QR code text, as standard input gives it.
+const WINDOW_LINK: &str = "cbb://pair?addr=192.168.1.5:8764&fp=1111111111111111111111111111111111111111111111111111111111111111&i=22222222222222222222222222222222&c=123456\n";
 
+/// A join of 0.6 needs no answer: the six digits are CPace's password. A
+/// home window shows its digits, its address, each failed try, and the
+/// device's name.
 #[test]
-fn pairing_compares_the_codes() {
+fn pairing_by_a_home_window() {
     let dir = tempdir("compare");
-    // Joining: the code shows, yes goes back, and it joined.
-    let r = run_with(&dir, &["pair", "-code"], "yes\n", compared("123456", json!({})), &[]);
-    want("join", &r, 0, "This device shows the code:  123 456", "");
-    assert!(r.stdout.contains("Joined the group"), "{:?}", r.stdout);
-    let answer = r.sent.iter().find(|s| s.op() == "answer").expect("no answer sent");
-    assert_eq!(answer.h["consent"], json!(true));
-    // No: the answer says so.
-    let r = run_with(&dir, &["pair", "-code"], "no\n", compared("123456", json!({})), &[]);
-    assert!(r.stdout.contains("Not paired"), "{:?}", r.stdout);
-    let answer = r.sent.iter().find(|s| s.op() == "answer").expect("no answer sent");
-    assert_ne!(answer.h["consent"], json!(true));
-    // The window: it opens with no code to type, then the code, then the
-    // device's name.
+    let r = run_with(&dir, &["pair", "-code"], "123456\n", group_then("", |_| vec![done(json!({}))]), &[]);
+    want("join", &r, 0, "Joined the group", "");
+    assert!(!r.sent.iter().any(|s| s.op() == "answer"), "nothing to answer");
     let window = group_then("g1", |s| match s.op() {
         "pair" => vec![
-            (json!({"expires": 300, "address": "192.168.1.5:8764"}), Vec::new()),
-            (json!({"code": "654321"}), Vec::new()),
+            (
+                json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                       "invite": WINDOW_LINK.trim()}),
+                Vec::new(),
+            ),
+            (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
             done(json!({"name": "laptop"})),
         ],
         "devices" => vec![done(json!({}))],
         _ => Vec::new(),
     });
-    let r = run_with(&dir, &["pair"], "yes\n", window, &[]);
+    let r = run_with(&dir, &["pair"], "", window, &[]);
     want("window", &r, 0, "cbb pair -code 192.168.1.5:8764", "");
-    assert!(r.stdout.contains("654 321") && r.stdout.contains("laptop joined the group"), "{:?}", r.stdout);
+    for part in ["Pairing code: 654 321", "scan this QR code", "A device did not pair", "laptop joined the group"] {
+        assert!(r.stdout.contains(part), "{part}: {:?}", r.stdout);
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -2329,7 +2329,8 @@ impl Service {
             }
             return;
         }
-        if m.header.op == "join" && m.header.code.is_empty() && m.header.invite.is_empty() && !m.header.listen {
+        // A join of 0.6 is by a home window's six digits or its QR code.
+        if m.header.op == "join" && m.header.invite.is_empty() && !m.header.listen {
             if let Err(e) = self.live_join(&m, r, &mut out) {
                 (self.log)(&format!("cbb: join: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));

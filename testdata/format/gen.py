@@ -1673,16 +1673,13 @@ TABLES = {
     "pair/start": [
         (2, "pair/start/ya", "bytes 1..256", True),
         (3, "pair/start/ada", "bytes 1..16384", True),
-        (4, "pair/start/commitment", "bytes 32", True),
     ],
     "pair/reply": [
         (2, "pair/reply/yb", "bytes 1..256", True),
         (3, "pair/reply/adb", "bytes 1..1024", True),
-        (4, "pair/reply/nonce", "bytes 32", True),
     ],
     "pair/confirm": [
         (2, "pair/confirm/ta", "bytes 1..64", True),
-        (3, "pair/confirm/nonce", "bytes 32", True),
     ],
     "pair/welcome": [
         (2, "pair/welcome/tb", "bytes 1..64", True),
@@ -2066,6 +2063,10 @@ def between_rule(name, v):
     # A root's fork is two records.
     if name == "roots" and 3 in v and len(v[3]) != 2:
         return "roots/fork"
+    # The short code's commitment and nonces of earlier drafts.
+    for table, n in [("pair/start", 4), ("pair/reply", 4), ("pair/confirm", 3)]:
+        if name == table and n in v:
+            return table + "/retired"
     # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
@@ -2604,9 +2605,9 @@ def wave3_vectors(records_take):
         "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
     bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
         "member-credentials/obfuscation")
-    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)})
-    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)})
-    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)})
+    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
+    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
+    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
     msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome, 4: fake("welcome tag", 64)},
         "records: the first two of records.json; field 4 is the Welcome's tag, welcome_parts has real ones")
     parts_welcome = {k: v for k, v in welcome.items() if k != 2}
@@ -2666,10 +2667,13 @@ def wave3_vectors(records_take):
     bad("hubs: flag 2", {0: 16, 2: 2}, "hubs/stopped")
     bad("guest op 8", {0: 17, 2: 8, 3: guest_key}, "guest/op")
     bad("pair error code 0", {0: 69, 2: 0}, "pair/error/code")
-    bad("pair start without the code's commitment", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)},
-        "pair/start/commitment")
-    bad("pair confirm with a short nonce", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 31)},
-        "pair/confirm/nonce")
+    bad("pair start without its Info", {0: 64, 2: fake("cpace ya", 32)}, "pair/start/ada")
+    bad("pair start with a code commitment (field 4, retired)",
+        {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)}, "pair/start/retired")
+    bad("pair reply with a nonce (field 4, retired)",
+        {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)}, "pair/reply/retired")
+    bad("pair confirm with a nonce (field 3, retired)",
+        {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)}, "pair/confirm/retired")
     bad("relay online: names out of order", {0: 97, 2: list(reversed(names))}, "relay/online/names")
     bad("relay online: a name twice", {0: 97, 2: [names[0], names[0]]}, "relay/online/names")
     bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
@@ -2888,59 +2892,46 @@ def welcome_parts_vectors():
 
 
 def code_vectors():
-    """The short code (W.3) and CPace's channel identifier (11.1), both
-    with the invitation ID each end believes it is using; 16 zero bytes at
-    home without an invitation. Each pair of cases differs in one input."""
+    """A home window's secret from its six digits and CPace's channel
+    identifier (11.1), with the invitation ID each end believes it is
+    using. Each pair of cases differs in one input."""
     def h(label):
         return hashlib.sha256(label.encode()).digest()
-
-    def code(exporter, nj, nm, inv):
-        d = hashlib.sha256(b"cbb short code v3\x00" + exporter + nj + nm + inv).digest()
-        return "%06d" % (int.from_bytes(d[:4], "big") % 1000000)
 
     def ci(member, joiner, inv):
         return b"cbb pair channel v3\x00" + member + joiner + inv
 
-    exporter, nj, nm = h("vector exporter"), h("vector joiner nonce"), h("vector member nonce")
+    home = []
+    for name, digits in [
+        ("six digits", "042917"),
+        ("one digit apart", "042918"),
+        ("all zeros", "000000"),
+        ("all nines", "999999"),
+    ]:
+        home.append({"name": name, "digits": digits,
+                     "secret": hashlib.sha256(b"cbb pair home code v1\x00" + digits.encode()).digest().hex()})
+    for name, digits in [
+        ("five digits", "04291"),
+        ("seven digits", "0429170"),
+        ("a letter", "04291a"),
+        ("a space", "042 17"),
+        ("full-width digits", "\uff10\uff14\uff12\uff19\uff11\uff17"),
+        ("nothing", ""),
+    ]:
+        home.append({"name": name, "digits": digits, "error": "not six digits"})
     inv = h("vector invitation")[:16]
     other = bytes([inv[0] ^ 1]) + inv[1:]
-    home = bytes(16)
-    short = []
-    for name, e, a, b, i in [
-        ("an invitation", exporter, nj, nm, inv),
-        ("another invitation ID, one bit apart", exporter, nj, nm, other),
-        ("at home without an invitation", exporter, nj, nm, home),
-        ("the nonces swapped", exporter, nm, nj, inv),
-        ("another session", h("vector exporter 2"), nj, nm, inv),
-    ]:
-        short.append({"name": name, "exporter": e.hex(), "nj": a.hex(), "nm": b.hex(), "invitation": i.hex(),
-                      "code": code(e, a, b, i)})
     member, joiner = h("vector member key"), h("vector joiner key")
     channel = []
     for name, m, j, i in [
         ("an invitation", member, joiner, inv),
         ("another invitation ID, one bit apart", member, joiner, other),
-        ("at home without an invitation", member, joiner, home),
         ("the keys swapped", joiner, member, inv),
     ]:
         channel.append({"name": name, "member": m.hex(), "joiner": j.hex(), "invitation": i.hex(),
                         "ci": ci(m, j, i).hex()})
-    # CPace's password with the invitation ID: both zero at home without an
-    # invitation (a public password, which authenticates nothing), neither
-    # with one; one without the other is refused.
-    secret, zero = h("vector invitation secret"), bytes(32)
-    passwords = [
-        {"name": "at home without an invitation", "invitation": home.hex(), "password": zero.hex(),
-         "keyed": False},
-        {"name": "an invitation", "invitation": inv.hex(), "password": secret.hex(), "keyed": True},
-        {"name": "an invitation ID with the zero password", "invitation": inv.hex(), "password": zero.hex(),
-         "error": "refused"},
-        {"name": "a secret with the ID of none", "invitation": home.hex(), "password": secret.hex(),
-         "error": "refused"},
-    ]
-    return {"short_code_label": "cbb short code v3", "channel_prefix": "cbb pair channel v3",
-            "no_invitation": home.hex(), "no_secret": zero.hex(), "short_code": short, "channel_id": channel,
-            "passwords": passwords}
+    return {"home_code_label": "cbb pair home code v1", "channel_prefix": "cbb pair channel v3",
+            "home_secret": home, "channel_id": channel}
 
 
 def card_vectors():

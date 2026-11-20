@@ -2,8 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A computer admits a device that pairs with it at home (format section
-//! 8, `cbb-pair/3` on the member port): both persons check the code, then
-//! this device writes the joiner's device record with the key it signs
+//! 8, `cbb-pair/3` on the member port) by the home window this device
+//! opened: once the joiner proved the window's six digits, this device
+//! writes the joiner's device record with the key it signs
 //! the group's records with, keeps the joiner's first keys statement and
 //! sends the Welcome. It runs inside the pairing window the service opens
 //! (`Mesh::on_pair`).
@@ -12,6 +13,7 @@ use std::net::TcpStream;
 
 use cbb_core::join::PairExporter;
 use cbb_core::join::info::Info;
+use cbb_core::join::invitation::{Invitation, Network, Open};
 use cbb_core::join::session::{Adb, MemberSession};
 use cbb_core::join::welcome::Welcome;
 use cbb_core::records::Key;
@@ -21,7 +23,7 @@ use cbb_core::records::body::{
 use cbb_core::tls::bykey;
 
 use crate::error::{Error, Result};
-use crate::join::{self, Ask, Way};
+use crate::join::{self, Way};
 use crate::mesh::Mesh;
 use crate::tls;
 
@@ -36,15 +38,34 @@ pub(crate) fn rights_of(role: u64, caps: u64) -> u64 {
     RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | hub
 }
 
-/// Runs the member's side of a pairing at home over its TLS session:
-/// `ask` shows the code and gives the person's answer. Gives what the
+/// A new home window (docs/protocol.md, "Pairing in 0.6"), open from
+/// `now_ms` for `lifetime`: the invitation it keeps open, and its six
+/// digits to show.
+pub fn home_window(now_ms: u64, lifetime: std::time::Duration) -> (Open, String) {
+    let (invitation, digits) = Invitation::home();
+    let open = Open {
+        invitation,
+        name: String::new(),
+        created_ms: now_ms,
+        expires_ms: now_ms.saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX)),
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    (open, digits)
+}
+
+/// Runs the member's side of a pairing at home over its TLS session, by
+/// the home window `open`, which counts the attempt. Gives what the
 /// joiner said of itself once it is in the group.
 pub fn at_home(
     mesh: &Mesh,
     sock: TcpStream,
     session: tls::Session,
     exporter: PairExporter,
-    ask: Ask<'_>,
+    open: &mut Open,
 ) -> Result<Info> {
     let joiner = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the device showed no key"))?;
     let own: [u8; 65] = mesh
@@ -69,7 +90,8 @@ pub fn at_home(
     let now = || crate::uptime::wall_ms().max(0) as u64;
     let mut statement = None;
     let mut pop_holds = false;
-    let info = join::member(&mut stream, session_m, Way::Home, ask, &now, &mut |info, s| {
+    let way = Way { open, network: Network::Home };
+    let info = join::member(&mut stream, session_m, way, &now, &mut |info, s| {
         statement.clone_from(&info.keys);
         pop_holds = s.admin_pop_holds();
         mesh.write(|set, signer| {

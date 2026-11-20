@@ -4,8 +4,8 @@
 //! Pairing of 0.6 over a connection (format section 11.1): the joiner's
 //! and the member's sessions of `cbb_core::join::session` run on a TLS
 //! connection of `cbb-pair/3` whose handshake is over. The steps and every
-//! check are the core's; this carries the frames, asks the person about
-//! the code shown at home, and hands the member's side the moment to write
+//! check are the core's; this carries the frames and hands the member's
+//! side the moment to write
 //! the joiner's record and the joiner's side the moment to store its set.
 //! A session that ends early tells the other end why, by message 69.
 
@@ -23,8 +23,9 @@ use crate::error::{Error, Result};
 pub struct Joiner<'a> {
     pub attempts: &'a mut JoinerAttempts,
     pub info: Info,
-    /// None at home without an invitation.
-    pub invitation: Option<Invitation>,
+    /// A QR code's invitation, or a home window's from its ID and six
+    /// digits (`Invitation::typed`).
+    pub invitation: Invitation,
     pub joining: Joining,
     /// Both ends' TLS keys: this device's and the member's the handshake
     /// proved.
@@ -33,16 +34,12 @@ pub struct Joiner<'a> {
     pub exporter: PairExporter,
 }
 
-/// How the member takes this joiner.
-pub enum Way<'a> {
-    /// At home, without an invitation: both persons answer the code.
-    Home,
-    /// By an invitation the member keeps open, from a joiner on `network`.
-    Invited { open: &'a mut Open, network: Network },
+/// How the member takes this joiner: by the invitation it keeps open (a
+/// home window, or a QR code's), from a joiner on `network`.
+pub struct Way<'a> {
+    pub open: &'a mut Open,
+    pub network: Network,
 }
-
-/// The person's answer to a shown code: true when they match.
-pub type Ask<'a> = &'a mut dyn FnMut(&str) -> bool;
 
 /// The member's admission once approved: writes the joiner's record and
 /// gives the frames of [`MemberSession::welcome`].
@@ -54,7 +51,6 @@ pub type Admit<'a> = &'a mut dyn FnMut(&Info, &mut MemberSession) -> Result<Vec<
 pub fn joiner(
     conn: &mut (impl Read + Write),
     j: Joiner<'_>,
-    ask: Ask<'_>,
     now_ms: &dyn Fn() -> u64,
     store: &mut dyn FnMut(&Admitted) -> Result<()>,
 ) -> Result<Box<Admitted>> {
@@ -63,16 +59,11 @@ pub fn joiner(
         .map_err(|e| failed("cannot start pairing", e))?;
     send(conn, &m64)?;
     let m65 = read(conn, frame::LIMIT_PAIRING)?;
-    let r = match s.reply(attempts, &m65) {
+    let r = match s.reply(&m65) {
         Ok(r) => r,
-        Err(e) => return Err(end(conn, e, "the pairing did not go on")),
+        Err(e) => return Err(end(conn, e, joiner_why(e, "the pairing did not go on"))),
     };
     send(conn, &r.send)?;
-    if let Some(code) = &r.code
-        && let Err(e) = s.answered(attempts, ask(code))
-    {
-        return Err(end(conn, e, "the codes do not match"));
-    }
     loop {
         // Message 67 and its parts come at the member connection's limit.
         let f = read(conn, frame::LIMIT_MEMBER)?;
@@ -83,48 +74,33 @@ pub fn joiner(
                 send(conn, &a.send)?;
                 return Ok(a);
             }
-            Err(e) => return Err(end(conn, e, "the group's answer did not hold")),
+            Err(e) => return Err(end(conn, e, joiner_why(e, "the group's answer did not hold"))),
         }
     }
 }
 
 /// The member's side: runs the session to its end. `admit` is called once
-/// the session is approved (at home by the person's "they match", by an
-/// invitation by its secret) with the joiner's Info and the session: it
+/// the session is approved (the joiner proved the invitation's secret) with the joiner's Info and the session: it
 /// writes the joiner's record and gives the frames of
 /// [`MemberSession::welcome`]. An error from it refuses the joiner. Gives
 /// the joiner's Info once it confirmed it kept its identity.
 pub fn member(
     conn: &mut (impl Read + Write),
     mut s: MemberSession,
-    mut way: Way<'_>,
-    ask: Ask<'_>,
+    way: Way<'_>,
     now_ms: &dyn Fn() -> u64,
     admit: Admit<'_>,
 ) -> Result<Info> {
+    let Way { open, network } = way;
     let m64 = read(conn, frame::LIMIT_PAIRING)?;
-    let started = match &mut way {
-        Way::Home => s.start_home(&m64),
-        Way::Invited { open, network } => s.start_invited(open, *network, &m64, now_ms()),
-    };
-    let m65 = match started {
+    let m65 = match s.start_invited(open, network, &m64, now_ms()) {
         Ok(f) => f,
         Err(e) => return Err(end(conn, e, "the device was not let in")),
     };
     send(conn, &m65)?;
     let m66 = read(conn, frame::LIMIT_PAIRING)?;
-    let open = match &mut way {
-        Way::Home => None,
-        Way::Invited { open, .. } => Some(&mut **open),
-    };
-    let c = match s.confirm(&m66, open, now_ms()) {
-        Ok(c) => c,
-        Err(e) => return Err(end(conn, e, "the device did not prove the code")),
-    };
-    if let Some(code) = &c.code
-        && let Err(e) = s.answered(ask(code))
-    {
-        return Err(end(conn, e, "the codes do not match"));
+    if let Err(e) = s.confirm(&m66, open, now_ms()) {
+        return Err(end(conn, e, "the device did not prove the code"));
     }
     let info = s.info().cloned().ok_or_else(|| Error::msg("the device said nothing of itself"))?;
     let frames = match admit(&info, &mut s) {
@@ -138,12 +114,21 @@ pub fn member(
         send(conn, f)?;
     }
     let m68 = read(conn, frame::LIMIT_PAIRING)?;
-    let open = match &mut way {
-        Way::Home => None,
-        Way::Invited { open, .. } => Some(&mut **open),
-    };
     s.done(&m68, open, now_ms()).map_err(|e| failed("the device did not keep its place", e))?;
     Ok(info)
+}
+
+/// What the joiner's person reads when the session ends with e; other
+/// errors say what.
+fn joiner_why(e: PairError, other: &'static str) -> &'static str {
+    match e {
+        PairError::WrongCode => "the code is not the window's: check the six digits it shows, and try again",
+        PairError::TooMany => "the window took three wrong codes and closed: open a new one with cbb pair",
+        PairError::Closed => "the window is closed: open a new one with cbb pair",
+        PairError::Expired => "the window's time is over: open a new one with cbb pair",
+        PairError::Busy => "another device is pairing with that window: try again in a moment",
+        _ => other,
+    }
 }
 
 /// Sends message 69 with why, where it is ours to say, and gives the error.
@@ -170,7 +155,7 @@ impl std::fmt::Display for Failure {
             PairError::Expired => "the invitation expired",
             PairError::TooMany => "too many tries",
             PairError::Refused => "refused",
-            PairError::Declined => "a person said the codes do not match",
+            PairError::Declined => "the other end declined",
             PairError::Taken => "the device's ID is taken",
         };
         write!(f, "{why} (pairing error {})", self.0.code())

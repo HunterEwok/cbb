@@ -40,26 +40,19 @@ pub static ADB: Table = Table {
     ],
 };
 
+/// Messages 64, 65 and 66 carry CPace alone: the short code's commitment
+/// and nonces of earlier drafts (64 field 4, 65 field 4, 66 field 3) are
+/// retired, never given again, and refused (`msg::check`).
 pub static PAIR_START: Table = Table {
     shape: "pair/start/shape",
-    fields: &[
-        f(2, "pair/start/ya", Ty::BytesUpTo(256), true),
-        f(3, "pair/start/ada", Ty::BytesUpTo(16384), true),
-        f(4, "pair/start/commitment", B32, true),
-    ],
+    fields: &[f(2, "pair/start/ya", Ty::BytesUpTo(256), true), f(3, "pair/start/ada", Ty::BytesUpTo(16384), true)],
 };
 pub static PAIR_REPLY: Table = Table {
     shape: "pair/reply/shape",
-    fields: &[
-        f(2, "pair/reply/yb", Ty::BytesUpTo(256), true),
-        f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true),
-        f(4, "pair/reply/nonce", B32, true),
-    ],
+    fields: &[f(2, "pair/reply/yb", Ty::BytesUpTo(256), true), f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true)],
 };
-pub static PAIR_CONFIRM: Table = Table {
-    shape: "pair/confirm/shape",
-    fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true), f(3, "pair/confirm/nonce", B32, true)],
-};
+pub static PAIR_CONFIRM: Table =
+    Table { shape: "pair/confirm/shape", fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true)] };
 /// Message 67: CPace's Tb, the Welcome, and `Tw`, the Welcome's tag from
 /// the session's ISK over field 3's bytes (`join::welcome::tag`).
 pub static PAIR_WELCOME: Table = Table {

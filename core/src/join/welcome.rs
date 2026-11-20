@@ -184,18 +184,10 @@ pub enum Joining {
 /// shows to take a Welcome.
 #[derive(Debug)]
 pub enum Way<'a> {
-    /// An invitation: its secret, CPace's password, binds the member. One
-    /// with the ID of none is no invitation.
+    /// An invitation: its secret, CPace's password, binds the member (a QR
+    /// code's long secret, or a home window's from its six digits). One
+    /// with an ID of zero bytes is no invitation.
     Invited(&'a super::invitation::Invitation),
-    /// At home without an invitation nothing secret binds the member: only
-    /// the person's "they match" at the joiner, in this session
-    /// (`invitation::JoinerAttempts::answered`). Without it, or after "they
-    /// do not match", there is no Welcome to take, and the session ends.
-    /// `exporter` is the TLS exporter of the session the Welcome came on:
-    /// an answer given in another session, or to another member than the
-    /// admitter, takes nothing. The answer is taken by value: one answer,
-    /// one Welcome.
-    Home { matched: super::invitation::Matched, exporter: &'a super::PairExporter },
 }
 
 /// Why the joiner does not take a Welcome.
@@ -558,10 +550,7 @@ impl Welcome {
         way: Way<'_>,
     ) -> Result<(RecordSet, State), Refusal> {
         let confirmed = match &way {
-            Way::Invited(i) => i.id != super::NO_INVITATION,
-            Way::Home { matched, exporter } => {
-                matched.local() == Key::es256(own.to_vec()).device_id() && matched.of(exporter) && matched.to(admitter)
-            }
+            Way::Invited(i) => i.id != [0; 16],
         };
         if !confirmed {
             return Err(Refusal::Unconfirmed);

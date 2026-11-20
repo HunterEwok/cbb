@@ -117,6 +117,8 @@ pub struct Live {
     paused: AtomicBool,
     closed: AtomicBool,
     window_open: AtomicBool,
+    /// The open window's ID, which its mDNS announcement carries as `i`.
+    window_id: Mutex<Option<[u8; 16]>>,
     unreached: Mutex<HashSet<DeviceId>>,
     /// The devices discovery found at home, and when (uptime).
     home: Mutex<HashMap<DeviceId, Duration>>,
@@ -142,6 +144,7 @@ impl Live {
             paused: AtomicBool::new(false),
             closed: AtomicBool::new(false),
             window_open: AtomicBool::new(false),
+            window_id: Mutex::new(None),
             unreached: Mutex::new(HashSet::new()),
             home: Mutex::new(HashMap::new()),
             networks: RwLock::new(None),
@@ -241,9 +244,10 @@ impl Live {
         *self.networks.write().unwrap() = Some(n);
     }
 
-    /// A pairing window opened or closed.
-    pub fn set_window_open(&self, open: bool) {
-        self.window_open.store(open, Ordering::SeqCst);
+    /// A home window opened with its ID, or closed (None).
+    pub fn set_window(&self, id: Option<[u8; 16]>) {
+        *self.window_id.lock().unwrap() = id;
+        self.window_open.store(id.is_some(), Ordering::SeqCst);
         self.kick();
     }
 
@@ -401,6 +405,10 @@ impl Peers for Live {
 
     fn window_fingerprint(&self) -> String {
         certs::hex(&self.mesh.own().hash().0)
+    }
+
+    fn window_id(&self) -> String {
+        self.window_id.lock().unwrap().map(|id| certs::hex(&id)).unwrap_or_default()
     }
 
     fn found(&self, id: &certs::DeviceId, here: bool) {

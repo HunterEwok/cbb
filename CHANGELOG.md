@@ -24,8 +24,8 @@ made with 0.5 is set up again once. The details follow.
   `release`, `entries`, `get`, `missing`, `reach`, `evidence`) and the new message `want`
   (t 30), by which a member asks a peer for the records and the list its set names and lacks.
 - The core runs one pairing session of 0.6 at each end (`join::session`): the joiner's and the
-  member's steps from message 64 to the Welcome and message 68, at home with both persons'
-  answers or by an invitation, for `member/` and the phones alike; `member/` runs it over the
+  member's steps from message 64 to the Welcome and message 68, by an invitation (a QR code's,
+  or a home window's six digits), for `member/` and the phones alike; `member/` runs it over the
   core's TLS of `cbb-pair/3` (`member/src/join.rs`), ready for the service's switch to 0.6.
 - `member/` keeps its sealing keys of 0.6 by epoch in `epochs.json`, each sealed under the
   device's local key, holds the group's keys statements and passes them on in message `keys`,
@@ -1925,6 +1925,13 @@ made with 0.5 is set up again once. The details follow.
 - At home a new device dials the admin's pairing window; one that waits for the group to dial
   it is gone in 0.6, and `cbb pair -qr` on a group of 0.6 says to open the window with
   `cbb pair` instead (docs/decisions.md, D-119).
+- A home pairing of 0.6 is a home window: an invitation that lives only at the admin, with a
+  random ID and six random digits from which its secret comes. The admin shows the digits and a
+  QR code that carries them with the ID; the new device scans it, or finds the window by mDNS
+  and takes the digits its person types. The digits are CPace's password, so nobody compares
+  codes on two screens; a wrong digit spends one of three tries, and one success closes the
+  window. Messages 64, 65 and 66 carry CPace alone: the short code's commitment and nonces are
+  retired and refused (docs/decisions.md, D-120; docs/protocol.md, "Pairing in 0.6").
 - The member protocol is `cbb/4` and pairing `cbb-pair/3`, named once in the Rust core
   (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
   name it speaks, the highest first; a peer's unknown names are ignored, and a device with no

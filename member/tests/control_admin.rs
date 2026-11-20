@@ -283,34 +283,39 @@ fn commands_reach_a_member() {
     root.ok(true, json!({"op": "away", "name": "off", "device": "desk"}));
 }
 
-/// One pairing at a time, a join only outside a group, a join's code
-/// checked before it dials.
+/// One pairing at a time, a join only outside a group; a home window
+/// takes a wrong code as one of its three tries and tells the window, and
+/// the third closes it.
 #[test]
 fn pairing_one_at_a_time() {
     let root = Svc::start("root", &[], &[]);
     // Outside a group nothing admits.
     assert!(!root.err(true, json!({"op": "pair"})).is_empty());
     root.new_group();
-    let (mut wconn, mut r) = root.open(true, &json!({"op": "pair"}), b"");
-    let opened = read(&mut r).unwrap();
-    assert_eq!(opened.h["expires"], 300);
+    let (wconn, mut r, digits, link) = root.window(false);
     has(&root.err(true, json!({"op": "pair"})), "already open");
-    has(&root.err(true, json!({"op": "join", "address": "127.0.0.1:9"})), "already in a group");
+    has(&root.err(true, json!({"op": "join", "address": "127.0.0.1:9", "code": "123456"})), "already in a group");
     let other = Svc::start("other", &[], &[]);
-    // The joiner declines the code it is shown: the pairing ends on both
-    // sides, and the window with it.
-    let (mut jconn, mut jr) = other.open(true, &json!({"op": "join", "address": root.addr()}), b"");
-    let at_joiner = read(&mut jr).unwrap_or_else(|| panic!("no code at the joiner:\n{}", other.log()));
-    let at_window = read(&mut r).unwrap_or_else(|| panic!("no code at the window:\n{}", root.log()));
-    assert_eq!(at_joiner.s("code"), at_window.s("code"));
-    send(&mut jconn, &json!({"op": "answer", "consent": false}), b"");
-    send(&mut wconn, &json!({"op": "answer", "consent": true}), b"");
-    let end = read(&mut jr).expect("the join's end");
-    assert!(!end.error().is_empty(), "{:?}", end.h);
-    let end = read(&mut r).expect("the window's end");
-    assert!(!end.error().is_empty(), "{:?}", end.h);
+    // Not six digits: refused before anything is dialed.
+    has(&other.err(true, json!({"op": "join", "code": "12345", "address": root.addr()})), "six digits");
+    // Wrong digits, three times: each refused at the joiner and told at
+    // the window; the third closes the window.
+    let wrong = if digits == "000000" { "000001" } else { "000000" };
+    let wrong_link = link.replace(&format!("c={digits}"), &format!("c={wrong}"));
+    for n in 1..=3 {
+        has(&other.err(true, json!({"op": "join", "code": wrong_link})), "not the window's");
+        let told = read(&mut r).unwrap_or_else(|| panic!("the window said nothing:\n{}", root.log()));
+        if n < 3 {
+            assert!(told.error().is_empty() && told.h["refused"] == true, "{:?}", told.h);
+        } else {
+            has(told.error(), "three failed tries");
+        }
+    }
+    // Closed: even the right digits find no window.
+    has(&other.err(true, json!({"op": "join", "code": link})), "no pairing window open");
+    assert!(other.status()["group"].is_null(), "{}", other.log());
     drop((wconn, r));
-    // Once the client hung up the window closes, and another opens.
+    // Another window opens.
     wait_for(
         "the window closes",
         || {
@@ -321,9 +326,8 @@ fn pairing_one_at_a_time() {
         },
         || root.log(),
     );
-    assert!(other.status()["group"].is_null(), "{}", other.log());
     // A join to a port where nobody listens fails at once.
-    let e = other.err(true, json!({"op": "join", "address": "127.0.0.1:9"}));
+    let e = other.err(true, json!({"op": "join", "address": "127.0.0.1:9", "code": link}));
     has(&e, "127.0.0.1:9");
 }
 
@@ -487,13 +491,21 @@ fn leaves_the_group() {
     assert!(!g[0].state().join("identity.json").exists());
 }
 
-/// A device that joins finds no window when none is open, and pairs once
-/// one is.
+/// A device that joins by another window's link is refused before any
+/// code: the member's key is not the one the link names; it pairs once
+/// this member's window is open. (A closed window: pairing_one_at_a_time.)
 #[test]
 fn a_closed_window_refuses_the_joiner() {
     let root = Svc::start("root", &[], &[]);
     root.new_group();
     let other = Svc::start("other", &[], &[]);
-    has(&other.err(true, json!({"op": "join", "address": root.addr()})), "no pairing window open");
+    // Another group's window link, with this root's address.
+    let elsewhere = Svc::start("elsewhere", &[], &[]);
+    elsewhere.new_group();
+    let (_wconn, _r, _, link) = elsewhere.window(false);
+    let mut l = cbb_core::join::invitation::WindowLink::parse(&link).unwrap();
+    l.addrs = vec![root.addr()];
+    let link = l.text();
+    has(&other.err(true, json!({"op": "join", "code": link})), "is not the window's member");
     assert_eq!(root.admit(&other, false), "other");
 }
