@@ -67,6 +67,9 @@ made with 0.5 is set up again once. The details follow.
   other operation answers that it is not on the records of 0.6 yet, with that as its cause
   in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
   8 bytes of the group ID.
+- A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
+  `p=1` by mDNS, as a phone's window does, so that a new device that browses for it dials the
+  one window and checks its key (docs/protocol.md, section 3).
 - The service sends and carries out commands on the records of 0.6
   (`member/src/service/on_live/orders.rs`): muting another device and ending its mute, its
   sync, remote paste, quick actions, turning remote paste or the quick actions off there or on

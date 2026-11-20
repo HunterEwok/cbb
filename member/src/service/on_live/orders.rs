@@ -142,9 +142,7 @@ impl Service {
                 (self.log)(&format!("cbb: {who} turned sync away from home off here"));
                 Ok(())
             }
-            Order::Hub(_) | Order::Device { .. } => {
-                Err(not_yet(&format!("carrying out a {} command", order.name())))
-            }
+            Order::Hub(_) | Order::Device { .. } => Err(not_yet(&format!("carrying out a {} command", order.name()))),
         }
     }
 

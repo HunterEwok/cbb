@@ -29,6 +29,21 @@ fn device_ids_go_to_discovery_and_back() {
     assert_eq!(tag(&st), "0102030405060708");
 }
 
+/// A pairing window announces the member key's hash as `f`, the key the
+/// new device checks the window's TLS by, as the phones' QR code's `fp`.
+#[test]
+fn a_window_announces_its_member_key_hash() {
+    let (a, _) = two_dirs("window-fp");
+    let l = open(&a);
+    let fp = l.window_fingerprint();
+    assert_eq!(fp, certs::hex(&cbb_core::records::Key::es256(l.mesh.own().member.public()).hash().0));
+    assert_eq!(fp.len(), 64);
+    assert!(fp.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    // It is the start of the device ID too.
+    assert!(fp.starts_with(&id_text(&l.mesh.device())));
+    l.close();
+}
+
 #[test]
 fn a_copy_goes_through_discovery_s_dial_and_listen_to_the_clipboard() {
     let (da, db) = two_dirs("live");

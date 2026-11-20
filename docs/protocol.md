@@ -388,10 +388,12 @@ TXT strings (each at most 255 bytes):
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a computer pairing window is open |
 | `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
-| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
+| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp`; with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the phone's pairing QR code's `fp`, which the new device checks before it sends anything |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
-The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
+A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
+`f=<key hash>` (`member/src/discovery.rs`), so that a new device that browses for it (the
+Aurora app) dials the one window and checks its key. The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
 member without `dials` publishes `v=1`, `g=<tag>`, `r=listen`. A receiver MUST ignore keys it does not
 know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
