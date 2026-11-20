@@ -2025,52 +2025,6 @@
         }
       }
     },
-    "Adding a device…": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جارٍ إضافة جهاز…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadiendo un dispositivo…"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מוסיף מכשיר…"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "डिवाइस जोड़ा जा रहा है…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Добавляю устройство…"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inaongeza kifaa…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在添加设备…"
-          }
-        }
-      }
-    },
     "Admin keys": {
       "localizations": {
         "ar": {
@@ -13160,52 +13114,6 @@
         }
       }
     },
-    "Not a CBB QR code.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ليس رمز QR خاصًا بـ CBB."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No es un código QR de CBB."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "זה לא קוד QR של CBB."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह CBB का QR कोड नहीं है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это не QR-код cbb."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si msimbo wa QR wa CBB."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不是 CBB 二维码。"
-          }
-        }
-      }
-    },
     "Not taking copies from the group": {
       "localizations": {
         "ar": {
@@ -13984,52 +13892,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在群组中的手机上点 +，然后扫描它显示的代码。让两部手机连在同一网络上。"
-          }
-        }
-      }
-    },
-    "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على هاتف من المجموعة، اضغط + وامسح هذا الرمز. على حاسوب من المجموعة، اضغط + واكتب الأرقام. أبقِ هذه الشاشة مفتوحة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בטלפון של הקבוצה, הקישו על + וסרקו את הקוד הזה. במחשב של הקבוצה, הקישו על + והקלידו את המספרים. השאירו את המסך הזה פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह स्क्रीन खुली रखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha skrini hii wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在群组的手机上，点按 + 并扫描此代码。在群组的电脑上，点按 + 并输入这些数字。请保持此屏幕打开。"
           }
         }
       }
@@ -15184,52 +15046,6 @@
         }
       }
     },
-    "Paste the text of the QR code of cbb pair.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصق نص رمز QR الخاص بـ cbb pair."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pega el texto del código QR de cbb pair."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הדביקו את הטקסט של קוד ה-QR של cbb pair."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cbb pair के QR कोड का टेक्स्ट पेस्ट करें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Вставьте текст QR-кода cbb pair."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bandika maandishi ya msimbo wa QR wa cbb pair."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "粘贴 cbb pair 二维码的文本。"
-          }
-        }
-      }
-    },
     "Paste the text of the recovery sheet's QR code.": {
       "localizations": {
         "ar": {
@@ -15502,52 +15318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "将相机对准恢复单上的二维码。让这部手机连接到群组中某台电脑所在的网络。群组等待时间结束后，这部手机将成为群组的根设备，除非旧手机取消。"
-          }
-        }
-      }
-    },
-    "Point the camera at the QR code the new device shows.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وجّه الكاميرا إلى رمز QR الذي يعرضه الجهاز الجديد."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apunta la cámara al código QR que muestra el dispositivo nuevo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כוונו את המצלמה לקוד ה-QR שהמכשיר החדש מציג."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कैमरा उस QR कोड की ओर करें जो नया डिवाइस दिखाता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Наведите камеру на QR-код, который показывает новое устройство."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elekeza kamera kwenye msimbo wa QR unaoonyeshwa na kifaa kipya."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将相机对准新设备显示的二维码。"
           }
         }
       }
@@ -22636,52 +22406,6 @@
         }
       }
     },
-    "The device is in the group.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الجهاز في المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El dispositivo está en el grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשיר בקבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "डिवाइस समूह में है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Устройство в группе."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifaa kiko kwenye kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设备已在群组中。"
-          }
-        }
-      }
-    },
     "The device is muted: its copies stay its own.": {
       "localizations": {
         "ar": {
@@ -22724,52 +22448,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "设备已静音：它的副本只留在本机。"
-          }
-        }
-      }
-    },
-    "The device is not ready yet. Trying again (%lld)…": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الجهاز ليس جاهزًا بعد. جارٍ المحاولة مرة أخرى (%lld)…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El dispositivo aún no está listo. Reintentando (%lld)…"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשיר עדיין לא מוכן. מנסה שוב (%lld)…"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "डिवाइस अभी तैयार नहीं है। फिर से कोशिश की जा रही है (%lld)…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Устройство ещё не готово. Пробую снова (%lld)…"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifaa bado hakiko tayari. Inajaribu tena (%lld)…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设备尚未就绪。正在重试（%lld）…"
           }
         }
       }
@@ -23000,52 +22678,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "创建群组的设备保存群组的主密钥：最好是随身携带的设备，比如手机。"
-          }
-        }
-      }
-    },
-    "The device was not added.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يُضف الجهاز."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El dispositivo no se añadió."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשיר לא נוסף."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "डिवाइस नहीं जोड़ा गया।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Устройство не добавлено."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifaa hakikuongezwa."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设备未添加。"
           }
         }
       }

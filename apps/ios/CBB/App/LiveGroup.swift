@@ -52,20 +52,8 @@ final class LiveGroup: GroupController {
     nonisolated static let caLabel = "tools.cbb.group-root"
     /// The admin key of a phone that joined another phone's group.
     nonisolated static let adminLabel = "tools.cbb.admin"
-    /// How long the join QR code is good for, and how many wrong codes it
-    /// takes, as for cbb pair (docs/protocol.md, section 6).
-    static let joinWindow: TimeInterval = 300
-    /// How long admitting a device may take once its connection is up:
-    /// a computer that stops answering mid-pairing fails then. Two minutes,
-    /// as a slow member takes its time: a ZX Next gets the group's records
-    /// through its ESP at about 2K a second, and confirms only after them.
-    static let pairingDeadline: Duration = .seconds(120)
-    /// How long a device that does not take the connection yet is dialed
-    /// again, every dialPause: one scanned the moment it shows its QR code
-    /// may not listen yet (the ZX Next's network starts a moment later).
-    static let dialRetry: Duration = .seconds(20)
+    /// The pause between two dials of an invitation's guest tunnel.
     static let dialPause: Duration = .seconds(2)
-    static let joinAttempts = 3
     /// How long joinComputer browses for a pairing window, and then for a
     /// second one.
     static let browseFor: TimeInterval = 10
@@ -692,122 +680,7 @@ final class LiveGroup: GroupController {
     /// that issued it, if one did.
     private static func chain(_ g: PhoneGroup) -> [Data] { g.memberIssuer.map { [$0] } ?? [] }
 
-    // MARK: Admitting
-
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
-        let ca = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
-        let made = state == nil
-        if made {
-            // The core makes the group, and the phone's member runs before
-            // it admits: the device's record joins the member's records.
-            let member = try memberSigner()
-            let c = try CorePairing.newGroup(name: PhoneGroup.validName(UIDevice.current.name), store: Records.hardware,
-                                             rootPublic: ca.publicKeyDER, publicKey: member.publicKeyDER, seal: Self.sealKey()) {
-                try ca.signature(digest: $0)
-            }
-            let g = PhoneGroup.of(c, root: true)
-            try g.save(to: file)
-            try modeBox.newDevice()
-            forgetCredentials()
-            state = g
-            try startSync()
-            groupChanged()
-            // A group made on this phone has it as its hub from the start (D-64).
-            try? await setPhoneHub(true)
-        }
-        do {
-            try await admitWithCore(code, ca: ca, retrying: retrying)
-        } catch Failure.notConfirmed {
-            // The device may still hold its identity: the group stays.
-            throw Failure.notConfirmed
-        } catch {
-            // A first device that did not join leaves no group of one behind.
-            if made { try? await leave() }
-            throw error
-        }
-    }
-
-    /// Admits the device of code through the core's admission
-    /// (CorePairing.Admitting), dialing its addresses.
-    private func admitWithCore(_ code: JoinCode, ca: SecKeySigner, retrying: @escaping @MainActor () -> Void) async throws {
-        guard let g = state else { throw Failure.noGroup }
-        guard let node else { throw Failure.unreachable }
-        // The root makes a phone that asks to be an admin one (docs/protocol.md, section 6).
-        let admitting = try CorePairing.Admitting(member: node, qr: code.qrText, publicKey: ca.publicKeyDER, adminCA: g.adminCA,
-                                                  makeAdmin: g.isRoot) { try ca.signature(digest: $0) }
-        defer { admitting.close() }
-        var failure: Error?
-        let clock = ContinuousClock(), until = clock.now + Self.dialRetry
-        while true {
-            var answered = false
-            for addr in Self.ordered(code.addrs) {
-                try Task.checkCancellation()
-                guard let (host, port) = Self.split(addr) else { continue }
-                let connection = CorePairing.Connection(host: host, port: port, timeout: TLSTransport.connectTimeout)
-                // Closing the connection ends a pairing that takes too long or
-                // that the user cancelled: the pending read fails.
-                let deadline = Task {
-                    try await Task.sleep(for: Self.pairingDeadline)
-                    connection.close()
-                }
-                defer { deadline.cancel() }
-                do {
-                    try await connection.start()
-                } catch {
-                    connection.close()
-                    if Task.isCancelled { throw CancellationError() }
-                    failure = Self.telling(failure, error)
-                    continue
-                }
-                answered = true
-                do {
-                    let admitted = try await withTaskCancellationHandler {
-                        defer { connection.close() }
-                        return try await admitting.admit(connection)
-                    } onCancel: {
-                        connection.close()
-                    }
-                    if admitted.role != "phone", var g = state {
-                        // The address that answered goes first, for dialing when mDNS does not find the computer.
-                        g.noteComputer(device: admitted.device, name: admitted.name, os: admitted.os,
-                                       addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
-                        try g.save(to: file)
-                        state = g
-                        groupChanged()
-                    }
-                    pullRecords()
-                    guard admitted.confirmed else { throw Failure.notConfirmed }
-                    return
-                } catch let e as CorePairing.Failure {
-                    throw e // the device answered: a wrong code is not worth another address
-                } catch Failure.notConfirmed {
-                    throw Failure.notConfirmed
-                } catch {
-                    connection.close()
-                    if Task.isCancelled { throw CancellationError() }
-                    failure = Self.telling(failure, error)
-                }
-            }
-            // No address took the connection: the device may not listen yet.
-            if answered || clock.now >= until { throw failure ?? Failure.unreachable }
-            retrying()
-            try await Task.sleep(for: Self.dialPause)
-        }
-    }
-
-    /// Of two failures on different addresses, the one that says more: an
-    /// address that answered, as with a failed handshake, over one that
-    /// did not.
-    nonisolated static func telling(_ earlier: Error?, _ later: Error) -> Error {
-        guard let earlier else { return later }
-        if case TLSTransport.Failure.timedOut = earlier, !isTimeout(later) { return later }
-        return earlier
-    }
-
-    nonisolated private static func isTimeout(_ e: Error) -> Bool {
-        if case TLSTransport.Failure.timedOut = e { return true }
-        return false
-    }
+    // MARK: Addresses
 
     /// The addresses to try, IPv4 first: a home network reaches those most
     /// surely, and each that fails costs its timeout.
@@ -958,84 +831,6 @@ final class LiveGroup: GroupController {
     }
 
     // MARK: Joining
-
-    /// Joins another phone's group (docs/protocol.md, section 6, "The
-    /// joiner listens") through the core (CorePairing.Joining): listens,
-    /// hands show the QR code to put on screen, and waits up to five
-    /// minutes for an admin phone to scan it and admit this one, always as
-    /// a member: the root makes it an admin later with the admin key its
-    /// hellos offer (offeredAdminKey). Three wrong codes end it, as does
-    /// cancelling the task.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
-        guard state == nil else { return }
-        let member = try memberSigner()
-        let listener = try CorePairing.Listener()
-        let port = try await listener.start()
-        let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
-        guard !addrs.isEmpty else {
-            listener.stop()
-            throw Failure.noNetwork
-        }
-        let joining: CorePairing.Joining
-        do {
-            joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) })
-        } catch {
-            listener.stop()
-            throw error
-        }
-        defer { joining.close() }
-        // Announced by Bonjour while it waits, so that a computer of the
-        // group finds it by the code typed there (docs/protocol.md, section 6).
-        listener.advertise(name: joining.device, txt: Discovery.joinerTXT(fingerprint: joining.fingerprint))
-        show(JoinCode(code: joining.code, addrs: JoinCode(qr: joining.qr)?.addrs ?? addrs, fingerprint: joining.fingerprint))
-        let file = file
-        let timer = Task {
-            try await Task.sleep(for: .seconds(Self.joinWindow))
-            listener.stop()
-        }
-        defer {
-            timer.cancel()
-            listener.stop()
-        }
-        var wrong = 0
-        let joined: PhoneGroup? = try await withTaskCancellationHandler {
-            while let c = await listener.next() {
-                defer { c.close() }
-                let deadline = Task {
-                    try await Task.sleep(for: Self.pairingDeadline)
-                    c.close()
-                }
-                defer { deadline.cancel() }
-                do {
-                    var group: PhoneGroup?
-                    _ = try await joining.attempt(c) { j in
-                        let g = PhoneGroup.of(j, root: false)
-                        guard (try? g.save(to: file)) != nil else { return false }
-                        group = g
-                        return true
-                    }
-                    if let group { return group }
-                } catch let e as CorePairing.Failure where e.wrongCode {
-                    wrong += 1
-                    if wrong >= Self.joinAttempts { throw Failure.tooManyWrongCodes }
-                } catch {
-                    continue // another device, or a dropped connection: the code is not spent
-                }
-            }
-            return nil
-        } onCancel: {
-            listener.stop()
-        }
-        guard let joined else {
-            if Task.isCancelled { throw CancellationError() }
-            throw Failure.timedOut
-        }
-        try modeBox.newDevice()
-        forgetCredentials()
-        state = joined
-        try startSync()
-    }
 
     /// Joins a group from afar by a remote invitation's text
     /// (docs/protocol.md, section 12), which the user scanned, opened or

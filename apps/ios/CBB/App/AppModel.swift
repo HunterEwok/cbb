@@ -99,13 +99,6 @@ protocol GroupController: AnyObject {
     func runAction(_ id: String, name: String) async throws
     /// Turns every quick action off on a device; only an admin phone does.
     func actionsOff(_ id: String) async throws
-    /// Admits the device whose QR code the user scanned; retrying is told
-    /// each time the device did not answer yet and is dialed again.
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
-    /// Joins another phone's group as a member: listens, hands show the QR
-    /// code for the other phone to scan, and returns once this phone is in
-    /// the group. The root makes it an admin later from its device page.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
     /// Joins a group from afar by a remote invitation the user accepted;
@@ -411,11 +404,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    enum ScanResult: Equatable {
-        case joinCode(JoinCode)
-        case notCBB
-    }
-
     @Published private(set) var phase: Phase
     @Published private(set) var computers: [Computer] = []
     @Published private(set) var devices: [Computer] = [] {
@@ -440,11 +428,6 @@ final class AppModel: ObservableObject {
     /// broke"); in debug mode a break shows whole in `message` instead.
     @Published private(set) var bug: BugReports.Offer?
     @Published private(set) var busy = false
-    /// How many times a device being added that has not answered yet was
-    /// dialed again; 0 before that.
-    @Published private(set) var retries = 0
-    /// The QR code this phone shows while it waits to join a group.
-    @Published private(set) var joinCode: JoinCode?
     /// A remote invitation the user scanned, opened or pasted, which waits
     /// to be accepted or declined (docs/apps.md, Start).
     struct PendingInvite: Equatable, Identifiable {
@@ -715,44 +698,6 @@ final class AppModel: ObservableObject {
         return try result.get()
     }
 
-    /// Reads what the camera saw, or what the user typed: the text of the QR
-    /// code of cbb pair.
-    nonisolated static func read(scanned text: String) -> ScanResult {
-        guard let jc = JoinCode(qr: text), jc.codeIsValid, !jc.addrs.isEmpty, !jc.fingerprint.isEmpty else { return .notCBB }
-        return .joinCode(jc)
-    }
-
-    /// Admits a scanned computer; on success the app goes Home.
-    func scanned(_ text: String) async -> Bool {
-        guard case let .joinCode(jc) = Self.read(scanned: text) else {
-            message = String(localized: "Not a CBB QR code.", bundle: .app)
-            return false
-        }
-        busy = true
-        retries = 0
-        defer {
-            busy = false
-            retries = 0
-        }
-        Island.show(.adding, String(localized: "Adding a device…", bundle: .app))
-        do {
-            try await group.admit(jc) { [weak self] in self?.retries += 1 }
-            computers = group.computers
-            devices = group.devices
-            phase = .home
-            message = nil
-            Island.end(.adding, last: String(localized: "The device is in the group.", bundle: .app))
-            return true
-        } catch is CancellationError {
-            Island.end(.adding)
-            return false
-        } catch {
-            message = Self.describe(error)
-            Island.end(.adding, last: String(localized: "The device was not added.", bundle: .app))
-            return false
-        }
-    }
-
     /// At the first launch: makes this phone's own key, once.
     func prepare() {
         guard phase == .start, !defaults.bool(forKey: Self.preparedKey) else { return }
@@ -833,23 +778,6 @@ final class AppModel: ObservableObject {
         inviteFingerprint = nil
     }
 
-    /// Joins another phone's group: shows this phone's QR code until an
-    /// admin phone scans it, then goes Home. The join screen runs it as its
-    /// task, so leaving the screen cancels it and stops listening.
-    func join() async {
-        do {
-            try await group.join { [weak self] code in self?.joinCode = code }
-            computers = group.computers
-            devices = group.devices
-            isAdmin = group.isAdmin
-            phase = .home
-        } catch is CancellationError {
-        } catch {
-            message = Self.describe(error)
-        }
-        joinCode = nil
-    }
-
     /// Restores the group with the recovery key from the sheet's QR code,
     /// on a phone without a group: the claim goes out, the app goes Home,
     /// and Home shows the time left until this phone becomes the root.
@@ -928,10 +856,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var pairAsk: CodeAsk?
     private var pairAnswer: CheckedContinuation<Bool, Never>?
 
-    /// Whether "Add a device" opens a window of 0.6 and "Join a group"
-    /// scans one: a phone without a group pairs on 0.6, a group of 0.5
-    /// keeps its screens.
-    var pairsOn06: Bool { !group.hasGroup || group.isV06 }
 
     /// Asks the person whether the code both screens show matches; a new
     /// question answers the one before it no.
@@ -970,6 +894,7 @@ final class AppModel: ObservableObject {
                 defer { busy = false }
                 newSheet = try await group.newGroup06()
                 await refresh()
+                isAdmin = group.isAdmin
                 phase = .home
             }
             let name = try await group.openWindow(shown: { [weak self] qr in self?.windowQr = qr }) { [weak self] a in
@@ -1005,6 +930,8 @@ final class AppModel: ObservableObject {
         do {
             try await group.joinByWindow(qr) { [weak self] a in await self?.askCode(a) ?? false }
             await refresh()
+            // A member: the root makes it an admin later.
+            isAdmin = group.isAdmin
             phase = .home
             return true
         } catch is CancellationError {
@@ -1020,7 +947,6 @@ final class AppModel: ObservableObject {
     static let windowQR = "cbb://pair?"
 
     func cancelJoin() {
-        joinCode = nil
         joiningInvite = nil
         inviteFingerprint = nil
         message = nil
@@ -1999,8 +1925,6 @@ final class PendingGroup: GroupController {
     func prepare() throws {}
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

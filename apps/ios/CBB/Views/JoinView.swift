@@ -4,63 +4,41 @@ import CBBKit
 import CoreImage.CIFilterBuiltins
 import SwiftUI
 
-/// Joining another phone's group: this phone's QR code, which the other
-/// phone scans in "Add a device" (docs/apps.md, Add a device); or, with an
-/// accepted invitation, the fingerprint the inviting admin compares while
-/// the phone joins from afar.
+/// Joining another phone's group: by the pairing window of a phone of the
+/// group (JoinByWindowView); or, with an accepted invitation, the
+/// fingerprint the inviting admin compares while the phone joins from afar.
 struct JoinView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
-    @Environment(\.themeStyle) private var style
 
     var body: some View {
         // On 0.6 the new phone dials a window (docs/protocol.md, section 6,
         // "The window and who dials").
-        if model.joiningInvite == nil && model.pairsOn06 {
+        if model.joiningInvite == nil {
             JoinByWindowView()
         } else {
-            listening
+            byInvite
         }
     }
 
-    /// This phone's QR code, on a group of 0.5, or joining by an invitation.
-    private var listening: some View {
+    /// Joining by an invitation.
+    private var byInvite: some View {
         VStack(spacing: Tokens.spacingLarge) {
             Spacer()
-            Text(model.joiningInvite != nil ? LocalizedStringKey("Join with an invitation") : LocalizedStringKey("Join a group"))
+            Text("Join with an invitation")
                 .font(.system(.title, design: .monospaced).weight(.bold))
                 .foregroundStyle(palette.accent)
-            if model.joiningInvite != nil {
-                if let fp = model.inviteFingerprint, model.message == nil {
-                    Text(verbatim: fp)
-                        .font(.system(.title2, design: .monospaced).weight(.bold))
-                        .multilineTextAlignment(.center)
-                        .textSelection(.enabled)
-                    Text("Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(palette.textDim)
-                    ProgressView()
-                } else if model.message == nil {
-                    ProgressView { Text("Connecting to the group's hub…") }
-                }
-            } else if let code = model.joinCode, let image = QRImage.make(code.qrText) {
-                Image(uiImage: image)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 260)
-                    .padding(Tokens.spacingMedium)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
-                    .accessibilityLabel(Text("QR code to join the group"))
-                Text(verbatim: code.grouped)
-                    .font(.system(.largeTitle, design: .monospaced).weight(.bold))
+            if let fp = model.inviteFingerprint, model.message == nil {
+                Text(verbatim: fp)
+                    .font(.system(.title2, design: .monospaced).weight(.bold))
+                    .multilineTextAlignment(.center)
                     .textSelection(.enabled)
-                    .accessibilityLabel(Text(verbatim: code.code.map(String.init).joined(separator: " ")))
-                Text("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
+                Text("Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
-            } else if model.message == nil {
                 ProgressView()
+            } else if model.message == nil {
+                ProgressView { Text("Connecting to the group's hub…") }
             }
             if let message = model.message {
                 Text(message).foregroundStyle(palette.danger).multilineTextAlignment(.center)
@@ -73,9 +51,7 @@ struct JoinView: View {
         .frame(maxWidth: Tokens.readableWidth)
         .padding(Tokens.spacingLarge)
         .frame(maxWidth: .infinity)
-        .task {
-            if model.joiningInvite != nil { await model.joinByInvite() } else { await model.join() }
-        }
+        .task { await model.joinByInvite() }
     }
 }
 
