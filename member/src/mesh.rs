@@ -264,6 +264,28 @@ impl Mesh {
         (self.log)(s)
     }
 
+    /// This device's own keys.
+    pub fn own(&self) -> &Own {
+        &self.own
+    }
+
+    /// Keeps a keys statement a device brought (a joiner's first) and
+    /// passes it on to every peer.
+    pub fn take_statement(&self, envelope: &[u8]) -> Result<()> {
+        let msgs = {
+            let mut st = self.statements.lock().unwrap();
+            if !st.add(envelope)? {
+                return Ok(());
+            }
+            st.save()?;
+            st.messages()
+        };
+        for f in msgs {
+            self.broadcast(&f, None);
+        }
+        Ok(())
+    }
+
     /// This device's ID.
     pub fn device(&self) -> DeviceId {
         self.own.device()

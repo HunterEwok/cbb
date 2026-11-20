@@ -44,6 +44,10 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `member/` admits a device that pairs with it at home on the records of 0.6
+  (`member/src/admitting.rs`): once both persons confirm the code, it writes the device's
+  record with its root or admin key, keeps the device's first keys statement and sends the
+  Welcome.
 - `member/` shows the group's devices from the records of 0.6 and the hellos of the devices
   connected (`member/src/roster.rs`), which the member connection of 0.6 now keeps.
 - `member/` reads and writes the orders of every command type of 0.6 (`member/src/orders.rs`),

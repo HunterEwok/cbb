@@ -16,6 +16,7 @@ mod l10n;
 mod actions;
 mod admin;
 mod admit_cli;
+pub mod admitting;
 mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
