@@ -45,7 +45,10 @@ const STEP: Duration = Duration::from_secs(30);
 struct NewArgs {
     /// The app's folder, where the group's set is kept.
     dir: String,
-    /// The window's QR code, cbb://pair?addr=…&fp=….
+    /// The window's QR code, cbb://pair?addr=…&fp=…; empty to find the one
+    /// open window by mDNS (a phone without a camera, docs/protocol.md
+    /// section 6).
+    #[serde(default)]
     qr: String,
     /// What the phone says of itself.
     name: String,
@@ -182,7 +185,7 @@ impl Joiner {
     fn start(request: &[u8], sign: SignFn, ctx: usize) -> Result<Joiner> {
         let a: NewArgs =
             serde_json::from_slice(request).map_err(|e| Error::msg(format!("the request does not decode: {e}")))?;
-        let code = read_code(&a.qr)?;
+        let code = if a.qr.trim().is_empty() { None } else { Some(read_code(&a.qr)?) };
         let dir = PathBuf::from(&a.dir);
         std::fs::create_dir_all(&dir).map_err(|e| Error::with(format!("cannot make {}", dir.display()), e))?;
         let local = cbb_member::set::local_key(&dir)?;
@@ -209,7 +212,9 @@ impl Joiner {
         std::thread::Builder::new()
             .name("pair-join".into())
             .spawn(move || {
-                let got = run(&code, key, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local));
+                let got = code
+                    .map_or_else(find, Ok)
+                    .and_then(|code| run(&code, key, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
                 match got {
                     Ok((group, device)) => sh.set(|s| {
                         s.state = "done";
@@ -258,6 +263,19 @@ impl Drop for Joiner {
         self.shared.cancelled.store(true, Ordering::SeqCst);
         self.answer(false);
     }
+}
+
+/// How long a phone without a camera browses for an open window.
+const BROWSE: Duration = Duration::from_secs(10);
+
+/// The one window open on the network, found by mDNS.
+fn find() -> Result<PairCode> {
+    let (addrs, fp) = cbb_member::discovery::find_window(BROWSE)?;
+    let fingerprint = fp.to_ascii_lowercase();
+    if fingerprint.len() != 64 || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::msg("the window announces no key fingerprint"));
+    }
+    Ok(PairCode { addrs, fingerprint })
 }
 
 /// Dials the window's addresses in turn and runs the session with the

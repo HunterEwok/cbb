@@ -58,6 +58,11 @@ struct NewArgs {
     /// hour at most.
     #[serde(default)]
     expires: u64,
+    /// Announce the window by mDNS from the core (`p=1`, `f`), for a joiner
+    /// without a camera: on Aurora, where the core does mDNS; the iPhone and
+    /// Android announce it with the system's DNS-SD from the answer.
+    #[serde(default)]
+    mdns: bool,
 }
 
 #[derive(Serialize)]
@@ -109,6 +114,8 @@ struct Shared {
     closed: AtomicBool,
     /// The person's answer to the code of the attempt that runs.
     answers: Mutex<Option<mpsc::SyncSender<bool>>>,
+    /// The window's mDNS announcement while it is open.
+    announced: Mutex<Option<cbb_member::discovery::Announcement>>,
 }
 
 impl Shared {
@@ -193,7 +200,14 @@ impl Window {
             busy: AtomicBool::new(false),
             closed: AtomicBool::new(false),
             answers: Mutex::new(None),
+            announced: Mutex::new(None),
         });
+        if a.mdns {
+            let tag = live.tag();
+            let ann = cbb_member::discovery::announce_window(&id_text(&mesh.device()), port, &tag, &fingerprint)
+                .ok_or_else(|| Error::msg("cannot announce the window by mDNS"))?;
+            *shared.announced.lock().unwrap_or_else(|e| e.into_inner()) = Some(ann);
+        }
         let (sh, k, l) = (shared.clone(), key.clone(), live.clone());
         mesh.on_pair(Some(Box::new(move |sock, session, exporter| {
             if sh.closed.load(Ordering::SeqCst) {
@@ -238,6 +252,7 @@ impl Window {
             drop(st);
             if !sh.closed.swap(true, Ordering::SeqCst) {
                 m.on_pair(None);
+                drop(sh.announced.lock().unwrap_or_else(|e| e.into_inner()).take());
                 sh.set(|s| s.state = "closed");
             }
         });
@@ -273,6 +288,7 @@ impl Drop for Window {
         if !self.shared.closed.swap(true, Ordering::SeqCst) {
             self.live.mesh.on_pair(None);
         }
+        drop(self.shared.announced.lock().unwrap_or_else(|e| e.into_inner()).take());
         // An attempt that waits for the person ends as "they do not match".
         self.answer(false);
         self.shared.changed.notify_all();

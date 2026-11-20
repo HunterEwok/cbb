@@ -822,7 +822,7 @@ pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
 }
 
 /// Opens a pairing window on a member of 0.6 (src/window.rs): `request` is
-/// `{"public", "addrs", "expires"}`, `public` the admitting key (the
+/// `{"public", "addrs", "expires", "mdns"}`, `public` the admitting key (the
 /// phone's admin key or the root's), which `sign` with `ctx` signs with
 /// until `cbb_window_free`; `addrs` the phone's home addresses without a
 /// port. The member port must listen (the member's `listen`). Writes the
@@ -914,7 +914,8 @@ pub unsafe extern "C" fn cbb_window_free(w: *mut window::Window) {
 }
 
 /// Joins a group of 0.6 by a pairing window's QR code (src/joiner.rs):
-/// `request` is `{"dir", "qr", "name", "os", "public"}`, `public` the
+/// `request` is `{"dir", "qr", "name", "os", "public"}` (`qr` empty finds
+/// the one window announced by mDNS), `public` the
 /// phone's member key, which `sign` with `ctx` signs with until
 /// `cbb_joiner_free`. It dials on a thread of its own; the answer is the
 /// first state, as `cbb_joiner_next` gives it. Returns the joiner, or null

@@ -124,8 +124,9 @@ of a copy are not written yet: its text is, and the log says why the rest is not
 A phone of 0.6 lets a device join at home through a pairing window, `cbb_window_new`
 (`ffi/src/window.rs`), while its member port listens: the request names the admitting key (the
 phone's admin key or the root's, signing through the callback until `cbb_window_free`), the
-phone's home addresses and how long the window stays open (five minutes by default, an hour at
-most). It answers the QR code `cbb://pair?addr=…&fp=…` (the addresses with the member port and
+phone's home addresses, how long the window stays open (five minutes by default, an hour at
+most) and whether the core announces it by mDNS (`mdns`, on Aurora; the iPhone and Android
+announce it with the system's DNS-SD, `p=1` and `f` from the answer). It answers the QR code `cbb://pair?addr=…&fp=…` (the addresses with the member port and
 the phone's key fingerprint, nothing secret) and its modules. The new device dials; its TLS
 session of `cbb-pair/3` reaches the window through the member port, and both ends show the code
 the session commits to. `cbb_window_next` waits for the next state: `open`, `joining` with the
@@ -137,7 +138,9 @@ home a member or a phone reads, sends and takes secrets, a watch only reads) and
 Welcome (`ffi/src/pair06.rs`). One attempt at a time; another gets `busy`.
 
 The new phone joins with `cbb_joiner_new` (`ffi/src/joiner.rs`): the request names the app's
-folder, the scanned QR code, what the phone says of itself and its member key. It dials the
+folder, the scanned QR code (empty on a phone without a camera: the core then finds the one
+window announced by mDNS, and refuses when there is more than one), what the phone says of
+itself and its member key. It dials the
 code's addresses in turn over TLS of `cbb-pair/3`, takes only the member whose key the code's
 fingerprint names, and `cbb_joiner_next` gives its state: `dialing`, `joining` with the code and
 the member's device and name, `done` with the group and the phone's device ID once the checked

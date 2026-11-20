@@ -303,10 +303,11 @@ void cbb_invite_free(cbb_invite *i);
 /*
  * A pairing window on a member of 0.6 (src/window.rs): an admin phone, or
  * the root phone, lets a device join at home. The member port must listen
- * (the member's "listen"). request is {"public","addrs","expires"}: the
+ * (the member's "listen"). request is {"public","addrs","expires","mdns"}: the
  * admitting key (admin or root), which sign with ctx signs with until
  * cbb_window_free; the phone's home addresses without a port; seconds open
- * (five minutes when 0, an hour at most). The answer is
+ * (five minutes when 0, an hour at most); mdns to have the core announce it
+ * (Aurora; the other apps announce p=1 and f with the system's DNS-SD). The answer is
  * {"qr","fingerprint","expires","modules"}, qr a cbb://pair link with the
  * addresses and the phone's key fingerprint, nothing secret. The new
  * device dials; cbb_window_next waits up to timeout_ms for a state past
@@ -326,7 +327,8 @@ void cbb_window_free(cbb_window *w);
 
 /*
  * A new phone joins a group of 0.6 by a pairing window's QR code
- * (src/joiner.rs): request is {"dir","qr","name","os","public"}, public the
+ * (src/joiner.rs): request is {"dir","qr","name","os","public"} (qr empty
+ * finds the one window announced by mDNS), public the
  * member key, which sign with ctx signs with until cbb_joiner_free. It
  * dials the code's addresses on a thread of its own and takes only the
  * member whose key the code's fingerprint names. The answer is the first

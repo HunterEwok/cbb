@@ -178,6 +178,27 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<An
     Some(Announcement(daemon))
 }
 
+/// Announces a phone's open pairing window of 0.6 (docs/protocol.md,
+/// section 6, "The window and who dials"): the phone's device ID, as
+/// text, as the
+/// instance, its member port, and TXT `v=1`, `g=<tag>`, `p=1` and its TLS
+/// key's fingerprint `f`, for a joiner without a camera. Dropping the
+/// announcement sends the goodbyes.
+pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str) -> Option<Announcement> {
+    let daemon = mdns_sd::ServiceDaemon::new().ok()?;
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+    let txt = [("v", "1"), ("g", tag), ("p", "1"), ("f", fingerprint)];
+    let info =
+        mdns_sd::ServiceInfo::new(SERVICE, id, &format!("cb-{id}.local."), "", port, &txt[..]).ok()?.enable_addr_auto();
+    daemon.register(info).ok()?;
+    Some(Announcement(daemon))
+}
+
 /// An announcement of announce_joiner: dropping it shuts the mDNS daemon
 /// down, which sends the goodbyes.
 pub struct Announcement(mdns_sd::ServiceDaemon);
@@ -209,6 +230,31 @@ pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
             "{n} devices announce a pairing window ({}); give the address that cbb pair showed",
             open.keys().cloned().collect::<Vec<_>>().join(", ")
         ))),
+    }
+}
+
+/// The one member that announces an open pairing window of 0.6 with its
+/// key's fingerprint (TXT `p=1` and `f`), with its addresses, for a phone
+/// without a camera that joins (docs/protocol.md, section 6, "The window
+/// and who dials"). More than one is refused: the person compares the code
+/// with one screen.
+pub fn find_window(wait: Duration) -> crate::error::Result<(Vec<SocketAddr>, String)> {
+    use crate::error::Error;
+    let open = browse_txt(wait, |info| {
+        let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
+        (info.get_property_val_str("p") == Some("1")).then(|| fp.to_string())
+    })?;
+    let mut open: Vec<_> = open.into_values().collect();
+    match open.len() {
+        0 => {
+            Err(Error::msg("no device with an open pairing window found; open Add a device on the group's phone first"))
+        }
+        1 => {
+            let (mut addrs, fp) = open.remove(0);
+            addrs.truncate(4);
+            Ok((addrs, fp))
+        }
+        n => Err(Error::msg(format!("{n} devices announce a pairing window; close all but one and try again"))),
     }
 }
 
