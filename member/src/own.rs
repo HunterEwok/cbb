@@ -103,10 +103,12 @@ fn store(key: &Arc<dyn ExternalKey>, pkcs8: Option<&[u8]>) -> Stored {
     }
 }
 
+/// A new key, how the file keeps it, and its PKCS #8 when the file holds
+/// it.
+type Made = (Arc<dyn ExternalKey>, Stored, Option<cbb_core::secret::Zeroizing<Vec<u8>>>);
+
 /// A new key: in the hardware where make gives one, else PKCS #8.
-fn make(
-    hardware: &dyn Fn() -> Option<Arc<dyn ExternalKey>>,
-) -> Result<(Arc<dyn ExternalKey>, Stored, Option<cbb_core::secret::Zeroizing<Vec<u8>>>)> {
+fn make(hardware: &dyn Fn() -> Option<Arc<dyn ExternalKey>>) -> Result<Made> {
     if let Some(k) = hardware() {
         let s = store(&k, None);
         if s != Stored::default() {
