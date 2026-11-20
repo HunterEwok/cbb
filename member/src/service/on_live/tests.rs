@@ -241,7 +241,7 @@ fn the_root_sets_the_groups_relay() {
     assert!(la.mesh.state().settings.servers.is_empty());
 
     let m = relay("203.0.113.9:8764", &key, true).unwrap();
-    assert_eq!(m.header.relay, "203.0.113.9:8764");
+    assert_eq!(m.header.relays, ["203.0.113.9:8764"]);
     let want = vec![Server { kind: SERVER_RELAY, endpoint: "203.0.113.9:8764".into(), pin }];
     assert_eq!(la.mesh.state().settings.servers, want);
     #[cfg(feature = "tunnel")]
@@ -255,9 +255,23 @@ fn the_root_sets_the_groups_relay() {
     let st = la.mesh.state();
     assert_eq!(st.settings.servers.len(), 1);
     assert_eq!(st.settings.servers[0].endpoint, "198.51.100.7:8764");
+    // Several relays, each once.
+    let m = ask(&a, "away", |h| {
+        (h.name, h.relay, h.relay_key, h.consent) = ("relay".into(), "203.0.113.9:8764".into(), key.clone(), true);
+        h.relays = vec![format!("198.51.100.7:8764 {key}")];
+    })
+    .unwrap();
+    assert_eq!(m.header.relays, ["203.0.113.9:8764", "198.51.100.7:8764"]);
+    assert_eq!(la.mesh.state().settings.servers.len(), 2);
+    let e = ask(&a, "away", |h| {
+        (h.name, h.relay, h.relay_key, h.consent) = ("relay".into(), "203.0.113.9:8764".into(), key.clone(), true);
+        h.relays = vec![format!("203.0.113.9:8764 {key}")];
+    })
+    .unwrap_err();
+    assert!(e.message().contains("given twice"), "{}", e.message());
     // The project's relay: the group's own go.
     let m = relay("cbb.tools:8765", "default", true).unwrap();
-    assert!(m.header.relay.is_empty());
+    assert!(m.header.relays.is_empty());
     assert!(la.mesh.state().settings.servers.is_empty());
     la.close();
 

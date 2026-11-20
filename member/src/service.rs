@@ -974,6 +974,11 @@ impl Service {
                 node.announce(true);
             }
             "hub-off" => away.stop_hub(&node, h.force)?,
+            "relay" if !h.relays.is_empty() => {
+                return Err(Error::msg(
+                    "a device meets at one relay; several are a setting of a group of 0.6, which its root signs",
+                ));
+            }
             "relay" => node.set_tunnel_key(Some(away.meet_at(&node, h)?)),
             n => return Err(Error::msg(format!("unknown cbb global {n:?}"))),
         }

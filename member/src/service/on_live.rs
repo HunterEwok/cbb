@@ -595,8 +595,9 @@ impl Service {
     /// cbb global relay: the group's own relay, which the root signs in the
     /// group's settings (format 4.5, field 15; D-121), so that every device
     /// takes it from there and shows it a face (`faces::group_servers`).
-    /// It takes the place of the relays the settings named; `default`, the
-    /// project's relay, leaves the group with the project's alone. An admin
+    /// The relays given (`relay` and `relays`) take the place of those the
+    /// settings named; `default`, the project's relay, leaves the group
+    /// with the project's alone. The answer's `relays` names them. An admin
     /// asks the root, which has not moved to the records of 0.6 yet.
     fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
         use cbb_core::records::body::{SERVER_RELAY, Server};
@@ -619,33 +620,48 @@ impl Service {
                 "only the group's root sets the group's relay: run cbb global relay on the computer that created the group",
             ));
         }
-        let relay = if h.relay_key == "default" {
-            None
-        } else {
-            let endpoint = match h.relay.parse::<std::net::SocketAddr>() {
+        let given = std::iter::once((h.relay.clone(), h.relay_key.clone())).chain(h.relays.iter().map(|r| {
+            let (a, k) = r.split_once(' ').unwrap_or((r, ""));
+            (a.to_string(), k.to_string())
+        }));
+        let mut relays: Vec<Server> = Vec::new();
+        for (addr, key) in given {
+            if key == "default" {
+                if !h.relays.is_empty() {
+                    return Err(Error::msg("the project's relay goes alone: cbb global relay default"));
+                }
+                break;
+            }
+            let endpoint = match addr.parse::<std::net::SocketAddr>() {
                 Ok(ep) if ep.port() != 0 => ep.to_string(),
                 _ => {
                     return Err(Error::msg(format!(
-                        "{:?} is not the relay's address with a port, such as 203.0.113.9:8764",
-                        h.relay
+                        "{addr:?} is not the relay's address with a port, such as 203.0.113.9:8764"
                     )));
                 }
             };
             use base64::Engine as _;
             let b64 = base64::engine::general_purpose::STANDARD;
             let pin = b64
-                .decode(&h.relay_key)
+                .decode(&key)
                 .ok()
-                .filter(|b| b64.encode(b) == h.relay_key)
+                .filter(|b| b64.encode(b) == key)
                 .and_then(|b| <[u8; 32]>::try_from(b).ok())
                 .ok_or_else(|| {
-                    Error::msg(format!(
-                        "{:?} is not a relay's key; cbb relay prints it, 44 characters of base64",
-                        h.relay_key
-                    ))
+                    Error::msg(format!("{key:?} is not a relay's key; cbb relay prints it, 44 characters of base64"))
                 })?;
-            Some(Server { kind: SERVER_RELAY, endpoint, pin })
-        };
+            if relays.iter().any(|r| r.endpoint == endpoint) {
+                return Err(Error::msg(format!("the relay {endpoint} is given twice")));
+            }
+            relays.push(Server { kind: SERVER_RELAY, endpoint, pin });
+        }
+        let others = st.settings.servers.iter().filter(|v| v.kind != SERVER_RELAY).count();
+        if relays.len() + others > cbb_core::records::body::MAX_SERVERS {
+            return Err(Error::msg(format!(
+                "a group names at most {} servers in its settings",
+                cbb_core::records::body::MAX_SERVERS
+            )));
+        }
         let now = uptime::wall_ms().max(0) as u64;
         live.mesh.write(|set, k| {
             writers::set_settings(
@@ -653,19 +669,18 @@ impl Service {
                 k,
                 |s| {
                     s.servers.retain(|v| v.kind != SERVER_RELAY);
-                    s.servers.extend(relay.clone());
+                    s.servers.extend(relays.iter().cloned());
                 },
                 now,
             )
         })?;
-        (self.log)(&match &relay {
-            Some(r) => format!("cbb: the group's relay is {} now", r.endpoint),
-            None => "cbb: the group meets at the project's relay alone now".to_string(),
+        let endpoints: Vec<String> = relays.into_iter().map(|r| r.endpoint).collect();
+        (self.log)(&if endpoints.is_empty() {
+            "cbb: the group meets at the project's relay alone now".to_string()
+        } else {
+            format!("cbb: the group's relays are {} now", endpoints.join(", "))
         });
-        Ok(control::reply(
-            Header { relay: relay.map(|r| r.endpoint).unwrap_or_default(), done: true, ..Default::default() },
-            Vec::new(),
-        ))
+        Ok(control::reply(Header { relays: endpoints, done: true, ..Default::default() }, Vec::new()))
     }
 
     /// cbb admin: makes a device an admin, on the group's root, with the

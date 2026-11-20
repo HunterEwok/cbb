@@ -163,6 +163,11 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away relay: the relays after the first, each its address and its
+    /// key's pin with a space between, which only the root of a group of
+    /// 0.6 takes (cbb global relay with several).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
     /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
     /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

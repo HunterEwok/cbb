@@ -93,9 +93,10 @@ fn usage_text() -> String {
                                       on the hub: make DEVICE, an admin computer with sync away from
                                       home on, the hub in its place, reached through this hub's
                                       forwarder unless others are given; its clients move with it
-       cbb global relay default|address:port -key KEY [-yes]
+       cbb global relay default|address:port -key KEY [address:port -key KEY...] [-yes]
                                       meet the group's other devices at a blind relay, for a group
-                                      without a hub: the project's ({PROJECT_RELAY}) or this one
+                                      without a hub: the project's ({PROJECT_RELAY}) or these, up to
+                                      16; in a group of 0.6 on the root, which signs them for the group
        cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main
                                       hubs, in the order they serve, before the others
        cbb global allow               let this computer's service reach the group's servers as they
@@ -168,6 +169,64 @@ impl Flags {
         self.strings.iter().any(|(n, v)| *n == name && v.is_some())
     }
 }
+
+/// The relays of cbb global relay: `default`, the project's, alone, or
+/// one or more `address:port -key KEY`, each address before its key or
+/// after it, up to [`MAX_RELAYS`], and whether -yes was given. An error
+/// says why, or is empty for the usage.
+fn relay_args(args: &[String]) -> std::result::Result<(Vec<(String, String)>, bool), String> {
+    let (mut out, mut yes) = (Vec::new(), false);
+    let (mut addr, mut key): (Option<String>, Option<String>) = (None, None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        let flag = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|n| !n.is_empty());
+        match flag.map(|n| n.split_once('=').map_or((n, None), |(n, v)| (n, Some(v.to_string())))) {
+            Some(("yes", None)) => yes = true,
+            Some(("key", v)) => {
+                if key.is_some() {
+                    return Err("each relay takes one -key".into());
+                }
+                key = Some(v.or_else(|| it.next().cloned()).ok_or_else(String::new)?);
+            }
+            Some(_) => return Err(String::new()),
+            None => {
+                if addr.is_some() {
+                    return Err(format!("{a:?} follows an address that has no -key yet"));
+                }
+                addr = Some(a.clone());
+            }
+        }
+        if addr.as_deref() == Some(PROJECT) {
+            if key.is_some() {
+                return Err("the project's relay (cbb global relay default) takes no -key: cbb knows it".into());
+            }
+            out.push((addr.take().unwrap_or_default(), PROJECT.to_string()));
+        } else if let (Some(_), Some(_)) = (&addr, &key) {
+            let (a, k) = (addr.take().unwrap_or_default(), key.take().unwrap_or_default());
+            if k == PROJECT {
+                return Err("-key default goes with the project's relay, cbb global relay default".into());
+            }
+            out.push((a, k));
+        }
+    }
+    if addr.is_some() || key.is_some() || out.is_empty() {
+        return Err(String::new());
+    }
+    if out.len() > 1 && out.iter().any(|(_, k)| k == PROJECT) {
+        return Err("the project's relay goes alone: cbb global relay default".into());
+    }
+    if out.len() > MAX_RELAYS {
+        return Err(format!("a group names at most {MAX_RELAYS} relays"));
+    }
+    if out.iter().enumerate().any(|(i, (a, _))| out.iter().take(i).any(|(b, _)| a == b)) {
+        return Err("each relay is given once".into());
+    }
+    Ok((out, yes))
+}
+
+/// The most relays cbb global relay names: the bound of the group's
+/// servers in its settings (format 4.5, field 15).
+const MAX_RELAYS: usize = cbb_core::records::body::MAX_SERVERS;
 
 /// A line from standard input, for a question.
 fn answer() -> Result<String> {
@@ -347,36 +406,22 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
         }
         "relay" => {
             net.check()?;
-            // The address may come before the flag or after it.
-            let (mut addr, rest) = match rest.split_first() {
-                Some((a, r)) if !a.starts_with('-') => (a.clone(), r),
-                _ => (String::new(), rest),
+            let (relays, yes) = match relay_args(rest) {
+                Ok(r) => r,
+                Err(msg) if msg.is_empty() => return Err(usage(usage_text())),
+                Err(msg) => return Err(usage_plain(&msg)),
             };
-            let f = Flags::parse(rest, &["yes"], &["key"])?;
-            if addr.is_empty() && f.rest.len() == 1 {
-                addr = f.rest[0].clone();
-            } else if !f.rest.is_empty() {
-                addr.clear();
-            }
-            let mut key = f.get("key");
-            if addr != PROJECT && key == PROJECT {
-                return Err(usage_plain("-key default goes with the project's relay, cbb global relay default"));
-            }
-            if addr == PROJECT {
+            let mut resolved = Vec::with_capacity(relays.len());
+            for (addr, key) in relays {
                 // The project's relay: the service takes its keys from the
                 // newest signed keys.json, which may change them.
-                if !key.is_empty() {
-                    return Err(usage_plain(
-                        "the project's relay (cbb global relay default) takes no -key: cbb knows it",
-                    ));
-                }
-                (addr, key) = (PROJECT_RELAY.into(), PROJECT.into());
+                let addr = if key == PROJECT { PROJECT_RELAY.to_string() } else { resolve_addr_port(&addr)? };
+                resolved.push((addr, key));
             }
-            if addr.is_empty() || key.is_empty() {
-                return Err(usage(usage_text()));
-            }
-            (h.relay, h.relay_key) = (resolve_addr_port(&addr)?, key);
-            if !f.on("yes") {
+            let mut it = resolved.into_iter();
+            (h.relay, h.relay_key) = it.next().unwrap_or_default();
+            h.relays = it.map(|(a, k)| format!("{a} {k}")).collect();
+            if !yes {
                 print!("{RELAY_NOTICE}");
                 // The relay turns sync away from home on where it is off,
                 // and the same yes agrees to that.
@@ -425,14 +470,14 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
         print!("{}", away_text(&net, st.away.as_ref()));
     }
     if verb == "relay" && m.header.status.is_none() {
-        // A group on the records of 0.6: the root signed the relay in the
-        // group's settings, and every device takes it from there.
-        if m.header.relay.is_empty() {
+        // A group on the records of 0.6: the root signed the relays in the
+        // group's settings, and every device takes them from there.
+        if m.header.relays.is_empty() {
             println!("The group meets at the project's relay alone now.");
         } else {
             println!(
-                "The group's relay is {} now; every device of the group takes it from the group's settings.",
-                m.header.relay
+                "The group's relays are {} now; every device of the group takes them from the group's settings.",
+                m.header.relays.join(", ")
             );
         }
     }
@@ -688,6 +733,33 @@ mod tests {
         assert_eq!(f.rest, ["203.0.113.9:8764", "-keep"]);
         assert!(Flags::parse(&strings(&["-nope"]), &[], &[]).is_err());
         assert!(Flags::parse(&strings(&["-port"]), &[], &["port"]).is_err());
+    }
+
+    #[test]
+    fn relay_args() {
+        let a = |s: &str| super::relay_args(&s.split_whitespace().map(String::from).collect::<Vec<_>>());
+        let (k1, k2) = ("AAAA", "BBBB");
+        assert_eq!(a("default").unwrap(), (vec![(PROJECT.into(), PROJECT.into())], false));
+        assert_eq!(a(&format!("-key {k1} 192.0.2.1:8764 -yes")).unwrap().0, vec![("192.0.2.1:8764".into(), k1.into())]);
+        let two = a(&format!("192.0.2.1:8764 -key {k1} --key={k2} 192.0.2.2:8764")).unwrap().0;
+        assert_eq!(two, vec![("192.0.2.1:8764".into(), k1.into()), ("192.0.2.2:8764".into(), k2.into())]);
+        for (args, says) in [
+            ("", ""),
+            ("192.0.2.1:8764", ""),
+            ("-key AAAA", ""),
+            ("-other", ""),
+            ("192.0.2.1:8764 192.0.2.2:8764 -key AAAA", "has no -key"),
+            ("-key AAAA -key BBBB 192.0.2.1:8764", "one -key"),
+            ("-key AAAA default", "takes no -key"),
+            ("192.0.2.1:8764 -key default", "goes with the project's relay"),
+            ("default 192.0.2.1:8764 -key AAAA", "goes alone"),
+            ("192.0.2.1:8764 -key AAAA 192.0.2.1:8764 -key BBBB", "once"),
+        ] {
+            let e = a(args).unwrap_err();
+            assert!(e.contains(says) && (says.is_empty() == e.is_empty()), "{args:?}: {e:?}");
+        }
+        let many: String = (0..=MAX_RELAYS).map(|i| format!("192.0.2.{i}:8764 -key K{i} ")).collect();
+        assert!(a(&many).unwrap_err().contains("at most 16"));
     }
 
     #[test]

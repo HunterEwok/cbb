@@ -3850,9 +3850,12 @@ can change its key or move without a release and without the user:
 A relay of the user's own is kept as it was given: a new key means `cbb global relay` with the
 new key on every device. In a group of 0.6 it is the group's setting instead (the `settings`
 record's `servers`, section 10): the root's service, on the `away` request with `name` `relay`
-and `consent`, signs a new `settings` record whose relays (kind 2) are the one given, keeping
-the entries of other kinds, or none for `relay_key` `default`; its answer names the relay in
-`relay` (empty for the project's). A device that is not the root is refused; an admin's
+and `consent`, signs a new `settings` record whose relays (kind 2) are the ones given, `relay`
+with `relay_key` and then each of `relays` (`address pin`, as `cbb global relay` with several
+`address -key KEY` sends them), each address once, keeping the entries of other kinds, or none
+for `relay_key` `default`, which goes alone; its answer names their addresses in `relays`
+(empty for the project's). A device not on the records of 0.6 refuses `relays`: it meets at
+one relay. A device that is not the root is refused; an admin's
 request to the root has not moved yet (`NotYet`). Every device makes a face for each relay
 the settings name (`faces::group_servers`), after the project's servers.
 

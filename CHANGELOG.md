@@ -59,7 +59,8 @@ made with 0.5 is set up again once. The details follow.
   in place of the relays named before (`default` leaves the project's alone), and every member
   shows the group's relays a face after the project's servers. A device that is not the root
   is refused; an admin asking the root, and meeting at the relay, are still moving to 0.6. A
-  settings record the core API writes keeps the group's servers.
+  settings record the core API writes keeps the group's servers. `cbb global relay` takes
+  several `address -key KEY`, up to 16, which only the root of a group of 0.6 takes.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and
