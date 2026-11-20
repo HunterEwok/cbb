@@ -400,10 +400,32 @@ final class LiveGroup: GroupController {
     }
 
     /// Takes in the records the member got from its peers.
+    /// The group's records count as synced with a member once one has
+    /// stayed connected for 30 s (its records came in at the connection's
+    /// start): that spends the push hints-only marks from before which the
+    /// records contradict.
+    private func syncedSoon() {
+        let before = Set(((try? node?.peers()) ?? []).map(\.device))
+        guard !before.isEmpty else { return }
+        let since = Date()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(30))
+            guard let self, let node = self.node else { return }
+            let now = Set(((try? node.peers()) ?? []).map(\.device))
+            let stayed = now.intersection(before)
+            if !stayed.isEmpty { PushSetup.shared.synced(at: since, peers: stayed, recordsAt: self.recordsTakenAt) }
+        }
+    }
+
+    /// When the app last took in records from the member that it did not
+    /// have: a push hints-only mark is spent by a sync only after it.
+    private var recordsTakenAt: Date?
+
     private func pullRecords() {
         guard let node, let rs = try? node.records(), !rs.isEmpty, let g = state else { return }
         var set = g.records
         guard !set.addAll(rs, groupCA: g.groupCA).isEmpty else { return }
+        recordsTakenAt = Date()
         adopt(set)
     }
 
@@ -1968,6 +1990,7 @@ final class LiveGroup: GroupController {
         case .peer:
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
+            syncedSoon()
         case let .message(from, .admin(ca)):
             Task { await adminCAReceived(ca, from: from) }
         case let .message(from, .evidence(ev)):

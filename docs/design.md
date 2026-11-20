@@ -1882,6 +1882,18 @@ with their names, systems and dates:
 - What stays: the period's tag and pseudonyms (for a month), roughly how many hubs or
   members there are, addresses, timing and sizes.
 - Inside the group every device keeps using the full records.
+- **Push, the one exception.** A phone's push registration names the group's face toward
+  the push service in the period it was made (the send key signs it), so the registration
+  holds only on that group's connection. A new period would leave a phone whose app is
+  closed without push until it registers again, so a member keeps the previous face's
+  server key and credentials for push only: until they expire, or until no registration it
+  holds names the old face, whichever is first. It uses them for nothing but sends to
+  registrations that name the old face, which also wake the phone to sync and register under
+  the new one; never for a registration of a device the records show removed (that
+  registration is dropped at the removal); nothing else of an ended period is kept. The
+  sender decides which faces it still needs (`member/src/pusher.rs`, `Sender::needs_face`);
+  keeping and dropping the previous face's key in the member's credentials comes with the
+  member's switch to the core (wave 5), until which the sender is given only current faces.
 
 #### What is left to hide
 

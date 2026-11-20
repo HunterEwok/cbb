@@ -59,6 +59,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
 | `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` and the bounds table of `docs/protocol.md` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when they no longer match it. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
+| `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys, and the Firebase project's service account `fcm.json` for `-fcm-account`, come from systemd's credentials), and `-new-state` on the very first start only (a missing state file stops any other start). |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
 | `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |
@@ -119,7 +120,12 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
-| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`, `streams`); the Go tests set it. |
+| `CBB_PUSH_LIVE_ADDR` | the push service's tests, by hand | The address of a running cbb-push that the ignored test `live_push_to_a_phone` sends a body to a real phone through. |
+| `CBB_PUSH_LIVE_KIND` | the same test | `event` (the default) or `waits`: which body it seals. |
+| `CBB_PUSH_LIVE_PIN` | the same test | The pin of that cbb-push's key, base64, as it logs it. |
+| `CBB_PUSH_LIVE_ROOTS` | the push service's tests, by hand | The CA certificates the ignored test that reaches Apple's sandbox checks it with. |
+| `CBB_PUSH_LIVE_REG` | the same test | The phone's push registration, base64, as the app's test row copies it (launch argument `-PushTestTools YES`). |
+| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
 | `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
@@ -140,7 +146,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |
 | `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
 | `CBB_FULL_SIZE` | the core's records tests | `1` runs the records' tests at real size too (minutes; CI's rust job sets it). |
-| `CBB_UPDATE_VECTORS` | the core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
+| `CBB_UPDATE_VECTORS` | the core's keyboard and push tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
+| `CBB_REQUIRE_IPV6` | cbb-push's tests | `1` makes the dual-stack payer test fail instead of skip on a machine without IPv6 loopback (`cargo test -p cbb-member pushd`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
 | `CBB_WRITE_INTEROP` | the Swift kit's certificate tests | Writes the certificates that Go's `TestSwiftCertificates` checks. |
