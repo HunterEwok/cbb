@@ -45,6 +45,8 @@ made with 0.5 is set up again once. The details follow.
   make it an admin later; a root phone keeps the key a device offered through its window, lets a
   computer that can be a hub be one, and mutes, unmutes and turns the sync of another device off
   and on by command (`cbb_member_manage`).
+- A phone of 0.6 copies images and files to the group and fetches the group's (`copy_media`,
+  `fetch`), on the service's media of 0.6.
 - A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
   its root key signs its own record, the set is kept for the member, and the recovery sheet goes
   to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers

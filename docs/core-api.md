@@ -112,14 +112,15 @@ On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
 `cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
 `device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
 `device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
-age_ms, kind, text, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
+age_ms, kind, text, media, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
 turned the phone's sync off or on), `log` and `panic`. It carries out by itself the commands
 an admin sends the phone that the records let through (`cbb_member::orders`, as the service's
 `live_command`): `mute`, `unmute` and the sync mode, kept in `mute.json` and `sync.json` and
 sent out in its next hello; it answers the paste, action and away switches with nothing to
 do, and refuses an action, a hub change, a device change and, until the apps take it, a paste.
-Its operations are `copy`, `current`, `waiting`, `took` and `sends` (the button's rule,
-`cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
+Its operations are `copy`, `copy_media` (images or files, sealed and kept to serve, as the
+service's), `fetch` (a copy's images or files, fetched from the member it came from and opened
+into `out`), `current`, `waiting`, `took` and `sends` (the button's rule, `cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
 `resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
 (`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
 update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
@@ -131,8 +132,9 @@ with that key and sent over the phone's connection to it, as the service sends t
 is that device's.
 Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
 `cbb_invite_new`, answers that it does not work in this build yet, with the cause
-`not on the records of 0.6 yet` in its details, until its part moves over. Images and files
-of a copy are not written yet: its text is, and the log says why the rest is not.
+`not on the records of 0.6 yet` in its details, until its part moves over. A copy with
+images or files comes as a `write` of kind `media` and a `copy` event with its manifest
+(`media`), which the app fetches.
 
 A phone of 0.6 lets a device join at home through a home window, `cbb_window_new`
 (`ffi/src/window.rs`), while its member port listens: the request names the admitting key (the

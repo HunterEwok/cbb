@@ -290,6 +290,37 @@ impl Phone {
                 self.own.sent(&c.text);
                 done()
             }
+            // Images or files the phone copies, sealed and kept to serve, as
+            // the service's copy_media; a phone's copy is always deliberate.
+            "copy_media" => {
+                use cbb_member::content::Source;
+                let a: super::MediaArgs = args(a)?;
+                let parts = a
+                    .parts
+                    .into_iter()
+                    .map(|p| {
+                        let src = match (p.dir, p.data, p.file) {
+                            (true, _, _) => Source::Dir,
+                            (false, Some(d), _) => Source::Bytes(d),
+                            (false, None, Some(f)) => Source::File(PathBuf::from(f)),
+                            _ => return Err(Error::msg("a part with neither data nor a file")),
+                        };
+                        let part =
+                            cbb_core::media::Part { kind: p.kind, path: p.path, dir: p.dir, ..Default::default() };
+                        Ok((part, src))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                l.copy_media(&a.text, parts, Via::Phone, true)?;
+                Ok(json!({ "copy": self.own_media_json(&a.text) }))
+            }
+            // The images or files of a copy from the group, fetched from the
+            // member it came from and opened into a new folder.
+            "fetch" => {
+                let a: super::FetchArgs = args(a)?;
+                let from = l.media_to_paste(&a.id)?;
+                let parts = l.open_media(&from, a.max, Path::new(&a.out))?;
+                Ok(json!({ "parts": parts.iter().map(|(p, at)| super::part_json(p, at)).collect::<Vec<_>>() }))
+            }
             // The one button's rule (cbb_member::button), on the group's
             // current copy.
             "waiting" => {
@@ -411,6 +442,27 @@ impl Phone {
     }
 
     /// The group's current copy as the button's rule reads it.
+    /// The copy of images or files the phone just made, as the app lists
+    /// it: its ID once it went to the group, and the manifest kept to
+    /// serve it.
+    fn own_media_json(&self, text: &str) -> Value {
+        let l = &self.live;
+        let manifest = match l.media_to_paste("") {
+            Ok(cbb_member::live::MediaFrom::Own(m)) => Some(m.manifest),
+            _ => None,
+        };
+        let id = l.media_copy().map(|i| certs::hex(&i)).unwrap_or_default();
+        let ev = cbb_core::clip::Event {
+            id,
+            origin: id_text(&l.mesh.device()),
+            kind: Kind::Media,
+            text: text.to_string(),
+            media: manifest,
+            ..Default::default()
+        };
+        event_json(&ev)
+    }
+
     fn current_event(&self) -> Option<cbb_core::clip::Event> {
         let c = self.live.board.current()?;
         let kind = if c.content.manifest.is_some() {
@@ -631,19 +683,10 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
 }
 
 /// A copy from the group to write to the phone's clipboard: its text, and
-/// the copy itself for the app's list. Images and files are not fetched on
-/// the records of 0.6 yet: their text goes, and the log says why the rest
-/// does not.
+/// the copy itself for the app's list, with the manifest of its images or
+/// files, which the app fetches (the op `fetch`) and writes itself.
 fn deliver(ev: &Events, w: &Write) {
-    let mut kind = w.kind;
-    if w.media.is_some() {
-        let e = not_yet("writing a copy's images or files");
-        ev.send(&Event::Log { line: &format!("cbb: a copy from the group: {}", e.for_log()) });
-        if w.text.is_empty() {
-            return;
-        }
-        kind = Kind::Text;
-    }
+    let kind = if w.media.is_some() { Kind::Media } else { w.kind };
     let ttl_ms = w.ttl.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
     ev.send(&Event::Write { text: &w.text, kind: kind_name(kind), ttl_ms });
     let id = certs::hex(&w.id);
@@ -654,6 +697,7 @@ fn deliver(ev: &Events, w: &Write) {
             "age_ms": 0,
             "kind": kind_name(kind),
             "text": w.text,
+            "media": w.media,
             "key": id,
         }),
     });
