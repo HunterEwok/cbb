@@ -160,7 +160,7 @@ func readRegister(t uint64, m blind.Value) (*register, error) {
 }
 
 // obfuscationOf reads the format's table `obfuscation` (1 jc 1..128, 2
-// jmin 0..1280, 3 jmax 1..1280, 4 s: 1 to 4 sizes 0..1280, 5 h: 1 to 4
+// jmin 0..1280, 3 jmax 1..1280 and not below jmin, 4 s: 1 to 4 sizes 0..1280, 5 h: 1 to 4
 // headers, each a value or a range of 32 bits, 6 key, 32 bytes, when
 // given) into the settings the forwarder routes by, a size or header not
 // given 0: nil when they break the table, and usable when the forwarder can
@@ -179,7 +179,7 @@ func obfuscationOf(v blind.Value) (o *tunnel.Obfuscation, usable bool) {
 	jc, ok1 := num(1, 1, 128)
 	jmin, ok2 := num(2, 0, 1280)
 	jmax, ok3 := num(3, 1, 1280)
-	if !ok1 || !ok2 || !ok3 {
+	if !ok1 || !ok2 || !ok3 || jmin > jmax {
 		return nil, false
 	}
 	o = &tunnel.Obfuscation{JC: jc, JMin: jmin, JMax: jmax}

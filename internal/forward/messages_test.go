@@ -182,3 +182,42 @@ func TestSeenWrittenOnce(t *testing.T) {
 		}
 	}
 }
+
+// TestObfuscationVectors holds the forwarder's reader of the table
+// `obfuscation` to the format's vectors (messages3.json, "maps"): it takes
+// the settings the format takes and refuses the others.
+func TestObfuscationVectors(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "format", "messages3.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Maps []struct {
+			Name, Table, Value, Rule string
+		}
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, r := range v.Maps {
+		if r.Table != "obfuscation" {
+			continue
+		}
+		n++
+		raw, err := hex.DecodeString(r.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := blind.Decode(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", r.Name, err)
+		}
+		if o, _ := obfuscationOf(m); (o != nil) != (r.Rule == "") {
+			t.Errorf("%s: read as %+v, the format's rule %q", r.Name, o, r.Rule)
+		}
+	}
+	if n < 3 {
+		t.Fatalf("%d vectors of the table obfuscation", n)
+	}
+}
