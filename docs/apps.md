@@ -262,9 +262,12 @@ shows its code and the member's own words.
 |---|---|---|
 | `not_in_group` | stop | the device is in no group |
 | `removed` | stop | the group removed it: leave, then join again |
-| `taken_over` | stop | an admin took the group over from this root |
-| `frozen` | stop | another admin froze this computer's admin key |
-| `cert_expired` | stop | its certificate ended: an admin at home renews it |
+| `recovery_fork` | stop | the group's recovery key signed two owners: the group stopped for good |
+| `root_two_histories` | stop | the group's root signed two histories: the group stops until it decides |
+| `admins_conflict` | stop | two admins conflict: the group stops until the root decides |
+| `owner_disagrees` | stop | these peers count another owner of the group (`devices`) |
+| `frozen` | stop | the group's records froze this device's keys |
+| `nothing_here` | stop | the group's records give this device nothing |
 | `stopped` | stop | the group's records stop the exchange until the root decides |
 | `sync_off` | stop | sync is off here, until a time or until turned on |
 | `away_off` | stop | no device of the group is on this network: turn on Everywhere |
@@ -278,11 +281,14 @@ shows its code and the member's own words.
 | `secrets_stopped` | warn | the group sends no secrets until the root decides |
 | `muted` | warn | an admin muted this device: its copies do not reach the group |
 | `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
-| `newer` | warn | the group has records of a newer version: update |
+| `no_secrets_here` | warn | the group seals no secrets to this device |
+| `newer` | warn, or stop | the group has records or settings of a newer version: update; a stop when this version cannot follow them |
+| `change_arriving` | warn | a change of the group's root is arriving; its records are asked for |
+| `checkpoint_stuck` | warn | the root's checkpoint waits for records no device has offered |
 | `unreached` | warn | members at home cannot connect to this computer: its firewall |
-| `cert_ending` | warn | its certificate ends within 30 days |
 | `only_device` | info | the group's only device: add a phone or a computer |
 | `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
+| `copy_waits` | info | copies wait for their senders' records (`devices`) |
 | `update` | info | a newer CBB is available |
 
 ## The lab

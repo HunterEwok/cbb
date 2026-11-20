@@ -211,7 +211,12 @@ impl Service {
             bug: self.bugs.waiting(),
             ..Default::default()
         };
-        Status { why: crate::why::reasons(&status, &devices, uptime::wall_ms()), ..status }
+        // The reasons: what the status says, and what the records of 0.6
+        // say of this device and the group.
+        let mut facts = crate::why::facts(&status, &devices);
+        cbb_core::why::group_facts(&mut facts, &st, &me);
+        facts.checkpoint_stuck = !live.mesh.set().lock().unwrap().stuck_checkpoints().is_empty();
+        Status { why: cbb_core::why::diagnose(&facts, uptime::wall_ms()), ..status }
     }
 
     /// The devices of a group of 0.6, as `cbb devices` shows them.

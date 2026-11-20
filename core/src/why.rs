@@ -14,9 +14,8 @@ use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 
-/// A member certificate that ends within so many milliseconds gets the
-/// warning `cert_ending`, as `cbb status` warns (30 days).
-pub const CERT_WARNING_MS: i64 = 30 * 24 * 3600 * 1000;
+use crate::records::DeviceId;
+use crate::records::eval::{ConflictKind, State, Stop};
 
 /// What a member knows that bears on its sync. Every field is optional in
 /// JSON, so a member fills in what it has; a phone has no quiet networks,
@@ -28,16 +27,37 @@ pub struct Facts {
     pub in_group: bool,
     /// The group's records revoke this device.
     pub removed: bool,
-    /// The records freeze this admin computer's admin key.
+    /// The records freeze this device's keys.
     pub frozen: bool,
-    /// The admin that took the group over from this root while it was away.
-    pub taken_over_by: String,
-    /// When this device's member certificate ends, in Unix milliseconds;
-    /// 0 when unknown.
-    pub cert_ends_ms: i64,
     /// How far the group's records stop the exchange: "secrets", "full", or
     /// empty (docs/protocol.md, section 10, "Stopping the exchange").
     pub stop: String,
+    /// Two admins conflict: the group stops until a root resolves it.
+    pub admins_conflict: bool,
+    /// The group's current root has two histories: the group stops.
+    pub root_two_histories: bool,
+    /// Two records at one step of the recovery chain: the group stops for
+    /// good (halted, rule 33).
+    pub recovery_fork: bool,
+    /// A change of root is arriving: a record of it is not here yet
+    /// (`first_missing` or `list_missing`); the peers are asked.
+    pub change_arriving: bool,
+    /// The records the root's checkpoint names stay missing round after
+    /// round (`records::set::MISSING_ROUNDS`).
+    pub checkpoint_stuck: bool,
+    /// The peers whose recovery chain parts from this device's: they count
+    /// another owner, by name.
+    pub owner_disagrees: Vec<String>,
+    /// The records seal no secrets to this device (`no_secrets_to`).
+    pub no_secrets_here: bool,
+    /// The records give this device nothing (`nothing_to`).
+    pub nothing_here: bool,
+    /// Copies that wait for their senders' records: the senders, by name or
+    /// ID.
+    pub copy_waits: Vec<String>,
+    /// The records hold one this version cannot read, or the settings ask
+    /// for newer rules: this device stops until it is updated.
+    pub update_needed: bool,
     /// Sync is off here (the clipboard is this device's own), until
     /// sync_until_ms in Unix milliseconds, 0 for until it is turned on.
     pub sync_off: bool,
@@ -155,11 +175,35 @@ impl Reason {
     }
 }
 
-/// The reasons from facts at now_ms (Unix milliseconds), the one that
-/// stops the most first; empty when everything syncs. A device in no group
+/// The facts the group's records of 0.6 give for the device me: whether
+/// they removed or froze it, the group's stops, a change of root arriving,
+/// what they give this device, and records of a later version. The member
+/// adds what only it knows (the peers that disagree about the owner, the
+/// copies that wait, a checkpoint that stays missing, its links).
+pub fn group_facts(f: &mut Facts, st: &State, me: &DeviceId) {
+    let dev = st.device(me);
+    f.in_group = true;
+    f.removed = dev.is_none();
+    f.frozen = dev.is_some_and(|d| d.frozen);
+    f.stop = match st.stop {
+        Stop::None => String::new(),
+        Stop::Secrets => "secrets".to_string(),
+        Stop::Full => "full".to_string(),
+    };
+    f.admins_conflict = st.conflicts.iter().any(|c| c.kind == ConflictKind::Admins);
+    f.root_two_histories = st.root_pair.is_some();
+    f.recovery_fork = st.fork.is_some();
+    f.change_arriving = st.first_missing.is_some() || st.list_missing.is_some();
+    f.no_secrets_here = st.no_secrets_to.contains(me);
+    f.nothing_here = st.nothing_to.contains(me);
+    f.update_needed = st.update_needed || st.too_old;
+    f.newer = st.newer.len();
+}
+
+/// The reasons from facts, the one that stops the most first; empty when everything syncs. A device in no group
 /// has the one reason `not_in_group`; a removed one only `removed`, since
 /// nothing else matters until it leaves.
-pub fn diagnose(f: &Facts, now_ms: i64) -> Vec<Reason> {
+pub fn diagnose(f: &Facts, _now_ms: i64) -> Vec<Reason> {
     let mut out = Vec::new();
     if !f.in_group {
         out.push(Reason::new("not_in_group", Level::Stop));
@@ -169,23 +213,36 @@ pub fn diagnose(f: &Facts, now_ms: i64) -> Vec<Reason> {
         out.push(Reason::new("removed", Level::Stop));
         return out;
     }
-    if !f.taken_over_by.is_empty() {
-        let mut r = Reason::new("taken_over", Level::Stop);
-        r.device = f.taken_over_by.clone();
+    // The group's stops, the one that halts for good first. Any other
+    // full stop of the records is `stopped`.
+    let named = f.recovery_fork || f.root_two_histories || f.admins_conflict;
+    for (on, code) in [
+        (f.recovery_fork, "recovery_fork"),
+        (f.root_two_histories, "root_two_histories"),
+        (f.admins_conflict, "admins_conflict"),
+    ] {
+        if on {
+            out.push(Reason::new(code, Level::Stop));
+        }
+    }
+    if !f.owner_disagrees.is_empty() {
+        let mut r = Reason::new("owner_disagrees", Level::Stop);
+        r.devices = f.owner_disagrees.clone();
         out.push(r);
     }
     if f.frozen {
         out.push(Reason::new("frozen", Level::Stop));
     }
-    if f.cert_ends_ms > 0 && f.cert_ends_ms <= now_ms {
-        let mut r = Reason::new("cert_expired", Level::Stop);
-        r.until_ms = f.cert_ends_ms;
-        out.push(r);
+    if f.nothing_here {
+        out.push(Reason::new("nothing_here", Level::Stop));
     }
     match f.stop.as_str() {
-        "full" => out.push(Reason::new("stopped", Level::Stop)),
+        "full" if !named => out.push(Reason::new("stopped", Level::Stop)),
         "secrets" => out.push(Reason::new("secrets_stopped", Level::Warn)),
         _ => {}
+    }
+    if f.no_secrets_here {
+        out.push(Reason::new("no_secrets_here", Level::Warn));
     }
     if f.sync_off {
         let mut r = Reason::new("sync_off", Level::Stop);
@@ -208,19 +265,23 @@ pub fn diagnose(f: &Facts, now_ms: i64) -> Vec<Reason> {
         r.detail = a.error.clone();
         out.push(r);
     }
-    if f.newer > 0 {
-        let mut r = Reason::new("newer", Level::Warn);
-        r.value = f.newer.to_string();
+    if f.newer > 0 || f.update_needed {
+        // A record or a setting this version cannot follow stops it.
+        let mut r = Reason::new("newer", if f.update_needed { Level::Stop } else { Level::Warn });
+        if f.newer > 0 {
+            r.value = f.newer.to_string();
+        }
         out.push(r);
+    }
+    if f.change_arriving {
+        out.push(Reason::new("change_arriving", Level::Warn));
+    }
+    if f.checkpoint_stuck {
+        out.push(Reason::new("checkpoint_stuck", Level::Warn));
     }
     if !f.unreached.is_empty() {
         let mut r = Reason::new("unreached", Level::Warn);
         r.devices = f.unreached.clone();
-        out.push(r);
-    }
-    if f.cert_ends_ms > now_ms && f.cert_ends_ms.saturating_sub(now_ms) < CERT_WARNING_MS {
-        let mut r = Reason::new("cert_ending", Level::Warn);
-        r.until_ms = f.cert_ends_ms;
         out.push(r);
     }
     let names = |p: fn(&DeviceFacts) -> bool| -> Vec<String> {
@@ -238,6 +299,11 @@ pub fn diagnose(f: &Facts, now_ms: i64) -> Vec<Reason> {
             r.devices = list;
             out.push(r);
         }
+    }
+    if !f.copy_waits.is_empty() {
+        let mut r = Reason::new("copy_waits", Level::Info);
+        r.devices = f.copy_waits.clone();
+        out.push(r);
     }
     if !f.update.is_empty() {
         let mut r = Reason::new("update", Level::Info);

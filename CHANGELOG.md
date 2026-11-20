@@ -50,6 +50,12 @@ made with 0.5 is set up again once. The details follow.
   root. `cbb pair` on the root or an admin opens a pairing window on the member port, and
   `cbb pair -code [ADDRESS]` on a new computer joins it: no code is typed, both computers show
   one and the person types `yes` on each when they match.
+- Why a device does not sync knows the group of 0.6 (`cbb_core::why::group_facts`): new
+  reasons `recovery_fork`, `root_two_histories`, `admins_conflict`, `owner_disagrees` and
+  `nothing_here` (stop), `no_secrets_here`, `change_arriving` and `checkpoint_stuck` (warn) and
+  `copy_waits` (info); a record or setting this version cannot follow is `newer` at the level
+  stop. `cbb status` says each. The reasons of 0.5's certificates and claims, `taken_over`,
+  `cert_expired` and `cert_ending`, are gone.
 - On the member connection of 0.6, a member that answers a peer's `have` sends its own `have`
   once for each hello of the peer's when the digests still differ, so that a record written
   while two members are connected reaches the other one, and of two connections that two
