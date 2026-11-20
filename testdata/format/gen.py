@@ -2015,6 +2015,8 @@ def ty_ok(ty, v):
         return all(ty_ok(inner, x) for x in v)
     if w[0] == "map":
         return check_map(w[1], v) is None
+    if w[0] == "copy":
+        return copy_shape_ok(v)
     raise ValueError(ty)
 
 
@@ -2073,6 +2075,12 @@ LATER = {
     ("member-credentials", 3): "unusable", ("pair/info", 3): "bits 7",
     ("forward/register", 4): "unusable", ("forward/registered", 4): "unusable",
     ("guest", 7): "absent", ("result", 5): "absent", ("waiting/request", 5): "absent",
+    ("hello", 2): "bits 7", ("hello", 4): "absent", ("hello", 5): "absent", ("hello", 8): "absent",
+    ("hello", 10): "absent", ("hello", 11): "absent", ("hello", 12): "absent", ("hello", 13): "absent",
+    ("hello", 14): "absent", ("hello", 15): "absent", ("hello", 16): "absent", ("hello", 17): "absent",
+    ("hello", 18): "absent", ("hello", 19): "absent", ("hello", 20): "bits 1", ("hello", 21): "absent",
+    ("hello/device", 1): "absent", ("hello/device", 2): "absent", ("hello/device", 3): "absent",
+    ("hello/device", 5): "absent",
 }
 TRANSPORTS = ("obfuscation", "vless")
 
@@ -2165,7 +2173,29 @@ def read_ty(ty, later, rule, v):
             return read_map(w[1], v)
         except Refused:
             raise Refused(rule)
+    if w[0] == "copy":
+        shape(copy_shape_ok(v))
+        return v
     raise ValueError(ty)
+
+
+def copy_shape_ok(v):
+    """A copy's outer map and header as section 10.1 has them (the core's
+    format::copy reader is the full one; the vectors here stay within what
+    this checks)."""
+    if not isinstance(v, dict) or any(k < 256 and not 1 <= k <= 6 for k in v):
+        return False
+    if not isinstance(v.get(1), bytes) or not isinstance(v.get(6), bytes) or len(v[6]) != 64:
+        return False
+    try:
+        hdr = dec(v[1])
+    except Exception:
+        return False
+    if not isinstance(hdr, dict) or not isinstance(hdr.get(4), list):
+        return False
+    if not isinstance(v.get(3), list) or len(v[3]) != len(hdr[4]) or not all(isinstance(w, bytes) for w in v[3]):
+        return False
+    return (4 in v) != (5 in v)
 
 
 def read_map(name, v):
@@ -2225,6 +2255,11 @@ def future_vectors():
     case("a Welcome, 257 keys statements: none", "welcome", {**welcome, 4: [env] * 257})
     case("a Welcome, 260 credentials: none", "welcome", {**welcome, 7: [env] * 260})
     case("a Welcome, an empty list: refused", "welcome", {**welcome, 10: b""})
+    case("a hello, unknown capability bits ignored", "hello", {0: 1, 2: 8 | 2})
+    case("a hello, unknown feature bits only: none", "hello", {0: 1, 20: 2})
+    case("a hello, a name too long: none", "hello", {0: 1, 4: "n" * 129})
+    case("a hello, an action name too long left out", "hello", {0: 1, 15: ["lock", "a" * 33]})
+    case("a hello, a MAC address of 5 bytes: refused", "hello", {0: 1, 13: {4: b"\x02\x00\x00\x00\x01"}})
     case("an info, unknown capability bits ignored", "pair/info", {**info, 3: 8 | 4})
     case("an info, only unknown capability bits: none", "pair/info", {**info, 3: 8})
     case("an info, the zero invitation ID: refused", "pair/info", {**info, 9: bytes(16)})
@@ -2954,6 +2989,64 @@ TABLES4 = {
 }
 MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal", 24: "roots"}
 TABLES.update(TABLES4)
+
+# ---------------------------------------------------------------- wave 5
+
+# The member connection's own messages (sections 9.2 and 9.3), as
+# core/src/msg/member.rs has them. The copy (t 2) is read by the copy's
+# reader, also inside the hello; the intro (t 8) by the join's.
+MS_ = "uint 1..9223372036854775807"
+TABLES5 = {
+    "hello": [
+        (2, "hello/caps", "uint 1..7", False),
+        (3, "hello/os", "uint 1..4294967295", False),
+        (4, "hello/name", "text 1..128", False),
+        (5, "hello/wall_ms", MS_, False),
+        (6, "hello/current", "copy", False),
+        (7, "hello/records", "bytes 32", False),
+        (8, "hello/count", "uint 1..4294967295", False),
+        (10, "hello/mode", "uint 1..2", False),
+        (11, "hello/muted", "flag", False),
+        (12, "hello/muted_for_ms", "uint 1..2592000000", False),
+        (13, "hello/device", "map hello/device", False),
+        (14, "hello/key_store", "uint 1..4", False),
+        (15, "hello/actions", "array 1..64 of text 1..32", False),
+        (16, "hello/release_seq", MS_, False),
+        (17, "hello/release_keys_seq", MS_, False),
+        (18, "hello/entries_seq", MS_, False),
+        (19, "hello/entries_keys_seq", MS_, False),
+        (20, "hello/features", "uint 1..1", False),
+        (21, "hello/keys_epoch", MS_, False),
+    ],
+    "hello/device": [
+        (1, "hello/device/form", "uint 1..12", False),
+        (2, "hello/device/os_version", "text 1..32", False),
+        (3, "hello/device/version", "text 1..32", False),
+        (4, "hello/device/mac", "bytes 6", False),
+        (5, "hello/device/archive", "text 1..64", False),
+    ],
+    "ping": [],
+    "bye": [],
+    "have": [(2, "have/ids", "set 1..4096 of bytes 32", True)],
+    "release": [
+        (2, "release/keys", "bytes 1..524288", True),
+        (3, "release/channel", "bytes 1..524288", True),
+        (4, "release/release", "bytes 1..524288", True),
+    ],
+    "entries": [(2, "entries/keys", "bytes 1..524288", True), (3, "entries/entries", "bytes 1..524288", True)],
+    "get": [(2, "get/sha256", "bytes 32", True), (3, "get/offset", MS_, False), (4, "get/length", MS_, False)],
+    "missing": [(2, "missing/sha256", "bytes 32", True), (3, "missing/offset", MS_, False),
+                (4, "missing/length", MS_, False)],
+    "reach": [(2, "reach/devices", "set 1..256 of bytes 16", False)],
+    "evidence": [
+        (2, "evidence/format", "uint 1..4", True),
+        (3, "evidence/key", "bytes 32", True),
+        (4, "evidence/data", "bytes 1..65536", True),
+    ],
+}
+MESSAGE_TYPES5 = {1: "hello", 3: "ping", 4: "bye", 6: "have", 12: "release", 13: "get", 14: "missing",
+                  18: "reach", 19: "evidence", 25: "entries"}
+TABLES.update(TABLES5)
 
 MEDIA_TYPES = 4
 
@@ -3712,6 +3805,85 @@ def wave4_vectors():
     return out
 
 
+def wave5_vectors():
+    """messages5.json: the member connection's own messages (sections 9.2
+    and 9.3)."""
+    out = {"tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
+                      for name, rows in TABLES5.items()},
+           "types": {str(t): name for t, name in MESSAGE_TYPES5.items()}}
+    cv = copy_vector()
+    current = dec(bytes.fromhex(cv["copy"]))
+    device = {1: 1, 2: "14.1", 3: "0.6.0", 4: bytes.fromhex("020000000001"), 5: "cbb-linux-arm64.tar.gz"}
+    hello = {0: 1, 2: 3, 3: 1, 4: "kitchen laptop", 5: T0, 6: current, 7: fake("set digest", 32), 8: 12,
+             10: 1, 13: device, 14: 2, 15: ["lock", "sleep"], 16: 3, 17: 1, 18: 2, 19: 1, 20: 1, 21: 4}
+    ids = sorted(fake("record id %d" % i, 32) for i in range(3))
+    devs = sorted([LAPTOP.id16, PHONE.id16, BOARD.id16])
+    release = {0: 12, 2: b'{"body":"","sig":"","key":""}', 3: b"{}", 4: b"{}"}
+    take, refuse = [], []
+
+    def msg(name, m, note=None):
+        rule = check_map(MESSAGE_TYPES5[m[0]], m)
+        assert rule is None, (name, rule)
+        e = {"name": name, "t": m[0], "message": enc(m).hex()}
+        if note:
+            e["note"] = note
+        take.append(e)
+
+    def bad(name, m, rule):
+        got = check_map(MESSAGE_TYPES5[m[0]], m)
+        assert got == rule, (name, got, rule)
+        refuse.append({"name": name, "rule": rule, "message": enc(m).hex()})
+
+    msg("hello", hello, "field 6 is copy.json's copy; the records say what the device may do")
+    msg("hello of a device that says little", {0: 1})
+    msg("hello, muted for a day", {0: 1, 11: 1, 12: 86_400_000})
+    msg("hello with 64 actions", {0: 1, 15: ["a%d" % i for i in range(64)]})
+    msg("hello with a field of a later version", {0: 1, 300: "later"})
+    bad("hello, muted for 31 days", {0: 1, 11: 1, 12: 2_592_000_001}, "hello/muted_for_ms")
+    bad("hello, 65 actions", {0: 1, 15: ["a%d" % i for i in range(65)]}, "hello/actions")
+    bad("hello, an action name of 33 bytes", {0: 1, 15: ["a" * 33]}, "hello/actions")
+    bad("hello, a name of 129 bytes", {0: 1, 4: "n" * 129}, "hello/name")
+    bad("hello, a digest of 31 bytes", {0: 1, 7: fake("set digest", 31)}, "hello/records")
+    bad("hello, a copy with an outer field the format does not name", {0: 1, 6: {**current, 7: 1}},
+        "hello/current")
+    bad("hello, a device form of a later version", {0: 1, 13: {**device, 1: 13}}, "hello/device")
+    bad("hello, a version of 33 bytes", {0: 1, 13: {**device, 3: "v" * 33}}, "hello/device")
+    bad("hello, an archive of 65 bytes", {0: 1, 13: {**device, 5: "a" * 65}}, "hello/device")
+    bad("hello, a MAC address of 5 bytes", {0: 1, 13: {**device, 4: b"\x02\x00\x00\x00\x01"}}, "hello/device")
+    bad("hello, muted 2", {0: 1, 11: 2}, "hello/muted")
+    msg("ping", {0: 3})
+    msg("bye", {0: 4})
+    msg("have", {0: 6, 2: ids})
+    msg("have 4096 IDs", {0: 6, 2: sorted(sha(b"id %d" % i) for i in range(4096))})
+    bad("have 4097 IDs", {0: 6, 2: sorted(sha(b"id %d" % i) for i in range(4097))}, "have/ids")
+    bad("have, IDs out of order", {0: 6, 2: list(reversed(ids))}, "have/ids")
+    bad("have, no IDs", {0: 6}, "have/ids")
+    msg("release", release, "the files are placeholders; their own reader checks them")
+    bad("release without its channel file", {k: v for k, v in release.items() if k != 3}, "release/channel")
+    bad("release, a file of 512 KiB and one byte", {**release, 4: b"x" * (512 * 1024 + 1)}, "release/release")
+    msg("entries", {0: 25, 2: b"{}", 3: b"{}"})
+    bad("entries without the keys file", {0: 25, 3: b"{}"}, "entries/keys")
+    msg("get", {0: 13, 2: fake("blob", 32), 3: 4_194_304, 4: 4_194_304})
+    msg("get from the start", {0: 13, 2: fake("blob", 32), 4: 4_194_304})
+    msg("get that cancels", {0: 13, 2: fake("blob", 32)}, "no length cancels")
+    bad("get with offset 0 written", {0: 13, 2: fake("blob", 32), 3: 0, 4: 1}, "get/offset")
+    bad("get, a hash of 16 bytes", {0: 13, 2: fake("blob", 16)}, "get/sha256")
+    msg("missing", {0: 14, 2: fake("blob", 32), 4: 1024})
+    bad("missing without its hash", {0: 14, 4: 1024}, "missing/sha256")
+    msg("reach", {0: 18, 2: devs})
+    msg("reach of nobody", {0: 18})
+    bad("reach, devices out of order", {0: 18, 2: list(reversed(devs))}, "reach/devices")
+    bad("reach of 257 devices", {0: 18, 2: sorted(sha(b"d %d" % i)[:16] for i in range(257))}, "reach/devices")
+    msg("evidence", {0: 19, 2: 1, 3: fake("key hash", 32), 4: fake("attestation", 3000)})
+    msg("evidence of 64 KiB", {0: 19, 2: 2, 3: fake("key hash", 32), 4: fake("attestation", 65536)})
+    bad("evidence of 64 KiB and one byte", {0: 19, 2: 2, 3: fake("key hash", 32), 4: fake("attestation", 65537)},
+        "evidence/data")
+    bad("evidence of a format of a later version", {0: 19, 2: 5, 3: fake("key hash", 32), 4: b"x"},
+        "evidence/format")
+    out["take"], out["refuse"] = take, refuse
+    return out
+
+
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
@@ -3748,7 +3920,7 @@ def main():
     cdt, cdr = card_vectors()
     files["messages3.json"] = {
         "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
-                   for name, rows in TABLES.items() if name not in TABLES4},
+                   for name, rows in TABLES.items() if name not in TABLES4 and name not in TABLES5},
         "types": {str(t): name for t, name in MESSAGE_TYPES.items()},
         "take": wt, "refuse": wr, "maps": wm,
         "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
@@ -3758,6 +3930,7 @@ def main():
         "intros": intro_vectors(rt),
     }
     files["wave4.json"] = wave4_vectors()
+    files["messages5.json"] = wave5_vectors()
     files["future.json"] = future_vectors()
     files["sheet.json"] = sheet_vectors()
     # Each signature has one form: the high-S twin of a valid signature

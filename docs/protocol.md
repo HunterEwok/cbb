@@ -4970,6 +4970,12 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `credential::PERIOD_RENEW_MS` | 2592000000 | stated | a period 30 days old, when the root starts the next |  |
 | `credential::PERIOD_LIFETIME_MS` | 3024000000 | stated | a period lasting 35 days, its renewal and 5 days |  |
 | `store::HEADER` | 12 | frozen | a store frame's header |  |
+| `msg::member::MAX_ACTIONS` | 64 | frozen | the action names a hello offers | `hello/actions` |
+| `msg::member::MAX_ACTION_NAME` | 32 | frozen | an action's name | `hello/actions` |
+| `msg::member::MAX_VERSION_TEXT` | 32 | frozen | a system's or cbb's version in a hello | `hello/device` |
+| `msg::member::MAX_ARCHIVE` | 64 | frozen | a release archive's name, 61 bytes at the widest | `hello/device` |
+| `msg::member::MAX_RELEASE_FILE` | 524288 | frozen | a release file of a 256 KiB body in base64 with its signature | `release/release` |
+| `msg::member::MAX_EVIDENCE` | 65536 | frozen | an attestation's chain or a TPM's quote with its certificates | `evidence/data` |
 | `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `not_sheet` |
 <!-- bounds:end -->
 

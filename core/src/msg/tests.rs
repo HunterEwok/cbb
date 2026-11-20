@@ -3,7 +3,7 @@
 
 use serde_json::Value as Json;
 
-use super::{check, check_map, tables, wave4};
+use super::{check, check_map, member, tables, wave4};
 use crate::blind::card::Card;
 use crate::format::{Rule, cbor};
 use crate::join::invitation::Invitation;
@@ -243,7 +243,7 @@ fn an_offer_names_its_endpoint_keys() {
 }
 
 mod reading {
-    use super::super::{Field, Later, Table, Ty, check_map, later, read_map, read_map_by, tables, wave4};
+    use super::super::{Field, Later, Table, Ty, check_map, later, member, read_map, read_map_by, tables, wave4};
     use crate::format::{Rule, Value};
 
     const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
@@ -363,7 +363,8 @@ mod reading {
     /// that does not exist.
     #[test]
     fn every_optional_field_has_one_row() {
-        let all: Vec<&'static Table> = tables::ALL.iter().chain(wave4::ALL.iter()).copied().collect();
+        let all: Vec<&'static Table> =
+            tables::ALL.iter().chain(wave4::ALL.iter()).chain(member::ALL.iter()).copied().collect();
         let mut seen = 0;
         for t in &all {
             for f in t.fields.iter().filter(|f| !f.needed) {
@@ -524,7 +525,8 @@ mod reading {
     fn the_future_vectors_are_what_the_reader_says() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/future.json");
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-        let all: Vec<&'static Table> = tables::ALL.iter().chain(wave4::ALL.iter()).copied().collect();
+        let all: Vec<&'static Table> =
+            tables::ALL.iter().chain(wave4::ALL.iter()).chain(member::ALL.iter()).copied().collect();
         let by_name = |n: &str| *all.iter().find(|t| t.name() == n).unwrap_or_else(|| panic!("no table {n}"));
         let word = |l: Later| match l {
             Later::Refuse => "refuse".into(),
@@ -633,4 +635,40 @@ fn every_kind_refuses_trailing_bytes_as_cbor_trailing() {
     }
     let wrong: Vec<&(String, &str)> = got.iter().filter(|(_, r)| *r != "cbor/trailing").collect();
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+fn load5() -> Json {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages5.json");
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// messages5.json: the member connection's tables are the vectors', and
+/// each message reads as the vectors say.
+#[test]
+fn the_member_messages_are_the_vectors() {
+    let v = load5();
+    let theirs = v["tables"].as_object().unwrap();
+    assert_eq!(theirs.len(), member::ALL.len());
+    for t in member::ALL {
+        let rows = theirs[t.name()].as_array().unwrap_or_else(|| panic!("{} missing", t.name()));
+        let ours: Vec<Json> = t
+            .fields
+            .iter()
+            .map(|f| serde_json::json!({"n": f.n, "rule": f.rule, "type": f.ty.describe(), "needed": f.needed}))
+            .collect();
+        assert_eq!(rows, &ours, "{}", t.name());
+        assert!(tables::ALL.iter().chain(wave4::ALL.iter()).all(|o| o.name() != t.name()), "{} twice", t.name());
+    }
+    for (t, name) in v["types"].as_object().unwrap() {
+        let n: u64 = t.parse().unwrap();
+        assert_eq!(member::of(n).map(super::Table::name), name.as_str(), "type {t}");
+        assert!(tables::of(n).is_none() && wave4::of(n).is_none(), "type {t} named twice");
+    }
+    for t in v["take"].as_array().unwrap() {
+        assert_eq!(check(&unhex(&t["message"])), Ok(t["t"].as_u64().unwrap()), "{}", t["name"]);
+    }
+    for r in v["refuse"].as_array().unwrap() {
+        let rule = r["rule"].as_str().unwrap();
+        assert_eq!(check(&unhex(&r["message"])).err().map(|e| e.name()), Some(rule), "{}", r["name"]);
+    }
 }

@@ -1103,6 +1103,7 @@ func main() {
 	checkBounds(dir)
 	checkMessages(dir)
 	checkWave4(dir)
+	checkMember(dir)
 	checkFuture(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)

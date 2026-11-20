@@ -173,6 +173,11 @@ func readTy(ty, later, rule string, v any) any {
 			panic(refused{rule})
 		}
 		return got
+	case "copy":
+		if copyRule([]byte(encOf(v))) != "" {
+			panic(refused{rule})
+		}
+		return v
 	}
 	panic("type " + ty)
 }

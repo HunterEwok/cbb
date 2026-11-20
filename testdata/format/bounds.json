@@ -1133,6 +1133,68 @@
       "widest": "a store frame's header"
     },
     {
+      "class": "frozen",
+      "name": "msg::member::MAX_ACTIONS",
+      "reached": [
+        "vec:messages5.json:hello with 64 actions",
+        "vec:messages5.json:hello, 65 actions"
+      ],
+      "refusal": "hello/actions",
+      "value": 64,
+      "widest": "the action names a hello offers"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_ACTION_NAME",
+      "reached": [
+        "vec:messages5.json:hello, an action name of 33 bytes"
+      ],
+      "refusal": "hello/actions",
+      "value": 32,
+      "widest": "an action's name"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_VERSION_TEXT",
+      "reached": [
+        "vec:messages5.json:hello, a version of 33 bytes"
+      ],
+      "refusal": "hello/device",
+      "value": 32,
+      "widest": "a system's or cbb's version in a hello"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_ARCHIVE",
+      "reached": [
+        "vec:messages5.json:hello, an archive of 65 bytes"
+      ],
+      "refusal": "hello/device",
+      "value": 64,
+      "widest": "a release archive's name, 61 bytes at the widest"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_RELEASE_FILE",
+      "reached": [
+        "vec:messages5.json:release, a file of 512 KiB and one byte"
+      ],
+      "refusal": "release/release",
+      "value": 524288,
+      "widest": "a release file of a 256 KiB body in base64 with its signature"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE",
+      "reached": [
+        "vec:messages5.json:evidence of 64 KiB",
+        "vec:messages5.json:evidence of 64 KiB and one byte"
+      ],
+      "refusal": "evidence/data",
+      "value": 65536,
+      "widest": "an attestation's chain or a TPM's quote with its certificates"
+    },
+    {
       "class": "reader",
       "name": "sheet::MAX_INPUT",
       "reached": [

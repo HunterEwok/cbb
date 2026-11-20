@@ -162,6 +162,8 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
+	case "copy":
+		return copyRule([]byte(encOf(v))) == ""
 	}
 	panic("type " + ty)
 }

@@ -24,7 +24,7 @@
 //! have no zones), except in a transport's table, where it makes the way
 //! unusable.
 
-use super::{Table, tables as t, wave4 as w};
+use super::{Table, member as m, tables as t, wave4 as w};
 
 /// What a reader of this version does with an optional field's value that
 /// is out of range.
@@ -133,6 +133,36 @@ pub static OPTIONAL: &[Optional] = &[
     o(&w::NONCE, 2, Refuse, "the one-time number"),
     o(&w::ROOTS, 2, Refuse, "the recovery heads a leaf needs"),
     o(&w::ROOTS, 3, Refuse, "a root's fork"),
+    // The member connection's own messages.
+    o(&m::HELLO, 2, Bits(0x07), "capabilities: unknown bits grant nothing, and the records say what a device does"),
+    o(&m::HELLO, 3, Refuse, "the system: a registry number, any in range kept"),
+    o(&m::HELLO, 4, Absent, "a name shown beside the one the records give"),
+    o(&m::HELLO, 5, Absent, "the clock, for skew reports only"),
+    o(&m::HELLO, 6, Refuse, "the sender's current copy"),
+    o(&m::HELLO, 7, Refuse, "the set digest sync compares"),
+    o(&m::HELLO, 8, Absent, "how many records: shown, sync goes by IDs"),
+    o(&m::HELLO, 10, Absent, "the mode: shown only"),
+    o(&m::HELLO, 11, Absent, "muted: shown only"),
+    o(&m::HELLO, 12, Absent, "how long it is muted: shown only"),
+    o(&m::HELLO, 13, Absent, "what the device says of itself: shown only"),
+    o(&m::HELLO, 14, Absent, "the key store: shown, the records give the device's"),
+    o(&m::HELLO, 15, Absent, "action names: those it reads are offered"),
+    o(&m::HELLO, 16, Absent, "a seq: the peer's release is not asked for"),
+    o(&m::HELLO, 17, Absent, "a seq: the peer's release keys are not asked for"),
+    o(&m::HELLO, 18, Absent, "a seq: the peer's entry points are not asked for"),
+    o(&m::HELLO, 19, Absent, "a seq: the peer's entry keys are not asked for"),
+    o(&m::HELLO, 20, Bits(0x01), "features: unknown bits are none"),
+    o(&m::HELLO, 21, Absent, "the epoch: the statement comes by sync"),
+    o(&m::HELLO_DEVICE, 1, Absent, "the form: an icon"),
+    o(&m::HELLO_DEVICE, 2, Absent, "a version shown"),
+    o(&m::HELLO_DEVICE, 3, Absent, "a version shown"),
+    o(&m::HELLO_DEVICE, 4, Refuse, "the MAC address a wake is sent to"),
+    o(&m::HELLO_DEVICE, 5, Absent, "the archive: the peer is not offered a release by it"),
+    o(&m::GET, 3, Refuse, "absent is offset 0: another range"),
+    o(&m::GET, 4, Refuse, "absent cancels"),
+    o(&m::MISSING, 3, Refuse, "absent is offset 0: another range"),
+    o(&m::MISSING, 4, Refuse, "absent is the cancel's"),
+    o(&m::REACH, 2, Refuse, "absent reaches nobody"),
 ];
 
 /// What a value out of range of field n of the table reads as: its row, or
