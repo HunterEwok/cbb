@@ -49,6 +49,7 @@ pub mod forward;
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 mod global_cli;
+pub mod hello;
 pub mod helper;
 #[cfg(feature = "tunnel")]
 pub mod hub;
