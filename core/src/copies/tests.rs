@@ -259,7 +259,10 @@ fn the_copy_key_is_bound_to_its_header() {
     let h = c.copy.h;
     let h2 = fcopy::header_hash(b"another header");
     assert_ne!(fcopy::payload_key(&k1, &h), fcopy::payload_key(&k1, &h2));
-    assert_ne!(fcopy::blob_key(&k1, &h), fcopy::blob_key(&k1, &h2));
+    // The blob key is K's alone, and none of the others.
+    assert_ne!(fcopy::blob_key(&k1), fcopy::blob_key(&k2));
+    assert_ne!(fcopy::blob_key(&k1), fcopy::payload_key(&k1, &h));
+    assert_ne!(fcopy::blob_key(&k1), fcopy::commit(&k1));
 }
 
 #[test]

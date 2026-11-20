@@ -115,9 +115,12 @@ pub fn payload_key(k: &[u8; 32], h: &[u8; 32]) -> [u8; 32] {
     hkdf(k, h, sig::LABEL_COPY_PAYLOAD)
 }
 
-/// The blob key under header hash h.
-pub fn blob_key(k: &[u8; 32], h: &[u8; 32]) -> [u8; 32] {
-    hkdf(k, h, sig::LABEL_COPY_BLOB)
+/// The blob key: HKDF(K, salt empty, info `cbb copy blob v2`). Not under
+/// the header hash, which covers the sealed blob's size and SHA-256 (field
+/// 5): the origin seals the blob before it can know h. K is random for each
+/// copy, and field 5 binds the blob to the signed header.
+pub fn blob_key(k: &[u8; 32]) -> [u8; 32] {
+    hkdf(k, &[], sig::LABEL_COPY_BLOB)
 }
 
 /// The hash of one wrap as `W` takes it: a whole wrap, of whatever

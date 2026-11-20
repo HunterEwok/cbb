@@ -1380,7 +1380,7 @@ def copy_vector():
         "name": "a text copy for three readers",
         "hdr_diag": diag(hdr), "hdr": hb.hex(), "h": h.hex(), "K": K.hex(), "commit": commit.hex(),
         "payload_key": hkdf(K, h, b"cbb copy payload v2").hex(),
-        "blob_key": hkdf(K, h, b"cbb copy blob v2").hex(),
+        "blob_key": hkdf(K, b"", b"cbb copy blob v2").hex(),
         "W": W.hex(), "P": P.hex(), "sig": sig.hex(),
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
         "mixed_copy": enc(mixed).hex(), "mixed_W": mixed_W.hex(),
