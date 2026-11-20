@@ -268,7 +268,9 @@ pub fn take(
             let seen = fresh::Seen::of(&c, &content, lifetimes.secret_ms, lifetimes.incoming_ms);
             let blob = c.blob().zip(blob_key).map(|((size, sha256), key)| Blob { size, sha256, key });
             match marks.judge(&seen, now_ms, state) {
-                fresh::Fresh::New { age_ms } => Taken::New { content: Box::new(content), origin: c.origin, signed: c.time, age_ms, blob },
+                fresh::Fresh::New { age_ms } => {
+                    Taken::New { content: Box::new(content), origin: c.origin, signed: c.time, age_ms, blob }
+                }
                 old => Taken::Old(old),
             }
         }

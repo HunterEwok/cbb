@@ -105,6 +105,7 @@ pub mod sealkey;
 mod sekey;
 pub mod set;
 mod status_text;
+pub mod writers;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod third_party {
     pub mod pcsclite;

@@ -342,6 +342,24 @@ impl Mesh {
         Ok(())
     }
 
+    /// Writes records as this device's root or admin key
+    /// (`writers::signer`): f writes them on the set under its lock, then
+    /// they are kept and passed on. An error when this device signs none.
+    pub fn write<T>(
+        &self,
+        f: impl FnOnce(&mut RecordSet, &dyn cbb_core::identity::ExternalKey) -> Result<T>,
+    ) -> Result<T> {
+        let out = {
+            let mut set = self.set.lock().unwrap();
+            let st = set.state();
+            let signer = crate::writers::signer(&self.own, &st)
+                .ok_or_else(|| Error::msg("this device holds neither the group's root key nor an admin key"))?;
+            f(&mut set, signer)?
+        };
+        self.changed()?;
+        Ok(out)
+    }
+
     /// Records this device wrote (by its own keys, through the set's
     /// writers): kept and passed on with a hello to every peer.
     pub fn changed(&self) -> Result<()> {

@@ -43,6 +43,9 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `member/` writes the group's records of 0.6 as root or admin (`member/src/writers.rs`):
+  removing, freezing, thawing and renaming a device, the window for incoming copies, the hubs
+  and the settings, kept and passed on through the member connection of 0.6 (`Mesh::write`).
 - `member/` keeps its clipboard state of 0.6 (`member/src/board.rs`): sync on or off, an
   admin's mute, its own copies going out once and the group's copies judged by the core's rule
   of incoming copies, standing where the clipboard engine of 0.5 stands until the switch.
