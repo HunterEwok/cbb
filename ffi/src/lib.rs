@@ -149,6 +149,8 @@ pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
 #[cfg(feature = "member")]
+pub(crate) mod pair06;
+#[cfg(feature = "member")]
 pub mod piv;
 #[cfg(feature = "join")]
 pub mod qr;
