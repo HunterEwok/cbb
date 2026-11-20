@@ -43,6 +43,8 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `member/` reads and writes the orders of every command type of 0.6 (`member/src/orders.rs`),
+  checked against the type's rows before they are sealed.
 - `member/` writes the group's records of 0.6 as root or admin (`member/src/writers.rs`):
   removing, freezing, thawing and renaming a device, the window for incoming copies, the hubs
   and the settings, kept and passed on through the member connection of 0.6 (`Mesh::write`).
