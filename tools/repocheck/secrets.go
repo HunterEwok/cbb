@@ -17,12 +17,17 @@ var (
 	jobHeading = regexp.MustCompile(`^  ([A-Za-z0-9_-]+):\s*(#.*)?$`)
 	secretUse  = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
 	releaseEnv = regexp.MustCompile(`^    environment:\s*release\s*(#.*)?$`)
+	// gatedEnv is the release workflow's one other form: the environment
+	// release when the run may sign (the job roots says so), none otherwise.
+	// A run without an environment gets none of its secrets, so a rehearsal
+	// reads nothing; only this exact gate passes, never another environment.
+	gatedEnv = regexp.MustCompile(`^    environment:\s*\$\{\{ needs\.roots\.outputs\.sign == 'true' && 'release' \|\| '' \}\}\s*(#.*)?$`)
 )
 
 // checkReleaseSecrets checks that every job of the release workflows that
 // reads a secret (other than GITHUB_TOKEN, which GitHub gives each run)
-// runs in the deployment environment release, whose protection rules
-// guard those secrets (docs/maintainers/maintaining.md, "Release secrets").
+// runs in the deployment environment release (or, gated on the run's right
+// to sign, in none), whose protection rules guard those secrets (docs/maintainers/maintaining.md, "Release secrets").
 func checkReleaseSecrets(files map[string][]byte) []string {
 	var problems []string
 	for _, name := range releaseWorkflows {
@@ -58,7 +63,7 @@ func jobsReadingSecrets(name, text string) []string {
 			job, line, secret, env = m[1], i+1, "", false
 			continue
 		}
-		if releaseEnv.MatchString(l) {
+		if releaseEnv.MatchString(l) || gatedEnv.MatchString(l) {
 			env = true
 		}
 		for _, m := range secretUse.FindAllStringSubmatch(l, -1) {

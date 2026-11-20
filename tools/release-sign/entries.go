@@ -4,7 +4,6 @@
 package main
 
 import (
-	"crypto"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -104,7 +103,7 @@ func checkEntriesFile(keys, f release.File, lapsed bool) (release.Entries, error
 // relays, into
 // out: with extend, on cbb.tools. A channel without one has nothing to
 // renew.
-func renewEntries(from, out string, keys release.File, k crypto.Signer) error {
+func renewEntries(from, out string, keys release.File, k release.Signer) error {
 	f, err := fetchFile(from + "/" + entriesName)
 	if err != nil {
 		step("%s/%s: %v; nothing to renew", from, entriesName, err)

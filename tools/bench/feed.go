@@ -5,14 +5,10 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"fmt"
+	"github.com/HunterEwok/cbb/internal/release"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,21 +55,23 @@ func newFeed(ctx context.Context) (fd *feed, err error) {
 		return nil, fmt.Errorf("run the bench at the repository's top: building tools/release-sign: %v: %s", err, out)
 	}
 	for _, name := range []string{"root1", "root2", "release", "other"} {
-		k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		// Both halves of each key in its file (docs/protocol.md, section 16,
+		// "Two signatures").
+		k, err := release.GenerateSigner()
 		if err != nil {
 			return nil, err
 		}
-		der, err := x509.MarshalPKCS8PrivateKey(k)
+		data, err := release.MarshalSignerPEM(k)
 		if err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(fd.key(name), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		if err := os.WriteFile(fd.key(name), data, 0o600); err != nil {
 			return nil, err
 		}
 	}
 	var roots []byte
 	for _, name := range []string{"root1", "root2"} {
-		pub, err := fd.sign(ctx, "public", "-key", "file:"+fd.key(name))
+		pub, err := fd.sign(ctx, "public", "-key", "file:"+fd.key(name), "-name", name)
 		if err != nil {
 			return nil, err
 		}

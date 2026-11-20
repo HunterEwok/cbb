@@ -4,9 +4,7 @@
 package service
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"net"
 	"os"
 	"path/filepath"
@@ -23,14 +21,10 @@ import (
 // forwarder are at path, under the signer's keys.json.
 func (s *releaseSigner) signEntries(t *testing.T, seq uint64, path string) string {
 	t.Helper()
-	key, err := x509.MarshalPKIXPublicKey(&s.key.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 	at := time.Now().Add(-time.Minute).UnixMilli()
 	life := (30 * 24 * time.Hour).Milliseconds()
 	keys, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: max(s.keysSeq, 1), TimeMS: at, ExpiresMS: at + life,
-		Keys: []release.Key{{Key: key, Name: "test"}}}, s.root)
+		Keys: s.keys(t)}, s.root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +90,7 @@ func TestAloneEntries(t *testing.T) {
 	pi := startEnv(t, &h, "pi", signer.rootsEnv(t))
 	dir := joinAlone(t, bin, pi)
 	pemFile := filepath.Join(t.TempDir(), "roots.pem")
-	if err := os.WriteFile(pemFile, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: signer.roots(t)[0]}), 0o644); err != nil {
+	if err := os.WriteFile(pemFile, signer.rootsPEM(t), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	free, err := net.Listen("tcp", "127.0.0.1:0")

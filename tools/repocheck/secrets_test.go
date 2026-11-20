@@ -41,11 +41,22 @@ jobs:
     environment: staging
     steps:
       - run: echo ${{ secrets.CBB_FEED_KEY }}
+  gated:
+    runs-on: ubuntu-latest
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }} # signs on a tag
+    steps:
+      - run: echo ${{ secrets.CBB_APP_KEY }}
+  gated-other:
+    runs-on: ubuntu-latest
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || 'staging' }}
+    steps:
+      - run: echo ${{ secrets.CBB_APP_KEY }}
 `
 	got := checkReleaseSecrets(map[string][]byte{".github/workflows/release.yml": []byte(flow)})
 	want := []string{
 		".github/workflows/release.yml:21: the job leak reads secrets.CBB_TAP_KEY outside the environment release",
 		".github/workflows/release.yml:27: the job other-env reads secrets.CBB_FEED_KEY outside the environment release",
+		".github/workflows/release.yml:37: the job gated-other reads secrets.CBB_APP_KEY outside the environment release",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))

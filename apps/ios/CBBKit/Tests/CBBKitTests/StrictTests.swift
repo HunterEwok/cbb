@@ -178,16 +178,9 @@ final class StrictTests: XCTestCase {
         }
         for c in v.releases {
             let b = c.full
-            var taken = b.count <= Releases.maxBody
-            if taken {
-                switch c.kind {
-                case "keys": taken = (try? Releases.decodeKeys(b)) != nil
-                case "release": taken = (try? Releases.decodeRelease(b)) != nil
-                case "channel": taken = (try? Releases.decodeChannel(b)) != nil
-                case "attest-status": taken = (try? Releases.decodeStatus(b)) != nil
-                default: XCTFail("unknown kind \(c.kind)")
-                }
-            }
+            XCTAssertTrue(["keys", "release", "channel", "attest-status"].contains(c.kind), "unknown kind \(c.kind)")
+            // The core reads release files for the kit (docs/core-api.md).
+            let taken = Core.bodyRefusal(c.kind, b) == nil
             if taken != c.valid { wrong.append("releases \(c.name) (\(c.rule)): valid \(c.valid)") }
         }
         XCTAssert(wrong.isEmpty, "\(wrong.count) vectors read otherwise:\n" + wrong.joined(separator: "\n"))

@@ -546,6 +546,16 @@ pub mod b64 {
         s.serialize_str(&STANDARD.encode(b))
     }
 
+    /// Standard base64 with padding.
+    pub fn encode(b: &[u8]) -> String {
+        STANDARD.encode(b)
+    }
+
+    /// The bytes of standard base64 with padding.
+    pub fn decode_str(s: &str) -> Option<Vec<u8>> {
+        STANDARD.decode(s).ok()
+    }
+
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
         let s = Option::<String>::deserialize(d)?.unwrap_or_default();
         STANDARD.decode(s).map_err(serde::de::Error::custom)

@@ -162,7 +162,7 @@ forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
 Windows, quick actions, TVs and the Bluetooth keyboard.
 
 - **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
-  program or from `CBB_HELPER` (empty for none), and talks to it only over the child's
+  program (a build with the test hooks takes `CBB_HELPER` instead, empty for none), and talks to it only over the child's
   standard input and output, the pipes it inherits; the helper logs to its standard error,
   which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
   helper for anything, and above all for a signature with a device's key. Started by hand,

@@ -5,14 +5,9 @@ package service
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +20,7 @@ import (
 // releaseSigner signs releases under a root of its own, as
 // tools/release-sign drill does.
 type releaseSigner struct {
-	root, key *ecdsa.PrivateKey
+	root, key release.Signer
 	keysSeq   uint64 // the seq of the keys.json it signs; 1 when 0
 }
 
@@ -33,36 +28,41 @@ func newReleaseSigner(t *testing.T) *releaseSigner {
 	t.Helper()
 	var s releaseSigner
 	var err error
-	if s.root, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader); err != nil {
+	if s.root, err = release.GenerateSigner(); err != nil {
 		t.Fatal(err)
 	}
-	if s.key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader); err != nil {
+	if s.key, err = release.GenerateSigner(); err != nil {
 		t.Fatal(err)
 	}
 	return &s
 }
 
-func (s *releaseSigner) roots(t *testing.T) [][]byte {
+// rootsPEM is the signer's root as roots.pem pins one.
+func (s *releaseSigner) rootsPEM(t *testing.T) []byte {
 	t.Helper()
-	der, err := x509.MarshalPKIXPublicKey(&s.root.PublicKey)
+	p, err := release.PublicPEM(s.root, "root-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return [][]byte{der}
+	return p
 }
 
-// rootsEnv is roots for the Rust service: CBB_RELEASE_ROOTS names a PEM
-// file of them.
+// keys are the release key's entries of keys.json.
+func (s *releaseSigner) keys(t *testing.T) []release.Key {
+	t.Helper()
+	k, err := s.key.Keys("test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k
+}
+
+// rootsEnv writes the signer's root as the PEM file CBB_RELEASE_ROOTS
+// names and returns the variable.
 func (s *releaseSigner) rootsEnv(t *testing.T) string {
 	t.Helper()
-	var b bytes.Buffer
-	for _, der := range s.roots(t) {
-		if err := pem.Encode(&b, &pem.Block{Type: "PUBLIC KEY", Bytes: der}); err != nil {
-			t.Fatal(err)
-		}
-	}
 	path := filepath.Join(t.TempDir(), "roots.pem")
-	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, s.rootsPEM(t), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return "CBB_RELEASE_ROOTS=" + path
@@ -77,14 +77,10 @@ func (s *releaseSigner) sign(t *testing.T, version string, seq uint64) *control.
 // signArchive is sign with data as the release's archive.
 func (s *releaseSigner) signArchive(t *testing.T, version string, seq uint64, data []byte) *control.Release {
 	t.Helper()
-	key, err := x509.MarshalPKIXPublicKey(&s.key.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
 	at := time.Now().Add(-time.Minute).UnixMilli()
 	life := (30 * 24 * time.Hour).Milliseconds()
 	keys, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: max(s.keysSeq, 1), TimeMS: at, ExpiresMS: at + life,
-		Keys: []release.Key{{Key: key, Name: "test"}}}, s.root)
+		Keys: s.keys(t)}, s.root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +122,7 @@ func TestReleaseSpreads(t *testing.T) {
 		t.Error("pc took an older channel file")
 	}
 	forged := signer.sign(t, "0.6.2", 3)
-	forged.Release.Sig[len(forged.Release.Sig)-1] ^= 1
+	forged.Release.Sigs[1].Sig[len(forged.Release.Sigs[1].Sig)-1] ^= 1
 	if _, err := pc.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, forged)); err == nil {
 		t.Error("pc took a forged release")
 	}

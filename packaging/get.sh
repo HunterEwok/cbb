@@ -239,12 +239,17 @@ archive=cbb-$os-$arch.tar.gz
 dir=cbb
 
 # The project's release root keys (docs/protocol.md, section 16), which sign
-# keys.json: two YubiKeys, as internal/release/roots/roots.pem.
+# keys.json: two YubiKeys, each with its ES256 half and its SLH-DSA half
+# (the halves of one root share its Name), as internal/release/roots/roots.pem.
 release_roots='-----BEGIN PUBLIC KEY-----
+Name: root-1
+
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxT
 LOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==
 -----END PUBLIC KEY-----
 -----BEGIN PUBLIC KEY-----
+Name: root-2
+
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoY
 fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
 -----END PUBLIC KEY-----'
@@ -255,11 +260,13 @@ fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
 channel_files=https://raw.githubusercontent.com/HunterEwok/cbb/channel
 
 roots=$release_roots
+roots_file=
 if [ -n "${CBB_RELEASE_DIR:-}" ] && [ -n "${CBB_RELEASE_ROOTS:-}" ]; then
-	roots=$(cat "$CBB_RELEASE_ROOTS")
+	roots_file=$CBB_RELEASE_ROOTS
+	roots=$(cat "$roots_file" 2>/dev/null) || roots=
 fi
 # verifying tells whether the release's signature is checked.
-verifying() { [ "${CBB_VERIFY:-}" != skip ] && [ -n "$roots" ]; }
+verifying() { [ "${CBB_VERIFY:-}" != skip ]; }
 
 # field NAME FILE prints the string field NAME of the compact JSON in FILE,
 # number NAME FILE a number field: enough for the files Go's encoding/json
@@ -281,24 +288,183 @@ strict() {
 	done
 }
 
-# opened FILE NAME KEYS... checks the envelope in FILE with any of the PEM
-# keys KEYS, and leaves its body in $tmp/NAME.body; it fails when none
-# verifies or the body is not of the type NAME.
+# Every file carries a signature of each algorithm (docs/protocol.md,
+# section 16, "Two signatures"): 1, ES256, which every openssl checks, and 4,
+# SLH-DSA-SHA2-128s, which OpenSSL 3.5 and later check. checked names those
+# this openssl checks, set by algorithms.
+checked=
+algorithms() {
+	checked=1
+	# The post-quantum half where this openssl has SLH-DSA (OpenSSL 3.5 and
+	# later). It must sign and check it as the project does, with the
+	# context "cbb release v1": a round trip with a key of its own, which
+	# another context must refuse. An openssl that has SLH-DSA and reads the
+	# options otherwise stops the install rather than checking one
+	# signature quietly.
+	openssl list -signature-algorithms 2>/dev/null | grep -qi 'SLH-DSA-SHA2-128s' || return 0
+	printf 'cbb' >"$tmp/slh.msg"
+	openssl genpkey -algorithm SLH-DSA-SHA2-128s -out "$tmp/slh.key" 2>/dev/null &&
+		openssl pkey -in "$tmp/slh.key" -pubout -out "$tmp/slh.pub" 2>/dev/null &&
+		openssl pkeyutl -sign -rawin -inkey "$tmp/slh.key" -in "$tmp/slh.msg" -out "$tmp/slh.sig" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1 &&
+		slh_verify "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg" &&
+		! openssl pkeyutl -verify -pubin -inkey "$tmp/slh.pub" -rawin -in "$tmp/slh.msg" -sigfile "$tmp/slh.sig" -pkeyopt "context-string:cbb release v0" >/dev/null 2>&1 &&
+		checked="1 4"
+	rm -f "$tmp/slh.key" "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg"
+	[ "$checked" = "1 4" ] ||
+		fail "%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)" "$(openssl version)"
+}
+slh_verify() {
+	openssl pkeyutl -verify -pubin -inkey "$1" -rawin -in "$3" -sigfile "$2" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1
+}
+# roots_list writes the root keys as keys.list writes keys.json's: a line
+# "ALG USE KEY NAME" for each half, KEY its SubjectPublicKeyInfo in base64.
+roots_list() {
+	printf '%s\n' "$roots" | awk '
+		/^-----BEGIN PUBLIC KEY-----$/ { name = ""; key = ""; body = 0; next }
+		/^-----END PUBLIC KEY-----$/ {
+			alg = 0
+			if (key ~ /^MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE/) alg = 1
+			if (key ~ /^MDAwCwYJYIZIAWUDBAMUAyEA/) alg = 4
+			print alg, "root", key, name
+			next
+		}
+		!body && /^Name:/ { sub(/^Name:[ \t]*/, ""); name = $0; next }
+		!body && /^$/ { body = 1; next }
+		{ body = 1; key = key $0 }
+	'
+}
+
+# one_b64 IN OUT decodes the base64 in IN into OUT and tells whether it
+# is in its one form: standard, padded, no stray bits, so that it encodes
+# back to itself.
+one_b64() {
+	openssl base64 -d -A <"$1" >"$2" 2>/dev/null || return 1
+	[ "$(openssl base64 -A <"$2")" = "$(cat "$1")" ]
+}
+
+# small FILE tells whether FILE is no larger than a release file may be,
+# 1 MiB.
+small() { [ "$(wc -c <"$1" | tr -d ' ')" -le 1048576 ]; }
+
+# valid_key ALG KEY tells whether KEY, a SubjectPublicKeyInfo in base64, is
+# a key of ALG as every reader takes it: for 1 a P-256 point, uncompressed,
+# for 4 an SLH-DSA-SHA2-128s key, which this openssl must also read where
+# it checks that algorithm.
+valid_key() {
+	case $1 in
+	1)
+		case $2 in
+		MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE*) ;;
+		*) return 1 ;;
+		esac
+		[ ${#2} -eq 124 ] || return 1
+		;;
+	4)
+		case $2 in
+		MDAwCwYJYIZIAWUDBAMUAyEA*) ;;
+		*) return 1 ;;
+		esac
+		[ ${#2} -eq 68 ] || return 1
+		;;
+	*) return 0 ;;
+	esac
+	case " $checked " in
+	*" $1 "*) printf '%s' "$2" | openssl base64 -d -A | openssl pkey -pubin -inform DER -noout 2>/dev/null ;;
+	esac
+}
+
+# algs_valid tells whether every line of its input is an algorithm number
+# as the readers take it: 1 to 2^31-1, written without leading zeros.
+algs_valid() {
+	awk '!/^[1-9][0-9]*$/ || length($0) > 10 || $0 + 0 > 2147483647 { bad = 1 } END { exit bad }'
+}
+
+# low_s FILE tells whether the ES256 signature in FILE (DER) has the low S,
+# at most half the order of P-256, the one form every reader takes.
+low_s() {
+	s=$(openssl asn1parse -inform DER -in "$1" 2>/dev/null | awk -F: '/INTEGER/ { v = $NF } END { print v }')
+	[ -n "$s" ] || return 1
+	awk -v s="$s" 'BEGIN {
+		h = "7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8"
+		s = toupper(s); sub(/^0+/, "", s)
+		if (length(s) > 64) exit 1
+		while (length(s) < 64) s = "0" s
+		exit !(s <= h)
+	}'
+}
+
+# opened FILE NAME LIST USES... checks the envelope in FILE with the keys of
+# LIST (lines "ALG USE KEY NAME") of the uses USES, and leaves its body in
+# $tmp/NAME.body. It takes the file when the halves of one key signed it
+# with every algorithm of $checked, and refuses it when a listed key's
+# signature that this openssl checks does not verify, or the body is not of
+# the type NAME. A signature of another algorithm, or of a key not listed,
+# is passed over, as every reader does.
 opened() {
-	f=$1 kind=$2
-	shift 2
-	field body "$f" | openssl base64 -d -A >"$tmp/$kind.body" 2>/dev/null || return 1
-	field sig "$f" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
-	for k in "$@"; do
-		if openssl dgst -sha256 -verify "$k" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1; then
-			strict "$tmp/$kind.body" || fail "the signed %s file is not in the strict form of signed bodies; not installing" "$kind"
-			[ "$(field type "$tmp/$kind.body")" = "$kind" ] || return 1
-			[ "$(number v "$tmp/$kind.body")" = 1 ] || return 1
-			[ -n "$(number time_ms "$tmp/$kind.body")" ] || return 1
-			return 0
-		fi
-	done
-	return 1
+	f=$1 kind=$2 list=$3
+	shift 3
+	small "$f" || return 1
+	# The file whole, as the signer writes it and every reader takes it
+	# (docs/protocol.md, section 16, "Two signatures"): whitespace around
+	# it, then the envelope in its canonical form, with only body and sigs,
+	# and in each of 1 to 8 signatures only alg, key and sig; any other
+	# shape refuses the file.
+	cr=$(printf '\r')
+	sed -e "s/^[ 	$cr]*//" -e "s/[ 	$cr]*\$//" "$f" | grep -v '^$' >"$tmp/$kind.line" || return 1
+	[ "$(wc -l <"$tmp/$kind.line")" -eq 1 ] || return 1
+	b64='[A-Za-z0-9+/]*={0,2}'
+	sig="\\{\"alg\":[1-9][0-9]*,\"key\":\"$b64\",\"sig\":\"$b64\"\\}"
+	grep -qE "^\\{\"body\":\"$b64\",\"sigs\":\\[$sig(,$sig)*\\]\\}\$" "$tmp/$kind.line" || return 1
+	grep -oE "$sig" "$tmp/$kind.line" >"$tmp/$kind.sigs" || return 1
+	[ "$(wc -l <"$tmp/$kind.sigs")" -le 8 ] || return 1
+	# Each algorithm 1 to 2^31-1, base64 in its one form, and a body of
+	# 256 KiB at most.
+	sed 's/^{"alg":\([0-9]*\),.*/\1/' "$tmp/$kind.sigs" | algs_valid || return 1
+	field body "$tmp/$kind.line" >"$tmp/$kind.b64"
+	one_b64 "$tmp/$kind.b64" "$tmp/$kind.body" || return 1
+	while read -r line; do
+		for m in key sig; do
+			printf '%s\n' "$line" | sed -n "s/.*\"$m\":\"\([^\"]*\)\".*/\1/p" >"$tmp/$kind.b64"
+			one_b64 "$tmp/$kind.b64" "$tmp/$kind.bin" || return 1
+		done
+	done <"$tmp/$kind.sigs"
+	[ "$(wc -c <"$tmp/$kind.body" | tr -d ' ')" -le 262144 ] || return 1
+	# A key is its halves under one use and name, one of each algorithm:
+	# two of one algorithm there would make one key of two.
+	awk '{ n = $0; sub(/^[^ ]* [^ ]* [^ ]* /, "", n); if (seen[$1 " " $2 " " n]++) exit 1 }' "$list" || return 1
+	: >"$tmp/$kind.good"
+	n=0
+	while read -r alg use key name; do
+		n=$((n + 1))
+		case " $checked " in *" $alg "*) ;; *) continue ;; esac
+		case " $* " in *" $use "*) ;; *) continue ;; esac
+		khash=$(printf '%s' "$key" | openssl base64 -d -A | openssl dgst -sha256 -binary | openssl base64 -A)
+		grep -F "\"alg\":$alg,\"key\":\"$khash\"," "$tmp/$kind.sigs" >"$tmp/$kind.sig.lines" || continue
+		printf '%s' "$key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -out "$tmp/$kind.pub-$n.pem" 2>/dev/null || return 1
+		# Every signature by this half must verify, not only the first.
+		while read -r line; do
+			printf '%s\n' "$line" >"$tmp/$kind.sig.json"
+			field sig "$tmp/$kind.sig.json" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
+			# A signature longer than 16 KiB is passed over, as every reader does.
+			[ "$(wc -c <"$tmp/$kind.sig" | tr -d ' ')" -le 16384 ] || continue
+			case $alg in
+			1)
+				low_s "$tmp/$kind.sig" || return 1
+				openssl dgst -sha256 -verify "$tmp/$kind.pub-$n.pem" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1 || return 1
+				;;
+			4) slh_verify "$tmp/$kind.pub-$n.pem" "$tmp/$kind.sig" "$tmp/$kind.body" || return 1 ;;
+			esac
+			printf '%s %s %s\n' "$alg" "$use" "$name" >>"$tmp/$kind.good"
+		done <"$tmp/$kind.sig.lines"
+	done <"$list"
+	# One key, by its use and name, signed with every algorithm checked.
+	awk -v n="$(echo "$checked" | wc -w)" '{ k = $0; sub(/^[^ ]* /, "", k); if (!seen[$0]++) c[k]++ }
+		END { for (k in c) if (c[k] == n) ok = 1; exit !ok }' "$tmp/$kind.good" || return 1
+	strict "$tmp/$kind.body" || fail "the signed %s file is not in the strict form of signed bodies; not installing" "$kind"
+	[ "$(field type "$tmp/$kind.body")" = "$kind" ] || return 1
+	[ "$(number v "$tmp/$kind.body")" = 1 ] || return 1
+	[ -n "$(number time_ms "$tmp/$kind.body")" ] || return 1
+	return 0
 }
 
 # verify_release checks keys.json against the root keys, release.json and,
@@ -310,43 +476,51 @@ verify_release() {
 		say "Not checked: the release's signature (CBB_VERIFY=skip)."
 		return
 	fi
+	# No roots is a refusal, never a silent install: the built-in ones are
+	# always there, so only a roots file that reads empty gets here.
 	if [ -z "$roots" ]; then
-		return
+		fail "no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)" "$roots_file"
 	fi
 	command -v openssl >/dev/null 2>&1 ||
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
-	printf '%s\n' "$roots" | awk -v d="$tmp" '/BEGIN/ { n++ } { print > (d "/root-" n ".pem") }'
+	algorithms
+	roots_list >"$tmp/roots.list"
 	if ! fetch "$channel_files/keys.json" "$tmp/keys.json" || ! fetch "$base/release.json" "$tmp/release.json"; then
 		fail "%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)" "$version"
 	fi
-	opened "$tmp/keys.json" keys "$tmp"/root-*.pem || fail "keys.json is not signed by the project's root key; not installing"
+	opened "$tmp/keys.json" keys "$tmp/roots.list" root || fail "keys.json is not signed by the project's root key; not installing"
 	now_ms=$(($(date +%s) * 1000))
 	[ "$(number expires_ms "$tmp/keys.body")" -gt "$now_ms" ] || fail "keys.json has expired; check the clock, or try again later"
-	# Each key with its use: a release key (no use) signs release.json and
+	# Each half with its use: a release key (no use) signs release.json and
 	# stable.json, a channel key only stable.json, a key of another use
 	# neither. Each entry is read whole, as the signer writes it (a name may
 	# hold a brace), and one that does not read so, or a use written empty,
 	# refuses the file.
-	grep -oE '\{"key":"[A-Za-z0-9+/=]+","name":"[^"]*"(,"use":"[a-z]+")?\}' "$tmp/keys.body" >"$tmp/keys.list" || true
-	[ "$(wc -l <"$tmp/keys.list")" -eq "$(grep -o '{"key":' "$tmp/keys.body" | wc -l)" ] ||
+	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","name":"[^"]*"(,"use":"[a-z]+")?\}' "$tmp/keys.body" >"$tmp/keys.entries" || true
+	[ "$(wc -l <"$tmp/keys.entries")" -eq "$(grep -o '{"alg":' "$tmp/keys.body" | wc -l)" ] ||
 		fail "keys.json is not valid; not installing"
-	n=0
+	: >"$tmp/keys.list"
 	while read -r entry; do
-		n=$((n + 1))
 		printf '%s\n' "$entry" >"$tmp/key"
+		# Every key is checked as the other readers check it, whatever its
+		# use: an algorithm number they take, a key of algorithm 1 that is
+		# P-256 and one of 4 that is SLH-DSA-SHA2-128s; a key of an
+		# algorithm no reader knows yet is kept unread.
+		alg=$(number alg "$tmp/key")
+		printf '%s\n' "$alg" | algs_valid || fail "keys.json is not valid; not installing"
+		valid_key "$alg" "$(field key "$tmp/key")" || fail "keys.json holds a key that is not valid"
 		case $(field use "$tmp/key") in
 		"" | release) use=release ;;
 		channel) use=channel ;;
 		*) continue ;;
 		esac
-		field key "$tmp/key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -out "$tmp/$use-$n.pem" 2>/dev/null ||
-			fail "keys.json holds a key that is not valid"
-	done <"$tmp/keys.list"
-	ls "$tmp"/release-*.pem >/dev/null 2>&1 || fail "keys.json holds no release key"
-	opened "$tmp/release.json" release "$tmp"/release-*.pem || fail "release.json is not signed by a release key; not installing"
+		printf '%s %s %s %s\n' "$alg" "$use" "$(field key "$tmp/key")" "$(field name "$tmp/key")" >>"$tmp/keys.list"
+	done <"$tmp/keys.entries"
+	grep -q ' release ' "$tmp/keys.list" || fail "keys.json holds no release key"
+	opened "$tmp/release.json" release "$tmp/keys.list" release || fail "release.json is not signed by a release key; not installing"
 	got_version=$(field version "$tmp/release.body")
 	if [ -n "$named" ]; then
-		opened "$tmp/stable.json" channel "$tmp"/release-*.pem "$tmp"/channel-*.pem ||
+		opened "$tmp/stable.json" channel "$tmp/keys.list" release channel ||
 			fail "stable.json is not signed by a release or channel key; not installing"
 		[ "$(field channel "$tmp/channel.body")" = stable ] || fail "stable.json is not the stable channel's"
 		[ "$(number expires_ms "$tmp/channel.body")" -gt "$now_ms" ] || fail "stable.json has expired; check the clock, or try again later"
@@ -365,7 +539,14 @@ verify_release() {
 	if [ "$(field sha256 "$tmp/entry")" != "$got" ] || [ "$(number size "$tmp/entry")" != "$(wc -c <"$tmp/$archive" | tr -d ' ')" ]; then
 		fail "%s does not match the signed release.json; not installing it" "$archive"
 	fi
-	say "The release's signature checks out (%s)." "$got_version"
+	if [ "$checked" = "1 4" ]; then
+		say "The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s." "$got_version"
+	else
+		say "The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later." "$got_version"
+	fi
+	if [ -n "$roots_file" ]; then
+		say "Checked against the roots in %s, not the built-in ones." "$roots_file"
+	fi
 }
 
 tmp=$(mktemp -d)
@@ -378,10 +559,12 @@ if [ "$version" = latest ] && verifying; then
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
 	fetch "$channel_files/stable.json" "$tmp/stable.json" || fail "could not download %s" "$channel_files/stable.json"
 	named=$(field body "$tmp/stable.json" | openssl base64 -d -A 2>/dev/null | sed -n 's/.*"release":"\([^"]*\)".*/\1/p')
-	case $named in
-	[0-9]*.[0-9]*.[0-9]*) ;;
-	*) fail "stable.json names no release" ;;
-	esac
+	# A version as cbb reads one, X.Y.Z or X.Y.Z-rc.N, on one line, before
+	# it goes into the address.
+	n='(0|[1-9][0-9]{0,5})'
+	[ "$(printf '%s\n' "$named" | wc -l)" -eq 1 ] &&
+		printf '%s\n' "$named" | LC_ALL=C grep -Eqx "$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?" ||
+		fail "stable.json names no release"
 	version=v$named
 	[ -n "${CBB_RELEASE_DIR:-}" ] || base=$repo/releases/download/$version
 fi

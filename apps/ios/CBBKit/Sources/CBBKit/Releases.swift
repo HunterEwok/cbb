@@ -4,53 +4,49 @@
 import Crypto
 import Foundation
 
-/// The signed files that describe a release (docs/protocol.md, section 16),
-/// checked as internal/release does: keys.json, in which a root key
-/// certifies the release keys; release.json, which lists a release's files
-/// with their hashes; and a channel file such as stable.json, which names
-/// the current release of its channel until it expires. The same keys.json
-/// certifies the status key that signs attest-status.json, the mirror of
-/// Google's revocation list for Android attestations (section 17).
+/// The signed files that describe a release (docs/protocol.md, section 16):
+/// keys.json, in which a root key certifies the release keys; release.json,
+/// which lists a release's files with their hashes; and a channel file such
+/// as stable.json, which names the current release of its channel until it
+/// expires. The same keys.json certifies the status key that signs
+/// attest-status.json, the mirror of Google's revocation list for Android
+/// attestations (section 17), and the keys of entries.json. The Rust core
+/// checks them all (release_check, docs/core-api.md, "Release files"): both
+/// signatures of every file, the roots it pins, the expiries and the
+/// sequence numbers. The kit only carries the files and reads the answer.
 public enum Releases {
     /// The largest body a file may carry.
     public static let maxBody = 256 << 10
-    /// The longest a keys or channel file may stay valid after it was signed.
-    public static let maxLifetimeMS: Int64 = 100 * 24 * 3600 * 1000
-    /// The longest attest-status.json stays valid after it was signed.
-    public static let maxStatusLifetimeMS: Int64 = 8 * 24 * 3600 * 1000
-    /// The pinned root keys (SubjectPublicKeyInfos, DER), two YubiKeys, as
-    /// internal/release/roots/roots.pem.
-    public static let roots: [Data] = [
-        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxTLOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==",
-        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoYfDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==",
-    ].map { Data(base64Encoded: $0)! }
+    /// The largest file, its body and its signatures, a device downloads.
+    public static let maxFile = 1 << 20
 
-    public static let useRelease = "release"
-    public static let useStatus = "status"
-    public static let useChannel = "channel"
-
+    /// A file the core refused: its reason, for the log.
     public struct Refused: Error, CustomStringConvertible {
         public let description: String
         init(_ s: String) { description = s }
     }
 
-    /// The envelope of every release file; key is SHA-256 of the signer's
-    /// SubjectPublicKeyInfo.
-    public struct File: Codable, Equatable, Sendable {
-        public var body: Data
-        public var sig: Data
-        public var key: Data
+    /// A release file as it was fetched: the kit reads nothing of it, the
+    /// core reads its bytes as every reader does (docs/core-api.md,
+    /// "Release files").
+    public struct File: Encodable, Equatable, Sendable {
+        public let data: Data
 
-        /// SHA-256 over the body, which names a release.json.
-        public var hash: Data { Data(SHA256.hash(data: body)) }
+        public init(_ data: Data) { self.data = data }
 
-        func verify(_ spkis: [Data]) throws {
-            guard body.count <= maxBody else { throw Refused("the file is too large") }
-            guard let spki = spkis.first(where: { Data(SHA256.hash(data: $0)) == key }),
-                  let pub = P256.Signing.PublicKey(spki: spki),
-                  let s = try? P256.Signing.ECDSASignature(derRepresentation: sig),
-                  pub.isValidSignature(s, for: body) else { throw Refused("the signature is not valid") }
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(data.base64EncodedString())
         }
+    }
+
+    /// A root key's half, for tests and drills that sign with roots of
+    /// their own: the core uses the roots it pins when none are given.
+    public struct Key: Codable, Equatable, Sendable {
+        public var alg: UInt64
+        public var key: Data
+        public var name: String
+        public var use: String
     }
 
     public struct Binary: Codable, Equatable, Sendable {
@@ -96,10 +92,10 @@ public enum Releases {
     }
 
     /// What a device keeps between checks: the highest sequence numbers and
-    /// version it has taken. A channel or status seq holds only under the
-    /// keys.json that certified its signer (channel_keys_seq,
-    /// status_keys_seq; keys_seq when absent, as kept before), as Go's Seen:
-    /// a newer keys.json, which only a root signs, starts them again.
+    /// version it has taken, as the core gives them back. A channel or
+    /// status seq holds only under the keys.json that certified its signer
+    /// (channel_keys_seq, status_keys_seq): a newer keys.json, which only a
+    /// root signs, starts them again.
     public struct Seen: Codable, Equatable, Sendable {
         public var keys_seq: UInt64 = 0
         public var channel_seq: UInt64 = 0
@@ -121,34 +117,6 @@ public enum Releases {
             self.channel_keys_seq = channel_keys_seq
             self.status_keys_seq = status_keys_seq
         }
-    }
-
-    /// The most a channel or status seq may rise past the one held under
-    /// the same keys.json, as Go's MaxSeqStep.
-    public static let maxSeqStep: UInt64 = 1 << 16
-
-    /// How far ahead of the device's clock a file may have been signed, when
-    /// that clock reads 2026 or later: a day.
-    public static let maxAheadMS: Int64 = 24 * 3600 * 1000
-
-    /// 2026-01-01: before it the clock is not trusted to refuse files signed
-    /// ahead of it.
-    static let plausible: Int64 = 1_767_225_600_000
-
-    /// The seq a file signed under keys.json keysSeq may not go below, as
-    /// Go's floor.
-    static func seqFloor(_ seq: UInt64, at: UInt64?, seenKeys: UInt64, keysSeq: UInt64) -> UInt64 {
-        let at = (at ?? 0) == 0 ? seenKeys : at!
-        return keysSeq > at ? 0 : seq
-    }
-
-    static func checkSeq(_ seq: UInt64, floor: UInt64) throws {
-        guard seq >= floor else { throw Refused("the file is older than one already seen") }
-        guard seq - floor <= maxSeqStep else { throw Refused("the file is too far ahead of the one already seen") }
-    }
-
-    static func signedAhead(_ timeMS: Int64, nowMS: Int64) -> Bool {
-        nowMS >= plausible && timeMS > nowMS + maxAheadMS
     }
 
     /// The body of attest-status.json: the serial numbers Google's list
@@ -177,6 +145,15 @@ public enum Releases {
     public struct EntryForwarder: Codable, Equatable, Sendable {
         public var name: String
         public var vless: [EntryVLESS]
+
+        enum CodingKeys: String, CodingKey { case name, vless }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decode(String.self, forKey: .name)
+            // The core leaves out a forwarder's empty list.
+            vless = try c.decodeIfPresent([EntryVLESS].self, forKey: .vless) ?? []
+        }
     }
 
     /// The body of entries.json, the signed list of the project's entry
@@ -191,65 +168,76 @@ public enum Releases {
         public func forwarder(_ name: String) -> EntryForwarder? { forwarders.first { $0.name == name } }
     }
 
-    /// The signed entry points as members pass them: entries.json and the
-    /// keys.json whose key signed it.
-    public struct EntriesSet: Codable, Equatable, Sendable {
-        public var keys: File
-        public var entries: File
+    /// The signed entry points as members pass them, `{"keys": keys.json,
+    /// "entries": entries.json}`, as they were received or kept: the core
+    /// reads them.
+    public struct EntriesSet: Encodable, Equatable, Sendable {
+        public let data: Data
 
-        public init(keys: File, entries: File) { (self.keys, self.entries) = (keys, entries) }
-    }
+        public init(_ data: Data) { self.data = data }
 
-    /// Checks entries.json: keys.json under the pinned roots, the list
-    /// under a release or channel key of it, its expiry, and that neither
-    /// is older than seen. Returns the list and the Seen to keep.
-    public static func checkEntries(_ set: EntriesSet, roots: [Data], nowMS: Int64, seen: Seen) throws -> (Entries, Seen) {
-        let k = try verifyKeys(set.keys, roots: roots, nowMS: nowMS, seen: seen)
-        let e = try within("entries.json") {
-            try set.entries.verify(k.spkis(useRelease) + k.spkis(useChannel))
-            let e = try decode(set.entries.body, "entries", as: Entries.self)
-            guard e.seq > 0 else { throw Refused("entries.json has no sequence number") }
-            try lifetime(e.time_ms, e.expires_ms)
-            guard nowMS < e.expires_ms else { throw Refused("the file has expired") }
-            guard !signedAhead(e.time_ms, nowMS: nowMS) else { throw Refused("the file was signed ahead of this device's clock") }
-            try checkSeq(e.seq, floor: seqFloor(seen.entries_seq ?? 0, at: seen.entries_keys_seq, seenKeys: seen.keys_seq, keysSeq: k.seq))
-            return e
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(data.base64EncodedString())
         }
-        var next = seen
-        next.keys_seq = k.seq
-        next.entries_seq = e.seq
-        next.entries_keys_seq = k.seq
-        return (e, next)
     }
 
-    struct Head: Decodable {
-        var v: Int?
-        var type: String?
+    /// The arguments of the core's release calls.
+    struct Args: Encodable {
+        var keys: File? = nil
+        var channel: File? = nil
+        var release: File? = nil
+        var status: File? = nil
+        var entries: File? = nil
+        var set: EntriesSet? = nil
+        var name: String? = nil
+        var roots: [Key]?
+        var now_ms: Int64
+        var seen: Seen
     }
 
-    struct Key: Decodable {
-        var key: Data
-        var name: String
-        /// A key of a use this reader does not know signs nothing.
-        var use: String?
+    struct Answer<T: Decodable>: Decodable {
+        var value: T
+        var seen: Seen
     }
 
-    struct Keys: Decodable {
-        var seq: UInt64
-        var time_ms: Int64
-        var expires_ms: Int64
-        var keys: [Key]
-
-        func spkis(_ use: String) -> [Data] { keys.filter { ($0.use ?? useRelease) == use }.map(\.key) }
+    /// Asks the core: a file it refuses is Refused, with its reason; any
+    /// other refusal is the kit's mistake and stays the core's.
+    static func ask<T: Decodable>(_ op: String, _ args: Args, as _: T.Type) throws -> (T, Seen) {
+        do {
+            let a = try Core.run(op, args, as: Answer<T>.self)
+            return (a.value, a.seen)
+        } catch let r as Core.Refusal where r.name == "signed" {
+            guard let d = r.details, !d.isEmpty else { throw Refused(r.message) }
+            throw Refused("\(r.message): \(d)")
+        }
     }
 
-    struct Channel: Decodable {
-        var channel: String
-        var seq: UInt64
-        var time_ms: Int64
-        var expires_ms: Int64
-        var release: String
-        var release_sha256: String
+    /// Checks entries.json: keys.json under the roots (the pinned ones when
+    /// nil), the list under a release or channel key of it, its expiry, and
+    /// that neither is older than seen. Returns the list and the Seen to
+    /// keep.
+    public static func checkEntries(_ set: EntriesSet, roots: [Key]? = nil, nowMS: Int64, seen: Seen) throws -> (Entries, Seen) {
+        try ask("release_check_entries", Args(set: set, roots: roots, now_ms: nowMS, seen: seen), as: Entries.self)
+    }
+
+    /// Checks a channel file and the release.json it names: keys.json under
+    /// the roots (the pinned ones when nil), the channel file under its
+    /// release or channel keys and release.json under its release keys, the
+    /// channel's name, both expiries, and that nothing is older than seen.
+    /// Returns the release and the Seen to keep.
+    public static func check(keys: File, channel: File, release: File, roots: [Key]? = nil, name: String, nowMS: Int64,
+                             seen: Seen) throws -> (Release, Seen) {
+        try ask("release_check", Args(keys: keys, channel: channel, release: release, name: name, roots: roots, now_ms: nowMS,
+                                      seen: seen), as: Release.self)
+    }
+
+    /// Checks attest-status.json: keys.json under the roots (the pinned ones
+    /// when nil), the list under a status key of it, its expiry, and that
+    /// neither is older than seen. Returns the list and the Seen to keep.
+    public static func checkStatus(keys: File, status: File, roots: [Key]? = nil, nowMS: Int64, seen: Seen) throws -> (Status, Seen) {
+        try ask("release_check_status", Args(keys: keys, status: status, roots: roots, now_ms: nowMS, seen: seen),
+                as: Status.self)
     }
 
     /// X, Y, Z and the release candidate's number, Int.max for a release.
@@ -291,175 +279,4 @@ public enum Releases {
     }
 
     static func hex(_ d: Data) -> String { d.map { String(format: "%02x", $0) }.joined() }
-
-    /// Whether pattern matches all of s. ICU's `$` also matches before a
-    /// final line break, so the match must cover the whole string.
-    static func matches(_ s: String, _ pattern: String) -> Bool {
-        s.range(of: pattern, options: .regularExpression) == s.startIndex..<s.endIndex
-    }
-
-    static let sha256RE = "^[0-9a-f]{64}$"
-    static let channelRE = "^[a-z][a-z0-9-]{0,31}$"
-
-    static func decode<T: Decodable>(_ body: Data, _ type: String, as: T.Type) throws -> T {
-        // The core decides whether the body is taken (parse_body); the
-        // checks here and in the callers only read its fields.
-        if let why = Core.bodyRefusal(type, body) { throw Refused("the file is not valid: \(why)") }
-        // The strict form of signed bodies first, so that every program reads a file alike (docs/protocol.md, section 16).
-        do {
-            try Strict.check(body, required: ["v", "type"])
-        } catch let e as Strict.Invalid {
-            throw Refused("the file is not valid: \(e.reason)")
-        }
-        guard let h = try? JSONDecoder().decode(Head.self, from: body) else { throw Refused("the file is not valid") }
-        guard h.type == type else { throw Refused("the file is a \"\(h.type ?? "")\", not a \"\(type)\"") }
-        guard h.v == 1 else { throw Refused("unknown version") }
-        guard let v = try? JSONDecoder().decode(T.self, from: body) else { throw Refused("the file is not valid") }
-        return v
-    }
-
-    static func lifetime(_ time: Int64, _ expires: Int64, max: Int64 = maxLifetimeMS) throws {
-        // A time before 1970 is no signing time; from it the difference cannot overflow.
-        guard time >= 0, expires > time, expires - time <= max else { throw Refused("the file's lifetime is out of range") }
-    }
-
-    static func decodeKeys(_ body: Data) throws -> Keys {
-        let k = try decode(body, "keys", as: Keys.self)
-        // A key is the only plain bytes of the file: only the one encoding of them.
-        struct RawKey: Decodable { var key: String }
-        struct Raw: Decodable { var keys: [RawKey] }
-        guard let raw = try? JSONDecoder().decode(Raw.self, from: body), raw.keys.allSatisfy({ Strict.base64($0.key) != nil }) else { throw Refused("a key is not canonical base64") }
-        guard k.seq > 0 else { throw Refused("keys.json has no sequence number") }
-        try lifetime(k.time_ms, k.expires_ms)
-        guard (1...8).contains(k.keys.count) else { throw Refused("keys.json must hold 1 to 8 keys") }
-        for key in k.keys {
-            guard !key.name.isEmpty, key.name.utf8.count <= 64 else { throw Refused("a key has no valid name") }
-            guard P256.Signing.PublicKey(spki: key.key) != nil else { throw Refused("a key is not P-256") }
-            // A release key's use is left out, never written empty.
-            guard key.use != "" else { throw Refused("a key's use is empty") }
-        }
-        return k
-    }
-
-    static func decodeRelease(_ body: Data) throws -> Release {
-        let r = try decode(body, "release", as: Release.self)
-        guard parseVersion(r.version) != nil, (r.min_from ?? "").isEmpty || parseVersion(r.min_from!) != nil else {
-            throw Refused("release.json names no valid version")
-        }
-        guard matches(r.channel, channelRE), (1...256).contains(r.files.count) else { throw Refused("release.json is not valid") }
-        var names = Set<String>()
-        for a in r.files {
-            guard matches(a.name, "^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$"), names.insert(a.name).inserted else {
-                throw Refused("\"\(a.name)\" is not a valid file name")
-            }
-            let bins = a.binaries ?? []
-            guard a.size >= 0, matches(a.sha256, sha256RE), bins.count <= 64 else { throw Refused("the entry for \(a.name) is not valid") }
-            for b in bins {
-                guard matches(b.name, "^[A-Za-z0-9_][A-Za-z0-9._/-]{0,255}$"), !b.name.contains(".."), matches(b.sha256, sha256RE) else {
-                    throw Refused("a binary in \(a.name) is not valid")
-                }
-            }
-        }
-        if let d = r.docker, d.image.isEmpty || !matches(d.digest, "^sha256:[0-9a-f]{64}$") {
-            throw Refused("the Docker image is not valid")
-        }
-        return r
-    }
-
-    static func decodeChannel(_ body: Data) throws -> Channel {
-        let c = try decode(body, "channel", as: Channel.self)
-        guard matches(c.channel, channelRE), c.seq > 0 else { throw Refused("the channel file is not valid") }
-        try lifetime(c.time_ms, c.expires_ms)
-        guard parseVersion(c.release) != nil, matches(c.release_sha256, sha256RE) else {
-            throw Refused("the channel file names no valid release")
-        }
-        return c
-    }
-
-    static func decodeStatus(_ body: Data) throws -> Status {
-        let st = try decode(body, "attest-status", as: Status.self)
-        guard st.seq > 0 else { throw Refused("attest-status.json has no sequence number") }
-        try lifetime(st.time_ms, st.expires_ms, max: maxStatusLifetimeMS)
-        for (i, s) in st.android_revoked.enumerated() {
-            guard matches(s, "^(0|[1-9a-f][0-9a-f]{0,63})$"), i == 0 || serialLess(st.android_revoked[i - 1], s) else {
-                throw Refused("\"\(s)\" is not a serial number in order")
-            }
-        }
-        return st
-    }
-
-    static func within<T>(_ file: String, _ f: () throws -> T) throws -> T {
-        do { return try f() } catch let e as Refused { throw Refused("\(file): \(e.description)") }
-    }
-
-    /// Checks a channel file and the release.json it names: keys.json under
-    /// the pinned roots (SubjectPublicKeyInfos, DER), the channel file under
-    /// its release or channel keys and release.json under its release keys,
-    /// the channel's name, both expiries, and that nothing is older than
-    /// seen. Returns the release and the Seen to keep.
-    public static func check(keys: File, channel: File, release: File, roots: [Data], name: String, nowMS: Int64,
-                             seen: Seen) throws -> (Release, Seen) {
-        let k = try verifyKeys(keys, roots: roots, nowMS: nowMS, seen: seen)
-        let spkis = k.spkis(useRelease)
-        let c = try within("\(name).json") {
-            // A channel key signs channel files and nothing else.
-            try channel.verify(spkis + k.spkis(useChannel))
-            let c = try decodeChannel(channel.body)
-            guard c.channel == name else { throw Refused("the file is for the channel \"\(c.channel)\"") }
-            guard nowMS < c.expires_ms else { throw Refused("the file has expired") }
-            guard !signedAhead(c.time_ms, nowMS: nowMS) else { throw Refused("the file was signed ahead of this device's clock") }
-            try checkSeq(c.seq, floor: seqFloor(seen.channel_seq, at: seen.channel_keys_seq, seenKeys: seen.keys_seq, keysSeq: k.seq))
-            return c
-        }
-        let r = try within("release.json") {
-            try release.verify(spkis)
-            guard hex(release.hash) == c.release_sha256 else { throw Refused("it is not the release \(name).json names") }
-            let r = try decodeRelease(release.body)
-            guard r.version == c.release, r.channel == c.channel else {
-                throw Refused("it is \(r.version) on \(r.channel), \(name).json names \(c.release)")
-            }
-            if let s = seen.version, !s.isEmpty, compare(r.version, s) < 0 { throw Refused("it is older than a release already seen") }
-            return r
-        }
-        var version = r.version
-        if let s = seen.version, !s.isEmpty, compare(s, r.version) > 0 { version = s }
-        let statusKeys = (seen.status_keys_seq ?? 0) == 0 ? seen.keys_seq : seen.status_keys_seq!
-        return (r, Seen(keys_seq: k.seq, channel_seq: c.seq, version: version, status_seq: seen.status_seq,
-                        channel_keys_seq: k.seq, status_keys_seq: statusKeys == 0 ? nil : statusKeys))
-    }
-
-    static func verifyKeys(_ keys: File, roots: [Data], nowMS: Int64, seen: Seen) throws -> Keys {
-        try within("keys.json") {
-            try keys.verify(roots)
-            let k = try decodeKeys(keys.body)
-            guard nowMS < k.expires_ms else { throw Refused("the file has expired") }
-            guard !signedAhead(k.time_ms, nowMS: nowMS) else { throw Refused("the file was signed ahead of this device's clock") }
-            guard k.seq >= seen.keys_seq else { throw Refused("the file is older than one already seen") }
-            return k
-        }
-    }
-
-    /// Orders serial numbers as numbers: the shorter first, then as strings.
-    static func serialLess(_ a: String, _ b: String) -> Bool { a.count != b.count ? a.count < b.count : a < b }
-
-    /// Checks attest-status.json: keys.json under the pinned roots, the list
-    /// under a status key of it, its expiry, and that neither is older than
-    /// seen. Returns the list and the Seen to keep.
-    public static func checkStatus(keys: File, status: File, roots: [Data], nowMS: Int64, seen: Seen) throws -> (Status, Seen) {
-        let k = try verifyKeys(keys, roots: roots, nowMS: nowMS, seen: seen)
-        let st = try within("attest-status.json") {
-            try status.verify(k.spkis(useStatus))
-            let st = try decodeStatus(status.body)
-            guard nowMS < st.expires_ms else { throw Refused("the file has expired") }
-            guard !signedAhead(st.time_ms, nowMS: nowMS) else { throw Refused("the file was signed ahead of this device's clock") }
-            try checkSeq(st.seq, floor: seqFloor(seen.status_seq ?? 0, at: seen.status_keys_seq, seenKeys: seen.keys_seq, keysSeq: k.seq))
-            return st
-        }
-        var next = seen
-        if (seen.channel_keys_seq ?? 0) == 0, seen.keys_seq != 0 { next.channel_keys_seq = seen.keys_seq }
-        next.keys_seq = k.seq
-        next.status_seq = st.seq
-        next.status_keys_seq = k.seq
-        return (st, next)
-    }
 }

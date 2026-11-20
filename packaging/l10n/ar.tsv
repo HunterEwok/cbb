@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json يخص %s، وليس %s
 release.json does not list %s	لا يذكر release.json الملف %s
 %s does not match the signed release.json; not installing it	لا يطابق %s ملف release.json الموقّع؛ لن يُثبَّت
-The release's signature checks out (%s).	توقيع الإصدار صحيح (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	توقيع الإصدار صحيح (%s): ES256 و SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، فهو يحتاج إلى OpenSSL 3.5 أو أحدث.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، لا يستطيع PowerShell التحقق منه.
 could not download %s	تعذّر تنزيل %s
 stable.json names no release	لا يسمّي stable.json أي إصدار
 Downloading %s (%s)...	جارٍ تنزيل %s (%s)...
@@ -258,3 +260,6 @@ cbb runs here with its helper, which may hold its keys; without it cbb cannot us
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput يحتاج إلى مساعد cbb، الذي يشغّل موصل سطح المكتب
 the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	لم تُكتب إجراءات polkit التي تؤكد إجراءات الإدارة؛ ستطلب التطبيقات كلمة مرور المسؤول بدلًا من ذلك
 the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	لم تُكتب الصلاحيات التي تؤكد إجراءات الإدارة؛ سيطلب تطبيق Mac كلمة مرور المسؤول بدلًا من ذلك
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s يدعم SLH-DSA-SHA2-128s لكنه لا يتحقق منه كما يوقّع cbb؛ حدِّث openssl (أو CBB_VERIFY=skip للتثبيت دون تحقق)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	لا توجد مفاتيح جذر في %s للتحقق من الإصدار؛ لن يُثبَّت (CBB_VERIFY=skip يثبّته دون تحقق)
+Checked against the roots in %s, not the built-in ones.	تم التحقق بالجذور الموجودة في %s، لا بالجذور المدمجة.

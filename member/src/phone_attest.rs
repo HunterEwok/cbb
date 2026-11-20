@@ -78,7 +78,6 @@ impl Attestations {
 
     fn check_status(keys: &File, status: &File, seen: &Seen) -> Result<(release::Status, Seen)> {
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         release::check_status(keys, status, &roots, crate::update::now_ms(), seen)
     }
 
@@ -216,5 +215,5 @@ impl Attestations {
 /// of public keys), in place of Google's, as cbb-helper reads them.
 fn test_roots() -> Option<Vec<Vec<u8>>> {
     let f = crate::testbuild::env_os("CBB_TEST_ATTEST_ROOTS")?;
-    crate::update::read_roots(Path::new(&f)).ok()
+    crate::update::read_public_keys(Path::new(&f)).ok()
 }

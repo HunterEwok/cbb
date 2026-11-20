@@ -48,6 +48,12 @@ required-features = ["windowless"]
 name = "remote_commands"
 required-features = ["testhooks"]
 
+# It points cbb at a fake helper with CBB_HELPER, a hook only a build for
+# tests reads: cargo test --features testhooks.
+[[test]]
+name = "helper_faults"
+required-features = ["testhooks"]
+
 [features]
 default = ["tunnel"]
 # Builds cbbw as well; for Windows.

@@ -11,13 +11,7 @@
 package release
 
 import (
-	"bytes"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -59,33 +53,39 @@ const (
 	formatVersion = 1
 	// MaxBody is the largest body a file may carry.
 	MaxBody = 256 << 10
+	// MaxFile is the largest a release file may be whole, its body and
+	// signatures in base64: room for several post-quantum signatures beside
+	// the largest body.
+	MaxFile = 1 << 20
 	// MaxLifetime is the longest a keys or channel file may stay valid
 	// after it was signed.
 	MaxLifetime = 100 * 24 * time.Hour
 	// MaxStatusLifetime is the longest attest-status.json stays valid: it
 	// is signed every day, and lives a week past a day without one.
 	MaxStatusLifetime = 8 * 24 * time.Hour
-	maxKeys           = 8
+	maxKeys           = 64
 	maxFiles          = 256
 	maxBinaries       = 64
 	maxName           = 64
 )
 
-// File is the envelope every release file has: the body's exact bytes, an
-// ECDSA P-256 signature with SHA-256 over them (DER), and the SHA-256 of
-// the signer's SubjectPublicKeyInfo.
+// File is the envelope every release file has: the body's exact bytes and
+// its signatures, one for each algorithm of Required by the halves of one
+// key, and any of algorithms a later version adds (docs/protocol.md,
+// section 16, "Two signatures").
 type File struct {
 	Body []byte `json:"body"`
-	Sig  []byte `json:"sig"`
-	Key  []byte `json:"key"`
+	Sigs []Sig  `json:"sigs"`
 }
 
 // Hash returns SHA-256 over the body, which names a release.json.
 func (f File) Hash() [sha256.Size]byte { return sha256.Sum256(f.Body) }
 
-// Key is a key that keys.json certifies, for its Use: UseRelease when
-// empty.
+// Key is one half of a key that keys.json certifies, for its Use:
+// UseRelease when empty. The halves of one key share its name and use,
+// one for each algorithm; a pinned root is a Key too, of use "root".
 type Key struct {
+	Alg  int    `json:"alg"`
 	Key  []byte `json:"key"` // SubjectPublicKeyInfo, DER
 	Name string `json:"name"`
 	Use  string `json:"use,omitempty"`
@@ -312,9 +312,9 @@ var (
 	ErrJump = errors.New("release: the file is too far ahead of the one already seen")
 )
 
-// Sign signs body with key. The body's type and version are set by the
-// caller; Sign only checks that the body has a known form.
-func Sign(body any, key crypto.Signer) (File, error) {
+// Sign signs body with each half of key. The body's type and version are
+// set by the caller; Sign only checks that the body has a known form.
+func Sign(body any, key Signer) (File, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return File{}, err
@@ -325,22 +325,9 @@ func Sign(body any, key crypto.Signer) (File, error) {
 	return signData(data, key)
 }
 
-func signData(data []byte, key crypto.Signer) (File, error) {
-	spki, err := x509.MarshalPKIXPublicKey(key.Public())
-	if err != nil {
-		return File{}, err
-	}
-	if e, ok := key.Public().(*ecdsa.PublicKey); !ok || e.Curve != elliptic.P256() {
-		return File{}, errors.New("release: the key is not P-256")
-	}
-	sum := sha256.Sum256(data)
-	sig, err := key.Sign(rand.Reader, sum[:], crypto.SHA256)
-	if err != nil {
-		return File{}, err
-	}
-	kh := sha256.Sum256(spki)
-	return File{Body: data, Sig: sig, Key: kh[:]}, nil
-}
+// CheckBody reports whether data is a body of a known type and form, as
+// Sign checks it before signing.
+func CheckBody(data []byte) error { return checkBody(data) }
 
 func checkBody(data []byte) error {
 	if len(data) > MaxBody {
@@ -370,33 +357,6 @@ func checkBody(data []byte) error {
 		err = fmt.Errorf("release: unknown type %q", b.Type)
 	}
 	return err
-}
-
-// verify checks f's signature with the key among spkis that f names.
-func (f File) verify(spkis [][]byte) error {
-	if len(f.Body) > MaxBody {
-		return errors.New("release: the body is too large")
-	}
-	for _, spki := range spkis {
-		kh := sha256.Sum256(spki)
-		if !bytes.Equal(kh[:], f.Key) {
-			continue
-		}
-		pub, err := x509.ParsePKIXPublicKey(spki)
-		if err != nil {
-			return err
-		}
-		k, ok := pub.(*ecdsa.PublicKey)
-		if !ok || k.Curve != elliptic.P256() {
-			return ErrSignature
-		}
-		sum := sha256.Sum256(f.Body)
-		if !ecdsa.VerifyASN1(k, sum[:], f.Sig) {
-			return ErrSignature
-		}
-		return nil
-	}
-	return ErrSignature
 }
 
 var (
@@ -461,12 +421,14 @@ func decodeKeys(data []byte) (Keys, error) {
 		return k, err
 	}
 	if len(k.Keys) == 0 || len(k.Keys) > maxKeys {
-		return k, errors.New("release: keys.json must hold 1 to 8 keys")
+		return k, errors.New("release: keys.json must hold 1 to 64 keys")
 	}
 	// The keys are the only plain bytes of a body: in base64's one form. A
-	// release key's use is left out, never written empty.
+	// release key's use is left out, never written empty; each key names
+	// its algorithm.
 	var raw struct {
 		Keys []struct {
+			Alg *int    `json:"alg"`
 			Key string  `json:"key"`
 			Use *string `json:"use"`
 		} `json:"keys"`
@@ -475,6 +437,9 @@ func decodeKeys(data []byte) (Keys, error) {
 		return k, fmt.Errorf("release: %w", err)
 	}
 	for _, key := range raw.Keys {
+		if key.Alg == nil {
+			return k, errors.New("release: a key names no algorithm")
+		}
 		if _, err := strict.DecodeBase64(key.Key); err != nil {
 			return k, fmt.Errorf("release: a key: %w", err)
 		}
@@ -482,17 +447,36 @@ func decodeKeys(data []byte) (Keys, error) {
 			return k, errors.New("release: a key's use is empty")
 		}
 	}
+	type half struct {
+		name, use string
+		alg       int
+	}
+	seen := map[half]bool{}
 	for _, key := range k.Keys {
 		if key.Name == "" || len(key.Name) > maxName {
 			return k, errors.New("release: a key has no valid name")
 		}
-		pub, err := x509.ParsePKIXPublicKey(key.Key)
-		if err != nil {
-			return k, fmt.Errorf("release: a key: %w", err)
+		if key.Alg < 1 || key.Alg > MaxAlg {
+			return k, errors.New("release: a key names no algorithm")
 		}
-		if e, ok := pub.(*ecdsa.PublicKey); !ok || e.Curve != elliptic.P256() {
-			return k, errors.New("release: a key is not P-256")
+		if err := checkPublic(key.Alg, key.Key); err != nil {
+			return k, err
 		}
+		// A key that signs is its halves under one name and use, one of
+		// each algorithm: two halves of one algorithm there would make
+		// one key of two. Pins of forwarders and relays may repeat.
+		u := key.Use
+		if u == "" {
+			u = UseRelease
+		}
+		if u == UseForwarder || u == UseRelay {
+			continue
+		}
+		h := half{key.Name, u, key.Alg}
+		if seen[h] {
+			return k, fmt.Errorf("release: two keys named %q of use %s hold a half of algorithm %d", key.Name, u, key.Alg)
+		}
+		seen[h] = true
 	}
 	return k, nil
 }
@@ -659,12 +643,12 @@ func decodeEntries(data []byte) (Entries, error) {
 // under its release or channel keys, its expiry, and that neither is older
 // than seen, which keeps the entries' own floors. It returns the entries
 // and the new Seen to keep.
-func CheckEntries(keys, entries File, roots [][]byte, now time.Time, seen Seen) (Entries, Seen, error) {
+func CheckEntries(keys, entries File, roots []Key, now time.Time, seen Seen) (Entries, Seen, error) {
 	k, err := VerifyKeys(keys, roots, now, seen)
 	if err != nil {
 		return Entries{}, seen, fmt.Errorf("keys.json: %w", err)
 	}
-	if err := entries.verify(append(k.spkis(UseRelease), k.spkis(UseChannel)...)); err != nil {
+	if err := entries.verify(append(k.of(UseRelease), k.of(UseChannel)...)); err != nil {
 		return Entries{}, seen, fmt.Errorf("entries.json: %w", err)
 	}
 	e, err := decodeEntries(entries.Body)
@@ -699,9 +683,9 @@ func SortSerials(s []string) {
 	sort.Slice(s, func(i, j int) bool { return serialLess(s[i], s[j]) })
 }
 
-// VerifyKeys checks keys.json against the pinned root keys (each a
-// SubjectPublicKeyInfo, DER) at now, and that it is not older than seen.
-func VerifyKeys(f File, roots [][]byte, now time.Time, seen Seen) (Keys, error) {
+// VerifyKeys checks keys.json against the pinned root keys (the halves of
+// each root, of one name) at now, and that it is not older than seen.
+func VerifyKeys(f File, roots []Key, now time.Time, seen Seen) (Keys, error) {
 	if err := f.verify(roots); err != nil {
 		return Keys{}, err
 	}
@@ -721,22 +705,24 @@ func VerifyKeys(f File, roots [][]byte, now time.Time, seen Seen) (Keys, error) 
 	return k, nil
 }
 
-// spkis returns the keys certified for use.
-func (k Keys) spkis(use string) [][]byte {
-	var out [][]byte
+// of returns the halves of the keys certified for use.
+func (k Keys) of(use string) []Key {
+	var out []Key
 	for _, key := range k.Keys {
 		u := key.Use
 		if u == "" {
 			u = UseRelease
 		}
 		if u == use {
-			out = append(out, key.Key)
+			key.Use = u
+			out = append(out, key)
 		}
 	}
 	return out
 }
 
-// Forwarders returns the keys certified as the forwarder at name.
+// Forwarders returns the keys certified as the forwarder at name: the
+// SubjectPublicKeyInfos of its P-256 keys, which its TLS shows.
 func (k Keys) Forwarders(name string) [][]byte { return k.named(UseForwarder, name) }
 
 // Relays returns the keys certified as the relay at name.
@@ -745,7 +731,7 @@ func (k Keys) Relays(name string) [][]byte { return k.named(UseRelay, name) }
 func (k Keys) named(use, name string) [][]byte {
 	var out [][]byte
 	for _, key := range k.Keys {
-		if key.Use == use && key.Name == name {
+		if key.Use == use && key.Name == name && key.Alg == AlgES256 {
 			out = append(out, key.Key)
 		}
 	}
@@ -755,12 +741,12 @@ func (k Keys) named(use, name string) [][]byte {
 // CheckStatus verifies attest-status.json: keys.json under the roots, the
 // status file under a status key of it, its expiry, and that neither is
 // older than seen. It returns the list and the new Seen to keep.
-func CheckStatus(keys, status File, roots [][]byte, now time.Time, seen Seen) (Status, Seen, error) {
+func CheckStatus(keys, status File, roots []Key, now time.Time, seen Seen) (Status, Seen, error) {
 	k, err := VerifyKeys(keys, roots, now, seen)
 	if err != nil {
 		return Status{}, seen, fmt.Errorf("keys.json: %w", err)
 	}
-	if err := status.verify(k.spkis(UseStatus)); err != nil {
+	if err := status.verify(k.of(UseStatus)); err != nil {
 		return Status{}, seen, fmt.Errorf("attest-status.json: %w", err)
 	}
 	s, err := decodeStatus(status.Body)
@@ -788,12 +774,12 @@ func CheckStatus(keys, status File, roots [][]byte, now time.Time, seen Seen) (S
 // under the roots, the channel file under its release or channel keys and
 // release.json under its release keys, the channel's name, both expiries, and that nothing is older than
 // seen. It returns the release and the new Seen to keep.
-func Check(keys, channel, rel File, roots [][]byte, name string, now time.Time, seen Seen) (Release, Seen, error) {
+func Check(keys, channel, rel File, roots []Key, name string, now time.Time, seen Seen) (Release, Seen, error) {
 	k, err := VerifyKeys(keys, roots, now, seen)
 	if err != nil {
 		return Release{}, seen, fmt.Errorf("keys.json: %w", err)
 	}
-	if err := channel.verify(append(k.spkis(UseRelease), k.spkis(UseChannel)...)); err != nil {
+	if err := channel.verify(append(k.of(UseRelease), k.of(UseChannel)...)); err != nil {
 		return Release{}, seen, fmt.Errorf("%s.json: %w", name, err)
 	}
 	c, err := decodeChannel(channel.Body)
@@ -811,7 +797,7 @@ func Check(keys, channel, rel File, roots [][]byte, name string, now time.Time, 
 	if err := checkSeq(c.Seq, floor(seen.ChannelSeq, seen.ChannelKeys, seen.KeysSeq, k.Seq)); err != nil {
 		return Release{}, seen, fmt.Errorf("%s.json: %w", name, err)
 	}
-	if err := rel.verify(k.spkis(UseRelease)); err != nil {
+	if err := rel.verify(k.of(UseRelease)); err != nil {
 		return Release{}, seen, fmt.Errorf("release.json: %w", err)
 	}
 	if h := rel.Hash(); hex.EncodeToString(h[:]) != c.ReleaseSHA256 {
@@ -841,12 +827,12 @@ func Check(keys, channel, rel File, roots [][]byte, name string, now time.Time, 
 // an update to the lowest version another release may come from: keys.json
 // under the roots and release.json under its release keys, without a
 // channel file, and that the version is not below the highest one seen.
-func CheckPinned(keys, rel File, roots [][]byte, now time.Time, seen Seen) (Release, Seen, error) {
+func CheckPinned(keys, rel File, roots []Key, now time.Time, seen Seen) (Release, Seen, error) {
 	k, err := VerifyKeys(keys, roots, now, seen)
 	if err != nil {
 		return Release{}, seen, fmt.Errorf("keys.json: %w", err)
 	}
-	if err := rel.verify(k.spkis(UseRelease)); err != nil {
+	if err := rel.verify(k.of(UseRelease)); err != nil {
 		return Release{}, seen, fmt.Errorf("release.json: %w", err)
 	}
 	r, err := decodeRelease(rel.Body)

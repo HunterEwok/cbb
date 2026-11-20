@@ -8,14 +8,27 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/version"
 )
 
 func main() {
-	os.Exit(forward.Command(os.Args[1:], os.Stdout, os.Stderr, defaultKey()))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// run is cbb-forward with args: its version, as cbb-helper's, which the
+// release sets and checks, or the forwarder.
+func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "version" || args[0] == "-version" || args[0] == "--version") {
+		fmt.Fprintln(stdout, version.String())
+		return 0
+	}
+	return forward.Command(args, stdout, stderr, defaultKey())
 }
 
 // defaultKey is in systemd's state directory for it, or in cbb's own state
