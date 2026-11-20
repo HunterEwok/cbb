@@ -444,6 +444,12 @@ enum Event<'a> {
         for_ms: i64,
         by: &'a str,
     },
+    /// An admin turned the phone's sync off or on (a group of 0.6): the
+    /// member did it; the app shows it.
+    Sync {
+        off: bool,
+        by: &'a str,
+    },
 }
 
 #[derive(Deserialize)]
@@ -566,7 +572,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// (`live::Phone`) when the app's folder holds the group's `group.cbor`.
 pub enum Member {
     Old(Old),
-    Live(live::Phone),
+    Live(Box<live::Phone>),
 }
 
 impl Member {
@@ -574,7 +580,7 @@ impl Member {
     pub fn start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> (Option<Member>, Vec<u8>) {
         if live::on_06(request) {
             return match live::Phone::start(request, sign, events, ctx) {
-                Ok(p) => (Some(Member::Live(p)), answer(Ok(json!({})))),
+                Ok(p) => (Some(Member::Live(Box::new(p))), answer(Ok(json!({})))),
                 Err(e) => (None, answer::<()>(Err(e))),
             };
         }

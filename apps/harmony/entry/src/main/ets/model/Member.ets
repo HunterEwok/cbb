@@ -980,7 +980,7 @@ export class Member {
       this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
     } else if (e.type === 'identity') {
       this.onIdentity(e.cert ?? '', e.issuer ?? '', e.roots ?? []);
-    } else if (e.type === 'mute') {
+    } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
     } else if (e.type === 'command') {
       if (e.command !== undefined) {

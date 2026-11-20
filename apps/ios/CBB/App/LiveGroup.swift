@@ -1997,6 +1997,13 @@ final class LiveGroup: GroupController {
             // shows it.
             try? modeBox.setMute(muted ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
             modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
+        case let .sync(off, by):
+            // The member of 0.6 carried out an admin's sync mode and keeps
+            // it; the phone shows it.
+            do { try modeBox.setSync(on: !off) } catch {
+                modeLog.error("cannot save the sync mode: \(String(reflecting: error), privacy: .public)")
+            }
+            modeLog.notice("\(by, privacy: .public) turned sync \(off ? "off" : "on", privacy: .public) on this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
             recentLog.append(line)

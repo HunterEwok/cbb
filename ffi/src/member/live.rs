@@ -94,20 +94,60 @@ struct ManageArgs {
     public: Vec<u8>,
 }
 
-/// The phone's member on the records of 0.6.
-pub struct Phone {
-    live: Arc<Live>,
-    dir: PathBuf,
+/// What the phone says of itself in its hellos.
+#[derive(Clone)]
+struct Me {
     name: String,
     os: String,
     os_version: String,
     version: String,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+impl Me {
+    /// Puts the phone's hello, with its board's mode and mute, in the
+    /// member's hellos, and sends it to the members connected now, so
+    /// that they show a mute or sync turned off at once.
+    fn hello(&self, live: &Live) {
+        self.set_hello(live);
+        if let Err(e) = live.mesh.changed() {
+            (self.log)(&format!("cbb: the new hello did not go: {}", e.for_log()));
+        }
+    }
+
+    fn set_hello(&self, live: &Live) {
+        let b = &live.board;
+        let muted = b.mute_left();
+        live.mesh.set_hello(cbb_member::hello::Hello {
+            name: self.name.clone(),
+            os: cbb_core::format::print::os_number(&self.os),
+            mode: if b.mode() == cbb_core::clip::Mode::Own { 2 } else { 1 },
+            muted: muted.is_some(),
+            muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
+            device: cbb_member::hello::Device {
+                form: roster::form_number("phone"),
+                version: self.version.clone(),
+                os_version: self.os_version.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }
+}
+
+/// The phone's member on the records of 0.6.
+pub struct Phone {
+    live: Arc<Live>,
+    dir: PathBuf,
+    me: Me,
     dialers: Dialers,
     /// The member port the app opened while it is in the front.
     port: Mutex<Option<Listener>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     stopped: AtomicBool,
     panics: u64,
+    /// What the phone itself sent or took last, for the one button's rule.
+    own: cbb_member::button::Own,
 }
 
 fn addrs(list: &[String]) -> Result<Vec<std::net::SocketAddr>> {
@@ -120,6 +160,20 @@ fn kind_name(k: Kind) -> &'static str {
         Kind::Secret => "secret",
         Kind::Media => "media",
     }
+}
+
+/// A copy the button's rule gives, as the app reads it, in the shape of
+/// 0.5's.
+fn event_json(e: &cbb_core::clip::Event) -> Value {
+    json!({
+        "id": e.id,
+        "origin": e.origin,
+        "age_ms": e.age,
+        "kind": kind_name(e.kind),
+        "text": e.text,
+        "media": e.media,
+        "key": cbb_member::button::key_of(e).unwrap_or_default(),
+    })
 }
 
 /// The group's current copy as the app reads it, in the shape of 0.5's.
@@ -168,21 +222,30 @@ impl Phone {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
+        let me = Me { name: a.name, os: a.os, os_version: a.os_version, version: a.version, log: log.clone() };
+        {
+            // The commands for the phone itself, which the core took and
+            // checked; the member holds the live member weakly, as the
+            // member holds this.
+            let (weak, me, dir) = (Arc::downgrade(&live), me.clone(), dir.clone());
+            live.mesh.on_command(Box::new(move |t| match weak.upgrade() {
+                Some(l) => carry_out(&l, &me, &dir, &ev, t),
+                None => Err(Error::msg("the member stopped")),
+            }));
+        }
         let panics = crate::guard::watch(Box::new(move |details: &str| ev.send(&Event::Panic { details })));
         let p = Phone {
             live,
             dir,
-            name: a.name,
-            os: a.os,
-            os_version: a.os_version,
-            version: a.version,
+            me,
             dialers: Dialers::default(),
             port: Mutex::new(None),
             log,
             stopped: AtomicBool::new(false),
             panics,
+            own: cbb_member::button::Own::default(),
         };
-        p.hello();
+        p.me.set_hello(&p.live);
         let tag = p.live.tag();
         cbb_member::discovery::start(p.live.clone(), tag.clone(), addrs(&a.peers)?, false, None, p.log.clone());
         if a.mdns {
@@ -191,23 +254,9 @@ impl Phone {
         Ok(p)
     }
 
-    /// What the phone says of itself in its hellos.
+    /// What the phone says of itself in its hellos, sent at once.
     fn hello(&self) {
-        let b = &self.live.board;
-        let muted = b.mute_left();
-        self.live.mesh.set_hello(cbb_member::hello::Hello {
-            name: self.name.clone(),
-            os: cbb_core::format::print::os_number(&self.os),
-            mode: if b.mode() == cbb_core::clip::Mode::Own { 2 } else { 1 },
-            muted: muted.is_some(),
-            muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
-            device: cbb_member::hello::Device {
-                version: self.version.clone(),
-                os_version: self.os_version.clone(),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+        self.me.hello(&self.live);
     }
 
     /// Answers a request of cbb_member_call.
@@ -235,7 +284,29 @@ impl Phone {
                     other => return Err(Error::msg(format!("a copy is a text or a secret, not {other:?}"))),
                 };
                 l.send(&c.text, kind, Via::Phone)?;
+                self.own.sent(&c.text);
                 done()
+            }
+            // The one button's rule (cbb_member::button), on the group's
+            // current copy.
+            "waiting" => {
+                let me = id_text(&l.mesh.device());
+                let window = Duration::from_millis(l.board.lifetimes().0);
+                let ev = cbb_member::button::waiting(self.current_event(), &me, window, &self.own);
+                Ok(json!({ "copy": ev.map(|e| event_json(&e)) }))
+            }
+            "took" => {
+                let id = arg("id");
+                let id = id.as_str().ok_or_else(|| Error::msg("took needs the copy's id"))?;
+                if let Some(ev) = self.current_event().filter(|e| e.id == id) {
+                    self.own.took(&ev);
+                }
+                done()
+            }
+            "sends" => {
+                let board = arg("board");
+                let board = board.as_str().unwrap_or_default();
+                Ok(json!({ "sends": cbb_member::button::sends(board, self.current_event().as_ref(), &self.own) }))
             }
             "current" => {
                 Ok(json!({ "copy": l.board.current().map(|c| current_json(&c, cbb_member::uptime::wall_ms())) }))
@@ -336,6 +407,27 @@ impl Phone {
         }
     }
 
+    /// The group's current copy as the button's rule reads it.
+    fn current_event(&self) -> Option<cbb_core::clip::Event> {
+        let c = self.live.board.current()?;
+        let kind = if c.content.manifest.is_some() {
+            Kind::Media
+        } else if c.content.is_secret() {
+            Kind::Secret
+        } else {
+            Kind::Text
+        };
+        Some(cbb_core::clip::Event {
+            id: certs::hex(&c.id),
+            origin: id_text(&c.origin),
+            age: cbb_member::uptime::wall_ms().saturating_sub(c.at_ms).max(0),
+            kind,
+            text: c.content.text.clone().unwrap_or_default(),
+            media: c.content.manifest.clone(),
+            ..Default::default()
+        })
+    }
+
     /// Every device of the group as the app shows it.
     fn devices(&self) -> Vec<Device> {
         let l = &self.live;
@@ -344,8 +436,8 @@ impl Phone {
             id: l.mesh.device(),
             mode: if l.board.mode() == cbb_core::clip::Mode::Own { "own" } else { "shared" }.into(),
             muted_until_ms: muted.map(|m| if m == 0 { 0 } else { cbb_member::uptime::wall_ms().saturating_add(m) }),
-            os_version: self.os_version.clone(),
-            version: self.version.clone(),
+            os_version: self.me.os_version.clone(),
+            version: self.me.version.clone(),
             ..Default::default()
         };
         roster::devices(&lock(&l.mesh.set()), &me, &l.mesh.hellos(), cbb_member::uptime::wall_ms())
@@ -447,6 +539,65 @@ impl Phone {
     /// What the watch asks is not on the records of 0.6 yet.
     pub fn manage_watch(&self) -> Vec<u8> {
         answer::<()>(Err(not_yet("an admin's action from the watch")))
+    }
+}
+
+/// Carries out a command for the phone itself that the core took and
+/// checked (format section 6, `cbb_member::orders`), as the computer's
+/// member does: a mute or its end and the mode (sync off or on) here, the
+/// app hearing of each; the switches a phone does not have are off
+/// already; an error refuses or fails it, with why.
+fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::commands::Taken) -> Result<()> {
+    use cbb_member::commands::refuse;
+    use cbb_member::orders::Order;
+    let st = live.mesh.state();
+    // Who signed it: a device's own key or its admin key, or the root's.
+    let root = st.roots.last() == Some(&t.signer);
+    let by = st
+        .devices
+        .iter()
+        .find(|d| d.key.hash() == t.signer || d.admin.as_ref() == Some(&t.signer))
+        .or_else(|| if root { st.root_device.and_then(|r| st.devices.iter().find(|d| d.id == r)) } else { None });
+    let by_id = by.map(|d| id_text(&d.id)).unwrap_or_default();
+    let who = by.map(|d| d.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| by_id.clone());
+    let log = |line: &str| ev.send(&Event::Log { line });
+    match Order::read(t.kind, t.orders.as_deref())? {
+        Order::Mute(ms) => {
+            let now = cbb_member::uptime::wall_ms();
+            let until = ms.map_or(0, |ms| now.saturating_add(i64::try_from(ms).unwrap_or(i64::MAX)));
+            live.board.set_mute(until);
+            cbb_member::mute::save(dir, &live.board, &by_id)?;
+            me.hello(live);
+            let for_ms = if until == 0 { 0 } else { until.saturating_sub(now).max(1) };
+            log(&format!("cbb: {who} muted this phone"));
+            ev.send(&Event::Mute { muted: true, for_ms, by: &by_id });
+            Ok(())
+        }
+        Order::Unmute => {
+            live.board.unmute();
+            cbb_member::mute::save(dir, &live.board, &by_id)?;
+            me.hello(live);
+            log(&format!("cbb: {who} ended this phone's mute"));
+            ev.send(&Event::Mute { muted: false, for_ms: 0, by: &by_id });
+            Ok(())
+        }
+        Order::Mode(m) => {
+            let on = m == cbb_core::clip::Mode::Shared;
+            cbb_member::sync::set(dir, &live.board, on, 0)?;
+            me.hello(live);
+            log(&format!("cbb: {who} turned sync {} on this phone", if on { "on" } else { "off" }));
+            ev.send(&Event::Sync { off: !on, by: &by_id });
+            Ok(())
+        }
+        // A phone of 0.6 takes no remote paste, has no quick actions and
+        // does not sync away from home: each of them is off already.
+        Order::PasteOff | Order::ActionsOff | Order::AwayOff => Ok(()),
+        Order::Action(_) => Err(refuse("a phone has no quick actions")),
+        Order::Hub(_) => {
+            Err(refuse("a phone does not become the hub by a command; move the hub from the phone that is the hub"))
+        }
+        Order::Device { .. } => Err(refuse("a phone carries out no small device's own command")),
+        Order::Paste { .. } => Err(not_yet("a remote paste on a phone")),
     }
 }
 

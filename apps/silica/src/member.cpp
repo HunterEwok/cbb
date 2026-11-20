@@ -439,7 +439,7 @@ void Member::event(const QByteArray &json)
         const QString details = e.value(QStringLiteral("details")).toString();
         Errors::log(QStringLiteral("member: %1").arg(details));
         emit panicked(details);
-    } else if (type == QStringLiteral("mute")) {
+    } else if (type == QStringLiteral("mute") || type == QStringLiteral("sync")) {
         pollMuted();
     } else if (type == QStringLiteral("root_changed")) {
         // Every device shows it until the person saw it, and nobody turns it off.

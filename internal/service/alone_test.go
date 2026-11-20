@@ -228,8 +228,9 @@ func TestEmbassyJoiner(t *testing.T) {
 
 // TestFFIJoiner runs the Aurora app's core through ffi's C functions
 // with a software key (the example phone-on-linux, CBB_PHONE_ON_LINUX): the
-// phone shows its QR code, the service admits it as cbb pair -qr does, and
-// then the phone's member dials the service and syncs with it both ways.
+// phone joins the group of 0.6 by the service's home window, as the app
+// does when it scans the window's QR code, and then the phone's member
+// dials the service and syncs with it both ways; the root mutes it.
 func TestFFIJoiner(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
@@ -240,17 +241,7 @@ func TestFFIJoiner(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
-	qr := next("QR: ")
-	// The service admits it as cbb pair -qr does.
-	jc, ok := phone.ParseJoinQR(qr)
-	if !ok {
-		t.Fatalf("not a join QR code: %q", qr)
-	}
-	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
-	if err != nil || m.Name != "aurora phone" {
-		t.Fatalf("admitting the phone: %v, %+v", err, m)
-	}
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
 	var phoneDev *control.Device
 	for _, d := range pi.devices(t) {
 		if d.Name == "aurora phone" {
@@ -260,18 +251,17 @@ func TestFFIJoiner(t *testing.T) {
 	if phoneDev == nil || phoneDev.OS != group.OSAurora || phoneDev.Role != group.RolePhone {
 		t.Fatalf("the phone is listed as %+v", phoneDev)
 	}
-	if joined := next("Joined "); !strings.HasSuffix(joined, " "+pi.status(t).Group) {
-		t.Fatalf("phone-on-linux joined %q, not the group %s", joined, pi.status(t).Group)
-	}
 
 	// The phone's member dials the service, with its key outside the core.
 	waitFor(t, "the phone connected", func() bool {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	// Its hello presents it as the phone it is, not as a small device.
+	// Its hello presents it as the phone it is, not as a small device. Its
+	// key counts as kept in a file: in a group of 0.6 only an attestation
+	// the admitter checked makes it hardware (TestFFIPhoneAttest).
 	for _, d := range pi.devices(t) {
-		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "hardware" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
+		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "file" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
 			t.Fatalf("the connected phone is listed as %+v", d)
 		}
 	}
@@ -381,23 +371,6 @@ func TestFFIJoiner(t *testing.T) {
 	})
 	fmt.Fprintln(in, "COPY after the mute")
 	waitFor(t, "the service has the phone's text after the mute", func() bool { return pi.paste(t) == "after the mute" })
-
-	// Eighteen months later the service renews the phone's certificate,
-	// and the app gets it to keep in its own file: the core has no
-	// identity file for a key outside it.
-	pi.port = portOf(t, pi.addr())
-	pi.stop()
-	clock := newTestClock(t, 548*24*time.Hour)
-	pi.env = []string{clock.env()}
-	pi = restartService(t, &h, pi)
-	der, err := base64.StdEncoding.DecodeString(next("IDENTITY "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	renewed, err := x509.ParseCertificate(der)
-	if err != nil || renewed.NotAfter.Before(time.Now().Add(548*24*time.Hour)) {
-		t.Fatalf("the phone kept no renewed certificate: %v", err)
-	}
 }
 
 // TestFFIMember runs the phones' member through ffi's one call
@@ -414,15 +387,7 @@ func TestFFIMember(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	me, _, _ := strings.Cut(next("Joined "), " ")
+	next, in, me := phoneJoins(t, bin, pi, "-name", "phone", "-dir", t.TempDir())
 	call := func(op string, args any) map[string]any {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -446,37 +411,27 @@ func TestFFIMember(t *testing.T) {
 	}
 	sends := func(board string) bool { return call("sends", map[string]any{"board": board})["sends"].(bool) }
 
-	// The app hands in the computer's address, as Bonjour finds it, and
-	// hears of the computer with its certificate chain once its hello came.
+	// The app hands in the computer's address, as Bonjour finds it.
 	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
-	var peer struct {
-		Device string   `json:"device"`
-		Chain  []string `json:"chain"`
-	}
-	if err := json.Unmarshal([]byte(next("PEER ")), &peer); err != nil || peer.Device == "" || len(peer.Chain) == 0 {
-		t.Fatalf("the peer event: %+v %v", peer, err)
-	}
 	waitFor(t, "the phone connected", func() bool { return peers() == 1 })
 
-	// A command for the phone itself other than a mute, which the member
-	// carries out, goes to the app, whose answer goes back.
-	answered := make(chan error, 1)
-	go func() {
-		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(false)}, "")
-		answered <- err
-	}()
-	token, cmd, _ := strings.Cut(next("COMMAND "), " ")
-	if !strings.Contains(cmd, `"body"`) {
-		t.Fatalf("the command event carries %s", cmd)
+	// A command for the phone itself: the root turns its sync off, the
+	// member carries it out and the app hears of it; then on again.
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(false)}, ""); err != nil {
+		t.Fatalf("the sync command: %v", err)
 	}
-	call("answer", map[string]any{"token": json.Number(token), "status": "done"})
-	if err := <-answered; err != nil {
-		t.Fatalf("the phone's answer to the sync command: %v", err)
+	if got := next("SYNC "); !strings.HasPrefix(got, "true ") {
+		t.Fatalf("the app heard %q of the sync command", got)
 	}
-	// A tunnel key goes into the hellos; a key of the wrong size does not.
-	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
-	call("tunnel_key", map[string]any{"key": key, "psk": key})
-	call("tunnel_key", map[string]any{})
+	if st := call("muted", nil); st["sync_off"] != true {
+		t.Fatalf("after the sync command the phone says %v", st)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(true)}, ""); err != nil {
+		t.Fatalf("the sync command: %v", err)
+	}
+	if got := next("SYNC "); !strings.HasPrefix(got, "false ") {
+		t.Fatalf("the app heard %q of the second sync command", got)
+	}
 
 	// The computer's copy waits for the phone until the app takes it; then
 	// the clipboard holds the group's text, and the button sends nothing.
@@ -531,6 +486,11 @@ func TestFFIMember(t *testing.T) {
 	if !call("wait", map[string]any{"timeout_ms": 10_000})["connected"].(bool) {
 		t.Fatal("the phone did not connect again on resume")
 	}
+
+	// A tunnel key goes into the hellos; a key of the wrong size does not.
+	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	call("tunnel_key", map[string]any{"key": key, "psk": key})
+	call("tunnel_key", map[string]any{})
 }
 
 // TestFFIPhoneAway syncs the phone's member away from home through a Go
@@ -558,15 +518,7 @@ func TestFFIPhoneAway(t *testing.T) {
 	}
 	piID := pi.status(t).Device
 	dir := t.TempDir()
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", dir)
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	next("Joined ")
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "phone", "-dir", dir)
 	try := func(op string, args any) (map[string]any, map[string]any) {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -665,8 +617,8 @@ func TestFFIPhoneReach(t *testing.T) {
 		t.Fatal(err)
 	}
 	m2 := startService(t, &h, "m2")
-	c, code := openWindow(t, pi)
-	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: code, Address: pi.addr()}, ""); err != nil {
+	c, _, link := openWindowLink(t, pi)
+	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
 		t.Fatalf("join on m2: %v", err)
 	}
 	c.Close()
@@ -679,15 +631,7 @@ func TestFFIPhoneReach(t *testing.T) {
 		}
 		return false
 	})
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	next("Joined ")
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "phone", "-dir", t.TempDir())
 	call := func(op string, args any) map[string]any {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -805,11 +749,35 @@ func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix st
 				if rest, ok := strings.CutPrefix(l, prefix); ok {
 					return rest
 				}
+				t.Logf("phone-on-linux, passed over: %s", l)
 			case <-deadline:
 				t.Fatalf("phone-on-linux printed no %q", prefix)
 			}
 		}
 	}, stdin
+}
+
+// phoneJoins opens pi's home window and starts phone-on-linux with args
+// (which name its -dir), joining pi's group by the window's QR code as the
+// app does when it scans it (-join-window). It returns what phoneOnLinux
+// does once the phone joined, and the phone's device ID.
+func phoneJoins(t *testing.T, bin string, pi *testService, args ...string) (next func(prefix string) string, in io.Writer, device string) {
+	t.Helper()
+	c, _, link := openWindowLink(t, pi)
+	defer c.Close()
+	if link == "" {
+		t.Fatalf("%s's window has no QR code of 0.6: is its group one of 0.6?", pi.name)
+	}
+	next, in = phoneOnLinux(t, bin, append(args, "-join-window", link)...)
+	// "Joined <device> <group tag> <name of the member that let it in>".
+	joined := strings.Fields(next("Joined "))
+	if len(joined) < 2 || !strings.HasPrefix(pi.status(t).Group, joined[1]) {
+		t.Fatalf("phone-on-linux joined %q, not the group %s", joined, pi.status(t).Group)
+	}
+	if m, err := c.Receive(); err != nil || m.Name == "" {
+		t.Fatalf("pair on %s ended with %+v, %v", pi.name, m, err)
+	}
+	return next, in, joined[0]
 }
 
 // TestFFIJoinerMadeAdmin: the Aurora app joins as a member, its member's

@@ -216,6 +216,9 @@ public final class CoreMember: @unchecked Sendable {
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
         case mute(muted: Bool, forMS: Int64, by: String)
+        /// An admin turned this phone's sync off (off true) or on again:
+        /// the member of 0.6 carried the command out and keeps it.
+        case sync(off: Bool, by: String)
         /// The group's state changed (a record came, a device joined or
         /// left).
         case state(GroupState)
@@ -944,6 +947,7 @@ public final class CoreMember: @unchecked Sendable {
         var port: UInt16?
         var device: String?
         var muted: Bool?
+        var off: Bool?
         var for_ms: Int64?
         var by: String?
         var details: String?
@@ -986,6 +990,9 @@ public final class CoreMember: @unchecked Sendable {
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
+        case "sync":
+            guard let off = w.off else { return nil }
+            return .sync(off: off, by: w.by ?? "")
         case "state": return w.state.map { .state($0) }
         case "notice": return w.notice.map { .notice($0) }
         case "root_changed": return .rootChanged(from: w.from ?? "", to: w.to ?? "", seq: w.seq ?? 0)

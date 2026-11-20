@@ -38,6 +38,9 @@ made with 0.5 is set up again once. The details follow.
   proves the digits, and the checked set is kept in the app's folder before the member hears it
   was (`ffi/src/joiner.rs`). The iPhone's and Android's
   kits open the window and join by it (`CorePairing.Window`, `CorePairing.Joiner`).
+- A phone's member of 0.6 carries out the commands an admin sends it that the records let
+  through, as the service does: mute, unmute and the sync mode, kept and sent in its next hello,
+  with a `sync` event for the app; it follows the button's rule (`waiting`, `took`, `sends`).
 - A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
   its root key signs its own record, the set is kept for the member, and the recovery sheet goes
   to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers

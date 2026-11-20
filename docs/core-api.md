@@ -112,9 +112,15 @@ On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
 `cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
 `device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
 `device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
-age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
-`current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
-`set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
+age_ms, kind, text, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
+turned the phone's sync off or on), `log` and `panic`. It carries out by itself the commands
+an admin sends the phone that the records let through (`cbb_member::orders`, as the service's
+`live_command`): `mute`, `unmute` and the sync mode, kept in `mute.json` and `sync.json` and
+sent out in its next hello; it answers the paste, action and away switches with nothing to
+do, and refuses an action, a hub change, a device change and, until the apps take it, a paste.
+Its operations are `copy`, `current`, `waiting`, `took` and `sends` (the button's rule,
+`cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
+`resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
 (`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
 update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
 hub}]}`: `admin` is whether the admin key the records name for the device is one of the

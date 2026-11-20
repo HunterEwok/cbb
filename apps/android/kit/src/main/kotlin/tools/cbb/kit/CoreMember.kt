@@ -230,6 +230,9 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
 
+        /** An admin turned this phone's sync off ([off]) or on again; the member of 0.6 carried it out and keeps it. */
+        class Sync(val off: Boolean, val by: String) : Event()
+
         /** The group's state changed (a record came, a device joined or left). */
         class State(val state: GroupState) : Event()
 
@@ -806,6 +809,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "sync" -> Event.Sync(o.optBool("off") ?: return null, o.optString("by") ?: "")
                 "state" -> o.optObject("state")?.let { Event.State(GroupState.fromJson(it)) }
                 "notice" -> o.optObject("notice")?.let { Event.NoticeAdded(Notice.fromJson(it)) }
                 "root_changed" -> Event.RootChanged(o.optString("from") ?: "", o.optString("to") ?: "", o.optLong("seq") ?: 0)

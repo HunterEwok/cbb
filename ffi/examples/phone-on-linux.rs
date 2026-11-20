@@ -14,7 +14,8 @@
 //! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
 //! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
 //! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
-//! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
+//! it or ended the mute, "SYNC <off> <by>" when an admin turned its sync
+//! off or on (a group of 0.6), "CHANGE <copy as JSON>" for each copy that became
 //! the group's, "PEER <peer as JSON>" for each peer whose hello it took,
 //! "COMMAND <token> <command as JSON>" for each command for the phone
 //! itself, and "LOG <line>" for each log line. It takes "COPY <text>"
@@ -425,6 +426,7 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
         Some("peer") => println!("PEER {}", v["peer"]),
         Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
+        Some("sync") => println!("SYNC {} {}", v["off"], s("by")),
         Some("message") if v["message"]["t"] == "admin" => {
             println!("ADMIN CA {}", v["message"]["admin_ca"].as_str().unwrap_or_default())
         }

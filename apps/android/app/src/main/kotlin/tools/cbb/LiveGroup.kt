@@ -2605,6 +2605,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 writeMute("mute", if (!e.muted) null else if (e.forMS > 0) System.currentTimeMillis() + e.forMS else 0)
                 Log.i(TAG, "${e.by} ${if (e.muted) "muted" else "unmuted"} this phone")
             }
+            // The member of 0.6 carried out an admin's sync mode and keeps it; the phone shows it.
+            is CoreMember.Event.Sync -> {
+                runCatching { setOwnMode(if (e.off) "own" else "shared", tell = false) }.onFailure { Log.e(TAG, "cannot save the sync mode", it) }
+                Log.i(TAG, "${e.by} turned sync ${if (e.off) "off" else "on"} on this phone")
+                onModeChanged?.invoke()
+            }
             // The device the relay said calls from that loopback port, once.
             is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
             // A member that broke stops and starts again, off its own events' thread.
