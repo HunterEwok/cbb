@@ -993,7 +993,7 @@ pub fn parse_roots(pem: &str) -> Result<Vec<Key>> {
 
 /// Keys that sign release files in tests and drills: both halves made
 /// from a seed, never a real key.
-#[cfg(feature = "std")]
+#[cfg(any(test, feature = "std"))]
 #[allow(clippy::expect_used)]
 pub mod testing {
     use super::*;
