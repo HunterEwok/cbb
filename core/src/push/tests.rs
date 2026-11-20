@@ -168,7 +168,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
     );
     // A key exchange's algorithm is refused where a send key is wanted; an
     // algorithm this version does not know is held.
-    let later = Key { alg: 9, public: vec![1; 2000] };
+    let later = Key::new(9, vec![1; 2000]);
     assert_eq!(
         check_send(
             &later,
@@ -177,7 +177,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         ),
         Ok(SendCheck::Unknown)
     );
-    let kem = Key { alg: crate::records::key::ALG_X25519, public: vec![1; 32] };
+    let kem = Key::new(crate::records::key::ALG_X25519, vec![1; 32]);
     assert_eq!(
         check_send(
             &kem,
@@ -454,7 +454,7 @@ fn a_unifiedpush_token_holds_the_endpoint_and_the_keys_within_its_bound() {
     // The longest token, send key and signature still fit one frame.
     let longest = vec![1u8; MAX_TOKEN];
     let big_sig = vec![1u8; MAX_SEND_SIG];
-    let big_key = Key { alg: 9, public: vec![1; MAX_SEND_KEY] };
+    let big_key = Key::new(9, vec![1; MAX_SEND_KEY]);
     let s = Send { token: &longest, env: ENV_UNIFIEDPUSH, key: big_key, sig: &big_sig, ..s.clone() };
     let f = s.write().unwrap();
     assert_eq!(f.len() - 4, 16384);

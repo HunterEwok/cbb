@@ -383,6 +383,20 @@ fn read_ty<'a>(f: &Field, l: Later, v: &Value<'a>, dropped: &mut alloc::vec::Vec
             k.check().map_err(|_| bad())?;
             Keep(v.clone())
         }
+        Ty::Signer(max) => {
+            // ES256, or an algorithm this version does not know (held); a
+            // key exchange's algorithm is no signer.
+            let k = crate::format::Key::from_value(v).map_err(|_| bad())?;
+            let held = matches!(k.alg, Alg::Unknown(n) if n != 0);
+            if !(k.alg == Alg::Es256 || held) {
+                return Err(bad());
+            }
+            if k.public.is_empty() || k.public.len() > max {
+                return out(dropped);
+            }
+            k.check().map_err(|_| bad())?;
+            Keep(v.clone())
+        }
         Ty::Envelope => {
             crate::format::Envelope::from_value(v).map_err(|_| bad())?;
             Keep(v.clone())

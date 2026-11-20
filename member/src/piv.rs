@@ -202,15 +202,6 @@ const MANAGEMENT_SLOT: u8 = 0x9b;
 /// as the kits' Piv makes it.
 pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = factory_management_key();
 
-const fn factory_management_key() -> [u8; 24] {
-    let mut key = [0u8; 24];
-    let mut i = 0;
-    while i < key.len() {
-        key[i] = (i % 8) as u8 + 1;
-        i += 1;
-    }
-    key
-}
 /// The recovery key's policies: the PIN and a touch before each signature.
 const PIN_ALWAYS: u8 = 0x03;
 const TOUCH_ALWAYS: u8 = 0x02;

@@ -18,7 +18,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use crate::authority::Record;
 use crate::certs::{self, Cert, DeviceId, b64};

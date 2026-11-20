@@ -232,10 +232,13 @@ fn life() -> (Key, Vec<Event>) {
     let root = g.set.root().clone();
     let mut d = Device::new(k("new phone").key.clone(), "new phone", ROLE_PHONE);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    // The group's records before the change: write_change keeps what it
+    // writes in the writer's own set.
+    let before = g.records();
     let w = g.set.write_change(&g.state(), &k("recovery"), rk2(), &k("new root"), d, &[], false, 0).unwrap();
     let ts = |w: i64| Timestamp { wall: w, logical: 0 };
     let (r, adm) = (k("root").hash, k("admin a").hash);
-    let mut ev: Vec<Event> = g.records().into_iter().map(|r| Event::Record(alloc::boxed::Box::new(r))).collect();
+    let mut ev: Vec<Event> = before.into_iter().map(|r| Event::Record(alloc::boxed::Box::new(r))).collect();
     ev.extend([
         Event::Command(r, 1),
         Event::Command(adm, 1),

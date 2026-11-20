@@ -376,7 +376,7 @@ fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
         assert_eq!(r.unwrap().status, push::SENT_STALE);
     }
     // A send key of an algorithm the service does not take.
-    let unknown = cbb_core::records::key::Key { alg: 77, public: vec![1; 40] };
+    let unknown = cbb_core::records::key::Key::new(77, vec![1; 40]);
     let r = c.send(push::Send {
         n: 0,
         token: &[9; 32],

@@ -611,19 +611,26 @@ impl World {
                 }
                 x => x,
             };
-            let r = match written {
-                Ok(r) => r,
+            let added = match written {
+                Ok(added) => added,
                 Err(e) => {
                     REFUSED.fetch_add(1, Ordering::Relaxed);
                     refused_why(&e).fetch_add(1, Ordering::Relaxed);
                     return None;
                 }
             };
+            // The writer gives back every record it added, in the order they
+            // go out: a seen line's acknowledgement first, the record asked
+            // for last.
             let m = &mut self.members[i].live;
-            m.heads.insert(kk.hash, (r.body().seq, r.id()));
-            self.signed.insert(r.id());
+            for r in &added {
+                if r.body().signer == kk.hash {
+                    m.heads.insert(kk.hash, (r.body().seq, r.id()));
+                }
+                self.signed.insert(r.id());
+            }
             self.refresh(i);
-            return Some(r);
+            return added.into_iter().last();
         }
         let m = &mut self.members[i].live;
         let (seq, prev) = m.heads.get(&kk.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
