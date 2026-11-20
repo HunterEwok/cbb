@@ -348,7 +348,9 @@ already expired cannot be renewed this way, since the handshake fails; the devic
 Members (computers, boards and routers with the service or the firmware) publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub"), and a device that listens to join (section 6, "The joiner listens"), which publishes
+hub"), and a phone whose pairing window is open (section 6, "The window and who dials"), which
+publishes `v=1`, `g=<tag>`, `p=1`, `f=<fingerprint>` while the window is open. Until the switch
+to the core (wave 5), a device that listens to join (section 6, "The joiner listens") publishes
 its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
 `f=<fingerprint>` while it waits.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
@@ -386,9 +388,9 @@ TXT strings (each at most 255 bytes):
 |-----|-------|---------|
 | `v` | `1` | protocol version |
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
-| `p` | `1` | present only while a computer pairing window is open |
-| `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
-| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
+| `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
+| `j` | `1` | until the switch to the core (wave 5): present only on a device that listens to join; it has no `g`, so no member dials it as one |
+| `f` | fingerprint | with `p` in 0.6: the hex of the key hash of the member's TLS key, as its window's QR code's `fp` (section 7); with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints") |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
 The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
@@ -1344,6 +1346,35 @@ bytes (`intro/size`; vectors: `messages3.json`, `intros`). The receiver checks e
 up to the root it holds before it keeps any, then goes on; anything that does not check closes
 the connection and keeps nothing.
 
+#### The window and who dials
+
+In 0.6 the joiner always dials, and the device it joins through always waits: a member opens a
+pairing window and the new device connects to it. No device listens to join. A computer opens
+its window with `cbb pair` (`member/src/joining.rs` is the joiner, `member/src/admitting.rs`
+the member); a phone that may admit (the root phone, or a phone with an admin key that has
+`admit`) opens one with "Add a device" (`cbb_window_new`, `ffi/src/window.rs`), and a new phone
+joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
+
+- While the window is open the member takes pairing sessions (`cbb-pair/3`) on its member port,
+  one at a time; a session that comes while another runs gets message 69 `busy`. A phone's
+  window needs its member port open, and closes after five minutes unless the person gives it
+  another time (an hour at most), when the person closes it, or when the app frees it.
+- The member shows the window's QR code (section 7): its addresses with the member port and the
+  fingerprint of its TLS key, nothing secret. A phone scans it and dials the addresses in turn,
+  and goes on only with the member whose key in the handshake has that fingerprint; any other
+  key is refused before message 64.
+- While the window is open the member announces it by mDNS (section 3): `v=1`, `g=<tag>`, `p=1`
+  and `f=<fingerprint>`. A device without a camera (Aurora) browses for such a window for up to
+  10 s and MUST refuse when more than one announces itself; it dials the one, its addresses and
+  `f` in place of the QR code's. The announcement is not authenticated, and needs not be: both
+  persons compare the code, and the fingerprint only keeps the session to the device announced.
+- Both ends then show the code the session commits to ("The short code" above), each person
+  answers, and the session goes on only after both said "they match". The member writes the
+  joiner's record by the admission rules (`join::decide::joiner_record`): at home a member or a
+  phone reads, sends and takes secrets, a watch only reads, and a small device without a screen
+  joins only by its own invitation. A phone joins as a member of the group with role `phone`;
+  the root makes it an admin later, from the admin key its hellos offer.
+
 ### Until the switch to the core (wave 5)
 
 What follows is pairing as the service in `member/`, the Go helper and the apps speak it today:
@@ -1576,6 +1607,30 @@ the QR code dials the computer, and nothing is announced:
   A phone that is not the root makes no admins, so its welcome has no `admin_ca`.
 
 ## 7. The join QR code
+
+### The window's QR code (0.6)
+
+Source: `ffi/src/window.rs` (`qr_text`), `ffi/src/joiner.rs` (`read_code`).
+
+The QR code a member shows while its pairing window is open (section 6, "The window and who
+dials"), which the new phone scans:
+
+```
+cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp=<64 hex digits>
+```
+
+| Field | Count | Meaning |
+|-------|-------|---------|
+| `addr` | one to four | the member's addresses with its member port, `host:port`, best first; an IPv6 host in brackets |
+| `fp` | one | the key hash of the member's TLS key (format section 12), 64 lowercase hex digits |
+
+The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the host
+`pair` without regard to case, decodes only percent escapes, ignores fields it does not know,
+keeps at most the first four addresses and drops one it cannot read; a text without `fp` or
+without an address is not a window's QR code. Nothing in it is secret: the code both persons
+compare binds the session.
+
+### The join QR code until the switch (wave 5)
 
 Source: `internal/phone/joinqr.go`, the kits' `JoinCode`.
 
