@@ -596,6 +596,9 @@ impl Mesh {
         let peer_key = Key::es256(point.to_vec());
         let peer = peer_key.device_id();
         sock.set_read_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        // A peer that stops reading ends the connection rather than holding
+        // the writer, and the TLS lock with it, for ever.
+        sock.set_write_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_LEN);
         let w = sock.try_clone().map_err(|e| Error::with("cannot use the connection", e))?;
         let conn = Arc::new(Conn { peer, tls: Mutex::new(session), sock: w, tx, closed: AtomicBool::new(false) });
