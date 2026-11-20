@@ -38,7 +38,8 @@ made with 0.5 is set up again once. The details follow.
   connection of 0.5 until the service switches to it. It carries copies with images or files
   too: the origin seals their bytes into a blob under the copy's blob key and serves it, and a
   reader fetches it a range at a time (`get`, chunk frames, `missing`), checks it whole and
-  opens it.
+  opens it. Its member port takes members (`cbb/4`, by their standing in the records) and
+  devices that pair (`cbb-pair/3`, to the open pairing window) alike.
 - The core seals and opens a copy's blob of 0.6 (`copies::seal_media`, `copies::blob`): the
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such

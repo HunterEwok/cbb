@@ -82,6 +82,10 @@ pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
 /// tunnel, hubs, guest, reach, evidence, waiting and dismiss (its type and
 /// body), from the peer named.
 pub type OnOther = Box<dyn Fn(&DeviceId, u64, &[u8]) + Send + Sync>;
+/// A pairing a device opened on the member port (ALPN `cbb-pair/3`): its
+/// socket, the TLS session and the session's pairing exporter, for the
+/// pairing window (`join::member`).
+pub type OnPair = Box<dyn Fn(TcpStream, tls::Session, cbb_core::join::PairExporter) + Send + Sync>;
 /// The set changed (new records came, or this device wrote one).
 pub type OnSet = Box<dyn Fn(&RecordSet) + Send + Sync>;
 
@@ -120,6 +124,7 @@ pub struct Mesh {
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
     on_other: RwLock<Option<OnOther>>,
+    on_pair: RwLock<Option<OnPair>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
     /// The signed release and entry points this member holds and passes on.
     releases: RwLock<Option<Arc<Releases>>>,
@@ -245,6 +250,7 @@ impl Mesh {
             on_command: RwLock::new(None),
             on_set: RwLock::new(None),
             on_other: RwLock::new(None),
+            on_pair: RwLock::new(None),
             waiting: Mutex::new(HashMap::new()),
             releases: RwLock::new(None),
             entries: RwLock::new(None),
@@ -287,6 +293,12 @@ impl Mesh {
 
     pub fn on_other(&self, f: OnOther) {
         *self.on_other.write().unwrap() = Some(f);
+    }
+
+    /// Where a pairing on the member port goes while a window is open;
+    /// None closes such connections.
+    pub fn on_pair(&self, f: Option<OnPair>) {
+        *self.on_pair.write().unwrap() = f;
     }
 
     /// Sends a frame to a connected device: false when it is not connected
@@ -551,6 +563,31 @@ impl Mesh {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let mut s = tls::Session::server(Arc::new(self.server_config()?))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
+        self.run(sock, s)
+    }
+
+    /// Takes a connection on the member port, where members connect
+    /// (`cbb/4`) and a device that joins pairs (`cbb-pair/3`): a member by
+    /// its standing in the records, a pairing to the open window.
+    pub fn accept_port(self: &Arc<Self>, sock: TcpStream) -> Result<()> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let mut cfg = bykey::server(&self.own.tls_key()?, bykey::any_key(), cbb_core::alpn::MEMBER, &tls::clock())?;
+        cfg.alpn_protocols = vec![cbb_core::alpn::MEMBER.to_vec(), cbb_core::alpn::PAIR.to_vec()];
+        let (cfg, exporter) = bykey::exporting_server(cfg);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        if cbb_core::alpn::is_pair(s.alpn_protocol()) {
+            let x = bykey::pairing_exporter(&s, &exporter)?;
+            return match &*self.on_pair.read().unwrap() {
+                Some(f) => {
+                    f(sock, s, x);
+                    Ok(())
+                }
+                None => Err(Error::msg("a device asked to pair, but no pairing window is open")),
+            };
+        }
+        let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
+        (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
         self.run(sock, s)
     }
 

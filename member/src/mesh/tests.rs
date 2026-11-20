@@ -10,6 +10,7 @@ use cbb_core::records::body::{self, Device};
 use cbb_core::records::{Kind, Recovery, key::ALG_SLH_DSA, pq};
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+use p256::pkcs8::EncodePrivateKey as _;
 
 use super::*;
 use crate::content::Source;
@@ -234,6 +235,67 @@ fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
     assert!(b.send(&a.device(), reach));
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), m::T_REACH));
     assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+    a.close();
+    b.close();
+}
+
+#[test]
+fn the_member_port_takes_members_and_pairings() {
+    let (a, b) = two("port");
+    let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap();
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_pair(Some(Box::new(move |_sock, _s, _x| {
+        let _ = tx.lock().unwrap().send(());
+    })));
+    let a2 = a.clone();
+    std::thread::spawn(move || {
+        for sock in ln.incoming().flatten() {
+            let a3 = a2.clone();
+            std::thread::spawn(move || {
+                let _ = a3.accept_port(sock);
+            });
+        }
+    });
+    // A member connects and syncs.
+    let (b2, ad) = (b.clone(), a.device());
+    std::thread::spawn(move || {
+        let _ = b2.dial(addr, Some(ad));
+    });
+    until("the sets to settle", || a.set().lock().unwrap().digest() == b.set().lock().unwrap().digest());
+    // A device that pairs reaches the window.
+    let stranger = K(SigningKey::from_slice(&[9; 32]).unwrap());
+    let der = cbb_core::secret::Zeroizing::new(stranger.0.to_pkcs8_der().unwrap().as_bytes().to_vec());
+    let ccfg = bykey::client(
+        &bykey::OwnKey::pkcs8(&der).unwrap(),
+        None,
+        bykey::any_key(),
+        cbb_core::alpn::PAIR,
+        &tls::clock(),
+    )
+    .unwrap();
+    let sock = TcpStream::connect(addr).unwrap();
+    sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut s = tls::Session::client(Arc::new(ccfg), bykey::unsent_name()).unwrap();
+    tls::handshake(&mut s, &sock, "the handshake").unwrap();
+    rx.recv_timeout(Duration::from_secs(10)).expect("the pairing reached the window");
+    // A stranger on the member protocol is refused.
+    let ccfg = bykey::client(
+        &bykey::OwnKey::pkcs8(&der).unwrap(),
+        None,
+        bykey::any_key(),
+        cbb_core::alpn::MEMBER,
+        &tls::clock(),
+    )
+    .unwrap();
+    let sock = TcpStream::connect(addr).unwrap();
+    sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut s = tls::Session::client(Arc::new(ccfg), bykey::unsent_name()).unwrap();
+    let _ = tls::handshake(&mut s, &sock, "the handshake");
+    let mut buf = [0u8; 16];
+    let mut r = tls::Stream::new(s, sock);
+    assert!(matches!(std::io::Read::read(&mut r, &mut buf), Ok(0) | Err(_)), "the stranger got nothing");
     a.close();
     b.close();
 }
