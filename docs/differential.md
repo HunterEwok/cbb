@@ -79,7 +79,10 @@ kits), so a reader that fails in another way also shows as a difference.
   checks that the packets do not depend on how the bytes came. The service's targets in
   `member/fuzz` read the control socket's messages, which cbb-helper's channel uses too
   (`control`: each read message written again reads back the same), and the ZX Spectrum
-  Next's frames on the Pi's UART with its character set (`next_frames`).
+  Next's frames on the Pi's UART with its character set (`next_frames`), and the relay's
+  messages of `cbb-relay/3` as both ends read them (`relay_wire`: a registration or a note
+  written again reads back the same, on the format's grid), which took the place of Go's
+  `FuzzRelayWire` with the Go relay client.
 
 Manifests are read by the rules of signed bodies in their canonical form ([roadmap](roadmap.md),
 item 42), so they fail the run as the other kinds do; `compare -report-only KIND` still prints

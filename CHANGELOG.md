@@ -21,7 +21,9 @@ made with 0.5 is set up again once. The details follow.
   credentials only, so it sees no record and no device ID; `-group` names a group of 0.6 by its
   root and recovery keys. It speaks `cbb-relay/3` alone: the registration of 0.5
   (`cbb-relay/2`), with its JSON claim, member certificates and the records it kept, is gone,
-  and so is the Go relay client (`internal/relay` keeps only the settings of a link).
+  and so is the Go relay client (`internal/relay` keeps only the settings of a link); the
+  nightly fuzz target `relay_wire` (`member/fuzz`) reads the relay's new messages in place of
+  Go's `FuzzRelayWire`.
 - A device's link to the relay (`member/src/relay.rs`, and the phones' `cbb_tunnel_relay`)
   registers by `cbb-relay/3` only, with its server key for the period and the period's server
   credentials (`faces::ForRelay` on a computer), a fresh WireGuard key each time; until the

@@ -150,7 +150,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [control, next_frames]
+        target: [control, next_frames, relay_wire]
     defaults:
       run:
         working-directory: member/

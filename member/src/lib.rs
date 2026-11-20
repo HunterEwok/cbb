@@ -51,7 +51,7 @@ pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
 pub mod founding;
-#[cfg(feature = "fuzzing")]
+#[cfg(any(feature = "fuzzing", test))]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 mod global_cli;

@@ -15,7 +15,7 @@
 //! connections between the two devices; here they are only passed to the
 //! app's own ports. The phones' kits (ffi/) use it.
 
-mod v3;
+pub(crate) mod v3;
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -252,7 +252,7 @@ fn run(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) {
 /// relay, or the answer of a call's ticket (base64, as the link keeps
 /// them).
 #[derive(Default)]
-struct Request<'a> {
+pub(crate) struct Request<'a> {
     watch: bool,
     dial: &'a str,
     answer: &'a str,
@@ -260,12 +260,12 @@ struct Request<'a> {
 
 /// A note of the relay in the tunnel.
 #[derive(Default, Debug)]
-struct Note {
-    online: Option<Vec<String>>,
-    call: String,
-    ticket: String,
-    ok: bool,
-    error: String,
+pub(crate) struct Note {
+    pub(crate) online: Option<Vec<String>>,
+    pub(crate) call: String,
+    pub(crate) ticket: String,
+    pub(crate) ok: bool,
+    pub(crate) error: String,
 }
 
 /// One registration with its tunnel and watch, until it ends or stop
