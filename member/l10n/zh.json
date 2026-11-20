@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "{} 上的远程粘贴已关闭。",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "已将 {} 从群组中移除。其他成员一得知就会拒绝它。",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "已将 {} 重命名为 {}。其他设备一得知就会显示新名称。",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "因此群组的密钥级别为 files：管理员或中心也可以把密钥保存在文件中，每次都会先发出警告（cbb keys）。",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "群组的主中心现在是 {}，按此顺序；其他中心在它们之后服务。",
  "The quick actions are off here.": "此处的快捷操作已关闭。",
  "The quick actions are off on every device of the group.": "群组所有设备上的快捷操作已关闭。",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB：更改群组的中心。",
  "CBB: change which devices may paste on this computer.": "CBB：更改哪些设备可以在这台电脑上粘贴。",
  "CBB: change this computer's Bluetooth keyboard.": "CBB：更改这台电脑的蓝牙键盘。",
- "CBB: change the TVs this computer is a remote of.": "CBB：更改这台电脑作为遥控器的电视。"
+ "CBB: change the TVs this computer is a remote of.": "CBB：更改这台电脑作为遥控器的电视。",
+ "Looking for the computer with the pairing window...": "正在寻找打开了配对窗口的电脑……",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "群组的恢复密钥只显示这一次，任何地方都不保存：请把它写在纸上或打印此屏幕，并与你的设备分开保管。如果这台电脑丢失，可以用它取回群组（cbb recovery）。"
 }

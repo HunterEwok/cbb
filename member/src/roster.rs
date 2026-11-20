@@ -69,6 +69,15 @@ fn caps_names(c: u64) -> Vec<String> {
         .collect()
 }
 
+/// The caps' bits of their names, as a computer's service is told them;
+/// a name this version does not know counts for nothing.
+pub fn caps_number(names: &[String]) -> u64 {
+    [("admin", CAP_ADMIN), ("dials", CAP_DIALS), ("hub", CAP_HUB)]
+        .iter()
+        .filter(|(n, _)| names.iter().any(|x| x == n))
+        .fold(0, |c, (_, b)| c | b)
+}
+
 fn mac_text(m: &[u8; 6]) -> String {
     m.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":")
 }
@@ -212,5 +221,8 @@ mod tests {
         let pi = get(&c.id);
         assert!(pi.hub && !pi.online && pi.listed);
         assert_eq!(id_text(&c.id).len(), 32);
+        let names = vec!["hub".to_string(), "admin".to_string(), "fly".to_string()];
+        assert_eq!(caps_number(&names), CAP_ADMIN | CAP_HUB);
+        assert_eq!(caps_names(caps_number(&names)), vec!["admin".to_string(), "hub".to_string()]);
     }
 }

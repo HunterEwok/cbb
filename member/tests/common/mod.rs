@@ -298,16 +298,25 @@ impl Svc {
     }
 
     /// Admits joiner through a pairing window here, the joiner dialing
-    /// this member's port with the window's code; returns the name the
-    /// window reports.
+    /// this member's port: each side is shown the same code, and both
+    /// answer yes; returns the name the window reports.
     pub fn admit(&self, joiner: &Svc, admins: bool) -> String {
-        let (_conn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
+        let (mut wconn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
         let opened = read(&mut r).unwrap_or_else(|| panic!("no window:\n{}", self.log()));
         assert!(opened.error().is_empty(), "the window: {}\n{}", opened.error(), self.log());
-        let code = opened.s("code").to_string();
-        assert_eq!(code.len(), 6, "{:?}", opened.h);
-        let joined = joiner.ask(true, json!({"op": "join", "code": code, "address": self.addr()}), b"");
-        assert!(joined.error().is_empty(), "join: {}\n{}\n{}", joined.error(), joiner.log(), self.log());
+        assert!(opened.s("code").is_empty(), "a window of 0.6 has no code to type: {:?}", opened.h);
+        let (mut jconn, mut jr) = joiner.open(true, &json!({"op": "join", "address": self.addr()}), b"");
+        let at_joiner = read(&mut jr).unwrap_or_else(|| panic!("no code at the joiner:\n{}", joiner.log()));
+        assert!(at_joiner.error().is_empty(), "join: {}\n{}\n{}", at_joiner.error(), joiner.log(), self.log());
+        let at_window = read(&mut r).unwrap_or_else(|| panic!("no code at the window:\n{}", self.log()));
+        assert!(at_window.error().is_empty(), "the window: {}\n{}", at_window.error(), self.log());
+        assert_eq!(at_joiner.s("code"), at_window.s("code"));
+        assert!(!at_joiner.s("code").is_empty());
+        for conn in [&mut jconn, &mut wconn] {
+            send(conn, &json!({"op": "answer", "consent": true}), b"");
+        }
+        let joined = read(&mut jr).unwrap_or_else(|| panic!("the join did not end:\n{}", joiner.log()));
+        assert!(joined.error().is_empty() && joined.done(), "join: {}\n{}", joined.error(), joiner.log());
         let closed = read(&mut r).unwrap_or_else(|| panic!("the window did not close:\n{}", self.log()));
         assert!(closed.error().is_empty(), "the window: {}", closed.error());
         joiner.port();

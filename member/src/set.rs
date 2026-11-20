@@ -59,8 +59,16 @@ pub fn local_key(dir: &Path) -> Result<[u8; 32]> {
             let mut key = [0u8; 32];
             getrandom::fill(&mut key)
                 .map_err(|_| Error::msg("cannot make the local key: the system has no randomness"))?;
-            let sealed = crate::keys::seal(&key)?
-                .unwrap_or_else(|| crate::keys::Sealed { secret: key.to_vec(), ..Default::default() });
+            // Sealed by the hardware where it can be; a helper that fails
+            // leaves it in the file, as a device with no hardware keeps it.
+            let sealed = match crate::keys::seal(&key) {
+                Ok(s) => s,
+                Err(e) => {
+                    crate::service::log_line(&format!("cbb: the local key stays in a file: {}", e.for_log()));
+                    None
+                }
+            }
+            .unwrap_or_else(|| crate::keys::Sealed { secret: key.to_vec(), ..Default::default() });
             let data = serde_json::to_vec_pretty(&LocalFile { v: 1, sealed }).context("cannot encode the local key")?;
             files::write_atomic(&path, &data, 0o600)?;
             return Ok(key);

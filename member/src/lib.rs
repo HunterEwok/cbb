@@ -49,6 +49,7 @@ mod evidence;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
+pub mod founding;
 #[cfg(feature = "fuzzing")]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
@@ -233,7 +234,7 @@ Commands:
                           computer, or with -admin for a phone that becomes an admin.
   pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
                           type its code, or paste its QR code's text.
-  pair -code [address]    Join with the code from cbb pair on the root or an admin.
+  pair -code [address]    Join the root's or an admin's pairing window; compare the codes.
   pair -invite file|-     Join from afar with an invitation from cbb invite
                           (its file, or with - its text pasted on standard input).
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
@@ -535,24 +536,39 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     // -name and -caps unless cbb pair gives them. With an address and no
     // service running, cbb joins itself, into its state folder, before its
     // service starts.
+    // A group of 0.6 has no code to type: the window and this device each
+    // show one once they meet, and the person says whether they match.
     if invite.is_none() && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g)) {
-        use std::io::IsTerminal;
-        if std::io::stdin().is_terminal() {
-            print!("{}", tr!("Pairing code: "));
-            std::io::stdout().flush().ok();
-        }
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).context("cannot read the code")?;
-        let code = pair::normalize_code(line.trim())?;
         let h = control::Header {
             op: "join".into(),
-            code: code.to_string(),
             address: code_addr.unwrap_or_default(),
             name: given_name.unwrap_or_default(),
             caps: given_caps,
             ..Default::default()
         };
-        request(g, &control::Message::new(h, Vec::new()))?;
+        println!("{}", tr!("Looking for the computer with the pairing window..."));
+        std::io::stdout().flush().ok();
+        let (mut w, mut r, mut m) = admit_cli::stream(g, h)?;
+        while !m.header.done {
+            if !m.header.code.is_empty() {
+                admit_cli::answer_code(&mut w, &m.header.code)?;
+            }
+            m = check(admit_cli::next(&mut r)?)?;
+        }
+        println!("{}", tr!("Joined the group."));
+        return Ok(());
+    }
+    // With an address and no service running, cbb joins itself, into its
+    // state folder, before its service starts.
+    if invite.is_none()
+        && let Some(a) = &code_addr
+    {
+        let me = joining::Me {
+            name: &name,
+            os: cbb_core::format::print::os_number(admin::os_name()),
+            caps: roster::caps_number(&caps),
+        };
+        joining::at_home(&g.state, resolve(a)?, &me, &mut admit_cli::same_code)?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
     }

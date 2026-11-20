@@ -229,9 +229,9 @@ impl Live {
     /// A deliberate send (cbb copy): to the group, unless muted.
     pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
         let c = self.board.send(text, kind, via)?;
-        if !self.mesh.copy(&c)? {
-            return Err(Error::msg("the group has no device that may read this copy"));
-        }
+        // A group with no other reader yet (this device alone) keeps the
+        // copy here, as the board did; nothing goes out.
+        self.mesh.copy(&c)?;
         Ok(())
     }
 

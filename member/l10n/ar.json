@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "اللصق عن بُعد متوقف على {}.",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "أُزيل {} من المجموعة. يرفضه الأعضاء الآخرون بمجرد علمهم بذلك.",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "أُعيدت تسمية {} إلى {}. تعرض الأجهزة الأخرى الاسم الجديد بمجرد علمها به.",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "لذا مستوى مفاتيح المجموعة هو files: يمكن للمسؤول أو الموزّع أيضًا أن يحفظ مفاتيحه في ملف، كل منهما بعد تحذير (cbb keys).",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "الموزّعات الرئيسية للمجموعة الآن هي {}، بهذا الترتيب؛ وتخدم الموزّعات الأخرى بعدها.",
  "The quick actions are off here.": "الإجراءات السريعة متوقفة هنا.",
  "The quick actions are off on every device of the group.": "الإجراءات السريعة متوقفة على كل أجهزة المجموعة.",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: تغيير محاور المجموعة.",
  "CBB: change which devices may paste on this computer.": "CBB: تغيير الأجهزة التي يمكنها اللصق على هذا الحاسوب.",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: تغيير لوحة مفاتيح Bluetooth لهذا الحاسوب.",
- "CBB: change the TVs this computer is a remote of.": "CBB: تغيير أجهزة التلفاز التي يعمل هذا الحاسوب جهاز تحكم لها."
+ "CBB: change the TVs this computer is a remote of.": "CBB: تغيير أجهزة التلفاز التي يعمل هذا الحاسوب جهاز تحكم لها.",
+ "Looking for the computer with the pairing window...": "جارٍ البحث عن الحاسوب الذي فتح نافذة الاقتران...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "مفتاح استرداد المجموعة يُعرض هذه المرة فقط ولا يُحفظ في أي مكان: اكتبه على ورق أو اطبع هذه الشاشة، واحفظه بعيدًا عن أجهزتك. به تستعيد المجموعة إذا فُقد هذا الحاسوب (cbb recovery)."
 }

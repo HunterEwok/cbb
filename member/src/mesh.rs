@@ -142,6 +142,8 @@ struct Conn {
     sock: TcpStream,
     tx: SyncSender<Vec<u8>>,
     closed: AtomicBool,
+    /// The device with the lower ID dialed it.
+    lower_dialed: bool,
 }
 
 impl Conn {
@@ -577,7 +579,7 @@ impl Mesh {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let mut s = tls::Session::client(Arc::new(self.client_config(expect)?), bykey::unsent_name())?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s)
+        self.run(sock, s, true)
     }
 
     /// Takes a connection a member made and runs it until it ends: the
@@ -586,7 +588,7 @@ impl Mesh {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let mut s = tls::Session::server(Arc::new(self.server_config()?))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s)
+        self.run(sock, s, false)
     }
 
     /// Takes a connection on the member port, where members connect
@@ -624,22 +626,46 @@ impl Mesh {
         }
         let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
-        self.run(sock, s).map(Some)
+        self.run(sock, s, false).map(Some)
     }
 
-    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session) -> Result<DeviceId> {
+    /// Runs a member connection until it ends; dialed says this device
+    /// dialed it. A new connection to a peer replaces the old one, as a
+    /// reconnect does, unless the old one was dialed by the device with the
+    /// lower ID and this one was not: when both dial at once, the two keep
+    /// the same connection, and neither is left without one.
+    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session, dialed: bool) -> Result<DeviceId> {
         let point = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         let peer_key = Key::es256(point.to_vec());
         let peer = peer_key.device_id();
+        let lower_dialed = dialed == (self.device().0 < peer.0);
         sock.set_read_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         // A peer that stops reading ends the connection rather than holding
         // the writer, and the TLS lock with it, for ever.
         sock.set_write_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_LEN);
         let w = sock.try_clone().map_err(|e| Error::with("cannot use the connection", e))?;
-        let conn = Arc::new(Conn { peer, tls: Mutex::new(session), sock: w, tx, closed: AtomicBool::new(false) });
-        if let Some(old) = self.conns.lock().unwrap().insert(peer, conn.clone()) {
-            old.close();
+        let conn = Arc::new(Conn {
+            peer,
+            tls: Mutex::new(session),
+            sock: w,
+            tx,
+            closed: AtomicBool::new(false),
+            lower_dialed,
+        });
+        {
+            let mut conns = self.conns.lock().unwrap();
+            if let Some(old) = conns.get(&peer)
+                && old.lower_dialed
+                && !lower_dialed
+                && !old.closed.load(Ordering::SeqCst)
+            {
+                conn.close();
+                return Ok(peer);
+            }
+            if let Some(old) = conns.insert(peer, conn.clone()) {
+                old.close();
+            }
         }
         let writer = {
             let conn = conn.clone();

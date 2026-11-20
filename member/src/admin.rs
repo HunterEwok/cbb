@@ -135,6 +135,13 @@ pub fn os_name() -> &'static str {
 /// the key level files (docs/roadmap.md, "Key levels"). It returns the new
 /// identity, which the service starts in, and why the member key is in a
 /// file when the hardware could not take it.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "cbb new makes groups of 0.6 (founding.rs); the old member's tests make theirs here until it goes"
+    )
+)]
 pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     if Identity::load(dir)?.is_some() {
         return Err(Error::msg("this device is already in a group; cbb status shows it"));

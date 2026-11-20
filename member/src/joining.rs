@@ -38,6 +38,7 @@ pub struct Me<'a> {
 /// and gives the person's answer. The set is kept in dir before the
 /// member hears it was; an error when this device is in a group already.
 pub fn at_home(dir: &Path, addr: SocketAddr, me: &Me<'_>, ask: Ask<'_>) -> Result<Box<Admitted>> {
+    std::fs::create_dir_all(dir).map_err(|e| Error::with(format!("cannot make {}", dir.display()), e))?;
     let local = crate::set::local_key(dir)?;
     if crate::set::load(dir, &local)?.is_some() {
         return Err(Error::msg("this device is in a group already: leave it first (cbb leave)"));
@@ -76,7 +77,21 @@ pub fn at_home(dir: &Path, addr: SocketAddr, me: &Me<'_>, ask: Ask<'_>) -> Resul
         exporter: x,
     };
     let now = || crate::uptime::wall_ms().max(0) as u64;
-    join::joiner(&mut stream, j, ask, &now, &mut |a| crate::set::save(dir, &a.set, &local))
+    let mut asked = false;
+    let mut ask = |code: &str| {
+        asked = true;
+        ask(code)
+    };
+    let got = join::joiner(&mut stream, j, &mut ask, &now, &mut |a| crate::set::save(dir, &a.set, &local));
+    // A member with no window open ends the connection before any code.
+    got.map_err(|e| {
+        let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
+        if !asked && eof {
+            e.context(format!("{addr} has no pairing window open: run cbb pair there first, then join"))
+        } else {
+            e
+        }
+    })
 }
 
 #[cfg(test)]

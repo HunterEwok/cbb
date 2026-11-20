@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "Kubandika kwa mbali kumezimwa kwenye {}.",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "{} kimeondolewa kwenye kikundi. Wanachama wengine hukikataa mara wanapopata habari.",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "{} kimepewa jina jipya {}. Vifaa vingine huonyesha jina jipya mara vinapopata habari.",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "Kwa hivyo kiwango cha funguo cha kikundi ni files: msimamizi au kitovu pia anaweza kuhifadhi funguo zake kwenye faili, kila mmoja baada ya onyo (cbb keys).",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "Vitovu vikuu vya kikundi sasa ni {}, kwa mpangilio huu; vitovu vingine huhudumu baada yao.",
  "The quick actions are off here.": "Vitendo vya haraka vimezimwa hapa.",
  "The quick actions are off on every device of the group.": "Vitendo vya haraka vimezimwa kwenye kila kifaa cha kikundi.",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: badilisha vitovu vya kikundi.",
  "CBB: change which devices may paste on this computer.": "CBB: badilisha vifaa vinavyoweza kubandika kwenye kompyuta hii.",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: badilisha kibodi ya Bluetooth ya kompyuta hii.",
- "CBB: change the TVs this computer is a remote of.": "CBB: badilisha televisheni ambazo kompyuta hii ni rimoti yake."
+ "CBB: change the TVs this computer is a remote of.": "CBB: badilisha televisheni ambazo kompyuta hii ni rimoti yake.",
+ "Looking for the computer with the pairing window...": "Inatafuta kompyuta yenye dirisha la kuoanisha...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "Ufunguo wa kurejesha wa kikundi unaonyeshwa mara hii tu na hauhifadhiwi popote: uandike kwenye karatasi au uchapishe skrini hii, na uuweke mbali na vifaa vyako. Kwa huo unarudisha kikundi kompyuta hii ikipotea (cbb recovery)."
 }

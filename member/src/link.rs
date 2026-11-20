@@ -61,6 +61,10 @@ pub struct Exchange {
     peer_hash: KeyHash,
     rounds: u32,
     stuck: bool,
+    /// The digest of the peer's last hello.
+    theirs: Option<[u8; 32]>,
+    /// This side sent its `have` since the peer's last hello.
+    have_sent: bool,
 }
 
 /// The frame of a message of type t with fields.
@@ -92,7 +96,7 @@ impl Exchange {
     /// device whose key hash is own.
     pub fn new(own: KeyHash, peer: [u8; 65]) -> Exchange {
         let peer_hash = cbb_core::records::Key::es256(peer.to_vec()).hash();
-        Exchange { own, peer, peer_hash, rounds: 0, stuck: false }
+        Exchange { own, peer, peer_hash, rounds: 0, stuck: false, theirs: None, have_sent: false }
     }
 
     /// Takes one message (a frame's message, as `frame::read` gives it).
@@ -105,6 +109,12 @@ impl Exchange {
                 let ids: Vec<RecordId> = ids_of(v.get(2));
                 let lacking: Vec<RecordId> = ids.into_iter().filter(|id| !set.contains(id)).collect();
                 want(&lacking, None, &mut out);
+                // A peer that answers this side's new hello with its have
+                // still lacks what changed here: this side sends its have
+                // too, once for each hello of the peer's.
+                if self.theirs.is_some_and(|d| d != set.digest()) && !self.have_sent {
+                    self.send_have(set, &mut out);
+                }
             }
             m::T_WANT => {
                 let ids = ids_of(v.get(2));
@@ -127,28 +137,38 @@ impl Exchange {
     fn on_hello(&mut self, set: &mut RecordSet, v: &Value<'_>, out: &mut Out) {
         let ours = set.digest();
         let theirs = v.get(7).and_then(Value::as_bytes).and_then(|b| <[u8; 32]>::try_from(b).ok());
-        let state = set.state();
+        self.theirs = theirs;
+        self.have_sent = false;
         if theirs.is_some_and(|d| d != ours) {
-            if self.rounds >= MAX_ROUNDS {
-                if !self.stuck {
-                    self.stuck = true;
-                    out.stuck = theirs.map(|d| (d, ours));
-                }
-                return;
-            }
-            self.rounds = self.rounds.saturating_add(1);
-            let given: Vec<RecordId> = set.for_peer(&state, &self.peer_hash).iter().map(|r| r.id()).collect();
-            for part in sync::have_parts(given.iter()) {
-                let ids: Vec<Value<'_>> = part.iter().map(|id| Value::Bytes(&id.0)).collect();
-                if !ids.is_empty() {
-                    out.send.push(write(m::T_HAVE, vec![(2, Value::Array(sorted(ids)))]));
-                }
-            }
+            self.send_have(set, out);
         }
+        let state = set.state();
         // Equal digests say nothing of what both lack: what its records
         // name and the list it waits for, it still asks.
         let lacking = set.missing(&state);
         want(&lacking, set.missing_list(), out);
+    }
+
+    /// Sends what this side holds for the peer, in `have` parts, while
+    /// the rounds last.
+    fn send_have(&mut self, set: &RecordSet, out: &mut Out) {
+        self.have_sent = true;
+        if self.rounds >= MAX_ROUNDS {
+            if !self.stuck {
+                self.stuck = true;
+                out.stuck = self.theirs.map(|d| (d, set.digest()));
+            }
+            return;
+        }
+        self.rounds = self.rounds.saturating_add(1);
+        let state = set.state();
+        let given: Vec<RecordId> = set.for_peer(&state, &self.peer_hash).iter().map(|r| r.id()).collect();
+        for part in sync::have_parts(given.iter()) {
+            let ids: Vec<Value<'_>> = part.iter().map(|id| Value::Bytes(&id.0)).collect();
+            if !ids.is_empty() {
+                out.send.push(write(m::T_HAVE, vec![(2, Value::Array(sorted(ids)))]));
+            }
+        }
     }
 
     fn answer(&self, set: &RecordSet, ids: &[RecordId], list: Option<[u8; 32]>, out: &mut Out) {

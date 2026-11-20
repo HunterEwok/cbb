@@ -38,11 +38,15 @@ pub fn signer<'a>(own: &'a Own, state: &State) -> Option<&'a dyn ExternalKey> {
     state.devices.iter().any(|d| d.admin == Some(h) && !d.frozen).then_some(&**admin)
 }
 
-/// The device a person names: by its name, or by a prefix of its ID in
-/// hex of at least four digits; an error when none or several fit.
+/// The device a person names: by its name (as written first, then in any
+/// case), or by a prefix of its ID in hex of at least four digits; an error
+/// when none or several fit.
 pub fn find<'a>(state: &'a State, target: &str) -> Result<&'a DeviceState> {
     let t = target.trim();
-    let by_name: Vec<&DeviceState> = state.devices.iter().filter(|d| d.name == t).collect();
+    let mut by_name: Vec<&DeviceState> = state.devices.iter().filter(|d| d.name == t).collect();
+    if by_name.is_empty() {
+        by_name = state.devices.iter().filter(|d| d.name.eq_ignore_ascii_case(t)).collect();
+    }
     let fits: Vec<&DeviceState> = if by_name.is_empty() && t.len() >= MIN_PREFIX {
         let lower = t.to_ascii_lowercase();
         state.devices.iter().filter(|d| hex(&d.id.0).starts_with(&lower)).collect()
@@ -51,8 +55,11 @@ pub fn find<'a>(state: &'a State, target: &str) -> Result<&'a DeviceState> {
     };
     match fits.as_slice() {
         [d] => Ok(d),
-        [] => Err(Error::msg(format!("no device of the group is called {t}"))),
-        _ => Err(Error::msg(format!("several devices fit {t}: name one by its ID"))),
+        [] => Err(Error::msg(format!("no device {t:?} in the group; cbb status lists them"))),
+        _ => Err(Error::msg(format!(
+            "several devices fit {t:?}; name one by its ID: {}",
+            fits.iter().map(|d| hex(&d.id.0)).collect::<Vec<_>>().join(", ")
+        ))),
     }
 }
 
@@ -101,6 +108,12 @@ pub fn remove(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot remove the device: {e}")))?))
 }
 
+/// The names of the devices whose keys signed two histories: none when
+/// the group has no fork to resolve.
+pub fn two_histories(state: &State) -> Vec<String> {
+    state.devices.iter().filter(|d| keys_of(d).iter().any(|k| state.two_histories(k))).map(|d| d.name.clone()).collect()
+}
+
 /// Freezes a device (its keys sign nothing and it gets no copies until it
 /// is thawed), or thaws it.
 pub fn freeze(
@@ -141,6 +154,12 @@ pub fn freeze(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot change the freeze: {e}")))?))
 }
 
+/// Whether a person may give a device this name: 1 to 64 bytes and no
+/// control characters.
+pub fn valid_name(s: &str) -> bool {
+    cbb_core::join::info::valid_name(s)
+}
+
 /// Gives a device another name.
 pub fn rename(
     set: &mut RecordSet,
@@ -149,11 +168,15 @@ pub fn rename(
     name: &str,
     now_ms: u64,
 ) -> Result<(DeviceState, Vec<Record>)> {
+    let name = name.trim();
+    if !valid_name(name) {
+        return Err(Error::msg("a device name has 1 to 64 characters and no control characters"));
+    }
     let st = set.state();
     let d = find(&st, target)?.clone();
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(Error::msg("a device's name is not empty"));
+    // The same name signs nothing and still answers.
+    if d.name == name {
+        return Ok((d, Vec::new()));
     }
     if st.devices.iter().any(|o| o.id != d.id && o.name == name) {
         return Err(Error::msg(format!("another device is called {name}")));

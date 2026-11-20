@@ -2235,6 +2235,16 @@ alike. A full set with the records outside the rooms and up to 64 lists does not
 so nothing assumes it does. A Welcome carries the set whole, in parts when it does not fit, with
 its digest (section 6, "The Welcome").
 
+On a connection (`member/src/link.rs`), a member whose digest differs from the one in the
+peer's `hello` sends `have` with the IDs of the records it holds for that peer, and asks with
+`want` for what the other side's `have` lists and it lacks. A member that takes a peer's `have`
+while the peer's last `hello` still showed a digest other than its own sends its own `have`
+too, once for each `hello` of the peer's: a record written while two members are connected thus
+reaches the other side although only the writer sent a new `hello`. A connection answers at most
+64 differing digests (`link::MAX_ROUNDS`) and then logs that the exchange is stuck. When two
+members dial each other at once, both keep the connection the one with the lower device ID
+dialed.
+
 #### What is offered again after a restart
 
 Being settled.

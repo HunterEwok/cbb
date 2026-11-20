@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "{} पर रिमोट पेस्ट बंद है।",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "{} को समूह से हटा दिया गया। बाकी सदस्य इसके बारे में सुनते ही इसे अस्वीकार कर देते हैं।",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "{} का नाम बदलकर {} किया गया। बाकी डिवाइस इसके बारे में सुनते ही नया नाम दिखाते हैं।",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "इसलिए समूह का कुंजी स्तर files है: एडमिन या हब भी अपनी कुंजियाँ फ़ाइल में रख सकता है, हर एक चेतावनी के बाद (cbb keys)।",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "समूह के मुख्य हब अब {} हैं, इसी क्रम में; बाकी हब इनके बाद सेवा देते हैं।",
  "The quick actions are off here.": "यहाँ त्वरित क्रियाएँ बंद हैं।",
  "The quick actions are off on every device of the group.": "समूह के हर डिवाइस पर त्वरित क्रियाएँ बंद हैं।",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: समूह के हब बदलें।",
  "CBB: change which devices may paste on this computer.": "CBB: बदलें कि कौन से डिवाइस इस कंप्यूटर पर पेस्ट कर सकते हैं।",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: इस कंप्यूटर का Bluetooth कीबोर्ड बदलें।",
- "CBB: change the TVs this computer is a remote of.": "CBB: वे टीवी बदलें जिनका रिमोट यह कंप्यूटर है।"
+ "CBB: change the TVs this computer is a remote of.": "CBB: वे टीवी बदलें जिनका रिमोट यह कंप्यूटर है।",
+ "Looking for the computer with the pairing window...": "पेयरिंग विंडो वाला कंप्यूटर खोजा जा रहा है...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "समूह की रिकवरी कुंजी केवल इसी बार दिखाई जाती है और कहीं सहेजी नहीं जाती: इसे काग़ज़ पर लिख लें या यह स्क्रीन प्रिंट कर लें, और अपने डिवाइसों से अलग रखें। यह कंप्यूटर खो जाने पर इससे आप समूह वापस ले सकते हैं (cbb recovery)।"
 }

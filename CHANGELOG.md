@@ -44,6 +44,16 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `cbb new` makes a group on the records of 0.6 (`member/src/founding.rs`): the root key in
+  the TPM or the Secure Enclave where it can be, a recovery key whose sheet `cbb new` shows
+  once (four lines and a QR code) and nothing keeps, and this computer's record under the
+  root. `cbb pair` on the root or an admin opens a pairing window on the member port, and
+  `cbb pair -code [ADDRESS]` on a new computer joins it: no code is typed, both computers show
+  one and the person types `yes` on each when they match.
+- On the member connection of 0.6, a member that answers a peer's `have` sends its own `have`
+  once for each hello of the peer's when the digests still differ, so that a record written
+  while two members are connected reaches the other one, and of two connections that two
+  members dial to each other at once both keep the one the lower device ID dialed.
 - The service runs a device whose group is kept on the records of 0.6 (`group.cbor`) on the
   member of 0.6 (`member/src/service/on_live.rs`): the clipboard watchers, `cbb copy` and
   `cbb paste`, status, devices, the tiles, sync, muting this device, leaving, and removing,

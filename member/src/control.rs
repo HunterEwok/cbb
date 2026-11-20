@@ -783,7 +783,6 @@ pub fn reply(header: Header, payload: Vec<u8>) -> Message {
 }
 
 /// An answer to a request that more answers follow: op reply, not done.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub fn partial(header: Header) -> Message {
     Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
 }

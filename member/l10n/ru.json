@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "Удалённая вставка выключена на {}.",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "{} удалён из группы. Остальные участники отказывают ему, как только узнают об этом.",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "{} переименован в {}. Остальные устройства покажут новое имя, как только узнают о нём.",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "Поэтому уровень ключей группы — files: админ или хаб тоже может хранить ключи в файле, каждый после предупреждения (cbb keys).",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "Главные хабы группы теперь {}, в этом порядке; остальные хабы служат после них.",
  "The quick actions are off here.": "Быстрые действия здесь выключены.",
  "The quick actions are off on every device of the group.": "Быстрые действия выключены на всех устройствах группы.",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: изменить хабы группы.",
  "CBB: change which devices may paste on this computer.": "CBB: изменить, какие устройства могут вставлять на этом компьютере.",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: изменить Bluetooth-клавиатуру этого компьютера.",
- "CBB: change the TVs this computer is a remote of.": "CBB: изменить телевизоры, пультом которых служит этот компьютер."
+ "CBB: change the TVs this computer is a remote of.": "CBB: изменить телевизоры, пультом которых служит этот компьютер.",
+ "Looking for the computer with the pairing window...": "Ищу компьютер с открытым окном сопряжения...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "Ключ восстановления группы показан один раз и нигде не хранится: запишите его на бумаге или распечатайте этот экран и храните отдельно от своих устройств. С ним вы вернёте группу, если этот компьютер пропадёт (cbb recovery)."
 }

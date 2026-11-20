@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "ההדבקה מרחוק כבויה ב-{}.",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "{} הוסר מהקבוצה. שאר החברים דוחים אותו ברגע שהם שומעים על כך.",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "שמו של {} שונה ל-{}. שאר המכשירים מציגים את השם החדש ברגע שהם שומעים עליו.",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "לכן רמת המפתחות של הקבוצה היא files: גם מנהל או רכזת יכולים לשמור את המפתחות שלהם בקובץ, כל אחד אחרי אזהרה (cbb keys).",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "הרכזות הראשיות של הקבוצה הן עכשיו {}, בסדר הזה; שאר הרכזות משרתות אחריהן.",
  "The quick actions are off here.": "הפעולות המהירות כבויות כאן.",
  "The quick actions are off on every device of the group.": "הפעולות המהירות כבויות בכל מכשירי הקבוצה.",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: שינוי הרכזות של הקבוצה.",
  "CBB: change which devices may paste on this computer.": "CBB: שינוי המכשירים שיכולים להדביק במחשב הזה.",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: שינוי מקלדת ה-Bluetooth של המחשב הזה.",
- "CBB: change the TVs this computer is a remote of.": "CBB: שינוי הטלוויזיות שהמחשב הזה משמש להן שלט."
+ "CBB: change the TVs this computer is a remote of.": "CBB: שינוי הטלוויזיות שהמחשב הזה משמש להן שלט.",
+ "Looking for the computer with the pairing window...": "מחפש את המחשב שפתח חלון צימוד...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "מפתח השחזור של הקבוצה מוצג פעם אחת בלבד ואינו נשמר בשום מקום: כתבו אותו על נייר או הדפיסו את המסך הזה, ושמרו אותו בנפרד מהמכשירים שלכם. בעזרתו תחזירו את הקבוצה אם המחשב הזה יאבד (cbb recovery)."
 }

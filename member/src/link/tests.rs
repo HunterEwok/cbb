@@ -53,12 +53,20 @@ fn admit(set: &mut RecordSet, root: &K, key: &K, name: &str, time_ms: u64) {
 /// Runs both sides until nothing is in flight: each opens with its hello
 /// and sends one again after every change. Returns how many messages went.
 fn settle(a: (&mut RecordSet, &mut Exchange), b: (&mut RecordSet, &mut Exchange)) -> usize {
+    let opening = vec![(true, hello(a.0)), (false, hello(b.0))];
+    flow(a, b, opening)
+}
+
+/// Runs both sides from the frames in flight (to b?, frame) until
+/// nothing is: each sends its hello again after every change.
+fn flow(
+    a: (&mut RecordSet, &mut Exchange),
+    b: (&mut RecordSet, &mut Exchange),
+    opening: Vec<(bool, Vec<u8>)>,
+) -> usize {
     let (sa, xa) = a;
     let (sb, xb) = b;
-    // In flight: (to b?, frame).
-    let mut q: VecDeque<(bool, Vec<u8>)> = VecDeque::new();
-    q.push_back((true, hello(sa)));
-    q.push_back((false, hello(sb)));
+    let mut q: VecDeque<(bool, Vec<u8>)> = opening.into();
     let mut n = 0;
     while let Some((to_b, f)) = q.pop_front() {
         n += 1;
@@ -117,7 +125,10 @@ fn a_record_written_while_connected_reaches_the_peer() {
     admit(&mut sa, &root, &c, "c", 3);
     let out = xb.take(&mut sb, &hello(&sa)[4..]).unwrap();
     assert_eq!(out.send.len(), 1, "b answers with its have");
-    settle((&mut sa, &mut xa), (&mut sb, &mut xb));
+    // Only a's hello goes: b says nothing new of itself, and a answers b's
+    // have with its own.
+    let opening = out.send.into_iter().map(|f| (false, f)).collect();
+    flow((&mut sa, &mut xa), (&mut sb, &mut xb), opening);
     assert_eq!(sa.digest(), sb.digest());
 }
 

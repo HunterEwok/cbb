@@ -46,7 +46,6 @@
  "Remote paste is off on {}.": "El pegado remoto está desactivado en {}.",
  "Removed {} from the group. The other members refuse it as soon as they hear of it.": "Has quitado {} del grupo. Los demás miembros lo rechazan en cuanto se enteran.",
  "Renamed {} to {}. The other devices show the new name as soon as they hear of it.": "Has renombrado {} como {}. Los demás dispositivos muestran el nuevo nombre en cuanto se enteran.",
- "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys).": "Así que el nivel de claves del grupo es files: un administrador o un concentrador también puede guardar sus claves en un archivo, cada uno tras un aviso (cbb keys).",
  "The group's main hubs are now {}, in this order; the other hubs serve after them.": "Los concentradores principales del grupo son ahora {}, en este orden; los demás concentradores sirven después de ellos.",
  "The quick actions are off here.": "Las acciones rápidas están desactivadas aquí.",
  "The quick actions are off on every device of the group.": "Las acciones rápidas están desactivadas en todos los dispositivos del grupo.",
@@ -153,5 +152,7 @@
  "CBB: change the group's hubs.": "CBB: cambiar los hubs del grupo.",
  "CBB: change which devices may paste on this computer.": "CBB: cambiar qué dispositivos pueden pegar en este ordenador.",
  "CBB: change this computer's Bluetooth keyboard.": "CBB: cambiar el teclado Bluetooth de este ordenador.",
- "CBB: change the TVs this computer is a remote of.": "CBB: cambiar los televisores de los que este ordenador es mando."
+ "CBB: change the TVs this computer is a remote of.": "CBB: cambiar los televisores de los que este ordenador es mando.",
+ "Looking for the computer with the pairing window...": "Buscando el ordenador con la ventana de emparejamiento...",
+ "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery).": "La clave de recuperación del grupo, que se muestra solo esta vez y no se guarda en ningún sitio: escríbala en papel o imprima esta pantalla, y guárdela lejos de sus dispositivos. Con ella recupera el grupo si pierde este ordenador (cbb recovery)."
 }

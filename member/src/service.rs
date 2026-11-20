@@ -259,6 +259,8 @@ struct Service {
 enum Pairing {
     Window(Arc<Window>),
     Qr,
+    /// A window of the member of 0.6 (on_live.rs).
+    Live,
 }
 
 /// Frees the pairing slot when dropped.
@@ -314,6 +316,7 @@ pub fn log_line(s: &str) {
 /// Runs the service until SIGTERM or SIGINT.
 /// What the user sees when the device's group file cannot be read, as Go's
 /// errBroken.
+const BROKEN_LIVE: &str = "this device's group files (group.cbor and the keys beside it in the service's state directory) do not open, so the service does not start the group; restore them from a backup, or leave the group (cbb leave) and join again";
 const BROKEN: &str = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again";
 
 pub fn run(cfg: Config) -> Result<()> {
@@ -662,7 +665,7 @@ fn run_live(svc: &Arc<Service>, cfg: &Config, admin_socket: &Path) -> Result<()>
         Err(e) => {
             // The group's files do not open: the service keeps answering,
             // with why, until it stops; cbb leave still works.
-            (svc.log)(&format!("cbb: {BROKEN} ({})", e.for_log()));
+            (svc.log)(&format!("cbb: {BROKEN_LIVE} ({})", e.for_log()));
             *svc.broken.lock().unwrap() = Some(e.for_log());
             None
         }
@@ -2246,7 +2249,8 @@ impl Service {
         }
         let broken = self.broken.lock().unwrap().clone();
         if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
-            let h = Header { error: BROKEN.to_string(), detail, done: true, ..Default::default() };
+            let why = if on_live::in_group(&self.state_dir) { BROKEN_LIVE } else { BROKEN };
+            let h = Header { error: why.to_string(), detail, done: true, ..Default::default() };
             let _ = control::write(&mut out, &control::reply(h, Vec::new()));
             return;
         }
@@ -2269,6 +2273,24 @@ impl Service {
                 }
             };
             let _ = control::write(&mut out, &answer);
+            return;
+        }
+        if m.header.op == "pair"
+            && m.header.addrs.is_empty()
+            && m.header.code.is_empty()
+            && let Some(live) = self.live()
+        {
+            if let Err(e) = self.live_pair_window(&live, r, &mut out) {
+                (self.log)(&format!("cbb: pair: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
+        if m.header.op == "join" && m.header.code.is_empty() && m.header.invite.is_empty() && !m.header.listen {
+            if let Err(e) = self.live_join(&m, r, &mut out) {
+                (self.log)(&format!("cbb: join: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
             return;
         }
         if m.header.op == "pair" && m.header.addrs.is_empty() && m.header.code.is_empty() {
@@ -2507,7 +2529,15 @@ impl Service {
     }
 
     fn request(&self, m: &Message) -> Result<Message> {
-        if let Some(live) = self.live()
+        // A group of 0.6 that is still starting: a request that needs the
+        // group waits for it, as on the old member.
+        let live = match self.live() {
+            None if on_live::in_group(&self.state_dir) && !on_live::needs_no_group(&m.header.op) => {
+                Some(self.started(|| self.live())?)
+            }
+            l => l,
+        };
+        if let Some(live) = live
             && let Some(res) = self.live_request(&live, m)
         {
             return res;
@@ -3051,7 +3081,7 @@ impl Service {
         use cbb_core::pair::Refusal;
         let w = match &*self.pairing.lock().unwrap() {
             Some(Pairing::Window(w)) => Ok(w.clone()),
-            Some(Pairing::Qr) => Err(Refusal::Busy),
+            Some(Pairing::Qr | Pairing::Live) => Err(Refusal::Busy),
             None => Err(Refusal::Closed),
         };
         match w {
@@ -3072,24 +3102,34 @@ impl Service {
     /// then starts in it.
     fn new_group(&self) -> Result<Message> {
         let _one = self.creating.lock().unwrap();
-        if self.node.read().unwrap().is_some() {
+        if self.node.read().unwrap().is_some() || self.live().is_some() {
             return Err(Error::msg("this device is already in a group; cbb status shows it"));
         }
-        let (ident, why) = crate::admin::new_group(&self.state_dir, &self.name)?;
-        (self.log)(&format!("cbb: created a new group {}", ident.tag()));
+        crate::admin::keys_allowed()?;
+        let me = crate::founding::Me {
+            name: &self.name,
+            os: cbb_core::format::print::os_number(crate::admin::os_name()),
+            caps: crate::roster::caps_number(&self.caps),
+        };
+        let f = crate::founding::found(&self.state_dir, &me, uptime::wall_ms().max(0) as u64)?;
+        let st = f.set.state();
+        let tag = crate::live::tag(&st);
+        (self.log)(&format!("cbb: created a new group {tag} on the records of 0.6"));
         let status = Status {
-            device: ident.id.to_string(),
-            group: ident.tag(),
+            device: st.root_device.as_ref().map(crate::roster::id_text).unwrap_or_default(),
+            group: tag,
             role: "member".into(),
             os: crate::admin::os_name().into(),
             version: VERSION.into(),
-            // A group made on a computer starts at the level files
-            // (admin::new_group), whatever its member key.
-            key_level: "files".into(),
-            key_problem: why,
+            key_level: if f.root_held { "hardware" } else { "files" }.into(),
+            key_problem: f.key_problem.clone(),
             ..Default::default()
         };
-        Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, Vec::new()))
+        // The recovery sheet goes to the person who made the group, once:
+        // the service keeps no copy.
+        let sheet = serde_json::to_vec(&serde_json::json!({ "sheet": &*f.sheet, "qr": &*f.qr }))
+            .context("cannot encode the recovery sheet")?;
+        Ok(control::reply(Header { status: Some(status), done: true, ..Default::default() }, sheet))
     }
 
     /// Serves a watcher: what it reports goes to the engine, the writes the
