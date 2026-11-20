@@ -41,7 +41,7 @@ they look, so both apps are built to the same plan.
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
    the pull-down menu, as in every Silica app.
 
-   On 0.6 (Android and the iPhone now, Aurora and HarmonyOS next) the new device always dials
+   On 0.6 (Android, the iPhone and Aurora now, HarmonyOS next) the new device always dials
    (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
    without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
    set kept where the member runs) and shows its recovery sheet once; on the root phone, or a
@@ -50,7 +50,11 @@ they look, so both apps are built to the same plan.
    camera (or takes the code's text pasted) and dials the window. On both ends the code the
    session commits to then shows with **They match** and **They don't match**, and the device
    joins only when both persons say they match. The device list, who is the root and who is
-   an admin come from the member's `group` (docs/core-api.md). A group of 0.5 keeps its old
+   an admin come from the member's `group` (docs/core-api.md). On Aurora, which gives the app
+   no DNS-SD of the system, **Create a group** makes the group of 0.6 and shows the sheet,
+   **Add a device** has the core announce the window by mDNS, and **Join a group** needs no
+   camera: it finds the one window announced on the home network, or dials a pasted
+   `cbb://pair` code; who is an admin comes from the member's `devices`. A group of 0.5 keeps its old
    screens until the end of the wave removes them.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for

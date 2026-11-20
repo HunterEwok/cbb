@@ -44,6 +44,7 @@ SOURCES += \
     src/join.cpp \
     src/member.cpp \
     src/membership.cpp \
+    src/pairing06.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
     src/admit.h \
@@ -58,6 +59,7 @@ HEADERS += \
     src/join.h \
     src/member.h \
     src/membership.h \
+    src/pairing06.h \
     src/platform/keystore.h \
     src/pinrule.h \
     src/platform/osinfo.h \
@@ -105,6 +107,9 @@ DISTFILES += \
     qml/pages/InvitePage.qml \
     qml/pages/NewGroupPage.qml \
     qml/pages/AddDevicePage.qml \
+    qml/pages/WindowPage.qml \
+    qml/pages/JoinWindowPage.qml \
+    qml/pages/CodeQuestion.qml \
     qml/pages/DevicePage.qml \
     qml/pages/DeviceCard.qml \
     qml/pages/AlertsCard.qml \

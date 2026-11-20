@@ -12,6 +12,7 @@
 #include "join.h"
 #include "member.h"
 #include "membership.h"
+#include "pairing06.h"
 #include "pastereceiver.h"
 #include "platform/osinfo.h"
 
@@ -56,6 +57,12 @@ class App : public QObject
     // Why the last code the camera read is not a recovery sheet's.
     Q_PROPERTY(QString restoreHint READ restoreHint NOTIFY restoreChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
+    // Pairing in a group of 0.6: the admin's window and the new phone's
+    // joiner; pairsOn06 says which pages pair, true without a group, as a
+    // new group is one of 0.6.
+    Q_PROPERTY(PairWindow *window READ window CONSTANT)
+    Q_PROPERTY(Joiner *joiner READ joiner CONSTANT)
+    Q_PROPERTY(bool pairsOn06 READ pairsOn06 NOTIFY groupChanged)
     Q_PROPERTY(Member *member READ member CONSTANT)
     Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Invite *invite READ invite CONSTANT)
@@ -119,6 +126,9 @@ public:
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
+    PairWindow *window() { return &m_window; }
+    Joiner *joiner() { return &m_joiner; }
+    bool pairsOn06() const { return m_member.isNull() || m_member.isV06(); }
     Member *member() { return &m_node; }
     Admit *admit() { return &m_admit; }
     Invite *invite() { return &m_invite; }
@@ -165,9 +175,16 @@ public:
     Q_INVOKABLE void startInvite(int seconds = 3600);
     // Joins by a remote invitation's text, which the user accepted.
     Q_INVOKABLE void startJoinByInvite(const QString &text);
-    // Makes a group of the phone's own, its root key the admin key in the
-    // TEE (docs/protocol.md, section 3), and starts the member as its root.
+    // Makes a group of 0.6 of the phone's own, its root key the admin key
+    // in the TEE (docs/protocol.md, section 3), shows its recovery sheet
+    // (recoveryText, recoveryModules) and starts the member as its root.
     Q_INVOKABLE void makeGroup();
+    // As an admin of a group of 0.6: opens the member's pairing window with
+    // the admin key, found off the GUI thread behind the admin PIN.
+    Q_INVOKABLE void openWindow();
+    // Without a group: joins a group of 0.6 by the window announced at
+    // home, or by a window's QR code text when qr is given.
+    Q_INVOKABLE void joinByWindow(const QString &qr = QString());
     // An admin's change to a device of the group (remove, rename, thaw,
     // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.
@@ -265,6 +282,8 @@ signals:
     void pinChanged(bool ok, bool locked, int triesLeft);
     void recoveryChanged();
     void restoreChanged();
+    // makeGroup made the group; its recovery sheet waits to be shown.
+    void groupMade();
 
 private:
     // Before the admin key signs: true when the PIN is asked first, run
@@ -304,6 +323,8 @@ private:
     QByteArray m_publicKey;
     Membership m_member;
     Join m_join;
+    PairWindow m_window;
+    Joiner m_joiner;
     Member m_node;
     Admit m_admit;
     Invite m_invite;

@@ -340,6 +340,37 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
             startMember();
         });
     });
+    // A phone that joined a group of 0.6: the set is in the app's folder.
+    connect(&m_joiner, &Joiner::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
+        emit groupChanged();
+        startMember();
+    });
+    // On 0.6 the group's records say who is an admin; the member's devices
+    // list them.
+    connect(&m_node, &Member::devicesChanged, this, [this]() {
+        if (!m_member.isV06())
+            return;
+        for (const QVariant &v : m_node.devices()) {
+            const QVariantMap d = v.toMap();
+            if (!d.value(QStringLiteral("self")).toBool())
+                continue;
+            const bool admin = d.value(QStringLiteral("admin")).toBool();
+            if (admin != m_member.admin06) {
+                Membership next = m_member;
+                next.admin06 = admin;
+                if (keep(next)) {
+                    Errors::log(QStringLiteral("admin: the records %1 this phone an admin").arg(admin ? QStringLiteral("make") : QStringLiteral("no longer make")));
+                    emit groupChanged();
+                }
+            }
+            return;
+        }
+    });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
@@ -1109,23 +1140,17 @@ void App::makeGroup()
     }
     if (askPin([this]() { makeGroup(); }))
         return;
-    Failure failure;
-    const QByteArray secret = sealSecret(&failure);
-    const QJsonObject seal = secret.isEmpty() ? QJsonObject()
-        : Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
-    if (!failure.isNull()) {
-        show(Errors::shown(failure));
-        return;
-    }
     m_busy = true;
     emit keyChanged();
     auto *thread = new GroupThread;
+    // A group of 0.6: the set is kept in the app's folder, where the member
+    // then starts on it (ffi's cbb_group_new with dir).
     thread->request = QJsonObject{
+        {QStringLiteral("dir"), Membership::directory()},
         {QStringLiteral("name"), phoneName()},
         {QStringLiteral("os"), phoneOs()},
         {QStringLiteral("store"), KeyStore::store()},
         {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
-        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
     };
     connect(thread, &QThread::finished, this, [this, thread]() {
         const QJsonObject group = thread->group;
@@ -1140,19 +1165,81 @@ void App::makeGroup()
             show(Errors::shown(failure));
             return;
         }
-        Membership m = Membership::fromJoined(group);
+        Membership m;
+        m.device = group.value(QStringLiteral("device")).toString();
+        m.group06 = group.value(QStringLiteral("group")).toString();
         m.root = true;
-        if (m.isNull() || !m.save(&failure)) {
+        if (m.isNull() || !m.isV06() || !m.save(&failure)) {
             show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("group: no device in the answer")} : failure));
             return;
         }
         Errors::log(QStringLiteral("group: made %1 as its root").arg(m.groupTag()));
         m_member = m;
+        // The recovery sheet, shown once and then forgotten (RecoveryPage).
+        const QJsonObject sheet = group.value(QStringLiteral("recovery")).toObject();
+        QStringList lines;
+        for (const QJsonValue &l : sheet.value(QStringLiteral("text")).toArray())
+            lines.append(l.toString());
+        m_recoveryText = lines.join(QLatin1Char('\n'));
+        m_recoveryModules.clear();
+        for (const QJsonValue &row : sheet.value(QStringLiteral("modules")).toArray())
+            m_recoveryModules.append(row.toString());
         show(QString());
         emit groupChanged();
+        emit recoveryChanged();
+        emit groupMade();
         startMember();
     });
     thread->start();
+}
+
+void App::openWindow()
+{
+    if (!m_member.isV06() || !m_member.isAdmin()) {
+        m_window.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("window: not an admin")});
+        return;
+    }
+    if (m_busy)
+        return;
+    if (askPin([this]() { openWindow(); },
+               [this]() { m_window.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("window: no PIN")}); }))
+        return;
+    Failure failure;
+    if (!m_node.listen(&failure)) {
+        m_window.fail(failure);
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    m_window.setPreparing();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (m_window.state() != QStringLiteral("preparing"))
+            return; // closed while the key was found
+        if (key.state != KeyStore::State::Ready) {
+            if (key.pinNeeded && askPin([this]() { openWindow(); }, std::function<void()>()))
+                return;
+            m_window.fail(key.failure);
+            return;
+        }
+        m_window.open(m_node.handle(), key.publicKey);
+    });
+    thread->start();
+}
+
+void App::joinByWindow(const QString &qr)
+{
+    if (!m_member.isNull())
+        return;
+    if (m_publicKey.isEmpty()) {
+        m_joiner.fail({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("joiner: no key")});
+        return;
+    }
+    m_joiner.start(Membership::directory(), qr, phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::leave()

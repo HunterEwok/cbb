@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>¿La otra pantalla muestra este código?</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>No coinciden</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>Coinciden</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>Elige un PIN de al menos seis cifras que no sea fácil de adivinar.</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>Conecta el teléfono a la Wi-Fi de casa para añadir un dispositivo.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>Unirse a un grupo</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>Uniéndose al grupo de %1.</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>Buscando el teléfono del grupo en esta red…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>En un teléfono del grupo, toca Añadir un dispositivo: este teléfono lo encuentra solo. Mantén ambos teléfonos en la misma Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>O pega el texto del código, cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>El teléfono ya está en el grupo.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Intentar de nuevo</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>%1 de %2 en línea</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Añadir un dispositivo</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>Por qué no se sincroniza</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 pide unirse.</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 ya está en el grupo.</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Añadir un dispositivo</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Conectando con el dispositivo…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>En el teléfono nuevo, abre CBB, toca Unirse a un grupo y escanea este código. Un ordenador nuevo encuentra esta ventana por sí solo al unirse. Mantén esta pantalla abierta.</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>Se acabó el tiempo para añadir un dispositivo.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Intentar de nuevo</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>Esperando al dispositivo nuevo…</translation>
     </message>
 </context>
 <context>

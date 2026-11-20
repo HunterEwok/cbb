@@ -115,6 +115,9 @@ public:
     // (ffi's take_admin_ca): for the offered admin key, naming this phone,
     // under the group's current root. The hellos then offer the key no more.
     bool takeAdminCa(const QByteArray &ca, Failure *failure);
+    // Opens the member port at home, which a pairing window of 0.6 needs
+    // (the member's listen op); a second call keeps it open.
+    bool listen(Failure *failure);
 
     // Sends the clipboard's text or image when the core's rule says so:
     // neither the group's copy nor what this phone sent or took last.
@@ -205,6 +208,7 @@ private:
     void pollAway();
 
     cbb_member *m_member = nullptr;
+    bool m_listening = false; // the member port is open (listen)
     QTimer m_peerTimer;
     QStringList m_peers;
     // The connected devices whose hello says an admin muted them, by ID:

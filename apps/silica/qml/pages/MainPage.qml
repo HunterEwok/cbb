@@ -134,6 +134,15 @@ Page {
         color: Theme.rgba(Theme.primaryColor, 0.2)
     }
 
+    // A group just made: its recovery sheet, shown once (RecoveryPage).
+    Connections {
+        target: app
+        onGroupMade: {
+            pageStack.completeAnimation()
+            pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
+        }
+    }
+
     // Aurora lets an app read the clipboard only in the foreground: what the
     // user copied goes to the group when the app comes to the front.
     Connections {
@@ -193,8 +202,8 @@ Page {
             }
             MenuItem {
                 visible: app.admin && app.member.running
-                text: qsTr("Scan a code")
-                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
+                text: app.pairsOn06 ? qsTr("Add a device") : qsTr("Scan a code")
+                onClicked: pageStack.push(Qt.resolvedUrl(app.pairsOn06 ? "WindowPage.qml" : "AddDevicePage.qml"))
             }
         }
 
@@ -245,7 +254,7 @@ Page {
                     anchors.horizontalCenter: parent.horizontalCenter
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join a group")
-                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+                    onClicked: pageStack.push(Qt.resolvedUrl(app.pairsOn06 ? "JoinWindowPage.qml" : "JoinPage.qml"))
                 }
                 Button {
                     visible: app.keyLevel !== "none"

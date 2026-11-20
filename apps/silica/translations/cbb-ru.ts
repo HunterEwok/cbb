@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>На другом экране этот же код?</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>Не совпадают</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>Совпадают</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>Выберите PIN не короче шести цифр, который трудно угадать.</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>Подключите телефон к домашней сети Wi-Fi, чтобы добавить устройство.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>Войти в группу</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>Присоединение к группе устройства %1.</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>Поиск телефона группы в этой сети…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>На телефоне группы нажмите «Добавить устройство»: этот телефон найдёт его сам. Оба телефона должны быть в одной сети Wi-Fi.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>Или вставьте текст кода, cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>Телефон теперь в группе.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>В сети %1 из %2</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Добавить устройство</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>Почему не синхронизируется</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 просит присоединиться.</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 теперь в группе.</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Добавить устройство</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Подключаюсь к устройству…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Присоединиться к группе» и отсканируйте этот код. Новый компьютер найдёт это окно сам, когда будет присоединяться. Не закрывайте этот экран.</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>Время на добавление устройства истекло.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Попробовать снова</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>Ожидание нового устройства…</translation>
     </message>
 </context>
 <context>

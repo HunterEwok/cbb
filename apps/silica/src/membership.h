@@ -30,14 +30,20 @@ struct Membership
     // (docs/protocol.md, section 10, "Admins"); empty once it is one, or
     // when the phone made no admin key.
     QByteArray adminOffer;
+    // A group of 0.6 (docs/apps.md, "Screens"): its ID in hex, and whether
+    // its records make this phone an admin, as the member's devices say. The
+    // member keeps the group's set itself (group.cbor), with no certificates.
+    QString group06;
+    bool admin06 = false;
 
     bool isNull() const { return device.isEmpty(); }
-    // An admin: through its admin CA, or as the group's root, which issues
-    // with the root key itself.
-    bool isAdmin() const { return root || !adminCa.isEmpty(); }
+    bool isV06() const { return !group06.isEmpty(); }
+    // An admin: through its admin CA, as the group's root, which issues
+    // with the root key itself, or as its records say on 0.6.
+    bool isAdmin() const { return root || !adminCa.isEmpty() || (isV06() && admin06); }
 
-    // The group's tag: the first 8 bytes of the group CA's SHA-256, in hex;
-    // empty when the phone is in no group.
+    // The group's tag: the first 8 bytes of the group ID on 0.6, else of
+    // the group CA's SHA-256, in hex; empty when the phone is in no group.
     QString groupTag() const;
 
     // From the core's answer of a join (ffi's cbb_join_feed, joined).
@@ -50,7 +56,8 @@ struct Membership
     // Saves member.json alone: the member keeps the records itself once it
     // runs.
     bool saveIdentity(Failure *failure) const;
-    // Leaves the group on this phone: deletes member.json and the records.
+    // Leaves the group on this phone: deletes member.json, the records and
+    // the set of 0.6.
     // The key for sealed messages stays, as the member keeps it for the run.
     static bool remove(Failure *failure);
 

@@ -52,6 +52,8 @@ int main(int argc, char *argv[])
         application->installTranslator(&translator);
 
     qmlRegisterUncreatableType<Join>("tools.cbb", 1, 0, "Join", QStringLiteral("the app makes it"));
+    qmlRegisterUncreatableType<PairWindow>("tools.cbb", 1, 0, "PairWindow", QStringLiteral("the app makes it"));
+    qmlRegisterUncreatableType<Joiner>("tools.cbb", 1, 0, "Joiner", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Member>("tools.cbb", 1, 0, "Member", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<Admit>("tools.cbb", 1, 0, "Admit", QStringLiteral("the app makes it"));
     qmlRegisterUncreatableType<BleKeyboard>("tools.cbb", 1, 0, "BleKeyboard", QStringLiteral("the app makes it"));

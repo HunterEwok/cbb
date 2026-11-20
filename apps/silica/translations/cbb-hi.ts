@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>क्या दूसरी स्क्रीन पर यही कोड दिख रहा है?</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>मेल नहीं खाते</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>मेल खाते हैं</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>कम से कम छह अंकों का ऐसा PIN चुनें जिसका अनुमान लगाना आसान न हो।</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>डिवाइस जोड़ने के लिए फ़ोन को घर के Wi-Fi से जोड़ें।</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>समूह में शामिल हों</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>%1 के समूह में जुड़ रहा है।</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>इस नेटवर्क पर समूह का फ़ोन खोजा जा रहा है…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>समूह के किसी फ़ोन पर डिवाइस जोड़ें टैप करें: यह फ़ोन उसे अपने-आप ढूँढ लेगा। दोनों फ़ोन एक ही Wi-Fi पर रखें।</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>फ़ोन अब समूह में है।</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>डिवाइस जोड़ें</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>सिंक क्यों नहीं हो रहा</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 जुड़ना चाहता है।</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 अब समूह में है।</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>डिवाइस जोड़ें</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>डिवाइस से जुड़ रहा है…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>नए फ़ोन पर CBB खोलें, समूह से जुड़ें पर टैप करें और यह कोड स्कैन करें। नया कंप्यूटर जुड़ते समय यह विंडो अपने-आप ढूँढ लेता है। यह स्क्रीन खुली रखें।</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>डिवाइस जोड़ने का समय खत्म हो गया।</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>फिर से कोशिश करें</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>नए डिवाइस का इंतज़ार…</translation>
     </message>
 </context>
 <context>

@@ -45,6 +45,9 @@ struct Sheet {
     qr: String,
     /// The sheet's 4 lines of 4 groups of 4 characters.
     text: Vec<String>,
+    /// The QR code's modules, a row of '1' and '0' each, for an app that
+    /// draws it from them (Aurora).
+    modules: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -101,13 +104,12 @@ pub fn new_group(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         let local = cbb_member::set::local_key(&dir)?;
         cbb_member::set::save(&dir, &set, &local)?;
         let group = set.state().group;
+        let qr = sheet::qr(&secret, &group);
+        let modules = crate::join::modules(&qr)?;
         Ok(Made {
             group: id_text(&group),
             device,
-            recovery: Sheet {
-                qr: sheet::qr(&secret, &group),
-                text: sheet::text(&secret).lines().map(str::to_string).collect(),
-            },
+            recovery: Sheet { qr, text: sheet::text(&secret).lines().map(str::to_string).collect(), modules },
         })
     })())
 }
@@ -171,6 +173,7 @@ mod tests {
         let read = sheet::read(&text.join("\n")).unwrap();
         sheet::check(&read, &st.group, set.recovery()).unwrap();
         assert!(sheet::read(ok["recovery"]["qr"].as_str().unwrap()).is_ok());
+        assert!(!ok["recovery"]["modules"].as_array().unwrap().is_empty());
         // Only once.
         let again: serde_json::Value =
             serde_json::from_slice(&new_group(&req, sign_with, &root as *const FileKey as usize)).unwrap();

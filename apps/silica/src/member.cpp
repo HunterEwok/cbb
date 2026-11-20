@@ -169,6 +169,7 @@ void Member::stop()
     m_peerTimer.stop();
     cbb_member_stop(m_member);
     m_member = nullptr;
+    m_listening = false;
     m_peers.clear();
     m_devices.clear();
     m_alerts.clear();
@@ -478,6 +479,22 @@ bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
     }
     call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
     return failure->isNull();
+}
+
+bool Member::listen(Failure *failure)
+{
+    if (!m_member) {
+        *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
+        return false;
+    }
+    if (m_listening)
+        return true;
+    const QJsonObject a = call(m_member, QStringLiteral("listen"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("home")}}, failure);
+    if (!failure->isNull())
+        return false;
+    m_listening = true;
+    Errors::log(QStringLiteral("member: listening on port %1").arg(a.value(QStringLiteral("port")).toInt()));
+    return true;
 }
 
 void Member::command(double token, const QString &from, const QJsonObject &record)

@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>Je, skrini nyingine inaonyesha msimbo huu?</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>Hazilingani</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>Zinalingana</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>Chagua PIN ya angalau tarakimu sita ambayo si rahisi kukisia.</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>Unganisha simu kwenye Wi-Fi ya nyumbani ili kuongeza kifaa.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>Jiunge na kikundi</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>Inajiunga na kikundi cha %1.</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>Inatafuta simu ya kikundi kwenye mtandao huu…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>Kwenye simu ya kikundi, gusa Ongeza kifaa: simu hii itaipata yenyewe. Weka simu zote mbili kwenye Wi-Fi moja.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>Au bandika maandishi ya msimbo, cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>Simu sasa iko kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Ongeza kifaa</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>Kwa nini haisawazishi</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 anaomba kujiunga.</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 sasa yuko kwenye kikundi.</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>Ongeza kifaa</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>Inaunganisha na kifaa…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge na kikundi na uchanganue msimbo huu. Kompyuta mpya hupata dirisha hili yenyewe inapojiunga. Acha skrini hii wazi.</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>Muda wa kuongeza kifaa umekwisha.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>Jaribu tena</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>Inasubiri kifaa kipya…</translation>
     </message>
 </context>
 <context>

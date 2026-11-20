@@ -287,7 +287,7 @@ fields, so the app keeps it as it keeps a join, and admits with the root key and
 On 0.6 the request names the app's `dir` (`src/found.rs`): the core makes the recovery secret
 (`cbb_member::founding::new_recovery`), writes the phone's record under the root through the
 callback, keeps the set in `dir`, where `cbb_member_start` then reads it, and answers
-`{"group","device","recovery":{"qr","text"}}`, the recovery sheet the app shows once and keeps
+`{"group","device","recovery":{"qr","text","modules"}}`, the recovery sheet the app shows once and keeps
 nowhere.
 `cbb_member_manage` (feature `member`, `cbb_core::manage`) signs an admin's change to a device
 through the same callback, as the phone kits' `PhoneGroup` does: a removal (every key of the

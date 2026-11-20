@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>هل تعرض الشاشة الأخرى هذا الرمز؟</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>غير متطابقين</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>متطابقان</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>اختر رمز PIN من ستة أرقام على الأقل يصعب تخمينه.</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>صِل الهاتف بشبكة Wi-Fi المنزلية لإضافة جهاز.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>الانضمام إلى مجموعة</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>الانضمام إلى مجموعة %1.</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>جارٍ البحث عن هاتف المجموعة على هذه الشبكة…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>على هاتف من المجموعة، اضغط «إضافة جهاز»: سيجده هذا الهاتف تلقائيًا. أبقِ الهاتفين على شبكة Wi-Fi نفسها.</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>أو الصق نص الرمز، cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>أصبح الهاتف في المجموعة الآن.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>%1 من %2 متصل</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>إضافة جهاز</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>لماذا لا تتم المزامنة</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 يطلب الانضمام.</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>أصبح %1 في المجموعة الآن.</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>إضافة جهاز</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>جارٍ الاتصال بالجهاز…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>على الهاتف الجديد، افتح CBB واضغط الانضمام إلى مجموعة وامسح هذا الرمز. يجد الحاسوب الجديد هذه النافذة بنفسه عند انضمامه. أبقِ هذه الشاشة مفتوحة.</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>انتهى وقت إضافة جهاز.</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>حاول مرة أخرى</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>في انتظار الجهاز الجديد…</translation>
     </message>
 </context>
 <context>

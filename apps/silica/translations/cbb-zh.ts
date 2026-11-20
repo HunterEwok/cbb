@@ -293,6 +293,21 @@
     </message>
 </context>
 <context>
+    <name>CodeQuestion</name>
+    <message>
+        <source>Does the other screen show this code?</source>
+        <translation>另一块屏幕显示的是这个代码吗？</translation>
+    </message>
+    <message>
+        <source>They don't match</source>
+        <translation>不一致</translation>
+    </message>
+    <message>
+        <source>They match</source>
+        <translation>一致</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -566,6 +581,10 @@
     <message>
         <source>Choose a PIN of at least six digits that is not easy to guess.</source>
         <translation>请选择至少六位、不易被猜到的 PIN。</translation>
+    </message>
+    <message>
+        <source>Connect the phone to your home Wi-Fi to add a device.</source>
+        <translation>请将手机连接到家中的 Wi-Fi 以添加设备。</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1020,6 +1039,37 @@
     </message>
 </context>
 <context>
+    <name>JoinWindowPage</name>
+    <message>
+        <source>Join a group</source>
+        <translation>加入群组</translation>
+    </message>
+    <message>
+        <source>Joining the group of %1.</source>
+        <translation>正在加入 %1 的群组。</translation>
+    </message>
+    <message>
+        <source>Looking for the group's phone on this network…</source>
+        <translation>正在此网络中查找群组的手机…</translation>
+    </message>
+    <message>
+        <source>On a phone of the group, tap Add a device: this phone finds it by itself. Keep both phones on the same Wi-Fi.</source>
+        <translation>在群组的一部手机上点按“添加设备”：这部手机会自动找到它。请让两部手机连接同一个 Wi-Fi。</translation>
+    </message>
+    <message>
+        <source>Or paste the code's text, cbb://pair…</source>
+        <translation>或粘贴代码的文本，cbb://pair…</translation>
+    </message>
+    <message>
+        <source>The phone is in the group now.</source>
+        <translation>手机现已加入群组。</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+</context>
+<context>
     <name>KeyboardPage</name>
     <message>
         <source>%1 bytes</source>
@@ -1139,6 +1189,10 @@
     <message>
         <source>%1 of %2 online</source>
         <translation>%2 台中 %1 台在线</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>添加设备</translation>
     </message>
     <message>
         <source>All devices</source>
@@ -2101,6 +2155,41 @@
     <message>
         <source>Why it does not sync</source>
         <translation>为什么不同步</translation>
+    </message>
+</context>
+<context>
+    <name>WindowPage</name>
+    <message>
+        <source>%1 asks to join.</source>
+        <translation>%1 请求加入。</translation>
+    </message>
+    <message>
+        <source>%1 is in the group now.</source>
+        <translation>%1 已加入群组。</translation>
+    </message>
+    <message>
+        <source>Add a device</source>
+        <translation>添加设备</translation>
+    </message>
+    <message>
+        <source>Connecting to the device…</source>
+        <translation>正在连接设备…</translation>
+    </message>
+    <message>
+        <source>On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.</source>
+        <translation>在新手机上打开 CBB，点“加入群组”并扫描这个二维码。新电脑加入时会自己找到这个窗口。请保持此屏幕打开。</translation>
+    </message>
+    <message>
+        <source>The time to add a device is up.</source>
+        <translation>添加设备的时间已到。</translation>
+    </message>
+    <message>
+        <source>Try again</source>
+        <translation>重试</translation>
+    </message>
+    <message>
+        <source>Waiting for the new device…</source>
+        <translation>正在等待新设备…</translation>
     </message>
 </context>
 <context>
