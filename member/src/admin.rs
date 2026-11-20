@@ -1711,26 +1711,10 @@ const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
 /// Whether the group's key level lets a device whose key is in store be
-/// its root, an admin or a hub, as Go's levelAllows; at the level files a
-/// key in a file needs consent, which hint says how to give.
+/// its root, an admin or a hub: the core's rule (`cbb_core::keylevel`),
+/// which the phones' apps share.
 pub(crate) fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
-    let msg = match () {
-        _ if store == "rootless" => format!(
-            "{name} is installed without root, so every program of its user can read its keys; such a device is never the group's root, an admin or a hub (D-79)"
-        ),
-        _ if level == "proven" && store != "proven" => format!(
-            "attestation does not prove that {name} keeps its key in hardware, and the group's key level lets only such keys be its root, an admin or a hub; on the root, cbb keys hardware lets keys in hardware by the device's own word too"
-        ),
-        _ if store != "file" => return Ok(()),
-        _ if level != "files" => format!(
-            "{name} keeps its keys in a file, and the group's key level lets only keys in hardware be its root, an admin or a hub; on the root, cbb keys files lets keys in files too, each time after a warning"
-        ),
-        _ if !consent => format!(
-            "{name} keeps its keys in a file, which a thief with it can copy and then act for it until another admin removes it; to allow it anyway, {hint}"
-        ),
-        _ => return Ok(()),
-    };
-    Err(Error::msg(msg))
+    cbb_core::keylevel::allows(level, store, name, hint, consent)
 }
 
 /// Where this device says its keys live, as Go's keyStore: rootless for a
