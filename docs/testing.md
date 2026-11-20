@@ -444,6 +444,19 @@ cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
 
+A member finds a pairing window, and the other members, only at a home address (a private,
+link-local or unique local one), as on a real network. A container whose one address is
+public finds none; run the tests there in a network namespace of their own with a private
+address, as root and with `iproute2`:
+
+```sh
+unshare -n sh -c 'ip link set lo up && ip link add home0 type bridge &&
+  ip link set home0 multicast on && ip addr add 10.77.0.2/24 dev home0 &&
+  ip link set home0 up && ip route add default dev home0 && exec "$@"' _ \
+  env CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb \
+  go test ./internal/service
+```
+
 ## Firmware size
 
 A small device takes only the parts of the core it calls, and the linker drops the rest, so

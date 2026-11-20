@@ -2697,6 +2697,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 `cbb pair` right after `cbb new` waits for the new group to start
+  instead of answering that the device is still starting, and a pairing window that opens
+  right after another closed announces its own ID by mDNS, not the closed one's.
 - On the records of 0.6 a record that an admin writes reaches the root on a connection the two
   keep: the admin sends its `have` again whenever its set changed since its last one, as the
   root sends no new hello when only the admin wrote.

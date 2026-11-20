@@ -364,6 +364,29 @@ func (s *testService) paste(t *testing.T) string {
 // when it is in none; closing the client closes it.
 func openWindow(t *testing.T, admin *testService) (*control.Client, string) {
 	t.Helper()
+	c, m := openWindowMsg(t, admin)
+	return c, m.Code
+}
+
+// openWindowLink is openWindow with the link of the window's QR code
+// (cbb://pair?...), which a home window of a group of 0.6 gives and an
+// old window does not: the link names the window's ID and member key,
+// which six digits alone leave to mDNS.
+func openWindowLink(t *testing.T, admin *testService) (*control.Client, string, string) {
+	t.Helper()
+	c, m := openWindowMsg(t, admin)
+	return c, m.Code, m.Invite
+}
+
+// on06 tells whether s is in a group on the records of 0.6: its state
+// holds the group's records (group.cbor) instead of identity.json.
+func (s *testService) on06() bool {
+	_, err := os.Stat(filepath.Join(s.dir, "group.cbor"))
+	return err == nil
+}
+
+func openWindowMsg(t *testing.T, admin *testService) (*control.Client, *control.Message) {
+	t.Helper()
 	if admin.status(t).Group == "" {
 		if _, err := admin.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 			t.Fatalf("new on %s: %v", admin.name, err)
@@ -375,7 +398,7 @@ func openWindow(t *testing.T, admin *testService) (*control.Client, string) {
 		c.Close()
 		t.Fatalf("pair on %s: %v", admin.name, err)
 	}
-	return c, m.Code
+	return c, m
 }
 
 // pairWith opens a pairing window on admin and joins s through it, found
@@ -429,10 +452,7 @@ func makeAdmin(t *testing.T, root, s *testService) {
 	if err != nil || m.Name != s.name {
 		t.Fatalf("admin %s on %s: %+v, %v", s.name, root.name, m, err)
 	}
-	waitFor(t, s.name+" is an admin", func() bool {
-		id, err := group.Load(s.dir)
-		return err == nil && id.AdminCA != nil
-	})
+	waitFor(t, s.name+" is an admin", func() bool { return s.isAdmin(t) })
 }
 
 func waitFor(t *testing.T, what string, ok func() bool) {

@@ -1155,6 +1155,9 @@ fn browse_with<P: Peers>(
         daemon.register(info)
     };
     let mut window = node.window_open();
+    // The window's ID too: a window that closes and another that opens
+    // between two looks would otherwise keep announcing the old ID.
+    let mut wid = node.window_id();
     let mut at = where_();
     publish(window, &at)?;
     let mut checked = Instant::now();
@@ -1182,15 +1185,14 @@ fn browse_with<P: Peers>(
                 *a.lock().unwrap() = None;
             }
         }
-        if (node.window_open() != window
-            || checked.elapsed() >= RECHECK
-            || away != at.as_ref().is_some_and(Vec::is_empty))
+        let changed = node.window_open() != window || node.window_id() != wid;
+        if (changed || checked.elapsed() >= RECHECK || away != at.as_ref().is_some_and(Vec::is_empty))
             && published.elapsed() >= REPUBLISH_GAP
         {
             checked = Instant::now();
             let now = where_();
-            if node.window_open() != window || now != at {
-                (window, at) = (node.window_open(), now);
+            if node.window_open() != window || node.window_id() != wid || now != at {
+                (window, wid, at) = (node.window_open(), node.window_id(), now);
                 published = Instant::now();
                 if let Err(e) = publish(window, &at) {
                     log(&format!("cbb: announcing this device failed: {e}"));

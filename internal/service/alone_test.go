@@ -1314,7 +1314,10 @@ func newCode(t *testing.T) string {
 
 // joinAlone has the small device join pi's group: cbb pair on pi shows a
 // code, and cbb pair -code on the small device reads it from standard input
-// and joins at pi's address. It returns the small device's state directory.
+// and joins at pi's address. In a group of 0.6 it reads the link of the
+// window's QR code, which names the window's ID: the address given here is
+// the loopback one, which no window announces by mDNS. It returns the
+// small device's state directory.
 func joinAlone(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
 	return joinAloneEnv(t, bin, pi, nil)
@@ -1323,8 +1326,11 @@ func joinAlone(t *testing.T, bin string, pi *testService) string {
 // joinAloneEnv is joinAlone with env added to cbb pair's environment.
 func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) string {
 	t.Helper()
-	c, code := openWindow(t, pi)
+	c, code, link := openWindowLink(t, pi)
 	defer c.Close()
+	if link != "" {
+		code = link
+	}
 	pa := pi.addr()
 	dir := t.TempDir()
 	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "small", "-code", pa)
@@ -1339,6 +1345,14 @@ func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) strin
 	}
 	if m, err := c.Receive(); err != nil || m.Name != "small" {
 		t.Fatalf("pair on pi ended with %+v, %v", m, err)
+	}
+	if link != "" {
+		// A group of 0.6 has no CA keys: the device keeps the group's
+		// records and its own key, and no identity.json.
+		if _, err := os.Stat(filepath.Join(dir, "group.cbor")); err != nil {
+			t.Fatalf("the small device keeps no records of 0.6: %v", err)
+		}
+		return dir
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
 	if err != nil {
