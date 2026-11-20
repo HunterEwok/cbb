@@ -32,7 +32,6 @@ LIBS += $$PWD/core/$$QT_ARCH/libcbb_ffi.a -ldl -lpthread -lm
 
 SOURCES += \
     src/main.cpp \
-    src/admit.cpp \
     src/invite.cpp \
     src/blekeyboard.cpp \
     src/pastereceiver.cpp \
@@ -47,7 +46,6 @@ SOURCES += \
     src/pairing06.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
-    src/admit.h \
     src/invite.h \
     src/blekeyboard.h \
     src/pastereceiver.h \
@@ -106,7 +104,6 @@ DISTFILES += \
     qml/pages/InvitationPage.qml \
     qml/pages/InvitePage.qml \
     qml/pages/NewGroupPage.qml \
-    qml/pages/AddDevicePage.qml \
     qml/pages/WindowPage.qml \
     qml/pages/JoinWindowPage.qml \
     qml/pages/CodeQuestion.qml \

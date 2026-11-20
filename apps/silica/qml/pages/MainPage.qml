@@ -202,8 +202,8 @@ Page {
             }
             MenuItem {
                 visible: app.admin && app.member.running
-                text: app.pairsOn06 ? qsTr("Add a device") : qsTr("Scan a code")
-                onClicked: pageStack.push(Qt.resolvedUrl(app.pairsOn06 ? "WindowPage.qml" : "AddDevicePage.qml"))
+                text: qsTr("Add a device")
+                onClicked: pageStack.push(Qt.resolvedUrl("WindowPage.qml"))
             }
         }
 
@@ -254,7 +254,7 @@ Page {
                     anchors.horizontalCenter: parent.horizontalCenter
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join a group")
-                    onClicked: pageStack.push(Qt.resolvedUrl(app.pairsOn06 ? "JoinWindowPage.qml" : "JoinPage.qml"))
+                    onClicked: pageStack.push(Qt.resolvedUrl("JoinWindowPage.qml"))
                 }
                 Button {
                     visible: app.keyLevel !== "none"

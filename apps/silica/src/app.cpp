@@ -373,12 +373,6 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
-        if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
-            Membership next = m;
-            next.adminOffer = m_joinOffer;
-            keep(next);
-        }
-        m_joinOffer.clear();
         emit groupChanged();
         startMember();
         // Joined from afar: sync away from home goes on, and the member
@@ -450,52 +444,8 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin()
-{
-    if (m_publicKey.isEmpty()) {
-        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
-        return;
-    }
-    if (m_busy)
-        return;
-    const int serial = ++m_joinSerial;
-    m_joinOffer.clear();
-    const auto listen = [this, serial]() {
-        if (serial == m_joinSerial)
-            m_join.start(phoneName(), phoneOs(), m_publicKey);
-    };
-    // The admin key, which the member's hellos offer the root for its
-    // "Make an admin": found without the PIN, or made behind it.
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, serial, listen]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (serial != m_joinSerial)
-            return;
-        if (key.state == KeyStore::State::Ready) {
-            Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-            m_joinOffer = key.publicKey;
-            listen();
-            return;
-        }
-        if (key.pinNeeded && m_adminPin != QStringLiteral("locked")
-            && askPin([this]() { startJoin(); }, listen,
-                      QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.")))
-            return;
-        Errors::log(QStringLiteral("key: joining without an admin key: %1 (%2)").arg(key.failure.message, key.failure.details));
-        listen();
-    });
-    thread->start();
-}
-
 void App::stopJoin()
 {
-    ++m_joinSerial;
-    m_joinOffer.clear();
     m_join.stop();
 }
 
@@ -530,37 +480,6 @@ void App::prepareAdmin()
         // The hellos of the new connections offer it.
         m_node.stop();
         startMember();
-    });
-    thread->start();
-}
-
-void App::startAdmit(const QString &qr, bool makeAdmin)
-{
-    if (!m_member.isAdmin()) {
-        m_admit.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("admit: not an admin")});
-        return;
-    }
-    if (m_busy)
-        return;
-    if (askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); },
-               [this]() { m_admit.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("admit: no PIN")}); }))
-        return;
-    m_busy = true;
-    emit keyChanged();
-    m_admit.setPreparing();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, qr, makeAdmin]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (key.state != KeyStore::State::Ready) {
-            if (key.pinNeeded && askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); }))
-                return;
-            m_admit.fail(key.failure);
-            return;
-        }
-        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
     });
     thread->start();
 }

@@ -4,7 +4,6 @@
 // What the QML pages show: the app, the core, the system and the phone's key.
 #pragma once
 
-#include "admit.h"
 #include "blekeyboard.h"
 #include "bugs.h"
 #include "events.h"
@@ -58,13 +57,10 @@ class App : public QObject
     Q_PROPERTY(QString restoreHint READ restoreHint NOTIFY restoreChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     // Pairing in a group of 0.6: the admin's window and the new phone's
-    // joiner; pairsOn06 says which pages pair, true without a group, as a
-    // new group is one of 0.6.
+    // joiner.
     Q_PROPERTY(PairWindow *window READ window CONSTANT)
     Q_PROPERTY(Joiner *joiner READ joiner CONSTANT)
-    Q_PROPERTY(bool pairsOn06 READ pairsOn06 NOTIFY groupChanged)
     Q_PROPERTY(Member *member READ member CONSTANT)
-    Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Invite *invite READ invite CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
     // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
@@ -128,9 +124,7 @@ public:
     Join *join() { return &m_join; }
     PairWindow *window() { return &m_window; }
     Joiner *joiner() { return &m_joiner; }
-    bool pairsOn06() const { return m_member.isNull() || m_member.isV06(); }
     Member *member() { return &m_node; }
-    Admit *admit() { return &m_admit; }
     Invite *invite() { return &m_invite; }
     Events *events() { return &m_events; }
     Bugs *bugs() { return &m_bugs; }
@@ -155,21 +149,12 @@ public:
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
-    // Listens for the device that scans this phone's QR code. The phone
-    // joins as a member; first it finds its admin key, or makes it behind
-    // the admin PIN unless the user cancels, off the GUI thread, for its
-    // member's hellos to offer the root, which may make it an admin later.
-    Q_INVOKABLE void startJoin();
-    // Stops listening, and drops a join that waits for the admin key.
+    // Stops a join by an invitation.
     Q_INVOKABLE void stopJoin();
     // For a member phone whose hellos offer no admin key (it joined
     // without one): makes the key behind the admin PIN and restarts the
     // member, whose hellos then offer it.
     Q_INVOKABLE void prepareAdmin();
-    // Adds the device whose join code (a cbb://join link) the camera read,
-    // with the admin key, found off the GUI thread.
-    // makeAdmin: the root makes a phone that asks an admin.
-    Q_INVOKABLE void startAdmit(const QString &qr, bool makeAdmin = false);
     // Makes a remote invitation for a device far away, valid for seconds,
     // as an admin (docs/protocol.md, section 12).
     Q_INVOKABLE void startInvite(int seconds = 3600);
@@ -326,7 +311,6 @@ private:
     PairWindow m_window;
     Joiner m_joiner;
     Member m_node;
-    Admit m_admit;
     Invite m_invite;
     Events m_events;
     Bugs m_bugs;
@@ -347,6 +331,4 @@ private:
     QStringList m_belowLevel;
     QString m_restoreState;
     QString m_restoreHint;
-    QByteArray m_joinOffer; // the admin key the joining phone's hellos will offer
-    int m_joinSerial = 0;   // bumped by each start and stop of a join
 };

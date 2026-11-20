@@ -81,7 +81,7 @@ public:
     ~Member() override;
 
     bool running() const { return m_member != nullptr; }
-    // The core's member, for adding a device (Admit); null when stopped.
+    // The core's member, for a pairing window or an invitation; null when stopped.
     cbb_member *handle() const { return m_member; }
     // The names of the members connected now.
     QStringList peers() const { return m_peers; }
