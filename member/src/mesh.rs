@@ -570,8 +570,8 @@ impl Mesh {
     }
 
     /// Dials a member at addr (the device `expect`, when known) and runs
-    /// the connection until it ends.
-    pub fn dial(self: &Arc<Self>, addr: SocketAddr, expect: Option<DeviceId>) -> Result<()> {
+    /// the connection until it ends: the device it was with.
+    pub fn dial(self: &Arc<Self>, addr: SocketAddr, expect: Option<DeviceId>) -> Result<DeviceId> {
         let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
             .map_err(|e| Error::with(format!("cannot reach {addr}"), e))?;
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
@@ -580,8 +580,9 @@ impl Mesh {
         self.run(sock, s)
     }
 
-    /// Takes a connection a member made and runs it until it ends.
-    pub fn accept(self: &Arc<Self>, sock: TcpStream) -> Result<()> {
+    /// Takes a connection a member made and runs it until it ends: the
+    /// device it was with.
+    pub fn accept(self: &Arc<Self>, sock: TcpStream) -> Result<DeviceId> {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let mut s = tls::Session::server(Arc::new(self.server_config()?))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
@@ -590,30 +591,43 @@ impl Mesh {
 
     /// Takes a connection on the member port, where members connect
     /// (`cbb/4`) and a device that joins pairs (`cbb-pair/3`): a member by
-    /// its standing in the records, a pairing to the open window.
-    pub fn accept_port(self: &Arc<Self>, sock: TcpStream) -> Result<()> {
+    /// its standing in the records, a pairing to the open window. The
+    /// device a member connection was with; None for a pairing.
+    pub fn accept_port(self: &Arc<Self>, sock: TcpStream) -> Result<Option<DeviceId>> {
+        self.accept_port_with(sock, &mut || {})
+    }
+
+    /// As `accept_port`; handshaken is called once the handshake is over,
+    /// whether it worked or not.
+    pub fn accept_port_with(
+        self: &Arc<Self>,
+        sock: TcpStream,
+        handshaken: &mut dyn FnMut(),
+    ) -> Result<Option<DeviceId>> {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         let mut cfg = bykey::server(&self.own.tls_key()?, bykey::any_key(), cbb_core::alpn::MEMBER, &tls::clock())?;
         cfg.alpn_protocols = vec![cbb_core::alpn::MEMBER.to_vec(), cbb_core::alpn::PAIR.to_vec()];
         let (cfg, exporter) = bykey::exporting_server(cfg);
         let mut s = tls::Session::server(Arc::new(cfg))?;
-        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        let shook = tls::handshake(&mut s, &sock, "the handshake failed");
+        handshaken();
+        shook?;
         if cbb_core::alpn::is_pair(s.alpn_protocol()) {
             let x = bykey::pairing_exporter(&s, &exporter)?;
             return match &*self.on_pair.read().unwrap() {
                 Some(f) => {
                     f(sock, s, x);
-                    Ok(())
+                    Ok(None)
                 }
                 None => Err(Error::msg("a device asked to pair, but no pairing window is open")),
             };
         }
         let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
-        self.run(sock, s)
+        self.run(sock, s).map(Some)
     }
 
-    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session) -> Result<()> {
+    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session) -> Result<DeviceId> {
         let point = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         let peer_key = Key::es256(point.to_vec());
         let peer = peer_key.device_id();
@@ -682,7 +696,7 @@ impl Mesh {
         drop(conn);
         let _ = writer.join();
         self.logf(&format!("the connection with {} ended: {}", hex(&peer.0[..4]), end.details()));
-        Ok(())
+        Ok(peer)
     }
 
     fn take(&self, conn: &Conn, x: &mut Exchange, msg: &[u8]) -> Result<()> {
@@ -900,9 +914,14 @@ impl Mesh {
         standing(&self.state(), &self.own.hash(), point)
     }
 
-    /// Closes every connection.
+    /// Closes every connection, and takes no more.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.close_connections();
+    }
+
+    /// Ends every connection with a goodbye; new ones are still taken.
+    pub fn close_connections(&self) {
         for c in self.conns.lock().unwrap().values() {
             let bye = frame::write(&Value::Map(vec![(frame::FIELD_T, Value::Uint(m::T_BYE))]));
             let _ = c.write(&bye);
@@ -966,4 +985,4 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 mod media;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

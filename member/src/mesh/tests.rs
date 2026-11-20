@@ -39,7 +39,7 @@ fn temp(name: &str) -> PathBuf {
     dir
 }
 
-fn own(dir: &Path) -> Own {
+pub(crate) fn own(dir: &Path) -> Own {
     Own::load_with(dir, &|_| Err(Error::msg("no hardware")), &|| None).unwrap()
 }
 
@@ -47,6 +47,17 @@ fn own(dir: &Path) -> Own {
 /// group's records first, b only the root's first records (a device that
 /// joined and missed some).
 fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
+    let (da, db) = two_dirs(name);
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    a.rotate().unwrap();
+    b.rotate().unwrap();
+    (a, b)
+}
+
+/// The state directories of `two`'s devices, a's and b's.
+pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
     let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
     let (oa, ob) = (own(&da), own(&db));
     let root = root();
@@ -72,12 +83,7 @@ fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
         let local = crate::set::local_key(dir).unwrap();
         crate::set::save(dir, s, &local).unwrap();
     }
-    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
-    let a = Mesh::open(&da, oa, log.clone()).unwrap();
-    let b = Mesh::open(&db, ob, log).unwrap();
-    a.rotate().unwrap();
-    b.rotate().unwrap();
-    (a, b)
+    (da, db)
 }
 
 /// Connects b to a over loopback; the connection runs in the background.

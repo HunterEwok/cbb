@@ -66,6 +66,7 @@ pub mod joining;
 mod keys;
 mod leave;
 pub mod link;
+pub mod live;
 mod logfile;
 mod media_cli;
 pub mod mesh;
