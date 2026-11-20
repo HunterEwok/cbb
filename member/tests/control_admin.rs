@@ -327,55 +327,46 @@ fn pairing_one_at_a_time() {
     has(&e, "127.0.0.1:9");
 }
 
-/// Admission by the joiner's QR code: the joiner listens, and the admin
-/// dials it with the code, the addresses and the fingerprint it shows.
+/// Admission by the joiner's QR code is gone on the records of 0.6: no
+/// device waits for the group to dial it, and the root says to open a
+/// pairing window, which the new device dials (D-119).
 #[test]
-fn admits_by_qr_code() {
+fn a_qr_admission_is_gone() {
     let root = Svc::start("root", &[], &[]);
     root.new_group();
-    let desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
-    let code = "482915";
-    let (_conn, mut r) = desk.open(true, &json!({"op": "join", "code": code, "listen": true, "expires": 60}), b"");
-    let shown = read(&mut r).unwrap();
-    assert!(shown.error().is_empty(), "{:?}", shown.h);
-    let fp = shown.s("fingerprint").to_string();
-    assert!(!fp.is_empty(), "{:?}", shown.h);
-    // A container may have no private address for the QR code: the join
-    // then ends with why, as the second answer.
-    let Some(addr) = shown.h["addrs"].as_array().and_then(|a| a.first()).and_then(|a| a.as_str()).map(String::from)
-    else {
-        let why = read(&mut r).expect("why the join ended");
-        has(why.error(), "no address on the home network");
-        eprintln!("admits_by_qr_code: no private address here, so only the refusal is checked");
-        return;
-    };
-    let e = root.err(true, json!({"op": "pair", "code": "000001", "addrs": [addr], "fingerprint": fp}));
-    assert!(!e.is_empty());
-    let m = root.ok(true, json!({"op": "pair", "code": code, "addrs": [addr], "fingerprint": fp}));
-    assert_eq!(m.s("name"), "desk");
-    let done = read(&mut r).unwrap();
-    assert!(done.error().is_empty() && done.done(), "{:?}", done.h);
-    root.wait_peer("desk");
+    let e = root.err(true, json!({"op": "pair", "code": "482915", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"}));
+    has(&e, "open a pairing window here with cbb pair");
+    // A code alone, which once looked for the device that shows it.
+    has(&root.err(true, json!({"op": "pair", "code": "482915"})), "open a pairing window here with cbb pair");
+    // The window itself still opens.
+    let (_c, mut r) = root.open(true, &json!({"op": "pair"}), b"");
+    let opened = read(&mut r).unwrap();
+    assert!(opened.error().is_empty(), "{:?}", opened.h);
 }
 
-/// What the root refuses of a QR code and of a recovery; and that on the
+/// What the root answers of a QR code and refuses of a recovery; and that on the
 /// records of 0.6 it makes a device that is not connected an admin, as the
 /// device's record carries the admin key it offered when it paired.
 #[test]
 fn refuses_bad_admissions_and_recoveries() {
     let mut g = group(&["root", "desk"]);
     let root = &g[0];
+    // No device waits for the group to dial it on 0.6 (D-119): whatever
+    // the QR code says, the root points to its pairing window.
     let qr = |addrs: serde_json::Value, fp: &str| {
         root.err(true, json!({"op": "pair", "code": "482915", "addrs": addrs, "fingerprint": fp}))
     };
-    has(&qr(json!(["192.168.1.2:9"]), ""), "no certificate fingerprint");
-    has(&qr(json!(["nonsense"]), "fp"), "not an address and port");
-    has(&qr(json!(["127.0.0.1:9"]), "fp"), "cannot connect");
-    has(&qr(json!(["8.8.8.8:9"]), "fp"), "not on the home network");
-    assert!(
-        !root
-            .err(true, json!({"op": "pair", "code": "48", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"}))
-            .is_empty()
+    for (addrs, fp) in [
+        (json!(["192.168.1.2:9"]), ""),
+        (json!(["nonsense"]), "fp"),
+        (json!(["127.0.0.1:9"]), "fp"),
+        (json!(["8.8.8.8:9"]), "fp"),
+    ] {
+        has(&qr(addrs, fp), "no device waits for the group to dial it");
+    }
+    has(
+        &root.err(true, json!({"op": "pair", "code": "48", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"})),
+        "no device waits for the group to dial it",
     );
     // The root claims nothing; a member has no recovery key to claim with.
     has(&root.err_with(true, json!({"op": "recover"}), b"words"), "root already");

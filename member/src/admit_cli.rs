@@ -121,10 +121,9 @@ pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open 
                                 in no group: join by the phone's QR code or a typed code
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
-       cbb pair -qr [-admin]    on the root or an admin: admit the device that shows a QR
+       cbb pair -qr [-admin]    on a group of 0.5 only: admit the device that shows a QR
                                 code and a code and waits, the code or the QR code's text read
-                                from standard input; with -admin, on the root, the phone
-                                becomes an admin
+                                from standard input; on 0.6 the new device dials the window
        cbb pair -code [address:port]   join a pairing window; both show a code to compare";
 
 /// Opens a pairing window and waits for the device that joins with its

@@ -10,7 +10,7 @@
 //! (`admin`) stands until the service switches.
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, Kind, RIGHT_HUB, Removal, Settings};
+use cbb_core::records::body::{CAP_HUB, Device, Kind, RIGHT_HUB, ROLE_MEMBER, Removal, Settings};
 use cbb_core::records::eval::DeviceState;
 use cbb_core::records::{DeviceId, Key, Record, RecordId, RecordSet, State};
 
@@ -257,22 +257,44 @@ pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String
         return Err(Error::msg(format!("name 1 to {MAX_HUBS} hubs")));
     }
     let st = set.state();
+    let by_root = st.roots.last() == Some(&Key::es256(signer.public()).hash());
     let mut hubs = Vec::with_capacity(targets.len());
+    let mut grant = Vec::new();
     for t in targets {
         let d = find(&st, t)?;
         if hubs.contains(&d.id) {
             return Err(Error::msg(format!("{} is named twice", d.name)));
         }
         // Only a device whose record gives it the right counts as a hub.
+        // The root gives it to a member with the cap hub that an admin
+        // admitted, which could not (it grants base rights only).
         if d.rights & RIGHT_HUB == 0 {
-            return Err(Error::msg(format!("{} may not be a hub: its record does not give it the right", d.name)));
+            if !(by_root && d.role == ROLE_MEMBER && d.caps & CAP_HUB != 0) {
+                return Err(Error::msg(format!("{} may not be a hub: its record does not give it the right", d.name)));
+            }
+            grant.push(d.id);
         }
         hubs.push(d.id);
     }
+    let mut out = Vec::new();
+    for id in grant {
+        let st = set.state();
+        let mut rec = device_record(set, &st, &id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+        rec.rights |= RIGHT_HUB;
+        rec.seen = Vec::new();
+        out.extend(
+            set.write_record(&st, signer, Kind::device(rec), now_ms)
+                .map_err(|e| Error::msg(format!("cannot let the device be a hub: {e}")))?,
+        );
+    }
     hubs.sort();
     hubs.dedup();
-    set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
-        .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))
+    let st = set.state();
+    out.extend(
+        set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
+            .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))?,
+    );
+    Ok(out)
 }
 
 /// Changes the group's settings from what they are now.

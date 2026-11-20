@@ -73,8 +73,9 @@ made with 0.5 is set up again once. The details follow.
   with its proof over the pairing session, when it paired with the root, which keeps the key
   by device (`offered.json`); the computer need not be connected, and one that another admin
   admitted is told to pair with the root first (docs/decisions.md, D-118). A group whose root
-  keeps its key in a file starts at the key level `files`; a member with the cap `hub` that
-  the root admits may be one of the main hubs. On a group of 0.6 a frozen admin computer is
+  keeps its key in a file starts at the key level `files`; a member with the cap `hub` may be
+  one of the main hubs: the root gives it the right when it admits it, or when it names it a
+  hub after an admin admitted it. On a group of 0.6 a frozen admin computer is
   told so, the root's device is not renamed, removed or frozen by an admin, and freezing twice
   or thawing what is not frozen is an error, as before.
 - A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
@@ -1916,6 +1917,9 @@ made with 0.5 is set up again once. The details follow.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
   `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
   (docs/decisions.md, D-117).
+- At home a new device dials the admin's pairing window; one that waits for the group to dial
+  it is gone in 0.6, and `cbb pair -qr` on a group of 0.6 says to open the window with
+  `cbb pair` instead (docs/decisions.md, D-119).
 - The member protocol is `cbb/4` and pairing `cbb-pair/3`, named once in the Rust core
   (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
   name it speaks, the highest first; a peer's unknown names are ignored, and a device with no

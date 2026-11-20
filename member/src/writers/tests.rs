@@ -101,3 +101,31 @@ fn the_root_sets_the_window_hubs_and_settings() {
     set_settings(&mut set, &*root, |s| s.shared = !s.shared, T + 13).unwrap();
     assert_ne!(set.state().settings.shared, st.settings.shared);
 }
+
+/// A member with the cap hub that an admin admitted gets only base rights;
+/// the root lets it be a hub when it names it one, and an admin cannot.
+#[test]
+fn the_root_lets_an_admitted_member_with_the_cap_hub_be_a_hub() {
+    let (o, mut set) = group("admitted-hub");
+    let root = o.root.clone().unwrap();
+    let dir = temp("admitted-hub-admin");
+    let admin = own(&dir).make(&dir, Which::Admin).unwrap();
+    make_admin(&mut set, &*root, "laptop", &admin.public(), T + 2).unwrap();
+    let k = SigningKey::from_slice(&[9; 32]).unwrap();
+    let mut pi = Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), "pi", ROLE_MEMBER);
+    pi.rights = body::RIGHT_READ | body::RIGHT_SEND;
+    pi.caps = body::CAP_HUB;
+    let st = set.state();
+    set.write_record(&st, &*admin, Kind::device(pi), T + 3).unwrap();
+    let st = set.state();
+    let id = find(&st, "pi").unwrap().id;
+    assert_eq!(find(&st, "pi").unwrap().rights & RIGHT_HUB, 0);
+
+    let e = set_hubs(&mut set, &*admin, &["pi".to_string()], T + 4).unwrap_err();
+    assert!(e.message().contains("may not be a hub"), "{e:?}");
+
+    set_hubs(&mut set, &*root, &["pi".to_string(), "laptop".to_string()], T + 5).unwrap();
+    let st = set.state();
+    assert_ne!(find(&st, "pi").unwrap().rights & RIGHT_HUB, 0);
+    assert!(st.hubs.contains(&id), "{:?}", st.hubs);
+}
