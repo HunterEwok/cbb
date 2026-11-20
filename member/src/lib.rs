@@ -65,6 +65,7 @@ mod leave;
 pub mod link;
 mod logfile;
 mod media_cli;
+pub mod mesh;
 mod mute;
 #[cfg(all(test, feature = "tunnel"))]
 mod nettest;

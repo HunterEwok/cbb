@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+use std::net::TcpListener;
+use std::sync::mpsc;
+use std::time::Instant;
+
+use cbb_core::identity::ExternalKey;
+use cbb_core::records::body::{self, Device};
+use cbb_core::records::{Kind, Recovery, key::ALG_SLH_DSA, pq};
+use p256::ecdsa::SigningKey;
+use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+
+use super::*;
+
+struct K(SigningKey);
+
+impl ExternalKey for K {
+    fn public(&self) -> Vec<u8> {
+        self.0.verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    }
+    fn sign_digest(&self, digest: &[u8; 32]) -> cbb_core::error::Result<Vec<u8>> {
+        let sig: p256::ecdsa::Signature = self.0.sign_prehash(digest).unwrap();
+        Ok(sig.to_der().as_bytes().to_vec())
+    }
+}
+
+fn root() -> K {
+    K(SigningKey::from_slice(&[1; 32]).unwrap())
+}
+
+fn temp(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("cbb-mesh-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+fn own(dir: &Path) -> Own {
+    Own::load_with(dir, &|_| Err(Error::msg("no hardware")), &|| None).unwrap()
+}
+
+/// Two devices of one group, each with its own state directory; a has the
+/// group's records first, b only the root's first records (a device that
+/// joined and missed some).
+fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
+    let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
+    let (oa, ob) = (own(&da), own(&db));
+    let root = root();
+    let (k1, k2) = pq::recovery_keys(&[1; 32]).unwrap();
+    let k1 = SigningKey::from(&k1).verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let mut set = RecordSet::new(
+        Key::es256(root.public()),
+        Recovery::new(Key::es256(k1), Key::new(ALG_SLH_DSA, k2.public())).unwrap(),
+    );
+    let now = crate::uptime::wall_ms() as u64;
+    for (o, name) in [(&oa, "a"), (&ob, "b")] {
+        let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
+        d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+        let st = set.state();
+        set.write_record(&st, &root, Kind::device(d), now - 1000).unwrap();
+    }
+    let b_set = set.clone();
+    let mut d = Device::new(Key::es256(K(SigningKey::from_slice(&[7; 32]).unwrap()).public()), "c", body::ROLE_MEMBER);
+    d.rights = body::RIGHT_READ;
+    let st = set.state();
+    set.write_record(&st, &root, Kind::device(d), now - 500).unwrap();
+    for (dir, s) in [(&da, &set), (&db, &b_set)] {
+        let local = crate::set::local_key(dir).unwrap();
+        crate::set::save(dir, s, &local).unwrap();
+    }
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, oa, log.clone()).unwrap();
+    let b = Mesh::open(&db, ob, log).unwrap();
+    a.rotate().unwrap();
+    b.rotate().unwrap();
+    (a, b)
+}
+
+/// Connects b to a over loopback; the connection runs in the background.
+fn connect(a: &Arc<Mesh>, b: &Arc<Mesh>) {
+    let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap();
+    let a2 = a.clone();
+    std::thread::spawn(move || {
+        let (sock, _) = ln.accept().unwrap();
+        let _ = a2.accept(sock);
+    });
+    let (b2, ad) = (b.clone(), a.device());
+    std::thread::spawn(move || {
+        let _ = b2.dial(addr, Some(ad));
+    });
+}
+
+fn until(what: &str, f: impl Fn() -> bool) {
+    let end = Instant::now() + Duration::from_secs(10);
+    while !f() {
+        assert!(Instant::now() < end, "timed out waiting for {what}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn two_members_sync_their_records_and_statements() {
+    let (a, b) = two("sync");
+    assert_ne!(a.set().lock().unwrap().digest(), b.set().lock().unwrap().digest());
+    connect(&a, &b);
+    until("the sets to settle", || a.set().lock().unwrap().digest() == b.set().lock().unwrap().digest());
+    // Each has the other's statement: each can seal to the other.
+    until("the statements", || {
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+            && a.statements.lock().unwrap().sealing(&a.state()).contains_key(&b.device())
+    });
+    // b kept what it learned.
+    let local = crate::set::local_key(&b.dir).unwrap();
+    assert_eq!(crate::set::load(&b.dir, &local).unwrap().unwrap().digest(), a.set().lock().unwrap().digest());
+    a.close();
+    b.close();
+}
+
+#[test]
+fn a_copy_reaches_the_other_member() {
+    let (a, b) = two("copy");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c, origin, _| {
+        let _ = tx.lock().unwrap().send((c.clone(), *origin));
+    }));
+    connect(&a, &b);
+    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    let content = Content::text("from b", false);
+    assert!(b.copy(&content).unwrap());
+    let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(got, content);
+    assert_eq!(origin, b.device());
+    a.close();
+    b.close();
+}
+
+#[test]
+fn the_root_commands_a_member_and_gets_its_result() {
+    let (a, b) = two("command");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    b.on_command(Box::new(move |t| {
+        let _ = tx.lock().unwrap().send(t.kind);
+        Ok(())
+    }));
+    connect(&a, &b);
+    until("the connection", || a.connected().contains(&b.device()));
+    let r = a.command(&root(), b.device(), cbb_core::commands::COMMAND_UNMUTE, None).unwrap();
+    assert_eq!(r.status, 1);
+    assert_eq!(r.by, b.device());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), cbb_core::commands::COMMAND_UNMUTE);
+    a.close();
+    b.close();
+}
