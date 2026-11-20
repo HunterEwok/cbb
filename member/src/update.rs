@@ -785,6 +785,7 @@ pub fn read_roots(path: &Path) -> Result<Vec<release::Key>> {
 
 /// Reads the public keys of a PEM file (SubjectPublicKeyInfos, DER), for
 /// tests (CBB_TEST_ATTEST_ROOTS), closed to others' writing as read_roots's.
+#[cfg(feature = "tunnel")]
 pub fn read_public_keys(path: &Path) -> Result<Vec<Vec<u8>>> {
     #[derive(Deserialize)]
     struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);

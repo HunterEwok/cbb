@@ -87,6 +87,7 @@ pub mod pusher;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
+#[cfg(feature = "tunnel")]
 pub mod relayd;
 pub mod releases;
 mod remotepaste;
