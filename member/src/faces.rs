@@ -768,9 +768,10 @@ impl Faces {
 }
 
 /// The project's servers a group of 0.6 shows a face to (A-55), by the
-/// newest keys.json held, else the pins built in: the relay and the
-/// forwarder at cbb.tools. A server whose key changes has a face for each
-/// key listed while both are.
+/// newest keys.json held, else the pins built in: the relay, the forwarder
+/// and the push service at cbb.tools (push has no pin built in: it is
+/// reached only by the keys.json that names it). A server whose key changes
+/// has a face for each key listed while both are.
 #[cfg(feature = "tunnel")]
 pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -> Vec<Server> {
     use base64::Engine as _;
@@ -780,6 +781,7 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
     for (usage, name, built_in) in [
         ("relay", crate::away::PROJECT_RELAY, crate::away::PROJECT_RELAY_PINS),
         ("forwarder", crate::away::PROJECT_FORWARDER, crate::away::PROJECT_FORWARDER_PINS),
+        ("push", crate::pusher::SERVICE, &[]),
     ] {
         let listed = entries.map(|e| e.keys_for(usage, name, now_ms)).unwrap_or_default();
         let pins: Vec<[u8; 32]> = if listed.is_empty() {

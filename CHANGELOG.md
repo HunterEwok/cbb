@@ -1949,7 +1949,7 @@ made with 0.5 is set up again once. The details follow.
   the root signs which key a hub takes there and no hub trusts a forwarder on first use; message
   `credentials` (t 11) always names the server its credentials are for by pin and address
   (fields 4 and 5; without field 4 it is refused): the group shows each server a face of its own
-  (A-55, D-121), made by the root for the project's relay and forwarder. The vectors are written
+  (A-55, D-121), made by the root for the project's relay, forwarder and push service. The vectors are written
   again (draft).
 - The rule of the group's key level and its messages are in the core
   (`cbb_core::keylevel`), so that `cbb` and the phones' apps share one.

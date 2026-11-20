@@ -395,7 +395,7 @@ fn server_credentials_go_round_the_group() {
     // A face for each of the project's servers, by the pins built in.
     let mut servers = crate::faces::project_servers(None, 0);
     servers.sort();
-    assert_eq!(servers.len(), 2, "the relay and the forwarder");
+    assert_eq!(servers.len(), 2, "the relay and the forwarder; push has no pin built in");
     assert_eq!(a.faces().servers(), servers);
     let pin = servers[0].pin;
     let tag = a.faces().kept(&pin).tag();
