@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
+  (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
+  written, with the root's and admins' keys signing where the device keeps them, the change of
+  root by the recovery sheet with the list of who stays, and where a peer's key stands.
 - A change of root in 0.6 counts only the last root ("the last root only"): after it, nothing an
   earlier root or its admins signed counts or takes room, and the new root carries the group
   over as its own records (every device but those the person leaves out, the settings, hubs,

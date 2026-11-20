@@ -15,6 +15,7 @@
 
 mod group;
 pub use group::checked_command;
+mod set;
 mod signed;
 
 use alloc::collections::BTreeMap;
@@ -221,6 +222,7 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "bug_pending" => bug_pending(serde_json::from_value(args).map_err(bad_args)?),
         _ => group::dispatch(op, &args)
             .or_else(|| signed::dispatch(op, &args))
+            .or_else(|| set::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
     }
 }

@@ -502,6 +502,58 @@ most the records records-v2.md allows. `group_view` answers:
 | `known` | every device ID a device record names, counted or not: IDs a new device must not take |
 | `records` | the number of records the set holds |
 
+## The group (records v3)
+
+The calls whose names start with `set_` are the group of 0.6: its records v3 (`cbb_core::records`)
+kept in a set file (`cbb_core::setfile`), which the computers' member writes in its state folder and
+Go and the tests pass in each call. They take the place of the `group_` calls above when the
+programs move to the core of 0.6. Keys, key hashes, record IDs, device IDs and digests are base64;
+a key is the point (SEC1, 65 bytes) except the recovery key's second half, the SLH-DSA public key.
+
+Every call takes `set`, the set file, and `local`, the device's 32-byte local key, when the file is
+pinned to it. A call that changes the set answers the new `set`, and every call that reads it the
+group's view.
+
+**The set file** is one CBOR map in the format's profile, written whole: 1 its version (1), 2 the
+group's first root key, 3 and 4 the two halves of the recovery key, 5 the pin (the HMAC under the
+local key over the three keys, `records::pin_mark`), 6 the records in dependency order, each
+`[envelope]` or `[envelope, mark]`, 7 the lists, 8 the removal records the notices keep, 9 the
+notices dismissed, 10 the devices that came in through each change of root `[change, seq, [key
+hash]]`, 11 the newest change applied with the devices before it `[change, seq, [device ID]]`. A
+record whose mark holds under the local key is taken without its signature checked again; every
+other is checked as if a peer sent it. With `local`, a file without a pin, or whose pin does not
+hold, is refused (code `saved`): its keys were changed. A file of a later version says to update.
+
+**Signing in rounds.** The root's, an admin's and a new root's keys stay where the device keeps
+them. A call that writes answers `{"sign": [{key, digest}]}` while it needs signatures: the caller
+signs each digest with that key (ECDSA P-256 over the SHA-256 digest as given) and calls again
+with the same arguments and `sigs`, `[{digest, sig}]`, every signature so far (`sig` DER or the 64
+bytes r ‖ s). A record's ID covers its body only, so the digests are the same in every round; an
+admin key's first record after its grant goes with its acknowledgement, whose digest comes first.
+
+| `op` | `args` | `ok` |
+|---|---|---|
+| `set_new` | `root`, `recovery`, `recovery2`, `local` (optional) | the empty set of a group, as its creator or a joiner starts it, and its view |
+| `set_add` | `records` (envelopes), `lists` | the records and lists a peer sent, each checked before it is kept, round after round as one may wait for another: `stored` (IDs), `refused` `[{id, why}]` (`why` `group`, `unknown_signer` or the rule broken; `id` null for bytes that are no record), `changed`, the view |
+| `set_view` | none | the view |
+| `set_records` | `peer` (optional, a member key's hash) | `{records, lists, digest}` to send, in dependency order; with `peer`, what the set gives that peer |
+| `set_write` | `signer`, `record`, `time_ms`, `sigs` | a record of the root or an admin: `records` (envelopes, to send), the view. `record` is `{"type": ...}`: `device` (`key`, `name`, `role` `member`, `phone`, `watch` or `leaf`, `rights` of `read`, `send`, `hub`, `secrets`, `caps` of `admin`, `dials`, `hub`, `os`, `store` `file`, `hardware`, `rootless` or `proven`, `admin` and `admin_kind` `watch`, `computer` or `phone`, which fixes the powers and commands, `holds_root`, `guarded`, `replaces`), `freeze` (`keys`), `thaw` (`ids`), `resolve` (`ids`), `settings` (`key_level`, `min_rules`, `shared`), `copies` (`incoming_ms`), `hubs` (device IDs), `ack` (`spare`, a spare admin key), `checkpoint` |
+| `set_remove` | `signer`, `keys` (member key hashes), `time_ms`, `sigs` | the removal of devices by the root (with what a key in two histories needs) or an admin that may remove |
+| `set_dismiss` | `id` | the notice is not shown again |
+| `set_change_preview` | `leave_out` (member key hashes) | `{"preview": [{device, outcome, frozen}]}`, what a change of root does to each device: `outcome` `stays`, `out`, `admin_kept_with_spare`, `admin_rights_lost` or `frozen` |
+| `set_change` | `recovery_secret` (32 bytes, from the recovery sheet; used for the call and forgotten), `new_root`, `device` (the new root's own device record, as `set_write`'s), `leave_out`, `drop_hubs`, `over_waiting` (write past a change the set holds and has not applied), `time_ms`, `sigs` | a change of root by the recovery key: `records` (the recovery record first, then the new root's first records), `list`, `again` (the change the set held, given back), `blind` (written without records from a member since the set was read: warn before sending), the view |
+| `set_standing` | `own`, `peer` (member keys) | where the peer's key stands in the records, as TLS by key asks: `standing` `member` (with `device`), `unknown` (it must send its intro), `refused` (with `reason`), `halted` or `fork_proof` |
+
+The view: `group`, `digest`, `record_count`, `bytes`, `first_root`, `recovery` (K1's hash), `roots`
+(the path, the current one last), `root_device`, `devices` `[{id, key, key_hash, name, role, rights,
+caps, os, store, admin, powers, commands, root, frozen, guarded, by_root, no_secrets, nothing}]`,
+`revoked`, `hubs`, `stop` (`""`, `secrets` or `full`), `stopped`, `halted`, `too_old`,
+`update_needed`, `incoming_ms`, `conflicts` `[{kind, records, signers}]` (`admins`, `fork`,
+`two_histories`, `admits`, `ids`), `changes` `[{record, seq, root, state}]` (`effective`, `void`,
+`competing`), `list_missing`, `change_arriving`, `newer`, `notices` `[{id, keys}]` (removals by an
+earlier root the person has not dismissed) and `came_in` `[{change, seq, keys}]` (devices that came
+in through a change of root).
+
 ## Signed bodies
 
 `parse_body` reads the signed bodies other than records as every program reads them

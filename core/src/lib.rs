@@ -86,6 +86,7 @@ pub mod root;
 pub mod rule;
 pub mod seal;
 pub mod secret;
+pub mod setfile;
 pub mod sheet;
 pub mod slhdsa;
 pub mod store;
