@@ -46,6 +46,7 @@ pub mod entries;
 pub mod epochs;
 pub mod error;
 mod evidence;
+pub mod faces;
 pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;

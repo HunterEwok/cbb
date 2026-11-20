@@ -16,6 +16,10 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
+  starts each period with a fresh tag and period key, every member signs its own server key
+  for it, derived from a secret of its own, the root lists the hubs, admins and members, and
+  members pass them on in message `member-credentials`.
 - The core writes server credentials of 0.6 (`blind::credential::Credential::sign`), the
   inverse of their reader, checked against the format's vectors.
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
@@ -1923,6 +1927,8 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- The rule of the group's key level and its messages are in the core
+  (`cbb_core::keylevel`), so that `cbb` and the phones' apps share one.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
   `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
   (docs/decisions.md, D-117).

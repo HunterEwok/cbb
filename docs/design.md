@@ -308,6 +308,15 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   credentials with the period key when their lists are stale, and an admin that the hubs'
   credential lists signs the members' credential (`credential::sign` and the `*_body`
   functions, the key behind a callback).
+  On the records of 0.6 `faces.rs` does the same with the format's credentials
+  (`blind::credential`, signed by `Credential::sign`): `server-credentials.cbor` keeps the
+  current period's, checked against the set (the period by the current root, a server key
+  by a member's key, the lists by the period key or a listed admin); the server key is
+  derived from the device's own `server-secret` and the period's tag
+  (`blind::alias::server_key`), so it needs no key store, and the root keeps its period key
+  in `period-key`. Peers get them in message `member-credentials` (t 11) when a connection
+  opens, and the mesh brings them up to date when the set changes and on the sealing key's
+  beat. A period starts as one face; a face for each server (A-55) follows.
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
