@@ -31,7 +31,7 @@ const MOVE_LINGER: Duration = Duration::from_secs(1);
 
 /// The pins of the project's forwarder's key this release knows, as Go's
 /// forward.projectPins, and what stands for them in a hub request.
-const PROJECT_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
+pub(super) const PROJECT_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
 const PROJECT_KEY: &str = "default";
 
 /// The hub while it serves.

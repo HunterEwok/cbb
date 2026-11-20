@@ -1872,7 +1872,7 @@ TABLES = {
     "member-credentials": [
         (2, "member-credentials/list", "array 1..259 of envelope", True),
         (3, "member-credentials/obfuscation", "map obfuscation", False),
-        (4, "member-credentials/server", "bytes 32", False),
+        (4, "member-credentials/server", "bytes 32", True),
         (5, "member-credentials/address", "text 1..261", False),
     ],
 }
@@ -2306,7 +2306,7 @@ def future_vectors():
     case("a guest, a later op: refused", "guest", {0: 17, 2: 8, 3: hub})
     case("a dismiss, the zero invitation ID: refused", "dismiss", {0: 27, 2: bytes(16)})
     case("credentials, settings for later out of range: unusable", "member-credentials",
-         {0: 11, 2: [env], 3: {**obf, 2: 80}})
+         {0: 11, 2: [env], 3: {**obf, 2: 80}, 4: fake("server pin", 32)})
     case("a key of the wrong length: refused", "tunnel", {0: 15, 2: [X25519, b"short"], 3: fake("c", 32)})
     return {"note": "a reader of this version, by each optional field's row; shape always refuses, and so does a "
                     "needed field; unusable reads as the empty map",
@@ -2602,13 +2602,15 @@ def wave3_vectors(records_take):
         maps.append(e)
 
     adb = {1: GROUP, 2: PHONE.id16, 3: "Ewok's phone"}
-    msg("credentials", {0: 11, 2: [dec(envs[0])]}, "the credential is a placeholder envelope")
-    msg("credentials with settings for later", {0: 11, 2: [dec(envs[0])], 3: obf},
+    srv = fake("server pin", 32)
+    msg("credentials", {0: 11, 2: [dec(envs[0])], 4: srv}, "the credential is a placeholder envelope; field 4 the pin of the server it is for")
+    bad("credentials that name no server", {0: 11, 2: [dec(envs[0])]}, "member-credentials/server")
+    msg("credentials with settings for later", {0: 11, 2: [dec(envs[0])], 3: obf, 4: srv},
         "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
-    bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
+    bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}, 4: srv},
         "member-credentials/obfuscation")
-    msg("credentials for one server", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 32), 5: "cbb.tools:8765"},
-        "fields 4 and 5: the server these credentials are for (A-55), its pin and its address; without field 4 they are the group's one face")
+    msg("credentials for one server", {0: 11, 2: [dec(envs[0])], 4: srv, 5: "cbb.tools:8765"},
+        "fields 4 and 5: the server these credentials are for (A-55), its pin, always, and its address")
     bad("credentials for a server, a pin of 31 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 31)},
         "member-credentials/server")
     bad("credentials for a server, an address of 262 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 32), 5: "a" * 262},

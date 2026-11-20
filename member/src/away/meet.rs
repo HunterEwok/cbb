@@ -30,10 +30,10 @@ use crate::tunnel::{Forwarder, State};
 /// What stands for the project's relay in cbb global relay, and its
 /// address.
 pub(super) const PROJECT_KEY: &str = "default";
-const PROJECT_HOST: &str = "cbb.tools:8765";
+pub(super) const PROJECT_HOST: &str = "cbb.tools:8765";
 /// The pins of the project's relay's key this release knows; keys.json may
 /// name others, which take their place (docs/protocol.md, section 16).
-const PROJECT_PINS: &[&str] = &["hnHvkm6ZrTMmfPEP4Bo0s38nlnNKeyXEdhQNKYt2Pzw="];
+pub(super) const PROJECT_PINS: &[&str] = &["hnHvkm6ZrTMmfPEP4Bo0s38nlnNKeyXEdhQNKYt2Pzw="];
 
 /// How long a call waits for the relay to say whose it is, and the most
 /// calls kept.

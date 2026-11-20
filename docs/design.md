@@ -316,7 +316,9 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   (`blind::alias::server_key`), so it needs no key store, and the root keeps its period key
   in `period-key`. Peers get them in message `member-credentials` (t 11) when a connection
   opens, and the mesh brings them up to date when the set changes and on the sealing key's
-  beat. A period starts as one face; a face for each server (A-55) follows.
+  beat. Each server gets a face of its own (A-55): the root makes a period for each server's
+  pin (the project's relay and forwarder for now), and every message `credentials` names the
+  server it is for.
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in

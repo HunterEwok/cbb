@@ -32,6 +32,14 @@ mod serve;
 pub use invite::{GuestTunnel, join_invite, keep_guest};
 pub use movehub::is_stop;
 
+/// The project's relay and forwarder by name, and the pins built in for
+/// them (the newest keys.json held lists others), for the faces the group
+/// shows them (`faces::project_servers`).
+pub(crate) const PROJECT_RELAY: &str = meet::PROJECT_HOST;
+pub(crate) const PROJECT_RELAY_PINS: &[&str] = meet::PROJECT_PINS;
+pub(crate) const PROJECT_FORWARDER: &str = "cbb.tools:8764";
+pub(crate) const PROJECT_FORWARDER_PINS: &[&str] = serve::PROJECT_PINS;
+
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The longest wait between tries of a hub that is a phone, there only
 /// while its app is open (docs/design.md, "The phone as the hub"): a try

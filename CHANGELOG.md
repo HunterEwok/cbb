@@ -1947,8 +1947,10 @@ made with 0.5 is set up again once. The details follow.
   a client gives each hub its key by message `tunnel`, and the pre-shared key is never sent.
 - The 0.6 format's `hub` command lists each forwarder as its address with its pin (field 11), so
   the root signs which key a hub takes there and no hub trusts a forwarder on first use; message
-  `credentials` (t 11) names the server its credentials are for by pin and address (fields 4
-  and 5), room for a face for each server (D-121). The vectors are written again (draft).
+  `credentials` (t 11) always names the server its credentials are for by pin and address
+  (fields 4 and 5; without field 4 it is refused): the group shows each server a face of its own
+  (A-55, D-121), made by the root for the project's relay and forwarder. The vectors are written
+  again (draft).
 - The rule of the group's key level and its messages are in the core
   (`cbb_core::keylevel`), so that `cbb` and the phones' apps share one.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,

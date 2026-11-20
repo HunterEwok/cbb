@@ -532,7 +532,7 @@ change the mode, or change what the person compares or approves.
 | 8 | `intro` | section 6, "The intro" | 6 |
 | 9 | `command` | 2 the command envelope | 15 |
 | 10 | `result` | 2 `id`; 3 `by`; 4 `status` 1 done, 2 refused, 3 failed; 5 `reason`; 6 `tunnel` the hub's offer | 15 |
-| 11 | `credentials` | 2 credential envelopes; 3 settings for a later version; 4 the pin of the server they are for (32 bytes) and 5 its address (text, at most 261 bytes), a face for each server (A-55); without 4 they are the group's one face, and 5 counts only with 4 | 18 |
+| 11 | `credentials` | 2 credential envelopes; 3 settings for a later version; 4 the pin of the server they are for (32 bytes), always, and 5 its address (text, at most 261 bytes): a face for each server (A-55), never one for all; a message without 4 is refused (`member-credentials/server`) | 18 |
 | 12 | `release` | 2 `keys`, 3 `channel`, 4 `release`: the release files' bytes as published | 16 |
 | 13 | `get` | 2 `sha256` bytes 32; 3 `offset`; 4 `length` (0 cancels) | 4 |
 | 14 | `missing` | as `get` | 4 |

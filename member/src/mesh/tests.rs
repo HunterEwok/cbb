@@ -392,17 +392,26 @@ fn server_credentials_go_round_the_group() {
     let a = Mesh::open(&da, oa, log.clone()).unwrap();
     let b = Mesh::open(&db, own(&db), log).unwrap();
     a.refresh_faces(&a.state());
-    let tag = a.faces().kept().tag();
+    // A face for each of the project's servers, by the pins built in.
+    let mut servers = crate::faces::project_servers(None, 0);
+    servers.sort();
+    assert_eq!(servers.len(), 2, "the relay and the forwarder");
+    assert_eq!(a.faces().servers(), servers);
+    let pin = servers[0].pin;
+    let tag = a.faces().kept(&pin).tag();
     assert!(tag.is_some(), "the root started a period");
-    assert!(b.faces().kept().tag().is_none());
+    assert_ne!(a.faces().kept(&servers[1].pin).tag(), tag, "another face for the other server");
+    assert!(b.faces().kept(&pin).tag().is_none());
     connect(&a, &b);
-    until("b takes the period", || b.faces().kept().tag() == tag);
+    until("b takes the period", || b.faces().kept(&pin).tag() == tag);
     let bk = b.own().hash();
-    until("the root lists b", || {
-        let k = a.faces().kept();
-        k.envelopes().len() == 5 && k.lists_member(&bk)
+    until("the root lists b on both faces", || {
+        servers.iter().all(|s| {
+            let k = a.faces().kept(&s.pin);
+            k.envelopes().len() == 5 && k.lists_member(&bk)
+        })
     });
-    until("b holds the new members' credential", || b.faces().kept().lists_member(&bk));
+    until("b holds the new members' credentials", || servers.iter().all(|s| b.faces().kept(&s.pin).lists_member(&bk)));
     a.close();
     b.close();
 }

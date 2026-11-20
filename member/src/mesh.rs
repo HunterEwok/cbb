@@ -449,14 +449,18 @@ impl Mesh {
     }
 
     /// Brings the server credentials up to date as far as this device can
-    /// (`Faces::refresh`) and sends what it signed to every peer.
+    /// (`Faces::refresh`), a face for each of the group's servers, and
+    /// sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
-        match self.faces.refresh(state, &s) {
+        let servers = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
+        match self.faces.refresh(state, &s, &servers) {
             Ok(signed) => {
-                for f in Faces::messages(&signed) {
-                    self.broadcast(&f, None);
+                for (server, envs) in signed {
+                    for f in Faces::messages(&server, &envs) {
+                        self.broadcast(&f, None);
+                    }
                 }
             }
             Err(e) => self.logf(&format!("cbb: the server credentials: {}", e.for_log())),
@@ -467,11 +471,11 @@ impl Mesh {
     /// to the other peers, and may want this device's server key or new
     /// lists.
     fn take_credentials(&self, conn: &Conn, msg: &[u8]) -> Result<()> {
-        let envs = Faces::read_message(msg)?;
+        let (server, envs) = Faces::read_message(msg)?;
         let state = self.state();
-        let fresh = self.faces.add(&state, &hex(&conn.peer.0[..4]), &envs);
+        let fresh = self.faces.add(&state, &hex(&conn.peer.0[..4]), &server, &envs);
         if !fresh.is_empty() {
-            for f in Faces::messages(&fresh) {
+            for f in Faces::messages(&server, &fresh) {
                 self.broadcast(&f, Some(&conn.peer));
             }
             self.refresh_faces(&state);
@@ -803,7 +807,7 @@ impl Mesh {
         for f in self.statements.lock().unwrap().messages() {
             let _ = conn.tx.try_send(f);
         }
-        for f in Faces::messages(&self.faces.kept().envelopes()) {
+        for f in self.faces.all_messages() {
             let _ = conn.tx.try_send(f);
         }
         let mut x = Exchange::new(self.own.hash(), point);
