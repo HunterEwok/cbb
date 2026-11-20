@@ -1931,6 +1931,8 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- The cleaning of a remote paste's text and its refusal of nothing but control characters are
+  in the core (`cbb_core::remotepaste`), so that `cbb` and the phones' apps share them.
 - The 0.6 format's `hub` command no longer carries its clients (field 12, retired and refused):
   a client gives each hub its key by message `tunnel`, and the pre-shared key is never sent.
 - The rule of the group's key level and its messages are in the core

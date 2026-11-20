@@ -2078,10 +2078,7 @@ impl Service {
         if kind == "media" {
             return self.paste_copy_on(h);
         }
-        let text = remotepaste::clean(&String::from_utf8_lossy(payload));
-        if text.is_empty() {
-            return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
-        }
+        let text = remotepaste::to_paste(&String::from_utf8_lossy(payload))?;
         let wait = if mode == "type" { INJECT_WAIT + TYPE_WAIT * text.len() as u32 } else { INJECT_WAIT };
         let o = cbb_core::manage::Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: h.enter };
         self.admin(|a| a.paste_on(&h.device, o, wait))?;

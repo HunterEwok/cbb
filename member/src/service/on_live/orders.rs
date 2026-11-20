@@ -297,14 +297,7 @@ impl Service {
             "type" => Way::Type,
             m => return Err(Error::msg(format!("a paste is pasted or typed, not {m:?}"))),
         };
-        let text = || {
-            let t = remotepaste::clean(&String::from_utf8_lossy(payload));
-            if t.is_empty() {
-                Err(Error::msg("nothing to paste: the text is empty or only control characters"))
-            } else {
-                Ok(t)
-            }
-        };
+        let text = || remotepaste::to_paste(&String::from_utf8_lossy(payload));
         let what = match h.kind.as_str() {
             "" | "text" => What::Text(text()?),
             "secret" => What::Secret(text()?),
