@@ -88,3 +88,10 @@ pub fn at_home(
 
 #[cfg(test)]
 mod tests;
+
+/// What other modules' tests build on: a group whose root this computer
+/// holds.
+#[cfg(test)]
+pub(crate) mod tests_support {
+    pub(crate) use super::tests::root_mesh;
+}

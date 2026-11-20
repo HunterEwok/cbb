@@ -25,7 +25,7 @@ fn temp(name: &str) -> PathBuf {
 }
 
 /// A group whose root key this computer holds, opened as its mesh.
-fn root_mesh(name: &str) -> Arc<Mesh> {
+pub(crate) fn root_mesh(name: &str) -> Arc<Mesh> {
     let dir = temp(name);
     let mut own = Own::load_with(&dir, &|_| Err(Error::msg("no hardware")), &|| None).unwrap();
     let root = own.make(&dir, Which::Root).unwrap();

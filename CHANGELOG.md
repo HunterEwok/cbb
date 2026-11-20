@@ -44,6 +44,9 @@ made with 0.5 is set up again once. The details follow.
   parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
   their size and SHA-256 signed in the copy's header and checked whole before they open. Such
   a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `member/` joins a group at home on the records of 0.6 (`member/src/joining.rs`): it dials a
+  member's pairing window, and once both persons confirm the code keeps the set the Welcome
+  brought before it says so.
 - `member/` admits a device that pairs with it at home on the records of 0.6
   (`member/src/admitting.rs`): once both persons confirm the code, it writes the device's
   record with its root or admin key, keeps the device's first keys statement and sends the

@@ -62,6 +62,7 @@ pub mod identity;
 mod interfaces;
 mod inviter;
 pub mod join;
+pub mod joining;
 mod keys;
 mod leave;
 pub mod link;
