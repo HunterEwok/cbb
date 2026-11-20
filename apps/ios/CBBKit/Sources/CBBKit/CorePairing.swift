@@ -482,6 +482,231 @@ public enum CorePairing {
         }
     }
 
+    /// A pairing window of a phone of 0.6 (docs/protocol.md, section 6,
+    /// "The window and who dials"): the member port listens, the app shows
+    /// the QR code, the new device dials, and both screens show one code
+    /// the person compares. publicKey is the admitting key sign holds (the
+    /// admin key, or the root's); addrs the phone's home addresses without
+    /// a port; expires in seconds (five minutes when 0, an hour at most).
+    public final class Window: @unchecked Sendable {
+        private let handle: OpaquePointer
+        private let signer: UnsafeMutableRawPointer
+        private let member: CoreMember
+        private let lock = NSCondition()
+        private var closed = false
+        private var calls = 0
+
+        /// The QR code's text, cbb://pair?addr=…&fp=….
+        public let qr: String
+        /// The phone's key fingerprint, as the QR code's fp and the mDNS f.
+        public let fingerprint: String
+        public let expires: Int
+
+        /// The device whose code is shown, as it says of itself.
+        public struct Request: Decodable, Equatable, Sendable {
+            public var device: String
+            public var name: String
+            public var os: String
+            public var code: String
+        }
+
+        /// open, joining (ask about request), done (name joined), failed
+        /// (that attempt; the window stays open) or closed.
+        public struct State: Sendable {
+            public var version: UInt64
+            public var state: String
+            public var request: Request?
+            public var name: String
+            public var failure: Failure?
+        }
+
+        public init(member: CoreMember, publicKey: Data, addrs: [String], expires: Int = 0,
+                    sign: @escaping (Data) throws -> Data) throws {
+            struct Args: Encodable { var `public`: Data, addrs: [String], expires: Int, mdns: Bool }
+            struct Answer: Decodable { var qr: String?, fingerprint: String?, expires: Int? }
+            let request = try JSONEncoder().encode(Args(public: try point(publicKey), addrs: addrs, expires: expires, mdns: false))
+            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
+            var answer: UnsafeMutablePointer<UInt8>?
+            var count = 0
+            let h: OpaquePointer? = request.withUnsafeBytes { r in
+                cbb_window_new(member.handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
+            }
+            let o: Answer
+            do {
+                guard let h else {
+                    _ = try ok("window", take(answer, count), as: Answer.self)
+                    throw Core.Mismatch(reason: "the core opened no window")
+                }
+                handle = h
+                o = try ok("window", take(answer, count), as: Answer.self)
+            } catch {
+                if let h { cbb_window_free(h) }
+                Unmanaged<Signer>.fromOpaque(s).release()
+                throw error
+            }
+            (signer, self.member) = (s, member)
+            (qr, fingerprint, self.expires) = (o.qr ?? "", o.fingerprint ?? "", o.expires ?? 0)
+        }
+
+        deinit { close() }
+
+        /// Waits up to timeout for a state past version; it blocks, so the
+        /// app calls it off its main thread.
+        public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
+            struct Answer: Decodable {
+                var version: UInt64?, state: String?, joining: Request?, name: String?, error: Refused?
+            }
+            try enter()
+            defer { leave() }
+            let a = try ok("window", call { cbb_window_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
+            return State(version: a.version ?? version, state: a.state ?? "open", request: a.joining, name: a.name ?? "",
+                         failure: a.error.map { Failure($0.message, details: $0.details) })
+        }
+
+        /// The person's answer: whether the codes match.
+        public func answer(_ yes: Bool) {
+            guard (try? enter()) != nil else { return }
+            defer { leave() }
+            cbb_window_answer(handle, yes ? 1 : 0)
+        }
+
+        private func enter() throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { throw Failure("the window is closed") }
+            calls += 1
+        }
+
+        private func leave() {
+            lock.lock()
+            calls -= 1
+            lock.broadcast()
+            lock.unlock()
+        }
+
+        /// Closes the window.
+        public func close() {
+            lock.lock()
+            let first = !closed
+            closed = true
+            while calls > 0 { lock.wait() }
+            lock.unlock()
+            guard first else { return }
+            cbb_window_free(handle)
+            Unmanaged<Signer>.fromOpaque(signer).release()
+        }
+    }
+
+    /// A new phone that joins a group of 0.6 by a window's QR code (empty
+    /// for the one window found by mDNS): it dials, both screens show one
+    /// code, and on "they match" the group is kept in dir, where the app
+    /// then starts its member. publicKey is the member key sign holds.
+    public final class Joiner: @unchecked Sendable {
+        private let handle: OpaquePointer
+        private let signer: UnsafeMutableRawPointer
+        private let lock = NSCondition()
+        private var closed = false
+        private var calls = 0
+
+        /// The member whose code is shown, as it says of itself.
+        public struct Shown: Decodable, Equatable, Sendable {
+            public var device: String
+            public var name: String
+            public var code: String
+        }
+
+        /// dialing, joining (ask about shown), done (group, device) or
+        /// failed.
+        public struct State: Sendable {
+            public var version: UInt64
+            public var state: String
+            public var shown: Shown?
+            public var group: String
+            public var device: String
+            public var failure: Failure?
+        }
+
+        public init(dir: URL, qr: String, name: String, os: String, publicKey: Data,
+                    sign: @escaping (Data) throws -> Data) throws {
+            struct Args: Encodable { var dir: String, qr: String, name: String, os: String, `public`: Data }
+            let request = try JSONEncoder().encode(Args(dir: dir.path, qr: qr, name: name, os: os, public: try point(publicKey)))
+            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
+            var answer: UnsafeMutablePointer<UInt8>?
+            var count = 0
+            let h: OpaquePointer? = request.withUnsafeBytes { r in
+                cbb_joiner_new(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
+            }
+            struct Answer: Decodable { var state: String? }
+            do {
+                guard let h else {
+                    _ = try ok("join", take(answer, count), as: Answer.self)
+                    throw Core.Mismatch(reason: "the core started no joining")
+                }
+                handle = h
+                _ = try ok("join", take(answer, count), as: Answer.self)
+            } catch {
+                if let h { cbb_joiner_free(h) }
+                Unmanaged<Signer>.fromOpaque(s).release()
+                throw error
+            }
+            signer = s
+        }
+
+        deinit { close() }
+
+        /// Waits up to timeout for a state past version; it blocks, so the
+        /// app calls it off its main thread.
+        public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
+            struct Answer: Decodable {
+                var version: UInt64?, state: String?, shown: Shown?, group: String?, device: String?, error: Refused?
+            }
+            try enter()
+            defer { leave() }
+            let a = try ok("join", call { cbb_joiner_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
+            return State(version: a.version ?? version, state: a.state ?? "dialing", shown: a.shown, group: a.group ?? "",
+                         device: a.device ?? "", failure: a.error.map { Failure($0.message, details: $0.details) })
+        }
+
+        /// The person's answer: whether the codes match.
+        public func answer(_ yes: Bool) {
+            guard (try? enter()) != nil else { return }
+            defer { leave() }
+            cbb_joiner_answer(handle, yes ? 1 : 0)
+        }
+
+        private func enter() throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { throw Failure("joining ended") }
+            calls += 1
+        }
+
+        private func leave() {
+            lock.lock()
+            calls -= 1
+            lock.broadcast()
+            lock.unlock()
+        }
+
+        /// Ends joining; a code waiting for the person counts as "they do
+        /// not match".
+        public func close() {
+            lock.lock()
+            let first = !closed
+            closed = true
+            while calls > 0 { lock.wait() }
+            lock.unlock()
+            guard first else { return }
+            cbb_joiner_free(handle)
+            Unmanaged<Signer>.fromOpaque(signer).release()
+        }
+    }
+
+    /// A duration in whole milliseconds, for the core's waits.
+    static func millis(_ d: Duration) -> UInt64 {
+        UInt64(max(0, d.components.seconds)) * 1000 + UInt64(max(0, d.components.attoseconds) / 1_000_000_000_000_000)
+    }
+
     // MARK: The core's answers
 
     /// The uncompressed point of a P-256 public key given as a
