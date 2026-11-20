@@ -9,10 +9,6 @@
 //! holds it. The same step as a computer's (`cbb_member::admitting`), with
 //! the key the app holds in place of one in a file.
 
-// The pairing window and the joiner that use it come with the decision
-// on which end dials; until then only the tests call it.
-#![cfg_attr(not(test), allow(dead_code, reason = "its callers come with the pairing direction"))]
-
 use cbb_core::error::{Error, Result};
 use cbb_core::identity::ExternalKey;
 use cbb_core::join::decide::{self, Checked, Choice, Signer};

@@ -433,6 +433,16 @@ impl Phone {
         })())
     }
 
+    /// Opens a pairing window with the admitting key behind sign
+    /// (`crate::window`): the member port must listen.
+    pub fn window(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::window::Window>, Vec<u8>) {
+        if self.stopped.load(Ordering::SeqCst) {
+            return (None, answer::<()>(Err(Error::msg("the member stopped"))));
+        }
+        let port = lock(&self.port).as_ref().map(|l| l.port);
+        crate::window::Window::open(self.live.clone(), port, request, sign, ctx)
+    }
+
     /// What the watch asks is not on the records of 0.6 yet.
     pub fn manage_watch(&self) -> Vec<u8> {
         answer::<()>(Err(not_yet("an admin's action from the watch")))

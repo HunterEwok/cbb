@@ -160,6 +160,8 @@ pub mod restore;
 pub mod tunnel;
 #[cfg(feature = "member")]
 pub mod watch;
+#[cfg(feature = "member")]
+pub mod window;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -814,6 +816,98 @@ pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
     if !i.is_null() {
         // SAFETY: i is a box cbb_invite_new let go of.
         guard::or(|| (), || drop(unsafe { Box::from_raw(i) }));
+    }
+}
+
+/// Opens a pairing window on a member of 0.6 (src/window.rs): `request` is
+/// `{"public", "addrs", "expires"}`, `public` the admitting key (the
+/// phone's admin key or the root's), which `sign` with `ctx` signs with
+/// until `cbb_window_free`; `addrs` the phone's home addresses without a
+/// port. The member port must listen (the member's `listen`). Writes the
+/// answer, `{"qr", "fingerprint", "expires", "modules"}`, to `answer` and
+/// `answer_len` and returns the window, or null when the answer is an
+/// error.
+///
+/// # Safety
+///
+/// As `cbb_admit_new`, until `cbb_window_free`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_window_new(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut window::Window {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let (w, ans) = guard::or(|| (None, guard::panicked()), || m.window(req, sign, ctx as usize));
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    w.map_or(core::ptr::null_mut(), |w| Box::into_raw(Box::new(w)))
+}
+
+/// Waits up to `timeout_ms` for the window's state to pass `version` and
+/// answers it: `{"version", "state", "joining", "name", "device",
+/// "error"}`, state open, joining (ask the person whether `joining.code`
+/// matches the device's screen; `joining` also names its device, name and
+/// os), done (a device joined), failed (that attempt failed; the window
+/// stays open) or closed (its time is up). It blocks, so the app calls it
+/// off its main thread.
+///
+/// # Safety
+///
+/// `w` must be a window of `cbb_window_new`, not freed; `answer_len`
+/// writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_window_next(
+    w: *const window::Window,
+    version: u64,
+    timeout_ms: u64,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(w) = (unsafe { w.as_ref() }) else { return core::ptr::null_mut() };
+    to_c(guard::answer(|| w.next(version, timeout_ms)), answer_len)
+}
+
+/// The person's answer to the code of the state's `joining`: `yes`
+/// non-zero when the codes match.
+///
+/// # Safety
+///
+/// As `cbb_window_next`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_window_answer(w: *const window::Window, yes: i32) {
+    // SAFETY: as the function's contract says.
+    if let Some(w) = unsafe { w.as_ref() } {
+        guard::or(|| (), || w.answer(yes != 0));
+    }
+}
+
+/// Closes a window and frees it; an attempt waiting for the person ends as
+/// "they do not match". Null does nothing.
+///
+/// # Safety
+///
+/// `w` must be null or a window of `cbb_window_new`, not freed before, with
+/// no other call on it running.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_window_free(w: *mut window::Window) {
+    if !w.is_null() {
+        // SAFETY: w is a box cbb_window_new let go of.
+        guard::or(|| (), || drop(unsafe { Box::from_raw(w) }));
     }
 }
 

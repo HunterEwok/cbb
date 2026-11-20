@@ -619,6 +619,14 @@ impl Member {
 
     /// Admitting a device by its QR code; on 0.6 it moves to the core's
     /// join session (docs/core-api.md).
+    /// A pairing window on the records of 0.6; a member of 0.5 has none.
+    pub fn window(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::window::Window>, Vec<u8>) {
+        match self {
+            Member::Old(_) => (None, answer::<()>(Err(Error::msg("a group of 0.5 admits by the device's QR code")))),
+            Member::Live(p) => p.window(request, sign, ctx),
+        }
+    }
+
     pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
         match self {
             Member::Old(m) => m.admit(request, sign, ctx),

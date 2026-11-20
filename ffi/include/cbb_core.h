@@ -301,6 +301,30 @@ void cbb_invite_answer(const cbb_invite *i, int32_t yes);
 void cbb_invite_free(cbb_invite *i);
 
 /*
+ * A pairing window on a member of 0.6 (src/window.rs): an admin phone, or
+ * the root phone, lets a device join at home. The member port must listen
+ * (the member's "listen"). request is {"public","addrs","expires"}: the
+ * admitting key (admin or root), which sign with ctx signs with until
+ * cbb_window_free; the phone's home addresses without a port; seconds open
+ * (five minutes when 0, an hour at most). The answer is
+ * {"qr","fingerprint","expires","modules"}, qr a cbb://pair link with the
+ * addresses and the phone's key fingerprint, nothing secret. The new
+ * device dials; cbb_window_next waits up to timeout_ms for a state past
+ * version and answers {"version","state","joining","name","device",
+ * "error"}, state open, joining (joining is {"device","name","os","code"}:
+ * the app asks its person whether the code matches the device's screen and
+ * answers with cbb_window_answer), done (a device joined: device, name),
+ * failed (that attempt failed; the window stays open) or closed (its time
+ * is up). cbb_window_free closes it.
+ */
+typedef struct cbb_window cbb_window;
+cbb_window *cbb_window_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                           uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_window_next(const cbb_window *w, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
+void cbb_window_answer(const cbb_window *w, int32_t yes);
+void cbb_window_free(cbb_window *w);
+
+/*
  * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with
  * the feature tunnel (the iPhone and Android apps): request is JSON with its
  * "op" (new_key, public_key, start, status, stop, and hub_... for the phone

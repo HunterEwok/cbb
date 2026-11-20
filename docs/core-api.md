@@ -121,6 +121,21 @@ Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit
 `not on the records of 0.6 yet` in its details, until its part moves over. Images and files
 of a copy are not written yet: its text is, and the log says why the rest is not.
 
+A phone of 0.6 lets a device join at home through a pairing window, `cbb_window_new`
+(`ffi/src/window.rs`), while its member port listens: the request names the admitting key (the
+phone's admin key or the root's, signing through the callback until `cbb_window_free`), the
+phone's home addresses and how long the window stays open (five minutes by default, an hour at
+most). It answers the QR code `cbb://pair?addr=…&fp=…` (the addresses with the member port and
+the phone's key fingerprint, nothing secret) and its modules. The new device dials; its TLS
+session of `cbb-pair/3` reaches the window through the member port, and both ends show the code
+the session commits to. `cbb_window_next` waits for the next state: `open`, `joining` with the
+code and what the device says of itself (device, name, system), `done` with the device that
+joined, `failed` with the error of that attempt (the window stays open for another), `closed`
+when its time is up. `cbb_window_answer` gives the person's answer; on "they match" the phone
+writes the device's record by the core's admission rules (`join::decide::joiner_record`: at
+home a member or a phone reads, sends and takes secrets, a watch only reads) and sends the
+Welcome (`ffi/src/pair06.rs`). One attempt at a time; another gets `busy`.
+
 ### The member's operations
 
 A phone's `cbb_member_call` and a computer's control socket (protocol.md, section 8: the

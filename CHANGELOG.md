@@ -28,8 +28,10 @@ made with 0.5 is set up again once. The details follow.
   writes, and show on every device that the main device changed, with "This wasn't me"
   ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
   and the change too.
-- `ffi` admits a device on the records of 0.6 with the app's root or admin key, by the core's
-  admission rules, and sends the Welcome (`ffi/src/pair06.rs`), for the phones' pairing window.
+- A phone of 0.6 opens a pairing window (`cbb_window_new`, docs/core-api.md): it shows a QR code
+  with its addresses and key fingerprint, both ends show the code the session commits to, and on
+  the person's "they match" its root or admin key admits the device by the core's admission rules
+  and sends the Welcome (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
   written, with the root's and admins' keys signing where the device keeps them, the change of
