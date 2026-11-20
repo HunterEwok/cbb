@@ -51,6 +51,15 @@
 //! restores with its recovery keys as -restore does with a sheet. -keys N
 //! gives a second phone keys of its own.
 //!
+//! On a group of 0.6: -group06 makes one in -dir (the admin key standing
+//! for the root key) and prints "Group <device> <group tag>"; -join-window
+//! <QR code text> (empty: the one window announced at home) joins one by
+//! its pairing window, keeping the set in -dir, prints "Code <name>
+//! <code>", answers that they match (not with -refuse-code) and prints
+//! "Joined <device> <group tag>" or "JOIN FAILED <message>". The member of
+//! 0.6 then runs in -dir and takes "WINDOW", which opens its pairing window
+//! (at once with -window): see window_new for what it prints and takes.
+//!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
 use std::io::{Read, Write};
@@ -62,8 +71,10 @@ use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
-    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
-    cbb_member_manage_card, cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore,
+    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_joiner_answer, cbb_joiner_free,
+    cbb_joiner_new, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_card,
+    cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore, cbb_window_answer,
+    cbb_window_free, cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -175,6 +186,48 @@ fn main() -> ExitCode {
         .unwrap_or_default();
     let peers: Vec<String> =
         args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
+    // A group of 0.6 (-group06, the admin key standing for the root key)
+    // or joining one by a pairing window (-join-window <QR code text>, empty
+    // to find the one window announced at home); then the member of 0.6 runs
+    // in -dir, which takes "WINDOW" too (and opens it at once with -window).
+    let window = args.iter().any(|a| a == "-window");
+    if args.iter().any(|a| a == "-group06") {
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -group06 needs -dir");
+            return ExitCode::FAILURE;
+        };
+        let req = serde_json::json!({
+            "dir": dir, "name": name, "os": "aurora", "store": "hardware", "root_public": admin_public,
+            "public": public_b64,
+        })
+        .to_string();
+        let mut n = 0usize;
+        let ctx = &admin_key as *const SigningKey as *mut _;
+        // SAFETY: req and n live for the call, the key too.
+        let made = take(unsafe { cbb_group_new(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
+        let group = made["ok"].clone();
+        if group.is_null() {
+            eprintln!("phone-on-linux: {made}");
+            return ExitCode::FAILURE;
+        }
+        let device = group["device"].as_str().unwrap_or_default().to_string();
+        let id = group["group"].as_str().unwrap_or_default();
+        println!("Group {device} {}", id.get(..16).unwrap_or(id));
+        let admin = Some((&admin_key, admin_public.as_str()));
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
+    }
+    if let Some(qr) = arg("-join-window") {
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -join-window needs -dir");
+            return ExitCode::FAILURE;
+        };
+        let refuse = args.iter().any(|a| a == "-refuse-code");
+        let Some(device) = join_window(&key, &public_b64, &name, &dir, &qr, refuse) else {
+            return ExitCode::FAILURE;
+        };
+        let admin = admin.then_some((&admin_key, admin_public.as_str()));
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
+    }
     if args.iter().any(|a| a == "-new-group") {
         // A group of its own, the admin key standing for the root key the
         // Aurora app keeps in its TEE; the phone then admits as the root.
@@ -404,6 +457,41 @@ fn run_member(
         "admin_key": joined.get("offer_admin_key"),
     })
     .to_string();
+    serve(key, &req, joined, admin, invite, false)
+}
+
+/// Runs the member of 0.6 whose group's set is in dir, as the app does
+/// once it made or joined the group, until standard input ends; with
+/// window, it opens its pairing window at once.
+#[allow(clippy::too_many_arguments)]
+fn run_live(
+    key: &SigningKey,
+    public_b64: &str,
+    name: &str,
+    dir: &str,
+    peers: Vec<String>,
+    device: &str,
+    admin: Option<(&SigningKey, &str)>,
+    window: bool,
+) -> ExitCode {
+    let req = serde_json::json!({
+        "dir": dir, "name": name, "os": "aurora", "os_version": "Aurora OS 5.1.5", "version": "0.6.0",
+        "device": device, "public": public_b64, "peers": peers, "mdns": false,
+    })
+    .to_string();
+    serve(key, &req, &serde_json::Value::Null, admin, None, window)
+}
+
+/// Starts the member with req and takes the commands on standard input
+/// until it ends.
+fn serve(
+    key: &SigningKey,
+    req: &str,
+    joined: &serde_json::Value,
+    admin: Option<(&SigningKey, &str)>,
+    invite: Option<&str>,
+    window: bool,
+) -> ExitCode {
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
     // SAFETY: req, ans and n live for the call; the key outlives the member,
@@ -427,9 +515,22 @@ fn run_member(
         }
     }
     let mut inviting: Option<std::sync::Arc<Inviting>> = None;
+    let mut windows: Option<std::sync::Arc<Windowing>> = None;
+    if window {
+        windows = window_new(m, admin);
+    }
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
-        if let Some(text) = line.strip_prefix("COPY ") {
+        if let Some(yes) = line.strip_prefix("WINDOW ANSWER ") {
+            if let Some(w) = &windows {
+                // SAFETY: the window lives until windows is dropped.
+                unsafe { cbb_window_answer(w.0, i32::from(yes == "yes")) };
+            }
+        } else if line == "WINDOW" {
+            // The one open window closes before the next opens.
+            drop(windows.take());
+            windows = window_new(m, admin);
+        } else if let Some(text) = line.strip_prefix("COPY ") {
             let a = call(serde_json::json!({ "op": "copy", "args": { "text": text } }).to_string());
             if let Some(e) = a.get("error") {
                 println!("REFUSED {}", e["message"].as_str().unwrap_or_default());
@@ -529,6 +630,156 @@ fn run_member(
         }
     }
     ExitCode::SUCCESS
+}
+
+/// A pairing window of 0.6 the phone opened, freed when dropped.
+struct Windowing(*mut cbb_ffi::window::Window);
+
+// SAFETY: the library's window may be used from any thread.
+unsafe impl Send for Windowing {}
+unsafe impl Sync for Windowing {}
+
+impl Drop for Windowing {
+    fn drop(&mut self) {
+        // SAFETY: the window is freed once, here.
+        unsafe { cbb_window_free(self.0) };
+    }
+}
+
+/// Opens the member's pairing window of 0.6 with the admin key (the root
+/// key on a phone that made its group), as the app does: the member port
+/// listens first. It prints "WINDOW <QR code text>", then from a thread of
+/// its own "WINDOW JOINING <name> <code>" when a device dials it and the
+/// code waits for "WINDOW ANSWER <yes|no>", "WINDOW DONE <name>" for each
+/// device that joined, "WINDOW FAILED <message>" for an attempt that
+/// failed (the window stays open) and "WINDOW CLOSED" when its time is up.
+fn window_new(
+    m: *const cbb_ffi::member::Member,
+    admin: Option<(&SigningKey, &str)>,
+) -> Option<std::sync::Arc<Windowing>> {
+    let Some((key, public)) = admin else {
+        println!("WINDOW FAILED this phone has no admin key");
+        return None;
+    };
+    let listen = serde_json::json!({ "op": "listen", "args": { "kind": "home", "port": 0 } }).to_string();
+    let mut n = 0usize;
+    // SAFETY: m runs; listen and n live for the call.
+    let got = take(unsafe { cbb_member_call(m, listen.as_ptr(), listen.len(), &mut n) }, n);
+    if let Some(e) = got.get("error") {
+        println!("WINDOW FAILED {}", e["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    let req = serde_json::json!({ "public": public, "addrs": ["127.0.0.1"], "expires": 0, "mdns": false }).to_string();
+    let mut ans = std::ptr::null_mut();
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: m runs; req, ans and n live for the call; the key outlives the
+    // window.
+    let w = unsafe { cbb_window_new(m, req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
+    let created = take(ans, n);
+    if w.is_null() {
+        println!("WINDOW FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    println!("WINDOW {}", created["ok"]["qr"].as_str().unwrap_or_default());
+    let windowing = std::sync::Arc::new(Windowing(w));
+    let held = std::sync::Arc::downgrade(&windowing);
+    std::thread::spawn(move || {
+        let mut version = 0u64;
+        loop {
+            // Holds the window only for one wait, so that dropping it
+            // (another WINDOW, or the end) ends this thread.
+            let Some(w) = held.upgrade() else { return };
+            let mut n = 0usize;
+            // SAFETY: w keeps the window for the call.
+            let st = take(unsafe { cbb_window_next(w.0, version, 1000, &mut n) }, n);
+            drop(w);
+            let ok = &st["ok"];
+            let v = ok["version"].as_u64().unwrap_or(version);
+            if v == version {
+                continue;
+            }
+            version = v;
+            let text = |k: &str| ok[k].as_str().unwrap_or_default().to_string();
+            match ok["state"].as_str() {
+                Some("joining") => println!(
+                    "WINDOW JOINING {} {}",
+                    ok["joining"]["name"].as_str().unwrap_or_default(),
+                    ok["joining"]["code"].as_str().unwrap_or_default()
+                ),
+                Some("done") => println!("WINDOW DONE {}", text("name")),
+                Some("failed") => {
+                    println!("WINDOW FAILED {}", ok["error"]["message"].as_str().unwrap_or_default())
+                }
+                Some("closed") => {
+                    println!("WINDOW CLOSED");
+                    return;
+                }
+                _ => {}
+            }
+        }
+    });
+    Some(windowing)
+}
+
+/// Joins a group of 0.6 by a pairing window's QR code (empty: the one
+/// window announced at home), as the app does, keeping the set in dir: it
+/// prints "Code <name> <code>" with the admitting member's name and the
+/// code both screens show, answers that they match (they don't with
+/// -refuse-code), and prints "Joined <device> <group tag>", the tag the
+/// first 16 hex characters of the group's ID, or "JOIN FAILED <message>".
+/// It answers the device ID.
+fn join_window(key: &SigningKey, public_b64: &str, name: &str, dir: &str, qr: &str, refuse: bool) -> Option<String> {
+    let req =
+        serde_json::json!({ "dir": dir, "qr": qr, "name": name, "os": "aurora", "public": public_b64 }).to_string();
+    let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: req, ans and n live for the call; the key outlives the joiner.
+    let j = unsafe { cbb_joiner_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
+    let created = take(ans, n);
+    if j.is_null() {
+        println!("JOIN FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    let mut version = 0u64;
+    let joined = loop {
+        // SAFETY: j is the joiner, used by this thread only.
+        let st = take(unsafe { cbb_joiner_next(j, version, 1000, &mut n) }, n);
+        let ok = &st["ok"];
+        if ok.is_null() {
+            println!("JOIN FAILED {}", st["error"]["message"].as_str().unwrap_or_default());
+            break None;
+        }
+        let v = ok["version"].as_u64().unwrap_or(version);
+        if v == version {
+            continue;
+        }
+        version = v;
+        match ok["state"].as_str() {
+            Some("joining") => {
+                println!(
+                    "Code {} {}",
+                    ok["shown"]["name"].as_str().unwrap_or_default(),
+                    ok["shown"]["code"].as_str().unwrap_or_default()
+                );
+                // SAFETY: j as above.
+                unsafe { cbb_joiner_answer(j, i32::from(!refuse)) };
+            }
+            Some("done") => {
+                let group = ok["group"].as_str().unwrap_or_default();
+                let device = ok["device"].as_str().unwrap_or_default().to_string();
+                println!("Joined {device} {}", group.get(..16).unwrap_or(group));
+                break Some(device);
+            }
+            Some("failed") => {
+                println!("JOIN FAILED {}", ok["error"]["message"].as_str().unwrap_or_default());
+                break None;
+            }
+            _ => {}
+        }
+    };
+    // SAFETY: j is freed once.
+    unsafe { cbb_joiner_free(j) };
+    joined
 }
 
 /// An invitation the phone made, freed when dropped.
