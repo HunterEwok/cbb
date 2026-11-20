@@ -34,11 +34,13 @@ use cbb_core::records::{DeviceId, Key, RecordSet, State};
 use cbb_core::tls::bykey;
 
 use crate::commands::{self, Book};
+use crate::entries::Entries;
 use crate::epochs::FileStore;
 use crate::error::{Error, Result};
 use crate::hello::Hello;
 use crate::link::{self, Exchange};
 use crate::own::Own;
+use crate::releases::Releases;
 use crate::sealed::{self, Lifetimes, Statements, Taken};
 use crate::tls;
 
@@ -91,6 +93,9 @@ pub struct Mesh {
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
+    /// The signed release and entry points this member holds and passes on.
+    releases: RwLock<Option<Arc<Releases>>>,
+    entries: RwLock<Option<Arc<Entries>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
 }
@@ -209,6 +214,8 @@ impl Mesh {
             on_command: RwLock::new(None),
             on_set: RwLock::new(None),
             waiting: Mutex::new(HashMap::new()),
+            releases: RwLock::new(None),
+            entries: RwLock::new(None),
             log,
             closed: AtomicBool::new(false),
         };
@@ -249,6 +256,13 @@ impl Mesh {
     /// What this device's hellos say of it beyond the exchange's fields.
     pub fn set_hello(&self, h: Hello) {
         *self.hello.write().unwrap() = h;
+    }
+
+    /// The signed release and entry points this member holds, which its
+    /// hellos name and it passes to a peer that holds older ones.
+    pub fn with_signed(&self, releases: Arc<Releases>, entries: Arc<Entries>) {
+        *self.releases.write().unwrap() = Some(releases);
+        *self.entries.write().unwrap() = Some(entries);
     }
 
     /// The lifetimes copies are judged by.
@@ -298,8 +312,58 @@ impl Mesh {
     }
 
     fn hello_frame(&self, set: &RecordSet) -> Vec<u8> {
-        let h = self.hello.read().unwrap();
+        let mut h = self.hello.read().unwrap().clone();
+        let now = crate::uptime::wall_ms();
+        if let Some(r) = &*self.releases.read().unwrap() {
+            (h.release_keys_seq, h.release_seq) = r.order(now);
+        }
+        if let Some(e) = &*self.entries.read().unwrap() {
+            (h.entries_keys_seq, h.entries_seq) = e.order(now);
+        }
+        h.wall_ms = now.max(0) as u64;
         link::hello_with(set, h.fields())
+    }
+
+    /// On a peer's hello: the release and entry points this member holds,
+    /// when the peer's are older.
+    fn on_hello(&self, conn: &Conn, h: &Hello) {
+        let now = crate::uptime::wall_ms();
+        if let Some(r) = &*self.releases.read().unwrap()
+            && crate::releases::newer(r.order(now), (h.release_keys_seq, h.release_seq))
+            && let Some(f) = r.current(now).and_then(|v| files_frame(m::T_RELEASE, RELEASE_FILES, &v))
+        {
+            let _ = conn.tx.try_send(f);
+        }
+        if let Some(e) = &*self.entries.read().unwrap()
+            && crate::entries::newer(e.order(now), (h.entries_keys_seq, h.entries_seq))
+            && let Some(f) = e.current(now).and_then(|v| files_frame(m::T_ENTRIES, ENTRIES_FILES, &v))
+        {
+            let _ = conn.tx.try_send(f);
+        }
+    }
+
+    fn take_signed(&self, conn: &Conn, t: u64, msg: &[u8]) -> Result<()> {
+        let now = crate::uptime::wall_ms();
+        let (files, what) =
+            if t == m::T_RELEASE { (RELEASE_FILES, "release") } else { (ENTRIES_FILES, "entry points") };
+        let v = files_value(msg, files).ok_or_else(|| Error::msg(format!("the {what} do not decode")))?;
+        let taken = if t == m::T_RELEASE {
+            self.releases.read().unwrap().as_ref().map(|r| r.take(&v, now))
+        } else {
+            self.entries.read().unwrap().as_ref().map(|e| e.take(&v, now))
+        };
+        match taken {
+            Some(Ok(true)) => {
+                // Newer here: passed on to the others with a new hello.
+                let hello = self.hello_frame(&self.set.lock().unwrap());
+                self.broadcast(&hello, Some(&conn.peer));
+            }
+            Some(Err(e)) => {
+                self.logf(&format!("the {what} from {} were not taken: {}", hex(&conn.peer.0[..4]), e.details()))
+            }
+            Some(Ok(false)) | None => {}
+        }
+        Ok(())
     }
 
     fn broadcast(&self, f: &[u8], except: Option<&DeviceId>) {
@@ -508,7 +572,14 @@ impl Mesh {
             self.broadcast(&hello, None);
         }
         match out.other {
-            None | Some(m::T_PING) => Ok(()),
+            None => {
+                if let Ok((m::T_HELLO, v, _)) = cbb_core::msg::read_noted(msg) {
+                    self.on_hello(conn, &Hello::read(&v));
+                }
+                Ok(())
+            }
+            Some(m::T_PING) => Ok(()),
+            Some(t @ (m::T_RELEASE | m::T_ENTRIES)) => self.take_signed(conn, t, msg),
             Some(m::T_BYE) => Err(Error::msg("the peer said goodbye")),
             Some(cbb_core::msg::wave4::T_KEYS) => self.take_keys(conn, msg),
             Some(copies::T_COPY) => self.take_copy(conn, msg),
@@ -667,6 +738,33 @@ impl Mesh {
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
     }
+}
+
+/// The release's files and their fields in message `release`.
+const RELEASE_FILES: &[(&str, u16)] = &[("keys", 2), ("channel", 3), ("release", 4)];
+/// The entry points' files and their fields in message `entries`.
+const ENTRIES_FILES: &[(&str, u16)] = &[("keys", 2), ("entries", 3)];
+
+/// Message `release` or `entries` from the files held, `{name: file}`:
+/// each file's bytes as published.
+fn files_frame(t: u64, files: &[(&str, u16)], v: &serde_json::Value) -> Option<Vec<u8>> {
+    let bytes: Vec<Vec<u8>> = files.iter().map(|(n, _)| serde_json::to_vec(v.get(*n)?).ok()).collect::<Option<_>>()?;
+    let mut f = vec![(frame::FIELD_T, Value::Uint(t))];
+    for ((_, n), b) in files.iter().zip(&bytes) {
+        f.push((*n, Value::Bytes(b)));
+    }
+    Some(frame::write(&Value::Map(f)))
+}
+
+/// The files of message `release` or `entries` (its body) as `{name: file}`.
+fn files_value(msg: &[u8], files: &[(&str, u16)]) -> Option<serde_json::Value> {
+    let (_, v, _) = cbb_core::msg::read_noted(msg).ok()?;
+    let mut out = serde_json::Map::new();
+    for (name, n) in files {
+        let b = v.get(*n)?.as_bytes()?;
+        out.insert((*name).to_string(), serde_json::from_slice(b).ok()?);
+    }
+    Some(serde_json::Value::Object(out))
 }
 
 /// A command's ID from its message frame.
