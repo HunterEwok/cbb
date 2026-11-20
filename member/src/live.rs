@@ -16,15 +16,17 @@ use std::time::Duration;
 
 use cbb_core::certs;
 use cbb_core::clip::{Kind, Via};
-use cbb_core::media::Manifest;
+use cbb_core::content::{Content, TYPE_FILES, TYPE_MEDIA};
+use cbb_core::media::{Manifest, Part};
 use cbb_core::records::body::CAP_DIALS;
 use cbb_core::records::{DeviceId, State};
 use cbb_core::rule::Verdict;
 
 use crate::board::{Board, LIVE_WINDOW_MS};
+use crate::content::Source;
 use crate::discovery::{Admit, Dialed, Peers};
 use crate::error::{Error, Result};
-use crate::mesh::{Arrived, Mesh};
+use crate::mesh::{Arrived, Mesh, SentMedia};
 use crate::networks::Networks;
 use crate::own::Own;
 use crate::pair::home_address;
@@ -123,7 +125,28 @@ pub struct Live {
     /// The devices discovery found at home, and when (uptime).
     home: Mutex<HashMap<DeviceId, Duration>>,
     networks: RwLock<Option<Arc<Networks>>>,
+    /// The images or files this member copied last, which a paste opens,
+    /// and when, on the wall clock.
+    own_media: Mutex<Option<(SentMedia, i64)>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// Where the images or files a paste opens come from.
+pub enum MediaFrom {
+    /// This member's own copy, kept here.
+    Own(SentMedia),
+    /// A copy from the group: its blob, fetched from the member it came
+    /// from, and that member.
+    Group { manifest: Manifest, blob: Option<Blob>, from: DeviceId },
+}
+
+impl MediaFrom {
+    pub fn manifest(&self) -> &Manifest {
+        match self {
+            MediaFrom::Own(m) => &m.manifest,
+            MediaFrom::Group { manifest, .. } => manifest,
+        }
+    }
 }
 
 impl Live {
@@ -148,6 +171,7 @@ impl Live {
             unreached: Mutex::new(HashSet::new()),
             home: Mutex::new(HashMap::new()),
             networks: RwLock::new(None),
+            own_media: Mutex::new(None),
             log,
         });
         live.settle(&live.mesh.state());
@@ -236,6 +260,87 @@ impl Live {
         // copy here, as the board did; nothing goes out.
         self.mesh.copy(&c)?;
         Ok(())
+    }
+
+    /// Images or files a watcher reported (deliberate false) or cbb copy
+    /// FILE handed in (true), with their plain-text alternative: sealed
+    /// and kept to serve, the clipboard's content here, and sent to the
+    /// group as Board::sends_media says.
+    pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via, deliberate: bool) -> Result<()> {
+        let send = self.board.sends_media(deliberate)?;
+        let files = parts.iter().any(|(p, _)| !p.path.is_empty() || p.dir);
+        let c = Content {
+            kind: if files { TYPE_FILES } else { TYPE_MEDIA },
+            text: (!text.is_empty()).then(|| text.to_string()),
+            via: match via {
+                Via::Phone => 1,
+                Via::Universal => 2,
+                _ => 0,
+            },
+            ..Content::default()
+        };
+        let m = self.mesh.copy_media(&c, parts, send)?;
+        self.board.copied_media(&m.manifest, text);
+        *self.own_media.lock().unwrap() = Some((m, uptime::wall_ms()));
+        Ok(())
+    }
+
+    /// The ID of the group's newest copy of images or files that this
+    /// device reads: its own last one, when it went to the group after the
+    /// group's current copy came, else that current copy.
+    pub fn media_copy(&self) -> Option<[u8; 16]> {
+        let current = self.board.current().filter(|c| c.content.manifest.is_some() && c.content.writable());
+        let own = self.own_media.lock().unwrap().clone().and_then(|(m, at)| Some((m.id?, at)));
+        match (own, current) {
+            (Some((id, at)), Some(c)) if at >= c.at_ms => Some(id),
+            (_, Some(c)) => Some(c.id),
+            (Some((id, _)), None) => Some(id),
+            (None, None) => None,
+        }
+    }
+
+    /// The images or files a paste opens: the group's copy `copy` (its ID
+    /// in hex) while it is the current one; else, in a mode that receives,
+    /// this member's own clipboard (its own copy, or the group's that was
+    /// written to it); else the group's current copy.
+    pub fn media_to_paste(&self, copy: &str) -> Result<MediaFrom> {
+        let group = |c: crate::board::Current| -> Option<MediaFrom> {
+            Some(MediaFrom::Group { manifest: c.content.manifest.clone()?, blob: c.blob, from: c.from })
+        };
+        if !copy.is_empty() {
+            let c = self.board.current().filter(|c| certs::hex(&c.id) == copy && c.content.writable());
+            return c
+                .and_then(group)
+                .ok_or_else(|| Error::msg("the copy to paste is no longer the group's current copy"));
+        }
+        if self.board.mode().receives() {
+            let (m, _, _) =
+                self.board.local_media().ok_or_else(|| Error::msg("the clipboard holds no images or files"))?;
+            if let Some((own, _)) = self.own_media.lock().unwrap().clone().filter(|o| o.0.manifest == m) {
+                return Ok(MediaFrom::Own(own));
+            }
+            return self
+                .board
+                .current()
+                .filter(|c| c.content.manifest.as_ref() == Some(&m))
+                .and_then(group)
+                .ok_or_else(|| Error::msg("the copy's images or files are no longer kept here; copy them again"));
+        }
+        self.board.current().and_then(group).ok_or_else(|| Error::msg("the group's copy is no images or files"))
+    }
+
+    /// Opens the images or files of `from` into the new folder `out`, the
+    /// group's fetched first (at most `max` bytes).
+    pub fn open_media(&self, from: &MediaFrom, max: u64, out: &Path) -> Result<Vec<(Part, std::path::PathBuf)>> {
+        match from {
+            MediaFrom::Own(m) => self.mesh.open_media(m.blob.as_ref(), &m.manifest, out),
+            MediaFrom::Group { manifest, blob, from } => {
+                if let Some(b) = blob {
+                    self.mesh.fetch(b, from, max)?;
+                }
+                self.mesh.open_media(blob.as_ref(), manifest, out)
+            }
+        }
     }
 
     /// The known networks, where the member port takes connections and

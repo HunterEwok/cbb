@@ -107,11 +107,7 @@ impl Service {
                     &from,
                     &body,
                     secrets_stopped,
-                    &|_| {
-                        let e = not_yet("pasting a copy's images or files");
-                        (self.log)(&format!("cbb: a paste from {who}: {}", e.for_log()));
-                        wire::CommandResult { status: "failed".into(), reason: e.to_string(), ..Default::default() }
-                    },
+                    &|set| self.live_paste_copy(live, &body, set, &by.name),
                     &|len| self.live_watch_typing(live, t.signer, len),
                 );
                 outcome(&res.status, &res.reason)
@@ -167,6 +163,44 @@ impl Service {
         actions::save(&self.state_dir, &set)?;
         self.live_hello(live);
         Ok(())
+    }
+
+    /// A paste of the group's copy of images or files on the records of
+    /// 0.6: the copy the command names, once it arrived here and while it
+    /// is the current one, fetched and pasted as on the old records. A
+    /// copy of 0.6 is sealed to every reader the group lists, the sender
+    /// among them, so there is no wrap to look for.
+    fn live_paste_copy(
+        &self,
+        live: &Live,
+        body: &crate::records::Command,
+        set: remotepaste::Settings,
+        name: &str,
+    ) -> wire::CommandResult {
+        let res = wire::CommandResult { id: body.id.clone(), status: "refused".into(), ..Default::default() };
+        let until = Instant::now() + COPY_WAIT;
+        let c = loop {
+            if let Some(c) = live.board.current().filter(|c| crate::certs::hex(&c.id) == body.text) {
+                break c;
+            }
+            if Instant::now() >= until {
+                let reason = "the copy to paste did not arrive here, or a newer copy replaced it".into();
+                return wire::CommandResult { reason, ..res };
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let Some(m) = c.content.manifest.clone().filter(|_| c.content.writable()) else {
+            let reason = if c.content.writable() {
+                "the copy to paste holds no images or files"
+            } else {
+                "this device cannot read the copy to paste"
+            };
+            return wire::CommandResult { reason: reason.into(), ..res };
+        };
+        self.inject_copy(body, set, name, &m, res, || match c.blob {
+            Some(b) => live.mesh.fetch(&b, &c.from, self.limits.lock().unwrap().home as u64),
+            None => Ok(()),
+        })
     }
 
     /// Sends the device target a command with order o, signed by this
@@ -278,10 +312,10 @@ impl Service {
                 if way == Way::Type {
                     return Err(Error::msg("images and files are pasted, not typed"));
                 }
-                let c = live.board.current().filter(|c| c.content.manifest.is_some()).ok_or_else(|| {
+                let id = live.media_copy().ok_or_else(|| {
                     Error::msg("the group's current copy is no images or files that this device reads")
                 })?;
-                What::Media(c.id)
+                What::Media(id)
             }
             k => return Err(Error::msg(format!("a paste is a text or a secret, not {k:?}"))),
         };

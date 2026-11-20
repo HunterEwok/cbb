@@ -80,9 +80,14 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     assert!(e.message().contains("only an admin can change the devices list"), "{}", e.message());
 
     // What has not moved yet answers so, with its cause.
-    for op in ["release_held", "away", "invite"] {
+    for op in ["away", "invite"] {
         let e = ask(&a, op, |_| {}).unwrap_err();
         assert!(e.find::<NotYet>().is_some(), "{op}: {}", e.for_log());
+    }
+    // The signed release and entry points have moved: none is held yet.
+    for (op, says) in [("release_held", "no signed release"), ("entries_get", "no signed entry points")] {
+        let e = ask(&a, op, |_| {}).unwrap_err();
+        assert!(e.find::<NotYet>().is_none() && e.message().contains(says), "{op}: {}", e.for_log());
     }
     // Muting another device takes an admin.
     let e = ask(&a, "mute", |h| h.device = "b".into()).unwrap_err();

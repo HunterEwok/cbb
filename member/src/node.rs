@@ -722,6 +722,11 @@ impl Node {
         &self.releases
     }
 
+    /// The release held, to keep beyond this borrow.
+    pub fn releases_arc(&self) -> Arc<Releases> {
+        self.releases.clone()
+    }
+
     /// The release archives the peers seen update from.
     pub fn archives(&self) -> Vec<String> {
         let mut out: Vec<String> = self.archives.lock().unwrap().values().cloned().collect();

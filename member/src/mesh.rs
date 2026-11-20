@@ -356,6 +356,48 @@ impl Mesh {
         *self.entries.write().unwrap() = Some(entries);
     }
 
+    /// The signed entry points this member holds, once with_signed gave
+    /// them.
+    pub fn entries(&self) -> Option<Arc<Entries>> {
+        self.entries.read().unwrap().clone()
+    }
+
+    /// The signed release this member holds, once with_signed gave it.
+    pub fn releases(&self) -> Option<Arc<Releases>> {
+        self.releases.read().unwrap().clone()
+    }
+
+    /// Takes a release the user gave (cbb update brings it), as
+    /// put_entries takes entry points; a newer one that offers a version
+    /// is logged, as the old member does. Whether it was newer.
+    pub fn put_release(&self, v: &serde_json::value::RawValue) -> Result<bool> {
+        let r = self.releases().ok_or_else(|| Error::msg("this member keeps no release"))?;
+        let now = crate::uptime::wall_ms();
+        let newer = r.take(v, now).map_err(|e| e.context("the release does not check out"))?;
+        if newer {
+            if let Some(v) = r.version(now).filter(|v| crate::releases::offered(v)) {
+                self.logf(&format!("CBB {v} is available; cbb update installs it"));
+            }
+            let hello = self.hello_frame(&self.set.lock().unwrap());
+            self.broadcast(&hello, None);
+        }
+        Ok(newer)
+    }
+
+    /// Takes entry points the user gave (cbb update brings them): when
+    /// they are newer than those held, the peers hear of them in a new
+    /// hello and ask, as for entry points a peer sent. Whether they were
+    /// newer.
+    pub fn put_entries(&self, v: &serde_json::value::RawValue) -> Result<bool> {
+        let e = self.entries().ok_or_else(|| Error::msg("this member keeps no entry points"))?;
+        let newer = e.take(v, crate::uptime::wall_ms()).map_err(|e| e.context("the entry points do not check out"))?;
+        if newer {
+            let hello = self.hello_frame(&self.set.lock().unwrap());
+            self.broadcast(&hello, None);
+        }
+        Ok(newer)
+    }
+
     /// The lifetimes copies are judged by.
     pub fn set_lifetimes(&self, l: Lifetimes) {
         *self.lifetimes.write().unwrap() = l;
@@ -1033,6 +1075,7 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 }
 
 mod media;
+pub use media::SentMedia;
 
 #[cfg(test)]
 pub(crate) mod tests;

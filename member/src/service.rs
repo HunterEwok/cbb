@@ -1832,11 +1832,32 @@ impl Service {
             .into();
             return res;
         };
+        let ev = Arc::new(ev);
+        self.inject_copy(body, set, name, &m, res, || {
+            node.fetch(&ev, self.limits.lock().unwrap().home as u64)?;
+            *self.media.lock().unwrap() = Some(ev.clone());
+            Ok(())
+        })
+    }
+
+    /// The rest of a paste of a copy of images or files, on the old
+    /// records or on those of 0.6: the desktop targets that take the
+    /// manifest m, the copy fetched (`fetch`), then each target asked in
+    /// turn until one pastes it.
+    fn inject_copy(
+        &self,
+        body: &crate::records::Command,
+        set: remotepaste::Settings,
+        name: &str,
+        m: &Manifest,
+        mut res: wire::CommandResult,
+        fetch: impl FnOnce() -> Result<()>,
+    ) -> wire::CommandResult {
         let (targets, text_only) = {
             let ws = self.watchers.lock().unwrap();
             let targets: Vec<(String, Option<peer::Who>, SyncSender<ToWatcher>)> = ws
                 .iter()
-                .filter(|w| w.target == DESKTOP && w.takes(&m))
+                .filter(|w| w.target == DESKTOP && w.takes(m))
                 .map(|w| (w.target.clone(), w.uid, w.tx.clone()))
                 .collect();
             (targets, ws.iter().any(|w| !w.target.is_empty()))
@@ -1855,13 +1876,11 @@ impl Service {
             .into();
             return res;
         }
-        let ev = Arc::new(ev);
-        if let Err(e) = node.fetch(&ev, self.limits.lock().unwrap().home as u64) {
+        if let Err(e) = fetch() {
             res.status = "failed".into();
             res.reason = format!("the copy's images or files did not arrive here: {}", e.for_log());
             return res;
         }
-        *self.media.lock().unwrap() = Some(ev);
         let mut reasons: Vec<String> = Vec::new();
         for (uid, tx) in targets {
             let (done, answer) = mpsc::sync_channel(1);
@@ -2432,8 +2451,13 @@ impl Service {
     /// carries the plain-text alternative. The copy is sealed, kept to
     /// serve, and sent to the group.
     fn copy_media(&self, m: &Message, r: &mut control::Reader<UnixStream>) -> Result<()> {
-        let node = self.node()?;
         let limit = self.limits.lock().unwrap().home;
+        if let Some(live) = self.live() {
+            let mut got = copies::receive(r, &m.payload, limit, &self.tmp_dir()?)?;
+            let parts = std::mem::take(&mut got.parts);
+            return live.copy_media(&got.text, parts, Via::Copy, m.header.op == "copy_media");
+        }
+        let node = self.node()?;
         let mut got = copies::receive(r, &m.payload, limit, &self.tmp_dir()?)?;
         let parts = std::mem::take(&mut got.parts);
         let ev = if m.header.op == "copied_media" {
@@ -2455,6 +2479,20 @@ impl Service {
     /// With `copy`, the group's copy of a remote paste that paste_copy
     /// fetched, while it is the current one.
     fn paste_media(&self, out: &mut UnixStream, copy: &str) -> Result<()> {
+        if let Some(live) = self.live() {
+            let from = live.media_to_paste(copy)?;
+            let dir = self.tmp_dir()?.join(format!("paste-{}", files::random_name()));
+            let max = self.limits.lock().unwrap().home as u64;
+            let alt = live
+                .board
+                .local_media()
+                .filter(|l| &l.0 == from.manifest())
+                .map(|l| l.1)
+                .unwrap_or_else(|| live.board.current().and_then(|c| c.content.text).unwrap_or_default());
+            let sent = live.open_media(&from, max, &dir).and_then(|parts| copies::send(out, &alt, &parts));
+            let _ = std::fs::remove_dir_all(&dir);
+            return sent;
+        }
         let node = self.node()?;
         let engine = &node.engine;
         let ev = if !copy.is_empty() {
@@ -2483,8 +2521,7 @@ impl Service {
     /// match its hash.
     fn receive_release_file(&self, m: &Message, r: &mut control::Reader<UnixStream>) -> Result<()> {
         use std::io::Write;
-        let node = self.node()?;
-        let releases = node.releases();
+        let releases = self.releases_here()?;
         let sha = m.header.value.to_ascii_lowercase();
         let now = uptime::wall_ms();
         let a =
@@ -2515,13 +2552,20 @@ impl Service {
     /// a part and its bytes, then done.
     fn send_release_file(&self, sha: &str, out: &mut UnixStream) -> Result<()> {
         use std::io::Read;
-        let node = self.node()?;
         let sha = sha.to_ascii_lowercase();
-        node.fetch_release_file(&sha)?;
-        let path = node.releases().path_of(&sha);
+        let releases = self.releases_here()?;
+        if self.live().is_some() {
+            // On the records of 0.6 only a hub fetches archives, and none
+            // is a hub yet: an archive is served when it is held here.
+            releases
+                .held(&sha, uptime::wall_ms())
+                .ok_or_else(|| crate::live::not_yet("fetching a release's archive from the group's hub"))?;
+        } else {
+            self.node()?.fetch_release_file(&sha)?;
+        }
+        let path = releases.path_of(&sha);
         let mut f = std::fs::File::open(&path).context("the file left this device")?;
-        let size =
-            node.releases().held(&sha, uptime::wall_ms()).ok_or_else(|| Error::msg("the file left this device"))?;
+        let size = releases.held(&sha, uptime::wall_ms()).ok_or_else(|| Error::msg("the file left this device"))?;
         let reply = |h: Header, payload: Vec<u8>| Message::new(Header { op: "reply".into(), ..h }, payload);
         let part = control::Part { size: size as i64, ..Default::default() };
         control::write(out, &reply(Header { part: Some(part), ..Default::default() }, Vec::new()))?;
@@ -2536,6 +2580,15 @@ impl Service {
             control::write(out, &reply(Header::default(), buf[..n].to_vec()))?;
         }
         control::write(out, &reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// The signed release this device holds: the member of 0.6's, or the
+    /// old member's.
+    fn releases_here(&self) -> Result<Arc<crate::releases::Releases>> {
+        match self.live() {
+            Some(l) => l.mesh.releases().ok_or_else(|| Error::msg("this device keeps no release")),
+            None => Ok(self.node()?.releases_arc()),
+        }
     }
 
     /// On a hub, the archives of the release held that the group's members

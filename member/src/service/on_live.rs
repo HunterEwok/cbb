@@ -84,7 +84,19 @@ impl Service {
     pub(super) fn start_live(self: &Arc<Self>, cfg: &Config) -> Result<Arc<Live>> {
         let log = self.log.clone();
         let own = Own::load(&cfg.state_dir)?;
+        // The blobs of the copies are a cache that a service starts empty,
+        // as on the old member.
+        crate::content::empty(&cfg.state_dir, &|s| log(s));
         let live = Live::open(&cfg.state_dir, own, log.clone())?;
+        // The signed release and entry points, kept and passed on as the
+        // old member does (docs/protocol.md, section 16).
+        {
+            let (now, roots) = (uptime::wall_ms(), crate::update::release_roots);
+            live.mesh.with_signed(
+                Arc::new(crate::releases::Releases::open(&cfg.state_dir, roots(), now, &*log)),
+                Arc::new(crate::entries::Entries::open(&cfg.state_dir, roots(), now, &*log)),
+            );
+        }
         if let Err(e) = crate::sync::load(&cfg.state_dir, &live.board) {
             log(&format!("cbb: sync on or off: {}; sync is on", e.for_log()));
         }
@@ -153,31 +165,85 @@ impl Service {
     }
 
     /// A copy from the group to write: to the watchers as a write. Images
-    /// and files are not fetched on the records of 0.6 yet: their text
-    /// goes, and the log says why the rest does not.
+    /// and files are fetched first, as deliver does on the old member.
     fn deliver_live(self: &Arc<Self>, w: live::Write) {
         let seq = {
             let mut l = self.latest.lock().unwrap();
             *l += 1;
             *l
         };
-        let media = w.media.is_some();
-        if media {
-            (self.log)(&format!("cbb: a copy from the group: {}", not_yet("writing its images or files").for_log()));
-            if w.text.is_empty() {
-                return;
-            }
-        }
-        self.deliver(WriteReq {
+        let req = WriteReq {
             id: crate::certs::hex(&w.id),
-            text: w.text,
+            text: w.text.clone(),
             media: None,
-            kind: if media { Kind::Text } else { w.kind },
+            kind: if w.media.is_some() { Kind::Text } else { w.kind },
             via: Via::Copy,
             seq,
             ttl: w.ttl,
             event: None,
-        });
+        };
+        let Some(m) = w.media.clone() else {
+            self.deliver(req);
+            return;
+        };
+        // Images or files: fetched whatever the watchers take, as on the
+        // old member; then whole to the watchers that take them, and the
+        // plain-text alternative to the others.
+        let alt = (!w.text.is_empty()).then_some(req.clone());
+        let whole = WriteReq { media: Some(m.clone()), kind: Kind::Media, ..req };
+        let takers = self.watchers.lock().unwrap().iter().any(|x| (x.board || x.target == NEXT) && x.takes(&m));
+        if let Some(live) = self.live() {
+            let (svc, alt) = (self.clone(), alt.clone());
+            std::thread::spawn(move || {
+                let limit = svc.limits.lock().unwrap().home;
+                let size = w.blob.map_or(0, |b| b.size);
+                let fetched = match w.blob {
+                    Some(_) if size > limit as u64 => Err(Error::msg(format!(
+                        "a {} copy from {} is over this device's limit of {}",
+                        copies::size_text(size as i64),
+                        id_text(&w.from),
+                        copies::size_text(limit)
+                    ))),
+                    Some(b) => {
+                        // Again after a pause while no member gives it,
+                        // until a newer write comes or FETCH_FOR passes.
+                        let start = Instant::now();
+                        loop {
+                            let res = live.mesh.fetch(&b, &w.from, limit as u64);
+                            if res.is_ok() || *svc.latest.lock().unwrap() != seq || start.elapsed() >= FETCH_FOR {
+                                break res;
+                            }
+                            wait_unless_stopping(Duration::from_secs(2));
+                        }
+                    }
+                    None => Ok(()),
+                };
+                if *svc.latest.lock().unwrap() != seq {
+                    return; // a newer write came
+                }
+                let mut failed = svc.fetch_failed.lock().unwrap();
+                match &fetched {
+                    Ok(()) => {
+                        failed.clear();
+                        (svc.log)(&format!("cbb: fetched a copy of {}", copies::size_text(size as i64)));
+                    }
+                    Err(e) => {
+                        (svc.log)(&format!("cbb: fetching a copy's images or files: {}", e.for_log()));
+                        *failed = e.message().to_string();
+                    }
+                }
+                drop(failed);
+                if takers {
+                    let whole = fetched.is_ok().then_some(whole);
+                    svc.send_writes(|x| if x.takes(&m) { whole.clone().or_else(|| alt.clone()) } else { None });
+                }
+            });
+        }
+        let Some(alt) = alt else { return };
+        let m = w.media.clone().unwrap_or_default();
+        if !self.send_writes(|x| if x.takes(&m) && takers { None } else { Some(alt.clone()) }) && !takers {
+            *self.pending.lock().unwrap() = Some(alt);
+        }
     }
 
     /// The status of a device in a group of 0.6.
@@ -319,6 +385,33 @@ impl Service {
                 .and_then(|text| live.send(&text, kind_of(&h.kind)?, via_of(&h.via)?))
                 .map(|()| control::reply(Header::default(), Vec::new())),
             "paste" => self.live_paste(live),
+            // Signed entry points the user gives (cbb update brings them),
+            // kept and passed on.
+            "entries" => serde_json::from_slice::<Box<serde_json::value::RawValue>>(&m.payload)
+                .map_err(|e| Error::with("the request carries no entry points", e))
+                .and_then(|set| live.mesh.put_entries(&set))
+                .map(|_| control::reply(Header { done: true, ..Default::default() }, Vec::new())),
+            "release" => serde_json::from_slice::<Box<serde_json::value::RawValue>>(&m.payload)
+                .map_err(|e| Error::with("the request carries no release", e))
+                .and_then(|set| live.mesh.put_release(&set))
+                .map(|_| control::reply(Header { done: true, ..Default::default() }, Vec::new())),
+            "release_held" => live
+                .mesh
+                .releases()
+                .and_then(|r| r.current(uptime::wall_ms()))
+                .ok_or_else(|| Error::msg("this device holds no signed release"))
+                .map(|set| control::reply(Header { done: true, ..Default::default() }, set.get().as_bytes().to_vec())),
+            // No device is a hub or syncs away from home on the records
+            // of 0.6 yet (cbb global answers that it is moving): it wants
+            // no archives, and has no way to update away from home.
+            "release_want" => Ok(control::reply(Header { done: true, ..Default::default() }, b"null".to_vec())),
+            "update_way" => Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new())),
+            "entries_get" => live
+                .mesh
+                .entries()
+                .and_then(|e| e.current(uptime::wall_ms()))
+                .ok_or_else(|| Error::msg("this device holds no signed entry points"))
+                .map(|set| control::reply(Header { done: true, ..Default::default() }, set.get().as_bytes().to_vec())),
             "status" => {
                 Ok(control::reply(Header { status: Some(self.live_status(live)), ..Default::default() }, Vec::new()))
             }
@@ -816,8 +909,7 @@ mod tests;
 /// The service's operations that need a group and have not moved to the
 /// records of 0.6 yet; any other the service answers as ever (an unknown
 /// one with why).
-const MOVING: &[&str] =
-    &["away", "entries", "entries_get", "release", "release_want", "release_held", "update_way", "invite"];
+const MOVING: &[&str] = &["away", "invite"];
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";
