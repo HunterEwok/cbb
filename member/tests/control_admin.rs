@@ -13,7 +13,7 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use serde_json::json;
+use serde_json::{Value, json};
 
 fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
@@ -385,6 +385,46 @@ fn refuses_bad_admissions_and_recoveries() {
     let m = root.ok(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true}));
     assert_eq!(m.s("name"), "desk");
     let _ = &mut g;
+}
+
+/// The root is lost: another computer becomes the root with the group's
+/// recovery sheet (rule 33), restarts to sign with its new root key, and
+/// the group's other devices stay.
+#[test]
+fn recovers_the_group_with_its_sheet() {
+    let mut root = Svc::start("root", &[], &[]);
+    let made = root.ok(true, json!({"op": "new"}));
+    let sheet: Value = serde_json::from_slice(&made.payload).unwrap();
+    let sheet = sheet["sheet"].as_str().unwrap().to_string();
+    root.port();
+    let mut desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&desk, false), "desk");
+    let lap = Svc::start("lap", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&lap, false), "lap");
+    desk.wait("desk learns of lap", |_| desk.find("lap").is_some());
+    root.stop();
+
+    // A sheet that is not one, and a key of a sheet with a line changed,
+    // claim nothing.
+    assert!(!desk.err_with(true, json!({"op": "recover"}), b"not a recovery sheet").is_empty());
+    let mut broken = sheet.clone().into_bytes();
+    let at = broken.iter().position(u8::is_ascii_alphanumeric).unwrap();
+    broken[at] = if broken[at] == b'A' { b'B' } else { b'A' };
+    assert!(!desk.err_with(true, json!({"op": "recover"}), &broken).is_empty());
+
+    desk.ok_with(true, json!({"op": "recover"}), sheet.as_bytes());
+    // It restarts by itself to sign with the new key; as systemd would,
+    // the test starts it again.
+    desk.wait_exit(Duration::from_secs(30));
+    desk.restart(&["-peer", &lap.addr()], &[]);
+    let me = desk.find("desk").unwrap();
+    assert_eq!(me["root"], true, "{me}");
+    assert_ne!(desk.find("root").unwrap()["root"], true);
+    // As the root it signs: it names how long a copy stays live, and lap,
+    // which stayed in the group, takes it.
+    has(&desk.err_with(true, json!({"op": "recover"}), sheet.as_bytes()), "root already");
+    desk.ok(true, json!({"op": "incoming", "value": "45s"}));
+    lap.wait("lap takes the new root's setting", |st| st["incoming_ms"] == 45_000);
 }
 
 /// Leaving: the root only alone; a member leaves and its service stops,

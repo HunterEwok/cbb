@@ -342,3 +342,31 @@ fn an_admins_record_reaches_the_root_on_a_kept_connection() {
     assert_eq!(sr.digest(), sd.digest(), "the root takes the admin's second record");
     assert!(sr.state().device(&kp.key().device_id()).is_some());
 }
+
+/// A change of root by the recovery key reaches a member on a kept
+/// connection: the recovery record, its list and the new root's first
+/// records, which wait for the list.
+#[test]
+fn a_change_of_root_reaches_a_member() {
+    let (root, kd, kl, new_root) = (K::new(1), K::new(3), K::new(4), K::new(6));
+    let mut sd = empty(&root);
+    admit(&mut sd, &root, &kd, "d", 1);
+    admit(&mut sd, &root, &kl, "l", 2);
+    let mut sl = empty(&root);
+    let recs: Vec<Record> = sd.in_dependency_order().into_iter().cloned().collect();
+    sl.take_part(&recs, &[]);
+    let mut xd = Exchange::new(kd.key().hash(), kl.point());
+    let mut xl = Exchange::new(kl.key().hash(), kd.point());
+    assert_eq!(settle((&mut sd, &mut xd), (&mut sl, &mut xl)), 2);
+    let (k1, k2) = pq::recovery_keys(&[1; 32]).unwrap();
+    let k1 = K(SigningKey::from(&k1));
+    let st = sd.state();
+    let mut me = Device::new(kd.key(), "d", body::ROLE_MEMBER);
+    me.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+    me.holds_root = true;
+    sd.write_change(&st, &k1, &k2, &new_root, me, &[], false, 3).unwrap();
+    let h = hello(&sd);
+    flow((&mut sd, &mut xd), (&mut sl, &mut xl), vec![(true, h)]);
+    assert_eq!(sd.digest(), sl.digest());
+    assert_eq!(sl.state().roots.last(), Some(&new_root.key().hash()));
+}

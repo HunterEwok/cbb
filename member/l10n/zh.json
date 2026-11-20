@@ -160,5 +160,6 @@
  "A change of the group's root is arriving: CBB asks the other devices for it.": "群组的根即将变更：CBB 正在向其他设备索取。",
  "The group's records wait for records no device has offered.": "群组的记录在等待尚无设备提供的记录。",
  "Connect the group's root, which has them.": "连接拥有这些记录的群组的根。",
- "Copies wait for their senders' records: {}.": "副本正在等待其发送者的记录：{}。"
+ "Copies wait for their senders' records: {}.": "副本正在等待其发送者的记录：{}。",
+ "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "凭借群组的恢复密钥，此设备现在是群组的根，所有设备仍留在群组中；cbb remove 可移除丢失的设备。服务将重启，以便用新的根密钥签名。"
 }

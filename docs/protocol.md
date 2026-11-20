@@ -2239,7 +2239,8 @@ its digest (section 6, "The Welcome").
 
 On a connection (`member/src/link.rs`), a member whose digest differs from the one in the
 peer's `hello` sends `have` with the IDs of the records it holds for that peer, and asks with
-`want` for what the other side's `have` lists and it lacks. A member that takes a peer's `have`
+`want` for what the other side's `have` lists and it lacks, with what its own records name and
+it lacks and the list a change of root waits for, as on a `hello`. A member that takes a peer's `have`
 while the peer's last `hello` still showed a digest other than its own sends its own `have`
 too, once for each `hello` of the peer's and each state of its own set: a record written while
 two members are connected thus reaches the other side although only the writer sent a new

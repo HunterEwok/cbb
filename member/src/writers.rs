@@ -237,6 +237,34 @@ pub fn make_admin(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
+/// Makes this device (me) the group's root with the group's recovery key
+/// (rule 33): the change of root, signed by both halves of the recovery
+/// key, naming new_root, with this device's record again as the root's
+/// own (its admin key, if it had one, goes: a change of root takes every
+/// admin key back). Every other device stays; leave_out names the keys
+/// that do not. Gives what was written, for the set's owner to save.
+pub fn recover(
+    set: &mut RecordSet,
+    recovery: &dyn ExternalKey,
+    recovery2: &cbb_core::records::pq::PqKey,
+    new_root: &dyn ExternalKey,
+    me: &DeviceId,
+    leave_out: &[cbb_core::records::KeyHash],
+    now_ms: u64,
+) -> Result<cbb_core::records::set::Written> {
+    use cbb_core::records::body::{RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+    let st = set.state();
+    let mut rec = device_record(set, &st, me).ok_or_else(|| Error::msg("this device's record is not here"))?;
+    rec.holds_root = true;
+    rec.admin = None;
+    rec.powers = 0;
+    rec.commands = 0;
+    rec.rights |= RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    rec.seen = Vec::new();
+    set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, false, now_ms)
+        .map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
+}
+
 /// Sets how long a copy from another device stays live on each member.
 pub fn set_incoming(
     set: &mut RecordSet,

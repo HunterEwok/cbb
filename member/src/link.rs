@@ -16,7 +16,8 @@
 //! - On every hello it also asks with `want` for what its own records name
 //!   and it lacks (`RecordSet::missing`) and for the list a change of root
 //!   waits for (`RecordSet::missing_list`); on a `have`, for the IDs it
-//!   lacks.
+//!   lacks and for those two again, as a peer that wrote nothing new sends
+//!   no hello.
 //! - A `want` is answered with `records`, built only from
 //!   `RecordSet::for_peer_by_id` and `RecordSet::lists_for_peer`.
 //! - The records taken are inserted part by part (`RecordSet::take_part`);
@@ -108,8 +109,16 @@ impl Exchange {
             m::T_HELLO => self.on_hello(set, &v, &mut out),
             m::T_HAVE => {
                 let ids: Vec<RecordId> = ids_of(v.get(2));
-                let lacking: Vec<RecordId> = ids.into_iter().filter(|id| !set.contains(id)).collect();
-                want(&lacking, None, &mut out);
+                let mut lacking: Vec<RecordId> = ids.into_iter().filter(|id| !set.contains(id)).collect();
+                // What its own records name and it lacks, and the list a
+                // change of root waits for, it asks too: a peer that wrote
+                // nothing new sends no hello that would ask for them.
+                for id in set.missing(&set.state()) {
+                    if !lacking.contains(&id) {
+                        lacking.push(id);
+                    }
+                }
+                want(&lacking, set.missing_list(), &mut out);
                 // A peer that answers this side's new hello with its have
                 // still lacks what changed here: this side sends its have
                 // too, once for each hello of the peer's and each state of

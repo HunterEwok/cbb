@@ -1917,6 +1917,10 @@ made with 0.5 is set up again once. The details follow.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
   `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
   (docs/decisions.md, D-117).
+- `cbb recovery` on a group of 0.6 makes this computer the group's root at once with the
+  recovery sheet: a change of root (rule 33) with a new root key, every device staying, after
+  which the service restarts to sign with that key. The recovery key on a YubiKey answers
+  that it is not on the records of 0.6 yet.
 - At home a new device dials the admin's pairing window; one that waits for the group to dial
   it is gone in 0.6, and `cbb pair -qr` on a group of 0.6 says to open the window with
   `cbb pair` instead (docs/decisions.md, D-119).
@@ -2688,6 +2692,9 @@ made with 0.5 is set up again once. The details follow.
 - On the records of 0.6 a record that an admin writes reaches the root on a connection the two
   keep: the admin sends its `have` again whenever its set changed since its last one, as the
   root sends no new hello when only the admin wrote.
+- On the records of 0.6 a change of root reaches a member on a connection it keeps: on a
+  `have` the member asks for the list the change waits for and what its records name, as it
+  does on a `hello`, which a peer that wrote nothing new does not send.
 - A Linux service that does not run as root no longer tries to write polkit's actions in
   `/usr/share/polkit-1/actions` at every start and log the refusal: it leaves them to the
   installer (`cbb confirm-setup`) and says once, at start, when they are not set up for its

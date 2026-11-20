@@ -18,6 +18,8 @@ use crate::own::Own;
 use crate::roster::{self, id_text};
 use crate::writers;
 use cbb_core::records::body::{MAX_INCOMING_MS, MIN_INCOMING_MS};
+use cbb_core::secret::Zeroizing;
+use p256::pkcs8::EncodePrivateKey as _;
 
 /// How often this device's sealing keys are checked for a new epoch.
 const ROTATE_EVERY: Duration = Duration::from_secs(3600);
@@ -378,6 +380,7 @@ impl Service {
             "incoming" => self.live_incoming(live, &h.value),
             control::op::KEY_LEVEL => self.live_key_level(live, &h.value),
             control::op::MAKE_ADMIN => self.live_make_admin(live, h),
+            control::op::RECOVER => self.live_recover(live, h, &m.payload),
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             op if !MOVING.contains(&op) => return None,
@@ -541,6 +544,55 @@ impl Service {
         Ok(control::reply(Header { name: d.name, done: true, ..Default::default() }, Vec::new()))
     }
 
+    /// cbb recovery: this device becomes the group's root with the
+    /// recovery key typed from the sheet (rule 33). It makes a new root key,
+    /// writes the change of root with both halves of the recovery key, and
+    /// restarts, so that the member signs with the new key; the recovery
+    /// key is not kept.
+    fn live_recover(&self, live: &Live, h: &Header, payload: &[u8]) -> Result<Message> {
+        let st = live.mesh.state();
+        let own = live.mesh.own();
+        if own.root.as_ref().is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()))
+        {
+            return Err(Error::msg("this device is the group's root already"));
+        }
+        if h.name == "yubikey" {
+            return Err(not_yet("a recovery key on a YubiKey"));
+        }
+        let text = Zeroizing::new(String::from_utf8_lossy(payload).into_owned());
+        let read = cbb_core::sheet::read(&text).map_err(|r| Error::msg(r.message()))?;
+        let set = live.mesh.set();
+        let recovery = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).recovery().clone();
+        cbb_core::sheet::check(&read, &st.group, &recovery).map_err(|r| Error::msg(r.message()))?;
+        let (k1, k2) = cbb_core::records::pq::recovery_keys(&read.secret)
+            .map_err(|e| e.context("cannot make the recovery key from the sheet"))?;
+        let pkcs8 = Zeroizing::new(
+            p256::ecdsa::SigningKey::from(k1)
+                .to_pkcs8_der()
+                .map_err(|_| Error::msg("cannot encode the recovery key"))?
+                .as_bytes()
+                .to_vec(),
+        );
+        let k1 = cbb_core::identity::FileKey::new(&pkcs8)?;
+        let mut own = Own::load(&self.state_dir)?;
+        let root = own.make(&self.state_dir, crate::own::Which::Root)?;
+        let now = uptime::wall_ms().max(0) as u64;
+        {
+            let mut set = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            writers::recover(&mut set, &k1, &k2, &*root, &live.mesh.device(), &[], now)?;
+        }
+        live.mesh.changed()?;
+        (self.log)(
+            "cbb: this device is the group's root now, by the group's recovery key; every device stays (cbb remove takes out a lost one); it restarts to sign with its new root key",
+        );
+        std::thread::spawn(|| {
+            std::thread::sleep(RESTART_AFTER);
+            super::RESTART.store(true, Ordering::SeqCst);
+            STOP.store(true, Ordering::SeqCst);
+        });
+        Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
+    }
+
     /// cbb incoming: how long a copy from another device stays live.
     fn live_incoming(&self, live: &Live, value: &str) -> Result<Message> {
         let ms = crate::go_duration_ms(value.trim())
@@ -566,7 +618,7 @@ impl Service {
             let others: Vec<String> = st.devices.iter().filter(|d| d.id != me).map(|d| d.name.clone()).collect();
             if !others.is_empty() {
                 return Err(Error::msg(format!(
-                    "this device is the group's root, and the group has other devices ({}): remove them first, or hand the group over to an admin (not on the records of 0.6 yet)",
+                    "this device is the group's root, and the group has other devices ({}): remove them first",
                     others.join(", ")
                 )));
             }
@@ -730,17 +782,8 @@ mod tests;
 /// The service's operations that need a group and have not moved to the
 /// records of 0.6 yet; any other the service answers as ever (an unknown
 /// one with why).
-const MOVING: &[&str] = &[
-    "away",
-    "entries",
-    "entries_get",
-    "release",
-    "release_want",
-    "release_held",
-    "update_way",
-    control::op::RECOVER,
-    "invite",
-];
+const MOVING: &[&str] =
+    &["away", "entries", "entries_get", "release", "release_want", "release_held", "update_way", "invite"];
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";

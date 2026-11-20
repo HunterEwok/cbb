@@ -481,7 +481,17 @@ pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
     if card && terminal {
         eprintln!("{}", tr!("Touch the YubiKey when it blinks."));
     }
-    request(g, &Message::new(h, text.into_bytes()))?;
+    let m = request(g, &Message::new(h, text.into_bytes()))?;
+    // A group of 0.6 changes its root at once (rule 33); 0.5's claim waits.
+    if m.header.done {
+        println!(
+            "{}",
+            tr!(
+                "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key."
+            )
+        );
+        return Ok(());
+    }
     println!(
         "{}",
         tr!(
