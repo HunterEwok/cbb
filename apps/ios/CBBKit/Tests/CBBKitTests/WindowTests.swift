@@ -69,6 +69,9 @@ final class WindowTests: XCTestCase {
         XCTAssertEqual(admitted.name, "Tablet")
         // The new phone keeps the set where its member then starts.
         XCTAssertTrue(FileManager.default.fileExists(atPath: newDir.appendingPathComponent("group.cbor").path))
+        let g = try m.group()
+        XCTAssertEqual(g.rootDevice, made.device)
+        XCTAssertEqual(g.devices.map(\.name).sorted(), ["Root phone", "Tablet"])
     }
 
     func testAJoinerRefusesACodeThatIsNoWindows() {

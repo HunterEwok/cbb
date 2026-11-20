@@ -329,6 +329,7 @@ impl Phone {
                 Ok(json!({ "peers": ps }))
             }
             "devices" => Ok(json!({ "devices": self.devices() })),
+            "group" => Ok(group_view(&l.mesh.state(), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
@@ -478,6 +479,63 @@ fn deliver(ev: &Events, w: &Write) {
     });
 }
 
+/// The group's state as the apps show it (inventory 4.5): the group,
+/// its root, this device's place and the devices that count. An admin's
+/// set is named by the kind of device it is (phone, watch or computer),
+/// as the apps name it. Removed devices are not listed yet: the state
+/// keeps no list of them.
+fn group_view(st: &cbb_core::records::State, me: &cbb_core::records::DeviceId) -> Value {
+    use cbb_core::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
+    use cbb_core::records::eval::{DeviceState, Stop};
+    let role = |r: u64| match r {
+        ROLE_MEMBER => "member",
+        ROLE_PHONE => "phone",
+        ROLE_WATCH => "watch",
+        ROLE_LEAF => "leaf",
+        _ => "unknown",
+    };
+    let admin = |d: &DeviceState| match (d.admin.is_some(), d.role) {
+        (false, _) => "",
+        (true, ROLE_PHONE) => "phone",
+        (true, ROLE_WATCH) => "watch",
+        (true, _) => "computer",
+    };
+    let mine = st.devices.iter().find(|d| d.id == *me);
+    let devices: Vec<Value> = st
+        .devices
+        .iter()
+        .map(|d| {
+            json!({
+                "device": id_text(&d.id), "name": d.name, "os": cbb_core::format::print::os_name(d.os),
+                "role": role(d.role), "admin": admin(d), "frozen": d.frozen, "hub": st.hubs.contains(&d.id),
+                "removed_by": Value::Null,
+            })
+        })
+        .collect();
+    json!({
+        "group": certs::b64::encode(&st.group.0),
+        "root": st.roots.last().map(|r| certs::b64::encode(&r.0)).unwrap_or_default(),
+        "root_device": st.root_device.as_ref().map(id_text).unwrap_or_default(),
+        "me": {
+            "device": id_text(me),
+            "role": mine.map_or("", |d| role(d.role)),
+            "admin": mine.map_or("", admin),
+            "frozen": mine.is_some_and(|d| d.frozen),
+            "leaf": mine.is_some_and(|d| d.role == ROLE_LEAF),
+        },
+        "stop": match st.stop {
+            Stop::None => "none",
+            Stop::Secrets => "secrets",
+            Stop::Full => "full",
+        },
+        "halted": st.halted(),
+        "update_needed": st.update_needed,
+        "too_old": st.too_old,
+        "change_arriving": st.first_missing.is_some() || st.list_missing.is_some(),
+        "devices": devices,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
@@ -558,6 +616,13 @@ mod tests {
         assert_eq!(ok(&call("muted", Value::Null))["sync_off"], true);
         ok(&call("sync", json!({ "on": true })));
         assert!(ok(&call("why", Value::Null))["why"].is_array());
+        let g = ok(&call("group", Value::Null));
+        assert_eq!(g["root_device"], device.as_str(), "{g}");
+        assert_eq!(g["me"]["device"], device.as_str());
+        assert_eq!(g["me"]["role"], "member");
+        assert_eq!((g["stop"].as_str(), g["halted"].as_bool()), (Some("none"), Some(false)));
+        assert_eq!(g["devices"].as_array().unwrap().len(), 1);
+        assert_eq!(g["devices"][0]["name"], "phone");
 
         // What has not moved answers why, never nothing.
         for op in ["away", "hub", "records"] {

@@ -77,6 +77,9 @@ class WindowTest {
         assertEquals("Tablet", admitted.name)
         // The new phone keeps the set where its member then starts.
         assertTrue(File(top, "new/group.cbor").isFile)
+        val g = m.group()
+        assertEquals(made.device, g.rootDevice)
+        assertEquals(listOf("Root phone", "Tablet"), g.devices.map { it.name }.sorted())
     }
 
     @Test
