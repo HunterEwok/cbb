@@ -58,6 +58,7 @@ mod interfaces;
 mod inviter;
 mod keys;
 mod leave;
+pub mod link;
 mod logfile;
 mod media_cli;
 mod mute;
@@ -93,8 +94,8 @@ mod remotepaste;
 pub mod restore;
 mod rootless;
 pub mod sealkey;
-pub mod set;
 mod sekey;
+pub mod set;
 mod status_text;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod third_party {

@@ -57,7 +57,8 @@ pub fn local_key(dir: &Path) -> Result<[u8; 32]> {
         Ok(d) => d,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let mut key = [0u8; 32];
-            getrandom::fill(&mut key).map_err(|_| Error::msg("cannot make the local key: the system has no randomness"))?;
+            getrandom::fill(&mut key)
+                .map_err(|_| Error::msg("cannot make the local key: the system has no randomness"))?;
             let sealed = crate::keys::seal(&key)?
                 .unwrap_or_else(|| crate::keys::Sealed { secret: key.to_vec(), ..Default::default() });
             let data = serde_json::to_vec_pretty(&LocalFile { v: 1, sealed }).context("cannot encode the local key")?;
@@ -90,7 +91,7 @@ pub fn load(dir: &Path, local: &[u8; 32]) -> Result<Option<RecordSet>> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(Error::with(format!("cannot read {}", path.display()), e)),
     };
-    setfile::load(&data, Some(local)).map(Some).map_err(|e| Error::from(e).context(format!("cannot read {}", path.display())))
+    setfile::load(&data, Some(local)).map(Some).map_err(|e| e.context(format!("cannot read {}", path.display())))
 }
 
 /// Writes the set to dir/group.cbor in one step, marked and pinned under
