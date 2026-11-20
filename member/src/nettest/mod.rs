@@ -11,12 +11,10 @@ use std::time::{Duration, Instant};
 
 use cbb_core::admit::{OwnDevice, new_group};
 use cbb_core::authority::{self, Body, Hash, Record};
-use cbb_core::certs::{self, Cert, DeviceId};
-use cbb_core::credential::{self, Credential};
+use cbb_core::certs::{Cert, DeviceId};
 use cbb_core::group::Records;
 use cbb_core::identity::{self, ExternalKey, FileKey};
 use cbb_core::issue;
-use serde_json::Value;
 
 pub mod blind;
 pub mod forwarder;
@@ -33,10 +31,10 @@ pub fn new_key() -> Arc<FileKey> {
     Arc::new(FileKey::new(&identity::new_key().unwrap()).unwrap())
 }
 
-/// A device of a test group: its ID, member key and member certificate.
+/// A device of a test group: its ID, member key (its PKCS #8) and member
+/// certificate.
 pub struct Dev {
     pub id: DeviceId,
-    pub key: Arc<FileKey>,
     pub pkcs8: Vec<u8>,
     pub cert: Vec<u8>,
 }
@@ -79,7 +77,7 @@ impl Group {
             root_pkcs8,
             root: g.root,
             records: g.records,
-            devs: vec![Dev { id: g.device, key, pkcs8, cert: g.cert.der }],
+            devs: vec![Dev { id: g.device, pkcs8, cert: g.cert.der }],
         };
         let mut group = group;
         for _ in 1..n {
@@ -127,7 +125,7 @@ impl Group {
         let mut b = b;
         f(&mut b);
         self.sign(b);
-        self.devs.push(Dev { id, key, pkcs8, cert });
+        self.devs.push(Dev { id, pkcs8, cert });
         self.devs.len() - 1
     }
 
@@ -159,35 +157,8 @@ impl Group {
         vec![self.devs[i].cert.clone(), self.root.der.clone()]
     }
 
-    pub fn key(&self, i: usize) -> Arc<dyn ExternalKey> {
-        self.devs[i].key.clone()
-    }
-
     pub fn id(&self, i: usize) -> String {
         self.devs[i].id.to_string()
-    }
-
-    /// A period of the group's credentials (docs/protocol.md, section 18)
-    /// whose hubs' and members' credentials list the server keys given:
-    /// the period, hubs' and members' credentials, the last two signed by
-    /// the period key, of the given version.
-    pub fn period(&self, servers: &[Arc<FileKey>], version: u64) -> [Credential; 3] {
-        let period_key = new_key();
-        let spki = |k: &FileKey| certs::p256_spki_of(&k.public());
-        let tag = credential::new_period_tag().unwrap();
-        let pb = credential::period_body(&certs::tag(&self.root), &tag, &spki(&period_key), version, now_ms());
-        let rk = self.root_key.clone();
-        let period = credential::sign(pb.clone(), &spki(&rk), &mut |b| identity::sign_external(&*rk, b)).unwrap();
-        let hashes: Vec<certs::KeyHash> = servers.iter().map(|k| certs::sha256(&spki(k))).collect();
-        let pk = period_key.clone();
-        let by_period = |b| credential::sign(b, &spki(&pk), &mut |x| identity::sign_external(&*pk, x)).unwrap();
-        let hubs = by_period(credential::hubs_body(&pb, &hashes, &[], version).unwrap());
-        let members = by_period(credential::members_body(&pb, &hashes, version).unwrap());
-        [period, hubs, members]
-    }
-
-    pub fn records_json(&self) -> Vec<Value> {
-        self.records.all().iter().map(|r| serde_json::to_value(r).unwrap()).collect()
     }
 }
 

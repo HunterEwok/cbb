@@ -190,10 +190,6 @@ pub struct Credentials {
     /// On a phone that holds the root: the period is due and waits for the
     /// app to sign it.
     period_due: AtomicBool,
-    /// The certificate of the last server key a hub registered with, by
-    /// the key's SubjectPublicKeyInfo, so that it is signed once.
-    #[cfg(feature = "tunnel")]
-    hub_cert: Mutex<Option<(Vec<u8>, Vec<u8>)>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -267,8 +263,6 @@ impl Credentials {
             phone,
             root_once: Mutex::new(None),
             period_due: AtomicBool::new(false),
-            #[cfg(feature = "tunnel")]
-            hub_cert: Mutex::new(None),
             log,
         })
     }
@@ -475,41 +469,5 @@ impl Credentials {
     pub fn period_tag(&self, node: &Node) -> Option<String> {
         let root = root_of(node, &self.group_ca);
         self.store.lock().unwrap().period(&root).map(|(_, p)| p.tag)
-    }
-
-    /// What the hub registers with on its forwarder when the period's
-    /// hubs' credential lists its server key, as Go's hubCredentials: that
-    /// credential, the server key and its certificate, which names no
-    /// device and no group; None otherwise, and the hub registers with its
-    /// member certificate and the records.
-    #[cfg(feature = "tunnel")]
-    pub fn hub(&self, node: &Node) -> Option<crate::forward::HubCredential> {
-        let now = uptime::wall_ms();
-        let root = root_of(node, &self.group_ca);
-        let st = self.store.lock().unwrap().clone();
-        let (_, p) = st.period(&root)?;
-        if now >= p.expires_ms || !self.keys.lock().unwrap().has(SERVER_KEY, &p.tag) {
-            return None;
-        }
-        let key = self.keys.lock().unwrap().get(SERVER_KEY, &p.tag).ok()?;
-        let (hc, hb) = st.hubs()?;
-        if !hb.hubs.contains(&certs::sha256(&spki(&*key))) {
-            return None;
-        }
-        let ks = spki(&*key);
-        let mut held = self.hub_cert.lock().unwrap();
-        if let Some((_, cert)) = held.as_ref().filter(|(k, _)| *k == ks) {
-            return Some(crate::forward::HubCredential { credentials: vec![hc], cert: cert.clone(), key });
-        }
-        match cbb_core::certs::server_cert_by(&key.public(), &mut |tbs| crate::identity::sign_external(&*key, tbs)) {
-            Ok(cert) => {
-                *held = Some((ks, cert.clone()));
-                Some(crate::forward::HubCredential { credentials: vec![hc], cert, key })
-            }
-            Err(e) => {
-                (self.log)(&format!("cbb: the hub's certificate for its server key: {}", e.for_log()));
-                None
-            }
-        }
     }
 }

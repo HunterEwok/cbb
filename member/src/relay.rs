@@ -275,8 +275,7 @@ fn once(cfg: &Arc<Config>, cred: &Credentialed, events: &Arc<dyn Events>, stop: 
     // key links no two of them.
     let wg_key: [u8; 32] = tunnel::new_key()?.try_into().map_err(|_| Error::msg("a bad WireGuard key"))?;
     let mut reg =
-        Registrar::connect(cfg.endpoint, &cfg.pins, core::slice::from_ref(&cred.cert), &cred.key, PROTOCOL, "relay")?
-            .on_grid();
+        Registrar::connect(cfg.endpoint, &cfg.pins, core::slice::from_ref(&cred.cert), &cred.key, PROTOCOL, "relay")?;
     let proof_key = reg.export(PROOF_LABEL)?;
     let stopped = || Error::msg("registering with the relay: stopped");
     let (e, wants_root) = v3::challenge(&reg.next_frame(stop)?.ok_or_else(stopped)?)?;

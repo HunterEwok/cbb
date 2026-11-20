@@ -859,14 +859,13 @@ pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: 
 }
 
 /// Registers a hub of `cbb_tunnel` with the group's forwarder (src/tunnel.rs
-/// tells the request), signing its TLS with the app's member key through
-/// `sign` and `ctx`, as `cbb_member_start` does; the answer is as
-/// `cbb_tunnel`'s.
+/// tells the request; `cbb-forward/3`); the hub signs only with the server
+/// key `cbb_tunnel_hub_credentials` gives, so `sign` is not called. The
+/// answer is as `cbb_tunnel`'s.
 ///
 /// # Safety
 ///
-/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
-/// until the hub stops or registers again.
+/// As `cbb_tunnel`.
 #[cfg(feature = "tunnel")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_tunnel_register(
@@ -938,10 +937,10 @@ pub unsafe extern "C" fn cbb_tunnel_relay_credentials(
     to_c(guard::answer(|| tunnel::relay_credentials(req, sign, ctx as usize)), answer_len)
 }
 
-/// Makes a hub of `cbb_tunnel` register with the forwarder with the
-/// period's hubs' credential (src/tunnel.rs tells the request), signing
-/// with the period's server key through `sign` and `ctx`; the answer is as
-/// `cbb_tunnel`'s.
+/// Gives a hub of `cbb_tunnel` what it registers with at the forwarder,
+/// the hubs' credential of the forwarder's face
+/// (src/tunnel.rs tells the request), signing with the face's server key
+/// through `sign` and `ctx`; the answer is as `cbb_tunnel`'s.
 ///
 /// # Safety
 ///

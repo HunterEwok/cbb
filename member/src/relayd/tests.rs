@@ -553,9 +553,8 @@ fn setup_ends_at_its_deadline() {
     let cert = k.cert().unwrap();
     let pins = vec![Cert::parse(&inner.cfg.keys.cert).unwrap().key_hash()];
     let key: Arc<dyn ExternalKey> = Arc::new(k);
-    let mut reg = crate::forward::Registrar::connect(r.addr(), &pins, &[cert], &key, super::wire3::PROTOCOL, "relay")
-        .unwrap()
-        .on_grid();
+    let mut reg =
+        crate::forward::Registrar::connect(r.addr(), &pins, &[cert], &key, super::wire3::PROTOCOL, "relay").unwrap();
     let stop = std::sync::atomic::AtomicBool::new(false);
     let _challenge = reg.next_frame(&stop).unwrap();
     // A claim of 1024 bytes, one byte every half second.

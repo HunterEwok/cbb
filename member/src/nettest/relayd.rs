@@ -74,7 +74,7 @@ struct Reg {
 type Welcome = Result<([u8; 32], [u8; 32], String), String>;
 
 fn connect(s: &Relay, pins: &[certs::KeyHash], chain: &[Vec<u8>], key: &Arc<dyn ExternalKey>) -> crate::Result<Reg> {
-    let mut reg = Registrar::connect(s.addr(), pins, chain, key, PROTOCOL, "relay")?.on_grid();
+    let mut reg = Registrar::connect(s.addr(), pins, chain, key, PROTOCOL, "relay")?;
     let proof_key = reg.export(PROOF_LABEL)?;
     let body = reg.next_frame(&AtomicBool::new(false))?.unwrap();
     let (ty, v, _) = cbb_core::msg::read_noted(&body).unwrap();

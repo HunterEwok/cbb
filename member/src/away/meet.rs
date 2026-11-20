@@ -16,13 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
-
 use super::Away;
 use crate::certs::DeviceId;
 use crate::control::{self, Header};
 use crate::error::{Context, Error, Result};
-use crate::identity::ExternalKey;
 use crate::node::{Admit, Node};
 use crate::relay::{self, Relay, Report};
 use crate::tunnel::{Forwarder, State};
@@ -364,38 +361,6 @@ impl Away {
         };
         (control::Relay { endpoint, connected: rep.connected, online: rep.online, error, detail }, rep.through > 0)
     }
-}
-
-/// What the device shows a forwarder or a relay it registers with, as
-/// Go's ForwarderCertificate: the key of its member certificate, and the
-/// certificate with its issuer and the group's roots, which the group's
-/// records show it a member, the root or an admin by.
-pub(super) struct Shown {
-    pub key: Arc<dyn ExternalKey>,
-    pub chain: Vec<Vec<u8>>,
-}
-
-pub(super) fn shown(node: &Node) -> Result<Shown> {
-    let ident = node.identity();
-    let key: Arc<dyn ExternalKey> = match &ident.external {
-        Some(k) => k.clone(),
-        None => Arc::new(cbb_core::identity::FileKey::new(&ident.key)?),
-    };
-    let roots = node.records().lock().unwrap().roots();
-    let mut chain = ident.chain();
-    for c in std::iter::once(ident.group_ca.clone()).chain(roots) {
-        if !chain.contains(&c.der) {
-            chain.push(c.der);
-        }
-    }
-    Ok(Shown { key, chain })
-}
-
-/// The group's records as a forwarder or a relay takes them.
-pub(super) fn node_records(node: &Node) -> Vec<Value> {
-    let rs = node.records();
-    let rs = rs.lock().unwrap();
-    rs.all().iter().filter_map(|r| serde_json::to_value(r).ok()).collect()
 }
 
 /// The pins this device accepts from the project's relay: those of the

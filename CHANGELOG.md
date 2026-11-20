@@ -30,6 +30,13 @@ made with 0.5 is set up again once. The details follow.
   members' credential lists the device it waits and says why. `relay_start` no longer takes a
   member certificate, device ID, tunnel key or records, `relay_set_records` is gone, and
   `cbb_tunnel_relay_credentials` takes the period's server credentials of 0.6.
+- A hub registers with its forwarder by `cbb-forward/3` only (`member/src/forward.rs`, and the
+  phones' `cbb_tunnel_register`): a certificate of its server key for the forwarder's face, the
+  face's hubs' credential alone and the format's messages (t 80 to 84), so the forwarder sees
+  no record, no device ID and no period credential. A hub without such a credential does not
+  dial and its status says it waits for it; a hub of a group of 0.5 stays so. The JSON claim,
+  member certificates and records are gone, `hub_set_records` with them, and
+  `cbb_tunnel_hub_credentials` takes the face's hubs' credential (an envelope).
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

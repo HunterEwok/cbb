@@ -2,10 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A group of 0.6 as its servers see it, made in memory for the tests of
-//! the relay: a root and recovery key (its Group ID), a period of the root
+//! the relay and the forwarder: a root and recovery key (its Group ID), a period of the root
 //! with its period key, a server key per device, and the period's hubs'
 //! and members' credentials (`cbb_core::blind::credential`), with what a
-//! device registers with (`relay::Credentialed`).
+//! device registers with (`relay::Credentialed`) and what a hub registers
+//! with at a forwarder (`forward::HubCredential`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -111,6 +112,20 @@ impl Blind {
         let mut m = blank(TYPE_MEMBERS, self.tag, version);
         m.members = listed.iter().map(|&i| Key::es256(self.servers[i].public()).hash().0).collect();
         [p.sign(&self.root).unwrap(), h.sign(&self.period_key).unwrap(), m.sign(&self.period_key).unwrap()]
+    }
+
+    /// What hub i registers with at a forwarder, at version `version`: the
+    /// hubs' credential alone, listing the hubs `listed`, with the
+    /// certificate of its server key. The forwarder never sees the period
+    /// credential, which names the group and its root.
+    pub fn hub_credential(&self, i: usize, version: u64, listed: &[usize]) -> crate::forward::HubCredential {
+        let mut h = blank(TYPE_HUBS, self.tag, version);
+        h.hubs = listed.iter().map(|&j| Key::es256(self.servers[j].public()).hash().0).collect();
+        crate::forward::HubCredential {
+            credentials: vec![h.sign(&self.period_key).unwrap()],
+            cert: self.servers[i].cert().unwrap(),
+            key: self.servers[i].clone(),
+        }
     }
 
     /// What device i registers with, at version `version`, with every

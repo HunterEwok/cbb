@@ -285,7 +285,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
-| Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
+| Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/3` (section 13) | `internal/forward` |
 | Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/3`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
 | Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
@@ -3550,22 +3550,20 @@ not built.
 
 Accepted by design ([design.md](design.md), "The forwarder"): the hub's WireGuard public
 key, the group's obfuscation settings and VLESS user ID when set, the addresses of the hub
-and its clients, and the timing and sizes of their packets. A hub that registers with a
-credential (section 18) shows besides only the period's tag, a certificate of its server key
-that names neither a device nor a group, and the period's hubs' credential: hashes of
-server keys, padded, a version, an expiry and the period key; all of it new each period, as are
-the hub's WireGuard key, its obfuscation settings and its VLESS user ID (section 11, "The hub's
-key"). The hub moves to its key, settings and user ID at once, as it registers under the new
-period, so none of these three links two periods; the hub's source address and port, which
-the forwarder sees as it sees every packet's, stay the same across the change unless its
-network changes them, and so may link two periods. The first period a hub serves still has the
-key its hello offers for three days. A hub that registers with
-records shows instead the group tag, its member certificate (device ID, validity, admin
-CA), the group's root certificates and its authority records, which name the root's and the
-admins' devices, with their names and systems, and the removals. It never sees a member key,
-a text, the other devices' records or names, or which client address is which device. On
-disk it keeps only a keyed hash of each period's tag with the version of its newest
-credential and a hash of its period key ("What it keeps").
+and its clients, and the timing and sizes of their packets. Besides, a hub shows only the
+tag of its group's period for the forwarder's face (section 18, faces per server), a
+certificate of its server key for that face that names neither a device nor a group, and the
+face's hubs' credential: hashes of server keys, padded, a version, an expiry and the period
+key. It never shows the period credential, so the forwarder never sees the Group ID or the
+root's key. All of it is new each period, as are the hub's WireGuard key, its obfuscation
+settings and its VLESS user ID (section 11, "The hub's key"). The hub moves to its key,
+settings and user ID at once, as it registers under the new period, so none of these three
+links two periods; the hub's source address and port, which the forwarder sees as it sees
+every packet's, stay the same across the change unless its network changes them, and so may
+link two periods. The first period a hub serves still has the key its hello offers for three
+days. It never sees a member key, a record, a device ID, a text, or which client address is
+which device. On disk it keeps only a keyed hash of each period's tag with the version of its
+newest credential and a hash of its period key ("What it keeps").
 
 ### The project's forwarder
 
@@ -3591,94 +3589,57 @@ forwarder's registration answer.
 
 ### Registration
 
-Framing: inside TLS, each message of this section is one frame (Conventions, "Frames").
-Go forwarders and hubs read at most 1 MiB in all from the other side, frames and lengths
-together, and close the connection beyond that; a sender MUST stay below it.
+A hub of 0.6 registers by `cbb-forward/3`, the one protocol the forwarder speaks. Each message
+is one frame of the format (section 4, "Frames"), a map with its type `t` in field 0, its
+length on the format's grid; the forwarder reads at most 1 MiB from the hub in all and closes
+the connection beyond that:
 
-1. The hub connects over TCP and runs TLS 1.3 with ALPN `cbb-forward/2` and no
-   server name. It MUST accept only the pinned key. A hub whose period's hubs' credential lists
-   its server key (section 18) presents only a certificate of that key, self-signed, with
-   the subject `cbb server`, no names, key usage digitalSignature and client
-   use. Any other hub presents its member certificate, its admin CA if it has one, and the
-   group's roots (the group CA, then the new roots of the claims that took effect).
-2. The forwarder takes the hub's certificate as a member certificate when it names a device
-   (section 1), and verifies it, for client authentication, to a self-signed CA among the
-   presented certificates, whose tag names the group (section 1). Otherwise it must be the
-   only certificate, not a CA, and the hub must register with a credential, whose period's
-   tag names the group. It knows no group beforehand: any group may register, but only its
-   hubs, its root or an admin can (step 3).
-3. The forwarder sends `{"e": bytes}`, a fresh X25519 public key. The hub answers
-   `{"key": bytes, "proof": bytes, "obfuscation": object, "vless": string, "credentials":
-   [credential], "admin": bytes, "admin_sig": bytes, "records": [record]}`, at most 1 MiB
-   with at most 1024 records and 3 credentials:
+| t | Message | From | Fields |
+|---|---|---|---|
+| 80 | `forward/challenge` | forwarder | 2 `e`, the forwarder's ephemeral X25519 key (32 bytes) |
+| 81 | `forward/register` | hub | 2 `key`, its WireGuard key (an X25519 key); 3 `proof` (32 bytes); 4 `obfuscation`, the group's settings (table `obfuscation`); 5 `vless`, the group's VLESS user ID (16 bytes); 6 `credentials`, at most 3 envelopes |
+| 82 | `forward/registered` | forwarder | 2 `id`, the registration's ID (1 to 2^63 - 1); 3 `mask`, the key of the hellos' mask (32 bytes); 4 `vless`, a map: 1 `user` (16 bytes), 2 `port`, 3 `host`, 4 `path` |
+| 83 | `forward/error` | forwarder | 2 `reason`, text of at most 256 bytes |
+| 84 | `forward/seen` | forwarder | 2 `addr`, where the forwarder sees the hub's WireGuard port (`ip:port`) |
+
+1. The hub connects over TCP and runs TLS 1.3 with ALPN `cbb-forward/3` and no server name.
+   It MUST accept only the pinned key. It presents only a certificate of its server key for
+   the forwarder's face (section 18), self-signed, with the subject `cbb server`, no names,
+   key usage digitalSignature and client use. The forwarder refuses any other ALPN and any
+   other chain. A hub whose group's hubs' credential for the face does not list its server
+   key yet does not connect, and its status says it waits for it.
+2. The forwarder sends `forward/challenge`.
+3. The hub answers `forward/register`:
    - `key` is its WireGuard public key, and `proof` is HMAC-SHA256 under X25519(the hub's
      WireGuard private key, `e`) of 32 bytes exported from the TLS session with the label
-     `cbb forwarder key` and no context. So the hub proves it holds the key, on
-     this connection only.
-   - A hub with a credential sends `credentials`, the period's hubs' credential alone, and
-     neither `admin`, `admin_sig` nor `records`. The forwarder checks it (section 18, "What
-     a server checks"): it has not expired, lists the key of the hub's certificate among
-     the hubs, and the period key that signed it is the one the forwarder first saw for
+     `cbb forwarder key` and no context. So the hub proves it holds the key, on this
+     connection only.
+   - `credentials` is the face's hubs' credential alone. The forwarder checks it (section 18,
+     "What a server checks"): it has not expired, lists the hash of the certificate's key
+     among the hubs, and the period key that signed it is the one the forwarder first saw for
      its tag, at a version no older than the one it keeps ("What it keeps"). It then keeps
-     the version for the period.
-   - Any other hub sends `admin`, `admin_sig` and `records`. The forwarder keeps the
-     groups that registered with a credential apart from these, so a period's tag never
-     stands for a group CA's.
-   - `admin_sig` is an ECDSA signature (ASN.1) of SHA-256 over 32 bytes exported with the label
-     `cbb forwarder admin` followed by `key`. The key of the group's root or of
-     the hub's admin CA signs it. `admin` is that admin CA (DER), left out for a root. The
-     forwarder takes the signature only from a root on the path of the records it knows, or
-     from an admin CA that such a root certified, so a member that is no admin cannot
-     register its group.
-   - A hub whose root or admin key signs only after the user, a phone hub (design.md, "The
-     phone as the hub", D-64), and a hub that only passes copies on, which holds no root or
-     admin key (section 11, "Two kinds of hub"), leave `admin` and `admin_sig` out. The
-     forwarder then takes the hub when the records make its member certificate's device,
-     with that certificate's key, the group's root (the latest `device` record of its own
-     that the current root signed), an admin that is not frozen (the devices list, section
-     10, names it an admin with that key), or a device whose newest record has
-     `forward_only`. Go hubs (`internal/forward`) and
-     the phones' hub (`ffi/src/tunnel.rs`) do this; any other hub is refused as before.
-   - `records` are the group's authority records: the path records (section 6, the Welcome; section 10, "The state"), every record
-     that is not a `device` record, and of the `device` records a root signed with its own key
-     those of a root's own device, every record of each device a root made an admin, so
-     that a demotion counts, and every record of a hub that only passes copies on. The records of the other devices, with their names, are not
-     sent.
-     The forwarder adds them to those it keeps for the group and refuses a hub whose signer
-     or member certificate the records revoke or freeze. It keeps the merged authority
-     records in memory after the registration ends, so a removed or demoted admin that
-     registers later, while the group's own hub is away, cannot leave its revocation out,
-     until the forwarder restarts; it writes none of them to disk. It refuses a registration
-     whose merged authority records come to more than 256 KiB, so it never keeps part of a
-     group's records. The records of a group that is registered now are never forgotten.
-     Of the groups that are away it keeps at most 32 MiB of records and 100,000 groups; past
-     that it forgets from the provider (an IPv6 /32, an IPv4 /16) that holds the most of them
-     (docs/relay-budget.md),
-     its group kept least recently first. The group CA for these records is the
-     root the hub's member certificate verified to in step 2, whose tag names the group; a
-     self-signed certificate the hub presents besides counts for nothing.
+     the version for the period, whose tag names the group there (`period <tag in hex>`).
    - An obfuscated hub adds its group's `obfuscation` settings (section 11, "Obfuscation");
      a plain hub leaves them out. A hub whose clients come over VLESS adds the group's VLESS
      user ID as `vless` (section 11, "VLESS").
-4. The forwarder answers `{"id": number, "mask": bytes}`, a random 64-bit registration ID
-   (an unsigned integer up to 2^64 - 1 as a JSON number: a decoder MUST keep all 64 bits,
-   which a double does not) and the 32-byte key of the hellos' mask, the same for every hub, or `{"error": string}`
-   and closes: the proof is wrong, the credentials do not verify, have expired, do not list
-   the hub, are older than the forwarder saw or come from another period key than the one it
-   saw first for the tag, no root or admin signed the registration, the records remove or
-   freeze the hub, the obfuscation settings are outside their bounds,
-   another group registered that key or that VLESS user ID, or the forwarder is full. A
-   forwarder without VLESS registers a hub that asked for it for UDP alone and leaves
-   `vless` out of its answer; the hub then forgets its VLESS user ID and sends its offer
-   without `vless`. A hub told that another group registered its VLESS user ID takes a new
-   one, with the path made for it, sends its offers again and registers again. To a hub that asked for VLESS a forwarder with it adds to its answer
-   `"vless": {"transport": "xhttp", "port": number, "server_name": string, "path": string}`,
-   where `port` is the web server's, and the forwarder lets that user ID in while the registration lasts. A group has one registration: a new one replaces the old, whose
-   connection closes.
+4. The forwarder answers `forward/registered`, a random registration ID and the key of the
+   hellos' mask, the same for every hub, or `forward/error` and closes: the frame or a
+   message breaks the format, the proof is wrong, the credential does not verify, has
+   expired, does not list the hub, is older than the forwarder saw or comes from another
+   period key than the one it saw first for the tag, another group registered that key or
+   that VLESS user ID, or the forwarder is full. A forwarder without VLESS registers a hub
+   that asked for it for UDP alone and leaves `vless` out of its answer; the hub then
+   forgets its VLESS user ID and sends its offer without `vless`. A hub told that another
+   group registered its VLESS user ID takes a new one, with the path made for it, sends its
+   offers again and registers again. To a hub that asked for VLESS a forwarder with it adds
+   `vless`: the user ID, the web server's port (443 when left out), its site and the
+   group's path ("VLESS", below), which the hub's offers give as XHTTP; the forwarder lets
+   that user ID in while the registration lasts. A group has one registration: a new one
+   replaces the old, whose connection closes.
 5. The registration lasts while the connection does; the hub sends nothing more on it. The
-   forwarder sends `{"seen": "ip:port"}` whenever it learns a new address of the hub's
-   WireGuard port. The hub registers again whenever the connection breaks, with a backoff of
-   1 s doubling to 60 s, and at once when the period's hubs' credential changes, so that the
+   forwarder sends `forward/seen` whenever it learns a new address of the hub's WireGuard
+   port. The hub registers again whenever the connection breaks, with a backoff of 1 s
+   doubling to 60 s, and at once when the face's hubs' credential changes, so that the
    forwarder learns the new version, and under a new period's tag when it serves with its
    key for that period (section 11, "The hub's key").
 
@@ -4858,7 +4819,7 @@ does not know unless its section says it refuses it.
 | `cbb/4` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
 | `cbb-pair/3` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
-| `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
+| `cbb-forward/3` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/3` | TCP on the relay's port (8764 by default) | 14 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
 | (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
