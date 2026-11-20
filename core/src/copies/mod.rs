@@ -181,21 +181,56 @@ pub fn seal(origin: &dyn ExternalKey, readers: &[Reader], made: &Made, content: 
     seal_with(origin, readers, made, content, &random::<32>()?, &seeds)
 }
 
-/// Seals content with images or files and their bytes: the copy's map and
-/// the sealed blob. `made.blob` is filled from the sealed blob.
+/// A new copy key K, for a copy with a blob: the origin seals the blob
+/// under `format::copy::blob_key(K)` first, then the copy under K
+/// ([`seal_keyed`]).
+pub fn new_key() -> Result<[u8; 32], Error> {
+    random::<32>()
+}
+
+/// [`seal`] under a copy key the origin chose: a copy with a blob, whose
+/// blob is sealed under that key's blob key, or such a copy sealed again.
+pub fn seal_keyed(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    k: &[u8; 32],
+) -> Result<Vec<u8>, Error> {
+    let mut seeds = Vec::with_capacity(readers.len());
+    for _ in readers {
+        seeds.push(random::<32>()?);
+    }
+    seal_with(origin, readers, made, content, k, &seeds)
+}
+
+/// A copy with a blob, sealed in memory.
+pub struct SealedMedia {
+    /// The copy's map, as message `copy` carries it.
+    pub copy: Vec<u8>,
+    /// The sealed blob.
+    pub blob: Vec<u8>,
+    /// What the origin keeps to seal it again.
+    pub kept: Kept,
+}
+
+/// Seals content with images or files and their bytes in memory: the
+/// copy's map and the sealed blob, `made.blob` filled from it.
 pub fn seal_media(
     origin: &dyn ExternalKey,
     readers: &[Reader],
     made: &Made,
     content: &Content,
     parts: &[u8],
-) -> Result<(Vec<u8>, Vec<u8>), Error> {
-    let k = random::<32>()?;
+) -> Result<SealedMedia, Error> {
+    let k = new_key()?;
     let mut seeds = Vec::with_capacity(readers.len());
     for _ in readers {
         seeds.push(random::<32>()?);
     }
-    seal_media_with(origin, readers, made, content, parts, &k, &seeds)
+    let (copy, blob) = seal_media_with(origin, readers, made, content, parts, &k, &seeds)?;
+    let made = Made { blob: Some((blob.len() as u64, sha256(&[&blob]))), ..*made };
+    Ok(SealedMedia { copy, blob, kept: Kept::keyed(made, content.clone(), readers, k) })
 }
 
 /// [`seal_media`] with K and the seals' randomness given: for the tests only.
@@ -523,12 +558,20 @@ pub struct Kept {
     pub readers: Vec<DeviceId>,
     /// How many times it was sealed again for each asker.
     pub resealed: BTreeMap<DeviceId, u8>,
+    /// The copy key of a copy with a blob: sealed again, it keeps K, so
+    /// that its blob, sealed once under K's blob key, still opens.
+    pub k: Option<[u8; 32]>,
 }
 
 impl Kept {
     /// What the origin keeps of a copy it just sealed to readers.
     pub fn new(made: Made, content: Content, readers: &[Reader]) -> Kept {
-        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new() }
+        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new(), k: None }
+    }
+
+    /// What the origin keeps of a copy with a blob it sealed under K.
+    pub fn keyed(made: Made, content: Content, readers: &[Reader], k: [u8; 32]) -> Kept {
+        Kept { k: Some(k), ..Kept::new(made, content, readers) }
     }
 
     /// The copy's lifetime: its own `ttl`, or for a secret the group's.
@@ -594,7 +637,11 @@ pub fn reseal(
     if r.epoch != ask.epoch {
         return Err(RULE_RESEAL_EPOCH);
     }
-    let sealed = seal(origin, &[r], &kept.made, &kept.content).map_err(|_| fcopy::RULE_SHAPE)?;
+    let sealed = match &kept.k {
+        Some(k) => seal_keyed(origin, &[r], &kept.made, &kept.content, k),
+        None => seal(origin, &[r], &kept.made, &kept.content),
+    }
+    .map_err(|_| fcopy::RULE_SHAPE)?;
     kept.resealed.insert(ask.asker, done.saturating_add(1));
     Ok(sealed)
 }

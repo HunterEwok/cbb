@@ -806,7 +806,7 @@ fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
     };
     let content = Content { kind: TYPE_MEDIA, manifest: Some(manifest), ..Content::default() };
     let rs = readers(&state, &w.sealing(), &content, &w.id("phone"), &[], None);
-    let (copy, sealed) = seal_media(&w.phone, &rs, &made(1), &content, &parts).unwrap();
+    let SealedMedia { copy, blob: sealed, mut kept } = seal_media(&w.phone, &rs, &made(1), &content, &parts).unwrap();
     assert_eq!(sealed.len() as u64, blob::sealed_size(parts.len() as u64));
     assert_eq!(blob::segments(sealed.len() as u64), Some(3));
     let v = cbor::decode(&copy).unwrap();
@@ -834,6 +834,17 @@ fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
     assert!(blob::open(&key, (cut.len() as u64, sha256(&[cut])), 2 * blob::SEGMENT as u64, cut).is_err());
     assert!(blob::open(&[9; 32], header, n as u64, &sealed).is_err());
     assert!(blob::open(&key, header, n as u64 - 1 - blob::SEGMENT as u64 * 2, &sealed).is_err());
+    // Sealed again, it keeps its copy key: the same blob opens.
+    let ask = Ask { asker: w.id("laptop"), epoch: 1, leaves: &[], now_ms: Some(T0), group_ttl_ms: DAY };
+    let again = reseal(&w.phone, &mut kept, &state, &w.sealing(), &ask).unwrap();
+    let av = cbor::decode(&again).unwrap();
+    let ac = check(&av, &state).unwrap();
+    assert_eq!(ac.blob(), Some(header));
+    let Opened::Content { blob_key: again_key, .. } = open(&ac, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()
+    else {
+        panic!("not opened")
+    };
+    assert_eq!(again_key, Some(key));
     // A text copy has no blob.
     let text = seal(&w.phone, &rs, &made(2), &Content::text("x", false)).unwrap();
     let tv = cbor::decode(&text).unwrap();
