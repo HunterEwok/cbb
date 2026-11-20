@@ -2104,26 +2104,62 @@ func TestFFIPhoneRemoves(t *testing.T) {
 }
 
 // TestFFIPhoneRemovesAway: the root phone removes a computer it never
-// connected to after admitting it; the phone's next connection with the
-// computer carries the records that remove it, and the computer says so.
+// connected to after it joined. By the group's rule a removed device need
+// not learn it was removed: the group refuses it and gives it nothing, not
+// even the device list. So the phone refuses its hello, nothing the
+// computer copies reaches the phone and nothing of the phone's reaches it,
+// and it never gets the records written after its removal.
 func TestFFIPhoneRemovesAway(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
-	if made := strings.Fields(next("Group ")); len(made) != 2 {
+	made := strings.Fields(next("Group "))
+	if len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
 	second := joinPhoneWindow(t, &h, next, in, "second")
 	id := second.status(t).Device
-	fmt.Fprintln(in, "MANAGE "+`{"action":"remove","device":"`+id+`"}`)
-	if got := next("MANAGED "); !strings.Contains(got, `"ok"`) {
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
+	}
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
+	}
+	// A record written after the removal, which the removed computer must
+	// never get.
+	if got := manage(`{"action":"rename","device":"` + made[0] + `","name":"renamed phone"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("renaming the phone: %s", got)
 	}
 	fmt.Fprintln(in, `CALL {"op":"found","args":{"key":"second","addrs":["`+second.addr()+`"]}}`)
 	next("ANSWER ")
-	waitUpTo(t, 30*time.Second, "the computer says it was removed", func() bool { return second.status(t).Removed })
-	waitFor(t, "the removed computer keeps no connection", func() bool { return len(second.status(t).Peers) == 0 })
+	if _, err := second.do(t, control.Header{Op: control.OpCopy}, "from the removed computer"); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(in, "COPY from the root phone")
+	// For a while, with the phone dialing it and it dialing the phone: no
+	// connection stands, and nothing crosses either way.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
+		fmt.Fprintln(in, "PEERS")
+		got := next("PEERS ")
+		peers := second.status(t).Peers
+		if got != "0" || slices.ContainsFunc(peers, func(p control.Device) bool { return p.Online }) {
+			t.Fatalf("a connection with the removed computer stands: the phone has %s, the computer %+v", got, peers)
+		}
+	}
+	fmt.Fprintln(in, `CALL {"op":"current"}`)
+	if got := next("ANSWER "); strings.Contains(got, "from the removed computer") {
+		t.Fatalf("the removed computer's copy reached the phone: %s", got)
+	}
+	if got := second.paste(t); got == "from the root phone" {
+		t.Fatal("the phone's copy reached the removed computer")
+	}
+	for _, d := range second.devices(t) {
+		if d.Name == "renamed phone" {
+			t.Fatal("the removed computer got the records written after its removal")
+		}
+	}
 }
