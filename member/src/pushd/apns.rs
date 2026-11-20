@@ -15,7 +15,7 @@
 //! wakes the app without showing anything.
 
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
@@ -138,7 +138,7 @@ impl Apns {
         {
             return tok.clone();
         }
-        let iat = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let iat = u64::try_from(crate::uptime::wall_ms() / 1000).unwrap_or(0);
         let tok = self.key.token(iat);
         *t = Some((tok.clone(), Instant::now()));
         tok

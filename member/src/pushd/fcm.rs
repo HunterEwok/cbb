@@ -11,7 +11,7 @@
 //! collapse key, which would let Google join two notifications.
 
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
@@ -151,7 +151,7 @@ impl Fcm {
         {
             return Ok(tok.clone());
         }
-        let iat = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let iat = u64::try_from(crate::uptime::wall_ms() / 1000).unwrap_or(0);
         let form = format!(
             "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion={}",
             self.account.assertion(iat)
@@ -178,7 +178,7 @@ impl Platform for Fcm {
         if d.env != cbb_core::push::ENV_FCM {
             return Outcome::NoPath;
         }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let now = u64::try_from(crate::uptime::wall_ms() / 1000).unwrap_or(0);
         let challenge = d.challenge.map(|c| c.bytes());
         let Some(body) = message(d.token, d.body, challenge.as_ref(), d.expires_s.saturating_sub(now)) else {
             // A token that is not FCM's never will be.

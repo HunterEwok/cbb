@@ -417,8 +417,7 @@ impl Inner {
             drop(st);
             // The face is looked up for every body, a kept connection too:
             // one past its expiry, or no longer given, sends nothing more.
-            let now =
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+            let now = u64::try_from(crate::uptime::wall_ms()).unwrap_or(0);
             let face = self.faces.faces(&job.group).into_iter().find(|f| f.tag == job.face && f.expires_ms > now);
             let gone_face = face.is_none();
             let mut client = if gone_face { None } else { client }.or_else(|| {

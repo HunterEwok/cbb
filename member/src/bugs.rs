@@ -479,7 +479,7 @@ mod tests {
     /// service up for months keeps at most LINES lines of MAX_LINE bytes.
     #[test]
     fn the_recent_lines_stay_bounded() {
-        let long = "\u{2}ж\"".repeat(cbb_core::bug::MAX_LINE);
+        let long = "\u{2}\u{436}\"".repeat(cbb_core::bug::MAX_LINE);
         for i in 0..LINES * 4 {
             remember(&format!("{i} {long}"));
         }
