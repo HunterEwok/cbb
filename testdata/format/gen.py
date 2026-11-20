@@ -1872,6 +1872,8 @@ TABLES = {
     "member-credentials": [
         (2, "member-credentials/list", "array 1..259 of envelope", True),
         (3, "member-credentials/obfuscation", "map obfuscation", False),
+        (4, "member-credentials/server", "bytes 32", False),
+        (5, "member-credentials/address", "text 1..261", False),
     ],
 }
 
@@ -2605,6 +2607,12 @@ def wave3_vectors(records_take):
         "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
     bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
         "member-credentials/obfuscation")
+    msg("credentials for one server", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 32), 5: "cbb.tools:8765"},
+        "fields 4 and 5: the server these credentials are for (A-55), its pin and its address; without field 4 they are the group's one face")
+    bad("credentials for a server, a pin of 31 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 31)},
+        "member-credentials/server")
+    bad("credentials for a server, an address of 262 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 32), 5: "a" * 262},
+        "member-credentials/address")
     msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
     msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
     msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
@@ -3463,8 +3471,9 @@ def _plain(x, most=255):
 
 def hub_rule(o):
     """`hub` orders: 13 off alone, or 10 [endpoint, key 32], 11 forwarders
-    (1 to 8 texts, each once); 12 (the clients) is retired and refused;
-    not empty."""
+    (1 to 8 [address, pin 32], each address once: the root signs each
+    forwarder's pin with its address); 12 (the clients) is retired and
+    refused; not empty."""
     bad = "orders/hub"
     if 13 in o:
         return "take" if o[13] == 1 and all(k >= 256 or k == 13 for k in o) else bad
@@ -3474,7 +3483,11 @@ def hub_rule(o):
             return bad
     if 11 in o:
         a = o[11]
-        if not (isinstance(a, list) and 1 <= len(a) <= 8 and all(_plain(x) for x in a) and len(set(a)) == len(a)):
+        if not (isinstance(a, list) and 1 <= len(a) <= 8):
+            return bad
+        if not all(isinstance(x, list) and len(x) == 2 and _plain(x[0]) and isinstance(x[1], bytes) and len(x[1]) == 32 for x in a):
+            return bad
+        if len({x[0] for x in a}) != len(a):
             return bad
     if 12 in o:
         # retired: the clients and their pre-shared keys (a client sends its
@@ -3705,13 +3718,16 @@ def wave4_vectors():
         ("mute over 30 days", 8, {10: 2592000001}),
         ("device command with a hidden character", 10, {10: "he‮at"}),
         ("device command with arguments not one item", 10, {10: "heat", 11: b"\x82"}),
-        ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: ["cbb.tools:8764"]}),
+        ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: [["cbb.tools:8764", fake("forwarder pin", 32)]]}),
+        ("hub with two forwarders", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 32)], ["[2001:db8::7]:8764", fake("pin 2", 32)]]}),
+        ("hub forwarder without its pin", 2, {11: ["cbb.tools:8764"]}),
+        ("hub forwarder with a short pin", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 31)]]}),
         ("hub off", 2, {13: 1}),
         ("hub with its clients, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
         ("hub empty", 2, {}),
         ("hub off with an endpoint", 2, {13: 1, 10: ["203.0.113.5:51820", fake("hub key", 32)]}),
         ("hub endpoint with a hidden character", 2, {10: ["203.0.113.5\u202e:51820", fake("hub key", 32)]}),
-        ("hub forwarder twice", 2, {11: ["cbb.tools:8764", "cbb.tools:8764"]}),
+        ("hub forwarder twice", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 32)], ["cbb.tools:8764", fake("pin 2", 32)]]}),
         ("hub clients out of order, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
         ("orders of a type without orders", 4, {10: 1}),
     ]:

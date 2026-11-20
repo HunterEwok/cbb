@@ -331,7 +331,13 @@ fn orders_of_each_type() {
         (COMMAND_MUTE, orders(vec![(10, Value::Uint(60_000))])),
         (COMMAND_DEVICE, orders(vec![(10, Value::Text("heat")), (11, Value::Bytes(&[0xa1, 0x01, 0x18, 0x5a]))])),
         (COMMAND_HUB, orders(vec![(13, Value::Uint(1))])),
-        (COMMAND_HUB, orders(vec![(11, Value::Array(vec![Value::Text("[2001:db8::1]:443")]))])),
+        (
+            COMMAND_HUB,
+            orders(vec![(
+                11,
+                Value::Array(vec![Value::Array(vec![Value::Text("[2001:db8::1]:443"), Value::Bytes(&[7; 32])])]),
+            )]),
+        ),
     ];
     for (t, o) in ok {
         assert_eq!(orders::check(t, &o), Ok(()), "{t}");
@@ -367,6 +373,18 @@ fn orders_of_each_type() {
             orders::RULE_HUB,
         ),
         (COMMAND_HUB, orders(vec![]), orders::RULE_HUB),
+        (COMMAND_HUB, orders(vec![(11, Value::Array(vec![Value::Text("[2001:db8::1]:443")]))]), orders::RULE_HUB),
+        (
+            COMMAND_HUB,
+            orders(vec![(
+                11,
+                Value::Array(vec![
+                    Value::Array(vec![Value::Text("a:1"), Value::Bytes(&[7; 32])]),
+                    Value::Array(vec![Value::Text("a:1"), Value::Bytes(&[8; 32])]),
+                ]),
+            )]),
+            orders::RULE_HUB,
+        ),
     ];
     for (t, o, rule) in bad {
         assert_eq!(orders::check(t, &o), Err(rule), "{t} {o:02x?}");

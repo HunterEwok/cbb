@@ -532,7 +532,7 @@ change the mode, or change what the person compares or approves.
 | 8 | `intro` | section 6, "The intro" | 6 |
 | 9 | `command` | 2 the command envelope | 15 |
 | 10 | `result` | 2 `id`; 3 `by`; 4 `status` 1 done, 2 refused, 3 failed; 5 `reason`; 6 `tunnel` the hub's offer | 15 |
-| 11 | `credentials` | 2 credential envelopes | 18 |
+| 11 | `credentials` | 2 credential envelopes; 3 settings for a later version; 4 the pin of the server they are for (32 bytes) and 5 its address (text, at most 261 bytes), a face for each server (A-55); without 4 they are the group's one face, and 5 counts only with 4 | 18 |
 | 12 | `release` | 2 `keys`, 3 `channel`, 4 `release`: the release files' bytes as published | 16 |
 | 13 | `get` | 2 `sha256` bytes 32; 3 `offset`; 4 `length` (0 cancels) | 4 |
 | 14 | `missing` | as `get` | 4 |
@@ -4016,7 +4016,9 @@ are not on the records of 0.6 yet; `away-off` is done at once, as the member of 
 at home.
 
 A `hub` command of 0.6 orders field 10 (the hub to use, an endpoint with its key), 11 (the
-forwarders, 1 to 8) or 13 (stop being a hub, alone). Field 12, the clients with their keys and
+forwarders, 1 to 8, each `[address, pin]`, an address once: the pin of the forwarder's key, 32
+bytes, comes signed by the root with its address, so the hub takes no forwarder's key on first
+use) or 13 (stop being a hub, alone). Field 12, the clients with their keys and
 pre-shared keys, is retired and refused (`orders/hub`), and its number is not used again: a
 client gives each hub its key in message `tunnel` (t 15), and the pre-shared key is never sent,
 since both ends export it from their own connection (`core/src/hubkey.rs`).

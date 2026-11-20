@@ -84,10 +84,23 @@ pub fn check(t: u64, b: &[u8]) -> Result<(), Rule> {
                 None if m.get(10).is_none() => {}
                 _ => return Err(RULE_HUB),
             }
+            // Field 11, the forwarders: each address with its pin, so the
+            // root signs which key the hub takes there (no trust on first
+            // use), each address once.
             if let Some(v) = m.get(11) {
                 let a = v.as_array().ok_or(RULE_HUB)?;
-                let distinct = a.iter().enumerate().all(|(i, x)| a.get(..i).is_some_and(|p| !p.contains(x)));
-                if a.is_empty() || a.len() > 8 || !distinct || !a.iter().all(|x| x.as_text().is_some_and(plain_text)) {
+                fn addr<'a>(x: &Value<'a>) -> Option<&'a str> {
+                    match x.as_array() {
+                        Some([Value::Text(e), Value::Bytes(k)]) if plain_text(e) && k.len() == 32 => Some(*e),
+                        _ => None,
+                    }
+                }
+                if a.is_empty() || a.len() > 8 || a.iter().any(|x| addr(x).is_none()) {
+                    return Err(RULE_HUB);
+                }
+                let distinct =
+                    a.iter().enumerate().all(|(i, x)| a.get(..i).is_some_and(|p| p.iter().all(|y| addr(y) != addr(x))));
+                if !distinct {
                     return Err(RULE_HUB);
                 }
             }

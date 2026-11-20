@@ -293,6 +293,16 @@
    "later": "unusable"
   },
   {
+   "table": "member-credentials",
+   "n": 4,
+   "later": "refuse"
+  },
+  {
+   "table": "member-credentials",
+   "n": 5,
+   "later": "refuse"
+  },
+  {
    "table": "nonce",
    "n": 2,
    "later": "refuse"

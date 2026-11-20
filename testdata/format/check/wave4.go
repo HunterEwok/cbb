@@ -783,8 +783,9 @@ func ordersVerdict(t uint64, b []byte) string {
 }
 
 // hubOrders: 13 `off` (flag, alone), or any of 10 the hub to use
-// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 texts, each once);
-// 12 (the clients) is retired and refused; not empty.
+// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 [address, pin of 32
+// bytes], each address once); 12 (the clients) is retired and refused;
+// not empty.
 func hubOrders(o map[any]any) string {
 	const bad = "orders/hub"
 	if x, there := o[uint64(13)]; there {
@@ -809,10 +810,14 @@ func hubOrders(o map[any]any) string {
 		}
 		once := map[string]bool{}
 		for _, e := range a {
-			if !plainText(e, 255) || once[e.(string)] {
+			f, ok := e.([]any)
+			if !ok || len(f) != 2 || !plainText(f[0], 255) || once[f[0].(string)] {
 				return bad
 			}
-			once[e.(string)] = true
+			if pin, ok := f[1].([]byte); !ok || len(pin) != 32 {
+				return bad
+			}
+			once[f[0].(string)] = true
 		}
 	}
 	// 12, the clients with their pre-shared keys, is retired: a client

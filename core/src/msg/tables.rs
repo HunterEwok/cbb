@@ -248,12 +248,17 @@ pub static GUEST: Table = Table {
 /// and in field 3 room for the group's AmneziaWG settings to change with
 /// the period in a later version. Only members get this message, so a
 /// server never sees the settings. No 0.6 writer sets field 3; a 0.6
-/// reader checks its shape and does not apply it.
+/// reader checks its shape and does not apply it. Fields 4 and 5 name the
+/// server these credentials are for (A-55, a face for each server): its
+/// pin, the hash of its key, and its address; without field 4 they are the
+/// group's one face. A reader takes field 5 only with field 4.
 pub static CREDENTIALS: Table = Table {
     shape: "member-credentials/shape",
     fields: &[
         f(2, "member-credentials/list", Ty::Array { of: &ENV, max: 259 }, true),
         f(3, "member-credentials/obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(4, "member-credentials/server", B32, false),
+        f(5, "member-credentials/address", Ty::Text(261), false),
     ],
 };
 

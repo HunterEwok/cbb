@@ -110,6 +110,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::GUEST, 10, Refuse, "the device"),
     o(&t::GUEST, 11, Refuse, "an invitation's ID"),
     o(&t::CREDENTIALS, 3, Unusable, "settings for a later version: never applied by 0.6"),
+    o(&t::CREDENTIALS, 4, Refuse, "the server's pin: credentials for no known server are not taken"),
+    o(&t::CREDENTIALS, 5, Refuse, "the server's address"),
     // Requests that wait.
     o(&t::REQUEST, 5, Absent, "how long it waited: the request is shown without it"),
     o(&t::INFO, 2, Refuse, "the system: a registry number, any in range kept"),
