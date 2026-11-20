@@ -155,6 +155,32 @@ struct Conn {
     closed: AtomicBool,
     /// The device with the lower ID dialed it.
     lower_dialed: bool,
+    /// The tunnel's pre-shared keys this connection gives (`crate::hubkey`).
+    tunnel_psks: TunnelPsks,
+}
+
+/// The tunnel's pre-shared keys a member connection gives (A-22): one for
+/// this device as the hub and the peer as its client, one for the peer as
+/// the hub. None from a connection whose key exchange was not the hybrid
+/// one, or whose secret could not be exported.
+#[derive(Clone, Copy, Default)]
+struct TunnelPsks {
+    as_hub: Option<cbb_core::hubkey::Psk>,
+    to_hub: Option<cbb_core::hubkey::Psk>,
+}
+
+impl TunnelPsks {
+    fn of(x: &tls::Exporter, session: &tls::Session, me: &DeviceId, peer: &DeviceId) -> TunnelPsks {
+        use cbb_core::hubkey;
+        let hybrid = hubkey::hybrid(session.kx_group());
+        let one = |hub: &DeviceId, device: &DeviceId| {
+            let mut out = cbb_core::secret::Zeroizing::new([0u8; 32]);
+            let (h, d) = (cbb_core::format::DeviceId(hub.0), cbb_core::format::DeviceId(device.0));
+            x.export(hubkey::EXPORTER_LABEL, &hubkey::context(&h, &d), &mut out[..]).ok()?;
+            hubkey::psk(&out, hybrid)
+        };
+        TunnelPsks { as_hub: one(me, peer), to_hub: one(peer, me) }
+    }
 }
 
 impl Conn {
@@ -428,6 +454,15 @@ impl Mesh {
     /// The last hello of each device connected now.
     pub fn hellos(&self) -> HashMap<DeviceId, Hello> {
         self.hellos.lock().unwrap().clone()
+    }
+
+    /// The tunnel's pre-shared key the connection with `peer` gives
+    /// (`crate::hubkey`): with this device as the hub (`as_hub`), or with
+    /// the peer as the hub; None while not connected, or from a connection
+    /// whose key exchange was not the hybrid one.
+    pub fn tunnel_psk(&self, peer: &DeviceId, as_hub: bool) -> Option<cbb_core::hubkey::Psk> {
+        let c = self.conns.lock().unwrap().get(peer)?.tunnel_psks;
+        if as_hub { c.as_hub } else { c.to_hub }
     }
 
     /// The devices connected now.
@@ -714,18 +749,20 @@ impl Mesh {
         let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
             .map_err(|e| Error::with(format!("cannot reach {addr}"), e))?;
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
-        let mut s = tls::Session::client(Arc::new(self.client_config(expect)?), bykey::unsent_name())?;
+        let (cfg, exporter) = bykey::exporting_client(self.client_config(expect)?);
+        let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, true)
+        self.run(sock, s, true, Some(&exporter))
     }
 
     /// Takes a connection a member made and runs it until it ends: the
     /// device it was with.
     pub fn accept(self: &Arc<Self>, sock: TcpStream) -> Result<DeviceId> {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
-        let mut s = tls::Session::server(Arc::new(self.server_config()?))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, false)
+        self.run(sock, s, false, Some(&exporter))
     }
 
     /// Takes a connection on the member port, where members connect
@@ -763,7 +800,7 @@ impl Mesh {
         }
         let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
-        self.run(sock, s, false).map(Some)
+        self.run(sock, s, false, Some(&exporter)).map(Some)
     }
 
     /// Runs a member connection until it ends; dialed says this device
@@ -771,10 +808,17 @@ impl Mesh {
     /// reconnect does, unless the old one was dialed by the device with the
     /// lower ID and this one was not: when both dial at once, the two keep
     /// the same connection, and neither is left without one.
-    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session, dialed: bool) -> Result<DeviceId> {
+    fn run(
+        self: &Arc<Self>,
+        sock: TcpStream,
+        session: tls::Session,
+        dialed: bool,
+        exporter: Option<&tls::Exporter>,
+    ) -> Result<DeviceId> {
         let point = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         let peer_key = Key::es256(point.to_vec());
         let peer = peer_key.device_id();
+        let tunnel_psks = exporter.map(|x| TunnelPsks::of(x, &session, &self.device(), &peer));
         let lower_dialed = dialed == (self.device().0 < peer.0);
         sock.set_read_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         // A peer that stops reading ends the connection rather than holding
@@ -789,6 +833,7 @@ impl Mesh {
             tx,
             closed: AtomicBool::new(false),
             lower_dialed,
+            tunnel_psks: tunnel_psks.unwrap_or_default(),
         });
         {
             let mut conns = self.conns.lock().unwrap();

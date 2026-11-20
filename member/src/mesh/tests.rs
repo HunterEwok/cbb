@@ -454,3 +454,23 @@ fn a_peer_registers_for_push_and_the_member_keeps_it() {
     assert_eq!(a.push.held(), 1, "kept across a restart");
     a.close();
 }
+
+/// A member connection gives the tunnel's pre-shared keys (A-22): the
+/// hub's and its client's ends export the same key and tag, the two
+/// directions differ, and a new connection gives a new key.
+#[test]
+fn a_connection_gives_both_ends_the_tunnels_key() {
+    let (da, db) = two_dirs("tunnel-psk");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    connect(&a, &b);
+    until("the connection", || a.connected().contains(&b.device()) && b.connected().contains(&a.device()));
+    let a_hub = a.tunnel_psk(&b.device(), true).expect("the hybrid exchange gives a key");
+    assert_eq!(b.tunnel_psk(&a.device(), false), Some(a_hub), "the hub's and the client's ends agree");
+    let b_hub = b.tunnel_psk(&a.device(), true).unwrap();
+    assert_eq!(a.tunnel_psk(&b.device(), false), Some(b_hub));
+    assert_ne!(a_hub, b_hub, "each direction its own");
+    a.close();
+    b.close();
+}
