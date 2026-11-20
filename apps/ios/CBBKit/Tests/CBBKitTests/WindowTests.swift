@@ -74,6 +74,92 @@ final class WindowTests: XCTestCase {
         XCTAssertEqual(g.devices.map(\.name).sorted(), ["Root phone", "Tablet"])
     }
 
+    /// A phone's group of 0.6 with its member running, the root key that
+    /// opens its windows.
+    private func root() throws -> (made: CorePairing.Made, member: CoreMember, root: SoftwareSigner) {
+        let root = SoftwareSigner(), key = SoftwareSigner()
+        let dir = temporary("root")
+        let made = try CorePairing.newGroup06(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
+                                              publicKey: key.publicKeyDER) { try root.signature(digest: $0) }
+        let m = try CoreMember(.init(dir: dir, name: "Root phone", device: made.device, publicKeyDER: key.publicKeyDER, seal: CoreGroup.seal,
+                                     cert: Data(), issuer: nil, groupCA: Data(), roots: [])) { try key.signature(digest: $0) }
+        addTeardownBlock { m.stop() }
+        return (made, m, root)
+    }
+
+    private func window(_ m: CoreMember, _ root: SoftwareSigner) throws -> CorePairing.Window {
+        try CorePairing.Window(member: m, publicKey: root.publicKeyDER, addrs: ["127.0.0.1"]) { try root.signature(digest: $0) }
+    }
+
+    private func joiner(_ name: String, _ qr: String) throws -> (CorePairing.Joiner, URL) {
+        let k = SoftwareSigner()
+        let dir = temporary(name)
+        let j = try CorePairing.Joiner(dir: dir, qr: qr, name: name, os: "ios", publicKey: k.publicKeyDER) { try k.signature(digest: $0) }
+        return (j, dir)
+    }
+
+    /// The first state named one of want, failed included.
+    private func until<S>(_ want: Set<String>, _ state: (S) -> String, _ version: (S) -> UInt64,
+                          _ next: (UInt64) throws -> S) throws -> S {
+        var v: UInt64 = 0
+        for _ in 0..<200 {
+            let s = try next(v)
+            if want.contains(state(s)) { return s }
+            v = version(s)
+        }
+        XCTFail("none of \(want)")
+        throw CancellationError()
+    }
+
+    func testAWindowNeedsTheMemberPortOpen() throws {
+        let r = try root()
+        XCTAssertThrowsError(try window(r.member, r.root))
+    }
+
+    func testACodeTheWindowsPersonSaysDoesNotMatchJoinsNoOneAndTheWindowTakesTheNextAttempt() throws {
+        let r = try root()
+        _ = try r.member.listen(.home)
+        let w = try window(r.member, r.root)
+        defer { w.close() }
+        let (j, dir) = try joiner("Tablet", w.qr)
+        defer { j.close() }
+        _ = try until(["joining"], { $0.state }, { $0.version }) { try w.next(after: $0, timeout: .milliseconds(100)) }
+        _ = try until(["joining"], { $0.state }, { $0.version }) { try j.next(after: $0, timeout: .milliseconds(100)) }
+        j.answer(true)
+        w.answer(false)
+        XCTAssertEqual(try until(["done", "failed"], { $0.state }, { $0.version }) { try j.next(after: $0, timeout: .milliseconds(100)) }.state,
+                       "failed")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("group.cbor").path), "the refused phone keeps no group")
+        XCTAssertEqual(try r.member.group().devices.map(\.name), ["Root phone"])
+
+        // The window stays open for the next attempt.
+        let (second, _) = try joiner("Laptop", w.qr)
+        defer { second.close() }
+        let again = try until(["joining"], { $0.state }, { $0.version }) { try w.next(after: $0, timeout: .milliseconds(100)) }
+        XCTAssertEqual(again.request?.name, "Laptop")
+        _ = try until(["joining"], { $0.state }, { $0.version }) { try second.next(after: $0, timeout: .milliseconds(100)) }
+        w.answer(true)
+        second.answer(true)
+        XCTAssertEqual(try until(["done", "failed"], { $0.state }, { $0.version }) { try second.next(after: $0, timeout: .milliseconds(100)) }.state,
+                       "done")
+        XCTAssertEqual(try r.member.group().devices.map(\.name).sorted(), ["Laptop", "Root phone"])
+    }
+
+    func testAClosedWindowLetsNoOneJoin() throws {
+        let r = try root()
+        _ = try r.member.listen(.home)
+        let w = try window(r.member, r.root)
+        let qr = w.qr
+        w.close()
+        if let pair = try? joiner("Tablet", qr) {
+            let j = pair.0
+            defer { j.close() }
+            XCTAssertEqual(try until(["done", "failed"], { $0.state }, { $0.version }) { try j.next(after: $0, timeout: .milliseconds(100)) }.state,
+                           "failed")
+        }
+        XCTAssertEqual(try r.member.group().devices.map(\.name), ["Root phone"])
+    }
+
     func testAJoinerRefusesACodeThatIsNoWindows() {
         let k = SoftwareSigner()
         XCTAssertThrowsError(try CorePairing.Joiner(dir: temporary("x"), qr: "cbb://join?code=1", name: "Tablet", os: "ios",

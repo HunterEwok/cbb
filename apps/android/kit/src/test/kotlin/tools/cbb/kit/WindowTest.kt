@@ -9,6 +9,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -80,6 +81,88 @@ class WindowTest {
         val g = m.group()
         assertEquals(made.device, g.rootDevice)
         assertEquals(listOf("Root phone", "Tablet"), g.devices.map { it.name }.sorted())
+    }
+
+    /** A phone's group of 0.6 with its member running and the port open. */
+    private class Root(val made: CorePairing.Made, val member: CoreMember, val root: SoftwareSigner)
+
+    private fun root(): Root {
+        val root = SoftwareSigner()
+        val key = SoftwareSigner()
+        val dir = File(top, "root")
+        val made = CorePairing.newGroup06(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
+        val m = CoreMember.start(
+            CoreMember.Start(dir, "Root phone", "android", device = made.device, publicKey = key.publicKeyDER, seal = CoreGroup.SEAL,
+                cert = ByteArray(0), groupCA = ByteArray(0)),
+            key::signDigest,
+            events = { },
+        ).closed()
+        return Root(made, m, root)
+    }
+
+    private fun Root.window(): CorePairing.Window =
+        CorePairing.Window(member, root.publicKeyDER, listOf("127.0.0.1"), sign = root::signDigest).closed()
+
+    private fun joiner(name: String, qr: String): CorePairing.Joiner {
+        val k = SoftwareSigner()
+        return CorePairing.Joiner(File(top, name).path, qr, name, "android", k.publicKeyDER, k::signDigest).closed()
+    }
+
+    /** The first state named one of want past the start, failed included. */
+    private fun <S> until(want: Set<String>, state: (S) -> String, version: (S) -> Long, next: (Long) -> S): S {
+        var v = 0L
+        repeat(200) {
+            val s = next(v)
+            if (state(s) in want) return s
+            v = version(s)
+        }
+        fail("none of $want")
+    }
+
+    @Test
+    fun aWindowNeedsTheMemberPortOpen() {
+        val r = root()
+        assertFailsWith<CorePairing.Failure> { r.window() }
+    }
+
+    @Test
+    fun aCodeTheWindowsPersonSaysDoesNotMatchJoinsNoOneAndTheWindowTakesTheNextAttempt() {
+        val r = root()
+        r.member.listen(CoreMember.Listen.HOME)
+        val w = r.window()
+        val j = joiner("Tablet", w.qr)
+        until(setOf("joining"), { it.state }, { it.version }) { w.next(it, 100) }
+        until(setOf("joining"), { it.state }, { it.version }) { j.next(it, 100) }
+        j.answer(true)
+        w.answer(false)
+        assertEquals("failed", until(setOf("done", "failed"), { it.state }, { it.version }) { j.next(it, 100) }.state)
+        assertFalse(File(top, "Tablet/group.cbor").exists(), "the refused phone keeps no group")
+        assertEquals(listOf("Root phone"), r.member.group().devices.map { it.name })
+
+        // The window stays open for the next attempt.
+        val second = joiner("Laptop", w.qr)
+        val again = until(setOf("joining"), { it.state }, { it.version }) { w.next(it, 100) }
+        assertEquals("Laptop", again.request?.name)
+        until(setOf("joining"), { it.state }, { it.version }) { second.next(it, 100) }
+        w.answer(true)
+        second.answer(true)
+        assertEquals("done", until(setOf("done", "failed"), { it.state }, { it.version }) { second.next(it, 100) }.state)
+        assertEquals(listOf("Laptop", "Root phone"), r.member.group().devices.map { it.name }.sorted())
+    }
+
+    @Test
+    fun aClosedWindowLetsNoOneJoin() {
+        val r = root()
+        r.member.listen(CoreMember.Listen.HOME)
+        val w = r.window()
+        val qr = w.qr
+        w.close()
+        val j = runCatching { joiner("Tablet", qr) }.getOrNull()
+        if (j != null) {
+            assertEquals("failed", until(setOf("done", "failed"), { it.state }, { it.version }) { j.next(it, 100) }.state)
+        }
+        assertFalse(File(top, "Tablet/group.cbor").exists())
+        assertEquals(listOf("Root phone"), r.member.group().devices.map { it.name })
     }
 
     @Test
