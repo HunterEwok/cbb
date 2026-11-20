@@ -141,3 +141,57 @@ fn a_pairing_code_reads_as_the_window_writes_it() {
     assert!(read_code("CBB://PAIR?addr=1.2.3.4:1&fp=").is_err(), "a fingerprint is needed");
     assert!(read_code(&format!("cbb://join?code=123456&fp={fp}")).is_err(), "a join code is not a window's");
 }
+
+#[test]
+fn a_phone_that_made_its_group_admits_a_new_phone_by_its_window() {
+    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-made-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let (root_dir, new_dir) = (tmp.join("root"), tmp.join("new"));
+    let key = || -> Arc<dyn ExternalKey> { Arc::new(FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap()) };
+    let (root_key, member_key, new_key) = (key(), key(), key());
+    let (root, member) = (leak(root_key.clone()), leak(member_key.clone()));
+    // As the app makes its group: the root key signs, the set is kept in dir.
+    let g = json!({
+        "dir": root_dir.to_string_lossy(), "name": "phone", "os": "ios", "store": "hardware",
+        "root_public": b64(&root_key.public()), "public": b64(&member_key.public()),
+    })
+    .to_string();
+    let made = ok(&crate::found::new_group(g.as_bytes(), sign, root));
+    let req = json!({
+        "dir": root_dir.to_string_lossy(), "name": "phone", "os": "ios",
+        "device": made["device"], "public": b64(&member_key.public()), "mdns": false,
+    })
+    .to_string();
+    let (m, a) = Member::start(req.as_bytes(), sign, events, member);
+    ok(&a);
+    let m = m.unwrap();
+    ok(&m.call(json!({ "op": "listen", "args": { "port": 0 } }).to_string().as_bytes()));
+    let w = json!({ "public": b64(&root_key.public()), "addrs": ["127.0.0.1"] }).to_string();
+    let (win, a) = m.window(w.as_bytes(), sign, root);
+    let qr = ok(&a)["qr"].as_str().unwrap().to_string();
+    let win = win.unwrap();
+
+    let j = json!({
+        "dir": new_dir.to_string_lossy(), "qr": qr, "name": "tablet", "os": "android",
+        "public": b64(&new_key.public()),
+    })
+    .to_string();
+    let (joiner, a) = Joiner::new(j.as_bytes(), sign, leak(new_key.clone()));
+    ok(&a);
+    let joiner = joiner.unwrap();
+    let wnext = |v: u64| ok(&win.next(v, 100));
+    let jnext = |v: u64| ok(&joiner.next(v, 100));
+    let at_window = wait(&wnext, "joining");
+    let at_joiner = wait(&jnext, "joining");
+    assert_eq!(at_window["joining"]["code"], at_joiner["shown"]["code"]);
+    win.answer(true);
+    joiner.answer(true);
+    let done = wait(&jnext, "done");
+    assert_eq!(done["group"], made["group"], "the new phone is in the group the phone made");
+    wait(&wnext, "done");
+    let devs = ok(&m.call(json!({ "op": "devices", "args": null }).to_string().as_bytes()));
+    assert_eq!(devs["devices"].as_array().unwrap().len(), 2, "{devs}");
+    drop(win);
+    m.stop();
+    let _ = std::fs::remove_dir_all(&tmp);
+}

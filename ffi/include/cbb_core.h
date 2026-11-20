@@ -256,7 +256,10 @@ uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t st
  * {"name","os","store":"hardware"|"file","root_public","public","seal"?}, the
  * keys' points base64, and sign the root key's callback, called during this
  * call only; the answer has a join's fields (device, cert, group_ca, roots,
- * records).
+ * records). On 0.6 the request also names "dir" (src/found.rs; no "seal"):
+ * the set is kept there for cbb_member_start, and the answer is
+ * {"group","device","recovery":{"qr","text":[4 lines]}}, the recovery sheet,
+ * which the core keeps nowhere.
  */
 uint8_t *cbb_group_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 

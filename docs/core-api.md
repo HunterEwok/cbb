@@ -280,6 +280,11 @@ group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feat
 `PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
 device record holding the root, all signed through the callback; its answer has a join's
 fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
+On 0.6 the request names the app's `dir` (`src/found.rs`): the core makes the recovery secret
+(`cbb_member::founding::new_recovery`), writes the phone's record under the root through the
+callback, keeps the set in `dir`, where `cbb_member_start` then reads it, and answers
+`{"group","device","recovery":{"qr","text"}}`, the recovery sheet the app shows once and keeps
+nowhere.
 `cbb_member_manage` (feature `member`, `cbb_core::manage`) signs an admin's change to a device
 through the same callback, as the phone kits' `PhoneGroup` does: a removal (every key of the
 device, its admin key among them; not the phone itself, nor the root's phone, which is taken

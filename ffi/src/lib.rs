@@ -143,6 +143,8 @@ pub unsafe extern "C" fn cbb_test_panic(answer_len: *mut usize) -> *mut u8 {
 #[cfg(feature = "member")]
 pub mod admit;
 #[cfg(feature = "member")]
+pub(crate) mod found;
+#[cfg(feature = "member")]
 pub mod invite;
 #[cfg(feature = "join")]
 pub mod join;
@@ -208,9 +210,11 @@ pub unsafe extern "C" fn cbb_qr_read(
     to_c(guard::answer(|| qr::read(frame, width, height, stride)), answer_len)
 }
 
-/// Makes a group with the app's root key (src/join.rs, new_group):
-/// `request` is its JSON, `sign` the root key's callback with `ctx`, called
-/// during this call only. The answer has a join's fields.
+/// Makes a group with the app's root key: on 0.6, when `request` names
+/// the app's `dir` (src/found.rs), the set is kept there and the answer is
+/// the group's and the phone's IDs and the recovery sheet; else as 0.5
+/// (src/join.rs, new_group), whose answer has a join's fields. `sign` is
+/// the root key's callback with `ctx`, called during this call only.
 ///
 /// # Safety
 ///
@@ -230,6 +234,10 @@ pub unsafe extern "C" fn cbb_group_new(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
+    #[cfg(feature = "member")]
+    if found::on_06(req) {
+        return to_c(guard::answer(|| found::new_group(req, sign, ctx as usize)), answer_len);
+    }
     to_c(guard::answer(|| join::new_group(req, sign, ctx as usize)), answer_len)
 }
 

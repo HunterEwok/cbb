@@ -63,6 +63,17 @@ pub fn found(dir: &Path, me: &Me<'_>, now_ms: u64) -> Result<Founded> {
     Ok(f)
 }
 
+/// A new recovery secret and the recovery key its two halves make; a
+/// phone's new group (the ffi) makes its own the same way.
+pub fn new_recovery() -> Result<(Zeroizing<[u8; 32]>, Recovery)> {
+    let secret = Zeroizing::new(cbb_core::certs::random_bytes::<32>());
+    let (k1, k2) = pq::recovery_keys(&secret).map_err(|e| e.context("cannot make the recovery key"))?;
+    let k1 = Key::es256(k1.public_key().to_sec1_point(false).as_bytes().to_vec());
+    let recovery = Recovery::new(k1, Key::new(ALG_SLH_DSA, k2.public()))
+        .ok_or_else(|| Error::msg("the recovery key's halves are not the keys a recovery key has"))?;
+    Ok((secret, recovery))
+}
+
 /// found, with the hardware's key maker given.
 pub fn found_with(
     dir: &Path,
@@ -79,11 +90,7 @@ pub fn found_with(
     }
     let mut own = Own::load_with(dir, &crate::keys::open, hardware)?;
     let root = own.make_with(dir, Which::Root, hardware)?;
-    let secret = Zeroizing::new(cbb_core::certs::random_bytes::<32>());
-    let (k1, k2) = pq::recovery_keys(&secret).map_err(|e| e.context("cannot make the recovery key"))?;
-    let k1 = Key::es256(k1.public_key().to_sec1_point(false).as_bytes().to_vec());
-    let recovery = Recovery::new(k1, Key::new(ALG_SLH_DSA, k2.public()))
-        .ok_or_else(|| Error::msg("the recovery key's halves are not the keys a recovery key has"))?;
+    let (secret, recovery) = new_recovery()?;
     let mut set = RecordSet::new(Key::es256(root.public()), recovery);
     let mut d = Device::new(own.member_key(), name, ROLE_MEMBER);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
