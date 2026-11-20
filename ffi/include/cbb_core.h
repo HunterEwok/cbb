@@ -340,10 +340,15 @@ void cbb_window_free(cbb_window *w);
  * answers {"version","state","group","device","name","error"}, state
  * dialing, done (the set is kept in dir: start the member on it; name is
  * the member that let it in) or failed. cbb_joiner_free ends it.
+ * cbb_joiner_new_admin also offers the admin key the request names in
+ * admin_public, admin_sign with admin_ctx signing its proof over the
+ * session: the group's root keeps it and makes the phone an admin later.
  */
 typedef struct cbb_joiner cbb_joiner;
 cbb_joiner *cbb_joiner_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
                            size_t *answer_len);
+cbb_joiner *cbb_joiner_new_admin(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, cbb_sign_fn admin_sign,
+                                 void *admin_ctx, uint8_t **answer, size_t *answer_len);
 uint8_t *cbb_joiner_next(const cbb_joiner *j, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
 void cbb_joiner_free(cbb_joiner *j);
 

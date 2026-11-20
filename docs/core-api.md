@@ -147,7 +147,10 @@ matches. `cbb_window_next` waits for the next state: `open`, `joining` while a d
 attempt (the window stays open for another), `closed` when its time is up or after three wrong
 codes (with the error). The phone writes the device's record by the core's admission rules
 (`join::decide::joiner_record`: at home a member or a phone reads, sends and takes secrets, a
-watch only reads) and sends the Welcome (`ffi/src/pair06.rs`). One attempt at a time; another
+member that can be a hub may be one when the root admits it, a watch only reads) and sends the
+Welcome (`ffi/src/pair06.rs`). A phone that holds the group's root key keeps the admin key a
+device offered with its proof over the session (`cbb_member::offered`), as a computer's root
+does. One attempt at a time; another
 gets `busy`.
 
 The new phone joins with `cbb_joiner_new` (`ffi/src/joiner.rs`): the request names the app's
@@ -159,6 +162,10 @@ the member whose key the window names, proves the digits, and `cbb_joiner_next` 
 state: `dialing`, `done` with the group, the phone's device ID and the name of the member that
 let it in once the checked set is kept in the folder (the app then starts its member there), or
 `failed` (a wrong code says so). A phone that holds a group already is refused.
+`cbb_joiner_new_admin` also offers the phone's admin key (`admin_public`, its own signing
+callback) with its signature over the session's exporter (`join::sign_admin_pop`), as a
+computer that may be an admin does: the group's root keeps it, and makes the phone an admin with
+it later (`cbb admin`, "Make it an admin").
 
 ### The member's operations
 
@@ -270,14 +277,14 @@ admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mu
 event); every other command for the phone goes to the app as a `command` event, as `cbb`
 refuses it. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
-the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
-both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
+the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join by the
+home window, sync both ways, a pause and an admin's mute against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
 `cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
-`TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
-listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the root makes an admin
-with the admin key its hellos offer, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
+`TestFFIJoinerMadeAdmin` a phone that joins by the root's window offering its admin key and
+that the root makes an admin with it later, `TestFFIJoinerAdmin` that admin phone opening its
+own window, by which a Go computer joins, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
 root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 

@@ -376,11 +376,22 @@ fn attempt(
     let s = MemberSession::new(own, joiner, adb, exporter);
     let now = || cbb_member::uptime::wall_ms().max(0).unsigned_abs();
     let mut statement = None;
+    let mut pop_holds = false;
     let way = cbb_member::join::Way { open, network: Network::Home };
     let info = cbb_member::join::member(&mut conn, s, way, &now, &mut |info, s| {
         statement.clone_from(&info.keys);
+        pop_holds = s.admin_pop_holds();
         mesh.write_by(key, |set, k| {
-            crate::pair06::admit(set, k, &own_pub, &joiner, info, &crate::pair06::home_profile(info.role), s, now())
+            crate::pair06::admit(
+                set,
+                k,
+                &own_pub,
+                &joiner,
+                info,
+                &crate::pair06::home_profile(info.role, info.caps),
+                s,
+                now(),
+            )
         })
     })?;
     conn.close();
@@ -388,6 +399,13 @@ fn attempt(
         mesh.take_statement(&env)?;
     }
     let device = id_text(&Key::es256(joiner.to_vec()).device_id());
+    // The root keeps the admin key the device offered with its proof over
+    // this session, as a computer's root does (cbb_member::offered), for
+    // making it an admin later; an admin keeps none.
+    let by_root = state.roots.last() == Some(&Key::es256(key.public()).hash());
+    if let (true, true, Some(admin)) = (by_root, pop_holds, info.admin.as_ref()) {
+        cbb_member::offered::keep(mesh.dir(), &device, admin)?;
+    }
     Ok((device, info.name))
 }
 

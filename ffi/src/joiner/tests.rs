@@ -115,7 +115,7 @@ fn a_new_phone_joins_by_the_window_of_the_phone_that_made_the_group() {
 
     let new_dir = tmp.join("new");
     let k = new_key();
-    let (joiner, a) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k.clone()));
+    let (joiner, a) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k.clone()), None);
     assert_eq!(ok(&a)["state"], "dialing");
     let joiner = joiner.unwrap();
     let jnext = |v: u64| ok(&joiner.next(v, 100));
@@ -136,12 +136,12 @@ fn a_new_phone_joins_by_the_window_of_the_phone_that_made_the_group() {
     // One device joined: the window is closed to the next.
     let other = tmp.join("other");
     let k2 = new_key();
-    let (j2, _) = Joiner::new(join_request(&other, &qr, "", &k2).as_bytes(), sign, leak(k2));
+    let (j2, _) = Joiner::new(join_request(&other, &qr, "", &k2).as_bytes(), sign, leak(k2), None);
     let j2 = j2.unwrap();
     let st = wait_end(&|v| ok(&j2.next(v, 100)));
     assert_eq!(st["state"], "failed", "{st}");
     // A phone in a group does not join again.
-    let (again, _) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k));
+    let (again, _) = Joiner::new(join_request(&new_dir, &qr, "", &k).as_bytes(), sign, leak(k), None);
     assert!(again.is_none());
     drop(win);
     m.stop();
@@ -184,7 +184,7 @@ fn a_wrong_code_joins_no_one_and_writes_nothing() {
     for n in 1..=3 {
         let dir = tmp.join(format!("wrong{n}"));
         let k = new_key();
-        let (j, _) = Joiner::new(join_request(&dir, &qr, "", &k).as_bytes(), sign, leak(k));
+        let (j, _) = Joiner::new(join_request(&dir, &qr, "", &k).as_bytes(), sign, leak(k), None);
         let j = j.unwrap();
         let st = wait_end(&|v| ok(&j.next(v, 100)));
         assert_eq!(st["state"], "failed", "{st}");
@@ -206,7 +206,7 @@ fn a_wrong_code_joins_no_one_and_writes_nothing() {
     let dir = tmp.join("right");
     let k = new_key();
     let right = opened["qr"].as_str().unwrap();
-    let (j, _) = Joiner::new(join_request(&dir, right, "", &k).as_bytes(), sign, leak(k));
+    let (j, _) = Joiner::new(join_request(&dir, right, "", &k).as_bytes(), sign, leak(k), None);
     let st = wait_end(&|v| ok(&j.as_ref().unwrap().next(v, 100)));
     assert_eq!(st["state"], "failed", "{st}");
     assert_eq!(devices(), before);
@@ -238,9 +238,48 @@ fn a_joiner_takes_six_digits_or_a_window_code() {
     let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-digits-{}", std::process::id()));
     let k = new_key();
     for digits in ["", "12345", "1234567", "12a456"] {
-        let (j, a) = Joiner::new(join_request(&tmp, "", digits, &k).as_bytes(), sign, leak(k.clone()));
+        let (j, a) = Joiner::new(join_request(&tmp, "", digits, &k).as_bytes(), sign, leak(k.clone()), None);
         assert!(j.is_none(), "{digits:?}");
         assert!(String::from_utf8_lossy(&a).contains("six digits"), "{digits:?}");
     }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn a_phone_offers_its_admin_key_and_the_root_phone_keeps_it() {
+    let tmp = std::env::temp_dir().join(format!("cbb-ffi-joiner-admin-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let (m, root_key, root) = root_member(&tmp);
+    ok(&m.call(json!({ "op": "listen", "args": { "port": 0 } }).to_string().as_bytes()));
+    let w = json!({ "public": b64(&root_key.public()), "addrs": ["127.0.0.1"] }).to_string();
+    let (win, a) = m.window(w.as_bytes(), sign, root);
+    let qr = ok(&a)["qr"].as_str().unwrap().to_string();
+    let win = win.unwrap();
+
+    let (k, admin) = (new_key(), new_key());
+    let mut req: Value = serde_json::from_str(&join_request(&tmp.join("new"), &qr, "", &k)).unwrap();
+    // The admin key's point without its callback, or the callback without
+    // the point, is refused before anything is dialed.
+    let (none, a) = Joiner::new(req.to_string().as_bytes(), sign, leak(k.clone()), Some((sign, leak(admin.clone()))));
+    assert!(none.is_none() && String::from_utf8_lossy(&a).contains("both"), "{}", String::from_utf8_lossy(&a));
+    req["admin_public"] = b64(&admin.public()).into();
+    let (none, _) = Joiner::new(req.to_string().as_bytes(), sign, leak(k.clone()), None);
+    assert!(none.is_none());
+
+    let (j, a) = Joiner::new(req.to_string().as_bytes(), sign, leak(k.clone()), Some((sign, leak(admin.clone()))));
+    ok(&a);
+    let j = j.unwrap();
+    let done = wait(&|v| ok(&j.next(v, 100)), "done");
+    wait(&|v| ok(&win.next(v, 100)), "done");
+    // The root keeps the key it proved over the session, for making the
+    // phone an admin later; the record names no admin yet.
+    let device = done["device"].as_str().unwrap();
+    let kept = cbb_member::offered::get(&tmp.join("root"), device).unwrap();
+    assert_eq!(kept, Some(admin.public()));
+    let g = ok(&m.call(json!({ "op": "group", "args": null }).to_string().as_bytes()));
+    let tablet = g["devices"].as_array().unwrap().iter().find(|d| d["device"] == device).cloned();
+    assert_eq!(tablet.as_ref().map(|t| &t["admin"]), Some(&json!(false)), "{g}");
+    drop(win);
+    m.stop();
     let _ = std::fs::remove_dir_all(&tmp);
 }

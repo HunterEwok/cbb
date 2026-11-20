@@ -57,7 +57,8 @@
 //! <QR code text> joins one by its home window, or -join-digits <six
 //! digits> by the one window announced at home, keeping the set in -dir,
 //! and prints "Joined <device> <group tag> <member's name>" or "JOIN FAILED
-//! <message>". The member of 0.6 then runs in -dir and takes "WINDOW",
+//! <message>"; with -admin it offers its admin key too, for the root to
+//! make it an admin later (cbb admin). The member of 0.6 then runs in -dir and takes "WINDOW",
 //! which opens its home window (at once with -window): see window_new for
 //! what it prints.
 //!
@@ -72,9 +73,10 @@ use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
-    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_joiner_free, cbb_joiner_new, cbb_joiner_next,
-    cbb_member_call, cbb_member_manage, cbb_member_manage_card, cbb_member_manage_watch, cbb_member_servers,
-    cbb_member_start, cbb_piv, cbb_restore, cbb_window_free, cbb_window_new, cbb_window_next,
+    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_joiner_free, cbb_joiner_new,
+    cbb_joiner_new_admin, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_card,
+    cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore, cbb_window_free,
+    cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -224,10 +226,10 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         };
         let (qr, digits) = (qr.unwrap_or_default(), digits.unwrap_or_default());
-        let Some(device) = join_window(&key, &public_b64, &name, &dir, &qr, &digits) else {
+        let admin = admin.then_some((&admin_key, admin_public.as_str()));
+        let Some(device) = join_window(&key, &public_b64, admin, &name, &dir, &qr, &digits) else {
             return ExitCode::FAILURE;
         };
-        let admin = admin.then_some((&admin_key, admin_public.as_str()));
         return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
     if args.iter().any(|a| a == "-new-group") {
@@ -724,16 +726,36 @@ fn window_new(
 /// with the one window announced at home, as the app does, keeping the set
 /// in dir: it prints "Joined <device> <group tag> <member's name>", the tag
 /// the first 16 hex characters of the group's ID, or "JOIN FAILED
-/// <message>". It answers the device ID.
-fn join_window(key: &SigningKey, public_b64: &str, name: &str, dir: &str, qr: &str, digits: &str) -> Option<String> {
-    let req = serde_json::json!({
+/// <message>". With admin it offers that key, for the root to make it an
+/// admin later. It answers the device ID.
+fn join_window(
+    key: &SigningKey,
+    public_b64: &str,
+    admin: Option<(&SigningKey, &str)>,
+    name: &str,
+    dir: &str,
+    qr: &str,
+    digits: &str,
+) -> Option<String> {
+    let mut req = serde_json::json!({
         "dir": dir, "qr": qr, "digits": digits, "name": name, "os": "aurora", "public": public_b64,
-    })
-    .to_string();
+    });
+    if let Some((_, public)) = admin {
+        req["admin_public"] = public.into();
+    }
+    let req = req.to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
-    // SAFETY: req, ans and n live for the call; the key outlives the joiner.
-    let j = unsafe { cbb_joiner_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
+    // SAFETY: req, ans and n live for the call; the keys outlive the joiner.
+    let j = unsafe {
+        match admin {
+            Some((k, _)) => {
+                let admin_ctx = k as *const SigningKey as *mut core::ffi::c_void;
+                cbb_joiner_new_admin(req.as_ptr(), req.len(), sign, ctx, sign, admin_ctx, &mut ans, &mut n)
+            }
+            None => cbb_joiner_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n),
+        }
+    };
     let created = take(ans, n);
     if j.is_null() {
         println!("JOIN FAILED {}", created["error"]["message"].as_str().unwrap_or_default());

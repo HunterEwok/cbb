@@ -60,6 +60,11 @@ struct NewArgs {
     /// The member key's public point, SEC1 uncompressed.
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
+    /// The admin key's public point, SEC1 uncompressed, for a phone that
+    /// offers it (cbb_joiner_new_admin): the root keeps it, and makes the
+    /// phone an admin with it later.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_public: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -130,9 +135,11 @@ pub(crate) fn read_code(text: &str) -> Result<Target> {
 
 impl Joiner {
     /// Starts joining from the app's request (NewArgs) with the member
-    /// key's callback; the answer is the first state.
-    pub fn new(request: &[u8], sign: SignFn, ctx: usize) -> (Option<Joiner>, Vec<u8>) {
-        match Joiner::start(request, sign, ctx) {
+    /// key's callback; the answer is the first state. With admin, the
+    /// admin key's callback and its context, the phone offers the admin
+    /// key the request names, with its proof over the session.
+    pub fn new(request: &[u8], sign: SignFn, ctx: usize, admin: Option<(SignFn, usize)>) -> (Option<Joiner>, Vec<u8>) {
+        match Joiner::start(request, sign, ctx, admin) {
             Ok(j) => {
                 let st = j.shared.lock().clone();
                 (Some(j), answer(Ok(st)))
@@ -141,9 +148,19 @@ impl Joiner {
         }
     }
 
-    fn start(request: &[u8], sign: SignFn, ctx: usize) -> Result<Joiner> {
+    fn start(request: &[u8], sign: SignFn, ctx: usize, admin: Option<(SignFn, usize)>) -> Result<Joiner> {
         let a: NewArgs =
             serde_json::from_slice(request).map_err(|e| Error::msg(format!("the request does not decode: {e}")))?;
+        let admin: Option<Arc<dyn ExternalKey>> = match (admin, a.admin_public) {
+            (Some((sign, ctx)), Some(public)) => {
+                if public.len() != 65 || public.first() != Some(&4) {
+                    return Err(Error::msg("the admin key is not a P-256 point"));
+                }
+                Some(Arc::new(AppKey { public, sign, ctx }))
+            }
+            (None, None) => None,
+            _ => return Err(Error::msg("the admin key needs both its public key and its callback")),
+        };
         let code = if a.qr.trim().is_empty() {
             let digits: String = a.digits.chars().filter(|c| !c.is_whitespace()).collect();
             if home_secret(&digits).is_none() {
@@ -180,7 +197,7 @@ impl Joiner {
             .spawn(move || {
                 let got = code
                     .or_else(|digits| find(&digits))
-                    .and_then(|t| run(t, key, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
+                    .and_then(|t| run(t, key, admin, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
                 match got {
                     Ok((group, device, name)) => sh.set(|s| {
                         s.state = "done";
@@ -239,7 +256,8 @@ fn find(digits: &str) -> Result<Target> {
 fn run(
     code: Target,
     key: Arc<dyn ExternalKey>,
-    info: Info,
+    admin: Option<Arc<dyn ExternalKey>>,
+    mut info: Info,
     sh: &Shared,
     store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
 ) -> Result<(String, String, String)> {
@@ -280,6 +298,13 @@ fn run(
         }
         let member = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the member showed no key"))?;
         let x = bykey::pairing_exporter(&s, &exporter)?;
+        // A phone offers its admin key with its proof over this session,
+        // as a computer does: the root keeps it, and makes the phone an
+        // admin with it later.
+        if let Some(admin) = &admin {
+            info.admin_pop = Some(cbb_core::join::sign_admin_pop(&**admin, &x)?.to_vec());
+            info.admin = Some(admin.public());
+        }
         let mut conn = cbb_member::tls::Stream::new(s, sock);
         // The first member that answered with the right key tried the
         // session: its outcome is the outcome.

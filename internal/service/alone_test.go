@@ -780,28 +780,17 @@ func phoneJoins(t *testing.T, bin string, pi *testService, args ...string) (next
 	return next, in, joined[0]
 }
 
-// TestFFIJoinerMadeAdmin: the Aurora app joins as a member, its member's
-// hellos offering its admin key, and the root makes it an admin later, as
-// the root's "Make it an admin" does (cbb admin): the phone gets its
-// admin CA in the admin message and the records list it as an admin.
-func TestFFIJoinerMadeAdmin(t *testing.T) {
-	bin := os.Getenv("CBB_PHONE_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_PHONE_ON_LINUX is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
+// adminPhone starts a root pi and phone-on-linux joining its group by its
+// home window, offering its admin key (-admin), and makes the phone an
+// admin as the root's "Make it an admin" does (cbb admin), with the key it
+// offered. It returns the root and what phoneJoins does.
+func adminPhone(t *testing.T, bin string, h *hub) (pi *testService, next func(prefix string) string, in io.Writer) {
+	t.Helper()
+	pi = startService(t, h, "pi")
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "member phone", "-offer-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("no join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
+	next, in, _ = phoneJoins(t, bin, pi, "-name", "member phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
 	listed := func() control.Device {
 		for _, d := range pi.devices(t) {
 			if d.Name == "member phone" {
@@ -817,38 +806,33 @@ func TestFFIJoinerMadeAdmin(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	m, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, "")
+	// On 0.6 no key a phone holds counts as proven without its
+	// attestation (TestFFIPhoneAttest): its keys are "file", which the
+	// root makes an admin only when told so.
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, ""); err == nil || !strings.Contains(err.Error(), "-allow-file-key") {
+		t.Fatalf("made a phone with keys in a file an admin unasked: %v", err)
+	}
+	m, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone", AllowFileKey: true}, "")
 	if err != nil || m.Name != "member phone" {
 		t.Fatalf("making the phone an admin: %+v, %v", m, err)
 	}
-	der, err := base64.StdEncoding.DecodeString(next("ADMIN CA "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, err := x509.ParseCertificate(der)
-	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
-		t.Fatalf("the admin CA: %v, %+v", err, ca)
-	}
-	// The member checks the CA for the app and stops offering the key; a
-	// second CA finds no key offered.
-	take := func() map[string]any {
-		req, _ := json.Marshal(map[string]any{"op": "take_admin_ca", "args": map[string]any{"key": der}})
-		fmt.Fprintf(in, "CALL %s\n", req)
-		var ans struct{ Error map[string]any }
-		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
-			t.Fatal(err)
-		}
-		return ans.Error
-	}
-	if e := take(); e != nil {
-		t.Fatalf("the member refused the root's admin CA: %v", e)
-	}
-	if e := take(); e == nil {
-		t.Fatal("the member took an admin CA with no admin key offered")
-	}
-	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "hardware" {
+	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "file" {
 		t.Fatalf("the phone made an admin is listed as %+v", d)
 	}
+	return pi, next, in
+}
+
+// TestFFIJoinerMadeAdmin: the Aurora app joins a group of 0.6 as a member
+// by the root's home window, offering its admin key with its proof over
+// the pairing, and the root makes it an admin later with that key (cbb
+// admin): the records list it as an admin, on the root and on the phone.
+func TestFFIJoinerMadeAdmin(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi, next, in := adminPhone(t, bin, &h)
 	// The phone's own list has it as an admin too, from the records.
 	waitFor(t, "the app lists itself as an admin", func() bool {
 		fmt.Fprintln(in, "DEVICES")
@@ -858,84 +842,47 @@ func TestFFIJoinerMadeAdmin(t *testing.T) {
 		}
 		return slices.ContainsFunc(devs, func(d struct{ Admin, Self bool }) bool { return d.Self && d.Admin })
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, ""); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone", AllowFileKey: true}, ""); err == nil {
 		t.Fatal("the root made the phone an admin twice")
+	}
+
+	// A phone that offered no admin key is never made an admin.
+	phoneJoins(t, bin, pi, "-name", "plain phone", "-keys", "1", "-dir", t.TempDir(), "-peer", pi.addr())
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "plain phone", AllowFileKey: true}, ""); err == nil || !strings.Contains(err.Error(), "offered this device no admin key") {
+		t.Fatalf("made a phone an admin that offered no key: %v", err)
 	}
 }
 
-// TestFFIJoinerAdmin: the Aurora app that offers an admin key joins as an
-// admin through the root's window that may make admins (cbb pair -qr
-// -admin), its admin CA for that key, and any other window refuses it.
+// TestFFIJoinerAdmin: an admin phone of a group of 0.6 opens its home
+// window with its admin key, as the app's "Add a device" does, and a Go
+// computer joins by its QR code: the phone's admin key signs its record,
+// and the root lists the computer as a member, never an admin.
 func TestFFIJoinerAdmin(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
+	pi, next, in := adminPhone(t, bin, &h)
+	fmt.Fprintln(in, "WINDOW")
+	link := next("WINDOW ")
+	if !strings.HasPrefix(link, "cbb://pair?") {
+		t.Fatalf("the admin phone's window: %q", link)
 	}
-	admit := func(next func(string) string, admins bool) (*control.Message, error) {
-		jc, ok := phone.ParseJoinQR(next("QR: "))
-		if !ok {
-			t.Fatal("not a join QR code")
-		}
-		return pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: admins}, "")
+	laptop := startService(t, &h, "laptop")
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("the computer joining the admin phone's window: %v; the phone: %s", err, next("WINDOW FAILED "))
 	}
-	next, _ := phoneOnLinux(t, bin, "-name", "refused phone", "-admin")
-	if _, err := admit(next, false); err == nil {
-		t.Fatal("a window that makes no admins admitted a phone that offers an admin key")
+	if got := next("WINDOW DONE "); got != "laptop" {
+		t.Fatalf("the phone's window admitted %q", got)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	if m, err := admit(next, true); err != nil || m.Name != "admin phone" {
-		t.Fatalf("admitting the phone as an admin: %v, %+v", err, m)
-	}
-	der, err := base64.StdEncoding.DecodeString(next("Admin CA "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, err := x509.ParseCertificate(der)
-	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
-		t.Fatalf("the admin CA: %v, %+v", err, ca)
-	}
-	for _, d := range pi.devices(t) {
-		if d.Name == "admin phone" && (!d.Admin || d.Role != group.RolePhone) {
-			t.Errorf("the phone is listed as %+v", d)
-		}
-		if d.Name == "refused phone" {
-			t.Errorf("the refused phone is listed: %+v", d)
-		}
-	}
-
-	// The admin phone admits a computer that listens, as the app does when
-	// it scans the computer's QR code: with a certificate from its admin
-	// CA, and a device record the root takes from it.
-	waitFor(t, "the admin phone connected", func() bool {
-		fmt.Fprintln(in, "PEERS")
-		return next("PEERS ") == "1"
-	})
-	laptop, qr := listeningJoin(t, &h, "laptop")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	admitted := next("ADMITTED ")
-	t.Logf("the admin phone admitted the computer %s", admitted)
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
-	}
-	id := joinedIdentity(t, laptop, admitted)
-	if id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
-		t.Fatalf("the computer's identity: %+v", id)
-	}
-	if err := id.Cert.CheckSignatureFrom(ca); err != nil {
-		t.Fatalf("the computer's certificate is not from the phone's admin CA: %v", err)
-	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
-		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	if g := laptop.status(t).Group; g != pi.status(t).Group {
+		t.Fatalf("the computer joined %q, not the group %q", g, pi.status(t).Group)
 	}
 	waitFor(t, "the root lists the computer the phone admitted", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "laptop" {
-				return d.Role == group.RoleMember && d.OS == group.OSLinux && !d.Admin
+				return d.Role == group.RoleMember && !d.Admin
 			}
 		}
 		return false

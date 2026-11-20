@@ -16,14 +16,20 @@ use cbb_core::join::info::Info;
 use cbb_core::join::invitation::Profile;
 use cbb_core::join::session::MemberSession;
 use cbb_core::join::welcome::Welcome;
-use cbb_core::records::body::{Kind, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF, ROLE_WATCH};
+use cbb_core::records::body::{
+    CAP_HUB, Kind, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF, ROLE_MEMBER, ROLE_WATCH,
+};
 use cbb_core::records::{Key, RecordSet};
 
-/// What a device admitted at home may get: a member or a phone reads,
-/// sends and takes secrets; a watch only reads, through its phone; a leaf
-/// joins at home by its own profile, never by this one.
-pub(crate) fn home_profile(role: u64) -> Profile {
-    let rights = if role == ROLE_WATCH { RIGHT_READ } else { RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS };
+/// What a device admitted at home may get, as a computer gives it
+/// (`cbb_member::admitting`): a member or a phone reads, sends and takes
+/// secrets, and a member that can be a hub (`caps`) may be one, which only
+/// the root grants (an admin's record gives the base rights); a watch only
+/// reads, through its phone; a leaf joins at home by its own profile, never
+/// by this one.
+pub(crate) fn home_profile(role: u64, caps: u64) -> Profile {
+    let hub = if role == ROLE_MEMBER && caps & CAP_HUB != 0 { RIGHT_HUB } else { 0 };
+    let rights = if role == ROLE_WATCH { RIGHT_READ } else { RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | hub };
     Profile { role, rights, home_only: true, guarded: false }
 }
 
@@ -140,9 +146,17 @@ mod tests {
         let (mut set, own, mut j, _a, mut m, info, jp) = approved("root", ROLE_MEMBER);
         let root = own.root.clone().unwrap();
         let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
-        let frames =
-            admit(&mut set, root.as_ref(), &own.member.public(), &jp, &info, &home_profile(info.role), &mut m, now)
-                .unwrap();
+        let frames = admit(
+            &mut set,
+            root.as_ref(),
+            &own.member.public(),
+            &jp,
+            &info,
+            &home_profile(info.role, info.caps),
+            &mut m,
+            now,
+        )
+        .unwrap();
         let hash = Key::es256(jp.to_vec()).hash();
         let d = set.state().device_by_key(&hash).cloned().expect("the joiner's record");
         assert_eq!(d.rights, RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS);
@@ -158,6 +172,29 @@ mod tests {
     }
 
     #[test]
+    fn the_root_phone_lets_a_computer_that_can_be_a_hub_be_one() {
+        let (mut set, own, _j, _a, mut m, mut info, jp) = approved("hub", ROLE_MEMBER);
+        info.caps = CAP_HUB;
+        let root = own.root.clone().unwrap();
+        let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+        admit(
+            &mut set,
+            root.as_ref(),
+            &own.member.public(),
+            &jp,
+            &info,
+            &home_profile(info.role, info.caps),
+            &mut m,
+            now,
+        )
+        .unwrap();
+        let d = set.state().device_by_key(&Key::es256(jp.to_vec()).hash()).cloned().expect("the joiner's record");
+        assert_eq!(d.rights, RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB);
+        // A phone or a watch is never a hub by its caps.
+        assert_eq!(home_profile(ROLE_PHONE, CAP_HUB).rights & RIGHT_HUB, 0);
+    }
+
+    #[test]
     fn a_device_that_may_not_admit_writes_nothing() {
         let (mut set, own, _j, _a, mut m, info, jp) = approved("nobody", ROLE_PHONE);
         let before = set.digest();
@@ -169,7 +206,7 @@ mod tests {
             &own.member.public(),
             &jp,
             &info,
-            &home_profile(info.role),
+            &home_profile(info.role, info.caps),
             &mut m,
             now,
         )
@@ -185,8 +222,17 @@ mod tests {
         let root = own.root.clone().unwrap();
         let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
         assert!(
-            admit(&mut set, root.as_ref(), &own.member.public(), &jp, &info, &home_profile(ROLE_MEMBER), &mut m, now)
-                .is_err()
+            admit(
+                &mut set,
+                root.as_ref(),
+                &own.member.public(),
+                &jp,
+                &info,
+                &home_profile(ROLE_MEMBER, 0),
+                &mut m,
+                now
+            )
+            .is_err()
         );
     }
 }

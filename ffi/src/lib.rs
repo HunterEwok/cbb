@@ -933,18 +933,50 @@ pub unsafe extern "C" fn cbb_joiner_new(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = guard::or(|| (None, guard::panicked()), || joiner::Joiner::new(req, sign, ctx as usize));
+    let (j, ans) = guard::or(|| (None, guard::panicked()), || joiner::Joiner::new(req, sign, ctx as usize, None));
+    // SAFETY: the caller gives a writable pointer at answer.
+    unsafe { answer.write(to_c(ans, answer_len)) };
+    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
+}
+
+/// As `cbb_joiner_new`, for a phone that offers its admin key: the request
+/// names `admin_public`, the admin key's public point, and `admin_sign`
+/// with `admin_ctx` signs the key's proof over the session with it. The
+/// group's root keeps the key and makes the phone an admin with it later.
+///
+/// # Safety
+///
+/// As `cbb_joiner_new`; `admin_ctx` valid for `admin_sign` as `ctx` is for
+/// `sign`.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn cbb_joiner_new_admin(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    admin_sign: join::SignFn,
+    admin_ctx: *mut core::ffi::c_void,
+    answer: *mut *mut u8,
+    answer_len: *mut usize,
+) -> *mut joiner::Joiner {
+    if request.is_null() || answer.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    let admin = Some((admin_sign, admin_ctx as usize));
+    let (j, ans) = guard::or(|| (None, guard::panicked()), || joiner::Joiner::new(req, sign, ctx as usize, admin));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
 }
 
 /// Waits up to `timeout_ms` for the joiner's state to pass `version` and
-/// answers it: `{"version", "state", "shown", "group", "device",
-/// "error"}`, state dialing, joining (ask the person whether `shown.code`
-/// matches the member's screen; `shown` also names the member's device and
-/// name), done (the set is kept in `dir`: start the member on it) or
-/// failed. It blocks, so the app calls it off its main thread.
+/// answers it: `{"version", "state", "group", "device", "name",
+/// "error"}`, state dialing, done (the set is kept in `dir`: start the
+/// member on it; `name` is the member that let the phone in) or failed. It blocks, so the app calls it off its main thread.
 ///
 /// # Safety
 ///
