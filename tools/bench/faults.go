@@ -12,7 +12,7 @@ import (
 )
 
 // Faults makes a group as smoke does and breaks it in the ways of
-// docs/testbench-catalogue.md, each with a timer on the device that
+// docs/maintainers/testbench-catalogue.md, each with a timer on the device that
 // takes the change back even if the controller is lost: a bad network on the
 // hub (E7), a member's port blocked (E8), a damaged group file (U7), a
 // service that hangs (E11, U6) and one that is stopped (U5). After each the
@@ -258,7 +258,7 @@ func hungService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 // the bench may not.
 func stopCmd(d *Device) (stop, start string) {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "sudo -n systemctl stop cbb", "sudo -n systemctl start cbb"
 	case "windows":
 		return "Stop-Service cbb", "Start-Service cbb"

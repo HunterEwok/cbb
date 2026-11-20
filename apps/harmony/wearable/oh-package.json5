@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+{
+  "name": "wearable",
+  "version": "0.6.0",
+  "description": "CBB for HarmonyOS watches",
+  "main": "",
+  "author": "HunterEwok",
+  "license": "AGPL-3.0-only",
+  "dependencies": {}
+}

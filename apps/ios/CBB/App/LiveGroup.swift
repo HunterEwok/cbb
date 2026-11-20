@@ -160,7 +160,9 @@ final class LiveGroup: GroupController {
                           version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
     }
     /// The last authentication context the user passed for the root key.
-    private var authorized: (context: LAContext, at: Date)?
+    /// The user's last Face ID check, good for authorizedFor; the renewer
+    /// shares it, so both stop signing when it ends.
+    private let authorization = Authorization(lasts: LiveGroup.authorizedFor)
 
     /// In the app group's container, where the share extension reads it.
     nonisolated static var defaultFile: URL { Shared.groupFile }
@@ -181,6 +183,11 @@ final class LiveGroup: GroupController {
             }
         }
         paths.start(queue: DispatchQueue(label: "cbb.paths"))
+        // The phone locked with the app in front: the keys sign without
+        // asking no more, as when the app goes to the background.
+        let authorization = authorization
+        NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+                                               object: nil, queue: nil) { _ in authorization.end() }
     }
 
     /// The network of path as the hub remembers it (HubState.networkKey):
@@ -352,7 +359,8 @@ final class LiveGroup: GroupController {
                   throughHub: $0.id != g.device && !online.contains($0.id) && reached.contains($0.id), role: $0.role, caps: $0.caps, os: $0.os,
                   isSelf: $0.id == g.device,
                   admin: $0.admin || $0.id == root, isRoot: $0.id == root,
-                  canMakeAdmin: g.isRoot && !$0.admin && !$0.frozen && $0.can("admin") && offers[$0.id] != nil,
+                  canMakeAdmin: g.isRoot && $0.id != root && !$0.admin && !$0.frozen && ($0.role == "phone" || $0.can("admin"))
+                      && offers[$0.id] != nil,
                   keysInFile: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.file,
                   rootless: Records.store(keyStores[$0.id] ?? $0.store, role: $0.role) == Records.rootless, frozen: $0.frozen,
                   device: $0.id == g.device ? Self.ownDevice : infos[$0.id], mode: $0.id == g.device ? modeBox.mode : modes[$0.id],
@@ -420,13 +428,12 @@ final class LiveGroup: GroupController {
     private func signer(label: String, reason: String) async throws -> SecKeySigner {
         guard Self.secureEnclave else { return try SecKeySigner(key(label: label, secureEnclave: false)) }
         let context: LAContext
-        if let a = authorized, Date().timeIntervalSince(a.at) < Self.authorizedFor {
-            context = a.context
+        if let c = authorization.context() {
+            context = c
         } else {
             context = LAContext()
             try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
-            authorized = (context, Date())
-            renewer?.context = context
+            authorization.keep(context)
         }
         if try KeychainIdentity.loadKey(label: label) == nil {
             _ = try KeychainIdentity.makeKey(label: label, secureEnclave: true, userPresence: true)
@@ -437,6 +444,46 @@ final class LiveGroup: GroupController {
 
     func prepare() throws {
         _ = try memberSigner()
+    }
+
+    /// This phone's admin key, made now if it has none: in the Secure
+    /// Enclave behind Face ID like the root key. Making it asks nothing;
+    /// only a signature does.
+    private func adminKey() throws -> SecKeySigner {
+        let se = Self.secureEnclave
+        return try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
+            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
+    }
+
+    /// The admin key a member phone's hellos offer, for the root's "Make it
+    /// an admin" (docs/protocol.md, section 10, "Admins"); none on the root and on an admin.
+    private func offeredAdminKey(_ g: PhoneGroup) -> Data? {
+        guard !g.isAdmin else { return nil }
+        do {
+            return try adminKey().publicKeyDER
+        } catch {
+            keysLog.error("making the admin key to offer: \(String(reflecting: error), privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Takes the admin CA the root sent when it made this member phone an
+    /// admin: PhoneGroup.takeAdminCA checks it is for this phone's admin key
+    /// and from the current root. The hellos offer the key no more, and
+    /// sync starts again as an admin's.
+    private func adminCAReceived(_ ca: Data, from: String) async {
+        guard var g = state, !g.isAdmin, let key = offeredAdminKey(g) else { return }
+        do {
+            try g.takeAdminCA(ca, adminKey: key)
+            try g.save(to: file)
+        } catch {
+            keysLog.error("the admin CA from \(from, privacy: .public): \(String(reflecting: error), privacy: .public)")
+            return
+        }
+        state = g
+        groupChanged()
+        keysLog.notice("the root made this phone an admin")
+        await restartSync()
     }
 
     private func memberSigner() throws -> SecKeySigner {
@@ -595,7 +642,9 @@ final class LiveGroup: GroupController {
         guard let hub, hub.isOn else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
         guard let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
         let guestBox = GuestBox()
-        let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)), admit: { [weak self] t, joinerCert, sid in
+        let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)),
+                                          fromGuest: { port in guestBox.guest?.dialed(port: port) == true },
+                                          admit: { [weak self] t, joinerCert, sid in
             guard let self, let guest = guestBox.guest else { throw HubOnPhone.Failure.notRunning }
             return try await self.admitInvited(over: t, joinerCert: joinerCert, sessionID: sid, guest: guest, ask: ask)
         }, onEnd: { r in
@@ -724,17 +773,13 @@ final class LiveGroup: GroupController {
     /// Joins another phone's group (docs/protocol.md, section 6, "The
     /// joiner listens") through the core (CorePairing.Joining): listens,
     /// hands show the QR code to put on screen, and waits up to five
-    /// minutes for an admin phone to scan it and admit this one. With
-    /// asAdmin it makes this phone's admin key and asks to be an admin,
-    /// which only the group's root grants; without, any admin admits it as
-    /// a member. Three wrong codes end it, as does cancelling the task.
-    func join(asAdmin: Bool = false, show: @escaping @MainActor (JoinCode) -> Void) async throws {
+    /// minutes for an admin phone to scan it and admit this one, always as
+    /// a member: the root makes it an admin later with the admin key its
+    /// hellos offer (offeredAdminKey). Three wrong codes end it, as does
+    /// cancelling the task.
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
         guard state == nil else { return }
         let member = try memberSigner()
-        // The admin key, in the Secure Enclave behind Face ID like the root
-        // key; the core asks it once, for the proof on the admitting
-        // connection.
-        let admin = asAdmin ? try await signer(label: Self.adminLabel, reason: String(localized: "Join a group as an admin", bundle: .app)) : nil
         let listener = try CorePairing.Listener()
         let port = try await listener.start()
         let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
@@ -745,8 +790,7 @@ final class LiveGroup: GroupController {
         let joining: CorePairing.Joining
         do {
             joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) },
-                                              adminPublic: admin?.publicKeyDER, signAdmin: admin.map { a in { try a.signature(digest: $0) } })
+                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) })
         } catch {
             listener.stop()
             throw error
@@ -913,9 +957,7 @@ final class LiveGroup: GroupController {
         guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
         let window = try await findWindow()
         let member = try memberSigner()
-        let se = Self.secureEnclave
-        let admin = try SecKeySigner(KeychainIdentity.loadKey(label: Self.adminLabel)
-            ?? KeychainIdentity.makeKey(label: Self.adminLabel, secureEnclave: se, userPresence: se))
+        let admin = try adminKey()
         let cert = try GroupCertificates.selfSigned(device: Member.newID(), signer: member)
         let id = try identity(certificate: cert, member)
         let info = Pairing.Info(name: PhoneGroup.validName(UIDevice.current.name), os: "ios", adminKey: admin.publicKeyDER,
@@ -1196,7 +1238,7 @@ final class LiveGroup: GroupController {
             try? FileManager.default.removeItem(at: url)
         }
         (online, offers, keyStores, infos, modes, actions, mutes) = ([], [:], [:], [:], [:], [:], [:])
-        authorized = nil
+        authorization.end()
         state = nil
         keysLog.notice("this phone left its group: its keys and the group's files are deleted")
     }
@@ -1365,9 +1407,10 @@ final class LiveGroup: GroupController {
         if !r.done { throw CommandRefused(reason: r.reason ?? r.status) }
     }
 
-    /// Makes a computer an admin (docs/protocol.md, section 10, "Admins"): the root key, after Face ID, certifies the admin key the
-    /// computer offers; the computer gets its admin CA and every member the
-    /// new record.
+    /// Makes a phone or a computer an admin (docs/protocol.md, section 10,
+    /// "Admins"): the root key, after Face ID, certifies
+    /// the admin key the device offers; the device gets its admin CA and
+    /// every member the new record.
     func makeAdmin(_ id: String) async throws {
         // The dialog before it warned when the computer's keys sit in a file.
         try await makeAdmin(id, allowFileKey: true)
@@ -1424,18 +1467,22 @@ final class LiveGroup: GroupController {
         if !res.done { throw CommandRefused(reason: res.reason ?? res.status) }
     }
 
-    /// Makes a computer an admin; one whose keys sit in a file only with
-    /// allowFileKey, else PhoneGroup.Failure.fileKey; a rootless install
-    /// never (PhoneGroup.Failure.rootless).
+    /// Makes a phone or a computer an admin; a computer whose keys sit in a
+    /// file only with allowFileKey, else PhoneGroup.Failure.fileKey; a
+    /// rootless install never (PhoneGroup.Failure.rootless). A phone keeps
+    /// the store its record names.
     private func makeAdmin(_ id: String, allowFileKey: Bool) async throws {
         guard state?.isRoot == true, let key = offers[id] else { throw Failure.notAdmin }
-        let store = keyStores[id]
-        guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
-        guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
-        let root = try await caSigner(reason: String(localized: "Make a computer an admin", bundle: .app))
+        let phone = state?.devices.first { $0.id == id }?.role == "phone"
+        let store = phone ? nil : keyStores[id]
+        if !phone {
+            guard Records.store(store, role: "member") != Records.rootless else { throw PhoneGroup.Failure.rootless }
+            guard Records.store(store, role: "member") == Records.hardware || allowFileKey else { throw PhoneGroup.Failure.fileKey }
+        }
+        let root = try await caSigner(reason: String(localized: "Make a device an admin", bundle: .app))
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
+        if !phone, Records.store(store, role: "member") == Records.file, allowFileKey, state?.keyLevel != Records.levelFiles {
             try rootRecord(root) { n, p, s in try n.setKeyLevel(Records.levelFiles, public: p, sign: s) }
         }
         guard var g = state else { return }
@@ -1586,6 +1633,7 @@ final class LiveGroup: GroupController {
         try? FileManager.default.removeItem(at: credentialsURL)
         periodKeys.clear()
         blindRelay?.setCredentials(nil)
+        hub?.setCredentials(nil)
     }
 
     /// Brings the group's server credentials up to date as far as this
@@ -1600,6 +1648,7 @@ final class LiveGroup: GroupController {
         let signed = box.refresh(member: member, keys: periodKeys, rootSigner: root)
         if !signed.isEmpty { _ = try? node.sendCredentials(signed) }
         blindRelay?.setCredentials(box.relayCredentials(keys: periodKeys))
+        hub?.setCredentials(box.hubCredentials(keys: periodKeys))
     }
 
     /// Passes a changed group to the parts that run with it.
@@ -1658,7 +1707,7 @@ final class LiveGroup: GroupController {
         let node = try CoreMember(.init(dir: memberDir, name: UIDevice.current.name, osVersion: Self.ownDevice.osVersion ?? "",
                                         version: Self.ownDevice.version ?? "", device: g.device, publicKeyDER: signer.publicKeyDER,
                                         seal: try SealKey.secret(), cert: g.memberCert, issuer: g.memberIssuer, groupCA: g.groupCA,
-                                        roots: g.trusted)) { try signer.signature(digest: $0) }
+                                        roots: g.trusted, adminKey: offeredAdminKey(g))) { try signer.signature(digest: $0) }
         try node.addRecords(g.records.records)
         try node.setSync(on: modeBox.mode != "own", forMS: modeBox.syncOffUntilMS.map { max(1, $0 - Int64(Date().timeIntervalSince1970 * 1000)) } ?? 0)
         if let muted = modeBox.mutedUntilMS { try node.setMute(untilMS: muted) }
@@ -1667,8 +1716,7 @@ final class LiveGroup: GroupController {
         credentials.onAdd = { [weak self] in Task { @MainActor in self?.refreshCredentials() } }
         // An admin phone renews the computers' certificates when they
         // connect and are due (docs/protocol.md, section 2).
-        let renewer = Renewer(group: g, secureEnclave: Self.secureEnclave)
-        renewer.context = authorized?.context
+        let renewer = Renewer(group: g, secureEnclave: Self.secureEnclave, authorization: authorization)
         // The root sends a computer it made an admin its admin CA again
         // when the computer still offers the key.
         let admins = AdminBox(group: g)
@@ -1920,6 +1968,8 @@ final class LiveGroup: GroupController {
         case .peer:
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
+        case let .message(from, .admin(ca)):
+            Task { await adminCAReceived(ca, from: from) }
         case let .message(from, .evidence(ev)):
             let chain = ((try? node?.peers()) ?? []).first { $0.device == from }?.chain ?? []
             guard !chain.isEmpty else { return }
@@ -2129,6 +2179,9 @@ final class LiveGroup: GroupController {
     /// would end them anyway.
     func setBackground(_ on: Bool) {
         background = on
+        // In the background the keys sign without asking no more: the
+        // next signing action asks for Face ID again.
+        if on { authorization.end() }
         guard let node else { return }
         if on { try? node.pause() } else { try? node.resume() }
     }
@@ -2246,6 +2299,8 @@ final class LiveGroup: GroupController {
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         entries.reload()
+        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
+        hub.setCredentials(credentialBox?.hubCredentials(keys: periodKeys))
         hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
                         ways: entries.ways(for: HubState.Forwarder.projectHost)))
         guard hub.isHome(network) else { return stopHome() }
@@ -2392,21 +2447,63 @@ final class LiveGroup: GroupController {
         }
     }
 
+    /// The context of the user's last Face ID check and when it passed. It
+    /// lets the keys sign for `lasts` seconds after the check, while the app
+    /// stays at the front; after that, or on `end`, the context is
+    /// invalidated, so no copy of it signs any more, and the next signing
+    /// action asks again.
+    final class Authorization: @unchecked Sendable {
+        let lasts: TimeInterval
+        private let now: () -> Date
+        private let lock = NSLock()
+        private var kept: (context: LAContext, at: Date)?
+
+        init(lasts: TimeInterval, now: @escaping () -> Date = Date.init) { (self.lasts, self.now) = (lasts, now) }
+
+        /// Keeps the context of a check that just passed.
+        func keep(_ context: LAContext) {
+            let old = lock.withLock { () -> LAContext? in
+                defer { kept = (context, now()) }
+                return kept?.context
+            }
+            if let old, old !== context { old.invalidate() }
+        }
+
+        /// The kept context while it lasts, or nil.
+        func context() -> LAContext? {
+            let (live, stale) = lock.withLock { () -> (LAContext?, LAContext?) in
+                guard let k = kept else { return (nil, nil) }
+                let age = now().timeIntervalSince(k.at)
+                if age >= 0 && age < lasts { return (k.context, nil) }
+                kept = nil
+                return (nil, k.context)
+            }
+            stale?.invalidate()
+            return live
+        }
+
+        /// Ends the window at once.
+        func end() {
+            let old = lock.withLock { () -> LAContext? in
+                defer { kept = nil }
+                return kept?.context
+            }
+            old?.invalidate()
+        }
+    }
+
     /// Issues renewed member certificates with the root or admin key, without
-    /// asking: in the Secure Enclave only while the context of the user's
-    /// last Face ID check in this run lasts, so a computer that is due and
-    /// connects before that gets its renewal on a later connection.
+    /// asking: in the Secure Enclave only while the user's last Face ID
+    /// check lasts (Authorization), so a computer that is due and connects
+    /// after that gets its renewal on a later connection.
     final class Renewer: @unchecked Sendable {
         let group: PhoneGroup
         let secureEnclave: Bool
-        private let lock = NSLock()
-        private var _context: LAContext?
-        var context: LAContext? {
-            get { lock.withLock { _context } }
-            set { lock.withLock { _context = newValue } }
-        }
+        let authorization: Authorization
 
-        init(group: PhoneGroup, secureEnclave: Bool) { (self.group, self.secureEnclave) = (group, secureEnclave) }
+        init(group: PhoneGroup, secureEnclave: Bool, authorization: Authorization) {
+            (self.group, self.secureEnclave, self.authorization) = (group, secureEnclave, authorization)
+        }
 
         /// A renewal for a peer's chain, leaf first, when it is due and this
         /// phone may renew it.
@@ -2419,7 +2516,7 @@ final class LiveGroup: GroupController {
 
         /// The root or admin key's signer while it signs without asking.
         func signer() -> SecKeySigner? {
-            var ctx = context
+            var ctx = authorization.context()
             if secureEnclave && ctx == nil {
                 let quiet = LAContext()
                 quiet.interactionNotAllowed = true // a key that needs the user fails instead of asking

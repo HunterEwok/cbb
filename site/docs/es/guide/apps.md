@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e3cc41b050a0 -->
+<!-- source: 29c68a9ea0e4 -->
 # Las apps
 
 Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
@@ -20,13 +20,13 @@ Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps 
 
 1. [Instala](install.md) Copy Beyond Borders en un ordenador y ejecuta allí `sudo cbb pair`. Muestra un código QR.
 2. Abre la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), añade el ordenador y abre Inicio.
-3. Añade cada ordenador adicional con **+** en Inicio. Un miembro ligero se une de la misma manera (`sudo -u cbb cbb pair` en él muestra su código).
+3. Añade cada ordenador adicional con **+** en Inicio. Un dispositivo pequeño se une de la misma manera (`sudo -u cbb cbb pair` en él muestra su código).
 
 Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que muestra el ordenador; en Android, pega el texto del código QR, que `cbb pair` también imprime.
 
 ### Cada día
 
-- **Inicio** muestra todos los dispositivos del grupo, como iconos o como lista, con un punto que indica si está en línea. El botón grande envía lo que tiene el teléfono, o trae la última copia de los ordenadores si se hizo hace un momento.
+- **Inicio** muestra todos los dispositivos del grupo, como iconos o como lista, con un punto que indica si está en línea. El botón grande toma una copia de otro dispositivo que aún esté vigente (un minuto por defecto; un administrador lo cambia en Ajustes) y, si no, envía lo que tiene el teléfono.
 - **iPhone**: iOS solo deja a una app usar el portapapeles mientras está en primer plano, así que el iPhone sincroniza con un solo gesto: la acción «Sync clipboard» en Tocar atrás o en el botón de Acción, el control del Centro de control o el widget de la pantalla de inicio. Compartir, Copy Beyond Borders envía de inmediato un texto o un enlace.
 - **Android**: las copias de los ordenadores llegan solas. Para que también se envíen solas las copias del teléfono, activa **Send my copies by themselves** (un servicio de accesibilidad; la app explica qué lee). Sin él, basta una pulsación: el icono **Send clipboard** de Ajustes rápidos, Send en la notificación, el widget de la pantalla de inicio, o Compartir y la selección de texto, Copy Beyond Borders.
 - **Las notificaciones** avisan cuando un dispositivo se une o se elimina, se convierte en administrador, o el hub no responde fuera de casa. Cada tipo tiene su propio interruptor en Ajustes.

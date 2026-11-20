@@ -42,9 +42,15 @@ var (
 // carry it on; a shorter one is signed again by a root.
 const keysMargin = 45 * 24 * time.Hour
 
-// channelLife is how long a channel file the release key signs is valid;
-// the channel key on cbb.tools renews it every week after.
-const channelLife = 30 * 24 * time.Hour
+// channelLife is how long a channel file is valid, whether the release key
+// or the channel key signs it: the channel key on cbb.tools renews it twice
+// a week, so a device that is kept from the newest file can be shown an
+// old one for two weeks at most, and a missed renewal does not stop updates.
+const channelLife = 14 * 24 * time.Hour
+
+// entriesLife is how long a list of entry points is valid; cbb.tools
+// renews it with the channel file.
+const entriesLife = 30 * 24 * time.Hour
 
 const defaultRepo = "HunterEwok/cbb"
 
@@ -99,7 +105,7 @@ func (s *signing) flags(fs *flag.FlagSet) {
 }
 
 // publish signs a release the workflow left as a draft, publishes it and
-// makes it the channel's: docs/maintaining.md, "Signed releases".
+// makes it the channel's: docs/maintainers/maintaining.md, "Signed releases".
 func publish(args []string) error {
 	fs := flag.NewFlagSet("publish", flag.ExitOnError)
 	var s signing
@@ -140,6 +146,18 @@ func publish(args []string) error {
 	case "none":
 		*docker = ""
 	}
+	if *docker != "" {
+		// The notes are not signed: the image is taken only with the release
+		// workflow's attestation for this tag.
+		step("checking the build attestation of %s", *docker)
+		if !dockerRE.MatchString(*docker) {
+			return fmt.Errorf("%q is not ghcr.io/hunterewok/cbb@sha256:DIGEST", *docker)
+		}
+		if _, err := gh("attestation", "verify", "oci://"+*docker, "--repo", s.repo,
+			"--source-ref", "refs/tags/"+tag, "--signer-workflow", s.repo+"/.github/workflows/release.yml"); err != nil {
+			return fmt.Errorf("the image %s was not built by the release workflow from %s: %w", *docker, tag, err)
+		}
+	}
 
 	dir := *dirFlag
 	if dir == "" {
@@ -157,6 +175,9 @@ func publish(args []string) error {
 	}
 	for _, e := range entries {
 		name := e.Name()
+		if provenance(name) {
+			continue
+		}
 		if describes(name) {
 			// From an earlier run; signed again below.
 			if err := os.Remove(filepath.Join(dir, name)); err != nil {
@@ -379,7 +400,7 @@ func putChannel(repo string, cur map[string]branchFile, files map[string]release
 func makeBranch(repo string) error {
 	readme := "# The release channel\n\nThe current signed `keys.json` and `stable.json` of CBB's releases\n" +
 		"(docs/protocol.md, section 16, on the main branch). `release-sign publish` writes them, and\n" +
-		"the channel workflow takes `stable.json` as cbb.tools renews it every week.\n"
+		"the channel workflow takes `stable.json` as cbb.tools renews it twice a week.\n"
 	call := func(v, body any, method, path string) error {
 		in, err := os.CreateTemp("", "cbb-gh-")
 		if err != nil {

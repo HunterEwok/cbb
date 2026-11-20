@@ -12,6 +12,7 @@ pub mod command;
 pub mod keys;
 pub mod limits;
 pub mod records;
+pub mod refused;
 pub mod register;
 pub mod server;
 pub mod wire;
@@ -20,3 +21,7 @@ pub use server::{Config, Relay};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "tunnel"))]
+#[path = "../nettest/relayd.rs"]
+mod net_tests;

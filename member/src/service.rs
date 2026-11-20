@@ -191,6 +191,8 @@ struct Service {
     node: RwLock<Option<Arc<Node>>>,
     away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
+    /// The pace of each user's confirmation prompts (confirm.rs).
+    prompts: crate::confirm::Pace,
     /// The grants of the remote pastes handed to desktop sessions, for the
     /// uinput helper's keys, by their tokens.
     grants: Mutex<HashMap<String, Grant>>,
@@ -335,6 +337,7 @@ pub fn run(cfg: Config) -> Result<()> {
         node: RwLock::new(None),
         away: RwLock::new(None),
         watchers: Mutex::new(Vec::new()),
+        prompts: crate::confirm::Pace::new(),
         grants: Mutex::new(HashMap::new()),
         peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
         next_watcher: AtomicUsize::new(0),
@@ -390,6 +393,7 @@ pub fn run(cfg: Config) -> Result<()> {
     // so the status says it until the service listens there itself.
     *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
+    crate::confirm::install(&|l: &str| log(l), &cfg.state_dir);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
         std::thread::spawn(move || accept_control(ln, move |conn| svc.serve(conn, admin)));
@@ -677,8 +681,7 @@ const CLAIM_CHECK: Duration = Duration::from_secs(2);
 /// months long, so twice a day is plenty, as Go's renewEvery. The Go
 /// service's tests shorten it with CBB_TEST_RENEW_EVERY (milliseconds).
 fn renew_every() -> Duration {
-    std::env::var("CBB_TEST_RENEW_EVERY")
-        .ok()
+    crate::testbuild::env("CBB_TEST_RENEW_EVERY")
         .and_then(|v| v.parse().ok())
         .map_or_else(scaled_twice_a_day, Duration::from_millis)
 }
@@ -924,12 +927,18 @@ impl Service {
     /// until an admin lifts it), or ends its mute, saves it, and tells the
     /// members connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
+        self.set_muted_as(node, on, until, by, by)
+    }
+
+    /// set_muted, saving `saved` as the muter (mute::kept_by) while the
+    /// log names `by`.
+    fn set_muted_as(&self, node: &Arc<Node>, on: bool, until: i64, by: &str, saved: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
         } else {
             node.engine.unmute();
         }
-        crate::mute::save(&self.state_dir, &node.engine)?;
+        crate::mute::save(&self.state_dir, &node.engine, saved)?;
         (self.log)(&match (on, until) {
             (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
@@ -953,9 +962,40 @@ impl Service {
         let until = crate::mute::until(h.for_ms)?;
         if self.admin(|a| a.mute(&h.device, on, h.for_ms))?.is_none() {
             let me = node.identity().id.to_string();
-            self.set_muted(&node, on, until, &me)?;
+            // Muting again keeps who muted it first, so another admin's mute
+            // never becomes this device's own to end.
+            let saved = if on {
+                crate::mute::kept_by(&crate::mute::by(&self.state_dir, &node.engine)?, &me)
+            } else {
+                me.clone()
+            };
+            self.set_muted_as(&node, on, until, &me, &saved)?;
         }
         Ok(())
+    }
+
+    /// Whether the request h only mutes or unmutes this device itself,
+    /// which the service also takes on its control socket from the user at
+    /// the screen (or root and the service's own user): it changes nothing
+    /// for the rest of the group, and only an admin device may do it
+    /// (mute_op asks for the admin key), so the app turns its own device
+    /// back on without the administrator's password (docs/design.md,
+    /// "Muting a device"). A mute another admin set is not the device's own
+    /// matter, to end or to set again: it goes through the confirmation, as
+    /// does any request when nothing tells that its user is at the screen.
+    fn own_device_op(&self, conn: &UnixStream, h: &Header) -> bool {
+        if !control::is_own_device_op(&h.op) || h.device.is_empty() {
+            return false;
+        }
+        let Ok(node) = self.node() else { return false };
+        let me = node.identity().id.to_string();
+        if !crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == me) {
+            return false;
+        }
+        if peer::may_take(peer::uid(conn), DESKTOP, peer::at_screen_surely) != peer::Verdict::Allowed {
+            return false;
+        }
+        crate::mute::by(&self.state_dir, &node.engine).is_ok_and(|by| by.is_empty() || by == me)
     }
 
     /// The answer to sync and muted, as the phone's member gives it.
@@ -2087,6 +2127,9 @@ impl Service {
     }
 
     fn serve(&self, conn: UnixStream, admin: bool) {
+        // When the connection came, which a confirmation checks the calling
+        // process against (confirm::check).
+        let accepted = crate::confirm::clock();
         let mut out = match conn.try_clone() {
             Ok(c) => c,
             Err(_) => return,
@@ -2102,16 +2145,52 @@ impl Service {
         if let Ok(c) = idle {
             let _ = c.set_read_timeout(None);
         }
-        if control::needs_admin(&m.header) && !admin {
-            let e = Error::msg(format!(
-                "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
-                m.header.op
-            ));
-            let _ = control::write(&mut out, &control::failure(&e));
+        // Confirming itself (confirm.rs): the challenge to sign, and on the
+        // admin socket a user's key.
+        if m.header.op == crate::confirm::OP_CHALLENGE || m.header.op == crate::confirm::OP_REGISTER {
+            // A user's key is registered only on the admin socket: no
+            // confirmation stands in for it.
+            let answer = if admin || m.header.op == crate::confirm::OP_CHALLENGE {
+                crate::confirm::answer(&out, &m.header).unwrap_or_else(|e| control::failure(&e))
+            } else {
+                control::failure(&Error::msg(format!(
+                    "{:?} is taken only on the admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
+            let _ = control::write(&mut out, &answer);
             return;
         }
+        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&out, &m.header) {
+            // The user at the screen confirms it with the system's prompt
+            // instead (confirm.rs), where this system has one, one prompt
+            // of a user at a time.
+            let user = peer::uid(&out).map(|u| u.to_string()).unwrap_or_default();
+            let res = if crate::confirm::supported() {
+                self.prompts.begin(&user, Instant::now()).and_then(|()| {
+                    let res = crate::confirm::check(&out, &m.header, accepted);
+                    self.prompts.end(&user, &res, Instant::now());
+                    res
+                })
+            } else {
+                Err(Error::msg(format!(
+                    "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
+            match res {
+                Ok(()) => (self.log)(&format!(
+                    "cbb: {} confirmed by the user {user} at the screen",
+                    crate::confirm::action(&m.header)
+                )),
+                Err(e) => {
+                    let _ = control::write(&mut out, &control::failure(&e));
+                    return;
+                }
+            }
+        }
         let broken = self.broken.lock().unwrap().clone();
-        if let Some(detail) = broken.filter(|_| m.header.op != "leave") {
+        if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
             let h = Header { error: BROKEN.to_string(), detail, done: true, ..Default::default() };
             let _ = control::write(&mut out, &control::reply(h, Vec::new()));
             return;
@@ -2601,7 +2680,7 @@ impl Service {
                 self.bugs.cancel();
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "new" => self.new_group(),
+            control::op::NEW => self.new_group(),
             "remove" => {
                 let name = self.admin(|a| a.revoke(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
@@ -2618,15 +2697,15 @@ impl Service {
                 let who = self.admin(|a| a.resolve())?;
                 Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
             }
-            "make_admin" => {
+            control::op::MAKE_ADMIN => {
                 let name = self.admin(|a| a.make_admin(&h.device, h.allow_file_key))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "key_level" => {
+            control::op::KEY_LEVEL => {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
             }
-            "takeover_delay" => {
+            control::op::TAKEOVER_DELAY => {
                 self.admin(|a| a.set_takeover_delay(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
@@ -2634,11 +2713,11 @@ impl Service {
                 self.admin(|a| a.set_incoming(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "take_over" => {
+            control::op::TAKE_OVER => {
                 let name = self.admin(|a| a.take_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "recover" => {
+            control::op::RECOVER => {
                 let text = String::from_utf8_lossy(&m.payload).to_string();
                 if h.name == "yubikey" {
                     self.admin(|a| a.recover_with_card(&text))?;
@@ -2647,7 +2726,7 @@ impl Service {
                 }
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "hand_over" => {
+            control::op::HAND_OVER => {
                 let name = self.admin(|a| a.hand_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
@@ -2657,26 +2736,15 @@ impl Service {
                     // A code alone: the device that shows it waits on the
                     // network, as Go's pairFind.
                     cbb_core::pair::normalize_code(&h.code)?;
-                    let waiting = crate::discovery::find_joiners(crate::discovery::PAIRING_BROWSE)?;
-                    let mut tried = Vec::new();
-                    let mut name = None;
-                    for (addrs, fp) in waiting {
-                        let addrs: Vec<String> = addrs.iter().map(|a| a.to_string()).collect();
-                        match self.admin(|a| a.admit_by_qr(&h.code, &addrs, &fp, h.admins)) {
-                            Ok(n) => {
-                                name = Some(n);
-                                break;
-                            }
-                            Err(e) => tried.push(e.for_log()),
-                        }
-                    }
-                    name.ok_or_else(|| Error::msg(tried.join("; ")))?
+                    let (addrs, fp) = crate::discovery::find_joiner(crate::discovery::PAIRING_BROWSE)?;
+                    let addrs: Vec<String> = addrs.iter().map(|a| a.to_string()).collect();
+                    self.admin(|a| a.admit_by_qr(&h.code, &addrs, &fp, h.admins))?
                 } else {
                     self.admin(|a| a.admit_by_qr(&h.code, &h.addrs, &h.fingerprint, h.admins))?
                 };
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "leave" => {
+            control::op::LEAVE => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
                 let node = self.node.read().unwrap().clone();
@@ -2770,9 +2838,14 @@ impl Service {
             cbb_core::secret::Zeroizing::new(String::new())
         };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
-        let (joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
-        let joiner =
-            joiner.as_member(crate::admin::os_name(), &self.caps.iter().map(String::as_str).collect::<Vec<_>>());
+        // cbb pair's -name and -caps, when it gave them, else the service's.
+        let name = if h.name.is_empty() { &self.name } else { &h.name };
+        let caps = match &h.caps {
+            Some(c) => crate::parse_caps(&c.join(","))?,
+            None => self.caps.clone(),
+        };
+        let (joiner, save) = crate::joiner(&self.state_dir, name)?;
+        let joiner = joiner.as_member(crate::admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
         let log = self.log.clone();
         let id = if !h.invite.is_empty() {
             // A remote invitation, as Go's joinInvite: sync away from home

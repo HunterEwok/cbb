@@ -1,0 +1,17 @@
+{
+  "shortcuts": [
+    {
+      "shortcutId": "sync",
+      "label": "$string:widget_name",
+      "icon": "$media:icon",
+      "wants": [
+        {
+          "bundleName": "tools.cbb.harmony",
+          "moduleName": "entry",
+          "abilityName": "EntryAbility",
+          "parameters": { "action": "sync" }
+        }
+      ]
+    }
+  ]
+}

@@ -40,6 +40,11 @@ pub struct Incoming {
     pub held: bool,
     /// How long ago, on this member's clock, the copy was made.
     pub age_ms: i64,
+    /// The copy's time is not after the clock mark this member saved
+    /// before it last started: a copy from before then, which its age
+    /// alone (not signed) could pass off as new.
+    #[serde(default)]
+    pub before_start: bool,
     /// How long a copy stays live: the group's `copies` setting.
     pub window_ms: i64,
     /// How long a secret stays current.
@@ -61,7 +66,8 @@ pub enum Verdict {
     NoText,
     /// The clipboard holds it already.
     Held,
-    /// Older than the live window: the member's own clipboard stays.
+    /// Older than the live window, or made before this member last
+    /// started: the member's own clipboard stays.
     Old,
 }
 
@@ -77,7 +83,7 @@ pub fn incoming(i: &Incoming) -> Verdict {
         Verdict::NoText
     } else if i.held {
         Verdict::Held
-    } else if i.age_ms >= i.window_ms {
+    } else if i.age_ms >= i.window_ms || i.before_start {
         Verdict::Old
     } else {
         Verdict::Write

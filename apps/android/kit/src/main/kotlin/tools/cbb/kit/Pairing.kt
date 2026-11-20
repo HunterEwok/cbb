@@ -108,7 +108,7 @@ object Pairing {
     /** The joiner's CPace associated data. */
     data class Info(
         val name: String,
-        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", "aurora", "sailfish", or "none" for a member's firmware. */
+        /** "linux", "windows", "macos", "ios" for an iPhone with the app, "android", "aurora", "sailfish", "harmonyos", or "none" for a member's firmware. */
         val os: String,
         /** A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the root may issue it; only from a phone. */
         val adminKey: ByteArray? = null,
@@ -154,7 +154,7 @@ object Pairing {
         override fun hashCode(): Int = name.hashCode()
 
         companion object {
-            val OSES = setOf("linux", "windows", "macos", "ios", "android", "aurora", "sailfish")
+            val OSES = setOf("linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "harmonyos")
 
             /** The size of a key for sealed messages (an X-Wing public key). */
             const val SEAL_KEY_SIZE = 1216
@@ -166,7 +166,7 @@ object Pairing {
             fun isPhone(os: String): Boolean = os in PHONE_OSES
 
             /** The systems of phones with the app. */
-            val PHONE_OSES = setOf("ios", "android", "aurora", "sailfish")
+            val PHONE_OSES = setOf("ios", "android", "aurora", "sailfish", "harmonyos")
 
             fun decode(data: ByteArray): Info? {
                 val o = Wire.parse(data) ?: return null

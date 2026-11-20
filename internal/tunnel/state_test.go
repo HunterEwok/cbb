@@ -428,25 +428,20 @@ func TestTake(t *testing.T) {
 	}
 }
 
-func TestRotate(t *testing.T) {
+func TestServingAndNextKeys(t *testing.T) {
 	s, err := NewState()
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.UnixMilli(1_800_000_000_000)
-	if changed, _, _ := s.Rotate("p1", now, time.Hour); changed {
-		t.Error("a device that is no hub rotated")
-	}
 	s.IsHub = true
-	if changed, switched, err := s.Rotate("p1", now, time.Hour); err != nil || !changed || switched || s.Next.IsZero() || s.NextFor != "p1" {
-		t.Fatalf("a new period: %v %v %v, next %v for %q", changed, switched, err, s.Next, s.NextFor)
+	next, err := NewPrivateKey()
+	if err != nil {
+		t.Fatal(err)
 	}
+	s.Next, s.NextFor, s.NextAt = next, "p1", now.Add(time.Hour)
 	if s.ServingKey() != s.Key {
 		t.Error("the hub serves with the next key ahead of time")
-	}
-	next := s.Next
-	if changed, _, _ := s.Rotate("p1", now.Add(time.Minute), time.Hour); changed {
-		t.Error("the same period changed the state")
 	}
 
 	// The next key and when it starts survive a restart.
@@ -462,8 +457,10 @@ func TestRotate(t *testing.T) {
 		t.Fatalf("loaded next %v for %q at %v, serving %v", got.Next, got.NextFor, got.NextAt, got.Serving)
 	}
 
-	if changed, switched, _ := got.Rotate("p1", now.Add(time.Hour), time.Hour); !changed || !switched || got.ServingKey() != next || !got.Next.IsZero() || got.ServingFor != "p1" {
-		t.Fatalf("the switch: %v %v, serving %v for %q, next %v", changed, switched, got.ServingKey(), got.ServingFor, got.Next)
+	got.Serving, got.ServingFor = got.Next, got.NextFor
+	got.Next, got.NextFor, got.NextAt = Key{}, "", time.Time{}
+	if got.ServingKey() != next {
+		t.Fatalf("serving %v, not the next key", got.ServingKey())
 	}
 	if err := got.Save(dir); err != nil {
 		t.Fatal(err)

@@ -37,6 +37,104 @@ use crate::join::{AppKey, SignFn, answer};
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;
 
+/// The app's keys for the servers (cbb_member_servers): op HAS answers 0
+/// when the app holds the key name, PUBLIC writes its public point (SEC1,
+/// 65 bytes) to out, making the key first when there is none, SIGN writes
+/// the key's signature (DER) of the 32-byte digest to out, and KEEP drops
+/// every key but those name lists, one a line; out has room for 72 bytes,
+/// and out_len gets how many it holds. Any other answer than 0 is a
+/// failure.
+pub type KeysFn = unsafe extern "C" fn(
+    ctx: *mut core::ffi::c_void,
+    op: i32,
+    name: *const u8,
+    name_len: usize,
+    digest: *const u8,
+    out: *mut u8,
+    out_len: *mut usize,
+) -> i32;
+
+const KEYS_HAS: i32 = 0;
+const KEYS_PUBLIC: i32 = 1;
+const KEYS_SIGN: i32 = 2;
+const KEYS_KEEP: i32 = 3;
+
+/// The app's keys for the servers behind its callback.
+#[derive(Clone, Copy)]
+struct AppKeys {
+    f: KeysFn,
+    ctx: usize,
+}
+
+impl AppKeys {
+    /// Calls the app with op for the key name; the bytes it wrote, or its
+    /// answer when it is not 0.
+    fn call(&self, op: i32, name: &str, digest: Option<&[u8; 32]>) -> core::result::Result<Vec<u8>, i32> {
+        let mut out = [0u8; 72];
+        let mut n = 0usize;
+        // SAFETY: the app gave a callback valid for the rest of the process
+        // that reads name_len bytes at name, 32 at digest when it is not
+        // null, and writes at most 72 bytes at out.
+        let rc = unsafe {
+            (self.f)(
+                self.ctx as *mut core::ffi::c_void,
+                op,
+                name.as_ptr(),
+                name.len(),
+                digest.map_or(core::ptr::null(), |d| d.as_ptr()),
+                out.as_mut_ptr(),
+                &mut n,
+            )
+        };
+        if rc != 0 {
+            return Err(rc);
+        }
+        Ok(out.get(..n).unwrap_or_default().to_vec())
+    }
+}
+
+/// One key for the servers that the app holds.
+struct HeldKey {
+    keys: AppKeys,
+    name: String,
+    public: Vec<u8>,
+}
+
+impl cbb_core::identity::ExternalKey for HeldKey {
+    fn public(&self) -> Vec<u8> {
+        self.public.clone()
+    }
+
+    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+        match self.keys.call(KEYS_SIGN, &self.name, Some(digest)) {
+            Ok(sig) if !sig.is_empty() => Ok(sig),
+            Ok(_) | Err(_) => Err(Error::msg(format!("the app's key {} did not sign", self.name))),
+        }
+    }
+}
+
+impl cbb_member::credentials::HeldKeys for AppKeys {
+    fn has(&self, name: &str) -> bool {
+        self.call(KEYS_HAS, name, None).is_ok()
+    }
+
+    fn get(&self, name: &str) -> Result<Arc<dyn cbb_core::identity::ExternalKey>> {
+        let public = self
+            .call(KEYS_PUBLIC, name, None)
+            .map_err(|rc| Error::msg(format!("the app gave no key {name} (code {rc})")))?;
+        if public.len() != 65 || public.first() != Some(&4) {
+            return Err(Error::msg(format!("the app's key {name} is not a P-256 key")));
+        }
+        Ok(Arc::new(HeldKey { keys: *self, name: name.to_string(), public }))
+    }
+
+    fn keep(&self, names: &[String]) -> Result<()> {
+        self.call(KEYS_KEEP, &names.join("\n"), None)
+            .map(|_| ())
+            .map_err(|rc| Error::msg(format!("the app did not drop the keys of an earlier period (code {rc})")))
+    }
+}
+
 #[derive(Deserialize)]
 struct StartArgs {
     /// The app's data directory: records.json, the clock's mark, the entries.
@@ -52,6 +150,10 @@ struct StartArgs {
     /// Where the key lives: `hardware` (the default) or `file`.
     #[serde(default = "hardware")]
     key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root to make it one.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_key: Option<Vec<u8>>,
     device: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -158,6 +260,12 @@ struct ToArgs {
 }
 
 #[derive(Deserialize)]
+struct OfferArgs {
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize)]
 struct CommandArgs {
     command: Record,
     #[serde(default = "ten_seconds")]
@@ -165,7 +273,8 @@ struct CommandArgs {
 }
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
-/// make_admin (as the root, for a computer connected), mute or unmute, for
+/// make_admin (as the root, for a phone or a computer connected), mute,
+/// unmute, paste, paste_off, actions_off, away_off, action or freeze, for
 /// `device`; renew, which renews every certificate due; or resolve, the
 /// root's decision on an alert, which voids its `records`.
 #[derive(Deserialize)]
@@ -189,6 +298,19 @@ struct ManageArgs {
     /// With mute: how long, 0 for until an unmute.
     #[serde(default)]
     for_ms: i64,
+    /// With paste: the text, or with kind media the event ID of the
+    /// group's copy of images or files, which the phone made just before.
+    #[serde(default)]
+    text: String,
+    /// With paste: `paste` (the default) or `type`.
+    #[serde(default)]
+    mode: String,
+    /// With paste: `text` (the default), `secret` or `media`.
+    #[serde(default)]
+    kind: String,
+    /// With paste: press Enter after it.
+    #[serde(default)]
+    enter: bool,
     /// The public point of the key that signs, SEC1 uncompressed: the
     /// phone's admin key, or the root's key when it holds the root.
     #[serde(with = "certs::b64")]
@@ -229,7 +351,7 @@ fn hardware() -> String {
     "hardware".into()
 }
 
-fn ten_seconds() -> u64 {
+pub(crate) fn ten_seconds() -> u64 {
     10_000
 }
 
@@ -479,6 +601,7 @@ impl Member {
                 os_version: a.os_version,
                 version: a.version,
                 key_store: a.key_store,
+                admin_key: a.admin_key.unwrap_or_default(),
                 state_dir: PathBuf::from(a.dir),
                 peers,
                 mdns: a.mdns,
@@ -760,6 +883,36 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             "away_status" => Ok(json!({ "away": n.away_status() })),
+            // Once the member serves the servers (cbb_member_servers): this
+            // phone as one of the group's hubs, or not; the blind relay; and
+            // whether the root's next period waits for the app.
+            "hub" => {
+                let s = |k: &str| arg(&a, k).as_str().unwrap_or_default().to_string();
+                let b = |k: &str| arg(&a, k).as_bool().unwrap_or(false);
+                n.hub_on(&s("forwarder"), &s("key"), b("obfuscate_off"), b("vless_off"))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "hub_off" => {
+                n.hub_off(arg(&a, "anyway").as_bool().unwrap_or(false))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "relay" => {
+                let s = |k: &str| arg(&a, k).as_str().unwrap_or_default().to_string();
+                n.relay(&s("relay"), &s("key"))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "servers" => Ok(json!({ "period_due": n.period_due() })),
+            // The revocation list of Android attestations the app fetched,
+            // and how many peers' evidence waits for the root key.
+            "attest_status" => {
+                let file = |k: &str| -> Result<cbb_core::release::File> {
+                    serde_json::from_value(arg(&a, k).clone())
+                        .map_err(|_| Error::msg(format!("the revocation list's {k} does not decode")))
+                };
+                let revoked = n.attest_status(file("keys")?, file("status")?)?;
+                Ok(json!({ "revoked": revoked, "pending": n.attest_pending() }))
+            }
+            "attest" => Ok(json!({ "pending": n.attest_pending() })),
             // The phone joined by a remote invitation and stored its
             // identity: sync away from home goes on, and the member offers
             // its tunnel key to the hub through the invitation's guest
@@ -803,6 +956,20 @@ impl Member {
                 let ca = a.ca.ok_or_else(|| Error::msg("send_admin_ca needs the admin CA"))?;
                 Ok(json!({ "sent": n.send_admin_ca(&device(&a.to)?, &ca) }))
             }
+            // The admin key the hellos offer: the phone's while it is no
+            // admin, none once it is one.
+            "offer_admin_key" => {
+                let a: OfferArgs = args(a)?;
+                n.offer_admin_key(a.key);
+                done()
+            }
+            // The admin CA of the root's admin message, checked against the
+            // offered key, this phone and the current root.
+            "take_admin_ca" => {
+                let a: OfferArgs = args(a)?;
+                n.take_admin_ca(&a.key.ok_or_else(|| Error::msg("take_admin_ca needs the admin CA"))?)?;
+                done()
+            }
             "send_tunnel" => {
                 let a: ToArgs = args(a)?;
                 let offer = a.offer.ok_or_else(|| Error::msg("send_tunnel needs the offer"))?;
@@ -844,6 +1011,19 @@ impl Member {
     /// is left, 0 for until it is lifted.
     fn state(&self) -> serde_json::Value {
         serde_json::to_value(self.node.muted()).unwrap_or_default()
+    }
+
+    /// Makes the member serve the servers (phone::Member::serve_servers)
+    /// with the app's keys for them behind keys, which must work with ctx
+    /// for the rest of the process.
+    pub fn servers(&self, keys: KeysFn, ctx: usize) -> Vec<u8> {
+        answer((|| -> Result<Value> {
+            if self.stopped.load(Ordering::SeqCst) {
+                return Err(Error::msg("the member stopped"));
+            }
+            self.node.serve_servers(Arc::new(AppKeys { f: keys, ctx }))?;
+            Ok(json!({}))
+        })())
     }
 
     /// Stops the member once; calls answer that it stopped from then on.
@@ -901,9 +1081,18 @@ impl Member {
                     let cert = self.node.finish_takeover(&s, &own)?;
                     return Ok(json!({ "state": "effective", "cert": b64(&cert) }));
                 }
+                // The next period of the server credentials, on the root,
+                // with the root key the app unlocked after asking.
+                "period" => {
+                    self.node.sign_period(Arc::new(AppKey { public: a.public.clone(), sign, ctx }))?;
+                    return Ok(json!({ "period_due": self.node.period_due() }));
+                }
                 // A new phone that restored the group (cbb_restore) claims
                 // it with the recovery key from the sheet, which signs the
                 // claim here and is not kept.
+                // What the watch may do to device from the wrist, for the
+                // watch's list (cbb_core::manage::watch_actions).
+                "watch_actions" => return Ok(json!({ "actions": self.node.watch_actions(&a.device) })),
                 "recover_with_sheet" => {
                     let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
                     let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_member::restore::NEEDS_QR))?;
@@ -976,6 +1165,26 @@ impl Member {
                     })?;
                     return Ok(json!({ "admin_ca": b64(&ca.into_inner()) }));
                 }
+                // A watch made an admin with the key it made, given as
+                // key (SubjectPublicKeyInfo): its device ID, new unless the
+                // request names one, the admin CA, and the group's tag and
+                // the watch's admin key's hash as records and commands name
+                // them, which the watch checks before it signs.
+                "add_watch" => {
+                    let spki = a.key.as_deref().ok_or_else(|| Error::msg("the action needs key"))?;
+                    let point = certs::p256_spki(spki)
+                        .ok_or_else(|| Error::msg("the watch's key is no P-256 key"))?
+                        .to_sec1_point(false)
+                        .as_bytes()
+                        .to_vec();
+                    let device = if a.device.is_empty() { DeviceId::random().to_string() } else { a.device.clone() };
+                    let name = if a.name.trim().is_empty() { "Watch" } else { a.name.trim() };
+                    let (ca, group) = self.node.add_watch(&s, &device, name, &a.os, &point)?;
+                    let signer = cbb_core::authority::Hash(Cert::parse(&ca)?.key_hash());
+                    return Ok(
+                        json!({ "device": device, "admin_ca": b64(&ca), "group": group, "signer": signer.text() }),
+                    );
+                }
                 _ => {}
             }
             let order = |o: Order| -> Result<Value> {
@@ -986,9 +1195,16 @@ impl Member {
                 "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
                 "rename" => self.node.change(&s, &a.device, &Change::Rename(&a.name))?,
                 "thaw" => self.node.change(&s, &a.device, &Change::Thaw)?,
+                "freeze" => self.node.change(&s, &a.device, &Change::Freeze)?,
                 "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
                 "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
+                // The root records what the Android peers' evidence shows
+                // (member/src/phone_attest.rs).
+                "attest" => {
+                    let recorded = self.node.attest_record(&s)?;
+                    return Ok(json!({ "recorded": recorded, "pending": self.node.attest_pending() }));
+                }
                 "take_over" => self.node.claim(&s, How::From(&a.device), new_root()?)?,
                 "take_handed_over" => self.node.claim(&s, How::HandedOver, new_root()?)?,
                 "recover" => self.node.claim(&s, How::Recovery, new_root()?)?,
@@ -996,7 +1212,52 @@ impl Member {
                 "unmute" => return order(Order::Unmute),
                 "sync_on" => return order(Order::Sync(true)),
                 "sync_off" => return order(Order::Sync(false)),
+                // Remote paste (docs/design.md, "Remote paste"): a text, or
+                // a copy of images or files the phone made just before.
+                "paste" => return order(paste_order(&a)?),
+                "paste_off" => return order(Order::PasteOff),
+                "actions_off" => return order(Order::ActionsOff),
+                "away_off" => return order(Order::AwayOff),
+                "action" => return order(Order::Action(a.name.clone())),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
+            }
+            Ok(json!({}))
+        })())
+    }
+
+    /// Does what the app's watch asked from the wrist, signed by the watch's
+    /// admin key, which sees each record or command it signs: sign_body
+    /// with ctx is the link to the watch (src/watch.rs). The request is
+    /// `{"action","device","watch","public","admin_ca","name"}`: action one
+    /// of watch_actions for device (with `-` as `_`), watch the watch's
+    /// device ID, public its key point, admin_ca the CA add_watch made,
+    /// name a quick action's. It answers as manage does.
+    pub fn manage_watch(&self, request: &[u8], sign_body: crate::watch::SignBodyFn, ctx: usize) -> Vec<u8> {
+        answer((|| -> Result<Value> {
+            let a: crate::watch::WatchArgs = serde_json::from_slice(request)
+                .map_err(|e| Error::msg(format!("the watch's request does not decode: {e}")))?;
+            let ca = Cert::parse(&a.admin_ca)?;
+            if ca.public_key() != a.public.as_slice() {
+                return Err(Error::msg("the watch's key does not belong to its admin CA"));
+            }
+            let allowed = self.node.watch_actions(&a.device);
+            if !allowed.iter().any(|w| w.replace('-', "_") == a.action) {
+                return Err(Error::msg(format!("the watch may not {} this device", a.action)));
+            }
+            let key = crate::watch::BodyKey { public: a.public.clone(), f: sign_body, ctx };
+            let s = Signer { ca: &ca, key: &key, me: &a.watch };
+            let order = |o: Order| -> Result<Value> {
+                let res = self.node.order(&s, &a.device, &o, Duration::from_millis(a.timeout_ms.min(60_000)))?;
+                Ok(json!({ "result": res }))
+            };
+            match a.action.as_str() {
+                "freeze" => self.node.change(&s, &a.device, &Change::Freeze)?,
+                "remove" => self.node.change(&s, &a.device, &Change::Remove)?,
+                "paste_off" => return order(Order::PasteOff),
+                "actions_off" => return order(Order::ActionsOff),
+                "away_off" => return order(Order::AwayOff),
+                "action" => return order(Order::Action(a.name.clone())),
+                other => return Err(Error::msg(format!("there is no watch action {other:?}"))),
             }
             Ok(json!({}))
         })())
@@ -1012,6 +1273,27 @@ impl Member {
     pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
         crate::invite::Invite::new(self.node.clone(), request, sign, ctx)
     }
+}
+
+/// The paste order of a manage request, as `cbb paste -on` makes it: a
+/// text cleaned of what may not go in (and refused when nothing is left),
+/// or a media copy's ID, which is pasted, never typed.
+fn paste_order(a: &ManageArgs) -> Result<Order> {
+    let mode = if a.mode.is_empty() { "paste" } else { a.mode.as_str() };
+    if mode != "paste" && mode != "type" {
+        return Err(Error::msg(format!("a paste command's way {mode:?} is not paste or type")));
+    }
+    let kind = if a.kind.is_empty() { "text" } else { a.kind.as_str() };
+    let text = match kind {
+        "text" | "secret" => phone::clean_paste(&a.text),
+        "media" if mode == "paste" => a.text.clone(),
+        "media" => return Err(Error::msg("images and files are pasted, not typed")),
+        other => return Err(Error::msg(format!("a paste is a text, a secret or media, not {other:?}"))),
+    };
+    if text.is_empty() {
+        return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
+    }
+    Ok(Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: a.enter })
 }
 
 /// Every device of the group as the app shows it: the same devices, in the
@@ -1042,4 +1324,38 @@ fn devices_of(n: &cbb_member::phone::Member) -> Vec<cbb_member::control::Device>
             ..Default::default()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(method: &str, kind: &str, text: &str) -> ManageArgs {
+        serde_json::from_value(json!({
+            "action": "paste", "device": "pc", "public": "", "mode": method, "kind": kind, "text": text, "enter": true,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn paste_orders() {
+        let o = paste_order(&request("", "", "ls\u{1b}[2J\r\n")).unwrap();
+        assert!(
+            matches!(&o, Order::Paste { mode, kind, text, enter: true } if mode == "paste" && kind == "text" && text == "ls\n"),
+            "a text is cleaned"
+        );
+        let o = paste_order(&request("type", "secret", "pin")).unwrap();
+        assert!(matches!(&o, Order::Paste { mode, kind, .. } if mode == "type" && kind == "secret"));
+        let o = paste_order(&request("paste", "media", "copy-id")).unwrap();
+        assert!(matches!(&o, Order::Paste { kind, text, .. } if kind == "media" && text == "copy-id"));
+        for (method, kind, text) in [
+            ("type", "media", "copy-id"),
+            ("say", "text", "hi"),
+            ("paste", "file", "hi"),
+            ("paste", "text", "\u{7}\u{1b}[0m"),
+            ("paste", "media", ""),
+        ] {
+            assert!(paste_order(&request(method, kind, text)).is_err(), "{method} {kind} {text:?} is refused");
+        }
+    }
 }

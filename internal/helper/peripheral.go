@@ -71,6 +71,8 @@ type PeripheralStatus struct {
 type peripherals struct {
 	logw io.Writer
 	bus  peripheral.BusDialer
+	// logMu keeps the lines whole: requests and typing log at once.
+	logMu sync.Mutex
 
 	mu    sync.Mutex
 	hosts map[string]*hostState
@@ -107,6 +109,8 @@ func (p *peripherals) host(req *control.Message) (*hostState, *PeripheralRequest
 	hs := p.hosts[r.Dir]
 	if hs == nil {
 		h := &peripheral.Host{Dir: r.Dir, Name: r.Name, OS: r.OS, Bus: p.bus, Logf: func(format string, args ...any) {
+			p.logMu.Lock()
+			defer p.logMu.Unlock()
 			fmt.Fprintf(p.logw, format+"\n", args...)
 		}}
 		hs = &hostState{h: h}

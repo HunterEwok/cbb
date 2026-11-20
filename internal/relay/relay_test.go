@@ -10,6 +10,8 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -454,4 +456,91 @@ func TestRemovedAdmin(t *testing.T) {
 		r := jf.last()
 		return !r.Connected && r.Err != nil && strings.Contains(r.Err.Error(), "the admin that certified the device was removed")
 	})
+}
+
+// TestRefusedGroupsList: a group on the operator's list cannot register,
+// one put on it is dropped within ten seconds, and the others go on
+// (docs/relay-budget.md, "Abuse reports"; the forwarder's
+// TestRefusedGroups).
+func TestRefusedGroupsList(t *testing.T) {
+	g1, g2, g3 := newGroup(t), newGroup(t), newGroup(t)
+	list := filepath.Join(t.TempDir(), "refused-groups")
+	if err := os.WriteFile(list, []byte("# reported\n"+group.Tag(g1.Cert)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, link := startWith(t, Config{Keys: keys, Groups: []string{group.Tag(g1.Cert), group.Tag(g2.Cert), group.Tag(g3.Cert)}, Refused: list})
+	ctx := context.Background()
+	reg := func(d device) (net.Conn, error) {
+		tc, _, _, err := register(ctx, MemberConfig{Link: link, Key: d.key, Cert: func() tls.Certificate { return d.cert }})
+		if err == nil {
+			t.Cleanup(func() { tc.Close() })
+		}
+		return tc, err
+	}
+	if _, err := reg(newDevice(t, g1)); err == nil || !strings.Contains(err.Error(), "refuses this group") {
+		t.Fatalf("a refused group: %v", err)
+	}
+	if _, err := reg(newDevice(t, g2)); err != nil {
+		t.Fatalf("a group not on the list: %v", err)
+	}
+	if _, err := reg(newDevice(t, g3)); err != nil {
+		t.Fatalf("a group not on the list: %v", err)
+	}
+	later := time.Now().Add(time.Minute)
+	if err := os.WriteFile(list, []byte(group.Tag(g2.Cert)+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(list, later, later); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if g, _ := r.Stats(); g == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the group put on the list was not dropped")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if _, err := reg(newDevice(t, g1)); err != nil {
+		t.Fatalf("a group taken off the list: %v", err)
+	}
+}
+
+// TestManyDevicesThroughRelay: the relay passes the connections of more
+// devices at once than one device's hub holds, each with its watch and a
+// call to the other device of its group.
+func TestManyDevicesThroughRelay(t *testing.T) {
+	const groups = 20
+	var cas []*group.CA
+	var tags []string
+	for range groups {
+		ca := newGroup(t)
+		cas = append(cas, ca)
+		tags = append(tags, group.Tag(ca.Cert))
+	}
+	keys, err := NewKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, link := startWith(t, Config{Keys: keys, Groups: tags})
+	var all []*joined
+	for _, ca := range cas {
+		for range 2 {
+			all = append(all, join(t, link, newDevice(t, ca)))
+		}
+	}
+	for i, j := range all {
+		select {
+		case <-j.dialed:
+		case <-j.called:
+		case <-time.After(2 * time.Minute):
+			t.Fatalf("device %d of %d made no call through the relay", i+1, len(all))
+		}
+	}
 }

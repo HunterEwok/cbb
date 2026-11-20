@@ -57,7 +57,11 @@ struct DeviceDetail: View {
         .confirmationDialog(Text("Make \(device?.name ?? "") an admin?"), isPresented: $promoting) {
             Button { Task { await model.makeAdmin(id) } } label: { Text("Make it an admin") }
         } message: {
-            Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
+            if device?.role == "phone" {
+                Text("It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.")
+            } else {
+                Text("It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.")
+            }
         }
         .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing) {
             // A hub that reads the copies is an admin, whose keys the
@@ -164,7 +168,7 @@ struct DeviceDetail: View {
             .toggleStyle(.switch)
             .disabled(!mayTurn || model.busy)
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
         }
     }
 
@@ -174,7 +178,7 @@ struct DeviceDetail: View {
             HStack {
                 muteLine(d)
                     .padding(.vertical, 4)
-                    .glassTile(cornerRadius: Tokens.radiusCard)
+                    .glassTile(.card)
                     .disabled(model.busy)
             }
         }
@@ -216,7 +220,7 @@ struct DeviceDetail: View {
             line
             row(Text("Device ID"), Text(verbatim: d.id).monospaced())
         }
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
     }
 
     private var line: some View { Divider().overlay(palette.line) }
@@ -253,7 +257,7 @@ struct DeviceDetail: View {
                 }
             }
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
             .disabled(model.busy)
             .confirmationDialog(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { tunnelTo != nil }, set: { if !$0 { tunnelTo = nil } })) {
                 Button {
@@ -313,7 +317,7 @@ struct DeviceDetail: View {
                     }
                     leaveAction
                 }
-                .glassTile(cornerRadius: Tokens.radiusCard)
+                .glassTile(.card)
                 .disabled(model.busy)
             }
         } else {
@@ -330,7 +334,9 @@ struct DeviceDetail: View {
                     line
                     action("snowflake", "Freeze", danger: true) { freezing = true }
                 }
-                if model.isRoot, !d.admin, !d.frozen, d.can("admin") {
+                // A phone joins as a member, and the root makes it an admin
+                // here as a computer, with the admin key its hello offers.
+                if model.isRoot, !d.admin, !d.frozen, d.can("admin") || d.role == "phone" {
                     line
                     action("star", "Make it an admin") { promoting = true }
                 }
@@ -346,7 +352,7 @@ struct DeviceDetail: View {
                     leaveAction
                 }
             }
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
             .disabled(model.busy)
             if let message = model.message {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)

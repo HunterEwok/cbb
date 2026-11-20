@@ -326,6 +326,17 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 /// level waits for that, as Go does both under one lock.
 static TAKEOVER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Holds off a takeover that would finish while the caller signs with the
+/// key signer reads. finish_takeover saves the claim's key as the root key
+/// before it adds the records the new root starts with, so a signer read in
+/// between would sign as the new root ahead of those records, at a number
+/// they take too: two histories of the root key, which stop the group.
+/// What signs on its own, as the service's loop does, holds this from
+/// reading the signer until its records are added.
+pub fn no_takeover_finishing() -> std::sync::MutexGuard<'static, ()> {
+    TAKEOVER.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// The group's key level, hardware when no record sets it, once a takeover
 /// that is finishing has signed the settings again.
 fn settled_level(node: &Node) -> String {
@@ -395,6 +406,7 @@ static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover:
 /// ADMIN_CAS_SENT remembers, by device, the root each got one from.
 pub fn renew_admin_cas(dir: &Path, node: &Node) {
     let sent = &ADMIN_CAS_SENT;
+    let _settled = no_takeover_finishing();
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {
@@ -490,7 +502,13 @@ impl Admin<'_> {
     /// admin's powers unless body names them, and the root's record of its
     /// own device says it holds the root. The record goes into the set and
     /// to the group.
-    fn sign(&self, s: &Signing, mut b: Body) -> Result<Record> {
+    fn sign(&self, s: &Signing, b: Body) -> Result<Record> {
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
+        self.sign_locked(s, b)
+    }
+
+    /// As sign, with Node::signing already held.
+    fn sign_locked(&self, s: &Signing, mut b: Body) -> Result<Record> {
         let records = self.node.records();
         let r = {
             let rs = records.lock().unwrap();
@@ -529,6 +547,7 @@ impl Admin<'_> {
         make: impl FnOnce(&cbb_core::group::Records, &Signer, i64) -> cbb_core::error::Result<Record>,
     ) -> Result<Record> {
         let me = self.me();
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let records = self.node.records();
         let r = make(&records.lock().unwrap(), &Signer { ca: &s.ca, key: &*s.key, me: &me }, uptime::wall_ms())?;
         self.node.add_own_records(std::slice::from_ref(&r));
@@ -701,6 +720,9 @@ impl Admin<'_> {
         if self.root_device() != self.me() {
             return Ok(None);
         }
+        // The check and the record are one step: the evidence of two
+        // connections at once is recorded once.
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer) else { return Ok(None) };
         if d.key != *key {
             return Ok(None); // not listed yet; it sends the evidence again when it next connects
@@ -736,7 +758,7 @@ impl Admin<'_> {
             forward_only: d.forward_only,
             ..Default::default()
         };
-        self.sign(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
+        self.sign_locked(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
         let why = if p.why.is_empty() { String::new() } else { format!(": {}", p.why) };
         Ok(Some(format!("cbb: the attestation of {} ({}) shows its keys {} ({kind}){why}", d.name, d.id, p.store)))
     }
@@ -819,11 +841,11 @@ impl Admin<'_> {
         Ok(who)
     }
 
-    /// Makes the computer target names an admin, on the group's root, as
-    /// Go's makeAdmin: the admin CA for the admin key its hello offers, its
-    /// device record naming it, and the admin message. A computer whose
-    /// keys sit in a file becomes one only with allow_file_key. It returns
-    /// its name.
+    /// Makes the phone or computer target names an admin, on the group's
+    /// root, as Go's makeAdmin: the admin CA for the admin key its hello
+    /// offers, its device record naming it, and the admin message. A
+    /// computer whose keys sit in a file becomes one only with
+    /// allow_file_key. It returns its name.
     pub fn make_admin(&self, target: &str, allow_file_key: bool) -> Result<String> {
         let d = find_device(self.node, target)?;
         let root_only = || {
@@ -838,9 +860,10 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
         }
-        if !d.can(authority::CAP_ADMIN) {
+        let phone = d.role == authority::ROLE_PHONE;
+        if !phone && !d.can(authority::CAP_ADMIN) {
             return Err(Error::msg(format!(
-                "{} cannot hold an admin key; only a member with the cap admin can be an admin",
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
                 d.name
             )));
         }
@@ -865,7 +888,24 @@ impl Admin<'_> {
                 d.name
             )));
         };
-        let (store, kind, proof) = if d.store == "proven" {
+        // A key another device holds, or a root's, would give its holder a
+        // second device's admin CA.
+        let hash = cbb_core::certs::sha256(&admin_key);
+        let taken = {
+            let rs = self.node.records();
+            let rs = rs.lock().unwrap();
+            rs.devices().iter().any(|o| o.admin_key == Some(hash) || o.keys.contains(&hash))
+                || rs.state().roots.contains(&Hash(hash))
+        };
+        if taken {
+            return Err(Error::msg(format!(
+                "the admin key that {} offers belongs to another key of the group",
+                d.name
+            )));
+        }
+        // A phone's keys stay where its record says (hardware); a
+        // computer's are where its hello says.
+        let (store, kind, proof) = if d.store == "proven" || phone {
             (d.store.clone(), d.kind.clone(), d.proof.clone())
         } else {
             (
@@ -915,6 +955,10 @@ impl Admin<'_> {
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: Some(admin),
+                // A phone admin has every power, as one admitted as an
+                // admin; a computer's come from computer_admin_powers.
+                powers: if phone { authority::POWERS.iter().map(|p| (*p).into()).collect() } else { Vec::new() },
+                commands: if phone { authority::COMMANDS.iter().map(|c| (*c).into()).collect() } else { Vec::new() },
                 store,
                 hardware: kind,
                 proof,
@@ -1487,6 +1531,10 @@ impl Admin<'_> {
     /// the core (cbb_core::admit), and records the device once its Welcome
     /// is out. With admins, on the root only, a phone that offers an admin
     /// key becomes an admin. It returns the device's name.
+    ///
+    /// It dials at most the QR code's four addresses, and stops at the
+    /// first attempt that showed the device this member's CPace message:
+    /// that attempt tried the code, which serves one guess only.
     pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
         let code = cbb_core::pair::normalize_code(code)?;
         if fingerprint.is_empty() {
@@ -1495,9 +1543,11 @@ impl Admin<'_> {
         let admitter = self.admitter(admins)?;
         let end = Instant::now() + PAIR_LIFETIME;
         let mut tried = Vec::new();
-        for addr in addrs {
-            match self.admit_at(&admitter, &code, addr, fingerprint, end) {
+        for addr in addrs.iter().take(cbb_core::pair::MAX_ADDRS) {
+            let mut started = false;
+            match self.admit_at(&admitter, &code, addr, fingerprint, end, &mut started) {
                 Ok(name) => return Ok(name),
+                Err(e) if started => return Err(e.context("could not admit the device that shows the QR code")),
                 Err(e) => tried.push(format!("{addr}: {}", e.for_log())),
             }
         }
@@ -1511,6 +1561,7 @@ impl Admin<'_> {
         addr: &str,
         fingerprint: &str,
         end: Instant,
+        started: &mut bool,
     ) -> Result<String> {
         let to: SocketAddr = addr.parse().map_err(|_| Error::msg("not an address and port"))?;
         if !crate::pair::home_address(to.ip()) {
@@ -1524,6 +1575,7 @@ impl Admin<'_> {
         let mut buf = vec![0u8; 16 << 10];
         loop {
             let step = adm.feed(&input, uptime::wall_ms());
+            *started |= adm.started();
             if !step.send.is_empty() {
                 sock.write_all(&step.send).context("cannot send to the device")?;
             }

@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.ByteArrayInputStream
 import java.security.cert.CertificateFactory
@@ -41,6 +42,8 @@ object RustTunnel {
         fun cbb_tunnel_relay(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, event: CoreMember.EventFn, ctx: Pointer?, answerLen: Pointer): Pointer?
 
         fun cbb_tunnel_relay_credentials(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
+
+        fun cbb_tunnel_hub_credentials(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
 
         fun cbb_free(answer: Pointer?, len: Core.SizeT)
     }
@@ -165,6 +168,16 @@ object RustTunnel {
         fun close() {
             runCatching { call(obj("op" to JsonPrimitive("guest_close"), "id" to JsonPrimitive(hub), "guest" to JsonPrimitive(guest))) }
         }
+
+        /**
+         * Whether the connection that reached the pairing window from the
+         * loopback port `port` is one the hub made for this guest
+         * (InvitationWindow's fromGuest); false when the hub cannot say.
+         */
+        fun dialed(port: Int): Boolean = runCatching {
+            val ok = call(obj("op" to JsonPrimitive("guest_dialed"), "id" to JsonPrimitive(hub), "guest" to JsonPrimitive(guest), "port" to JsonPrimitive(port)))
+            (ok["through"] as? JsonPrimitive)?.booleanOrNull == true
+        }.getOrDefault(false)
     }
 
     /** A running hub on the phone. */
@@ -191,6 +204,20 @@ object RustTunnel {
 
         fun setRecords(records: String) {
             op("hub_set_records", "records" to (json(records) ?: JsonArray(emptyList())))
+        }
+
+        /**
+         * Registers with the period's hubs' credential, as JSON, which lists serverKey (SubjectPublicKeyInfo DER),
+         * signing with sign, in place of the member certificate and the records (docs/protocol.md, section 18); an
+         * empty creds goes back to them.
+         */
+        fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String) {
+            val req = obj(
+                "id" to JsonPrimitive(id), "credentials" to (json(creds) ?: JsonArray(emptyList())),
+                "public" to if (creds.isEmpty()) null else b64(CoreMember.point(serverKey)),
+            )
+            val s = signFn(sign)
+            answer(req) { r, n -> lib.cbb_tunnel_hub_credentials(r, Core.SizeT(r.size.toLong()), s, null, n) }
         }
 
         fun setProjectWays(ways: String) {

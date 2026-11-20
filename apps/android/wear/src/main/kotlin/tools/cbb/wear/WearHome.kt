@@ -46,7 +46,7 @@ import tools.cbb.FormGlyph
 import tools.cbb.Palette
 import tools.cbb.SwitchGlyph
 import tools.cbb.WatchState
-import tools.cbb.paletteNamed
+import tools.cbb.themeNamed
 
 /**
  * The main page: how many devices are online, the away switch, the devices
@@ -56,7 +56,7 @@ import tools.cbb.paletteNamed
 @Composable
 fun WearHome(model: WearModel) {
     // A watch is dark.
-    val palette = paletteNamed(model.state.color).dark
+    val palette = themeNamed(model.state.theme).dark
     var open by remember { mutableStateOf<String?>(null) }
     MaterialTheme(colorScheme = scheme(palette)) {
         AppScaffold {

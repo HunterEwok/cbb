@@ -29,7 +29,7 @@
 // the list of the project's entry points, which extend renews and take
 // brings in as well; mirror keeps
 // dl.cbb.tools and the ZX Spectrum Next's files on cbb.tools.
-// docs/maintaining.md, "Signed releases", has the whole flow.
+// docs/maintainers/maintaining.md, "Signed releases", has the whole flow.
 package main
 
 import (
@@ -130,7 +130,7 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.Type().IsRegular() || describes(name) {
+		if !e.Type().IsRegular() || describes(name) || provenance(name) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
@@ -160,6 +160,13 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 // release's files.
 func describes(name string) bool {
 	return strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".cdx.json")
+}
+
+// provenance tells the release workflow's copy of its build provenance
+// (provenance.intoto.jsonl), which GitHub signed and which describes the
+// release's files: it is not one of them, and no attestation covers it.
+func provenance(name string) bool {
+	return strings.HasSuffix(name, ".intoto.jsonl")
 }
 
 func hexSum(data []byte) string {
@@ -299,7 +306,7 @@ func keys(args []string) error {
 func channel(args []string) error {
 	fs := flag.NewFlagSet("channel", flag.ExitOnError)
 	seq := fs.Uint64("seq", 0, "the sequence number, above the channel's last")
-	days := fs.Int("days", 30, "days until it expires")
+	days := fs.Int("days", int(channelLife.Hours()/24), "days until it expires")
 	fs.Parse(args)
 	if fs.NArg() != 1 {
 		return errors.New("channel needs the signed release.json")

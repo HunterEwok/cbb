@@ -17,7 +17,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/testhook"
 )
 
 // Config says how Start runs cbb-relay.
@@ -31,6 +34,8 @@ type Config struct {
 	Groups []string
 	Open   bool
 	Limits Limits
+	// Refused is the list of refused groups (-refused); none when empty.
+	Refused string
 
 	Logf    func(format string, args ...any) // its log lines; none when nil
 	Verbose bool                             // CBB_DEBUG=1
@@ -48,6 +53,7 @@ type Limits struct {
 	ByteRate         float64 `json:"byte_rate"`
 	GroupRecordBytes int     `json:"group_record_bytes"`
 	RecordBytes      int     `json:"record_bytes"`
+	Streams          int     `json:"streams"`
 }
 
 // StatsInterval is how often a relay that Start runs logs its counts.
@@ -57,7 +63,7 @@ const StatsInterval = 20 * time.Millisecond
 // one beside the cbb of CBB_TEST_ALONE or CBB_TEST_RUST_SERVICE, or "" when
 // there is none.
 func Binary() string {
-	if bin := os.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
+	if bin := testhook.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
 		return bin
 	}
 	name := "cbb-relay"
@@ -65,7 +71,7 @@ func Binary() string {
 		name += ".exe"
 	}
 	for _, env := range []string{"CBB_TEST_ALONE", "CBB_TEST_RUST_SERVICE"} {
-		if cbb := os.Getenv(env); cbb != "" {
+		if cbb := testhook.Getenv(env); cbb != "" {
 			bin := filepath.Join(filepath.Dir(cbb), name)
 			if _, err := os.Stat(bin); err == nil {
 				return bin
@@ -112,7 +118,11 @@ func Start(bin string, cfg Config) (*Process, error) {
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:0"
 	}
-	args := []string{"-listen", cfg.Listen, "-key", key}
+	list := cfg.Refused
+	if list == "" {
+		list = "none"
+	}
+	args := []string{"-listen", cfg.Listen, "-key", key, "-refused", list}
 	if cfg.Open {
 		args = append(args, "-open")
 	}
@@ -230,7 +240,17 @@ func (p *Process) Exited() bool {
 
 // Close stops the relay and waits for it.
 func (p *Process) Close() {
-	_ = p.cmd.Process.Kill()
-	<-p.done
+	// SIGTERM first, which cbb-relay takes as an exit, so that a build with
+	// instrument-coverage writes what it ran; a kill if it does not end, or
+	// where there is no SIGTERM (Windows).
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = p.cmd.Process.Kill()
+	}
+	select {
+	case <-p.done:
+	case <-time.After(5 * time.Second):
+		_ = p.cmd.Process.Kill()
+		<-p.done
+	}
 	_ = p.cmd.Wait()
 }

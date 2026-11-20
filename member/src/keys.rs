@@ -75,12 +75,13 @@ pub struct Sealed {
     pub se: Option<serde_json::Value>,
 }
 
-impl core::fmt::Debug for Sealed {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+/// Never the secret itself, should a Sealed be printed.
+impl std::fmt::Debug for Sealed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Sealed")
-            .field("secret", &cbb_core::secret::Redacted(self.secret.len()))
-            .field("tpm", &self.tpm)
-            .field("se", &self.se)
+            .field("secret", &format_args!("<{} bytes>", self.secret.len()))
+            .field("tpm", &self.tpm.is_some())
+            .field("se", &self.se.is_some())
             .finish()
     }
 }
@@ -300,5 +301,19 @@ pub fn new_device_key() -> (Option<Arc<dyn ExternalKey>>, String) {
             }
         }
         Err(e) => (None, e.for_log()),
+    }
+}
+
+#[cfg(test)]
+mod sealed_tests {
+    use super::*;
+
+    /// A Sealed printed shows how long its secret is, never the secret.
+    #[test]
+    fn debug_keeps_the_secret() {
+        let s = Sealed { secret: b"very-secret-bytes".to_vec(), tpm: None, se: None };
+        let out = format!("{s:?}");
+        assert!(!out.contains("very") && !out.contains("118"), "{out}");
+        assert!(out.contains("<17 bytes>"), "{out}");
     }
 }

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-# Keeps the release channel current (docs/maintaining.md, "Signed
+# Keeps the release channel current (docs/maintainers/maintaining.md, "Signed
 # releases"): takes the stable.json that cbb.tools renews every week with
 # the channel key into the branch channel, after checking it under the
 # pinned roots, and opens an issue when keys.json or stable.json there is
@@ -72,6 +72,6 @@ jobs:
           cat "$RUNNER_TEMP/due.md"
           title="Release channel: renewal due"
           if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[].number')" ]; then
-            printf '%s\n\n%s\n' "The branch channel needs the maintainer (docs/maintaining.md, \"Signed releases\"):" "$(cat "$RUNNER_TEMP/due.md")" >"$RUNNER_TEMP/issue.md"
+            printf '%s\n\n%s\n' "The branch channel needs the maintainer (docs/maintainers/maintaining.md, \"Signed releases\"):" "$(cat "$RUNNER_TEMP/due.md")" >"$RUNNER_TEMP/issue.md"
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/issue.md" --assignee HunterEwok
           fi

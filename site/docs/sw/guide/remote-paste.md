@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f299825ed818 -->
+<!-- source: 071a5fc1eda6 -->
 # Kubandika kwa mbali
 
 Kwa yeyote anayetaka kuweka maandishi kwenye programu ya kifaa kingine: nenosiri kwenye fomu ya kuingia ya televisheni, amri kwenye terminal ya seva, anwani kwenye kompyuta iliyo upande wa pili wa chumba. Msimamizi wa kikundi hutuma maandishi, nayo hutua mahali ambapo mwelekeo wa kifaa hicho upo, yakibandikwa au kuandikwa herufi kwa herufi.
@@ -15,7 +15,7 @@ Kubandika kwa mbali kumezimwa kwenye kila kifaa hadi mtumiaji wake mwenyewe akiw
 | Windows | `cbb paste-receive on` kwenye terminal iliyofunguliwa kama msimamizi | dirisha lenye mwelekeo |
 | Mac | `sudo cbb paste-receive on`, na programu ya Mac ikiwa wazi, imeruhusiwa katika Mipangilio ya Mfumo, Faragha na Usalama, Ufikivu | programu yenye mwelekeo |
 | Simu au televisheni ya Android | Mipangilio, "Let the group's admins paste here", na huduma ya ufikivu ya programu ikiwa imewashwa | uga wa maandishi wenye mwelekeo katika programu nyingine |
-| Mwanachama mwepesi | `sudo cbb paste-receive on`; kwa `-console`, pia kiweko cha maandishi | kidirisha cha tmux kinachotumika |
+| Kifaa kidogo kisicho na eneo-kazi | `sudo cbb paste-receive on`; kwa `-console`, pia kiweko cha maandishi | kidirisha cha tmux kinachotumika |
 
 `-enter` (kwenye simu, "Let a paste press Enter") huruhusu kubandika kubonyeza Enter baada ya maandishi. Bila hiyo maandishi yenye kikatizo cha mstari hukataliwa, kwa sababu kikatizo cha mstari kinaweza kutekeleza kama amri kilichotangulia popote ambapo terminal haipokei kubandika kama kipande kimoja.
 

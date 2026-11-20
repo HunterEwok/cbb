@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 #
-# stable.json lives 30 days; renewed weekly, three missed runs still leave
-# time before the channel workflow's reminder at 10 days.
+# stable.json lives 14 days; renewed twice a week, so it has at least 10
+# days left between runs, and a missed run still leaves time before the
+# channel workflow's reminder and the monitor's alarm at 5 days.
 
 [Unit]
-Description=Renew the cbb release channel every week
+Description=Renew the cbb release channel twice a week
 
 [Timer]
-OnCalendar=Mon *-*-* 05:00:00 UTC
+OnCalendar=Mon,Thu *-*-* 05:00:00 UTC
 Persistent=true
 RandomizedDelaySec=1h
 

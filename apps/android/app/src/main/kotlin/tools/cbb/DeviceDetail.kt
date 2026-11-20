@@ -186,7 +186,9 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
     if (promoting) {
         Confirm(
             title = stringResource(R.string.make_admin_title, d.name),
-            body = if (d.keysInFile && model.keyLevel != KitRecords.LEVEL_FILES) {
+            body = if (d.role == "phone") {
+                stringResource(R.string.make_admin_phone_body)
+            } else if (d.keysInFile && model.keyLevel != KitRecords.LEVEL_FILES) {
                 stringResource(R.string.make_admin_body) + " " + stringResource(R.string.make_admin_files_body)
             } else {
                 stringResource(if (d.keysInFile) R.string.make_admin_body else R.string.make_admin_hardware_body)
@@ -239,8 +241,8 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var acting by remember { mutableStateOf(false) }
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        // Members and Android phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os == "android"))) {
+        // Members and Android and Aurora phones take pastes; iPhones cannot.
+        if (d.takesPaste) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
         // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").
@@ -264,7 +266,7 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
 private fun IconLabel(symbol: String, title: String, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Column(
-        Modifier.width(80.dp).clip(RoundedCornerShape(Tokens.radiusCard)).focusRing().clickable(role = Role.Button, onClick = onClick)
+        Modifier.width(80.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)).focusRing().clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = Tokens.spacingSmall).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -381,7 +383,7 @@ private fun HubChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (forward
  * computer takes it only when its user turned remote paste on there.
  */
 @Composable
-private fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
+internal fun PasteOn(model: AppModel, d: LiveGroup.Device, dismiss: () -> Unit) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -550,7 +552,7 @@ private fun Switch(title: String, on: Boolean, change: (Boolean) -> Unit) {
 
 /** How long an admin mutes a device: its copies then reach no device of the group, and it still takes theirs. */
 @Composable
-private fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
+internal fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
     val palette = LocalPalette.current
     AlertDialog(
         onDismissRequest = dismiss,

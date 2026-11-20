@@ -63,7 +63,8 @@ subtle = { version = "2.6", default-features = false }
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
 x25519-dalek = { version = "3", default-features = false, features = ["static_secrets", "zeroize"] }
 x509-cert = { version = "0.3", default-features = false, features = ["hazmat"] }
-zeroize = { version = "1.8", default-features = false, features = ["alloc", "serde"] }
+# Wiping keys and secret texts from memory when they are dropped.
+zeroize = { version = "1.9", default-features = false, features = ["alloc", "serde"] }
 
 [dev-dependencies]
 # Property tests (tests/props.rs): random inputs against the parsers and the

@@ -22,6 +22,8 @@ mod acl_windows;
 #[cfg(windows)]
 pub use acl_windows::listen as listen_windows;
 #[cfg(windows)]
+pub use acl_windows::owner_only;
+#[cfg(windows)]
 pub mod service_windows;
 
 /// Whether the process runs as root, or on Windows as an administrator or
@@ -259,11 +261,15 @@ pub fn local_time() -> LocalTime {
 
 /// The local clock's time at ms, milliseconds since 1970 (UTC).
 #[cfg(unix)]
+// libc deprecates time_t on musl and OpenHarmony (whose libc is musl) ahead of
+// its change to 64 bits; it is the type localtime_r takes either way.
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 pub fn local_time_at(ms: i64) -> LocalTime {
     local_time_at_secs(ms.div_euclid(1000) as libc::time_t)
 }
 
 #[cfg(unix)]
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 fn local_time_at_secs(now: libc::time_t) -> LocalTime {
     // SAFETY: localtime_r writes into tm, which is a valid tm.
     unsafe {
@@ -366,6 +372,29 @@ pub fn has_stderr() -> bool {
     let h = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
     !h.is_null() && h != INVALID_HANDLE_VALUE
 }
+
+/// Keeps the service's memory, where its keys and the copies' texts pass,
+/// out of core dumps; on Linux also from other processes of its user,
+/// which may no longer attach to it or read its memory. A failure leaves
+/// the service running as before, and says so.
+#[cfg(unix)]
+pub fn no_dumps() {
+    let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: a plain system call with a valid limit.
+    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &none) } != 0 {
+        eprintln!("cbb: cannot turn core dumps off: {}", std::io::Error::last_os_error());
+    }
+    #[cfg(target_os = "linux")]
+    // SAFETY: a plain system call with valid arguments.
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
+        eprintln!("cbb: cannot keep the service's memory from other processes: {}", std::io::Error::last_os_error());
+    }
+}
+
+/// Windows writes no dump of a service unless its administrator asked
+/// Windows Error Reporting for one.
+#[cfg(not(unix))]
+pub fn no_dumps() {}
 
 /// Gives up root for the user name, with its groups, as Go's runAs (cbb
 /// service -user, which FreeBSD's rc script passes): root must not come
@@ -493,5 +522,48 @@ impl Drop for NoEcho {
             // SAFETY: puts back the console mode that new read.
             unsafe { windows_sys::Win32::System::Console::SetConsoleMode(h, mode) };
         }
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd")))]
+mod tests {
+    /// cbb service -user gives up root for good: run in a copy of this
+    /// test's process, which becomes nobody and cannot become root again.
+    #[test]
+    fn gives_up_root() {
+        if std::env::var_os("CBB_TEST_RUN_AS").is_some() {
+            super::run_as("nobody").unwrap();
+            // SAFETY: plain system calls.
+            assert_ne!(unsafe { libc::getuid() }, 0);
+            assert_eq!(std::env::var("USER").as_deref(), Ok("nobody"));
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        if !super::is_root() {
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        assert!(super::run_as("no-such-user-of-cbb").unwrap_err().to_string().contains("no user"));
+        assert!(super::run_as("a\0b").is_err());
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "sys::tests::gives_up_root", "--nocapture"])
+            .env("CBB_TEST_RUN_AS", "1")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+        assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn no_dumps_turns_them_off() {
+        super::no_dumps();
+        let mut lim = libc::rlimit { rlim_cur: 1, rlim_max: 1 };
+        // SAFETY: plain system calls with valid arguments.
+        unsafe {
+            assert_eq!(libc::getrlimit(libc::RLIMIT_CORE, &mut lim), 0);
+            assert_eq!(libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0), 0);
+        }
+        assert_eq!((lim.rlim_cur, lim.rlim_max), (0, 0));
     }
 }

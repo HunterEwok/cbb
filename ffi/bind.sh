@@ -6,12 +6,17 @@
 # (docs/core-api.md), for the phone apps and the phone kits' tests:
 #   bind.sh ios OUT       OUT/iphoneos/libcbb_ffi.a and OUT/iphonesimulator/libcbb_ffi.a,
 #                         for the iPhone app (needs Xcode)
+#   bind.sh ios-sim OUT   only OUT/iphonesimulator/libcbb_ffi.a, for this Mac's
+#                         processor: what the simulator's tests link (CI's iPhone app)
 #   bind.sh android OUT   OUT/jniLibs/<abi>/libcbb_ffi.so, for the Android app (needs
 #                         ANDROID_NDK_HOME and cargo-ndk)
 #   bind.sh host OUT      OUT/libcbb_ffi.a, for the Swift kit's tests on this computer:
 #                         swift test -Xlinker -LOUT
 #   bind.sh aurora OUT    OUT/arm/libcbb_ffi.a and OUT/arm64/libcbb_ffi.a, for the
 #                         Aurora and Sailfish app (apps/silica/build.sh)
+#   bind.sh harmony OUT   OUT/arm64-v8a/libcbb_ffi.a, for the HarmonyOS app's native
+#                         module (apps/harmony; needs OHOS_NDK_HOME, OpenHarmony's
+#                         native SDK, which ffi/ohos-sdk.sh downloads)
 # OUT is made absolute; nothing it writes belongs in git. The Kotlin kit's
 # tests build the host's shared library themselves (apps/android/kit). Every
 # library carries the member (the feature member, docs/core-api.md, "The
@@ -19,7 +24,7 @@
 # tunnel), which takes them to the hub away from home.
 set -eu
 if [ $# -ne 2 ]; then
-	echo "usage: bind.sh ios|android|host|aurora OUT" >&2
+	echo "usage: bind.sh ios|ios-sim|android|host|aurora|harmony OUT" >&2
 	exit 2
 fi
 target=$1
@@ -56,6 +61,16 @@ ios)
 	lipo -create target/aarch64-apple-ios-sim/release/libcbb_ffi.a target/x86_64-apple-ios/release/libcbb_ffi.a \
 		-output "$out/iphonesimulator/libcbb_ffi.a"
 	;;
+ios-sim)
+	case $(uname -m) in
+	arm64) t=aarch64-apple-ios-sim ;;
+	*) t=x86_64-apple-ios ;;
+	esac
+	rustup target add "$t" >/dev/null
+	IPHONEOS_DEPLOYMENT_TARGET=17.0 cargo build --locked -p cbb-ffi --features member,tunnel --release --target "$t"
+	mkdir -p "$out/iphonesimulator"
+	cp "target/$t/release/libcbb_ffi.a" "$out/iphonesimulator/"
+	;;
 android)
 	rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android >/dev/null
 	for abi in arm64-v8a armeabi-v7a x86_64; do
@@ -87,6 +102,24 @@ aurora)
 		mkdir -p "$out/$arch"
 		cp "target/$t/release/libcbb_ffi.a" "$out/$arch/"
 	done
+	;;
+harmony)
+	# The HarmonyOS app's static library (HarmonyOS 5 and later, without
+	# Android's layer), linked into its Node-API module; with member and
+	# tunnel, as Aurora's. The target's libc is musl; the SDK's clang
+	# wrappers pass the target and the sysroot, to cargo as the linker
+	# (GotaTun's shared library needs one even here) and to cc as the C
+	# compiler.
+	ndk=${OHOS_NDK_HOME:?"set OHOS_NDK_HOME to the OpenHarmony native SDK (ffi/ohos-sdk.sh)"}
+	t=aarch64-unknown-linux-ohos
+	export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER="$ndk/llvm/bin/$t-clang"
+	export CC_aarch64_unknown_linux_ohos="$ndk/llvm/bin/$t-clang"
+	export CXX_aarch64_unknown_linux_ohos="$ndk/llvm/bin/$t-clang++"
+	export AR_aarch64_unknown_linux_ohos="$ndk/llvm/bin/llvm-ar"
+	rustup target add "$t" >/dev/null
+	cargo rustc --locked -p cbb-ffi --features member,tunnel --lib --release --target "$t" --crate-type staticlib
+	mkdir -p "$out/arm64-v8a"
+	cp "target/$t/release/libcbb_ffi.a" "$out/arm64-v8a/"
 	;;
 *)
 	echo "bind.sh: unknown target $target" >&2

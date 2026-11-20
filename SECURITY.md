@@ -4,6 +4,9 @@
 
 The latest release receives security fixes; older releases do not. Fixes land on the
 `main` branch first and go out in the next release.
+From 0.6 on a device works in one group with devices of the release before it, so a group
+can move to the latest release one device at a time
+([versions and compatibility](docs/reference/compatibility.md)).
 
 ## Reporting a vulnerability
 
@@ -19,7 +22,7 @@ Include, if you can:
 - the affected component (the service on Linux, macOS, Windows, FreeBSD or OpenWrt, the
   desktop connector, the clipboard agents, remote paste, quick actions, sync away from home,
   the forwarder or the relay, `cbb update`, the iPhone, Android, watch, Mac or tray app, or
-  the lite member) and the version or commit;
+  `cbb` on a small device) and the version or commit;
 - the steps to reproduce;
 - the impact: what an attacker can read, change or run.
 

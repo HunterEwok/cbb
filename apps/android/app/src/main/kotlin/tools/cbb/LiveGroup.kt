@@ -426,7 +426,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Device(
                     id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, caps = it.caps, os = it.os, isSelf = it.id == g.device,
                     admin = it.admin || it.id == root, isRoot = it.id == root,
-                    canMakeAdmin = g.isRoot && !it.admin && !it.frozen && it.can("admin") && offers[it.id] != null,
+                    canMakeAdmin = g.isRoot && it.id != root && !it.admin && !it.frozen && (it.role == "phone" || it.can("admin")) &&
+                        offers[it.id] != null,
                     keysInFile = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.FILE,
                     rootless = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.ROOTLESS,
                     frozen = it.frozen,
@@ -668,6 +669,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val member = runCatching { memberSigner() }.getOrNull() ?: return
         val port = listen(n, CoreMember.Listen.TUNNEL) ?: return
         Log.i(TAG, "the hub takes member connections through the tunnel on port $port")
+        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
+        h.setCredentials(hubCredentials())
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         h.start(
             HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords, entries.ways(HubState.Forwarder.PROJECT_HOST)),
@@ -785,11 +788,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Asks the user, on the activity open now, for one signature. */
-    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature) -> Signature = { s ->
+    private fun prompter(reason: Int, subtitle: String?, prompts: Prompts): (Signature?) -> Signature? = { s ->
         val ui = activity ?: throw Failure(Failure.Kind.NO_SCREEN)
         val n = prompts.made.incrementAndGet()
         val total = prompts.total
+        // A timed key asks once for all of them (s null): no count then.
         val which = when {
+            s == null -> null
             total != null && total > 1 && n <= total -> ui.getString(R.string.signature_of, n, total)
             n > 1 -> ui.getString(R.string.signature_n, n)
             else -> null
@@ -933,6 +938,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val guest = AtomicReference<HubGuest?>()
         val window = InvitationWindow(
             member.privateKey, g.memberCert, Instant.now().plusSeconds(lifetimeS.toLong()),
+            fromGuest = { port -> guest.get()?.dialed(port) == true },
             admit = { t, joinerCert, sid -> admitInvited(t, joinerCert, sid, guest.get() ?: throw HubOnPhone.NotRunning(), ask) },
             onEnd = { r ->
                 if (r.isFailure) guest.get()?.close()
@@ -1043,22 +1049,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * Joins another phone's group (docs/protocol.md, section 6, "The joiner
      * listens") through the core (CorePairing.Joining): listens, hands show
      * the QR code to put on screen, and waits up to five minutes for an
-     * admin phone to scan it and admit this one. With asAdmin it makes this
-     * phone's admin key and asks to be an admin, which only the group's root
-     * grants; without, any admin admits it as a member. Three wrong codes
-     * end it, as does cancelling. A TV never asks: it has no fingerprint or
-     * face to guard an admin key.
+     * admin phone to scan it and admit this one, always as a member: the root
+     * makes it an admin later with the admin key its hellos offer
+     * ([offeredAdminKey]). Three wrong codes end it, as does cancelling.
      */
-    suspend fun join(asAdmin: Boolean = false, show: (JoinCode) -> Unit) {
+    suspend fun join(show: (JoinCode) -> Unit) {
         if (hasGroup) return
-        val admin = asAdmin && !Tv.isTv(context)
-        if (admin && activity == null) throw Failure(Failure.Kind.NO_SCREEN)
         val (listener, joining) = withContext(Dispatchers.IO) {
             val member = memberSigner()
-            // The admin key, behind the screen lock like the root key; the
-            // core asks it once, for the proof on the admitting connection.
-            val adminKey = if (admin) Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN) else null
-            val adminSigner = adminKey?.let { authorized(Keys.ADMIN, R.string.reason_join) }
             val listener = ServerSocket(0)
             val addrs = LocalAddresses.current().map { JoinCode.address(it, listener.localPort) }
             if (addrs.isEmpty()) {
@@ -1068,7 +1066,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val joining = try {
                 CorePairing.Joining(
                     PhoneGroup.validName(deviceName), "android", member.publicKeyDER, sealKey(), addrs, member::signDigest,
-                    adminPublic = adminSigner?.publicKeyDER, signAdmin = adminSigner?.let { it::signDigest },
                 )
             } catch (e: Exception) {
                 listener.close()
@@ -1519,6 +1516,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         credentialsFile.delete()
         runCatching { Keys.PhoneKeys.clear() }
         relayLink?.setCredentials(null)
+        synchronized(lock) { hub }?.setCredentials(null)
     }
 
     /** The current root's key and whether a key hash is a member of the group, for the credentials. lock is held. */
@@ -1592,6 +1590,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }.onFailure { Log.w(TAG, "signing the server credentials", it) }.getOrNull().orEmpty()
             if (signed.isNotEmpty()) currentNode?.let { n -> runCatching { n.sendCredentials(signed) } }
             relayCredentials()
+            synchronized(lock) { hub }?.setCredentials(hubCredentials())
         }
     }
 
@@ -1615,6 +1614,24 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }.onFailure { Log.w(TAG, "the server credentials for the relay", it) }.getOrNull()
         r.setCredentials(c)
     }
+
+    /**
+     * What the phone's hub registers with at its forwarder: its server key
+     * and the hubs' credential once that lists the key; null until then,
+     * and the hub registers with its member certificate.
+     */
+    private fun hubCredentials(): HubOnPhone.Credentials? = runCatching {
+        synchronized(lock) {
+            val g = state ?: return@synchronized null
+            val s = credentialsLocked(g)
+            val (root, _) = credentialRootLocked(g)
+            val tag = s.period(root)?.second?.tag?.takeIf { Keys.PhoneKeys.has(PeriodKeys.SERVER_KEY, it) }
+            val k = tag?.let { Keys.PhoneKeys.get(PeriodKeys.SERVER_KEY, it) } as? KeystoreSigner ?: return@synchronized null
+            val creds = s.hubRegistration(root, MessageDigest.getInstance("SHA-256").digest(k.publicKeyDER), System.currentTimeMillis())
+                ?: return@synchronized null
+            HubOnPhone.Credentials(k.publicKeyDER, k::signDigest, creds)
+        }
+    }.onFailure { Log.w(TAG, "the server credentials for the hub", it) }.getOrNull()
 
     /** Sends records made on this phone to the computers, and brings the credentials up to date with them. */
     private fun published(rs: List<Member.Record>) {
@@ -1977,23 +1994,27 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
 
     /**
-     * Makes a computer an admin (docs/protocol.md, section 10, "Admins"): the root key certifies the admin key the computer offers;
-     * the computer gets its admin CA and every member the new record. A
-     * computer whose keys sit in a file becomes one only with allowFileKey,
-     * after the user read the warning; else PhoneGroup.FileKey. A rootless
-     * install never (PhoneGroup.Rootless).
+     * Makes a phone or a computer an admin (docs/protocol.md, section 10,
+     * "Admins"): the root key certifies the admin key the
+     * device offers; the device gets its admin CA and every member the new
+     * record. A computer whose keys sit in a file becomes one only with
+     * allowFileKey, after the user read the warning; else
+     * PhoneGroup.FileKey. A rootless install never (PhoneGroup.Rootless). A
+     * phone keeps the store its record names.
      */
     suspend fun makeAdmin(id: String, allowFileKey: Boolean = false) {
-        val n = synchronized(lock) { if (state?.isRoot == true) node else null }
+        val (n, phone) = synchronized(lock) {
+            (if (state?.isRoot == true) node else null) to (state?.devices?.firstOrNull { it.id == id }?.role == "phone")
+        }
         val peer = n?.let { runCatching { it.peers() }.getOrNull() }?.firstOrNull { it.device == id }
         val key = peer?.adminKey ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val store = peer.keyStore.ifEmpty { null }
-        if (KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
-        if (KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
+        val store = if (phone) null else peer.keyStore.ifEmpty { null }
+        if (!phone && KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
+        if (!phone && KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
         val root = caSigner(R.string.reason_make_admin)
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if (KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && keyLevel != KitRecords.LEVEL_FILES) {
+        if (!phone && KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && keyLevel != KitRecords.LEVEL_FILES) {
             rootRecord(root) { m, public, sign -> m.setKeyLevel(KitRecords.LEVEL_FILES, public, sign) }
         }
         val g = copyOfState() ?: return
@@ -2001,6 +2022,44 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         withContext(Dispatchers.IO) { adopt(g) }
         published(listOf(r))
         currentNode?.let { m -> runCatching { m.sendAdminCA(id, ca) } }
+    }
+
+    /**
+     * The admin key a member phone's hellos offer, for the root's "Make it
+     * an admin" (docs/protocol.md, section 10, "Admins"),
+     * made now behind the screen lock if it has none: making it asks
+     * nothing, only a signature does. None on the root, on an admin, and on
+     * a TV, which has no fingerprint or face to guard it.
+     */
+    private fun offeredAdminKey(g: PhoneGroup): ByteArray? {
+        if (g.isAdmin || Tv.isTv(context)) return null
+        return try {
+            (Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN, g.tag)).publicKeyDER
+        } catch (e: Exception) {
+            Log.w(TAG, "making the admin key to offer", e)
+            null
+        }
+    }
+
+    /**
+     * Takes the admin CA the root sent when it made this member phone an
+     * admin: PhoneGroup.takeAdminCA checks it is for this phone's admin key
+     * and from the current root. The hellos offer the key no more, and sync
+     * starts again as an admin's.
+     */
+    private fun adminCAReceived(ca: ByteArray, from: String) {
+        val g = copyOfState() ?: return
+        if (g.isAdmin) return
+        val key = Keys.loadCurrent(Keys.ADMIN)?.publicKeyDER ?: return
+        try {
+            g.takeAdminCA(ca, key)
+        } catch (e: Exception) {
+            Log.w(TAG, "the admin CA from $from", e)
+            return
+        }
+        Log.i(TAG, "the root made this phone an admin")
+        adopt(g)
+        Thread({ restartSync() }, "restart").start()
     }
 
     /**
@@ -2467,6 +2526,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     // Without its secret the phone still seals, and the copies sealed to it stay unread.
                     sealSecret() ?: ByteArray(32).also { SecureRandom().nextBytes(it) },
                     g.memberCert, g.memberIssuer, g.groupCA, g.trusted,
+                    adminKey = offeredAdminKey(g),
                 ),
                 member::signDigest,
                 post = nodeEvents::execute,
@@ -2559,6 +2619,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     if (fresh.isNotEmpty()) runCatching { n.sendCredentials(fresh, except = e.from) }
                 }
                 is Member.Message.Hubs -> hubsShared(n, e.from, m.share, isHub, a, h)
+                is Member.Message.Admin -> adminCAReceived(m.adminCA, e.from)
                 is Member.Message.Evidence -> {
                     val chain = runCatching { n.peers(all = true) }.getOrDefault(emptyList()).firstOrNull { it.device == e.from }?.chain.orEmpty()
                     if (chain.isNotEmpty()) evidenceReceived(e.from, chain, m.evidence)

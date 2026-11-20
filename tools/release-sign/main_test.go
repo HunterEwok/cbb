@@ -88,9 +88,12 @@ func archives(t *testing.T, dir string) {
 		fmt.Fprintf(&sums, "%x  %s\n", sum, name)
 	}
 	write(t, filepath.Join(dir, "SHA256SUMS"), []byte(sums.String()))
+	// The workflow's copy of its provenance describes the files, outside
+	// SHA256SUMS and release.json.
+	write(t, filepath.Join(dir, "provenance.intoto.jsonl"), []byte(`{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}`+"\n"))
 }
 
-// TestFlow makes, signs and checks a release as docs/maintaining.md
+// TestFlow makes, signs and checks a release as docs/maintainers/maintaining.md
 // describes, with keys in files.
 func TestFlow(t *testing.T) {
 	keysDir, dist := t.TempDir(), t.TempDir()

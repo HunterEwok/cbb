@@ -5,8 +5,9 @@ Devices of one class can do the same things. A difference is allowed only where 
 system itself forces it, and then it is written here with the reason. The classes:
 
 - **Computers**: Linux, macOS, Windows (`cbb`).
-- **Phones**: Android, iPhone, Aurora OS (the apps; the Aurora app also builds for Sailfish OS).
-- **Lite devices**: the lite member (`cbb` in Rust) on small Linux devices, the ESP32 firmware, the ZX Spectrum
+- **Phones**: Android, iPhone, Aurora OS (the apps; the Aurora app also builds for Sailfish OS),
+  HarmonyOS 5 and later (`apps/harmony`, in development, ported from the Aurora app).
+- **Small devices**: `cbb` without its helper on small Linux devices, the ESP32 firmware, the ZX Spectrum
   Next through its Pi.
 
 A feature added to one platform is planned for its whole class in the same task, or added
@@ -26,7 +27,7 @@ on every platform of the class, on the roadmap).
 | Battery detection | yes | yes | yes | |
 | Installer and uninstaller, `--purge` | yes | yes | yes | |
 | One-line installer with checksum check | yes (`get.sh`) | yes (`get.sh`) | yes (`get.ps1`) | |
-| Package manager | Homebrew | Homebrew | winget (`cbb install` after it) | each release writes the winget manifest; it reaches winget by a pull request to its repository (docs/maintaining.md) |
+| Package manager | Homebrew | Homebrew | winget (`cbb install` after it) | each release writes the winget manifest; it reaches winget by a pull request to its repository (docs/maintainers/maintaining.md) |
 | Member port other than 8764 | yes (`--port`) | yes (`--port`) | yes (`-Port`) | |
 | Inbound only from the home network, in the program | yes | yes | yes | the member port drops other addresses |
 | Inbound only from the home network, by the system | yes (ufw, firewalld) | **OS** | yes (Windows Firewall) | the macOS application firewall allows or blocks a program, not an address; a Network Extension of the Mac app (roadmap item 22) |
@@ -53,13 +54,13 @@ on every platform of the class, on the roadmap).
 
 | Capability | Android | iPhone | Aurora OS | Notes |
 |---|---|---|---|---|
-| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE; no prompt before signing: Aurora 5.1.5 keeps its authentication service out of a regular app's sandbox (a probe on the R570E shows it); making a group not yet tried on the phone | StrongBox or TEE; Secure Enclave |
-| Add a computer or a lite device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
-| Join another phone's group | yes | yes | yes | |
+| Make a group, root key in hardware behind biometrics | yes | yes | yes, the root key in the TEE behind the app's own PIN, which the TEE checks (D-94): Aurora 5.1.5 gives a regular app neither its authentication service nor the fingerprint (a probe on the R570E and Open Mobile Platform's answer, 2026-11-09); making a group not yet tried on the phone | StrongBox or TEE; Secure Enclave |
+| Add a computer or a small device by QR code | yes | yes | yes, as an admin; not yet tried on the phone | the Aurora app reads the code with the core's reader |
+| Join another phone's group, as a member with one button | yes | yes | yes; the second button "Join as an admin" goes after the admin PIN (D-94) | the root makes it an admin later (D-95) |
 | Make an admin, remove, take over from a lost root, renew certificates | yes | yes | remove, renew and take over from a lost root (its admin key in the TEE becomes the new root), as the root or an admin; not yet tried on the phone | the core signs (`cbb_core::takeover` for the takeover), the app's admin key in the TEE |
 | The root's settings: the takeover delay, the key level, handing the group over, the recovery key | yes | yes | yes, as the root, the recovery key as a sheet shown once (no YubiKey), and restoring from the sheet on a new phone (`cbb_restore`); not yet tried on the phone | built and signed in the core on every phone (`cbb_core::root`, `CoreMember`) |
-| Make a computer an admin | yes | yes | yes, as the root, for a computer connected; not yet tried on the phone | |
-| Sync away from home | yes, in the background | while the app runs | yes, while the app runs, through the lite member's tunnel in the core (`TestFFIPhoneAway`); not yet tried on the phone | **OS**: iOS stops a background app's network |
+| Make a phone or a computer an admin | yes | yes | yes, as the root, for a device connected; not yet tried on the phone | a phone offers its admin key in its hellos once it is in the group; on Aurora after D-94 |
+| Sync away from home | yes, in the background | while the app runs | yes, while the app runs, through `cbb`'s tunnel in the core (`TestFFIPhoneAway`); not yet tried on the phone | **OS**: iOS stops a background app's network |
 | Receive copies without a tap | yes (foreground service) | **OS** | yes | iOS lets an app read and write the clipboard only in the foreground; Aurora lets it write in the background |
 | Send without a tap | yes (accessibility service) | **OS** | **OS** | iOS: Back Tap or the Action button runs the app's shortcut, one gesture; Aurora reads the clipboard only in the foreground, so the app sends when it comes to the front |
 | Send from the share sheet and the text selection menu | yes | yes | yes, text, through the system's share menu; not yet tried on the phone | the iPhone's share extension; its menu's Share |
@@ -69,26 +70,26 @@ on every platform of the class, on the roadmap).
 | The group's alerts card, and the root's decision on it | yes | yes | yes; not yet tried on the phone | `GroupAlert` in the kits, the core's `alerts` op on Aurora |
 | Error details switch without developer tools | yes | yes | yes | seven taps on the version in Settings show it; `adb` and the Xcode launch argument still work |
 | Wallpaper colours theme | yes | **OS** | the ambience | Material You exists only on Android |
-| Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; remote paste typed on the Bluetooth keyboard's device (**OS**: no app may type into another); not yet tried on the phone | the iPhone takes no remote paste (**OS**: no app may type into another) |
+| Remote paste, images and files | yes | yes | images and files both ways, through the share menu, the clipboard's image and Downloads; remote paste typed on the Bluetooth keyboard's device (**OS**: no app may type into another); remote paste on another device, text or pictures and files, from the device's page; not yet tried on the phone | the iPhone takes no remote paste (**OS**: no app may type into another) |
 | Remote invitations | planned | planned | planned | roadmap item 12; computers have them |
 | Arrange the tiles and collections | yes | yes | yes, by a long press's menu and by a drag among the tiles; not yet tried on the phone | kept on each installation; the watches show their phone's |
 | Act as a Bluetooth keyboard for a TV, tablet or computer | yes | **OS** | yes, as a Bluetooth LE keyboard through BlueZ, which also types remote pastes; not yet tried on the phone | iOS keeps the HID service to the system; some Android makers leave the profile out, which the app says |
 | Tested on a real phone | not yet | yes | yes, on Aurora 5.1.5 | the iPhone app on an iPhone 12 Pro Max, built with a developer's own team; the Aurora app on an F+ R570E |
 
-## Lite devices
+## Small devices
 
-| Capability | Lite member on Linux | ESP32 | ZX Spectrum Next | Notes |
+| Capability | `cbb` on a small Linux device | ESP32 | ZX Spectrum Next | Notes |
 |---|---|---|---|---|
 | Join by the phone's QR code or a computer's code | yes | yes (pairing; on Linux over TAP in CI) | yes, through the Pi | |
 | Sync the clipboard | yes | not yet | yes, through the Pi | the firmware's sync is the next step of roadmap item 15 |
 | Listen for phones and Macs | yes | not yet | through the Pi | |
 | Secrets (`copy -secret`) | yes | not yet | yes (`.cbb text -s`, `.cbb copy -s`) | |
-| Sync away from home | yes (`TestAloneMemberAway`) | planned | through the Pi | not on MIPS routers yet: the lite member for MIPS is built without the tunnel |
+| Sync away from home | yes (`TestAloneMemberAway`) | planned | through the Pi | not on MIPS routers yet: `cbb` for MIPS is built without the tunnel |
 | Update itself | yes (`cbb update`, Linux and OpenWrt) | planned (OTA, roadmap item 29) | through the Pi | |
 | Error details switch | yes (`-debug`, `CBB_DEBUG=1`) | not yet | yes (`.cbb -d`) | |
 
 The ESP32 and the Next are still being built, so "not yet" is progress, not a gap: each
-item is on its road to the Linux lite member's set.
+item is on its road to the set of `cbb` on Linux.
 
 ## Plan
 
@@ -143,10 +144,10 @@ in three lines; this table has every part.
 | Android app | built, CI; APK in every release | not yet |
 | Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |
 | Apple Watch and Wear OS apps (devices, events, away switch) | built, CI | the Apple Watch app on an Apple Watch Ultra: its list and remote paste; Wear OS not yet |
-| Lite member on Linux | built, CI e2e with Go members | joined a group on a Pi Zero W |
-| Lite member on the Arduino Nano ESP32 | firmware: Wi-Fi, joining by the phone, the USB port as a keyboard; CI in QEMU; syncing next | not yet |
+| `cbb` without its helper on a small Linux device | built, CI e2e with other members | joined a group on a Pi Zero W |
+| The Arduino Nano ESP32 | firmware: Wi-Fi, joining by the phone, the USB port as a keyboard; CI in QEMU; syncing next | not yet |
 | Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
-| Sync away from home for the phones and the lite member | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
+| Sync away from home for the phones and small devices | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
 | The phone as the hub, several hubs, your own blind relay | built | not yet |
 | Images, files and formatted text | built | not yet |
 | Remote paste and quick actions | built | remote paste from the iPhone and the watch to a Mac, at home and away from home; Windows, Linux and the quick actions not yet |

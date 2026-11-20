@@ -9,15 +9,17 @@ use std::io::Write;
 use std::net::{Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use super::keys::Keys;
 use super::server::{Config, Relay};
 use crate::error::{Error, Result};
 
-const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] (-group TAGS | -open) [-show-key]
+const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] [-refused FILE] (-group TAGS | -open) [-show-key]
   -listen ADDRESS  the address to listen on, UDP and TCP (default :8764)
   -key FILE        the relay's keys, made on the first run
+  -refused FILE    the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the key; \"none\" refuses none)
   -group TAGS      the tags of the groups to serve, separated by commas, as cbb status shows them
   -open            serve every group that registers, within limits per group and per network, in place of -group
   -show-key        print the key for cbb global relay -key and stop";
@@ -34,14 +36,21 @@ pub fn default_key() -> PathBuf {
 struct Flags {
     listen: String,
     key: PathBuf,
+    refused: String,
     groups: String,
     open: bool,
     show_key: bool,
 }
 
 fn parse(args: &[String]) -> std::result::Result<Flags, String> {
-    let mut f =
-        Flags { listen: ":8764".into(), key: default_key(), groups: String::new(), open: false, show_key: false };
+    let mut f = Flags {
+        listen: ":8764".into(),
+        key: default_key(),
+        refused: String::new(),
+        groups: String::new(),
+        open: false,
+        show_key: false,
+    };
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let Some(name) = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|n| !n.is_empty()) else {
@@ -56,6 +65,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
         match name {
             "listen" => f.listen = value()?,
             "key" => f.key = PathBuf::from(value()?),
+            "refused" => f.refused = value()?,
             "group" => f.groups = value()?,
             "open" => f.open = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
             "show-key" => f.show_key = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
@@ -93,6 +103,7 @@ fn test_limits() -> Result<super::limits::Limits> {
         byte_rate: f64,
         group_record_bytes: usize,
         record_bytes: usize,
+        streams: usize,
     }
     let Ok(v) = std::env::var("CBB_RELAY_LIMITS") else { return Ok(Default::default()) };
     let l: L = serde_json::from_str(&v).map_err(|e| Error::msg(format!("CBB_RELAY_LIMITS: {e}")))?;
@@ -105,6 +116,7 @@ fn test_limits() -> Result<super::limits::Limits> {
         byte_rate: l.byte_rate,
         group_record_bytes: l.group_record_bytes,
         record_bytes: l.record_bytes,
+        streams: l.streams,
     })
 }
 
@@ -150,11 +162,50 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         Ok(l) => l,
         Err(e) => return fail(stderr, e),
     };
-    let relay =
-        match Relay::start(Config { listen, keys, groups, open: f.open, limits, log: log.clone(), verbose: debug }) {
-            Ok(r) => r,
-            Err(e) => return fail(stderr, e),
-        };
+    // Each connection through the tunnel costs open files: the relay takes
+    // as many as its system lets it, and holds no more connections than
+    // they allow.
+    let limits = match super::limits::raise_files() {
+        Some(files) => {
+            let fit = limits.fit_files(files);
+            if fit.streams < limits.with_defaults().streams {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, too few for {} tunnel connections: it holds {} (raise LimitNOFILE)",
+                    limits.with_defaults().streams,
+                    fit.streams
+                ));
+            } else {
+                log(&format!("cbb relay: {files} open files allowed, {} tunnel connections", fit.streams));
+            }
+            if fit.files() > files {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, fewer than the {} it needs at least",
+                    fit.files()
+                ));
+            }
+            fit
+        }
+        None => limits,
+    };
+    // A list that cannot be read stops the relay: it never starts without
+    // the list its operator gave it.
+    let refused = match super::refused::List::open(&f.refused, &f.key) {
+        Ok(l) => l.map(Arc::new),
+        Err(e) => return fail(stderr, e),
+    };
+    let relay = match Relay::start(Config {
+        listen,
+        keys,
+        groups,
+        open: f.open,
+        limits,
+        log: log.clone(),
+        verbose: debug,
+        refused,
+    }) {
+        Ok(r) => r,
+        Err(e) => return fail(stderr, e),
+    };
     log(&format!(
         "cbb relay: listening on UDP and TCP port {} for {serving}; its key, for cbb global relay -key: {pin}",
         relay.addr().port()
@@ -164,7 +215,16 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
     let every = std::env::var("CBB_RELAY_STATS_MS").ok().and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0);
     let tick = Duration::from_millis(every.unwrap_or(1000));
     let mut ticks = 0u64;
-    while !relay.stopped() {
+    // SIGTERM and SIGINT end it as an exit, not a kill: systemd's stop
+    // returns at once, and a build with instrument-coverage writes what it
+    // ran (CI's coverage of the Go tests that run it).
+    #[cfg(unix)]
+    // SAFETY: the handler only stores to an atomic.
+    unsafe {
+        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
+    }
+    while !relay.stopped() && !STOP.load(Ordering::SeqCst) {
         std::thread::sleep(tick);
         ticks += 1;
         if every.is_some() || debug && ticks.is_multiple_of(60) {
@@ -174,6 +234,14 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         }
     }
     0
+}
+
+/// Set by SIGTERM or SIGINT: the relay ends.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn on_signal(_: libc::c_int) {
+    STOP.store(true, Ordering::SeqCst);
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@
 # other archives.
 #
 # The release workflow writes it after each release; it goes to winget's
-# repository microsoft/winget-pkgs by a pull request (docs/maintaining.md,
+# repository microsoft/winget-pkgs by a pull request (docs/maintainers/maintaining.md,
 # "winget").
 set -eu
 

@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 #
 # Renews the release channel's stable.json with the channel key
-# (docs/maintaining.md, "Signed releases"): /etc/systemd/system/cbb-channel.service,
+# (docs/maintainers/maintaining.md, "Signed releases"): /etc/systemd/system/cbb-channel.service,
 # run by cbb-channel.timer. The key stays readable only by root, and the
 # service gets it as a credential for the run.
 

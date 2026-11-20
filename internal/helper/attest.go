@@ -23,6 +23,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/testhook"
 	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
@@ -61,7 +62,7 @@ type StatusFiles struct {
 // statusURL is the mirror of the revocation list; CBB_TEST_STATUS_URL in
 // tests.
 func statusURL() string {
-	if u := os.Getenv("CBB_TEST_STATUS_URL"); u != "" {
+	if u := testhook.Getenv("CBB_TEST_STATUS_URL"); u != "" {
 		return u
 	}
 	return "https://cbb.tools/attest/"
@@ -199,7 +200,7 @@ type attestation struct {
 // as the policy takes them, or their certificates) and CBB_TEST_TPM_ROOTS
 // (certificates) name.
 func androidRoots() ([][]byte, error) {
-	f := os.Getenv("CBB_TEST_ATTEST_ROOTS")
+	f := testhook.Getenv("CBB_TEST_ATTEST_ROOTS")
 	if f == "" {
 		return nil, nil
 	}
@@ -227,7 +228,7 @@ func androidRoots() ([][]byte, error) {
 }
 
 func tpmRoots() ([]*x509.Certificate, error) {
-	f := os.Getenv("CBB_TEST_TPM_ROOTS")
+	f := testhook.Getenv("CBB_TEST_TPM_ROOTS")
 	if f == "" {
 		return nil, nil
 	}

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Lists the modules the Android apps are built with, for tools/sbom
-// (docs/maintaining.md, "What a release is built from"). An init script, so
+// (docs/maintainers/maintaining.md, "What a release is built from"). An init script, so
 // the apps' own build files stay as they are:
 //
 //   ./gradlew --no-configuration-cache --init-script ../../packaging/sbom.init.gradle.kts \

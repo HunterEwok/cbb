@@ -37,7 +37,7 @@ func (g *fakeGitHub) zxnext(tag, dot string) {
 	var sums strings.Builder
 	entries, _ := os.ReadDir(d)
 	for _, e := range entries {
-		if e.Name() != "SHA256SUMS" {
+		if e.Name() != "SHA256SUMS" && !provenance(e.Name()) {
 			fmt.Fprintf(&sums, "%x  %s\n", sha256.Sum256(must(os.ReadFile(filepath.Join(d, e.Name())))), e.Name())
 		}
 	}

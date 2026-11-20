@@ -69,7 +69,7 @@ public enum Pairing {
     /// The joiner's CPace associated data.
     public struct Info: Codable, Equatable {
         public var name: String
-        public var os: String // "linux", "windows", "macos", or "ios", "android", "aurora" or "sailfish" for a phone with the app; "none" for firmware
+        public var os: String // "linux", "windows", "macos", or "ios", "android", "aurora", "sailfish" or "harmonyos" for a phone with the app; "none" for firmware
         /// A phone's admin key, a SubjectPublicKeyInfo, for the admin CA the
         /// root may issue it; only from a phone.
         public var adminKey: Data?
@@ -118,7 +118,7 @@ public enum Pairing {
 
         /// Whether it comes from a phone with the app, an iPhone or an
         /// Android phone, which joins as a phone and may become an admin.
-        public var isPhone: Bool { ["ios", "android", "aurora", "sailfish"].contains(os) }
+        public var isPhone: Bool { ["ios", "android", "aurora", "sailfish", "harmonyos"].contains(os) }
 
         /// Whether a name may hold s, as Go's unicode.IsPrint says: a
         /// letter, mark, number, punctuation, symbol or the ASCII space; no
@@ -142,7 +142,7 @@ public enum Pairing {
         /// to 64 bytes, known caps, sorted, none from a phone, and an admin
         /// key only from a phone, a P-256 one.
         public var isValid: Bool {
-            guard ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "none"].contains(os), !name.isEmpty, name.utf8.count <= 64,
+            guard ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "harmonyos", "none"].contains(os), !name.isEmpty, name.utf8.count <= 64,
                   name.unicodeScalars.allSatisfy(Self.printable) else { return false }
             let c = caps ?? []
             guard c.allSatisfy(Records.caps.contains), zip(c, c.dropFirst()).allSatisfy({ $0 < $1 }), !(isPhone && !c.isEmpty) else { return false }

@@ -27,6 +27,7 @@ function system(d) {
     case "android": return "Android"
     case "aurora": return "Aurora OS"
     case "sailfish": return "Sailfish OS"
+    case "harmonyos": return "HarmonyOS"
     case "watchos": return "watchOS"
     case "wearos": return "Wear OS"
     case "": return ""
@@ -37,6 +38,14 @@ function system(d) {
 // Whether it is a member with the capability c: admin, dials or hub.
 function can(d, c) {
     return d.role === "member" && (d.caps || []).indexOf(c) >= 0
+}
+
+// Whether it takes a remote paste: a member, or a phone with Android,
+// Aurora OS or Sailfish OS (through its Bluetooth keyboard); an iPhone
+// takes none.
+function takesPaste(d) {
+    return !d.self && (d.role === "member"
+                       || (d.role === "phone" && ["android", "aurora", "sailfish"].indexOf(d.os) >= 0))
 }
 
 // Its kind, from its role and system.

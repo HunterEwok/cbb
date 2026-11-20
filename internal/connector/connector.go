@@ -549,7 +549,17 @@ func acted(ctx context.Context, act Actor, m *control.Message, logf func(string,
 	var err error
 	switch {
 	case len(m.Command) > 0:
-		err = actions.RunCommand(ctx, m.Command)
+		// Only a command this session's user set: the service names it,
+		// but must not choose what the session runs.
+		dir, derr := actions.OwnDir()
+		if derr == nil {
+			err = actions.OwnCommandAllowed(dir, m.Name, m.Command)
+		} else {
+			err = &actions.Refusal{Reason: "this session cannot find its user's settings: " + derr.Error()}
+		}
+		if err == nil {
+			err = actions.RunCommand(ctx, m.Command)
+		}
 	case act == nil:
 		ans.Error, ans.Refused = "this session runs no presets: the service runs them", true
 		return ans

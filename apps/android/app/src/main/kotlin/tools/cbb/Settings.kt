@@ -51,10 +51,10 @@ class Settings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
 
-    /** A name of Tokens.colors, or ColorChoice.MATERIAL. */
-    var color: String
-        get() = prefs.getString("color", null) ?: "terminal"
-        set(v) = prefs.edit().putString("color", v).apply()
+    /** A name of Tokens.themes, or ThemeChoice.MATERIAL. */
+    var theme: String
+        get() = prefs.getString("theme", null) ?: Tokens.themes.first().name
+        set(v) = prefs.edit().putString("theme", v).apply()
 
     var appearance: Appearance
         get() = Appearance.of(prefs.getString("appearance", null))
@@ -95,13 +95,19 @@ class Settings(context: Context) {
     /**
      * Whether a message names the error underneath, to find out what
      * failed: on in debug builds, off in release ones, and either way what
-     * the switch in Settings (seven taps on the version show it) or the
-     * launch extra ShowErrorDetails set last
+     * the switch in Settings (seven taps on the version show it) or, in a
+     * debug build, the launch extra ShowErrorDetails set last
      * (adb shell am start -n tools.cbb/tools.cbb.MainActivity --ez ShowErrorDetails true).
      */
     var showsErrorDetails: Boolean
         get() = if (prefs.contains(ERROR_DETAILS)) prefs.getBoolean(ERROR_DETAILS, false) else debuggable
         set(v) = prefs.edit().putBoolean(ERROR_DETAILS, v).apply()
+
+    /**
+     * Whether the launch extra ShowErrorDetails counts: in debug builds
+     * only, since any app on the phone can start the activity with it.
+     */
+    val takesErrorDetailsExtra: Boolean get() = debuggable
 
     /**
      * Whether the user chose to keep this phone as the hub when the app

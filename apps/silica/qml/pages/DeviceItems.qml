@@ -17,6 +17,11 @@ Column {
     property var level: []         // the items, of kind "device" or "collection"
     property var view: []          // the whole view, for the collections
     property string inCollection: "" // the collection these devices are in
+    // On a big screen: the main page's choice of a device, the one chosen,
+    // and how a collection opens (as a section of the sidebar).
+    property var choose: null
+    property string chosen: ""
+    property var openCollection: null
 
     // This phone is an item as the others are: first until the user moves it.
     function arrange(level, index, inCollection) {
@@ -221,6 +226,8 @@ Column {
             DeviceTile {
                 id: dt
                 device: entry.device
+                choose: items.choose
+                chosen: at >= 0 && entry.device.id === items.chosen
                 enabled: at >= 0
                 preventStealing: items.dragFrom === at && at >= 0
                 onPressAndHold: items.dragStart(at, dt, mouse)
@@ -234,6 +241,7 @@ Column {
             CollectionTile {
                 id: ct
                 collection: entry
+                open: items.openCollection
                 enabled: at >= 0
                 preventStealing: items.dragFrom === at && at >= 0
                 onPressAndHold: items.dragStart(at, ct, mouse)
@@ -283,13 +291,15 @@ Column {
                 visible: entry.kind === "device"
                 width: parent.width
                 device: entry.kind === "device" ? entry.device : ({})
+                choose: items.choose
+                chosen: entry.kind === "device" && entry.device.id === items.chosen
                 onPressAndHold: items.arrange(items.level, at, items.inCollection)
             }
             BackgroundItem {
                 visible: entry.kind === "collection"
                 width: parent.width
                 height: Theme.itemSizeSmall
-                onClicked: pageStack.push(Qt.resolvedUrl("CollectionPage.qml"), { collection: entry.id })
+                onClicked: items.openCollection ? items.openCollection(entry.id) : pageStack.push(Qt.resolvedUrl("CollectionPage.qml"), { collection: entry.id })
                 onPressAndHold: items.arrange(items.level, at, "")
                 Label {
                     x: Theme.horizontalPageMargin
@@ -309,6 +319,8 @@ Column {
                 DeviceRow {
                     width: items.width
                     device: modelData
+                    choose: items.choose
+                    chosen: modelData.id === items.chosen
                     onPressAndHold: items.arrange(Arrange.items(entry.devices), index, entry.id)
                 }
             }

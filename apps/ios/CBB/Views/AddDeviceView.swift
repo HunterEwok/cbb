@@ -11,6 +11,7 @@ struct AddDeviceView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
     @State private var typed = ""
     /// The device being admitted; leaving the sheet cancels it.
     @State private var adding: Task<Void, Never>?
@@ -24,7 +25,7 @@ struct AddDeviceView: View {
             VStack(spacing: Tokens.spacingLarge) {
                 if QRScanner.available {
                     QRScanner { text in add(text) }
-                    .clipShape(RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                     .frame(maxHeight: 360)
                     if restore {
                         Text("Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.")

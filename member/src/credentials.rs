@@ -12,11 +12,15 @@
 //! admin that the hubs' credential lists, the members' credential. Its keys
 //! for the servers, a server key for the period and on the root the period
 //! key, are in server-keys.json, in the TPM or the Secure Enclave where
-//! cbb-helper can put them there, as Go's ServerKeys.
+//! cbb-helper can put them there, as Go's ServerKeys. A phone's member
+//! (`load_held`, the apps that sign through the core) keeps them where the
+//! app holds its keys (HeldKeys), and signs a period only when the app hands
+//! it the root key after asking the user (sign_period); until then the
+//! period waits, and period_due tells the app.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use cbb_core::certs::{Cert, KeyHash};
@@ -61,10 +65,24 @@ impl SavedKey {
     }
 }
 
-/// The device's keys for the servers, by kind and period tag.
+/// Keys for the servers that the app holds, as a phone's app holds its
+/// own in its TEE, by name ("server TAG" or "period TAG"): it makes a key
+/// when asked for one it has not, signs with it, and drops the others.
+pub trait HeldKeys: Send + Sync {
+    /// Whether the app holds the key name.
+    fn has(&self, name: &str) -> bool;
+    /// The key name, made first when the app holds none.
+    fn get(&self, name: &str) -> Result<Arc<dyn ExternalKey>>;
+    /// Drops every key but those named.
+    fn keep(&self, names: &[String]) -> Result<()>;
+}
+
+/// The device's keys for the servers, by kind and period tag: in the file,
+/// or the app's (held).
 struct ServerKeys {
     file: PathBuf,
     keys: BTreeMap<String, (Arc<dyn ExternalKey>, SavedKey)>,
+    held: Option<Arc<dyn HeldKeys>>,
 }
 
 impl ServerKeys {
@@ -83,17 +101,24 @@ impl ServerKeys {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(Error::with(format!("cannot read {}", file.display()), e)),
         }
-        Ok(ServerKeys { file, keys })
+        Ok(ServerKeys { file, keys, held: None })
     }
 
     fn has(&self, kind: &str, tag: &str) -> bool {
-        self.keys.contains_key(&format!("{kind} {tag}"))
+        let name = format!("{kind} {tag}");
+        match &self.held {
+            Some(h) => h.has(&name),
+            None => self.keys.contains_key(&name),
+        }
     }
 
     /// The key of kind for the period of tag, made and saved when there is
     /// none.
     fn get(&mut self, kind: &str, tag: &str) -> Result<Arc<dyn ExternalKey>> {
         let name = format!("{kind} {tag}");
+        if let Some(h) = &self.held {
+            return h.get(&name);
+        }
         if let Some((k, _)) = self.keys.get(&name) {
             return Ok(k.clone());
         }
@@ -122,6 +147,9 @@ impl ServerKeys {
 
     /// Drops the keys of every period but tag's.
     fn keep(&mut self, tag: &str) -> Result<()> {
+        if let Some(h) = &self.held {
+            return h.keep(&[format!("{SERVER_KEY} {tag}"), format!("{PERIOD_KEY} {tag}")]);
+        }
         let n = self.keys.len();
         self.keys.retain(|name, _| *name == format!("{SERVER_KEY} {tag}") || *name == format!("{PERIOD_KEY} {tag}"));
         if self.keys.len() == n { Ok(()) } else { self.save() }
@@ -155,6 +183,13 @@ pub struct Credentials {
     refreshing: Mutex<()>,
     /// Counts the changes, so that a relay link registers again.
     changes: AtomicUsize,
+    /// A phone's member: it holds the root when the records say so, and
+    /// signs a period only with the key sign_period hands it (root_once).
+    phone: bool,
+    root_once: Mutex<Option<Arc<dyn ExternalKey>>>,
+    /// On a phone that holds the root: the period is due and waits for the
+    /// app to sign it.
+    period_due: AtomicBool,
     /// The certificate of the last server key a hub registered with, by
     /// the key's SubjectPublicKeyInfo, so that it is signed once.
     #[cfg(feature = "tunnel")]
@@ -195,15 +230,43 @@ impl Credentials {
         }
         let keys = ServerKeys::load(dir).unwrap_or_else(|e| {
             log(&format!("cbb: reading the keys for the servers: {}; making new ones", e.for_log()));
-            ServerKeys { file: dir.join(KEYS_FILE), keys: BTreeMap::new() }
+            ServerKeys { file: dir.join(KEYS_FILE), keys: BTreeMap::new(), held: None }
         });
+        Self::with_keys(dir, node, store, keys, false, log)
+    }
+
+    /// The credentials of a phone's member, kept in dir, with its keys for
+    /// the servers where the app holds them.
+    pub fn load_held(
+        dir: &Path,
+        node: &Node,
+        held: Arc<dyn HeldKeys>,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Arc<Credentials> {
+        let c = Self::load(dir, node, log.clone());
+        let store = c.store.lock().unwrap().clone();
+        let keys = ServerKeys { file: dir.join(KEYS_FILE), keys: BTreeMap::new(), held: Some(held) };
+        Self::with_keys(dir, node, store, keys, true, log)
+    }
+
+    fn with_keys(
+        dir: &Path,
+        node: &Node,
+        store: Store,
+        keys: ServerKeys,
+        phone: bool,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Arc<Credentials> {
         Arc::new(Credentials {
             dir: dir.to_path_buf(),
-            group_ca,
+            group_ca: node.identity().group_ca.clone(),
             store: Mutex::new(store),
             keys: Mutex::new(keys),
             refreshing: Mutex::new(()),
             changes: AtomicUsize::new(0),
+            phone,
+            root_once: Mutex::new(None),
+            period_due: AtomicBool::new(false),
             #[cfg(feature = "tunnel")]
             hub_cert: Mutex::new(None),
             log,
@@ -277,11 +340,55 @@ impl Credentials {
         if let Err(e) = self.refresh_with(node, &mut signed) {
             (self.log)(&format!("cbb: the server credentials: {}", e.for_log()));
         }
+        Self::send(node, &signed);
+    }
+
+    fn send(node: &Node, signed: &[Credential]) {
         if !signed.is_empty()
-            && let Ok(v) = serde_json::to_value(&signed)
+            && let Ok(v) = serde_json::to_value(signed)
         {
             node.broadcast(&wire::credentials(&v), |_| true);
         }
+    }
+
+    /// Whether this phone holds the root and its period is due, waiting for
+    /// sign_period.
+    pub fn period_due(&self) -> bool {
+        self.period_due.load(Ordering::SeqCst)
+    }
+
+    /// Signs the next period on a phone that holds the root, with key, the
+    /// root key the app hands in for this call after asking the user, when
+    /// one is due, and brings the rest up to date; nothing when none is due.
+    pub fn sign_period(&self, node: &Node, key: Arc<dyn ExternalKey>) -> Result<()> {
+        if spki(&*key) != root_of(node, &self.group_ca) {
+            return Err(Error::msg("the key that signs the period is not the group's root"));
+        }
+        let _busy = self.refreshing.lock().unwrap();
+        *self.root_once.lock().unwrap() = Some(key);
+        let mut signed = Vec::new();
+        let done = self.refresh_with(node, &mut signed);
+        *self.root_once.lock().unwrap() = None;
+        Self::send(node, &signed);
+        done
+    }
+
+    /// Whether this device holds the group's root, and its key when it
+    /// may sign with it now: the admin file's root key on a computer, the
+    /// key sign_period hands in on a phone.
+    fn root_signer(&self, node: &Node, root: &[u8]) -> Result<(bool, Option<Arc<dyn ExternalKey>>)> {
+        let ident = node.identity();
+        if self.phone {
+            let held = node
+                .records()
+                .lock()
+                .unwrap()
+                .root_member()
+                .is_some_and(|(id, k)| id == ident.id.as_str() && k == ident.cert.key_hash());
+            return Ok((held, if held { self.root_once.lock().unwrap().clone() } else { None }));
+        }
+        let key = crate::admin::signer(&self.dir, &ident)?.filter(|s| s.root && s.ca.spki == root).map(|s| s.key);
+        Ok((key.is_some(), key))
     }
 
     fn refresh_with(&self, node: &Node, signed: &mut Vec<Credential>) -> Result<()> {
@@ -292,10 +399,10 @@ impl Credentials {
         let member = member_test(node);
 
         // The period, on the root.
-        let root_key = crate::admin::signer(&self.dir, &ident)?.filter(|s| s.root && s.ca.spki == root).map(|s| s.key);
-        if let Some(rk) = &root_key
-            && self.store.lock().unwrap().period_stale(&root, &member, now)
-        {
+        let (is_root, root_key) = self.root_signer(node, &root)?;
+        let stale = is_root && self.store.lock().unwrap().period_stale(&root, &member, now);
+        self.period_due.store(stale && root_key.is_none(), Ordering::SeqCst);
+        if let Some(rk) = root_key.as_ref().filter(|_| stale) {
             let tag = credential::new_period_tag()?;
             let pk = self.keys.lock().unwrap().get(PERIOD_KEY, &tag).map_err(|e| e.context("making the period key"))?;
             let prev = self.store.lock().unwrap().period(&root).map_or(0, |(_, p)| p.version);
@@ -335,7 +442,7 @@ impl Credentials {
             (st.server_keys(&l.hubs), st.server_keys(&l.admins), st.server_keys(&l.members))
         };
         let listed = self.store.lock().unwrap().hubs();
-        let period_key = root_key.is_some() && self.keys.lock().unwrap().has(PERIOD_KEY, &p.tag);
+        let period_key = is_root && self.keys.lock().unwrap().has(PERIOD_KEY, &p.tag);
         let signing = if period_key {
             let pk = self.keys.lock().unwrap().get(PERIOD_KEY, &p.tag)?;
             let stale = listed.as_ref().is_none_or(|(_, hb)| {

@@ -29,6 +29,9 @@ enum SyncSwitch {
 struct SetSyncIntent: SetValueIntent, LiveActivityIntent {
     static let title: LocalizedStringResource = "Sync"
     static let isDiscoverable = false
+    /// Control Center also opens on a locked phone: there it asks for Face
+    /// ID or the passcode before sync changes.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Sync")
     var value: Bool

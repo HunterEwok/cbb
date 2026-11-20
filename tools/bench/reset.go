@@ -32,7 +32,7 @@ const winStateBase = "$env:LOCALAPPDATA\\cbbbench"
 
 // Build is the build under test: the release archives in a directory, as
 // the release workflow and CI make them (packaging/archive.sh,
-// member/packaging/archive.sh), checked against its SHA256SUMS.
+// packaging/archive.sh), checked against its SHA256SUMS.
 type Build struct {
 	dir    string
 	sums   map[string]string // archive name to its SHA-256
@@ -112,8 +112,6 @@ func archiveFor(d *Device, machine string) (string, error) {
 		return "cbb-freebsd-" + arch + ".tar.gz", nil
 	case "linux", "docker", "netns":
 		return "cbb-linux-" + arch + ".tar.gz", nil
-	case "linux-lite":
-		return "cbb-lite-linux-" + arch + ".tar.gz", nil
 	case "darwin":
 		return "cbb-darwin-" + arch + ".tar.gz", nil
 	case "windows":
@@ -157,9 +155,9 @@ func Reset(ctx context.Context, r *Report, devices []*Device, b *Build, quick bo
 
 func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool) error {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		if quick {
-			_, err := Run(ctx, d, "sudo -n sh -c 'systemctl stop cbb && rm -rf /var/lib/cbb/* /etc/systemd/system/cbb.service.d && systemctl daemon-reload && systemctl start cbb'", "")
+			_, err := Run(ctx, d, "sudo -n sh -c 'systemctl stop cbb && rm -rf /var/lib/cbb/* && rm -f /etc/systemd/system/cbb.service.d/cbbbench.conf && systemctl daemon-reload && systemctl start cbb'", "")
 			if err != nil {
 				return noSudo(d, err)
 			}
@@ -263,7 +261,7 @@ func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool
 	case "windows":
 		return resetWindows(ctx, r, d, b, quick)
 	}
-	return Skipped("the bench does not reset os " + d.OS + " yet; reset it by hand (docs/testbench-cases.md, R1)")
+	return Skipped("the bench does not reset os " + d.OS + " yet; reset it by hand (docs/maintainers/testbench-cases.md, R1)")
 }
 
 // resetRouterOrBSD is R1 on OpenWrt and FreeBSD: uninstall.sh --purge, a
@@ -412,8 +410,7 @@ func stage(ctx context.Context, d *Device, b *Build) (string, error) {
 	if d.OS == "darwin" {
 		return dir, nil
 	}
-	// The archive holds one directory, cbb or
-	// cbb-lite.
+	// The archive holds one directory, cbb.
 	out, err = Run(ctx, d, "ls -d "+dir+"/*/", "")
 	if err != nil {
 		return "", err
@@ -462,7 +459,7 @@ Get-ChildItem "` + winStateBase + `" -Directory | Sort-Object LastWriteTime -Des
 func uninstalled(ctx context.Context, d *Device) error {
 	check := "ls -d " + strings.Join(installedPaths(d), " ") + " 2>/dev/null; "
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		check += "sudo -n ufw status 2>/dev/null | grep -i cbb; "
 	case "openwrt":
 		check += "ls /etc/rc.d | grep cbb; grep -l cbb /etc/config/firewall; "

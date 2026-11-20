@@ -1,6 +1,6 @@
 module github.com/HunterEwok/cbb/apps/desktop
 
-go 1.27.0
+go 1.27.3
 
 toolchain go1.27.4
 
@@ -9,8 +9,8 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/makiuchi-d/gozxing v0.1.1
-	github.com/wailsapp/wails/v3 v3.2.0-nightly.20261101
-	golang.org/x/sys v0.49.0
+	github.com/wailsapp/wails/v3 v3.2.0-nightly.20261103
+	golang.org/x/sys v0.50.0
 	rsc.io/qr v0.2.0
 )
 

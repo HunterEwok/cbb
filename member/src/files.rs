@@ -107,3 +107,86 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+/// Marks a file received from another device as downloaded, so that the
+/// system checks it before it first opens, as Go's mediafile.markDownload:
+/// on a Mac the quarantine attribute (Gatekeeper), on Windows the Mark of
+/// the Web in the Zone.Identifier stream, zone 3 (SmartScreen, Office's
+/// Protected View). Elsewhere nothing; a file system without the attribute
+/// or the stream keeps the file unmarked.
+pub fn mark_download(path: &Path) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let fail = |e| Error::with(format!("cannot mark {} as downloaded", path.display()), e);
+        let c = std::ffi::CString::new(path.as_os_str().as_bytes())
+            .map_err(|_| Error::msg(format!("{} holds a NUL", path.display())))?;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let value = quarantine_value(now);
+        // SAFETY: both strings are NUL-terminated and value is read within
+        // its length, all for the call.
+        let r = unsafe {
+            libc::setxattr(c.as_ptr(), c"com.apple.quarantine".as_ptr(), value.as_ptr().cast(), value.len(), 0, 0)
+        };
+        if r != 0 {
+            let e = std::io::Error::last_os_error();
+            if e.raw_os_error() != Some(libc::ENOTSUP) {
+                return Err(fail(e));
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        let mut stream = path.as_os_str().to_owned();
+        stream.push(":Zone.Identifier");
+        // A file system without streams (FAT) keeps the file unmarked.
+        if let Ok(mut f) = fs::File::create(&stream) {
+            f.write_all(ZONE_IDENTIFIER.as_bytes())
+                .map_err(|e| Error::with(format!("cannot mark {} as downloaded", path.display()), e))?;
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let _ = path;
+    Ok(())
+}
+
+/// The quarantine attribute of a file CBB received at `now` (Unix
+/// seconds), as Go's: the flags, the time in hexadecimal, the agent.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn quarantine_value(now: u64) -> String {
+    format!("0083;{now:x};CBB;")
+}
+
+/// The Mark of the Web of a file from another device: the Internet zone.
+#[cfg_attr(not(windows), allow(dead_code))]
+const ZONE_IDENTIFIER: &str = "[ZoneTransfer]\r\nZoneId=3\r\n";
+
+#[cfg(test)]
+mod mark_tests {
+    use super::*;
+
+    /// The marks are Go's, byte for byte (internal/mediafile).
+    #[test]
+    fn marks_as_go() {
+        assert_eq!(quarantine_value(0x6543_21ab), "0083;654321ab;CBB;");
+        assert_eq!(ZONE_IDENTIFIER, "[ZoneTransfer]\r\nZoneId=3\r\n");
+        let dir = std::env::temp_dir().join(format!("cbb-mark-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("a.txt");
+        fs::write(&f, b"x").unwrap();
+        mark_download(&f).unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            let out =
+                std::process::Command::new("xattr").arg("-p").arg("com.apple.quarantine").arg(&f).output().unwrap();
+            assert!(String::from_utf8_lossy(&out.stdout).starts_with("0083;"));
+        }
+        #[cfg(windows)]
+        {
+            let mut s = f.as_os_str().to_owned();
+            s.push(":Zone.Identifier");
+            assert_eq!(fs::read_to_string(s).unwrap(), ZONE_IDENTIFIER);
+        }
+        fs::remove_dir_all(&dir).unwrap();
+    }
+}

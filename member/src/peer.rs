@@ -87,6 +87,22 @@ pub fn own_sid() -> Option<String> {
     win::sid_of(None)
 }
 
+/// The SID of the user at the other end of s, and whether its process runs
+/// in an active session: at the console or over Remote Desktop.
+#[cfg(windows)]
+pub fn sid_at_screen(s: &UnixStream) -> Option<(String, bool)> {
+    let pid = s.peer_pid()?;
+    let session = win::session_of(pid)?;
+    Some((win::sid_of(Some(pid))?, win::active(session)))
+}
+
+/// The session of the process at the other end of s, where the service
+/// shows what a confirmation is for.
+#[cfg(windows)]
+pub fn session(s: &UnixStream) -> Option<u32> {
+    win::session_of(s.peer_pid()?)
+}
+
 /// Root and the service's own user, which take every target.
 #[cfg(unix)]
 pub fn privileged(uid: Who) -> bool {
@@ -150,6 +166,42 @@ pub fn at_screen(uid: u32, target: &str) -> Verdict {
         }
     }
     Verdict::Refused
+}
+
+/// Whether the user uid is at the screen, for what must not go ahead
+/// unchecked: at_screen, and where logind is missing, on a Mac, the owner
+/// of the console (the user of the session in front). Nothing that tells
+/// counts as no.
+#[cfg(unix)]
+pub fn at_screen_surely(uid: u32, target: &str) -> Verdict {
+    match at_screen(uid, target) {
+        Verdict::Unchecked if cfg!(target_os = "macos") => console_verdict(console_owner(), uid),
+        Verdict::Unchecked => Verdict::Refused,
+        v => v,
+    }
+}
+
+/// On Windows at_screen always tells.
+#[cfg(windows)]
+pub fn at_screen_surely(w: Who, target: &str) -> Verdict {
+    at_screen(w, target)
+}
+
+/// The owner of /dev/console: on a Mac, the user whose session is in front.
+#[cfg(unix)]
+fn console_owner() -> Option<u32> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/dev/console").ok().map(|m| m.uid())
+}
+
+/// Allowed only when the console's owner is known, not root (the login
+/// window), and uid.
+#[cfg(unix)]
+fn console_verdict(owner: Option<u32>, uid: u32) -> Verdict {
+    match owner {
+        Some(o) if o != 0 && o == uid => Verdict::Allowed,
+        _ => Verdict::Refused,
+    }
 }
 
 /// Whether a session whose logind properties are props puts the user uid at
@@ -286,6 +338,21 @@ mod tests {
         assert_eq!(may_take(Some(other), TMUX, screen), Verdict::Allowed);
         assert_eq!(may_take(Some(other + 1), DESKTOP, screen), Verdict::Refused);
         assert_eq!(may_take(Some(other), DESKTOP, |_, _| Verdict::Unchecked), Verdict::Unchecked);
+    }
+
+    /// What must not go ahead unchecked takes the console's owner or
+    /// nothing: no owner, the login window's root or another user is a no.
+    #[cfg(unix)]
+    #[test]
+    fn at_the_console() {
+        assert_eq!(console_verdict(Some(501), 501), Verdict::Allowed);
+        assert_eq!(console_verdict(Some(502), 501), Verdict::Refused);
+        assert_eq!(console_verdict(Some(0), 0), Verdict::Refused);
+        assert_eq!(console_verdict(None, 501), Verdict::Refused);
+        #[cfg(not(target_os = "macos"))]
+        if loginctl(&["list-sessions", "--no-legend"]).is_none() {
+            assert_eq!(at_screen_surely(4242, DESKTOP), Verdict::Refused);
+        }
     }
 
     #[test]

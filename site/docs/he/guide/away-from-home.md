@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0ee54fa655f3 -->
+<!-- source: 1abdaa297166 -->
 # מחוץ לבית
 
 בבית המכשירים שלכם מסתנכרנים בעצמם. כדי להמשיך להסתנכרן כשמחשב נייד או טלפון נמצאים במקום אחר, מחשב אחד בבית הופך להיות **הרכזת** של הקבוצה, והמכשירים שנוסעים מגיעים אליה דרך המנהרה המוצפנת של הקבוצה עצמה. התמונות של כל מקרה נמצאות ב[איך זה עובד](how-it-works.md#away-from-home-the-hub).
@@ -44,7 +44,7 @@ sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches you
 
 - **מחשבים**: ‏`sudo cbb global on` (ב-Windows, בטרמינל של מנהל).
 - **טלפונים**: באפליקציה, הגדרות, **Sync away from home**. אחר כך השאירו את האפליקציה פתוחה לרגע בבית, כדי שתפגוש את הרכזת. iPhone מסתנכרן מחוץ לבית בזמן שהאפליקציה פתוחה; Android גם ברקע. בקבוצה שנוצרה בטלפון, הטלפון הזה מתחיל כרכזת, והמתג מופיע רק כשהוא מפסיק להיות כזו: תחת **Move the hub to a computer** הפכו את המחשב לרכזת (אחרי ששמרתם קודם את המעביר בטלפון), או כבו את **This phone as the hub**.
-- **חבר קל**: ‏`sudo cbb global on` במכשיר ([חבר קל](../../member/README.md#sync-away-from-home)).
+- **מכשיר קטן** (נתב, Raspberry Pi): ‏`sudo cbb global on` במכשיר ([מכשירים קטנים](../../member/README.md#sync-away-from-home)).
 
 ## 4. בדקו
 

@@ -146,14 +146,10 @@ func syncModes(ctx context.Context, r *Report, g *benchGroup, timeout time.Durat
 	}
 }
 
-// modeIs checks the device's cbb sync, which a full member shows to any
-// member of the service's group; the lite member's cbb sync asks as root.
+// modeIs checks the device's cbb sync, which the service shows to any
+// member of its group: its own sync needs no admin socket.
 func modeIs(ctx context.Context, d *Device, mode string) error {
-	cmd := cbbCmd(d)
-	if d.OS == "linux-lite" {
-		cmd = adminCmd(d)
-	}
-	out, err := Run(ctx, d, cmd+" sync", "")
+	out, err := Run(ctx, d, cbbCmd(d)+" sync", "")
 	if err != nil {
 		return noSudo(d, err)
 	}
@@ -182,7 +178,7 @@ func restartService(ctx context.Context, d *Device) error {
 // where the bench cannot (Windows so far).
 func asRoot(d *Device, cmd string) (string, bool) {
 	switch d.OS {
-	case "linux", "linux-lite", "docker", "netns", "openwrt", "freebsd":
+	case "linux", "docker", "netns", "openwrt", "freebsd":
 		return rootPrefix(d) + "sh -c " + shellQuote(cmd), true
 	}
 	return "", false
@@ -192,7 +188,7 @@ func asRoot(d *Device, cmd string) (string, bool) {
 // volume's directory on the host.
 func stateDir(ctx context.Context, d *Device) (string, error) {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "/var/lib/cbb", nil
 	case "darwin":
 		return "/Library/Application Support/cbb/state", nil
@@ -232,7 +228,7 @@ func secretCopy(ctx context.Context, r *Report, g *benchGroup, timeout time.Dura
 	}
 	for _, d := range g.members {
 		r.Do(prefix+d.Name+"/disk", func() error { return notOnDisk(ctx, d, g.run) })
-		if d.OS == "linux" || d.OS == "linux-lite" {
+		if d.OS == "linux" {
 			r.Do(prefix+d.Name+"/swap", func() error {
 				out, err := Run(ctx, d, "systemctl show cbb -p MemorySwapMax --value", "")
 				if err == nil && strings.TrimSpace(out) != "0" {
@@ -293,7 +289,7 @@ func notOnDisk(ctx context.Context, d *Device, run string) error {
 func localAccess(ctx context.Context, r *Report, g *benchGroup) {
 	const prefix = "full/S11-access/"
 	for _, d := range g.members {
-		if d.OS != "linux" && d.OS != "linux-lite" && d.OS != "darwin" {
+		if d.OS != "linux" && d.OS != "darwin" {
 			continue
 		}
 		r.Do(prefix+d.Name+"/stranger", func() error {
@@ -338,7 +334,7 @@ func logsClean(ctx context.Context, r *Report, g *benchGroup, since time.Time) {
 	for _, d := range g.members {
 		var logs string
 		switch d.OS {
-		case "linux", "linux-lite":
+		case "linux":
 			// The service's unit and the agent's process only: sudo logs
 			// the bench's own commands, which name the run.
 			logs = "{ sudo -n journalctl -u cbb --since @" + at + " --no-pager -o cat && { journalctl --user _COMM=cbb --since @" + at + " --no-pager -o cat 2>/dev/null || true; }; }"

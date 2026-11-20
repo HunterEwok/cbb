@@ -101,6 +101,14 @@ func TestReload(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
+	// Missing once, as when an editor moves it aside to save it, the list
+	// stays; missing again, it is gone.
+	if changed, err := l.Reload(); changed || err != nil {
+		t.Fatalf("a file moved aside: Reload = %v, %v", changed, err)
+	}
+	if !l.Refused(tagB) {
+		t.Fatal("a file moved aside let a refused group back in")
+	}
 	if changed, err := l.Reload(); !changed || err != nil {
 		t.Fatalf("a removed file: Reload = %v, %v", changed, err)
 	}

@@ -23,7 +23,7 @@
 #                mirror writes from the release's zxnext.json
 #
 # The site serves zxnext/CBB at /zxnext as well, which
-# `.http -h cbb.tools -u /zxnext -f CBB` fetches (docs/maintaining.md).
+# `.http -h cbb.tools -u /zxnext -f CBB` fetches (docs/maintainers/maintaining.md).
 set -eu
 
 [ $# -eq 3 ] || { echo "usage: $0 BUILD PI_CBB OUTDIR" >&2; exit 2; }

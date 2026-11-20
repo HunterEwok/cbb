@@ -6,6 +6,15 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
+In short, for 0.6: every computer and small device runs one `cbb` in Rust on the same core as
+the phones' apps, with the Go helper beside it on computers; the group's signed records are
+new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
+apps for the iPhone, Android, Aurora OS and HarmonyOS, the Mac, and a tray app for Linux and
+Windows; devices sync away from home through a hub, a forwarder or a blind relay; releases are
+signed and `cbb update` installs them. From 0.6 on a device works in one group with devices of
+the release before it ([versions and compatibility](docs/reference/compatibility.md)); a group
+made with 0.5 is set up again once. The details follow.
+
 ### Added
 - A change of root in 0.6 counts only the last root ("the last root only"): after it, nothing an
   earlier root or its admins signed counts or takes room, and the new root carries the group
@@ -40,11 +49,119 @@ All notable changes to cbb are documented in this file. The format follows
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
   marks and the pairing confirmation run on demand.
-- The forwarder refuses the groups their operator lists after an abuse report:
+- The CI measures what each part of the core costs in a small device's flash (`tools/size`,
+  for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
+  pairing, the member TLS and the core's whole entry point, each against today's baseline,
+  failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
+- Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
+  HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
+- The iPad has a Home of its own (docs/apps.md, "Big screens"): a sidebar with the group's
+  line and its switches, the devices' sections (all, needs attention, each collection) and the
+  settings' parts, the devices as tiles with the chosen one's card beside them, Command-1 to 9,
+  the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
+  dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
+  no longer offered on a Mac or a Vision Pro as an iPad app.
+- Android tablets, foldables and wide windows get the iPad's Home: the sidebar (standing in
+  landscape, sliding in from the edge in portrait) with the devices' sections and the parts of
+  Settings, the tiles with the chosen device's details beside them, Ctrl+1 to 9, Ctrl+N,
+  Ctrl+F, the arrows and Esc, a right click for a tile's menu (which now also pastes on the
+  device and mutes it), and text, pictures or files dropped on a tile pasted there or beside
+  the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
+  without its keys in secure hardware or without a strong fingerprint or face sensor says so
+  before it makes a group, restores one or takes one handed over.
+- The Aurora app on a tablet, or a phone turned on its side, shows the chosen device's card
+  beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
+  attention, each collection and Settings. Making or restoring a group on Aurora says that
+  its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
+- HarmonyOS tablets and open foldables get the same Home: the sidebar (standing from 1040 vp,
+  sliding in behind ☰ below) with the devices' sections and the parts of Settings, the
+  chosen tile outlined beside its details, Ctrl+1 to 9, Ctrl+, Ctrl+N, the arrows and Esc, a
+  right click for a tile's menu, and drops on a tile pasted there or beside the tiles sent to
+  the group. A HarmonyOS device without a strong fingerprint or face sensor says so before it
+  makes a group, restores one or takes one over.
+- The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
+  Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
+  HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
+  screens: a new group, joining by QR code or by an invitation, always as a member (the root makes a phone an
+  admin later from its device page, with the admin key its hellos offer), restoring, Home
+  with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
+  invitations, the recovery key and the takeover, the arrangement, the notifications, and
+  why it does not sync; it sends with the system's Paste button and from the Share menu
+  without opening (a share extension, as on the iPhone), pastes
+  a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
+  the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
+  in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app
+  (`apps/harmony/wearable`, HarmonyOS 5 watches) shows the devices, sync, Everywhere and
+  the latest events through the phone over Wear Engine, and turns sync and Everywhere on or
+  off (docs/apps.md, "HarmonyOS watches"); the root makes it an admin with a key in its HUKS,
+  and it freezes, removes and turns things off from the wrist, signing on the watch each
+  record or command it checked (manage `add_watch` and `watch_actions`,
+  `cbb_member_manage_watch`, `ExternalKey::sign_data`; the core's `add_watch`,
+  `watch_actions` and `Change::Freeze`). The phone can be the group's hub or meet the
+  group at a blind relay, and the root phone signs the periods of the group's server keys
+  and records what the Android phones' attestations show, with Google's revocation list
+  (`cbb_core::attest`, Android Key Attestation in the core, checked against Go's vectors;
+  the ops `attest_status`, `attest` and the manage action `attest`). It puts the recovery key
+  on a YubiKey over NFC and restores the group with one, the core speaking PIV for it
+  (`cbb_piv`, `cbb_member_manage_card`, and `cbb_restore`'s `card`), as for any app without
+  a PIV of its own. Outside the app it has the home-screen widget "Sync clipboard", a
+  shortcut on its icon, the intents SyncClipboard and ToggleSync, and Live View for adding a
+  device and for sync away from home, as the iPhone's widget, App Intents and Live
+  Activities. On a tablet or an open foldable its Home shows the devices on orbits, as
+  tiles or a list, with a device's details beside them.
+  `cbb_member_manage` signs a remote paste (`paste`, `paste_off`), `actions_off`,
+  `away_off`, `action`, `freeze` and a period of the
+  server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
+  makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,
+  `relay`, `servers`). The
+  protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
+  and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
+  `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
+  (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
+  OpenHarmony's compiler, the abilities, intents and widgets as well as the pages; `tools/strings` writes its strings from `apps/l10n`,
+  `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
+  runs the check.
+- `tools/prcheck` and its workflow check every pull request's commits for authors,
+  committers and co-authors outside a short list of known addresses, and its title and
+  description, which become the squash commit's message, for links to assistant
+  conversations and model names.
+- The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
+  gives an app neither its authentication service nor the fingerprint. The key moves to a
+  second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
+  the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
+  sync needs no PIN. Settings change the PIN.
+- The Aurora app pastes on another device, as the iPhone and Android apps do: "Paste on it…" in
+  an admin's menu on a device's page sends a text (or the clipboard's), pasted or typed, with
+  Enter after it if asked, or a picture or files that the device pastes with its paste keys. It
+  signs the paste command with the admin key in the core (`cbb_member_manage` action `paste`).
+  The iPhone and Android apps paste on Aurora phones too, which type the text on their
+  Bluetooth keyboard's device.
+- Ten themes in every app, each a full set of tokens (faces, corners, lines, material, grid,
+  colours for dark and light) from `apps/design/tokens.json`: Blueprint, the new default,
+  Precise, Glass (the look until now), Soft, Swiss, Hardware, Art Deco, Liquid Glass,
+  Terminal and Retro. They replace the ten accent colours; the default is one field of the
+  tokens. A theme draws only the app's own surfaces, the system's controls stay the
+  system's. The setting is `theme` (it was `color`), and the watches get the theme's name.
+- Chalkboard, the website's look, is an eleventh theme and the default: chalk on slate over
+  felt in the dark, graphite on pale slate over sand-coloured cloth in the light, with walnut
+  lines. Blueprint stays one of the themes.
+- A small mute button in the corner of every device tile on the iPhone, Android, Aurora, the
+  Mac and the tray app: on the device's own tile it turns sync off or on, on another
+  device's an admin mutes it for the group or unmutes it; a long press or a right click
+  picks the time. The tile shows the new state at once and never leaves the list while
+  the command goes out.
+- The apps are tested in all eight languages and for every reader (docs/testing.md, "The
+  apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
+  Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
+  of every app translated with its placeholders; screen reader names, contrast, large text and
+  the keyboard; screenshot regressions of the tray window and the Android screens. Go's
+  coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote.
+- The forwarder and the relay refuse the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices
   already there are dropped, while every other group goes on. A broken list keeps the one
-  before. The terms of the public servers say so, in every language.
+  before, and so does a file missing at one reading only. The terms of the public servers say
+  so, in every language.
 - The monitor watches the traffic of cbb.tools: `cbb-traffic.timer` on the server publishes
   the totals of the last 24 hours at `/status/traffic.json`, and the monitor fails past 1 TB
   or when the file stops changing (docs/relay-budget.md, "Money and traffic").
@@ -123,6 +240,11 @@ All notable changes to cbb are documented in this file. The format follows
   Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
   the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
   `-baseline`.
+- A release carries its build provenance as `provenance.intoto.jsonl`, the same signed
+  attestation GitHub keeps, for checking a release without GitHub's API; `release-sign`
+  leaves it out of `release.json`, as it describes the files and no attestation covers it.
+- CI checks the Android build's `gradle-wrapper.jar` against the checksums of Gradle's own
+  releases (`gradle/actions/wrapper-validation`).
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
@@ -617,7 +739,7 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb update` fetches it, the members pass it to each other, and `cbb global entries export`
   and `import` carry it as a string or QR code; every device checks the signature, wherever
   it came from. `release-sign entries` signs it, and `extend`, `take`, `due` and `mirror`
-  keep it (docs/maintaining.md, "Signed releases"). The iPhone and Android take the list
+  keep it (docs/maintainers/maintaining.md, "Signed releases"). The iPhone and Android take the list
   from the computers of their group and keep it, and a phone that is the hub registers with
   the project's forwarder over VLESS through the ways it names, then through the built-in
   ones. The lite member takes the list and passes it on. A hub of the project's forwarder
@@ -637,13 +759,13 @@ All notable changes to cbb are documented in this file. The format follows
   keys are taken from the newest `keys.json` with the entry points as well.
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
-  (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
+  (`go run ./tools/monitor`; docs/maintainers/maintaining.md, "Watching cbb.tools").
 - The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
   Android app and the lite member fall back to when GitHub does not answer: `release-sign
   mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
   out, the release they name and the `min_from` of each, checks every file as a device does
   before it serves it, and unpacks the ZX Spectrum Next's files of the newest checked
-  release for `.cbb install` (docs/maintaining.md, "The mirror").
+  release for `.cbb install` (docs/maintainers/maintaining.md, "The mirror").
 - cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
   Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
   that every build still loads the Rust core there.
@@ -801,7 +923,7 @@ All notable changes to cbb are documented in this file. The format follows
   `SHA256SUMS` and the signed `release.json`: the Go programs' modules, the lite member's crates,
   the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,
   made by `tools/sbom`; the Docker image carries its own as an attestation in the registry
-  (docs/maintaining.md, "Releases").
+  (docs/maintainers/maintaining.md, "Releases").
 - The group's key level is a setting: `cbb keys proven|hardware|files` on a root computer
   sets which devices may be the group's root, an admin or a hub, and `cbb keys` and `cbb
   status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
@@ -1115,7 +1237,7 @@ All notable changes to cbb are documented in this file. The format follows
 - The bench's time suite checks certificates near the end of the group CA: a new member's
   certificate ends with the CA, and neither it nor the root's is renewed past it (K5).
 - The bench's fleet and time suites take `-coverdir DIR`, where containers running a `cbb` built
-  with `-cover` write which code the cases ran (docs/testbench.md, "Code coverage").
+  with `-cover` write which code the cases ran (docs/maintainers/testbench.md, "Code coverage").
 - `docs/protocol.md` gives the exact rule for a signed body: each rule of the strict form has
   a name, the order of the checks is written down, and section 10 has a table of every
   record field with its JSON type, the types that need it and its values; section 15 says
@@ -1141,7 +1263,7 @@ All notable changes to cbb are documented in this file. The format follows
 - On the website the pictures of the documentation are drawn in chalk on a board in a walnut
   frame, like every other picture of the site, in every language, and are drawn in once as
   they come into view. The files in `docs/images` are unchanged, so GitHub shows them as before.
-- The users' guides (`docs/guide`) in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
+- The users' guides (`docs/guide`), the lab among them, in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
   Hebrew, opening inside the website's own layout with its header and language menu, with
   the text inside their pictures translated; the index's descriptions are translated too.
   Every other page of the documentation stays English and opens on GitHub from the index.
@@ -1303,10 +1425,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The `away-off` command turns sync away from home off on a member (`cbb global off -on
   DEVICE` on an admin computer); turning it on stays each device's own decision.
 - Quick actions take `watch` in `-by`, for actions a watch may run.
-- The bench's catalogue for 0.6 (docs/testbench-catalogue.md): 287 cases in one line each,
+- The bench's catalogue for 0.6 (docs/maintainers/testbench-catalogue.md): 287 cases in one line each,
   by area, with where each runs (real devices, a fleet of containers, a time-scaled build,
   a test release feed, UI automation, a person) and what it still needs; and every function
-  of the product with its cases (docs/testbench-functions.md). `testbench coverage` counts
+  of the product with its cases (docs/maintainers/testbench-functions.md). `testbench coverage` counts
   how many functions have a case, how many run by themselves and how many the harness runs
   today; `testbench all` runs every suite in turn and ends with that table.
 - The bench's `faults` suite: a bad network at the hub, a blocked member port, a hung and a
@@ -1561,12 +1683,18 @@ All notable changes to cbb are documented in this file. The format follows
   period key in the Secure Enclave or the Keystore. Once the members' credential lists a
   phone's server key, the phone registers with a relay by the credentials too, under its
   pseudonym (`cbb_tunnel_relay_credentials`).
-- The hub takes a new WireGuard key for its clients with each period of the server
-  credentials (docs/protocol.md, section 11, "The hub's key"): its offers give the next key
-  three days ahead, then it serves with it and registers again with its forwarder, so the
-  forwarder cannot link the group's traffic from one month to the next by the hub's key. Go
-  members, the lite member and both phone apps try a hub with its next key too, so one that
-  was away when the hub moved on still reaches it.
+- The hub takes a new WireGuard key, new AmneziaWG settings and a new VLESS user ID for its
+  clients with each period of the server credentials (docs/protocol.md, section 11, "The
+  hub's key"): its offers always give the next ones ahead of time, and when a new period
+  comes the hub serves with them at once and registers again with its forwarder under it,
+  staying under the old period until then, so the forwarder cannot link the group's traffic
+  from one month to the next by any of these three (the hub's address and port, which it sees
+  with every packet, stay as the network gives them). The forwarder makes a group's XHTTP path
+  from its VLESS user ID, so the hub knows the next path too; a hub whose user ID the forwarder
+  already holds for another group takes a new one. The lite member and both phone apps try a
+  hub with its next key and settings too, so one that was away when the hub moved on still
+  reaches it; the phone kits take next settings only to the same forwarder, with the path made
+  for the next user ID, and obfuscation the tunnel accepts.
 - The test bench resets a Windows device itself: `uninstall.ps1 -Purge`, a check that it left
   nothing, and `install.ps1` from the build's zip, so a Windows VM needs no snapshot.
 - FreeBSD: release archives for amd64 and arm64, `get.sh` and an installer with an rc.d
@@ -1614,6 +1742,116 @@ All notable changes to cbb are documented in this file. The format follows
   (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
   name it speaks, the highest first; a peer's unknown names are ignored, and a device with no
   common name is told the other one runs another version of cbb.
+- Members and phones read an address in one spelling before they order it or keep it as a
+  home address.
+- The phone apps hold their keys and data tighter. iPhone: "Sync clipboard" from Siri or a
+  shortcut and the Control Center switch run only on an unlocked phone, and the shortcut's
+  answer names the device a copy came from but not the copy; the root and admin keys sign
+  without asking only in the minutes after Face ID while the app stays at the front; the
+  group's file and the recovery sheet state their file protection. Android: the share sheet
+  and the clipboard read only what another app's provider hands over; the questions before
+  sending hide windows drawn over them and ignore taps through them; nothing of the app goes
+  into a backup or a transfer to a new phone; the Quick Settings tile asks to unlock first;
+  the launch extra `ShowErrorDetails` counts in debug builds only (the switch in Settings
+  stays); a release build does not sign with a group key that a debug build made without the
+  screen lock. A remote invitation's pairing window on a phone hub takes only the connections
+  its hub made for the invitation (docs/protocol.md, section 12). Aurora: the join QR code's
+  text reaches the log in debug builds only. The core's C functions all stop a panic, and
+  `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
+- The Aurora app's admin PIN is at least six digits and none easy to guess (repeats, runs,
+  short patterns, palindromes, dates, common keypad PINs), checked as it is typed and by the key store;
+  a PIN set before still works. The admin token itself says whether its SO PIN was made
+  random, and the tries left come from its flags, so clearing the app's data neither stops
+  the PIN working nor shows a full seven tries.
+- `cbb` and `cbb-helper` build reproducibly: `packaging/build.sh` names the crates' sources
+  from `/cargo`, the nightly workflow builds both twice in two folders and compares
+  (`.github/reproducible.sh`), and `docs/own-build.md`, "Checking a release", says how
+  to check a release against its tag.
+- CI runs `site check -strict`: a guide page changed without its translations (and
+  `site docs-sync`) fails the pull request.
+- The build scripts of `cbb` in Rust (`build.sh`, `mips.sh`, `notices.sh`) moved from
+  `member/packaging/` to `packaging/`, beside the installers and archives of the same program.
+- Versions and compatibility (`docs/reference/compatibility.md`): which releases work
+  together in one group, how to update a group, and what an older device does with something
+  newer.
+- The notes for coding agents are in `AGENTS.md`, short and pointing to the documents
+  instead of repeating them; `CLAUDE.md` only includes it.
+- Copied code may sit in a `third_party` directory beside the code that uses it, and
+  `tools/repocheck` asks each copied directory for its `README.md` as well as its `LICENSE`.
+- The maintainers' pages moved to `docs/maintainers/`: maintaining, the test bench, its
+  catalogue, functions and cases, and the security audit's plan. `tools/bench` reads the
+  catalogue there by default (`-docs`).
+- The documentation, the website's index and the command line's messages no longer speak of
+  a "lite member" or a "full member": every computer and small device runs the one `cbb`, and
+  a small device usually without `cbb-helper` beside it. `member/README.md` is now "`cbb` on
+  small devices", the command reference's section "Without cbb-helper" replaces "The lite
+  member", and pages that set the two programs apart (the device table, the design's routers,
+  the protocol's notes on what one of them lacked) say what holds now. `tools/repocheck`
+  refuses the old words outside the changelog and the decisions.
+- A member does not write to its clipboard a copy made before it last started, whatever its
+  age: the rule of incoming copies takes the clock mark saved before the start.
+- The core wipes device keys, a secret's text and a copy's key from memory once it is done
+  with them, and the service writes no core dump; on Linux other processes of its user cannot
+  read its memory.
+- Pairing codes are drawn with every code equally likely, and a device that listens for a
+  join stops taking an address's connections after three failed attempts from it.
+- Channel files (`stable.json`) are signed for 14 days instead of 30, and cbb.tools renews
+  them twice a week; the reminders and the monitor warn 5 days before the end.
+- Builds for tests only never ship: the tests' hooks (`CBB_TEST_*`, the test clock among them)
+  are read only by a `cbb` built with the feature `testhooks` and a `cbb-helper` built with
+  the tag `testhooks`; `CBB_STANDBY_GRACE`, `CBB_UP_CHECK` and `CBB_HUB_KEY_AHEAD` are now
+  `CBB_TEST_STANDBY_GRACE`, `CBB_TEST_UP_CHECK` and `CBB_TEST_HUB_KEY_AHEAD`, hooks too; a
+  release's `cbb` checks updates only against its pinned roots, whatever `CBB_RELEASE_DIR`
+  and `CBB_RELEASE_ROOTS` say. A test build does not compile in the release workflow, names
+  itself in `cbb version` and is refused by the release workflow, as is a Go program built
+  with the tag `benchtime` or `testhooks` (docs/maintainers/maintaining.md, "Releases").
+- The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
+  window of their own; "Settings…" in the menu bar item and Command-comma open the window
+  with them.
+- A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
+  joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
+  phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and
+  with `cbb admin` on a root computer, with the admin key the phone's hellos now offer (made
+  without a prompt; none on a TV). The phone takes its admin CA from the root's admin message
+  once it names its key, its device and the current root. The root refuses an admin key that
+  the records already name for another device or a root (D-95; docs/protocol.md, section 10,
+  "Admins").
+- The Aurora app has one "Join a group" button too. Joining makes the admin key behind the
+  admin PIN (cancelling joins without it, and Settings' "Get ready to be an admin" makes it
+  later), the member's hellos offer it, and the root's device page has "Make an admin" for
+  phones; the member checks the admin CA of the root's admin message (`take_admin_ca`) before
+  the app keeps it.
+- The hub and the open relay share their tunnels' connections: the hub holds at most 1024
+  at once and 8 for each client, half-open ones included, and the relay's tunnel holds the
+  devices' watches, their calls by group and by the address, network and provider each end
+  registered from, and connections being opened by the same sources; every client keeps its
+  first two connections whatever the others hold, and a connection the app ended is cut when
+  the client takes nothing of it for 10 s (docs/relay-budget.md). The relay raises its limit
+  of open files at start, holds no more tunnel connections than it allows and logs both;
+  its unit and the server compose file allow 65536. A hub checks a
+  handshake's `mac1` before its key exchange, asks for a cookie when many key exchanges come
+  at once, and shares them each second by network, wide network and provider, with a part
+  kept for its clients' rekeys, shared by address and network. A relay gives a registration's setup and each request one
+  deadline for the whole exchange. AmneziaWG junk stays within the settings' bounds.
+- A phone that is the group's hub registers with its forwarder by the period's hubs'
+  credential once that lists its server key, as a computer's hub does (`cbb_tunnel_hub_credentials`),
+  so the forwarder learns neither the phone nor the group; until then it registers with its
+  member certificate and the records.
+- A phone's port for a call it dialed through a relay takes connections of its own user only,
+  and the relay's tunnel port closes connections it did not make without holding up the
+  others.
+- Updates, bug reports and releases are hardened: the updater makes its work folder anew
+  unless it is its own and closed to others, and unpacks the archive as root's files; bug
+  reports filter more (addresses and host names inside a word, names in any case and as host
+  names, words in other scripts) and send a panic's kind and place without the values in its
+  message; `bug.cbb.tools` keeps 30 days of reports, answers 503 when full so the apps send
+  later, gives each IPv6 /64 and /48 a share of the day and limits each /64's rate; the Docker image gets its version, and `latest` only for a
+  newer release, after the release is signed with the offline key, and `release-sign publish` takes the image only
+  with the release workflow's attestation; OpenWrt's init script writes the interface list to
+  `/var/run/cbb.interfaces`; `get.ps1` downloads into a folder only administrators may change;
+  a kept revocation list of Android attestations still counts after a restart once it ran out;
+  test roots in `CBB_RELEASE_ROOTS` are taken only from a file others cannot change. The
+  cryptography page lists the sealed messages (HPKE with X-Wing) and their keys.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
@@ -1635,6 +1873,12 @@ All notable changes to cbb are documented in this file. The format follows
   whose BPF maps fail on small boards, and the installer pairs at once, as on OpenWrt, which
   always runs `cbb` alone. `cbb update` takes the system's archive, `cbb version` no longer
   names a kind of member, and the crate is `cbb-member`.
+- The test bench follows the one archive: the inventory has no `linux-lite` any more, a small
+  board is `os = "linux"` (the example's device `small`), and `peer = true` marks a Linux device
+  in another subnet, which the bench tells the hub's address with `-peer` and which joins at the
+  address `cbb pair` prints. Every Linux device joins as the service's user; I1 runs
+  `get.sh --no-helper`; the hub moves and sync away from home skip only a container and a MIPS
+  build, which has no tunnel; the quick reset keeps the installer's drop-ins.
 - The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
   iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
   web through (VLESS, which needs the first).
@@ -1685,6 +1929,33 @@ All notable changes to cbb are documented in this file. The format follows
 - From 0.6 on, a device works in one group with devices of the release before it, and an
   update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
+- Admin actions no longer ask for the password every time (D-97). The user confirms them
+  with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
+  polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
+  confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
+  over or handing on a group, making a device an admin, admitting a device, joining a group,
+  a hub and sync away from home, taking remote pastes, and pairing a Bluetooth keyboard or a
+  TV's remote ask each time; muting the computer itself, or ending a mute it set, asks nothing
+  of the user surely at its screen. Each prompt names the action and its device,
+  a user has one prompt at a time, and a cancelled one makes the next wait. On a Mac each
+  action confirmed each time has a right of its own whose prompt the installer writes; on
+  Windows the service shows the action in the user's session, and the Windows Hello key signs
+  it. The installers
+  write the rights on a Mac and the polkit actions on Linux (`cbb confirm-setup`); on Windows
+  only an administrator of the PC confirms, checked at every confirmation, and
+  `cbb confirm-key -remove SID` removes a user's key. `cbb` run without `sudo` does the same,
+  and the apps fall back to the administrator's prompt where nothing else confirms. On
+  Android the app's own fingerprint, face or PIN prompt lets a new admin key sign for five
+  minutes, never on a locked phone; the group's root key, and keys made before, keep asking
+  for each signature.
+- `cbb pair -invite` takes the invitation from its file, or with `-` its text pasted on
+  standard input, never on the command line; `cbb remote code` reads the TV's code from
+  standard input.
+- A user's own quick action runs in the user's session only as that user set it:
+  `cbb action add` also writes the command to `own-actions.json` in the user's settings, as
+  that user also under `sudo`, and the agent refuses any other. Own actions added before need `cbb action add` again.
+- Files that `cbb paste -o` saves, and those the Mac app fetches for a remote paste, carry the
+  quarantine mark on a Mac and the Mark of the Web on Windows, as the Go member's did.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2056,7 +2327,7 @@ All notable changes to cbb are documented in this file. The format follows
   installed (the phone then joins its group again).
 - The keys that sign releases (Android, Windows, the OpenWrt feed, the Homebrew tap) are
   secrets of the environment `release`, which only release tags and `main` may use, instead
-  of repository secrets that any branch's workflow could read (docs/maintaining.md,
+  of repository secrets that any branch's workflow could read (docs/maintainers/maintaining.md,
   "Release secrets").
 - CI runs only the jobs of the parts a pull request changes (`.github/ci-changes.sh`), so a
   pull request of documentation no longer builds the phone apps, the lite member and the
@@ -2228,16 +2499,109 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An admin phone pastes pictures and files on a device again: the iPhone and Android kits
+  sign the paste command of kind `media` that names the group's copy, which they refused to
+  build before.
+- Members given each other's addresses with `-peer` no longer reconnect to each other
+  several times a second: a member dialed a member it was connected to every second, and
+  when the member with the lower device ID did, its new connection replaced the old one on
+  the other side while it dropped the new one itself, so both ended. A member now remembers
+  which member it found at an address and leaves it alone while it is connected, and a
+  dialer keeps or drops its new connection by the same rule as the side that accepts it. A
+  member on one machine also took the address a dual-stack listener shows for 127.0.0.1
+  (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
+  connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
+- `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
+  -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
+  -name` and `-caps` give); it joined by itself, under the computer's host name.
+- A hub that started serving in place of one above it ended its first clients' connections
+  a moment later, when it made its key for the next period, and those clients then tried the
+  hub above, which may be off, before it again. The hub makes those keys before it listens,
+  and only a hub that serves reconnects its members for a new offer.
+- In Settings on the iPhone, the theme swatches grow with the text size as their names do,
+  and no theme's name in Hindi reads as clipped to the accessibility checks.
+- The Aurora app renamed and handed the group over to no device, and named no sender of a
+  remote paste: its pages read a device's ID from a field the core's list does not have. An
+  Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
+  in place of typing the copy's ID.
+- Pairing and the member port hold up better on a busy home network: the member port
+  limits connections in their handshake per device as well as in all, and closes one that
+  sends nothing for 3 s; a pairing connection with no window open is answered after one small
+  frame; a pairing window counts only attempts that tried a code against its three, takes no
+  more guesses from one device once it is one short of closing, and lets an attempt that sends
+  nothing give way to the next; a device that listens to join takes no more attempts from a
+  device whose attempts keep ending without a code, gives a dialing member 10 s to prove the
+  code, and lets an attempt that proved nothing give way to the next (the Nano ESP32 has the
+  10 s too); a device's addresses count as one only within a global IPv6 /64, never the home
+  network's shared ones;
+  `cbb pair` with the six digits alone admits only when one device waits to join, and stops at
+  its first attempt; a device that joins by an invitation joins only the group the invitation
+  names (computers and phones); a connection that carries records only takes small frames;
+  commands run a few at a time per connection, and a command that fails badly frees its
+  place; the mDNS cache is checked ten times a second and starts again empty when it grows
+  past 1024 records or mDNS stops answering, pausing longer each time while that goes on; the
+  addresses of a connected member are kept as they are, new addresses never push out all
+  those known, and a goodbye by mDNS no longer stops dialing a device of the group
+  (docs/protocol.md, sections 4, 6 and 12).
+- A pairing code is drawn so that every code is as likely as any other; an admin key at
+  pairing must be new to the group's device keys, every root's key (the group CA's too) and
+  the recovery key; an admission
+  whose Welcome cannot be sent adds no device record.
+- The tray app runs `pkexec` and Windows PowerShell from the system's own folders, never by
+  their names; the service's `panic.json` is readable by the service alone.
+- A Rust `cbb` that started looking for its group by mDNS just after another device asked a
+  member for its TXT record could find that member without one, take it for another group's
+  and never dial it. It now asks the members for their records again, a little later each
+  time, until that member's TXT comes.
+- A manifest whose SHA-256 is base64 with bits after its last byte is refused by the Go
+  reader too, as by the Rust core and the kits, so every member reads it alike. The nightly
+  run's unstable tests run against the Rust service with its helper, and cargo fuzz starts
+  a target with no seed from an empty corpus.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.
 - Builds use Go 1.27.4, which fixes a crash of an HTTP/1 server in the standard library
   (GO-2026-6859), and rustix 1.1.6 (RUSTSEC-2026-0486).
+- The blind relay in Rust keeps the watches of every device it registers: it passed at most 32
+  connections through its tunnel at once, all groups together, so from the 33rd device on the
+  watches ended and the devices registered again and again. It passes up to 8192 now (the
+  `streams` limit).
+- A hub, and the relay, answer every connection a burst of them opens at once: past the four
+  sockets it kept listening, a connection found the port closed and ended at once.
+- A connection through the tunnel to a hub or a relay ends on the far side at once when the
+  local side closes or breaks; the far side held it until its timeout, some 30 seconds.
 - Muting or unmuting a device, and turning sync away from home on or off or making a device a
   hub, no longer drops its connections, so the device no longer vanishes from the others for
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- The Mac app's Settings fit their width: the language menu, sized to fit with its label,
+  widened every row to some 600 points in a 460-point window and cut the rows' ends off on
+  both sides. A build's long version is one line cut in the middle, whole on hover; the tray
+  app's wraps instead of reaching past its dialog.
+- The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
+  the right, as it does the rest of the window.
+- The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges
+  keep WCAG AA contrast on the tray window's tiles.
+- The Android app's Settings in the dark appearance show the title, "Update automatically" and
+  "Version" in the palette's text colour; they were near black on the dark background. At the
+  largest font size the colour names take as many lines as they need, and the round buttons'
+  symbols stay inside their circles.
+- The Android app's back button points right in Arabic and Hebrew, where it stands on the right.
+- The Mac app's notices (the service not answering, a removed Mac) show their title and text in
+  the theme's text colour, for contrast on every theme, and VoiceOver reads a notice by its title.
+- The iPhone app's Start screen scrolls at the largest text sizes and in the longer languages
+  instead of cutting off its name, tagline and buttons, and "Restore with the recovery key" is
+  44 points tall and the screen's width to touch, in the other buttons' medium weight, at
+  which its Hindi line is no longer reported as clipped. "Copy Beyond Borders" under the name
+  is bold at the title 3 size, large text, whose contrast over the background's glow is
+  enough. Settings put as many colour swatches in a
+  row as their names fit at the text size, so a long colour name breaks between words instead
+  of being cut off. On an iPad, Settings opened from the Start screen cover the whole
+  screen instead of a sheet whose lower edge cut the list's rows in view.
 - A tunnel's loopback port on Linux takes a client on a dual-stack socket, as Java's on a system
   with IPv6: its user is looked up in the kernel's IPv6 table too, by its IPv4-mapped address,
   where before it was refused at once.
@@ -2259,6 +2623,13 @@ All notable changes to cbb are documented in this file. The format follows
   lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,
   as the Go service did: control characters become spaces and it is cut to 256 bytes.
+- A release's `winget-manifest.zip` has its line in `SHA256SUMS`, which `release-sign verify`
+  and `mirror` ask of every file in `release.json`; it was written after the sums.
+- The copy of amneziawg-go requires only what its packages import, at the versions the root
+  module selects: the module's own `go.mod` named older versions that never reach the build,
+  and scanners that read every `go.mod` (OpenSSF Scorecard) took them for ours. The firmware's
+  OSV-Scanner exceptions sit beside `esp32/Cargo.lock`, where Scorecard's run reads them, and
+  the stale one for block-buffer, which no longer matches, is gone.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

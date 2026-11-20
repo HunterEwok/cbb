@@ -15,7 +15,7 @@ import (
 var rootsPEM []byte
 
 // Roots are the pinned root keys (SubjectPublicKeyInfos, DER) that every
-// keys.json must verify under (docs/maintaining.md, "Signed releases").
+// keys.json must verify under (docs/maintainers/maintaining.md, "Signed releases").
 var Roots = parseRoots(rootsPEM)
 
 func parseRoots(data []byte) [][]byte {

@@ -6,7 +6,7 @@
 # stand-in (ring-shim/). The ESP32 firmware
 # (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
 [workspace]
-members = ["core", "embassy", "ffi", "member", "ring-shim"]
+members = ["core", "embassy", "ffi", "member", "ring-shim", "tools/size"]
 exclude = ["esp32", "core/fuzz", "member/fuzz"]
 # A cargo build or run without -p or --workspace means the program cbb.
 default-members = ["member"]

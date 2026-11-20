@@ -11,10 +11,10 @@ struct StatusActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: StatusActivity.self) { context in
             StatusLockScreen(state: context.state)
-                .activityBackgroundTint(AccentChoice.pair(context.state.color).dark.background)
+                .activityBackgroundTint(ThemeChoice.theme(context.state.theme).dark.background)
         } dynamicIsland: { context in
             let state = context.state
-            let accent = AccentChoice.pair(state.color).dark.accent
+            let accent = ThemeChoice.theme(state.theme).dark.accent
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     StatusIcon(kind: state.kind).font(.title2).foregroundStyle(accent).padding(.leading, 4)
@@ -72,7 +72,7 @@ struct StatusLockScreen: View {
     let state: StatusActivity.ContentState
 
     var body: some View {
-        let p = AccentChoice.pair(state.color).dark
+        let p = ThemeChoice.theme(state.theme).dark
         HStack(spacing: 12) {
             StatusIcon(kind: state.kind).font(.title).foregroundStyle(p.accent)
             VStack(alignment: .leading, spacing: 2) {

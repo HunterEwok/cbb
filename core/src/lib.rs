@@ -44,6 +44,8 @@ pub mod admit;
 pub mod alpn;
 pub mod api;
 pub mod arrange;
+#[cfg(feature = "web")]
+pub mod attest;
 pub mod authority;
 pub mod beacon;
 pub mod benchtime;

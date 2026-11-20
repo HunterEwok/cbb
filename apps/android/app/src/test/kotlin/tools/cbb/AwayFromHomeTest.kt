@@ -54,6 +54,53 @@ class AwayFromHomeTest {
         assertEquals(listOf(hub, hub), tried.map { it.first })
         assertArrayEquals(ByteArray(32) { 7 }, tried[1].second.hubKey)
         assertNull(tried[1].second.nextKey)
+        // With the obfuscation and the way over VLESS that go with the next key,
+        // which the try with that key takes; without them, the same.
+        fun obf(jc: Int, h2: String = "300-400", s2: Int = 40, key: String = "CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg=") =
+            """{"jc":$jc,"jmin":50,"jmax":300,"s1":20,"s2":$s2,"s3":16,"s4":24,"h1":"100-200","h2":"$h2",""" +
+                """"h3":"500-600","h4":"700-800","header_protection_key":"$key"}"""
+        fun way(path: String, id: String, endpoint: String = "203.0.113.9:443") =
+            """{"transport":"xhttp","endpoint":"$endpoint","server_name":"cbb.tools","path":"$path","id":"$id"}"""
+        val obf4 = obf(4)
+        val obf5 = obf(5)
+        val wayA = way("/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr", "5f0c1e2d-3b4a-4c5d-8e6f-7a8b9c0d1e2f")
+        val wayB = way("/banMEJvnYJJap8S/mefvDB5qwj9eeFnyKOOk4A", "0b6e7f10-2a3b-4c5d-9e8f-112233445566")
+        fun withNext(nextObfuscation: String? = obf5, nextVless: String? = wayB) = Member.TunnelOffer(
+            offer.hubKey, offer.psk, offer.endpoints, obf4, wayA, nextKey = ByteArray(32) { 7 },
+            nextObfuscation = nextObfuscation, nextVless = nextVless,
+        )
+        val withBoth = withNext()
+        assertTrue(withBoth.isValid)
+        val both2 = AwayState(key).withOffer(hub, withBoth)
+        assertEquals(withBoth, AwayState.decode(both2.encode())!!.offer(hub))
+        val triedBoth = AwayFromHome.hubsToTry(listOf(hub), both2)
+        assertEquals(listOf(obf4, wayA), listOf(triedBoth[0].second.obfuscation, triedBoth[0].second.vless))
+        assertEquals(listOf(obf5, wayB), listOf(triedBoth[1].second.obfuscation, triedBoth[1].second.vless))
+        assertNull(triedBoth[1].second.nextVless)
+        val older = Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, obf4, wayA, nextKey = ByteArray(32) { 7 })
+        assertEquals(wayA, AwayFromHome.hubsToTry(listOf(hub), AwayState(key).withOffer(hub, older))[1].second.vless)
+        assertFalse(Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, obf4, nextObfuscation = obf5).isValid)
+        assertFalse(
+            Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, nextKey = ByteArray(32) { 7 }, nextVless = wayB).isValid,
+        )
+        // The next settings themselves are checked too: obfuscation the tunnel
+        // would not take, and a way over VLESS to another forwarder, with
+        // another path or with no user ID.
+        for (bad in listOf(
+            obf(5, s2 = 96), obf(5, h2 = "150-250"), obf(17), obf(5, h2 = "0300-400"),
+            obf(5, key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="), """{"jc":5}""",
+        )) {
+            assertFalse(bad, withNext(nextObfuscation = bad).isValid)
+        }
+        for (bad in listOf(
+            way("/banMEJvnYJJap8S/mefvDB5qwj9eeFnyKOOk4A", "0b6e7f10-2a3b-4c5d-9e8f-112233445566", "198.51.100.7:443"),
+            way("/banMEJvnYJJap8S/AbCdEfGhIjKlMnOpQr", "0b6e7f10-2a3b-4c5d-9e8f-112233445566"),
+            way("/otherBase0/mefvDB5qwj9eeFnyKOOk4A", "0b6e7f10-2a3b-4c5d-9e8f-112233445566"),
+            way("/banMEJvnYJJap8S/mefvDB5qwj9eeFnyKOOk4A", "0B6E7F10-2A3B-4C5D-9E8F-112233445566"),
+            """{"id":"b"}""",
+        )) {
+            assertFalse(bad, withNext(nextVless = bad).isValid)
+        }
 
         // Another version, a cut file, a longer one and a bad offer are not states.
         val b = both.encode()

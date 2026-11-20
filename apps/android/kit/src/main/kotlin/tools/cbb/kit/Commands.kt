@@ -115,8 +115,9 @@ object Commands {
     /**
      * A paste command for the device to: put text where its focus is, by
      * method "paste" (the clipboard and the paste keys) or "type", then
-     * press Enter when enter is set; kind is "text" or "secret". Signed as
-     * mode.
+     * press Enter when enter is set; kind is "text" or "secret", or
+     * "media", whose text is the event ID of the group's copy of images or
+     * files to paste, by method "paste" only. Signed as mode.
      */
     fun paste(
         to: String,
@@ -137,7 +138,12 @@ object Commands {
             "type" -> MAX_TYPE_TEXT
             else -> throw IllegalArgumentException("a paste is paste or type, not $method")
         }
-        require(kind == "text" || kind == "secret") { "a paste is text or secret, not $kind" }
+        require(kind == "text" || kind == "secret" || kind == "media") { "a paste is text, secret or media, not $kind" }
+        if (kind == "media") {
+            // As the receiver checks: a paste of images or files names its copy and is not typed.
+            require(method == "paste") { "a paste of images or files is not typed" }
+            require(text.length == 32 && text.all { it in "0123456789abcdef" }) { "a paste of images or files names no copy" }
+        }
         val n = text.toByteArray().size
         require(n in 1..limit) { "the text is empty or longer than $limit bytes" }
         val ms = now.toEpochMilli()

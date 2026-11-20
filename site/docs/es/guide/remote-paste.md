@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f299825ed818 -->
+<!-- source: 071a5fc1eda6 -->
 # Pegado remoto
 
 Para quien quiere poner un texto en una app de otro dispositivo: una contraseña en el formulario de inicio de sesión de un televisor, un comando en la terminal de un servidor, una dirección en un ordenador al otro lado de la habitación. Un administrador del grupo envía el texto, y aterriza donde esté el foco de ese dispositivo, pegado o escrito tecla a tecla.
@@ -15,7 +15,7 @@ El pegado remoto está desactivado en cada dispositivo hasta que su propio usuar
 | Windows | `cbb paste-receive on` en una terminal abierta como administrador | la ventana que tiene el foco |
 | Mac | `sudo cbb paste-receive on`, y la app del Mac abierta y permitida en Ajustes del Sistema, Privacidad y seguridad, Accesibilidad | la app que tiene el foco |
 | Teléfono o televisor Android | Ajustes, «Let the group's admins paste here», y el servicio de accesibilidad de la app activado | el campo de texto que tiene el foco en otra app |
-| Miembro ligero | `sudo cbb paste-receive on`; con `-console`, también la consola de texto | el panel de tmux en uso |
+| Un dispositivo pequeño sin escritorio | `sudo cbb paste-receive on`; con `-console`, también la consola de texto | el panel de tmux en uso |
 
 `-enter` (en un teléfono, «Let a paste press Enter») permite que un pegado pulse Intro después del texto. Sin él, se rechaza un texto con un salto de línea, porque un salto de línea puede ejecutar como un comando lo que va antes de él en cualquier terminal que no tome el pegado como una sola pieza.
 

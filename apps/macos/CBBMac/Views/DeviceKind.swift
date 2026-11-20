@@ -51,7 +51,7 @@ extension Control.Device {
         case (_, "none"): .board
         case ("watch", _): .watch
         case (_, "macos"): .laptop
-        case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"): .phone
+        case (_, "ios"), (_, "android"), (_, "aurora"), (_, "sailfish"), (_, "harmonyos"): .phone
         default: .desktop
         }
     }
@@ -66,6 +66,7 @@ extension Control.Device {
         case "android": "Android"
         case "aurora": "Aurora OS"
         case "sailfish": "Sailfish OS"
+        case "harmonyos": "HarmonyOS"
         case "watchos": "watchOS"
         case "wearos": "Wear OS"
         default: nil
@@ -125,17 +126,18 @@ struct OnlineDot: View {
     }
 }
 
-/// The chosen colour and appearance on a window's views.
+/// The chosen theme and appearance on a window's views.
 struct Themed: ViewModifier {
-    @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
+    @AppStorage(ThemeChoice.key) private var theme = Tokens.themes[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         let a = Appearance(rawValue: appearance) ?? .system
         content
-            .environment(\.palette, a.palette(color, for: scheme))
-            .tint(a.palette(color, for: scheme).accent)
+            .environment(\.palette, a.palette(theme, for: scheme))
+            .environment(\.themeStyle, ThemeChoice.theme(theme).style)
+            .tint(a.palette(theme, for: scheme).accent)
             .preferredColorScheme(a.scheme)
     }
 }

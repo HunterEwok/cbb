@@ -25,8 +25,9 @@ pub fn only() -> &'static [String] {
     })
 }
 
-/// Where OpenWrt's init script writes the list.
-const OPENWRT_LIST: &str = "/var/run/cbb/interfaces";
+/// Where OpenWrt's init script writes the list: beside the service's
+/// folder, not in it, so that root never writes where the service may.
+const OPENWRT_LIST: &str = "/var/run/cbb.interfaces";
 
 fn parse(v: &str) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();

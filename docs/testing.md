@@ -4,8 +4,8 @@
 For contributors and reviewers: how Copy Beyond Borders is tested, from a single function to
 real devices, and which level answers which question. The commands are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#development), the CI jobs one by one in
-[maintaining](maintaining.md#ci), and the tests on real devices in the
-[test bench](testbench.md).
+[maintaining](maintainers/maintaining.md#ci), and the tests on real devices in the
+[test bench](maintainers/testbench.md).
 
 ## Levels
 
@@ -13,11 +13,11 @@ real devices, and which level answers which question. The commands are in
 |---|---|---|---|
 | Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
 | Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
-| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or the lite member | every push, in CI |
+| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or `cbb` | every push, in CI |
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
-| App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `Mac app`, `tray app`, `Android app` jobs | every push, in CI |
-| Bench scenarios | real devices pass real copies over real networks | the [test bench](testbench.md), its [catalogue](testbench-catalogue.md) | before each release |
+| App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `tray app`, `Android app` jobs and the Mac app's part of `test and build (macOS), homebrew, Mac app` | every push, in CI |
+| Bench scenarios | real devices pass real copies over real networks | the [test bench](maintainers/testbench.md), its [catalogue](maintainers/testbench-catalogue.md) | before each release |
 
 A change is not done before the levels it touches pass locally (CONTRIBUTING lists the
 commands per part); CI then runs the jobs of every part the pull request changes, and the
@@ -29,7 +29,11 @@ request is up to date with main, whose run tested those files when they last cha
 ## Unit tests
 
 - Go tests run with the race detector on Linux x86-64, Linux ARM64 and macOS, under QEMU
-  for big-endian 32-bit MIPS, and on FreeBSD.
+  for big-endian 32-bit MIPS, and on FreeBSD. A change to Go is tested under it on a Mac too
+  before it is pushed, since a fault of one system's race build shows only there: gVisor's
+  race build on ARM64 kept its network stack from ever sleeping (fixed in its 2026-08 versions),
+  which on the runner's three cores slowed the tunnel's tests past their waits, while Linux
+  x86-64 passed them in a fraction of a second.
 - Time comes from the caller (`now time.Time`), so a test sets the clock; lifetimes and
   renewals are tested at their edges without waiting.
 - The TPM code runs against swtpm (`internal/tpmkey`), the ei protocol against a test EIS
@@ -51,6 +55,8 @@ watch's state, content hashes, join QR codes and a CPace exchange.
   Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
+- `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
+  from the draft; Go and the Rust core open its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.
@@ -75,37 +81,193 @@ becomes a vector here.
 - `internal/service` starts whole members in one test: sync, pairing, remote paste, quick
   actions, sync away from home through a hub, a forwarder (`TestAwayThroughForwarder`) and a
   relay (`TestAwayThroughRelay`), with obfuscation (`TestAwayObfuscated`).
+- `member/tests` runs the Rust `cbb service` as programs on the loopback, without mDNS, and
+  talks to them over the control and admin sockets as plain JSON (`common/mod.rs`):
+  `control_contract` checks that every operation answers once and on the right socket and
+  that a broken client never stops the service; `control_admin` admits, renames, removes,
+  freezes, makes admins, hands over and takes over; `remote_commands` carries out remote
+  paste and quick actions through a member's watchers; `helper_faults` runs a fake
+  cbb-helper that crashes, hangs, writes garbage or plays a TPM. `cli_commands` checks the
+  command line against a fake service.
 - `tools/e2e/e2e.sh` runs the built static binary as three members and an avahi browser
   in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
+## Running tests in parallel
+
+Go runs the packages of `go test ./...` at the same time, and Cargo the tests of each test
+binary; the tests of `internal/service` do not run in parallel within one process, since each
+starts whole members that find each other by mDNS on the same network. CI splits them into
+parts instead, each on a machine of its own:
+
+- `service tests on the Rust cbb, the build` builds every program once, instrumented for the
+  coverage (the Rust `cbb`, `phone-on-linux`, `tunnel-on-linux`, a `cbb-helper` and the Go
+  test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
+  one archive.
+- `service tests on the Rust cbb (1)` to `(6)` each run a part of `internal/service`;
+  `(others)` runs the desktop connector, the relay, the phones' tunnel and the previous
+  release. Each writes its Go coverage (`cover-go-service-PART.out`) and its Rust profiles.
+- `service tests on the Rust cbb, the coverage` adds up the Rust profiles of the build and
+  every part into `rust-service`.
+
+`tools/shard` makes the parts: it reads the test names (`service.test -test.list .`) and
+prints the `-test.run` expression of one part, filled longest test first from the seconds
+in `tools/shard/service.txt`. Every test is in exactly one part, a new one included, which
+counts as a median test until the file names it. After the tests' times change much, record
+a full run's `-v` output into the file:
+
+```sh
+go run ./tools/shard -record tools/shard/service.txt <service-test.log
+```
+
+On a computer with Docker, `tools/e2e/parallel.sh` runs the same parts at the same time, each
+in a container on a Docker network of its own, after one container has built the programs
+and the test binary; IMAGE is a Linux image with Go, Rust, swtpm, Xvfb and xclip:
+
+```sh
+sh tools/e2e/parallel.sh -n 6 IMAGE              # every test of internal/service
+sh tools/e2e/parallel.sh -run 'Takeover' IMAGE   # only those -run names
+```
+
+Other jobs run side by side the same way: the iPhone app's UI tests on an iPhone and an iPad
+simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
+(`cbb (Rust), the checks and the Raspberry Pi builds`) run beside its tests (`cbb (Rust)`),
+and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
+
+The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
+the iPhone app's jobs build only the simulator's Rust library for the runner's processor
+(`ffi/bind.sh ios-sim`; the phone kit's macOS job builds all three with the latest Rust),
+they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
+kit's interop tests still do), and jobs shorter than the iPhone app's share a machine: macOS's
+`go test`, the macOS archives, Homebrew's formula and the Mac app
+(`test and build (macOS), homebrew, Mac app`), and the phone kit with the iPhone's libraries.
+So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
+Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
+for the runner's processor only) runs on a pull request after them, from `ci.yml`, not beside
+them.
+
+The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
+on macOS, the Android phone core and the service tests' build) keep their build in the Actions cache
+(`.github/actions/rust-cache`). A pull request saves its own and its later runs take it, so
+they compile only the crates it changed; another pull request never reads it, and the release
+and F-Droid builds build from nothing.
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
-Wi-Fi. The [test bench](testbench.md) does, on the real devices of each platform, with the
-rules R1 to R7 ([cases](testbench-cases.md)), a catalogue of the cases of a release with how
+Wi-Fi. The [test bench](maintainers/testbench.md) does, on the real devices of each platform, with the
+rules R1 to R7 ([cases](maintainers/testbench-cases.md)), a catalogue of the cases of a release with how
 each runs, and a coverage report of the product's functions
-([functions](testbench-functions.md)). Security cases block a release; a case that cannot
+([functions](maintainers/testbench-functions.md)). Security cases block a release; a case that cannot
 run yet is skipped with its reason and stays on the list.
+
+## The apps' languages, accessibility and screenshots
+
+Every app is checked in the project's eight languages (zh en es ru ar sw he hi) and for a
+person who uses a screen reader, large text or the keyboard (docs/maintainers/testbench-catalogue.md,
+A9 and U14 to U18).
+
+- `tools/repocheck` checks that every text of every app (the String Catalogs, Android's
+  `strings.xml`, the tray's and the command line's JSON) is translated into all eight, marked
+  done, and keeps the original's placeholders. `tools/tokens` checks that every palette keeps
+  WCAG AA contrast for text, the accent included, on the background and on a surface.
+- The tray app (`apps/desktop`, `TestWindow` in a headless Chrome): each language without
+  English left over, clipped text or a page wider than the window, Arabic and Hebrew from
+  right to left and no text set to one side; every control named in the accessibility tree;
+  every text's contrast in all ten colours, dark and light; the window at twice the text size;
+  Tab through the header and Settings with the focus shown.
+- Android (`LanguagesTest`, `AccessibilityTest` on Robolectric): the Start screen and Settings
+  in each language, no text cut off or ended with "…", right to left in Arabic and Hebrew,
+  every control named and at least 48 dp to touch, nothing cut off at font scale 2.
+- The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
+  the texts checked against the app's catalog, the iPhone's top row swapping sides from right
+  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
+  iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
+  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens-iPhone`, `ios-screens-iPad`, `mac-windows`), and the English ones
+  are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
+  of each element the audit fails and of the screen a lost tap met (the test taps Settings
+  again and says so in its output). For each failed iPhone test CI also keeps its activities,
+  every launch, tap, wait and query with its time (`.github/activities.py`, in `ios-screens-*`
+  and the log). The audit's contrast check
+  fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
+  button's) contrast is measured on the screen's picture instead: its darkest and lightest
+  pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
+  audit looks only at what a person can reach.
+- The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
+  build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
+  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
+  largest size; each screen's picture is attached. Escape is sent as U+241B
+  (`XCUIKeyboardKey.simulatorEscape`): the simulator's keyboard has no key for `.escape`'s
+  "\u{1B}" and sends nothing for it.
+- In CI both run on GitHub's `xcode-27` image with Xcode 27.2 and the newest iOS, as on the
+  maintainers' Macs: Xcode 26.6's iOS 26.4 takes whole Devanagari and Chinese texts for clipped
+  (the clipped text check compares the first two and the last two letters' frames, which a
+  conjunct such as ग्स or a squeezed 「。」 at a line's end share).
+- The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
+  restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
+  compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
+  the three is yet run on a tablet.
+
+Screenshots are compared where a picture is the same on every machine that draws it: the
+tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
+`fonts-droid-fallback`), and the Android screens in Robolectric's native graphics, which
+bring their own fonts. A picture may differ from its reference in 0.3% of its pixels, the
+smoothing of text between two builds of a browser, not more. A failed comparison leaves the
+new picture and the difference in the job's artifacts. The simulators' pictures change with
+each Xcode and iOS, so the iPhone's and the Mac's are kept with the results to look at, not
+compared.
+
+After a change to a screen, write the pictures again and look at each before committing it:
+
+```sh
+cd apps/desktop && CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots' .
+cd apps/android && ./gradlew :app:recordRoborazziFullDebug
+```
+
+The tray's references are CI's pictures: another build of Chrome smooths text differently in
+more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
+the ones to commit from the `tray-screenshots` artifact of the failed CI job.
 
 ## Coverage
 
-CI measures how much of the code the tests run, part by part, and its `coverage` job prints
-the table in the run's summary. `tools/coverage` adds the reports up and fails when a part
-falls more than one point below its floor in `tools/coverage/floor.json`, so coverage can
-rise but not fall. When the table says "raise the floor", raise it in the same pull request.
+CI measures how much of the code the tests run, part by part and by kind, and its `coverage`
+job prints the table, coverage by kind, in the run's summary. `tools/coverage` adds the
+reports up and fails when a row falls more than one point below its floor in
+`tools/coverage/floor.json`. The project aims at 90% of the lines in every part
+(`-target 90`): a part below that is marked in the table and gets a warning, without failing
+the run, and the tests are written up to 90 again before it reaches its floor of 85.
+
+Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
+report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
+core the nightly `rust core, branch coverage` job, since only a nightly compiler counts Rust's
+branches. Go counts statements only. The aim is 80% of the branches (`-branch-target 80`),
+90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
+a branch row's floor is its first measure, and it only rises. The table shows each row's floor
+and target side by side, so the gap between them is in view.
+
+Under the table are the hard gates, which have no floor and fail the job at once:
+
+- every closed finding of the security audits keeps its tests: `testdata/audit/closed.json`
+  lists each by an opaque id with the tests that hold it closed, and `-audit` fails when one
+  of them is gone; a fix that closes a finding adds its row;
+- every rule a format reader refuses by name (`Rule::field("grants/replaces")` in `core/src`)
+  is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
+  `-vectors`); until the 0.6 core's readers are in the tree it is not measured;
+- no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
+  `tools/mutants/check.sh` in the nightly jobs).
 
 | Part | What counts | Measured by |
 |---|---|---|
-| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
+| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
-| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
+| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 
-The aims are 80% for `go`, 85% to 90% for the protocol's core in each implementation, and 90% for `rust-service`.
+The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
@@ -122,12 +284,29 @@ network or a container with one of its own):
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
 cargo llvm-cov clean --workspace
-cargo test --release -p cbb-member && cargo build --release -p cbb-member
-CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+cargo test --release -p cbb-member && cargo build --release -p cbb-member --features testhooks
+CGO_ENABLED=0 go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
 CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
+
+## Firmware size
+
+A small device takes only the parts of the core it calls, and the linker drops the rest, so
+what a part costs shows only in a linked program. `tools/size` is a program for the ESP32-C6's
+RISC-V (`riscv32imac-unknown-none-elf`, the workspace's release profile) that calls the parts
+its features name with input the linker cannot see through; it is never run. `sh
+tools/size/size.sh` builds it empty, once per part (`p256`: X.509 and a chain check; `json`;
+`records`: the group's records and their state; `seal`: opening a sealed message, X-Wing;
+`copy`: a copy read, checked and opened; `pair`: a joiner and CPace; `tls`: the member TLS),
+with all of them, and with the core's whole entry point (`api`), and prints each program's
+flash (`.text`, `.rodata` and `.data`) and its cost over the empty one against
+`tools/size/baseline.txt`. The `esp32` job runs it on every change to the Rust code and puts
+the table in the job's summary; it fails when everything together grows more than 10% over
+the baseline. A change that makes the core larger on purpose writes the baseline again with
+`sh tools/size/size.sh -update` in the same pull request. The parts overlap (`copy` holds
+`records`, `seal` and JSON), so the costs do not add up to `all`.
 
 ## Unsafe code
 
@@ -145,8 +324,10 @@ The nightly workflow changes the records' code one place at a time (drops a chec
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
 `core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
 `internal/authority`. A change that every test still passes is listed as missed, in the run's
-summary and its artifacts. The jobs report and do not fail yet; each missed change gets a
-test, or a note why it cannot matter, and then the jobs fail on a new one.
+summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
+does not name (no new survivor, from the first day); the list holds the records' baseline of
+2026-11-11, and each of those gets a test or a note why it cannot matter. `gremlins` reports
+and does not fail yet.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
@@ -180,19 +361,29 @@ these before the bench has run them.
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
 
+## Known failures
+
+A step that fails for a reason outside the project, shown with evidence, is not skipped: it
+stays, wrapped in a strict expected failure (`XCTExpectFailure` with `isStrict`), so it is
+still run, it still fails the test the day it starts passing, and the tag `KNOWN-ISSUE(<release>)`
+finds it again (`git grep KNOWN-ISSUE`). What it checks is checked by hand until then. The owner
+decides each entry.
+
+No step is marked at the moment.
+
 ## Unstable tests
 
 A test that fails only now and then is a red test too, with a cause to find: a race in the
 code, a wait too short for a slow runner, or an order the test assumes. The nightly
-workflow's `unstable` job runs the members' tests ten times over, with the Go service and
-with the Rust `cbb`, and its summary lists every test that failed and how often. A test
+workflow's `unstable` job runs the members' tests ten times over, against the Rust service with
+its helper and with `cbb` alone, and its summary lists every test that failed and how often. A test
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
-([test bench](testbench.md#11-automation)).
+([test bench](maintainers/testbench.md#11-automation)).
 
 | Test | Where | Seen | What is known |
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
 | `TestAloneHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
-| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |
+| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs, 2026-11 | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line came 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test now writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |
