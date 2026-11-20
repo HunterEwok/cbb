@@ -57,6 +57,7 @@ mod hubport;
 pub mod identity;
 mod interfaces;
 mod inviter;
+pub mod join;
 mod keys;
 mod leave;
 pub mod link;
