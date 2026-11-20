@@ -296,3 +296,49 @@ fn a_stranger_is_refused_in_the_handshake() {
     let _ = crate::tls::handshake(&mut s, &sock, "the handshake");
     assert!(server.join().unwrap(), "the server took a stranger");
 }
+
+/// An admin's record reaches the root while they stay connected, after an
+/// earlier round in which the admin had sent its have already: the root
+/// answers the admin's new hello with its have, and the admin, holding
+/// more than that hello's sender, sends its own again.
+#[test]
+fn an_admins_record_reaches_the_root_on_a_kept_connection() {
+    let (root, kr, kd, ad, kp) = (K::new(1), K::new(2), K::new(3), K::new(4), K::new(5));
+    let mut sr = empty(&root);
+    let mut d = Device::new(kr.key(), "r", body::ROLE_MEMBER);
+    d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+    d.holds_root = true;
+    let st = sr.state();
+    sr.write_record(&st, &root, Kind::device(d), 1).unwrap();
+    admit(&mut sr, &root, &kd, "d", 2);
+    let mut sd = empty(&root);
+    let recs: Vec<Record> = sr.in_dependency_order().into_iter().cloned().collect();
+    sd.take_part(&recs, &[]);
+    let mut xr = Exchange::new(kr.key().hash(), kd.point());
+    let mut xd = Exchange::new(kd.key().hash(), kr.point());
+    assert_eq!(settle((&mut sr, &mut xr), (&mut sd, &mut xd)), 2);
+    // The root makes d an admin; its hello brings d the record.
+    let st = sr.state();
+    let mut rec = Device::new(kd.key(), "d", body::ROLE_MEMBER);
+    rec.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+    rec.admin = Some(ad.key());
+    (rec.powers, rec.commands) = body::AdminKind::Computer.grants();
+    sr.write_record(&st, &root, Kind::device(rec), 3).unwrap();
+    let h = hello(&sr);
+    flow((&mut sr, &mut xr), (&mut sd, &mut xd), vec![(true, h)]);
+    assert_eq!(sr.digest(), sd.digest());
+    // d writes as an admin, twice; only its hello goes each time.
+    let st = sd.state();
+    sd.write_record(&st, &ad, Kind::Copies { incoming_ms: 30_000, seen: Vec::new() }, 4).unwrap();
+    let h = hello(&sd);
+    flow((&mut sr, &mut xr), (&mut sd, &mut xd), vec![(false, h)]);
+    assert_eq!(sr.digest(), sd.digest(), "the root takes the admin's first record");
+    let mut dp = Device::new(kp.key(), "p", body::ROLE_MEMBER);
+    dp.rights = body::RIGHT_READ | body::RIGHT_SEND;
+    let st = sd.state();
+    sd.write_record(&st, &ad, Kind::device(dp), 5).unwrap();
+    let h = hello(&sd);
+    flow((&mut sr, &mut xr), (&mut sd, &mut xd), vec![(false, h)]);
+    assert_eq!(sr.digest(), sd.digest(), "the root takes the admin's second record");
+    assert!(sr.state().device(&kp.key().device_id()).is_some());
+}

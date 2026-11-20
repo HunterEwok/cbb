@@ -2241,8 +2241,9 @@ On a connection (`member/src/link.rs`), a member whose digest differs from the o
 peer's `hello` sends `have` with the IDs of the records it holds for that peer, and asks with
 `want` for what the other side's `have` lists and it lacks. A member that takes a peer's `have`
 while the peer's last `hello` still showed a digest other than its own sends its own `have`
-too, once for each `hello` of the peer's: a record written while two members are connected thus
-reaches the other side although only the writer sent a new `hello`. A member sends its `have` at
+too, once for each `hello` of the peer's and each state of its own set: a record written while
+two members are connected thus reaches the other side although only the writer sent a new
+`hello`, even when the writer had sent its `have` since the peer's last `hello`. A member sends its `have` at
 most 64 times on one connection (its own budget in `member/src/link.rs`, not a bound of the
 format) and then logs that the exchange is stuck. When two
 members dial each other at once, both keep the connection the one with the lower device ID

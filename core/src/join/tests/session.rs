@@ -237,3 +237,35 @@ fn a_session_refuses_what_does_not_fit() {
     let r = j.reply(&mut attempts, &m65).unwrap();
     assert_eq!(m.confirm(&r.send, None, NOW).err(), Some(PairError::WrongCode));
 }
+
+/// The member's end checks the admin key the joiner offers over its own
+/// session's exporter: a proof over another session, or none, does not
+/// hold.
+#[test]
+fn the_member_checks_an_offered_admin_key() {
+    let g = G::new();
+    let admin = k("tv admin");
+    for (pop_over, holds) in [(Some("session"), true), (Some("another"), false), (None, false)] {
+        let mut i = info("tv", ROLE_MEMBER);
+        i.caps = CAP_ADMIN;
+        if let Some(name) = pop_over {
+            i.admin = Some(admin.key.public().to_vec());
+            i.admin_pop = Some(sign_admin_pop(&admin, &exporter(name)).unwrap().to_vec());
+        }
+        let mut attempts = invitation::JoinerAttempts::default();
+        let (_, m64) = JoinerSession::start(
+            &mut attempts,
+            i,
+            None,
+            Joining::Ordinary,
+            point(&k("tv")),
+            point(&k("laptop")),
+            exporter("session"),
+        )
+        .unwrap();
+        let mut m = MemberSession::new(point(&k("laptop")), point(&k("tv")), adb(&g), exporter("session"));
+        assert!(!m.admin_pop_holds(), "before the Info comes");
+        m.start_home(&m64).unwrap();
+        assert_eq!(m.admin_pop_holds(), holds, "{pop_over:?}");
+    }
+}

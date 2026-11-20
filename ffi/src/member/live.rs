@@ -347,7 +347,7 @@ impl Phone {
             version: self.version.clone(),
             ..Default::default()
         };
-        roster::devices(&l.mesh.state(), &me, &l.mesh.hellos(), cbb_member::uptime::wall_ms())
+        roster::devices(&lock(&l.mesh.set()), &me, &l.mesh.hellos(), cbb_member::uptime::wall_ms())
     }
 
     /// Why the phone does not sync: the facts its member and the group's

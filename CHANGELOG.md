@@ -69,6 +69,14 @@ made with 0.5 is set up again once. The details follow.
   8 bytes of the group ID.
 - `cbb keys` sets the group's key level on the records of 0.6, on its root, whose own keys
   must meet it, and names the admins and hubs below it; status shows the level.
+- `cbb admin` makes a computer an admin on the records of 0.6 with the admin key it offered,
+  with its proof over the pairing session, when it paired with the root, which keeps the key
+  by device (`offered.json`); the computer need not be connected, and one that another admin
+  admitted is told to pair with the root first (docs/decisions.md, D-118). A group whose root
+  keeps its key in a file starts at the key level `files`; a member with the cap `hub` that
+  the root admits may be one of the main hubs. On a group of 0.6 a frozen admin computer is
+  told so, the root's device is not renamed, removed or frozen by an admin, and freezing twice
+  or thawing what is not frozen is an error, as before.
 - A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
   `p=1` by mDNS, as a phone's window does, so that a new device that browses for it dials the
   one window and checks its key (docs/protocol.md, section 3).
@@ -1905,6 +1913,9 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
+  `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
+  (docs/decisions.md, D-117).
 - The member protocol is `cbb/4` and pairing `cbb-pair/3`, named once in the Rust core
   (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
   name it speaks, the highest first; a peer's unknown names are ignored, and a device with no
@@ -2670,6 +2681,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a record that an admin writes reaches the root on a connection the two
+  keep: the admin sends its `have` again whenever its set changed since its last one, as the
+  root sends no new hello when only the admin wrote.
 - A Linux service that does not run as root no longer tries to write polkit's actions in
   `/usr/share/polkit-1/actions` at every start and log the refusal: it leaves them to the
   installer (`cbb confirm-setup`) and says once, at start, when they are not set up for its

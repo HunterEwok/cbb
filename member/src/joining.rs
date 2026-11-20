@@ -43,7 +43,7 @@ pub fn at_home(dir: &Path, addr: SocketAddr, me: &Me<'_>, ask: Ask<'_>) -> Resul
     if crate::set::load(dir, &local)?.is_some() {
         return Err(Error::msg("this device is in a group already: leave it first (cbb leave)"));
     }
-    let own = Own::load(dir)?;
+    let mut own = Own::load(dir)?;
     let point: [u8; 65] = own
         .member_key()
         .public()
@@ -66,6 +66,17 @@ pub fn at_home(dir: &Path, addr: SocketAddr, me: &Me<'_>, ask: Ask<'_>) -> Resul
     let mut stream = tls::Stream::new(s, sock);
     let mut info = Info::new(me.name, me.os, cbb_core::records::body::ROLE_MEMBER);
     info.caps = me.caps;
+    // A computer that may be an admin offers its admin key with its proof
+    // over this session: the root keeps it, and cbb admin there makes it
+    // an admin later. One installed without root never is (D-79).
+    if me.caps & cbb_core::records::body::CAP_ADMIN != 0 && !crate::rootless::is() {
+        let admin = match own.admin.clone() {
+            Some(k) => k,
+            None => own.make(dir, crate::own::Which::Admin)?,
+        };
+        info.admin_pop = Some(cbb_core::join::sign_admin_pop(&*admin, &x)?.to_vec());
+        info.admin = Some(admin.public());
+    }
     let mut attempts = JoinerAttempts::default();
     let j = Joiner {
         attempts: &mut attempts,

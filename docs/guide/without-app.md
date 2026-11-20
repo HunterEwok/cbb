@@ -50,10 +50,11 @@ Enclave. A computer without either keeps it in a file, so `cbb admin` asks for `
 whoever copies that file acts as an admin until another admin removes the computer, so make
 an admin only of a computer you keep safe.
 
-If the root is lost or broken, the admin takes the group over, and every other device stays:
+If the root is lost or broken, another computer becomes the root with the group's recovery
+sheet, and every other device stays:
 
 ```sh
-sudo cbb takeover NAME       # on the admin; NAME is the lost root
+sudo cbb recovery            # then type the recovery key from the sheet
 ```
 
 More in [if a device is lost or stolen](lost-device.md).

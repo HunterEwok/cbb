@@ -364,6 +364,16 @@ impl MemberSession {
         MemberSession { exporter, own, joiner, adb, attempt: None, info: None, step: MemberStep::Start }
     }
 
+    /// Whether the joiner's Info offers an admin key whose proof holds
+    /// over this session's exporter (`crate::join::verify_admin_pop`);
+    /// false when it offers none or its Info has not come.
+    pub fn admin_pop_holds(&self) -> bool {
+        match self.info().map(|i| (i.admin_key(), i.admin_pop.as_ref())) {
+            Some((Some(k), Some(p))) => super::verify_admin_pop(&k, &self.exporter, p),
+            _ => false,
+        }
+    }
+
     /// The joiner's Info, once message 64 came.
     pub fn info(&self) -> Option<&Info> {
         self.info.as_ref()

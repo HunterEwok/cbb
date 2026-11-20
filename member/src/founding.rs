@@ -10,9 +10,7 @@
 
 use std::path::Path;
 
-use cbb_core::records::body::{
-    Device, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_MEMBER, STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS,
-};
+use cbb_core::records::body::{Device, ROLE_MEMBER, STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
 use cbb_core::records::key::ALG_SLH_DSA;
 use cbb_core::records::{Key, Kind, RecordSet, Recovery, pq};
 use cbb_core::secret::Zeroizing;
@@ -86,7 +84,7 @@ pub fn found_with(
         .ok_or_else(|| Error::msg("the recovery key's halves are not the keys a recovery key has"))?;
     let mut set = RecordSet::new(Key::es256(root.public()), recovery);
     let mut d = Device::new(own.member_key(), name, ROLE_MEMBER);
-    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    d.rights = crate::admitting::rights_of(ROLE_MEMBER, me.caps);
     d.caps = me.caps;
     d.os = me.os;
     d.holds_root = true;
@@ -101,6 +99,15 @@ pub fn found_with(
     let st = set.state();
     set.write_record(&st, &*root, Kind::device(d), now_ms)
         .map_err(|e| Error::msg(format!("cannot write this device's record: {e}")))?;
+    // A root whose key is in a file starts the group at the key level
+    // files, which its own key meets; cbb keys raises it.
+    if root.held().is_none() {
+        let st = set.state();
+        let mut settings = st.settings.clone();
+        settings.key_level = cbb_core::records::body::LEVEL_FILES;
+        set.write_record(&st, &*root, Kind::settings(settings), now_ms)
+            .map_err(|e| Error::msg(format!("cannot write the group's settings: {e}")))?;
+    }
     let local = crate::set::local_key(dir)?;
     crate::set::save(dir, &set, &local)?;
     let group = set.state().group;

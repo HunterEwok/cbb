@@ -215,7 +215,7 @@ impl Service {
             removed: mine.is_none(),
             frozen: mine.is_some_and(|d| d.frozen),
             media: Some(self.media_status()),
-            key_level: match st.settings.key_level {
+            key_level: match st.settings.level() {
                 cbb_core::records::body::LEVEL_PROVEN => "proven",
                 cbb_core::records::body::LEVEL_FILES => "files",
                 _ => "hardware",
@@ -246,7 +246,12 @@ impl Service {
             version: VERSION.into(),
             ..Default::default()
         };
-        roster::devices(&live.mesh.state(), &me, &live.mesh.hellos(), uptime::wall_ms())
+        roster::devices(
+            &live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+            &me,
+            &live.mesh.hellos(),
+            uptime::wall_ms(),
+        )
     }
 
     /// Writes records with this device's root or admin key, and names the
@@ -293,6 +298,9 @@ impl Service {
     /// needs no group, which the service answers as ever.
     pub(super) fn live_request(&self, live: &Arc<Live>, m: &Message) -> Option<Result<Message>> {
         let h = &m.header;
+        if matches!(h.op.as_str(), control::op::TAKEOVER_DELAY | control::op::TAKE_OVER | control::op::HAND_OVER) {
+            return Some(Err(Error::msg(ROOT_BY_RECOVERY)));
+        }
         if let Some(why) = refusal(live, h) {
             return Some(Err(Error::msg(why)));
         }
@@ -338,8 +346,10 @@ impl Service {
                 }
                 // A computer freezes only admins: an ordinary device is
                 // removed.
-                if let Ok(d) = writers::find(&live.mesh.state(), &h.device)
+                let st = live.mesh.state();
+                if let Ok(d) = writers::find(&st, &h.device)
                     && d.admin.is_none()
+                    && Some(d.id) != st.root_device
                 {
                     return Some(Err(Error::msg(format!(
                         "{} is no admin computer; only those are frozen, and an ordinary device is removed with cbb remove",
@@ -364,6 +374,7 @@ impl Service {
             }
             "incoming" => self.live_incoming(live, &h.value),
             control::op::KEY_LEVEL => self.live_key_level(live, &h.value),
+            control::op::MAKE_ADMIN => self.live_make_admin(live, h),
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             op if !MOVING.contains(&op) => return None,
@@ -464,7 +475,9 @@ impl Service {
         };
         crate::admin::level_allows(value, root_store, "this device, the group's root,", "", true)?;
         let now = uptime::wall_ms().max(0) as u64;
-        live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = level, now))?;
+        // The default, hardware, is written as no level at all (format 4.5).
+        let kept = if level == LEVEL_HARDWARE { 0 } else { level };
+        live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         (self.log)(&format!("cbb: the group's key level is {value} now"));
         let st = live.mesh.state();
         let me = live.mesh.device();
@@ -477,6 +490,52 @@ impl Service {
             .map(|d| d.name)
             .collect();
         Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb admin: makes a device an admin, on the group's root, with the
+    /// admin key it offered when it paired with the root (offered.rs).
+    fn live_make_admin(&self, live: &Live, h: &Header) -> Result<Message> {
+        use cbb_core::records::body::{CAP_ADMIN, ROLE_PHONE, STORE_ROOTLESS};
+        let st = live.mesh.state();
+        let d = writers::find(&st, &h.device)?.clone();
+        if d.id == live.mesh.device() {
+            return Err(Error::msg("this device is the group's root, which is more than an admin"));
+        }
+        if d.role != ROLE_PHONE && d.caps & CAP_ADMIN == 0 {
+            return Err(Error::msg(format!(
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
+                d.name
+            )));
+        }
+        if d.admin.is_some() {
+            return Err(Error::msg(format!("{} is already an admin", d.name)));
+        }
+        if d.store == STORE_ROOTLESS {
+            return Err(Error::msg(format!(
+                "{} is installed without root, so every program of its user can read its keys; such a device is never an admin (D-79)",
+                d.name
+            )));
+        }
+        let Some(point) = crate::offered::get(&self.state_dir, &id_text(&d.id))? else {
+            return Err(Error::msg(format!(
+                "{} offered this device no admin key when it joined (another admin admitted it, or it cannot be one then): pair this device with the root to make it an admin",
+                d.name
+            )));
+        };
+        let shown = self.live_devices(live).into_iter().find(|x| x.id == id_text(&d.id));
+        let store = shown.map(|x| x.store).unwrap_or_default();
+        let level = self.live_status(live).key_level;
+        crate::admin::level_allows(
+            &level,
+            &store,
+            &d.name,
+            &format!("run cbb admin -allow-file-key {}", h.device),
+            h.allow_file_key,
+        )?;
+        let now = uptime::wall_ms().max(0) as u64;
+        let (d, _) = live.mesh.write(|set, k| writers::make_admin(set, k, &h.device, &point, now))?;
+        (self.log)(&format!("cbb: made {} ({}) an admin of the group", d.name, id_text(&d.id)));
+        Ok(control::reply(Header { name: d.name, done: true, ..Default::default() }, Vec::new()))
     }
 
     /// cbb incoming: how long a copy from another device stays live.
@@ -676,17 +735,32 @@ const MOVING: &[&str] = &[
     "release_want",
     "release_held",
     "update_way",
-    control::op::MAKE_ADMIN,
-    control::op::TAKEOVER_DELAY,
-    control::op::TAKE_OVER,
     control::op::RECOVER,
-    control::op::HAND_OVER,
     "invite",
 ];
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";
 const NOT_COMMANDER: &str = "only an admin pastes on another device, runs its actions or turns either off: the group's root, an admin it made (cbb admin), or an admin phone";
+/// What a handover, a claim and a claim's delay answer on the records of
+/// 0.6, where the root changes only with the group's recovery key (rule
+/// 33; docs/decisions.md).
+pub(super) const ROOT_BY_RECOVERY: &str = "the group's root changes only with its recovery key on the records of 0.6 (cbb recovery); a handover and a claim's delay are gone";
+
+/// Why a frozen admin computer is refused what an admin does.
+const FROZEN: &str = "another admin froze this computer's admin key: it changes nothing until the group's root or an admin phone unfreezes it";
+
+/// Whether h writes the group's records, or commands another device
+/// (other), as only an admin does.
+fn writes(h: &Header, other: bool) -> bool {
+    match h.op.as_str() {
+        "rename" | "remove" | "freeze" | "thaw" | "resolve" | "hubs" => true,
+        "incoming" => !h.value.is_empty(),
+        "mute" | "unmute" | "sync" | "away" | "action_on" | "actions_off" | "paste_receive" | "paste_on" => other,
+        _ => false,
+    }
+}
+
 /// Why a device that is no admin, or not the group's root, is refused.
 pub(super) const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
@@ -698,15 +772,18 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
     let root =
         own.root.as_ref().is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
     let admin = writers::signer(own, &st).is_some();
+    // An admin key the records name, but frozen.
+    let frozen = own.admin.as_ref().is_some_and(|k| {
+        let h = cbb_core::records::Key::es256(k.public()).hash();
+        st.devices.iter().any(|d| d.admin == Some(h) && d.frozen)
+    });
     let other = !h.device.is_empty() && !self_named(live, &h.device);
     let why = match h.op.as_str() {
         "make_admin" if !root => {
             "only the group's root makes admins: run cbb admin on the computer that created the group, or use \"Make it an admin\" on the root phone"
         }
         "key_level" if !root => "only the group's root sets the key level",
-        "takeover_delay" if !root => "only the group's root sets how long a claim waits",
-        "hand_over" if !root => "only the group's root hands the group over",
-        "take_over" if !admin => "only an admin takes the group over; this device is none",
+        _ if !admin && frozen && writes(h, other) => FROZEN,
         "rename" | "remove" | "freeze" | "thaw" | "resolve" if !admin => NOT_ADMIN,
         "incoming" if !admin && !h.value.is_empty() => {
             "only the group's root or an admin sets how long an incoming copy stays live"

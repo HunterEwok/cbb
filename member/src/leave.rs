@@ -35,6 +35,7 @@ pub const GROUP_FILES: &[&str] = &[
     records::FILE_NAME,
     crate::set::FILE_NAME,
     crate::set::LOCAL_FILE,
+    crate::offered::FILE_NAME,
     crate::own::FILE_NAME,
     crate::epochs::FILE_NAME,
     crate::sealed::FILE_NAME,

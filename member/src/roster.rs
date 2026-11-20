@@ -15,7 +15,7 @@ use cbb_core::records::body::{
     STORE_HARDWARE, STORE_PROVEN, STORE_ROOTLESS,
 };
 use cbb_core::records::eval::DeviceState;
-use cbb_core::records::{DeviceId, State};
+use cbb_core::records::{DeviceId, KeyHash, RecordSet, State};
 
 use crate::control::Device;
 use crate::hello::Hello;
@@ -41,7 +41,7 @@ pub fn id_text(id: &DeviceId) -> String {
     id.0.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn role_name(r: u64) -> &'static str {
+pub(crate) fn role_name(r: u64) -> &'static str {
     match r {
         ROLE_MEMBER => "member",
         ROLE_PHONE => "phone",
@@ -51,7 +51,7 @@ fn role_name(r: u64) -> &'static str {
     }
 }
 
-fn store_name(s: u64) -> &'static str {
+pub(crate) fn store_name(s: u64) -> &'static str {
     match s {
         STORE_FILE => "file",
         STORE_HARDWARE => "hardware",
@@ -97,7 +97,10 @@ pub struct Me {
     pub mac: String,
 }
 
-fn from_record(d: &DeviceState, state: &State) -> Device {
+fn from_record(d: &DeviceState, state: &State, is_admin: &dyn Fn(&KeyHash) -> bool) -> Device {
+    // An admin key the records name that the set does not count as an
+    // admin's (a root's, or the recovery key's) shows as none.
+    let admin = d.admin.is_some_and(|h| is_admin(&h));
     Device {
         id: id_text(&d.id),
         name: d.name.clone(),
@@ -105,11 +108,11 @@ fn from_record(d: &DeviceState, state: &State) -> Device {
         caps: caps_names(d.caps),
         os: if d.os == 0 { String::new() } else { os_name(d.os).into() },
         store: store_name(d.store).into(),
-        admin: d.admin.is_some(),
+        admin,
         root: state.root_device == Some(d.id),
         frozen: d.frozen,
         listed: true,
-        may_hub: !d.frozen && (d.admin.is_some() || d.rights & RIGHT_HUB != 0),
+        may_hub: !d.frozen && (admin || d.rights & RIGHT_HUB != 0),
         hub: state.hubs.contains(&d.id),
         ..Device::default()
     }
@@ -141,12 +144,23 @@ fn with_hello(d: &mut Device, h: &Hello, now_ms: i64) {
 /// The devices of the group: every device the records name, in their
 /// order, this device marked and filled from what it knows of itself, the
 /// connected ones from their hellos.
-pub fn devices(state: &State, me: &Me, hellos: &HashMap<DeviceId, Hello>, now_ms: i64) -> Vec<Device> {
+pub fn devices(set: &RecordSet, me: &Me, hellos: &HashMap<DeviceId, Hello>, now_ms: i64) -> Vec<Device> {
+    devices_in(&set.state(), &|h| set.is_admin(h), me, hellos, now_ms)
+}
+
+/// As devices, from the state, with is_admin telling the keys of admins.
+fn devices_in(
+    state: &State,
+    is_admin: &dyn Fn(&KeyHash) -> bool,
+    me: &Me,
+    hellos: &HashMap<DeviceId, Hello>,
+    now_ms: i64,
+) -> Vec<Device> {
     state
         .devices
         .iter()
         .map(|rec| {
-            let mut d = from_record(rec, state);
+            let mut d = from_record(rec, state, is_admin);
             if rec.id == me.id {
                 d.this = true;
                 d.online = true;
@@ -209,7 +223,12 @@ mod tests {
         let mut h = Hello { mode: 2, muted: true, muted_for_ms: 1000, ..Hello::default() };
         h.device = hello::Device { form: form_number("laptop"), version: "0.6.0".into(), ..hello::Device::default() };
         let hellos = HashMap::from([(b.id, h)]);
-        let out = devices(&state, &me, &hellos, 5000);
+        let admin_key = Key::es256(vec![9; 65]).hash();
+        state.devices[2].admin = Some(admin_key);
+        let out = devices_in(&state, &|_| false, &me, &hellos, 5000);
+        assert!(out.iter().all(|d| !d.admin), "a key the set counts as no admin's shows as none");
+        let out = devices_in(&state, &|h| *h == admin_key, &me, &hellos, 5000);
+        assert!(out.iter().any(|d| d.admin));
         let get = |id: &DeviceId| out.iter().find(|d| d.id == id_text(id)).unwrap();
         let desk = get(&a.id);
         assert!(desk.this && desk.root && desk.online && desk.muted);

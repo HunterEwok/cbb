@@ -96,7 +96,10 @@ pub fn remove(
     let st = set.state();
     let d = find(&st, target)?.clone();
     if Some(d.id) == st.root_device {
-        return Err(Error::msg("the root's device is not removed: the group changes its root instead"));
+        return Err(Error::msg(format!(
+            "{} holds the group's root, which is not removed: the root changes only with its recovery key (cbb recovery)",
+            d.name
+        )));
     }
     let keys = keys_of(&d);
     let out =
@@ -125,8 +128,14 @@ pub fn freeze(
 ) -> Result<(DeviceState, Vec<Record>)> {
     let st = set.state();
     let d = find(&st, target)?.clone();
-    if on == d.frozen {
-        return Ok((d, Vec::new()));
+    if Some(d.id) == st.root_device {
+        return Err(Error::msg(format!("{} holds the group's root, which nobody freezes", d.name)));
+    }
+    if on && d.frozen {
+        return Err(Error::msg(format!("{} is frozen already", d.name)));
+    }
+    if !on && !d.frozen {
+        return Err(Error::msg(format!("{} is not frozen", d.name)));
     }
     let keys = keys_of(&d);
     let kind = if on {
@@ -181,11 +190,51 @@ pub fn rename(
     if st.devices.iter().any(|o| o.id != d.id && o.name == name) {
         return Err(Error::msg(format!("another device is called {name}")));
     }
+    // A device record that names an admin key, or of a watch, counts only
+    // from the root's key, and so does the root's own device's.
+    let by_root = st.roots.last() == Some(&Key::es256(signer.public()).hash());
+    if !by_root && (d.admin.is_some() || d.role == cbb_core::records::body::ROLE_WATCH || Some(d.id) == st.root_device)
+    {
+        return Err(Error::msg(format!(
+            "only the group's root renames {}: it is an admin or a watch, or the root's own device",
+            d.name
+        )));
+    }
     let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
     rec.name = name.to_string();
     rec.seen = Vec::new();
     let out = set.write_record(&st, signer, Kind::device(rec), now_ms);
     Ok((d, out.map_err(|e| Error::msg(format!("cannot rename the device: {e}")))?))
+}
+
+/// Makes a device an admin with the admin key it offered when it paired
+/// (`admin`, a P-256 point): its record again, naming the key with the
+/// powers and commands of its kind (a phone's or a computer's).
+pub fn make_admin(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    target: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceState, Vec<Record>)> {
+    use cbb_core::records::body::{AdminKind, ROLE_PHONE};
+    let st = set.state();
+    let d = find(&st, target)?.clone();
+    let key = Key::es256(admin.to_vec());
+    let hash = key.hash();
+    let taken = st.devices.iter().any(|o| o.key.hash() == hash || o.admin == Some(hash)) || st.roots.contains(&hash);
+    if taken {
+        return Err(Error::msg(format!("the admin key that {} offered belongs to another key of the group", d.name)));
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    let kind = if d.role == ROLE_PHONE { AdminKind::Phone } else { AdminKind::Computer };
+    let (powers, commands) = kind.grants();
+    rec.admin = Some(key);
+    rec.powers = powers;
+    rec.commands = commands;
+    rec.seen = Vec::new();
+    let out = set.write_record(&st, signer, Kind::device(rec), now_ms);
+    Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
 /// Sets how long a copy from another device stays live on each member.
@@ -203,10 +252,17 @@ pub fn set_incoming(
 /// Names the group's hubs, by the devices a person names, each with the
 /// right to be a hub; none clears it.
 pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String], now_ms: u64) -> Result<Vec<Record>> {
+    use cbb_core::records::body::MAX_HUBS;
+    if targets.is_empty() || targets.len() > MAX_HUBS {
+        return Err(Error::msg(format!("name 1 to {MAX_HUBS} hubs")));
+    }
     let st = set.state();
     let mut hubs = Vec::with_capacity(targets.len());
     for t in targets {
         let d = find(&st, t)?;
+        if hubs.contains(&d.id) {
+            return Err(Error::msg(format!("{} is named twice", d.name)));
+        }
         // Only a device whose record gives it the right counts as a hub.
         if d.rights & RIGHT_HUB == 0 {
             return Err(Error::msg(format!("{} may not be a hub: its record does not give it the right", d.name)));

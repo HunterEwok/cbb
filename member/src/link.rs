@@ -63,8 +63,9 @@ pub struct Exchange {
     stuck: bool,
     /// The digest of the peer's last hello.
     theirs: Option<[u8; 32]>,
-    /// This side sent its `have` since the peer's last hello.
-    have_sent: bool,
+    /// This side's digest when it last sent its `have` since the peer's
+    /// last hello: a set that changed since then sends it again.
+    have_sent: Option<[u8; 32]>,
 }
 
 /// The frame of a message of type t with fields.
@@ -96,7 +97,7 @@ impl Exchange {
     /// device whose key hash is own.
     pub fn new(own: KeyHash, peer: [u8; 65]) -> Exchange {
         let peer_hash = cbb_core::records::Key::es256(peer.to_vec()).hash();
-        Exchange { own, peer, peer_hash, rounds: 0, stuck: false, theirs: None, have_sent: false }
+        Exchange { own, peer, peer_hash, rounds: 0, stuck: false, theirs: None, have_sent: None }
     }
 
     /// Takes one message (a frame's message, as `frame::read` gives it).
@@ -111,8 +112,11 @@ impl Exchange {
                 want(&lacking, None, &mut out);
                 // A peer that answers this side's new hello with its have
                 // still lacks what changed here: this side sends its have
-                // too, once for each hello of the peer's.
-                if self.theirs.is_some_and(|d| d != set.digest()) && !self.have_sent {
+                // too, once for each hello of the peer's and each state of
+                // its own set, as the peer sends no new hello when only
+                // this side wrote.
+                let ours = set.digest();
+                if self.theirs.is_some_and(|d| d != ours) && self.have_sent != Some(ours) {
                     self.send_have(set, &mut out);
                 }
             }
@@ -138,7 +142,7 @@ impl Exchange {
         let ours = set.digest();
         let theirs = v.get(7).and_then(Value::as_bytes).and_then(|b| <[u8; 32]>::try_from(b).ok());
         self.theirs = theirs;
-        self.have_sent = false;
+        self.have_sent = None;
         if theirs.is_some_and(|d| d != ours) {
             self.send_have(set, out);
         }
@@ -152,7 +156,7 @@ impl Exchange {
     /// Sends what this side holds for the peer, in `have` parts, while
     /// the rounds last.
     fn send_have(&mut self, set: &RecordSet, out: &mut Out) {
-        self.have_sent = true;
+        self.have_sent = Some(set.digest());
         if self.rounds >= MAX_ROUNDS {
             if !self.stuck {
                 self.stuck = true;

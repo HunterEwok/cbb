@@ -80,6 +80,7 @@ mod nextimage;
 #[cfg(unix)]
 mod nextlink;
 pub mod node;
+pub mod offered;
 pub mod orders;
 pub mod own;
 pub mod pair;
