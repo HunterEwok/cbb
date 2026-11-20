@@ -415,3 +415,42 @@ fn server_credentials_go_round_the_group() {
     a.close();
     b.close();
 }
+
+/// Message `push` from a peer over its own connection is its registration:
+/// the member keeps it, in push.cbor, and takes it again after a restart.
+#[test]
+fn a_peer_registers_for_push_and_the_member_keeps_it() {
+    let (da, db) = two_dirs("push");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log.clone()).unwrap();
+    connect(&a, &b);
+    until("the connection", || b.connected().contains(&a.device()));
+    let token = vec![5; 32];
+    let send_key = Key::es256(K(SigningKey::from_slice(&[9; 32]).unwrap()).public());
+    let reg = cbb_core::push::Registration {
+        seq: 1,
+        kinds: cbb_core::push::KIND_COPIES,
+        on: Some(cbb_core::push::On {
+            token,
+            env: cbb_core::push::ENV_APNS,
+            key: cbb_core::secret::Zeroizing::new([8; 32]),
+            send_key,
+            send_sig: vec![1; 64],
+            slot: [3; 16],
+            face: [4; 16],
+            challenge: None,
+        }),
+    };
+    assert!(b.send(&a.device(), reg.write().unwrap()));
+    until("the registration", || a.push.held() == 1);
+    assert!(da.join(super::push::FILE).exists());
+    // A copy a makes while b is connected goes to b directly, not by push.
+    a.copy(&Content::text("near", false)).unwrap();
+    assert_eq!(a.push.waiting(), 0);
+    a.close();
+    b.close();
+    let a = Mesh::open(&da, own(&da), log).unwrap();
+    assert_eq!(a.push.held(), 1, "kept across a restart");
+    a.close();
+}

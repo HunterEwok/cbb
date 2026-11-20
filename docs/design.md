@@ -319,6 +319,17 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   beat. Each server gets a face of its own (A-55): the root makes a period for each server's
   pin (the project's relay, forwarder and push service for now), and every message `credentials` names the
   server it is for.
+- **Push.** On the records of 0.6 the mesh drives the push sender (`pusher.rs`) through its
+  seam (`mesh/push.rs`): message `push` (t 28) from a phone or a computer over its own
+  connection is its registration, kept in `push.cbor` (each device's message as it came) and
+  taken again after a restart; a connection that opens gets its `push-renew` messages (t 29)
+  and marks the device connected; a removed or frozen device's registration goes when the
+  set changes; a copy made here (the origin) or received by a device with the `hub` right is
+  offered to the sender with `push::copy_body`. The push service's face is the group's face
+  toward the service's pin in the newest `keys.json` (use `push`): the current period's
+  server key and its hubs' and members' credentials. The previous period's face is not kept
+  yet, so a registration made under it is asked to register again; events (rule 33) are not
+  sent yet.
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in

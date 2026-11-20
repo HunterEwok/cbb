@@ -61,6 +61,11 @@ made with 0.5 is set up again once. The details follow.
   is refused; an admin asking the root, and meeting at the relay, are still moving to 0.6. A
   settings record the core API writes keeps the group's servers. `cbb global relay` takes
   several `address -key KEY`, up to 16, which only the root of a group of 0.6 takes.
+- A member of 0.6 sends push: it keeps the phones' registrations (message `push`, in
+  `push.cbor`, across a restart), asks a phone to register again when the service found its
+  registration stale, forgets a removed or frozen device's, and wakes a phone that is not
+  connected for a copy it made or, with the `hub` right, received, under the group's face
+  toward the push service. Events and the previous period's face are still moving to 0.6.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

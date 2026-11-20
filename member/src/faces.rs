@@ -291,6 +291,10 @@ pub struct ForRelay {
     pub period: Vec<u8>,
     pub root: Vec<u8>,
     pub names: std::collections::HashMap<String, String>,
+    /// The period's tag, and when the first of its credentials expires
+    /// (Unix milliseconds).
+    pub tag: [u8; 16],
+    pub expires_ms: u64,
 }
 
 impl Kept {
@@ -302,7 +306,8 @@ impl Kept {
         if [period, hubs, members].iter().any(|h| !h.c.live(now_ms)) {
             return None;
         }
-        let (scalar, point) = alias::server_key(secret, &period.c.tag?);
+        let tag = period.c.tag?;
+        let (scalar, point) = alias::server_key(secret, &tag);
         if !members.c.members.contains(&hash_of(&point).0) || member_of(state, me).is_none() {
             return None;
         }
@@ -322,6 +327,8 @@ impl Kept {
             period: period.env.clone(),
             root: period.c.signer.clone(),
             names,
+            tag,
+            expires_ms: [period, hubs, members].iter().map(|h| h.c.expires_ms).min().unwrap_or(0),
         })
     }
 }

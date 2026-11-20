@@ -133,6 +133,10 @@ pub struct Mesh {
     /// The group's server credentials, which this member keeps, brings up
     /// to date and passes on (`crate::faces`).
     faces: Faces,
+    /// The push sender (`crate::pusher`), and where it keeps the phones'
+    /// registrations (`mesh/push.rs`).
+    push: crate::pusher::Sender,
+    push_saved: Arc<push::PushSaved>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
 }
@@ -235,9 +239,19 @@ impl Mesh {
         };
         let clock = Clock::new(Box::new(crate::uptime::wall_ms), Timestamp::default(), None);
         let faces = Faces::open(dir, &set.state(), log.clone())?;
-        let mesh = Mesh {
-            statements: Mutex::new(Statements::load(dir)?),
-            book: Mutex::new(Book::load(dir)?),
+        let (saved, loaded) = push::PushSaved::open(dir, set.state().group, log.clone());
+        let push_saved = Arc::new(saved);
+        let (statements, book) = (Statements::load(dir)?, Book::load(dir)?);
+        Ok(Arc::new_cyclic(|me| Mesh {
+            push: crate::pusher::Sender::start(
+                Arc::new(push::PushFaces(me.clone())),
+                push_saved.clone(),
+                loaded,
+                log.clone(),
+            ),
+            push_saved,
+            statements: Mutex::new(statements),
+            book: Mutex::new(book),
             store: Mutex::new(store),
             marks: Mutex::new(marks),
             own,
@@ -264,8 +278,7 @@ impl Mesh {
             faces,
             log,
             closed: AtomicBool::new(false),
-        };
-        Ok(Arc::new(mesh))
+        }))
     }
 
     fn logf(&self, s: &str) {
@@ -453,6 +466,8 @@ impl Mesh {
     /// project's and the group's own relays, `faces::group_servers`), and
     /// sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
+        // A removed or frozen device's push registration goes with it.
+        self.prune_push(state);
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
         let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
@@ -622,6 +637,9 @@ impl Mesh {
         self.see(&kept.made.id);
         self.kept.lock().unwrap().insert(kept.made.id, kept);
         self.broadcast(&frame, None);
+        if let Ok(msg) = frame::read(&frame, frame::LIMIT_MEMBER) {
+            self.push_copy(&msg.map, crate::pusher::Role::Origin);
+        }
         Ok(true)
     }
 
@@ -812,6 +830,10 @@ impl Mesh {
         for f in self.faces.all_messages() {
             let _ = conn.tx.try_send(f);
         }
+        self.push.connected(&peer);
+        for (_, f) in self.push.renewals(&peer) {
+            let _ = conn.tx.try_send(f);
+        }
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
         let end = loop {
@@ -835,6 +857,7 @@ impl Mesh {
             }
         }
         conn.close();
+        self.push.left(&peer);
         drop(conn);
         let _ = writer.join();
         self.logf(&format!("the connection with {} ended: {}", hex(&peer.0[..4]), end.details()));
@@ -878,6 +901,10 @@ impl Mesh {
             }
             Some(m::T_PING) => Ok(()),
             Some(cbb_core::msg::tables::T_CREDENTIALS) => self.take_credentials(conn, msg),
+            Some(cbb_core::push::T_PUSH) => {
+                self.take_push(&conn.peer, msg);
+                Ok(())
+            }
             Some(t @ (m::T_RELEASE | m::T_ENTRIES)) => self.take_signed(conn, t, msg),
             Some(m::T_BYE) => Err(Error::msg("the peer said goodbye")),
             Some(cbb_core::msg::wave4::T_KEYS) => self.take_keys(conn, msg),
@@ -964,6 +991,9 @@ impl Mesh {
         }
         match taken {
             Taken::New { id, content, origin, signed, age_ms, blob } => {
+                if let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) {
+                    self.push_copy(&v, self.push_role_received());
+                }
                 {
                     let mut marks = self.marks.lock().unwrap();
                     marks.wrote(&origin, signed);
@@ -1064,6 +1094,7 @@ impl Mesh {
     /// Closes every connection, and takes no more.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.push.stop();
         self.close_connections();
     }
 
@@ -1131,6 +1162,7 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 
 mod media;
 pub use media::SentMedia;
+mod push;
 
 #[cfg(test)]
 pub(crate) mod tests;
