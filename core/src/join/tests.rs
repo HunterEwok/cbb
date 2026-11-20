@@ -22,6 +22,8 @@ use crate::records::body::*;
 use crate::records::set::RecordSet;
 use crate::records::{Body, GroupId, Key, KeyHash, Kind, Record, RecordId, State};
 
+mod session;
+
 struct K {
     sk: SigningKey,
     key: Key,

@@ -1103,6 +1103,7 @@ func main() {
 	checkBounds(dir)
 	checkMessages(dir)
 	checkWave4(dir)
+	checkMember(dir)
 	checkFuture(dir)
 	checkPush(dir)
 	if bad > 0 {

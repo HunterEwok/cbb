@@ -107,6 +107,20 @@ unread, key}`: `media` is the manifest of images or files, and `key` what the bu
 it by (a text by itself, an image by `"\u0000image:"` and the hex SHA-256 of its PNG or JPEG
 part, files by `"\u0000files:"` and the copy's ID).
 
+On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
+`cbb_member_start` runs the member of 0.6 instead (`ffi/src/member/live.rs`, over
+`cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
+`device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
+`device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
+age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
+`current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
+`set_mute`, `sync`, `muted`, `peers`, `devices` and `why`; `cbb_member_manage` takes `remove`,
+`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
+Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
+`cbb_invite_new`, answers that it does not work in this build yet, with the cause
+`not on the records of 0.6 yet` in its details, until its part moves over. Images and files
+of a copy are not written yet: its text is, and the log says why the rest is not.
+
 ### The member's operations
 
 A phone's `cbb_member_call` and a computer's control socket (protocol.md, section 8: the
@@ -389,7 +403,7 @@ the core's.
 | `release_named` | `channel` (a channel file's bytes, base64) | `{"release"}`: the version it names, read but not yet checked, so that a device knows which release.json to fetch; `release_check` then checks both |
 | `new_device_key` | none | `{"pkcs8", "public"}`: a new P-256 device key (base64 PKCS #8 and SEC1 uncompressed) for a phone that keeps its key in a file (level 3) |
 | `sign_digest` | `pkcs8`, `digest` (base64, 32 bytes) | `{"sig"}`: ECDSA P-256 over the SHA-256 digest with that key, DER, base64: what the phone's signing callback gives for a key in a file |
-| `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `taken_over_by`, `cert_ends_ms`, `stop`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`) |
+| `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `stop`, `admins_conflict`, `root_two_histories`, `recovery_fork`, `change_arriving`, `checkpoint_stuck`, `owner_disagrees`, `no_secrets_here`, `nothing_here`, `copy_waits`, `update_needed`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`); on the group of 0.6 a driver fills the group's part with `why::group_facts` from the state (removed, frozen, the stop, `admins_conflict` from a conflict of admins, `root_two_histories` from `root_pair`, `recovery_fork` from `fork`, `change_arriving` from `first_missing` or `list_missing`, `no_secrets_here` and `nothing_here` from `no_secrets_to` and `nothing_to`, `update_needed` from `update_needed` or `too_old`, `newer`) and adds `owner_disagrees` (peers whose chain parts from its own, `State::disagrees`), `copy_waits` (senders whose copies wait for their records) and `checkpoint_stuck` (`RecordSet::stuck_checkpoints`) |
 | `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
@@ -721,6 +735,58 @@ most the records records-v2.md allows. `group_view` answers:
 | `known` | every device ID a device record names, counted or not: IDs a new device must not take |
 | `records` | the number of records the set holds |
 
+## The group (records v3)
+
+The calls whose names start with `set_` are the group of 0.6: its records v3 (`cbb_core::records`)
+kept in a set file (`cbb_core::setfile`), which the computers' member writes in its state folder and
+Go and the tests pass in each call. They take the place of the `group_` calls above when the
+programs move to the core of 0.6. Keys, key hashes, record IDs, device IDs and digests are base64;
+a key is the point (SEC1, 65 bytes) except the recovery key's second half, the SLH-DSA public key.
+
+Every call takes `set`, the set file, and `local`, the device's 32-byte local key, when the file is
+pinned to it. A call that changes the set answers the new `set`, and every call that reads it the
+group's view.
+
+**The set file** is one CBOR map in the format's profile, written whole: 1 its version (1), 2 the
+group's first root key, 3 and 4 the two halves of the recovery key, 5 the pin (the HMAC under the
+local key over the three keys, `records::pin_mark`), 6 the records in dependency order, each
+`[envelope]` or `[envelope, mark]`, 7 the lists, 8 the removal records the notices keep, 9 the
+notices dismissed, 10 the devices that came in through each change of root `[change, seq, [key
+hash]]`, 11 the newest change applied with the devices before it `[change, seq, [device ID]]`. A
+record whose mark holds under the local key is taken without its signature checked again; every
+other is checked as if a peer sent it. With `local`, a file without a pin, or whose pin does not
+hold, is refused (code `saved`): its keys were changed. A file of a later version says to update.
+
+**Signing in rounds.** The root's, an admin's and a new root's keys stay where the device keeps
+them. A call that writes answers `{"sign": [{key, digest}]}` while it needs signatures: the caller
+signs each digest with that key (ECDSA P-256 over the SHA-256 digest as given) and calls again
+with the same arguments and `sigs`, `[{digest, sig}]`, every signature so far (`sig` DER or the 64
+bytes r ‖ s). A record's ID covers its body only, so the digests are the same in every round; an
+admin key's first record after its grant goes with its acknowledgement, whose digest comes first.
+
+| `op` | `args` | `ok` |
+|---|---|---|
+| `set_new` | `root`, `recovery`, `recovery2`, `local` (optional) | the empty set of a group, as its creator or a joiner starts it, and its view |
+| `set_add` | `records` (envelopes), `lists` | the records and lists a peer sent, each checked before it is kept, round after round as one may wait for another: `stored` (IDs), `refused` `[{id, why}]` (`why` `group`, `unknown_signer` or the rule broken; `id` null for bytes that are no record), `changed`, the view |
+| `set_view` | none | the view |
+| `set_records` | `peer` (optional, a member key's hash) | `{records, lists, digest}` to send, in dependency order; with `peer`, what the set gives that peer |
+| `set_write` | `signer`, `record`, `time_ms`, `sigs` | a record of the root or an admin: `records` (envelopes, to send), the view. `record` is `{"type": ...}`: `device` (`key`, `name`, `role` `member`, `phone`, `watch` or `leaf`, `rights` of `read`, `send`, `hub`, `secrets`, `caps` of `admin`, `dials`, `hub`, `os`, `store` `file`, `hardware`, `rootless` or `proven`, `admin` and `admin_kind` `watch`, `computer` or `phone`, which fixes the powers and commands, `holds_root`, `guarded`, `replaces`), `freeze` (`keys`), `thaw` (`ids`), `resolve` (`ids`), `settings` (`key_level`, `min_rules`, `shared`), `copies` (`incoming_ms`), `hubs` (device IDs), `ack` (`spare`, a spare admin key), `checkpoint` |
+| `set_remove` | `signer`, `keys` (member key hashes), `time_ms`, `sigs` | the removal of devices by the root (with what a key in two histories needs) or an admin that may remove |
+| `set_dismiss` | `id` | the notice is not shown again |
+| `set_change_preview` | `leave_out` (member key hashes) | `{"preview": [{device, outcome, frozen}]}`, what a change of root does to each device: `outcome` `stays`, `out`, `admin_kept_with_spare`, `admin_rights_lost` or `frozen` |
+| `set_change` | `recovery_secret` (32 bytes, from the recovery sheet; used for the call and forgotten), `new_root`, `device` (the new root's own device record, as `set_write`'s), `leave_out`, `drop_hubs`, `over_waiting` (write past a change the set holds and has not applied), `time_ms`, `sigs` | a change of root by the recovery key: `records` (the recovery record first, then the new root's first records), `list`, `again` (the change the set held, given back), `blind` (written without records from a member since the set was read: warn before sending), the view |
+| `set_standing` | `own`, `peer` (member keys) | where the peer's key stands in the records, as TLS by key asks: `standing` `member` (with `device`), `unknown` (it must send its intro), `refused` (with `reason`), `halted` or `fork_proof` |
+
+The view: `group`, `digest`, `record_count`, `bytes`, `first_root`, `recovery` (K1's hash), `roots`
+(the path, the current one last), `root_device`, `devices` `[{id, key, key_hash, name, role, rights,
+caps, os, store, admin, powers, commands, root, frozen, guarded, by_root, no_secrets, nothing}]`,
+`revoked`, `hubs`, `stop` (`""`, `secrets` or `full`), `stopped`, `halted`, `too_old`,
+`update_needed`, `incoming_ms`, `conflicts` `[{kind, records, signers}]` (`admins`, `fork`,
+`two_histories`, `admits`, `ids`), `changes` `[{record, seq, root, state}]` (`effective`, `void`,
+`competing`), `list_missing`, `change_arriving`, `newer`, `notices` `[{id, keys}]` (removals by an
+earlier root the person has not dismissed) and `came_in` `[{change, seq, keys}]` (devices that came
+in through a change of root).
+
 ## Signed bodies
 
 `parse_body` reads the signed bodies other than records as every program reads them
@@ -820,6 +886,7 @@ service and command line, the kits are the phones' Swift and Kotlin kits, and th
 | `join::welcome::message` | message 67, made only with an `Approved` naming the exchange's session and joiner | the same | to add |
 | `join::welcome::Welcome::build`, `part_message` | the Welcome and the parts that follow it when the set does not fit one frame | the same | to add |
 | `join::welcome::Assembly` (`new`, `due`, `late`, `take`, `finish`) | the joiner takes the parts after message 67 within `join::welcome::MAX_PARTS_BYTES` and their time limits, then gives the whole Welcome to `Welcome::check` | every program that joins: `member/`, the kits, the boards | to add |
+| `join::session::JoinerSession`, `MemberSession` | one whole pairing session at each end, without I/O: the frames of messages 64 to 69 in order, with the code to show at home and the person's answer through `answered`; the joiner ends with `Joined::Done`, a checked Welcome's set and state to store and message 68 to send. They only call the entries above in their order, so a program that runs them needs none of those itself | every program that joins or admits: `member/`, the kits, the boards | to add: the one pairing entry the kits need beside the exporter |
 | `bounds::BOUNDS` | every number of the format with its rule, refusal and the vector that reaches it ([protocol.md](protocol.md), section 19) | no driver; the tests and the docs check against it | none |
 | `records::RecordSet::parts_for_peer` | what a peer gets in sync (`for_peer` and its lists), as parts that each fit one frame, every change of root's list beside its head | every program that syncs: `member/`, the kits, the boards; today only the Welcome | to add |
 | `records::RecordSet::digest` | the set's digest, which a hello and each sync round carry | the same | to add |

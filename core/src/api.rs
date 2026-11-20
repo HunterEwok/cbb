@@ -16,6 +16,7 @@
 mod group;
 pub use group::checked_command;
 mod push;
+mod set;
 mod signed;
 
 use alloc::collections::BTreeMap;
@@ -227,6 +228,7 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         _ => push::dispatch(op, &args)
             .or_else(|| group::dispatch(op, &args))
             .or_else(|| signed::dispatch(op, &args))
+            .or_else(|| set::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),
     }
 }

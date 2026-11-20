@@ -278,7 +278,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 |------|-------|--------|
 | Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `internal/group/cert.go` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
-| Group tag | first 8 bytes of SHA-256 over the group CA certificate (DER), as 16 lowercase hex characters | `group.Tag` |
+| Group tag | on the records of 0.6, the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters; in a group of 0.5, the first 8 bytes of SHA-256 over the group CA certificate (DER) | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
@@ -543,12 +543,13 @@ change the mode, or change what the person compares or approves.
 | 25 | `entries` | as `release`, for `entries.json` | 16 |
 | 26 | `waiting` | the holder (a hub) to a device that may admit | 12 |
 | 27 | `dismiss` | that admin to the holder | 12 |
+| 30 | `want` | 2 record IDs, sorted, each once, at most `records::sync::HAVE_IDS` (4096); 3 the hash of a list (32 bytes); at least one of the two: "give me these". The answer is `records`, built only from what the set gives that peer by ID and the lists it gives that peer | 10 |
 | 64–69 | pairing | `cbb-pair/3` only | 6 |
 | 80–84 | forwarder | device and forwarder | 13 |
 | 90–99 | relay | device and relay, and inside the relay's tunnel | 14 |
 
 0.5's `cert` and `admin` messages are gone, since there are no certificates. Each message's
-fields and their rules are in the core's tables (`msg::tables`, `msg::wave4`) and in the
+fields and their rules are in the core's tables (`msg::tables`, `msg::wave4`, `msg::member`) and in the
 vectors of `testdata/format`.
 
 **The hello** (`t` 1) is the first message of each side on a member connection. The core reads
@@ -2233,6 +2234,17 @@ would give. Message `have` carries at most `records::sync::HAVE_IDS` (4096) IDs 
 alike. A full set with the records outside the rooms and up to 64 lists does not fit one frame,
 so nothing assumes it does. A Welcome carries the set whole, in parts when it does not fit, with
 its digest (section 6, "The Welcome").
+
+On a connection (`member/src/link.rs`), a member whose digest differs from the one in the
+peer's `hello` sends `have` with the IDs of the records it holds for that peer, and asks with
+`want` for what the other side's `have` lists and it lacks. A member that takes a peer's `have`
+while the peer's last `hello` still showed a digest other than its own sends its own `have`
+too, once for each `hello` of the peer's: a record written while two members are connected thus
+reaches the other side although only the writer sent a new `hello`. A member sends its `have` at
+most 64 times on one connection (its own budget in `member/src/link.rs`, not a bound of the
+format) and then logs that the exchange is stuck. When two
+members dial each other at once, both keep the connection the one with the lower device ID
+dialed.
 
 #### What is offered again after a restart
 
@@ -4946,6 +4958,9 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `copies::fresh::ALLOWANCE_MS` | 300000 | frozen | an origin's clock 5 minutes ahead; past it a copy is the verdict `ahead` (not written, not the newest), which depends on the reader's clock, so its vectors give the clock | `ahead` |
 | `copies::fresh::MAX_SECRETS` | 1024 | reader | secrets listed by ID above the floor |  |
 | `copies::fresh::MAX_ORIGINS` | 1024 | reader | origins with a newest time |  |
+| `copies::blob::SEGMENT` | 65536 | frozen | a blob's plaintext segment, the last one padded with zeros |  |
+| `copies::blob::SEALED_SEGMENT` | 65552 | frozen | a segment and its AES-256-GCM tag, the unit a fetch gets |  |
+| `copies::blob::MAX_SEGMENTS` | 16384 | frozen | the largest media copy in segments |  |
 | `content::MAX_STATE` | 4096 | frozen | a device's state | `content/data` |
 | `media::MAX_NAME` | 765 | stated | a file name of 255 characters of 3 bytes | `content/manifest` |
 | `media::MAX_PATH` | 16384 | stated | one path | `content/manifest` |
@@ -5041,6 +5056,12 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `credential::PERIOD_RENEW_MS` | 2592000000 | stated | a period 30 days old, when the root starts the next |  |
 | `credential::PERIOD_LIFETIME_MS` | 3024000000 | stated | a period lasting 35 days, its renewal and 5 days |  |
 | `store::HEADER` | 12 | frozen | a store frame's header |  |
+| `msg::member::MAX_ACTIONS` | 64 | frozen | the action names a hello offers | `hello/actions` |
+| `msg::member::MAX_ACTION_NAME` | 32 | frozen | an action's name | `hello/actions` |
+| `msg::member::MAX_VERSION_TEXT` | 32 | frozen | a system's or cbb's version in a hello | `hello/device` |
+| `msg::member::MAX_ARCHIVE` | 64 | frozen | a release archive's name, 61 bytes at the widest | `hello/device` |
+| `msg::member::MAX_RELEASE_FILE` | 524288 | frozen | a release file of a 256 KiB body in base64 with its signature | `release/release` |
+| `msg::member::MAX_EVIDENCE` | 65536 | frozen | an attestation's chain or a TPM's quote with its certificates | `evidence/data` |
 | `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `not_sheet` |
 <!-- bounds:end -->
 

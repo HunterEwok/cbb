@@ -623,7 +623,7 @@ impl Member {
 
     /// Stops dialing the member the app lost.
     pub fn lost(&self, key: &str) {
-        self.dialers.lost(&self.node, key);
+        self.dialers.lost(&*self.node, key);
     }
 
     /// Opens a member port for what: on the home network (every address)

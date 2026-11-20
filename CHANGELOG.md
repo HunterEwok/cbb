@@ -28,6 +28,83 @@ made with 0.5 is set up again once. The details follow.
   writes, and show on every device that the main device changed, with "This wasn't me"
   ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
   and the change too.
+- The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
+  (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and
+  written, with the root's and admins' keys signing where the device keeps them, the change of
+  root by the recovery sheet with the list of who stays, and where a peer's key stands.
+- The core reads the member connection's own messages of 0.6 (`hello`, `ping`, `bye`, `have`,
+  `release`, `entries`, `get`, `missing`, `reach`, `evidence`) and the new message `want`
+  (t 30), by which a member asks a peer for the records and the list its set names and lacks.
+- The core runs one pairing session of 0.6 at each end (`join::session`): the joiner's and the
+  member's steps from message 64 to the Welcome and message 68, at home with both persons'
+  answers or by an invitation, for `member/` and the phones alike; `member/` runs it over the
+  core's TLS of `cbb-pair/3` (`member/src/join.rs`), ready for the service's switch to 0.6.
+- `member/` keeps its sealing keys of 0.6 by epoch in `epochs.json`, each sealed under the
+  device's local key, holds the group's keys statements and passes them on in message `keys`,
+  and seals, checks, opens and judges copies of 0.6 on the core (`member/src/sealed.rs`),
+  ready for the service's switch to 0.6.
+- `member/` sends and takes commands of 0.6 on the core (`member/src/commands.rs`), their orders
+  sealed to the receiver, with every signer's counter kept across restarts in `commands.cbor`.
+- `member/` has its member connection of 0.6 (`member/src/mesh.rs`): members over TLS by key
+  exchange records, keys statements, copies, commands and their results, built beside the
+  connection of 0.5 until the service switches to it. It carries copies with images or files
+  too: the origin seals their bytes into a blob under the copy's blob key and serves it, and a
+  reader fetches it a range at a time (`get`, chunk frames, `missing`), checks it whole and
+  opens it. Its member port takes members (`cbb/4`, by their standing in the records) and
+  devices that pair (`cbb-pair/3`, to the open pairing window) alike.
+- The core seals and opens a copy's blob of 0.6 (`copies::seal_media`, `copies::blob`): the
+  parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
+  their size and SHA-256 signed in the copy's header and checked whole before they open. Such
+  a copy sealed again for a reader keeps its copy key, so that its blob still opens.
+- `cbb new` makes a group on the records of 0.6 (`member/src/founding.rs`): the root key in
+  the TPM or the Secure Enclave where it can be, a recovery key whose sheet `cbb new` shows
+  once (four lines and a QR code) and nothing keeps, and this computer's record under the
+  root. `cbb pair` on the root or an admin opens a pairing window on the member port, and
+  `cbb pair -code [ADDRESS]` on a new computer joins it: no code is typed, both computers show
+  one and the person types `yes` on each when they match.
+- Why a device does not sync knows the group of 0.6 (`cbb_core::why::group_facts`): new
+  reasons `recovery_fork`, `root_two_histories`, `admins_conflict`, `owner_disagrees` and
+  `nothing_here` (stop), `no_secrets_here`, `change_arriving` and `checkpoint_stuck` (warn) and
+  `copy_waits` (info); a record or setting this version cannot follow is `newer` at the level
+  stop. `cbb status` says each. The reasons of 0.5's certificates and claims, `taken_over`,
+  `cert_expired` and `cert_ending`, are gone.
+- On the member connection of 0.6, a member that answers a peer's `have` sends its own `have`
+  once for each hello of the peer's when the digests still differ, so that a record written
+  while two members are connected reaches the other one, and of two connections that two
+  members dial to each other at once both keep the one the lower device ID dialed.
+- The service runs a device whose group is kept on the records of 0.6 (`group.cbor`) on the
+  member of 0.6 (`member/src/service/on_live.rs`): the clipboard watchers, `cbb copy` and
+  `cbb paste`, status, devices, the tiles, sync, muting this device, leaving, and removing,
+  renaming, freezing and thawing a device, the hubs and the window for incoming copies. Every
+  other operation answers that it is not on the records of 0.6 yet, with that as its cause
+  in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
+  8 bytes of the group ID.
+- A phone's app runs the member of 0.6 when its data directory holds the group's `group.cbor`
+  (`ffi/src/member/live.rs`): the member key signs through the app's callback, the clipboard,
+  the devices, sync, the mute, why, and removing, renaming, freezing and thawing a device
+  with the app's admin or root key. Every other operation answers that it is not on the
+  records of 0.6 yet, with that as its cause in debug mode, until its part moves over.
+- `member/` runs a member of 0.6 for the service (`member/src/live.rs`): the member connection
+  and the clipboard state together, a copy from the group written when the rule says so.
+  Discovery finds, dials and takes peers for it and for the member of 0.5 alike, through one
+  trait (`discovery::Peers`).
+- `member/` joins a group at home on the records of 0.6 (`member/src/joining.rs`): it dials a
+  member's pairing window, and once both persons confirm the code keeps the set the Welcome
+  brought before it says so.
+- `member/` admits a device that pairs with it at home on the records of 0.6
+  (`member/src/admitting.rs`): once both persons confirm the code, it writes the device's
+  record with its root or admin key, keeps the device's first keys statement and sends the
+  Welcome.
+- `member/` shows the group's devices from the records of 0.6 and the hellos of the devices
+  connected (`member/src/roster.rs`), which the member connection of 0.6 now keeps.
+- `member/` reads and writes the orders of every command type of 0.6 (`member/src/orders.rs`),
+  checked against the type's rows before they are sealed.
+- `member/` writes the group's records of 0.6 as root or admin (`member/src/writers.rs`):
+  removing, freezing, thawing and renaming a device, the window for incoming copies, the hubs
+  and the settings, kept and passed on through the member connection of 0.6 (`Mesh::write`).
+- `member/` keeps its clipboard state of 0.6 (`member/src/board.rs`): sync on or off, an
+  admin's mute, its own copies going out once and the group's copies judged by the core's rule
+  of incoming copies, standing where the clipboard engine of 0.5 stands until the switch.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.

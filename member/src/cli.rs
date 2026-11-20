@@ -380,28 +380,45 @@ pub(crate) fn new(g: &Global, args: &[String]) -> Result<()> {
     let m = ask(g, header("new"))?;
     let s = m.header.status.unwrap_or_default();
     println!("{}", tr!("Created the group {}; this computer is its root.", s.group));
-    println!(
-        "{}",
-        tr!(
-            "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
-        )
-    );
-    if !s.key_problem.is_empty() {
-        println!("{}", tr!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem));
-    }
     if s.key_level == "files" {
         println!(
             "{}",
             tr!(
-                "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys)."
+                "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
             )
         );
+    }
+    if !s.key_problem.is_empty() {
+        println!("{}", tr!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem));
+    }
+    if let Ok(sheet) = serde_json::from_slice::<RecoverySheet>(&m.payload) {
+        println!();
+        println!(
+            "{}",
+            tr!(
+                "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery)."
+            )
+        );
+        println!();
+        for line in sheet.sheet.lines() {
+            println!("    {line}");
+        }
+        println!();
+        print!("{}", crate::qr(&sheet.qr));
+        println!();
     }
     println!(
         "{}",
         tr!("Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
     );
     Ok(())
+}
+
+/// The recovery sheet that cbb new shows once.
+#[derive(serde::Deserialize)]
+struct RecoverySheet {
+    sheet: String,
+    qr: String,
 }
 
 /// The most cbb recovery reads: the QR code's text with its admin CA fits

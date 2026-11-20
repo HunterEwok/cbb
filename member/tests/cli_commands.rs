@@ -923,11 +923,12 @@ fn pair_with_a_code() {
     run_cases(
         "pair-code",
         vec![
+            // No code is typed: the window and this device each show one
+            // once they meet, which the service sends to compare.
             Case {
                 name: "pair -code",
                 args: &["pair", "-code"],
-                stdin: "123 456\n",
-                sent: Some(("join", Some(|s| s.s("code") == "123456"))),
+                sent: Some(("join", Some(|s| s.s("code").is_empty() && s.s("address").is_empty()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -936,11 +937,10 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS",
                 args: &["pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
                 sent: Some((
                     "join",
                     Some(|s| {
-                        s.s("code") == "123456"
+                        s.s("code").is_empty()
                             && s.s("address") == "127.0.0.1:1"
                             && s.s("name").is_empty()
                             && s.h.get("caps").is_none()
@@ -952,7 +952,6 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -name -caps -code ADDRESS",
                 args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
                 sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
                 stdout: "Joined the group",
                 ..Case::default()
@@ -960,7 +959,6 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -caps none -code",
                 args: &["pair", "-caps", "none", "-code"],
-                stdin: "123 456\n",
                 sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
                 stdout: "Joined the group",
                 ..Case::default()
@@ -969,9 +967,8 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS, no service",
                 args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
                 code: 1,
-                stderr: "cannot connect to 127.0.0.1:1",
+                stderr: "cannot reach 127.0.0.1:1",
                 ..Case::default()
             },
             Case {
@@ -1019,26 +1016,66 @@ fn pair_with_a_code() {
                 stderr: "invitation",
                 ..Case::default()
             },
-            // A bad code fails before the service is asked or the address
-            // dialed.
+            // No code is read: what standard input holds never goes to the
+            // service.
             Case {
-                name: "five digits",
+                name: "digits on standard input",
                 args: &["pair", "-code"],
                 stdin: "12345\n",
-                code: 1,
-                stderr: "six digits",
+                sent: Some(("join", Some(|s| s.s("code").is_empty() && !text(s).contains("12345")))),
+                stdout: "Joined the group",
                 ..Case::default()
             },
             Case {
-                name: "five digits with an address",
+                name: "digits on standard input, with an address",
                 args: &["pair", "-code", "127.0.0.1:1"],
                 stdin: "12345\n",
-                code: 1,
-                stderr: "six digits",
+                sent: Some(("join", Some(|s| s.s("code").is_empty() && s.s("address") == "127.0.0.1:1"))),
+                stdout: "Joined the group",
                 ..Case::default()
             },
         ],
     );
+}
+
+/// The answers of a join of 0.6 on a device in no group: the code to
+/// compare, then the end, which last gives.
+fn compared(code: &'static str, last: Value) -> Handler {
+    group_then("", move |s| match s.op() {
+        "answer" => Vec::new(),
+        _ => vec![(json!({"code": code}), Vec::new()), done(last.clone())],
+    })
+}
+
+#[test]
+fn pairing_compares_the_codes() {
+    let dir = tempdir("compare");
+    // Joining: the code shows, yes goes back, and it joined.
+    let r = run_with(&dir, &["pair", "-code"], "yes\n", compared("123456", json!({})), &[]);
+    want("join", &r, 0, "This device shows the code:  123 456", "");
+    assert!(r.stdout.contains("Joined the group"), "{:?}", r.stdout);
+    let answer = r.sent.iter().find(|s| s.op() == "answer").expect("no answer sent");
+    assert_eq!(answer.h["consent"], json!(true));
+    // No: the answer says so.
+    let r = run_with(&dir, &["pair", "-code"], "no\n", compared("123456", json!({})), &[]);
+    assert!(r.stdout.contains("Not paired"), "{:?}", r.stdout);
+    let answer = r.sent.iter().find(|s| s.op() == "answer").expect("no answer sent");
+    assert_ne!(answer.h["consent"], json!(true));
+    // The window: it opens with no code to type, then the code, then the
+    // device's name.
+    let window = group_then("g1", |s| match s.op() {
+        "pair" => vec![
+            (json!({"expires": 300, "address": "192.168.1.5:8764"}), Vec::new()),
+            (json!({"code": "654321"}), Vec::new()),
+            done(json!({"name": "laptop"})),
+        ],
+        "devices" => vec![done(json!({}))],
+        _ => Vec::new(),
+    });
+    let r = run_with(&dir, &["pair"], "yes\n", window, &[]);
+    want("window", &r, 0, "cbb pair -code 192.168.1.5:8764", "");
+    assert!(r.stdout.contains("654 321") && r.stdout.contains("laptop joined the group"), "{:?}", r.stdout);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -1047,6 +1084,15 @@ fn new_group() {
     let r = run_with(&dir, &["new"], "", group_then("g1", |_| vec![done(status(json!({"group": "g1"})))]), &[]);
     want("new", &r, 0, "group g1", "");
     assert!(ops(&r).contains(&"new"), "new sent {:?}", ops(&r));
+    // The recovery sheet shows, once, as the service gives it.
+    let sheet = json!({"sheet": "AAAA BBBB CCCC DDDD\nEEEE FFFF GGGG HHHH", "qr": "CBBR1XYZ"}).to_string();
+    let with_sheet = group_then("g1", move |_| {
+        let (h, _) = done(status(json!({"group": "g1", "key_level": "hardware"})));
+        vec![(h, sheet.clone().into_bytes())]
+    });
+    let r = run_with(&dir, &["new"], "", with_sheet, &[]);
+    want("new with its sheet", &r, 0, "EEEE FFFF GGGG HHHH", "");
+    assert!(r.stdout.contains("recovery key") && !r.stdout.contains("root key is a file"), "{:?}", r.stdout);
     let r = run_in(&dir, &["new", "x"], "", json!({}), b"");
     want("new with an argument", &r, 2, "", "");
     let _ = std::fs::remove_dir_all(&dir);

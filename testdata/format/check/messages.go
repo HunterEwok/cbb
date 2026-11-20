@@ -189,6 +189,8 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
+	case "copy":
+		return copyRule([]byte(encOf(v))) == ""
 	}
 	panic("type " + ty)
 }
@@ -241,6 +243,10 @@ func betweenRule(name string, m map[any]any) string {
 			}
 			seen[e] = true
 		}
+	}
+	// A want asks for something.
+	if _, ids := m[uint64(2)]; name == "want" && !ids && m[uint64(3)] == nil {
+		return "want/empty"
 	}
 	// A root's fork is two records.
 	if fork, ok := m[uint64(3)].([]any); ok && name == "roots" && len(fork) != 2 {

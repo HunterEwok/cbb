@@ -467,7 +467,7 @@ fn serves_a_watcher() {
     has(svc.log().as_str(), "\"fax\", which is not known");
 }
 
-/// A damaged identity.json: the service runs without its group, answers
+/// A damaged group.cbor: the service runs without its group, answers
 /// every request with why, and takes only cbb leave, after which it starts
 /// again in no group.
 #[test]
@@ -475,16 +475,16 @@ fn a_damaged_group_file_takes_only_leave() {
     let mut svc = Svc::start("desk", &[], &[]);
     svc.new_group();
     svc.stop();
-    write(&svc.state().join("identity.json"), "{ damaged");
+    write(&svc.state().join("group.cbor"), "damaged");
     svc.restart(&[], &[]);
     for op in ["status", "devices", "copy", "rename", "pair"] {
         let m = svc.ask(true, json!({"op": op}), b"");
-        assert!(m.error().contains("identity.json"), "{op}: {:?}\n{}", m.h, svc.log());
+        assert!(m.error().contains("group.cbor"), "{op}: {:?}\n{}", m.h, svc.log());
         assert!(!m.s("detail").is_empty(), "{:?}", m.h);
     }
     svc.ok(true, json!({"op": "leave"}));
     svc.wait_exit(Duration::from_secs(20));
-    assert!(!svc.state().join("identity.json").exists());
+    assert!(!svc.state().join("group.cbor").exists());
     svc.restart(&[], &[]);
     assert!(svc.status()["group"].is_null());
 }

@@ -156,6 +156,7 @@ const MODULES: &[&str] = &[
     "alpn.rs",
     "media.rs",
     "bounds.rs",
+    "msg/member.rs",
 ];
 
 #[test]

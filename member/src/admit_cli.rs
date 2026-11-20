@@ -28,7 +28,7 @@ const INVITE_FILE: &str = "cbb.cbbinvite";
 
 /// A request on its own connection, for the operations that answer more
 /// than once: the writer, the reader and the first answer.
-fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
+pub(crate) fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
     let conn = open(g, &mut h)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(&mut w, &Message::new(h, Vec::new()))?;
@@ -38,7 +38,7 @@ fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, 
 }
 
 /// The service's next message on r.
-fn next(r: &mut Reader<UnixStream>) -> Result<Message> {
+pub(crate) fn next(r: &mut Reader<UnixStream>) -> Result<Message> {
     r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))
 }
 
@@ -117,7 +117,7 @@ pub(crate) fn pair(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// What cbb pair takes, as Go's pairUsage.
-pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: show a code for a new computer;
+pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open a pairing window for a new computer;
                                 in no group: join by the phone's QR code or a typed code
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
@@ -125,12 +125,15 @@ pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: show 
                                 code and a code and waits, the code or the QR code's text read
                                 from standard input; with -admin, on the root, the phone
                                 becomes an admin
-       cbb pair -code [address:port]   join with the code, read from standard input";
+       cbb pair -code [address:port]   join a pairing window; both show a code to compare";
 
 /// Opens a pairing window and waits for the device that joins with its
 /// code, as Go's admit.
 fn window(g: &Global, admins: bool) -> Result<()> {
-    let (_w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
+    let (mut w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
+    if m.header.code.is_empty() {
+        return compared_window(g, &mut w, &mut r, &m);
+    }
     if admins {
         println!("The phone that joins with this code becomes an admin of the group. It may then");
         println!("add, remove and renew devices, freeze other admins, choose the hub, and take");
@@ -155,6 +158,54 @@ fn window(g: &Global, admins: bool) -> Result<()> {
     println!("{} joined the group.", m.header.name);
     admin_hint(g);
     Ok(())
+}
+
+/// A pairing window of a group of 0.6: no code to type; once a device
+/// pairs, both show a code, and the person here says whether they match.
+fn compared_window(g: &Global, w: &mut UnixStream, r: &mut Reader<UnixStream>, m: &Message) -> Result<()> {
+    println!("A pairing window is open on this computer.\n");
+    println!("On the new computer run cbb pair -code.");
+    if !m.header.address.is_empty() {
+        println!("If it cannot find this one: cbb pair -code {}", m.header.address);
+    }
+    println!("\nWaiting up to {} minutes. Press Ctrl+C to cancel.", m.header.expires / 60);
+    loop {
+        std::io::stdout().flush().ok();
+        let m = check(next(r)?)?;
+        if m.header.done {
+            println!("{} joined the group.", m.header.name);
+            admin_hint(g);
+            return Ok(());
+        }
+        if !m.header.code.is_empty() {
+            answer_code(w, &m.header.code)?;
+        }
+    }
+}
+
+/// Shows the code a pairing of 0.6 gives and sends the person's answer:
+/// yes only when the other device shows the same.
+pub(crate) fn answer_code(w: &mut UnixStream, code: &str) -> Result<()> {
+    let yes = same_code(code);
+    control::write(w, &Message::new(Header { op: "answer".into(), consent: yes, ..Default::default() }, Vec::new()))
+}
+
+/// Shows the code a pairing of 0.6 gives and asks the person whether the
+/// other device shows the same.
+pub(crate) fn same_code(code: &str) -> bool {
+    let shown = match code.len() {
+        6 => format!("{} {}", &code[..3], &code[3..]),
+        _ => code.to_string(),
+    };
+    println!("\nThis device shows the code:  {shown}");
+    println!("The other device shows a code too. Answer yes only if they are the same.");
+    print!("Are they the same? Type yes: ");
+    std::io::stdout().flush().ok();
+    let yes = read_line(256).is_ok_and(|l| l.trim().eq_ignore_ascii_case("yes"));
+    if !yes {
+        println!("Not paired: the codes were not the same.");
+    }
+    yes
 }
 
 /// Suggests a second admin when this computer, the root, is the group's

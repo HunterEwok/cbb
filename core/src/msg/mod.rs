@@ -15,6 +15,7 @@
 //! and a field at its default is left out (`form/default`).
 
 pub mod later;
+pub mod member;
 pub mod tables;
 pub mod wave4;
 
@@ -63,6 +64,9 @@ pub enum Ty {
     Set { of: &'static Ty, max: usize },
     /// A map of its own table.
     Map(&'static Table),
+    /// A copy (format section 10), read by the copy's own reader
+    /// (`crate::format::copy::Copy::from_value`).
+    Copy,
 }
 
 /// One field of a table.
@@ -158,6 +162,9 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
         }
         // A bad field inside breaks the field that holds the map.
         Ty::Map(t) => check_map(t, v).map_err(|_| bad())?,
+        Ty::Copy => {
+            crate::format::copy::Copy::from_value(v).map_err(|_| bad())?;
+        }
     }
     Ok(())
 }
@@ -184,6 +191,7 @@ impl Ty {
             Ty::Once { of, max } => format!("once 1..{max} of {}", of.describe()),
             Ty::Set { of, max } => format!("set 1..{max} of {}", of.describe()),
             Ty::Map(t) => format!("map {}", t.name()),
+            Ty::Copy => "copy".into(),
         }
     }
 }
@@ -265,6 +273,10 @@ fn between(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             }
             seen.push(e);
         }
+    }
+    // A want asks for something.
+    if core::ptr::eq(table, &member::WANT) && v.get(2).is_none() && v.get(3).is_none() {
+        return Err(Rule::field("want/empty"));
     }
     // A root's fork is two records.
     if core::ptr::eq(table, &wave4::ROOTS) && v.get(3).and_then(Value::as_array).is_some_and(|a| a.len() != 2) {
@@ -430,6 +442,10 @@ fn read_ty<'a>(f: &Field, l: Later, v: &Value<'a>, dropped: &mut alloc::vec::Vec
             }
         }
         Ty::Map(t) => Keep(read_map_into(t, v, later::of, dropped).map_err(|_| bad())?),
+        Ty::Copy => {
+            crate::format::copy::Copy::from_value(v).map_err(|_| bad())?;
+            Keep(v.clone())
+        }
     })
 }
 
@@ -510,7 +526,7 @@ pub fn read(msg: &[u8]) -> Result<(u64, Value<'_>), Rule> {
 pub fn read_noted(msg: &[u8]) -> Result<(u64, Value<'_>, alloc::vec::Vec<Dropped>), Rule> {
     let v = cbor::decode(msg)?;
     let t = v.get(frame::FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;
-    match tables::of(t).or_else(|| wave4::of(t)) {
+    match tables::of(t).or_else(|| wave4::of(t)).or_else(|| member::of(t)) {
         Some(table) => {
             let (r, d) = read_map_noted(table, &v)?;
             Ok((t, r, d))
@@ -554,7 +570,8 @@ impl Obfuscation {
 pub fn check(msg: &[u8]) -> Result<u64, Rule> {
     let v = cbor::decode(msg)?;
     let t = v.get(frame::FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;
-    if let Some(table) = tables::of(t).or_else(|| wave4::of(t)).or_else(|| crate::push::of(t)) {
+    if let Some(table) = tables::of(t).or_else(|| wave4::of(t)).or_else(|| crate::push::of(t)).or_else(|| member::of(t))
+    {
         check_map(table, &v)?;
     }
     Ok(t)

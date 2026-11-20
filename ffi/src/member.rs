@@ -34,6 +34,8 @@ use serde_json::{Value, json};
 
 use crate::join::{AppKey, SignFn, answer};
 
+mod live;
+
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;
 
@@ -560,7 +562,81 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-pub struct Member {
+/// The phone's member: the one of 0.5 (`Old`), or the one of 0.6
+/// (`live::Phone`) when the app's folder holds the group's `group.cbor`.
+pub enum Member {
+    Old(Old),
+    Live(live::Phone),
+}
+
+impl Member {
+    /// Starts the member the app's folder holds a group for.
+    pub fn start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> (Option<Member>, Vec<u8>) {
+        if live::on_06(request) {
+            return match live::Phone::start(request, sign, events, ctx) {
+                Ok(p) => (Some(Member::Live(p)), answer(Ok(json!({})))),
+                Err(e) => (None, answer::<()>(Err(e))),
+            };
+        }
+        let (m, a) = Old::start(request, sign, events, ctx);
+        (m.map(Member::Old), a)
+    }
+
+    pub fn call(&self, request: &[u8]) -> Vec<u8> {
+        match self {
+            Member::Old(m) => m.call(request),
+            Member::Live(p) => p.call(request),
+        }
+    }
+
+    pub fn servers(&self, keys: KeysFn, ctx: usize) -> Vec<u8> {
+        match self {
+            Member::Old(m) => m.servers(keys, ctx),
+            Member::Live(p) => p.servers(keys, ctx),
+        }
+    }
+
+    pub fn stop(&self) {
+        match self {
+            Member::Old(m) => m.stop(),
+            Member::Live(p) => p.stop(),
+        }
+    }
+
+    pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+        match self {
+            Member::Old(m) => m.manage(request, sign, ctx),
+            Member::Live(p) => p.manage(request, sign, ctx),
+        }
+    }
+
+    pub fn manage_watch(&self, request: &[u8], sign_body: crate::watch::SignBodyFn, ctx: usize) -> Vec<u8> {
+        match self {
+            Member::Old(m) => m.manage_watch(request, sign_body, ctx),
+            Member::Live(p) => p.manage_watch(),
+        }
+    }
+
+    /// Admitting a device by its QR code; on 0.6 it moves to the core's
+    /// join session (docs/core-api.md).
+    pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
+        match self {
+            Member::Old(m) => m.admit(request, sign, ctx),
+            Member::Live(_) => (None, answer::<()>(Err(cbb_member::live::not_yet("admitting a device from a phone")))),
+        }
+    }
+
+    /// A remote invitation; on 0.6 it moves to the core's join session.
+    pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
+        match self {
+            Member::Old(m) => m.invite(request, sign, ctx),
+            Member::Live(_) => (None, answer::<()>(Err(cbb_member::live::not_yet("a remote invitation")))),
+        }
+    }
+}
+
+/// The phone's member on a group of 0.5.
+pub struct Old {
     node: Arc<Node>,
     answers: Arc<Answers>,
     events: Events,
@@ -570,11 +646,11 @@ pub struct Member {
     panics: u64,
 }
 
-impl Member {
+impl Old {
     /// Starts the member from the app's request, with its key's callback
     /// and its events' callback; with the answer.
-    pub fn start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> (Option<Member>, Vec<u8>) {
-        let made = (|| -> Result<Member> {
+    pub fn start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> (Option<Old>, Vec<u8>) {
+        let made = (|| -> Result<Old> {
             let a: StartArgs = serde_json::from_slice(request)
                 .map_err(|e| Error::msg(format!("the member's request does not decode: {e}")))?;
             let key = Arc::new(AppKey { public: a.public, sign, ctx });
@@ -670,7 +746,7 @@ impl Member {
                 res
             }));
             let panics = crate::guard::watch(Box::new(move |details: &str| ev.send(&Event::Panic { details })));
-            Ok(Member {
+            Ok(Old {
                 node: Arc::new(node),
                 answers,
                 events: ev,

@@ -9,9 +9,62 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::board::Board;
 use crate::error::{Context, Error, Result};
 use crate::files;
 use cbb_core::clip::Engine;
+
+/// Sync and the mute on a member's clipboard state: the old member's
+/// engine and the board of 0.6 both keep them.
+pub trait Switches {
+    fn set_sync(&self, on: bool, until_ms: i64);
+    fn sync(&self) -> (bool, i64);
+    fn set_mute(&self, until_ms: i64);
+    fn unmute(&self);
+    fn mute_left(&self) -> Option<i64>;
+}
+
+macro_rules! switches {
+    ($t:ty) => {
+        impl Switches for $t {
+            fn set_sync(&self, on: bool, until_ms: i64) {
+                <$t>::set_sync(self, on, until_ms)
+            }
+            fn sync(&self) -> (bool, i64) {
+                <$t>::sync(self)
+            }
+            fn set_mute(&self, until_ms: i64) {
+                <$t>::set_mute(self, until_ms)
+            }
+            fn unmute(&self) {
+                <$t>::unmute(self)
+            }
+            fn mute_left(&self) -> Option<i64> {
+                <$t>::mute_left(self)
+            }
+        }
+    };
+}
+switches!(Engine);
+switches!(Board);
+
+impl<T: Switches + ?Sized> Switches for std::sync::Arc<T> {
+    fn set_sync(&self, on: bool, until_ms: i64) {
+        (**self).set_sync(on, until_ms)
+    }
+    fn sync(&self) -> (bool, i64) {
+        (**self).sync()
+    }
+    fn set_mute(&self, until_ms: i64) {
+        (**self).set_mute(until_ms)
+    }
+    fn unmute(&self) {
+        (**self).unmute()
+    }
+    fn mute_left(&self) -> Option<i64> {
+        (**self).mute_left()
+    }
+}
 
 /// The file, in the state directory.
 pub const FILE_NAME: &str = "sync.json";
@@ -33,7 +86,7 @@ fn is_zero(v: &i64) -> bool {
 }
 
 /// Gives the engine the sync state saved in dir.
-pub fn load(dir: &Path, engine: &Engine) -> Result<()> {
+pub fn load(dir: &Path, engine: &dyn Switches) -> Result<()> {
     let data = match std::fs::read(dir.join(FILE_NAME)) {
         Ok(d) => d,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -45,7 +98,7 @@ pub fn load(dir: &Path, engine: &Engine) -> Result<()> {
 }
 
 /// Writes the engine's sync state to dir; sync on removes the file.
-pub fn save(dir: &Path, engine: &Engine) -> Result<()> {
+pub fn save(dir: &Path, engine: &dyn Switches) -> Result<()> {
     let path = dir.join(FILE_NAME);
     let (on, until_ms) = engine.sync();
     if on {
@@ -63,7 +116,7 @@ pub fn save(dir: &Path, engine: &Engine) -> Result<()> {
 
 /// Turns sync on, or off for ms milliseconds (0 for until it is turned
 /// on), and saves it.
-pub fn set(dir: &Path, engine: &Engine, on: bool, ms: i64) -> Result<()> {
+pub fn set(dir: &Path, engine: &dyn Switches, on: bool, ms: i64) -> Result<()> {
     if !(0..=MAX_MS).contains(&ms) {
         return Err(Error::msg(
             "sync turns off for at most 30 days; leave the time out to turn it off until cbb sync on",
@@ -86,7 +139,7 @@ pub struct Standing {
 }
 
 /// Where sync and the mute stand on engine now.
-pub fn standing(engine: &Engine) -> Standing {
+pub fn standing(engine: &dyn Switches) -> Standing {
     let off = match engine.sync() {
         (true, _) => None,
         (false, 0) => Some(0),
@@ -111,7 +164,7 @@ pub fn parse(name: &str) -> Result<bool> {
 }
 
 /// What the log says of sync on or off.
-pub fn line(engine: &Engine) -> String {
+pub fn line(engine: &dyn Switches) -> String {
     match engine.sync() {
         (true, _) => "cbb: sync is on: copies go to the group and come from it".into(),
         (false, 0) => "cbb: sync is off until it is turned on: the clipboard is this device's own".into(),
