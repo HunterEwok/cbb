@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 private let awayLog = Logger(subsystem: "tools.cbb", category: "away")
 private let relayLog = Logger(subsystem: "tools.cbb", category: "relay")
 private let browseLog = Logger(subsystem: "tools.cbb", category: "browse")
+private let pairLog = Logger(subsystem: "tools.cbb", category: "pair")
 private let hubLog = Logger(subsystem: "tools.cbb", category: "hub")
 private let modeLog = Logger(subsystem: "tools.cbb", category: "mode")
 private let keysLog = Logger(subsystem: "tools.cbb", category: "keys")
@@ -353,6 +354,7 @@ final class LiveGroup: GroupController {
 
     var devices: [AppModel.Computer] {
         guard let g = state else { return [] }
+        if g.isV06 { return devices06(g) }
         let root = g.records.rootDevice
         return g.devices.map {
             .init(id: $0.id, name: $0.name, online: $0.id == g.device || online.contains($0.id) || reached.contains($0.id),
@@ -372,6 +374,10 @@ final class LiveGroup: GroupController {
 
     func refresh() async {
         take(peers: (try? node?.peers()) ?? [])
+        if state?.isV06 == true, let gs = try? node?.group() {
+            group06 = gs
+            state?.admin06 = gs.me.admin
+        }
         pullRecords()
         if let n = node, let ns = try? n.notices() { notices = ns }
         entries.reload()
@@ -379,6 +385,131 @@ final class LiveGroup: GroupController {
     }
 
     // MARK: The group in 0.6
+
+    /// The member's state of a group of 0.6, as the last refresh read it.
+    private var group06: GroupState?
+
+    var isV06: Bool { state?.isV06 ?? false }
+
+    /// The devices of a group of 0.6, as its member's state names them,
+    /// with what the connected ones' hellos say.
+    private func devices06(_ g: PhoneGroup) -> [AppModel.Computer] {
+        guard let gs = group06 else { return [] }
+        return gs.devices.map {
+            let me = $0.device == g.device
+            return .init(id: $0.device, name: $0.name, online: me || online.contains($0.device), role: $0.role == "computer" ? "member" : $0.role,
+                         os: $0.os.isEmpty ? nil : $0.os, isSelf: me, admin: $0.admin, isRoot: $0.device == gs.rootDevice,
+                         keysInFile: keyStores[$0.device] == Records.file, frozen: $0.frozen,
+                         device: me ? Self.ownDevice : infos[$0.device], mode: me ? modeBox.mode : modes[$0.device],
+                         actions: actions[$0.device] ?? [],
+                         muted: AppModel.Hold(ms: me ? modeBox.mutedUntilMS : mutes[$0.device]),
+                         syncOff: me && modeBox.mode == "own" ? AppModel.Hold(ms: modeBox.syncOffUntilMS ?? 0) : nil)
+        }
+    }
+
+    /// Makes a group of 0.6 on this phone (docs/apps.md, "Screens"): a new
+    /// root key in the Secure Enclave behind Face ID, the core writes this
+    /// phone's record under it and keeps the set where the member runs, and
+    /// the member starts. Returns the recovery sheet, which the app shows
+    /// once and keeps nowhere.
+    func newGroup06() async throws -> Core.RecoverySheet {
+        guard state == nil else { throw Failure.noGroup }
+        let root = try await newRootKey(reason: String(localized: "Add a computer to your group", bundle: .app))
+        let member = try memberSigner()
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let made = try CorePairing.newGroup06(dir: memberDir, name: PhoneGroup.validName(UIDevice.current.name), store: Records.hardware,
+                                              rootPublic: root.publicKeyDER, publicKey: member.publicKeyDER) { try root.signature(digest: $0) }
+        let g = PhoneGroup.of06(device: made.device, group: made.group, root: true)
+        try g.save(to: file)
+        try modeBox.newDevice()
+        forgetCredentials()
+        state = g
+        try startSync()
+        groupChanged()
+        await refresh()
+        let text = made.recovery.text.flatMap { $0.split(separator: " ").map(String.init) }.joined(separator: "-")
+        return Core.RecoverySheet(qr: made.recovery.qr, text: text, admin: Data())
+    }
+
+    /// Opens this phone's pairing window on a group of 0.6 (docs/protocol.md,
+    /// section 6, "The window and who dials"): the member port listens, the
+    /// window is announced by Bonjour, shown gets the QR code, and for each
+    /// device that dials ask gets the person's answer about the code.
+    /// Returns the name of the device that joined; the window closes when it
+    /// does, when its time is up, or when the task is cancelled.
+    func openWindow(shown: @escaping @MainActor (String) -> Void,
+                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String {
+        guard let g = state, g.isV06, g.isAdmin else { throw Failure.noGroup }
+        guard let node else { throw Failure.unreachable }
+        let signer = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
+        let port: UInt16
+        if let p = homePort { port = p } else { port = try node.listen(.home, port: 0) }
+        let hosts = LocalAddresses.current()
+        guard !hosts.isEmpty else { throw Failure.noNetwork }
+        let w = try CorePairing.Window(member: node, publicKey: signer.publicKeyDER, addrs: hosts) { try signer.signature(digest: $0) }
+        defer { w.close() }
+        let announced = try? BonjourPublisher(name: g.device, port: port, txt: Discovery.windowTXT(group: g.tag, fingerprint: w.fingerprint))
+        defer { announced?.stop() }
+        shown(w.qr)
+        var version: UInt64 = 0
+        while true {
+            try Task.checkCancellation()
+            let v = version
+            let st = try await Task.detached { try w.next(after: v) }.value
+            version = st.version
+            switch st.state {
+            case "joining":
+                if let r = st.request { w.answer(await ask(AppModel.CodeAsk(name: r.name, code: r.code))) }
+            case "done":
+                await refresh()
+                return st.name
+            case "closed":
+                throw Failure.timedOut
+            case "failed":
+                if let f = st.failure { pairLog.error("a device did not join through the window: \(String(reflecting: f), privacy: .public)") }
+            default:
+                break
+            }
+        }
+    }
+
+    /// Joins a group of 0.6 by a window's QR code: this phone dials, ask
+    /// gets the person's answer about the code both screens show, and the
+    /// member starts on the group it keeps.
+    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws {
+        guard state == nil else { return }
+        let member = try memberSigner()
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let j = try CorePairing.Joiner(dir: memberDir, qr: qr, name: PhoneGroup.validName(UIDevice.current.name), os: "ios",
+                                       publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
+        defer { j.close() }
+        var version: UInt64 = 0
+        while true {
+            try Task.checkCancellation()
+            let v = version
+            let st = try await Task.detached { try j.next(after: v) }.value
+            version = st.version
+            switch st.state {
+            case "joining":
+                if let s = st.shown { j.answer(await ask(AppModel.CodeAsk(name: s.name, code: s.code))) }
+            case "done":
+                let g = PhoneGroup.of06(device: st.device, group: st.group, root: false)
+                try g.save(to: file)
+                try modeBox.newDevice()
+                forgetCredentials()
+                state = g
+                try startSync()
+                groupChanged()
+                await refresh()
+                return
+            case "failed":
+                if let f = st.failure { throw f }
+                throw Failure.unreachable
+            default:
+                break
+            }
+        }
+    }
 
     /// The member's notices about the group, as the last refresh read them.
     private(set) var notices: [Notice] = []
@@ -1759,7 +1890,8 @@ final class LiveGroup: GroupController {
     private func startSync() throws {
         guard let g = state, node == nil else { return }
         let signer = try memberSigner()
-        let id = try identity(g, signer)
+        // A group of 0.6 has no certificates: the member proves itself by its key.
+        let id: SecIdentity? = g.isV06 ? nil : try identity(g, signer)
         try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
         Self.moveEntries(from: file.deletingLastPathComponent(), to: memberDir)
         let node = try CoreMember(.init(dir: memberDir, name: UIDevice.current.name, osVersion: Self.ownDevice.osVersion ?? "",

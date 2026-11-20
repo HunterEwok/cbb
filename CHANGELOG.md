@@ -40,9 +40,9 @@ made with 0.5 is set up again once. The details follow.
   its root key signs its own record, the set is kept for the member, and the recovery sheet goes
   to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers
   `group`, the state the apps show (the group, its root, the phone's place, the devices).
-- The Android app pairs on 0.6: "Add a device" makes a group of 0.6 on a phone without one
+- The Android and iPhone apps pair on 0.6: "Add a device" makes a group of 0.6 on a phone without one
   (its recovery sheet shown once) and opens the pairing window with its QR code, announced by
-  NSD; "Join a group" scans a window's code and dials it; both ends ask whether the code
+  NSD or Bonjour; "Join a group" scans a window's code and dials it; both ends ask whether the code
   matches ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
 - The core's entry point works on the group of 0.6 (`set_` calls, docs/core-api.md "The group
   (records v3)"): the records v3 kept in one set file pinned to the device, read, added to and

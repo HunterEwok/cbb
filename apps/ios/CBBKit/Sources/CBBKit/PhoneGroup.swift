@@ -46,9 +46,18 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// The device of the root that claim takes the group over from, which
     /// the new root removes.
     public var claimedFrom: String?
+    /// On the records of 0.6: the Group ID (hex) the member's set names; nil
+    /// for a group of 0.5. Such a group has no certificates and no records
+    /// here: the member keeps its set in its own folder and answers the
+    /// group's state (CoreMember.group), and the app reads it from there.
+    public var group06: String?
+    /// On 0.6: whether the member's state names this phone an admin
+    /// (GroupState.me.admin); set as the state arrives.
+    public var admin06 = false
 
     enum CodingKeys: String, CodingKey {
         case device, groupCA, roots, memberCert, memberIssuer, isRoot, adminCA, computers, records, computerAdmins, claim, claimedFrom
+        case group06, admin06
     }
 
     init(device: String, groupCA: Data, memberCert: Data, computers: [Computer]) {
@@ -70,11 +79,16 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         computerAdmins = try c.decodeIfPresent([String: Data].self, forKey: .computerAdmins) ?? [:]
         claim = try c.decodeIfPresent(Data.self, forKey: .claim)
         claimedFrom = try c.decodeIfPresent(String.self, forKey: .claimedFrom)
+        group06 = try c.decodeIfPresent(String.self, forKey: .group06)
+        admin06 = try c.decodeIfPresent(Bool.self, forKey: .admin06) ?? false
     }
+
+    /// Whether the group is on the records of 0.6.
+    public var isV06: Bool { group06 != nil }
 
     /// Whether this phone may admit devices, renew certificates and remove
     /// devices: the root and the admins.
-    public var isAdmin: Bool { isRoot || adminCA != nil }
+    public var isAdmin: Bool { isRoot || adminCA != nil || (isV06 && admin06) }
 
     /// The certificate chain this phone presents in TLS, leaf first.
     public var memberChain: [Data] { [memberCert] + (memberIssuer.map { [$0] } ?? []) }
@@ -114,7 +128,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     }
 
     /// The group tag the computers publish.
-    public var tag: String { GroupCertificates.tag(groupCA: groupCA) }
+    public var tag: String { group06.map { String($0.prefix(16)) } ?? GroupCertificates.tag(groupCA: groupCA) }
 
     /// Creates a group: a root CA for caSigner's key, a member certificate
     /// for this phone's member key (a SubjectPublicKeyInfo), and the phone's
@@ -152,6 +166,15 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         g.records.addAll(j.welcome.records ?? [], groupCA: j.welcome.groupCA)
         g.records.takeClaimTimes(j.welcome.claimTimes ?? [])
         g.roots = g.records.roots
+        return g
+    }
+
+    /// A group of 0.6 this phone made (CorePairing.newGroup06, root) or
+    /// joined (CorePairing.Joiner): its device and Group ID; the member keeps
+    /// the set.
+    public static func of06(device: String, group: String, root: Bool) -> PhoneGroup {
+        var g = PhoneGroup(device: device, groupCA: Data(), memberCert: Data(), computers: [])
+        (g.isRoot, g.group06) = (root, group)
         return g
     }
 

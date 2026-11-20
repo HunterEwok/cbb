@@ -50,6 +50,14 @@ public enum Discovery {
         ["v": "1", "j": "1", "f": fingerprint]
     }
 
+    /// The TXT of a member's pairing window of 0.6 while it is open: the
+    /// group's tag, p=1 and the fingerprint the window's QR code names, so
+    /// a device without a camera finds it (docs/protocol.md, sections 3 and
+    /// 6, "The window and who dials").
+    public static func windowTXT(group: String, fingerprint: String) -> [String: String] {
+        ["v": "1", "g": group, "p": "1", "f": fingerprint]
+    }
+
     /// The members to dial: those browsing found, and the devices of the
     /// group with a known address that it did not find, as a member in
     /// another subnet, which mDNS does not reach (docs/protocol.md, section 9).

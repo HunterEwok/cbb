@@ -158,6 +158,10 @@ public enum Core {
         public var qr: String
         public var text: String
         public var admin: Data
+
+        public init(qr: String, text: String, admin: Data) {
+            (self.qr, self.text, self.admin) = (qr, text, admin)
+        }
     }
 
     /// The recovery sheet for key (its 32 bytes), its admin CA and the

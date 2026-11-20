@@ -179,9 +179,29 @@ protocol GroupController: AnyObject {
     /// root key in the Secure Enclave, Face ID, and leaveOut removed in the
     /// same act; overWaiting writes over a change whose records never came.
     func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws
+    /// Whether the group is on the records of 0.6.
+    var isV06: Bool { get }
+    /// Makes a group of 0.6 on this phone and returns its recovery sheet,
+    /// which the app shows once.
+    func newGroup06() async throws -> Core.RecoverySheet
+    /// Opens the pairing window of a group of 0.6: shown gets its QR code,
+    /// ask the person's answer about each code; returns the name of the
+    /// device that joined.
+    func openWindow(shown: @escaping @MainActor (String) -> Void,
+                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String
+    /// Joins a group of 0.6 by a window's QR code; ask gets the person's
+    /// answer about the code.
+    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws
 }
 
 extension GroupController {
+    var isV06: Bool { false }
+    func newGroup06() async throws -> Core.RecoverySheet { throw PendingGroup.Failure.notReady }
+    func openWindow(shown: @escaping @MainActor (String) -> Void,
+                    ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws -> String { throw PendingGroup.Failure.notReady }
+    func joinByWindow(_ qr: String, ask: @escaping @MainActor (AppModel.CodeAsk) async -> Bool) async throws {
+        throw PendingGroup.Failure.notReady
+    }
     var notices: [Notice] { [] }
     func dismissNotice(_ id: String) async throws {}
     var rootChanged: AppModel.RootChange? { nil }
@@ -890,6 +910,115 @@ final class AppModel: ObservableObject {
     }
 
     /// Leaves the join screen without joining.
+    // MARK: Pairing on 0.6: the window and the joiner
+
+    /// A device whose code waits for the person's answer: the name it
+    /// gives, and the code both screens show.
+    struct CodeAsk: Equatable, Sendable {
+        let name: String
+        let code: String
+    }
+
+    /// The recovery sheet of the group of 0.6 this phone just made, shown
+    /// once until the person says it is kept.
+    @Published var newSheet: Core.RecoverySheet?
+    /// The open window's QR code, while "Add a device" shows it.
+    @Published private(set) var windowQr: String?
+    /// The code that waits for the person's answer, on either end.
+    @Published private(set) var pairAsk: CodeAsk?
+    private var pairAnswer: CheckedContinuation<Bool, Never>?
+
+    /// Whether "Add a device" opens a window of 0.6 and "Join a group"
+    /// scans one: a phone without a group pairs on 0.6, a group of 0.5
+    /// keeps its screens.
+    var pairsOn06: Bool { !group.hasGroup || group.isV06 }
+
+    /// Asks the person whether the code both screens show matches; a new
+    /// question answers the one before it no.
+    private func askCode(_ a: CodeAsk) async -> Bool {
+        pairAnswer?.resume(returning: false)
+        pairAnswer = nil
+        pairAsk = a
+        let yes = await withCheckedContinuation { pairAnswer = $0 }
+        pairAsk = nil
+        return yes
+    }
+
+    /// The person's answer about the code.
+    func answerCode(_ yes: Bool) {
+        pairAnswer?.resume(returning: yes)
+        pairAnswer = nil
+    }
+
+    private func endPairing() {
+        windowQr = nil
+        pairAsk = nil
+        pairAnswer?.resume(returning: false)
+        pairAnswer = nil
+    }
+
+    /// "Add a device" on 0.6: makes the group first on a phone without one
+    /// (its recovery sheet shows over the window), then opens the window
+    /// until a device joins. The screen runs it as its task, so leaving it
+    /// closes the window. Returns whether a device joined.
+    func addByWindow() async -> Bool {
+        message = nil
+        defer { endPairing() }
+        do {
+            if !group.hasGroup {
+                busy = true
+                defer { busy = false }
+                newSheet = try await group.newGroup06()
+                await refresh()
+                phase = .home
+            }
+            let name = try await group.openWindow(shown: { [weak self] qr in self?.windowQr = qr }) { [weak self] a in
+                await self?.askCode(a) ?? false
+            }
+            log.info("\(name, privacy: .public) joined through this phone's window")
+            await refresh()
+            message = String(localized: "The device joined the group.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// Joins a group of 0.6 by a window's scanned or pasted QR code: the
+    /// code both screens show waits for the person's answer, then the app
+    /// goes Home. The join screen runs it, so leaving it cancels it.
+    func joinByWindow(_ text: String) async -> Bool {
+        let qr = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard qr.hasPrefix(Self.windowQR) else {
+            message = String(localized: "This is not the QR code of a pairing window. On a phone of the group, tap + to show one.", bundle: .app)
+            return false
+        }
+        message = nil
+        busy = true
+        defer {
+            busy = false
+            endPairing()
+        }
+        do {
+            try await group.joinByWindow(qr) { [weak self] a in await self?.askCode(a) ?? false }
+            await refresh()
+            phase = .home
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// How the QR code of a pairing window of 0.6 starts (docs/protocol.md,
+    /// section 7, "The window's QR code").
+    static let windowQR = "cbb://pair?"
+
     func cancelJoin() {
         joinCode = nil
         joiningInvite = nil

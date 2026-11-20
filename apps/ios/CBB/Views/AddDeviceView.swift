@@ -21,6 +21,15 @@ struct AddDeviceView: View {
     init(restore: Bool = false) { self.restore = restore }
 
     var body: some View {
+        if !restore && model.pairsOn06 {
+            WindowView()
+        } else {
+            scanner
+        }
+    }
+
+    /// Scanning a device's QR code, on a group of 0.5, or the recovery sheet's.
+    private var scanner: some View {
         NavigationStack {
             VStack(spacing: Tokens.spacingLarge) {
                 if QRScanner.available {

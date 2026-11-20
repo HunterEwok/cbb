@@ -14,6 +14,17 @@ struct JoinView: View {
     @Environment(\.themeStyle) private var style
 
     var body: some View {
+        // On 0.6 the new phone dials a window (docs/protocol.md, section 6,
+        // "The window and who dials").
+        if model.joiningInvite == nil && model.pairsOn06 {
+            JoinByWindowView()
+        } else {
+            listening
+        }
+    }
+
+    /// This phone's QR code, on a group of 0.5, or joining by an invitation.
+    private var listening: some View {
         VStack(spacing: Tokens.spacingLarge) {
             Spacer()
             Text(model.joiningInvite != nil ? LocalizedStringKey("Join with an invitation") : LocalizedStringKey("Join a group"))
