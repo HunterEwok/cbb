@@ -101,6 +101,7 @@ pub mod releases;
 mod remotepaste;
 pub mod restore;
 mod rootless;
+pub mod roster;
 pub mod sealed;
 pub mod sealkey;
 mod sekey;

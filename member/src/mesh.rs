@@ -111,6 +111,8 @@ pub struct Mesh {
     /// The fetches running, by blob.
     fetches: Mutex<HashMap<[u8; 32], SyncSender<media::Got>>>,
     conns: Mutex<HashMap<DeviceId, Arc<Conn>>>,
+    /// The last hello of each device connected now, for the views.
+    hellos: Mutex<HashMap<DeviceId, Hello>>,
     clock: Clock,
     hello: RwLock<Hello>,
     lifetimes: RwLock<Lifetimes>,
@@ -235,6 +237,7 @@ impl Mesh {
             content: Arc::new(Store::open(dir)),
             fetches: Mutex::new(HashMap::new()),
             conns: Mutex::new(HashMap::new()),
+            hellos: Mutex::new(HashMap::new()),
             clock,
             hello: RwLock::new(Hello::default()),
             lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
@@ -317,6 +320,11 @@ impl Mesh {
         *self.lifetimes.write().unwrap() = l;
     }
 
+    /// The last hello of each device connected now.
+    pub fn hellos(&self) -> HashMap<DeviceId, Hello> {
+        self.hellos.lock().unwrap().clone()
+    }
+
     /// The devices connected now.
     pub fn connected(&self) -> Vec<DeviceId> {
         self.conns.lock().unwrap().keys().copied().collect()
@@ -392,6 +400,7 @@ impl Mesh {
     /// On a peer's hello: the release and entry points this member holds,
     /// when the peer's are older.
     fn on_hello(&self, conn: &Conn, h: &Hello) {
+        self.hellos.lock().unwrap().insert(conn.peer, h.clone());
         let now = crate::uptime::wall_ms();
         if let Some(r) = &*self.releases.read().unwrap()
             && crate::releases::newer(r.order(now), (h.release_keys_seq, h.release_seq))
@@ -604,6 +613,7 @@ impl Mesh {
             let mut conns = self.conns.lock().unwrap();
             if conns.get(&peer).is_some_and(|c| Arc::ptr_eq(c, &conn)) {
                 conns.remove(&peer);
+                self.hellos.lock().unwrap().remove(&peer);
             }
         }
         conn.close();
