@@ -1927,6 +1927,8 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- The 0.6 format's `hub` command no longer carries its clients (field 12, retired and refused):
+  a client gives each hub its key by message `tunnel`, and the pre-shared key is never sent.
 - The rule of the group's key level and its messages are in the core
   (`cbb_core::keylevel`), so that `cbb` and the phones' apps share one.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,

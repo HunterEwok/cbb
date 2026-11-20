@@ -4025,6 +4025,12 @@ carrying the command out went wrong. `hub` and a small device's own command answ
 are not on the records of 0.6 yet; `away-off` is done at once, as the member of 0.6 syncs only
 at home.
 
+A `hub` command of 0.6 orders field 10 (the hub to use, an endpoint with its key), 11 (the
+forwarders, 1 to 8) or 13 (stop being a hub, alone). Field 12, the clients with their keys and
+pre-shared keys, is retired and refused (`orders/hub`), and its number is not used again: a
+client gives each hub its key in message `tunnel` (t 15), and the pre-shared key is never sent,
+since both ends export it from their own connection (`core/src/hubkey.rs`).
+
 ### The command
 
 It has the form of a record, `{body, sig, chain?}`. Its body is JSON, in the strict form of

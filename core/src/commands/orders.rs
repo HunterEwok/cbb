@@ -91,15 +91,12 @@ pub fn check(t: u64, b: &[u8]) -> Result<(), Rule> {
                     return Err(RULE_HUB);
                 }
             }
-            if let Some(v) = m.get(12) {
-                let a = v.as_array().ok_or(RULE_HUB)?;
-                let ok = |c: &Value<'_>| {
-                    matches!(c.as_array(), Some([Value::Bytes(id), Value::Bytes(k), Value::Bytes(p)])
-                        if id.len() == 16 && k.len() == 32 && p.len() == 32)
-                };
-                if a.is_empty() || a.len() > 256 || !cbor::is_set(a) || !a.iter().all(ok) {
-                    return Err(RULE_HUB);
-                }
+            // Field 12, the clients with their keys and pre-shared keys, is
+            // retired and its number not used again: a client gives a hub
+            // its key by `tunnel` (t 15), and the pre-shared key is never
+            // sent (`crate::hubkey`).
+            if m.get(12).is_some() {
+                return Err(RULE_HUB);
             }
             if m.as_map().is_some_and(|e| e.iter().all(|(k, _)| *k >= 256)) {
                 return Err(RULE_HUB);

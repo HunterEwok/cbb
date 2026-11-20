@@ -764,9 +764,9 @@
    "orders": "a10d01"
   },
   {
-   "name": "hub with its clients",
+   "name": "hub with its clients, field 12 retired",
    "type": 2,
-   "verdict": "take",
+   "verdict": "orders/hub",
    "orders": "a10c8283506f71ceabce49c7d50934bf03b80c09e858205fd72bc6cd8a218afd2428fb50c6a88fb6b02fba980ceccf22845dbf5905770658208c8b053da881dd3f3bf6fa5553f068f9c69d05836589666032915787e39c6b008350b330b4f419e47392ebf8036ae1dc2178582077f3291950967a7cc0150ffed2f37cadd09115cf6421f8f1b93eccdfb2c93e515820673c6dd9b33338824ec4cc30b11853e6cec8c1c8889be1c69ad7084906f1a55b"
   },
   {
@@ -794,7 +794,7 @@
    "orders": "a10b826e6362622e746f6f6c733a383736346e6362622e746f6f6c733a38373634"
   },
   {
-   "name": "hub clients out of order",
+   "name": "hub clients out of order, field 12 retired",
    "type": 2,
    "verdict": "orders/hub",
    "orders": "a10c828350b330b4f419e47392ebf8036ae1dc2178582077f3291950967a7cc0150ffed2f37cadd09115cf6421f8f1b93eccdfb2c93e515820673c6dd9b33338824ec4cc30b11853e6cec8c1c8889be1c69ad7084906f1a55b83506f71ceabce49c7d50934bf03b80c09e858205fd72bc6cd8a218afd2428fb50c6a88fb6b02fba980ceccf22845dbf5905770658208c8b053da881dd3f3bf6fa5553f068f9c69d05836589666032915787e39c6b00"

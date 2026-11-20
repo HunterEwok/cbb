@@ -3463,8 +3463,8 @@ def _plain(x, most=255):
 
 def hub_rule(o):
     """`hub` orders: 13 off alone, or 10 [endpoint, key 32], 11 forwarders
-    (1 to 8 texts, each once), 12 clients (a set of 1 to 256 [ID 16, key
-    32, psk 32]); not empty."""
+    (1 to 8 texts, each once); 12 (the clients) is retired and refused;
+    not empty."""
     bad = "orders/hub"
     if 13 in o:
         return "take" if o[13] == 1 and all(k >= 256 or k == 13 for k in o) else bad
@@ -3477,14 +3477,9 @@ def hub_rule(o):
         if not (isinstance(a, list) and 1 <= len(a) <= 8 and all(_plain(x) for x in a) and len(set(a)) == len(a)):
             return bad
     if 12 in o:
-        a = o[12]
-        if not (isinstance(a, list) and 1 <= len(a) <= 256):
-            return bad
-        keys = [enc(x[0] if isinstance(x, list) and x else x) for x in a]
-        if any(keys[i] >= keys[i + 1] for i in range(len(keys) - 1)):
-            return bad
-        if not all(isinstance(c, list) and len(c) == 3 and all(isinstance(v, bytes) and len(v) == n for v, n in zip(c, (16, 32, 32))) for c in a):
-            return bad
+        # retired: the clients and their pre-shared keys (a client sends its
+        # key by `tunnel`; the pre-shared key is never sent)
+        return bad
     if all(k >= 256 for k in o):
         return bad
     return "take"
@@ -3712,12 +3707,12 @@ def wave4_vectors():
         ("device command with arguments not one item", 10, {10: "heat", 11: b"\x82"}),
         ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: ["cbb.tools:8764"]}),
         ("hub off", 2, {13: 1}),
-        ("hub with its clients", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
+        ("hub with its clients, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
         ("hub empty", 2, {}),
         ("hub off with an endpoint", 2, {13: 1, 10: ["203.0.113.5:51820", fake("hub key", 32)]}),
         ("hub endpoint with a hidden character", 2, {10: ["203.0.113.5\u202e:51820", fake("hub key", 32)]}),
         ("hub forwarder twice", 2, {11: ["cbb.tools:8764", "cbb.tools:8764"]}),
-        ("hub clients out of order", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
+        ("hub clients out of order, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
         ("orders of a type without orders", 4, {10: 1}),
     ]:
         b = enc(o)

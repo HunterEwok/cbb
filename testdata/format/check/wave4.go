@@ -783,8 +783,8 @@ func ordersVerdict(t uint64, b []byte) string {
 }
 
 // hubOrders: 13 `off` (flag, alone), or any of 10 the hub to use
-// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 texts, each once),
-// 12 its clients (a set of 1 to 256 [ID 16, key 32, psk 32]); not empty.
+// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 texts, each once);
+// 12 (the clients) is retired and refused; not empty.
 func hubOrders(o map[any]any) string {
 	const bad = "orders/hub"
 	if x, there := o[uint64(13)]; there {
@@ -815,22 +815,10 @@ func hubOrders(o map[any]any) string {
 			once[e.(string)] = true
 		}
 	}
-	if x, there := o[uint64(12)]; there {
-		a, ok := x.([]any)
-		if !ok || len(a) == 0 || len(a) > 256 || !sortedSet(a) {
-			return bad
-		}
-		for _, e := range a {
-			c, ok := e.([]any)
-			if !ok || len(c) != 3 {
-				return bad
-			}
-			for i, n := range []int{16, 32, 32} {
-				if b, ok := c[i].([]byte); !ok || len(b) != n {
-					return bad
-				}
-			}
-		}
+	// 12, the clients with their pre-shared keys, is retired: a client
+	// sends its key by `tunnel`, and the pre-shared key is never sent.
+	if _, there := o[uint64(12)]; there {
+		return bad
 	}
 	if only(o) {
 		return bad
