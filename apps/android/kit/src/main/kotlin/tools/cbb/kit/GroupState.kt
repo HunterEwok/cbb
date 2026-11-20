@@ -38,24 +38,22 @@ data class GroupState(
         val device: String,
         /** phone, computer, watch, board, … as the device record says. */
         val role: String,
-        /** watch, computer or phone: the admin rights set, empty for no admin. */
-        val admin: String,
+        /** The admin key the records name for it is one of the group's admins. */
+        val admin: Boolean,
         val frozen: Boolean,
         val leaf: Boolean,
     )
 
-    /** One device the group counts, or one it removed. */
+    /** One device the group counts; removed devices are not listed. */
     data class Device(
         val device: String,
         val name: String,
         val os: String,
         val role: String,
-        /** The admin rights set (watch, computer, phone), empty for no admin. */
-        val admin: String,
+        /** The admin key the records name for it is one of the group's admins. */
+        val admin: Boolean,
         val frozen: Boolean,
         val hub: Boolean,
-        /** root or admin when the device was removed, empty while it counts. */
-        val removedBy: String,
     )
 
     val stopped: Boolean get() = stop == "full" || halted
@@ -73,7 +71,7 @@ data class GroupState(
                 me = Me(
                     device = me?.optString("device") ?: "",
                     role = me?.optString("role") ?: "",
-                    admin = me?.optString("admin") ?: "",
+                    admin = me?.optBool("admin") ?: false,
                     frozen = me?.optBool("frozen") ?: false,
                     leaf = me?.optBool("leaf") ?: false,
                 ),
@@ -88,10 +86,9 @@ data class GroupState(
                         name = it.optString("name") ?: "",
                         os = it.optString("os") ?: "",
                         role = it.optString("role") ?: "",
-                        admin = it.optString("admin") ?: "",
+                        admin = it.optBool("admin") ?: false,
                         frozen = it.optBool("frozen") ?: false,
                         hub = it.optBool("hub") ?: false,
-                        removedBy = it.optString("removed_by") ?: "",
                     )
                 },
             )

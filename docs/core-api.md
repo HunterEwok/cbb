@@ -114,7 +114,11 @@ On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
 `device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
 age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
 `current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
-`set_mute`, `sync`, `muted`, `peers`, `devices` and `why`; `cbb_member_manage` takes `remove`,
+`set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
+(`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
+update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
+hub}]}`: `admin` is whether the admin key the records name for the device is one of the
+group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
 `rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
 Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
 `cbb_invite_new`, answers that it does not work in this build yet, with the cause

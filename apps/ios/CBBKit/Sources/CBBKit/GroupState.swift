@@ -34,14 +34,14 @@ public struct GroupState: Decodable, Equatable, Sendable {
         public var device: String
         /// phone, computer, watch, board, … as the device record says.
         public var role: String
-        /// watch, computer or phone: the admin rights set, empty for no admin.
-        public var admin: String
+        /// The admin key the records name for it is one of the group's admins.
+        public var admin: Bool
         public var frozen: Bool
         public var leaf: Bool
 
         enum CodingKeys: String, CodingKey { case device, role, admin, frozen, leaf }
 
-        public init(device: String = "", role: String = "", admin: String = "", frozen: Bool = false, leaf: Bool = false) {
+        public init(device: String = "", role: String = "", admin: Bool = false, frozen: Bool = false, leaf: Bool = false) {
             (self.device, self.role, self.admin, self.frozen, self.leaf) = (device, role, admin, frozen, leaf)
         }
 
@@ -49,28 +49,26 @@ public struct GroupState: Decodable, Equatable, Sendable {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             device = try c.decodeIfPresent(String.self, forKey: .device) ?? ""
             role = try c.decodeIfPresent(String.self, forKey: .role) ?? ""
-            admin = try c.decodeIfPresent(String.self, forKey: .admin) ?? ""
+            admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
             leaf = try c.decodeIfPresent(Bool.self, forKey: .leaf) ?? false
         }
     }
 
-    /// One device the group counts, or one it removed.
+    /// One device the group counts; removed devices are not listed.
     public struct Device: Decodable, Equatable, Sendable, Identifiable {
         public var device: String
         public var name: String
         public var os: String
         public var role: String
-        /// The admin rights set (watch, computer, phone), empty for no admin.
-        public var admin: String
+        /// The admin key the records name for it is one of the group's admins.
+        public var admin: Bool
         public var frozen: Bool
         public var hub: Bool
-        /// root or admin when the device was removed, empty while it counts.
-        public var removedBy: String
 
         public var id: String { device }
 
-        enum CodingKeys: String, CodingKey { case device, name, os, role, admin, frozen, hub, removedBy = "removed_by" }
+        enum CodingKeys: String, CodingKey { case device, name, os, role, admin, frozen, hub }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -78,10 +76,9 @@ public struct GroupState: Decodable, Equatable, Sendable {
             name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
             os = try c.decodeIfPresent(String.self, forKey: .os) ?? ""
             role = try c.decodeIfPresent(String.self, forKey: .role) ?? ""
-            admin = try c.decodeIfPresent(String.self, forKey: .admin) ?? ""
+            admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
-            removedBy = try c.decodeIfPresent(String.self, forKey: .removedBy) ?? ""
         }
     }
 

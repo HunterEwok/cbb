@@ -329,7 +329,7 @@ impl Phone {
                 Ok(json!({ "peers": ps }))
             }
             "devices" => Ok(json!({ "devices": self.devices() })),
-            "group" => Ok(group_view(&l.mesh.state(), &l.mesh.device())),
+            "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
@@ -480,26 +480,22 @@ fn deliver(ev: &Events, w: &Write) {
 }
 
 /// The group's state as the apps show it (inventory 4.5): the group,
-/// its root, this device's place and the devices that count. An admin's
-/// set is named by the kind of device it is (phone, watch or computer),
-/// as the apps name it. Removed devices are not listed yet: the state
-/// keeps no list of them.
-fn group_view(st: &cbb_core::records::State, me: &cbb_core::records::DeviceId) -> Value {
+/// its root, this device's place and the devices that count. A device is
+/// an admin when the admin key the records name for it is one of the
+/// group's admins. Removed devices are not listed: the apps get no more
+/// of the group than they show.
+fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Value {
     use cbb_core::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
     use cbb_core::records::eval::{DeviceState, Stop};
     let role = |r: u64| match r {
-        ROLE_MEMBER => "member",
+        ROLE_MEMBER => "computer",
         ROLE_PHONE => "phone",
         ROLE_WATCH => "watch",
         ROLE_LEAF => "leaf",
         _ => "unknown",
     };
-    let admin = |d: &DeviceState| match (d.admin.is_some(), d.role) {
-        (false, _) => "",
-        (true, ROLE_PHONE) => "phone",
-        (true, ROLE_WATCH) => "watch",
-        (true, _) => "computer",
-    };
+    let st = &set.state();
+    let admin = |d: &DeviceState| d.admin.as_ref().is_some_and(|h| set.is_admin(h));
     let mine = st.devices.iter().find(|d| d.id == *me);
     let devices: Vec<Value> = st
         .devices
@@ -508,7 +504,6 @@ fn group_view(st: &cbb_core::records::State, me: &cbb_core::records::DeviceId) -
             json!({
                 "device": id_text(&d.id), "name": d.name, "os": cbb_core::format::print::os_name(d.os),
                 "role": role(d.role), "admin": admin(d), "frozen": d.frozen, "hub": st.hubs.contains(&d.id),
-                "removed_by": Value::Null,
             })
         })
         .collect();
@@ -519,7 +514,7 @@ fn group_view(st: &cbb_core::records::State, me: &cbb_core::records::DeviceId) -
         "me": {
             "device": id_text(me),
             "role": mine.map_or("", |d| role(d.role)),
-            "admin": mine.map_or("", admin),
+            "admin": mine.is_some_and(admin),
             "frozen": mine.is_some_and(|d| d.frozen),
             "leaf": mine.is_some_and(|d| d.role == ROLE_LEAF),
         },
@@ -619,7 +614,8 @@ mod tests {
         let g = ok(&call("group", Value::Null));
         assert_eq!(g["root_device"], device.as_str(), "{g}");
         assert_eq!(g["me"]["device"], device.as_str());
-        assert_eq!(g["me"]["role"], "member");
+        assert_eq!(g["me"]["role"], "computer");
+        assert_eq!(g["me"]["admin"], false, "the root is no admin");
         assert_eq!((g["stop"].as_str(), g["halted"].as_bool()), (Some("none"), Some(false)));
         assert_eq!(g["devices"].as_array().unwrap().len(), 1);
         assert_eq!(g["devices"][0]["name"], "phone");

@@ -23,16 +23,16 @@ final class GroupStateTests: XCTestCase {
     func testGroup() throws {
         let g = try JSONDecoder().decode(V.self, from: Data(contentsOf: url)).group
         XCTAssertEqual(g.group, "q83vEjRWeJCrze8SNFZ4kA==")
-        XCTAssertEqual(g.rootDevice, "AQEBAQEBAQEBAQEBAQEBAQ==")
-        XCTAssertEqual(g.me.admin, "phone")
+        XCTAssertEqual(g.rootDevice, "01010101010101010101010101010101")
+        XCTAssertTrue(g.me.admin)
         XCTAssertFalse(g.isRoot)
         XCTAssertEqual(g.stop, "secrets")
         XCTAssertFalse(g.stopped)
         XCTAssertTrue(g.tooOld)
         XCTAssertTrue(g.changeArriving)
         XCTAssertFalse(g.updateNeeded)
-        XCTAssertEqual(g.devices.map(\.name), ["Root phone", "Pixel", "Desk", "Old laptop"])
-        XCTAssertEqual(g.devices.map(\.removedBy), ["", "", "", "root"])
+        XCTAssertEqual(g.devices.map(\.name), ["Root phone", "Pixel", "Desk"])
+        XCTAssertEqual(g.devices.map(\.admin), [false, true, false])
         XCTAssertTrue(g.devices[2].frozen && g.devices[2].hub)
         var r = g
         r.me.device = g.rootDevice
@@ -65,8 +65,8 @@ final class GroupStateTests: XCTestCase {
         guard case let .notice(n)? = try ev("notice") else { return XCTFail("notice") }
         XCTAssertEqual(n.kind, "recovery_not_saved")
         guard case let .rootChanged(from, to, seq)? = try ev("root_changed") else { return XCTFail("root_changed") }
-        XCTAssertEqual(from, "AQEBAQEBAQEBAQEBAQEBAQ==")
-        XCTAssertEqual(to, "AgICAgICAgICAgICAgICAg==")
+        XCTAssertEqual(from, "01010101010101010101010101010101")
+        XCTAssertEqual(to, "02020202020202020202020202020202")
         XCTAssertEqual(seq, 2)
         guard case let .needKey(token, kind)? = try ev("need_key") else { return XCTFail("need_key") }
         XCTAssertEqual(token, 7)

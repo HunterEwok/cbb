@@ -466,6 +466,12 @@ pub struct Written {
 }
 
 impl RecordSet {
+    /// Whether h is a key of one of the group's admins (not a root's, not
+    /// the recovery key's), as the set learned it from the records.
+    pub fn is_admin(&self, h: &KeyHash) -> bool {
+        self.keys.is_admin(h)
+    }
+
     /// An empty set for the group whose first root key is root and whose
     /// recovery key is recovery: the Group ID commits to both.
     pub fn new(root: Key, recovery: Recovery) -> RecordSet {
