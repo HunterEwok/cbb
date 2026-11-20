@@ -20,7 +20,7 @@ import (
 )
 
 // rootPhoneWithLaptop runs a phone's app (phone-on-linux) as the root of a
-// group of its own that admits a laptop, with the member serving the
+// group of 0.6 of its own, which a laptop joins by its home window, with the member serving the
 // servers (cbb_member_servers), and returns the phone, its directory, the
 // laptop and their device IDs.
 func rootPhoneWithLaptop(t *testing.T, h *hub) (next func(string) string, in io.Writer, dir string, laptop *testService, phoneID, laptopID string) {
@@ -37,15 +37,10 @@ func rootPhoneWithLaptopArgs(t *testing.T, h *hub, args ...string) (next func(st
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	dir = t.TempDir()
-	next, w := phoneOnLinux(t, bin, append([]string{"-name", "root phone", "-new-group", "-dir", dir}, args...)...)
+	next, w := phoneOnLinux(t, bin, append([]string{"-name", "root phone", "-group06", "-dir", dir}, args...)...)
 	phoneID = strings.Fields(next("Group "))[0]
-	laptop, qr := listeningJoin(t, h, "laptop")
-	fmt.Fprintln(w, "ADMIT "+qr)
-	laptopID = next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the laptop did not confirm its join: %q", got)
-	}
-	joinedIdentity(t, laptop, laptopID)
+	laptop = joinPhoneWindow(t, h, next, w, "laptop")
+	laptopID = laptop.status(t).Device
 	fmt.Fprintln(w, "SERVERS")
 	if got := next("SERVERS "); got != `{"ok":{}}` {
 		t.Fatalf("serving the servers: %s", got)

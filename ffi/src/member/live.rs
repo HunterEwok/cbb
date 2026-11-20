@@ -93,6 +93,24 @@ struct ManageArgs {
     /// How long a mute lasts, 0 for until an admin ends it.
     #[serde(default)]
     for_ms: i64,
+    /// A paste: its text, pasted or typed (`method`), with Enter after it,
+    /// a text or a secret (`kind`), or `media` for the group's copy of
+    /// images or files.
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    method: String,
+    #[serde(default)]
+    enter: bool,
+    #[serde(default)]
+    kind: String,
+    /// With make_admin: the person consented to a device that keeps its
+    /// keys in a file, which the group's key level must allow too.
+    #[serde(default)]
+    allow_file_key: bool,
+    /// With key_level: proven, hardware or files.
+    #[serde(default)]
+    level: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
 }
@@ -548,8 +566,9 @@ impl Phone {
 
     /// An admin's change to a device, signed with the app's admin or root
     /// key: remove, rename, freeze and thaw, or a command for another
-    /// device (mute, unmute, sync_off, sync_on), sent as the computer's
-    /// service sends it and answered by that device; the records judge
+    /// device (mute, unmute, sync_off, sync_on, paste, paste_off,
+    /// actions_off, away_off), sent as the computer's service sends it and
+    /// answered by that device (`{status, reason}`); the records judge
     /// whether the key may.
     pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         answer((|| -> Result<Value> {
@@ -577,34 +596,151 @@ impl Phone {
                     let on = a.action == "freeze";
                     mesh.write_by(&key, |set, k| writers::freeze(set, k, &a.device, on, now))?.0
                 }
-                "mute" | "unmute" | "sync_off" | "sync_on" => {
-                    use cbb_member::orders::Order;
+                "mute" | "unmute" | "sync_off" | "sync_on" | "paste" | "paste_off" | "actions_off" | "away_off" => {
                     if named_me() {
-                        return Err(Error::msg("this phone's own sync and mute are its own switches, not a command"));
+                        return Err(Error::msg("this phone's own switches are its own, not a command"));
                     }
-                    let o = match a.action.as_str() {
-                        "mute" => {
-                            cbb_member::mute::until(a.for_ms)?;
-                            Order::Mute((a.for_ms > 0).then_some(a.for_ms.unsigned_abs()))
-                        }
-                        "unmute" => Order::Unmute,
-                        "sync_off" => Order::Mode(cbb_core::clip::Mode::Own),
-                        _ => Order::Mode(cbb_core::clip::Mode::Shared),
-                    };
+                    let o = self.order(&a)?;
                     let d = writers::find(&mesh.state(), &a.device)?.clone();
                     let r = mesh
                         .command(&key, d.id, o.kind(), o.orders()?.as_deref())
                         .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
-                    if r.status != 1 {
-                        let status = if r.status == cbb_core::commands::STATUS_REFUSED { "refused" } else { "failed" };
-                        return Err(Error::msg(format!("{} {status} it: {}", d.name, r.reason)));
-                    }
-                    d
+                    let status = match r.status {
+                        1 => "done",
+                        s if s == cbb_core::commands::STATUS_REFUSED => "refused",
+                        _ => "failed",
+                    };
+                    return Ok(
+                        json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }),
+                    );
                 }
+                "make_admin" => self.make_admin(&a, &key, now)?,
+                "key_level" => return self.key_level(&a, &key, now),
                 other => return Err(not_yet(&format!("the admin's action {other:?}"))),
             };
             Ok(json!({ "device": id_text(&d.id), "name": d.name }))
         })())
+    }
+
+    /// The group's key level as the records set it.
+    fn level(&self) -> &'static str {
+        use cbb_core::records::body::{LEVEL_FILES, LEVEL_PROVEN};
+        match self.live.mesh.state().settings.level() {
+            LEVEL_PROVEN => "proven",
+            LEVEL_FILES => "files",
+            _ => "hardware",
+        }
+    }
+
+    /// The root's "Make it an admin", as the service's cbb admin: the
+    /// device's record again with the admin key it offered when it paired
+    /// with this phone (`cbb_member::offered`), if the key level allows
+    /// where it keeps its keys.
+    fn make_admin(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<cbb_core::records::eval::DeviceState> {
+        use cbb_core::records::body::{CAP_ADMIN, ROLE_PHONE, STORE_ROOTLESS};
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        if st.roots.last() != Some(&cbb_core::records::Key::es256(key.public.clone()).hash()) {
+            return Err(Error::msg("only the group's root makes admins"));
+        }
+        let d = writers::find(&st, &a.device)?.clone();
+        if d.id == mesh.device() {
+            return Err(Error::msg("this phone is the group's root, which is more than an admin"));
+        }
+        if d.role != ROLE_PHONE && d.caps & CAP_ADMIN == 0 {
+            return Err(Error::msg(format!(
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
+                d.name
+            )));
+        }
+        if d.admin.is_some() {
+            return Err(Error::msg(format!("{} is already an admin", d.name)));
+        }
+        if d.store == STORE_ROOTLESS {
+            return Err(Error::msg(format!(
+                "{} is installed without root, so every program of its user can read its keys; such a device is never an admin (D-79)",
+                d.name
+            )));
+        }
+        let Some(point) = cbb_member::offered::get(mesh.dir(), &id_text(&d.id))? else {
+            return Err(Error::msg(format!(
+                "{} offered this phone no admin key when it joined (another admin admitted it, or it cannot be one then): pair it with this phone again to make it an admin",
+                d.name
+            )));
+        };
+        let store = self.devices().into_iter().find(|x| x.id == id_text(&d.id)).map(|x| x.store).unwrap_or_default();
+        cbb_core::keylevel::allows(self.level(), &store, &d.name, "allow keys in a file for it", a.allow_file_key)?;
+        Ok(mesh.write_by(key, |set, k| writers::make_admin(set, k, &a.device, &point, now))?.0)
+    }
+
+    /// The root's key level, as the service's cbb keys: never one this
+    /// phone's own keys do not pass. Answers `{below}`, the admins and hubs
+    /// whose keys the new level would not let in, which stay until removed.
+    fn key_level(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<Value> {
+        use cbb_core::records::body::{LEVEL_FILES, LEVEL_HARDWARE, LEVEL_PROVEN};
+        let level = match a.level.as_str() {
+            "proven" => LEVEL_PROVEN,
+            "hardware" => LEVEL_HARDWARE,
+            "files" => LEVEL_FILES,
+            _ => return Err(Error::msg("the key level is proven, hardware or files")),
+        };
+        let mesh = &self.live.mesh;
+        let me = id_text(&mesh.device());
+        let devices = self.devices();
+        let own = devices.iter().find(|d| d.id == me).map(|d| d.store.clone()).unwrap_or_default();
+        cbb_core::keylevel::allows(&a.level, &own, "this phone, the group's root,", "", true)?;
+        // The default, hardware, is written as no level at all (format 4.5).
+        let kept = if level == LEVEL_HARDWARE { 0 } else { level };
+        mesh.write_by(key, |set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
+        let st = mesh.state();
+        let below: Vec<String> = devices
+            .into_iter()
+            .filter(|d| d.id != me)
+            .filter(|d| d.admin || st.hubs.iter().any(|h| id_text(h) == d.id))
+            .filter(|d| cbb_core::keylevel::allows(&a.level, &d.store, &d.name, "", true).is_err())
+            .map(|d| d.name)
+            .collect();
+        Ok(json!({ "below": below }))
+    }
+
+    /// The command a manage request names, built and checked as the
+    /// service builds it (`cbb_member::orders`).
+    fn order(&self, a: &ManageArgs) -> Result<cbb_member::orders::Order> {
+        use cbb_member::orders::{Order, Way, What};
+        Ok(match a.action.as_str() {
+            "mute" => {
+                cbb_member::mute::until(a.for_ms)?;
+                Order::Mute((a.for_ms > 0).then_some(a.for_ms.unsigned_abs()))
+            }
+            "unmute" => Order::Unmute,
+            "sync_off" => Order::Mode(cbb_core::clip::Mode::Own),
+            "sync_on" => Order::Mode(cbb_core::clip::Mode::Shared),
+            "paste_off" => Order::PasteOff,
+            "actions_off" => Order::ActionsOff,
+            "away_off" => Order::AwayOff,
+            _ => {
+                let way = match a.method.as_str() {
+                    "" | "paste" => Way::Paste,
+                    "type" => Way::Type,
+                    m => return Err(Error::msg(format!("a paste is pasted or typed, not {m:?}"))),
+                };
+                let what = match a.kind.as_str() {
+                    "" | "text" => What::Text(a.text.clone()),
+                    "secret" => What::Secret(a.text.clone()),
+                    "media" => {
+                        if way == Way::Type {
+                            return Err(Error::msg("images and files are pasted, not typed"));
+                        }
+                        let id = self.live.media_copy().ok_or_else(|| {
+                            Error::msg("the group's current copy is no images or files that this phone reads")
+                        })?;
+                        What::Media(id)
+                    }
+                    k => return Err(Error::msg(format!("a paste is a text or a secret, not {k:?}"))),
+                };
+                Order::Paste { way, enter: a.enter, what }
+            }
+        })
     }
 
     /// Opens a pairing window with the admitting key behind sign
@@ -855,7 +991,9 @@ mod tests {
         assert_eq!(ok(&manage("rename", "phone", "tablet"))["name"], "phone");
         assert_eq!(ok(&call("devices", Value::Null))["devices"][0]["name"], "tablet");
         assert!(error(&manage("remove", "tablet", "")).contains("cannot remove itself"));
-        assert!(error(&manage("mute", "tablet", "")).contains("does not work in this build yet"));
+        // A command names another device; this phone's own switches are its own.
+        assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
+        assert!(error(&manage("hand_over", "tablet", "")).contains("does not work in this build yet"));
         let (a, ans) = m.admit(b"{}", sign, ctx(root));
         assert!(a.is_none() && error(&ans).contains("does not work in this build yet"));
 

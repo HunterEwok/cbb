@@ -43,8 +43,9 @@ made with 0.5 is set up again once. The details follow.
   with a `sync` event for the app; it follows the button's rule (`waiting`, `took`, `sends`).
 - A phone of 0.6 offers its admin key when it joins (`cbb_joiner_new_admin`), for the root to
   make it an admin later; a root phone keeps the key a device offered through its window, lets a
-  computer that can be a hub be one, and mutes, unmutes and turns the sync of another device off
-  and on by command (`cbb_member_manage`).
+  computer that can be a hub be one, mutes, unmutes, turns the sync of another device off and
+  on and sends it pastes by command, and as the root sets the key level and makes admins
+  (`cbb_member_manage`).
 - A phone of 0.6 copies images and files to the group and fetches the group's (`copy_media`,
   `fetch`), on the service's media of 0.6.
 - A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):

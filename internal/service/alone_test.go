@@ -819,6 +819,27 @@ func adminPhone(t *testing.T, bin string, h *hub) (pi *testService, next func(pr
 	return pi, next, in
 }
 
+// joinPhoneWindow opens the home window of phone-on-linux (next, in), as
+// the app's "Add a device" does, and starts a service named name that
+// joins by the window's QR code; it returns that service once the window
+// says it joined.
+func joinPhoneWindow(t *testing.T, h *hub, next func(prefix string) string, in io.Writer, name string) *testService {
+	t.Helper()
+	fmt.Fprintln(in, "WINDOW")
+	link := next("WINDOW ")
+	if !strings.HasPrefix(link, "cbb://pair?") {
+		t.Fatalf("the phone's window: %q", link)
+	}
+	s := startService(t, h, name)
+	if _, err := s.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("%s joining the phone's window: %v; the phone: %s", name, err, next("WINDOW FAILED "))
+	}
+	if got := next("WINDOW DONE "); got != name {
+		t.Fatalf("the phone's window admitted %q, not %s", got, name)
+	}
+	return s
+}
+
 // TestFFIJoinerMadeAdmin: the Aurora app joins a group of 0.6 as a member
 // by the root's home window, offering its admin key with its proof over
 // the pairing, and the root makes it an admin later with that key (cbb
@@ -861,18 +882,7 @@ func TestFFIJoinerAdmin(t *testing.T) {
 	}
 	var h hub
 	pi, next, in := adminPhone(t, bin, &h)
-	fmt.Fprintln(in, "WINDOW")
-	link := next("WINDOW ")
-	if !strings.HasPrefix(link, "cbb://pair?") {
-		t.Fatalf("the admin phone's window: %q", link)
-	}
-	laptop := startService(t, &h, "laptop")
-	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
-		t.Fatalf("the computer joining the admin phone's window: %v; the phone: %s", err, next("WINDOW FAILED "))
-	}
-	if got := next("WINDOW DONE "); got != "laptop" {
-		t.Fatalf("the phone's window admitted %q", got)
-	}
+	laptop := joinPhoneWindow(t, &h, next, in, "laptop")
 	if g := laptop.status(t).Group; g != pi.status(t).Group {
 		t.Fatalf("the computer joined %q, not the group %q", g, pi.status(t).Group)
 	}
@@ -972,7 +982,8 @@ func TestFFIPhoneTakeover(t *testing.T) {
 // that key, and a Go computer joins by the window's QR code, as the app's
 // "Add a device" does. The root phone then changes the computer through
 // cbb_member_manage: renames it, mutes it and turns its sync off and on by
-// commands the computer carries out, and removes it.
+// commands the computer carries out, sets the key level, makes it an admin
+// with the admin key it offered, and removes it.
 func TestFFIPhoneRoot(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
@@ -989,18 +1000,7 @@ func TestFFIPhoneRoot(t *testing.T) {
 	}
 
 	var h hub
-	fmt.Fprintln(in, "WINDOW")
-	link := next("WINDOW ")
-	if !strings.HasPrefix(link, "cbb://pair?") {
-		t.Fatalf("the root phone's window: %q", link)
-	}
-	laptop := startService(t, &h, "laptop")
-	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
-		t.Fatalf("the computer joining the root phone's window: %v; the phone: %s", err, next("WINDOW FAILED "))
-	}
-	if got := next("WINDOW DONE "); got != "laptop" {
-		t.Fatalf("the phone's window admitted %q", got)
-	}
+	laptop := joinPhoneWindow(t, &h, next, in, "laptop")
 	st := laptop.status(t)
 	if !strings.HasPrefix(st.Group, made[1]) {
 		t.Fatalf("the computer joined group %s, not the phone's %s", st.Group, made[1])
@@ -1035,24 +1035,48 @@ func TestFFIPhoneRoot(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000}`); !strings.Contains(got, `"ok"`) {
+	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("muting the computer: %s", got)
 	}
 	waitFor(t, "the computer muted", func() bool { return laptop.status(t).Muted })
-	if got := manage(`{"action":"unmute","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+	if got := manage(`{"action":"unmute","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("ending the computer's mute: %s", got)
 	}
 	waitFor(t, "the computer unmuted", func() bool { return !laptop.status(t).Muted })
-	if got := manage(`{"action":"sync_off","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+	if got := manage(`{"action":"sync_off","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("turning the computer's sync off: %s", got)
 	}
 	waitFor(t, "the computer's sync off", func() bool { return laptop.status(t).Mode == "own" })
-	if got := manage(`{"action":"sync_on","device":"` + admitted + `"}`); !strings.Contains(got, `"ok"`) {
+	if got := manage(`{"action":"sync_on","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("turning the computer's sync on: %s", got)
 	}
 	waitFor(t, "the computer's sync on", func() bool { return laptop.status(t).Mode == "shared" })
-	if got := manage(`{"action":"mute","device":"` + made[0] + `"}`); !strings.Contains(got, "own switches") {
+	if got := manage(`{"action":"mute","device":"` + made[0] + `"}`); !strings.Contains(got, "its own, not a command") {
 		t.Fatalf("the phone muting itself by a command: %s", got)
+	}
+
+	// The root's key level and "Make it an admin", by the core's key level
+	// rule (cbb_core::keylevel). Neither the phone's keys nor the
+	// computer's count as proven in this test: both are "file", which only
+	// the level files lets be the root or an admin.
+	if got := manage(`{"action":"key_level","level":"proven"}`); !strings.Contains(got, "error") {
+		t.Fatalf("the root phone set a key level its own keys do not pass: %s", got)
+	}
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, "key level") {
+		t.Fatalf("made a computer with keys in a file an admin at the level hardware: %s", got)
+	}
+	if got := manage(`{"action":"key_level","level":"files"}`); got != `{"ok":{"below":[]}}` {
+		t.Fatalf("setting the key level: %s", got)
+	}
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "allow keys in a file") {
+		t.Fatalf("made a computer with keys in a file an admin unasked: %s", got)
+	}
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("making the computer an admin: %s", got)
+	}
+	waitFor(t, "the computer is an admin", func() bool { return laptop.isAdmin(t) })
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, "already an admin") {
+		t.Fatalf("making the computer an admin twice: %s", got)
 	}
 
 	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
@@ -2019,20 +2043,14 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
 	if made := strings.Fields(next("Group ")); len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
 	admit := func(name string) (*testService, string) {
-		s, qr := listeningJoin(t, &h, name)
-		fmt.Fprintln(in, "ADMIT "+qr)
-		admitted := next("ADMITTED ")
-		if got := next("ADMIT DONE "); got != "true" {
-			t.Fatalf("%s did not confirm its join: %q", name, got)
-		}
-		joinedIdentity(t, s, admitted)
-		return s, admitted
+		s := joinPhoneWindow(t, &h, next, in, name)
+		return s, s.status(t).Device
 	}
 	pc, pcID := admit("pc")
 	second, id := admit("second")
@@ -2061,7 +2079,7 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if got := manage(`{"action":"paste_off","device":"` + pcID + `"}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("turning remote paste off on the computer: %s", got)
 	}
-	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("renaming the computer: %s", got)
 	}
 	waitFor(t, "the second computer has its new name", func() bool {
@@ -2076,7 +2094,7 @@ func TestFFIPhoneRemoves(t *testing.T) {
 		}
 		return false
 	})
-	if got := manage(`{"action":"remove","device":"` + id + `"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
 	waitUpTo(t, 60*time.Second, "the second computer says it was removed", func() bool { return second.status(t).Removed })
@@ -2093,20 +2111,15 @@ func TestFFIPhoneRemovesAway(t *testing.T) {
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
 	if made := strings.Fields(next("Group ")); len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
-	second, qr := listeningJoin(t, &h, "second")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	id := next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
-	}
-	joinedIdentity(t, second, id)
+	second := joinPhoneWindow(t, &h, next, in, "second")
+	id := second.status(t).Device
 	fmt.Fprintln(in, "MANAGE "+`{"action":"remove","device":"`+id+`"}`)
-	if got := next("MANAGED "); got != `{"ok":{}}` {
+	if got := next("MANAGED "); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
 	fmt.Fprintln(in, `CALL {"op":"found","args":{"key":"second","addrs":["`+second.addr()+`"]}}`)

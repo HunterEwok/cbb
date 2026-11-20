@@ -127,9 +127,12 @@ update_needed, too_old, change_arriving, devices[{device, name, os, role, admin,
 hub}]}`: `admin` is whether the admin key the records name for the device is one of the
 group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
 `rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge,
-and `mute` (`for_ms`), `unmute`, `sync_off` and `sync_on`, commands for another device signed
-with that key and sent over the phone's connection to it, as the service sends them; the answer
-is that device's.
+`mute` (`for_ms`), `unmute`, `sync_off`, `sync_on`, `paste` (`text`, `method`, `enter`,
+`kind`), `paste_off`, `actions_off` and `away_off`, commands for another device signed with that
+key and sent over the phone's connection to it, as the service sends them (the answer is that
+device's: `{status, reason}`), and on the root `key_level` (`level`; `{below}`) and
+`make_admin` (`device`, `allow_file_key`, with the admin key the device offered when it joined
+by this phone's window), both by the core's key level rule (`cbb_core::keylevel`).
 Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
 `cbb_invite_new`, answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
