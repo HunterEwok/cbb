@@ -93,6 +93,7 @@ mod remotepaste;
 pub mod restore;
 mod rootless;
 pub mod sealkey;
+pub mod set;
 mod sekey;
 mod status_text;
 #[cfg(all(unix, not(target_os = "macos")))]
