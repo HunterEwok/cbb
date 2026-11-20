@@ -180,6 +180,10 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In recover: the devices that do not stay in the group, names or
+    /// device IDs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leave: Vec<String>,
     /// In an inject to a desktop session, the grant its desktop connector
     /// hands the uinput helper, which asks with keys whether it may press
     /// the paste's keys.
@@ -246,6 +250,7 @@ impl core::fmt::Debug for Header {
             .field("below", &self.below)
             .field("code", &cbb_core::secret::Redacted(self.code.len()))
             .field("addrs", &self.addrs)
+            .field("leave", &self.leave)
             .field("fingerprint", &self.fingerprint)
             .field("admins", &self.admins)
             .field("expires", &self.expires)

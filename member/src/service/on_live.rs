@@ -574,17 +574,31 @@ impl Service {
                 .to_vec(),
         );
         let k1 = cbb_core::identity::FileKey::new(&pkcs8)?;
+        // Who does not stay: by name or ID, never this device.
+        let mut leave_out = Vec::new();
+        for name in &h.leave {
+            let d = writers::find(&st, name)?;
+            if d.id == live.mesh.device() {
+                return Err(Error::msg("this device becomes the root: it stays in the group"));
+            }
+            leave_out.extend(writers::keys_of(d));
+        }
         let mut own = Own::load(&self.state_dir)?;
         let root = own.make(&self.state_dir, crate::own::Which::Root)?;
         let now = uptime::wall_ms().max(0) as u64;
         {
             let mut set = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-            writers::recover(&mut set, &k1, &k2, &*root, &live.mesh.device(), &[], now)?;
+            writers::recover(&mut set, &k1, &k2, &*root, &live.mesh.device(), &leave_out, now)?;
         }
         live.mesh.changed()?;
-        (self.log)(
-            "cbb: this device is the group's root now, by the group's recovery key; every device stays (cbb remove takes out a lost one); it restarts to sign with its new root key",
-        );
+        let left = if h.leave.is_empty() {
+            "every device stays (cbb remove takes out a lost one)".to_string()
+        } else {
+            format!("these left the group: {}", h.leave.join(", "))
+        };
+        (self.log)(&format!(
+            "cbb: this device is the group's root now, by the group's recovery key; {left}; it restarts to sign with its new root key"
+        ));
         std::thread::spawn(|| {
             std::thread::sleep(RESTART_AFTER);
             super::RESTART.store(true, Ordering::SeqCst);

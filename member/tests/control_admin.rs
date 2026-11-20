@@ -427,6 +427,47 @@ fn recovers_the_group_with_its_sheet() {
     lap.wait("lap takes the new root's setting", |st| st["incoming_ms"] == 45_000);
 }
 
+/// A stolen root is left out when another computer recovers the group:
+/// the group drops it, and once it runs again no member lets it in.
+#[test]
+fn recovers_without_the_lost_root() {
+    let mut root = Svc::start("root", &[], &[]);
+    let made = root.ok(true, json!({"op": "new"}));
+    let sheet: Value = serde_json::from_slice(&made.payload).unwrap();
+    let sheet = sheet["sheet"].as_str().unwrap().to_string();
+    root.port();
+    let mut desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&desk, false), "desk");
+    let lap = Svc::start("lap", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&lap, false), "lap");
+    desk.wait("desk learns of lap", |_| desk.find("lap").is_some());
+    root.stop();
+
+    // This device stays: it becomes the root.
+    has(&desk.err_with(true, json!({"op": "recover", "leave": ["desk"]}), sheet.as_bytes()), "it stays");
+    has(&desk.err_with(true, json!({"op": "recover", "leave": ["nobody"]}), sheet.as_bytes()), "no device");
+    desk.ok_with(true, json!({"op": "recover", "leave": ["root"]}), sheet.as_bytes());
+    desk.wait_exit(Duration::from_secs(30));
+    desk.restart(&["-peer", &lap.addr()], &[]);
+    assert!(desk.find("root").is_none(), "{:?}", desk.devices());
+    assert_eq!(desk.find("desk").unwrap()["root"], true);
+    lap.wait("lap learns the old root left", |_| lap.find("root").is_none());
+
+    // The old root runs again: neither member lets it in.
+    root.restart(&["-peer", &desk.addr(), "-peer", &lap.addr()], &[]);
+    for _ in 0..25 {
+        for m in [&desk, &lap] {
+            let peers = m.status()["peers"].clone();
+            assert!(
+                peers.as_array().is_none_or(|p| p.iter().all(|x| x["name"] != "root")),
+                "{} let the old root in: {peers}",
+                m.name
+            );
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// Leaving: the root only alone; a member leaves and its service stops,
 /// with its group's files deleted.
 #[test]

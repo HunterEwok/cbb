@@ -1918,8 +1918,9 @@ made with 0.5 is set up again once. The details follow.
   `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
   (docs/decisions.md, D-117).
 - `cbb recovery` on a group of 0.6 makes this computer the group's root at once with the
-  recovery sheet: a change of root (rule 33) with a new root key, every device staying, after
-  which the service restarts to sign with that key. The recovery key on a YubiKey answers
+  recovery sheet: a change of root (rule 33) with a new root key, after which the service
+  restarts to sign with that key. Every device stays but those named with `-leave NAME`, such
+  as a lost root, which the group then refuses; it shows who stays and asks once first. The recovery key on a YubiKey answers
   that it is not on the records of 0.6 yet.
 - At home a new device dials the admin's pairing window; one that waits for the group to dial
   it is gone in 0.6, and `cbb pair -qr` on a group of 0.6 says to open the window with

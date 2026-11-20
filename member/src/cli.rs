@@ -446,18 +446,46 @@ fn read_secret_line(limit: usize) -> Result<String> {
 /// sheet or its QR code's text, or on a YubiKey with -yubikey, as Go's
 /// cmdRecovery. The key comes from standard input, never the command line.
 pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
-    use std::io::IsTerminal;
+    use std::io::{IsTerminal, Write as _};
+    const USE: &str = "cbb recovery [-yubikey] [-leave NAME]..., then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; -leave names a device that does not stay in the group, such as a lost root";
     let mut h = Header { kind: "secret".into(), ..header("recover") };
-    match args {
-        [] => {}
-        [a] if flag(a) == Some("yubikey") => h.name = "yubikey".into(),
-        _ => {
-            return Err(usage(
-                "cbb recovery [-yubikey], then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; cbb status shows the claim",
-            ));
+    let mut i = 0;
+    while i < args.len() {
+        match flag(&args[i]) {
+            Some("yubikey") => h.name = "yubikey".into(),
+            Some("leave") => {
+                let name = args.get(i + 1).filter(|n| !n.starts_with('-')).ok_or_else(|| usage(USE))?;
+                h.leave.push(name.clone());
+                i += 1;
+            }
+            _ => return Err(usage(USE)),
         }
+        i += 1;
     }
     let terminal = std::io::stdin().is_terminal();
+    // Who stays and who leaves, asked once before the key is typed: a
+    // change of root cannot be undone.
+    if terminal && let Ok(m) = request(g, &Message::new(header("devices"), Vec::new())) {
+        let leaves = |d: &crate::control::Device| {
+            h.leave
+                .iter()
+                .any(|n| d.name.eq_ignore_ascii_case(n) || (n.len() >= 4 && d.id.starts_with(&n.to_lowercase())))
+        };
+        let (gone, stay): (Vec<_>, Vec<_>) = m.header.devices.iter().partition(|d| leaves(d));
+        let names = |v: &[&crate::control::Device]| v.iter().map(|d| d.name.as_str()).collect::<Vec<_>>().join(", ");
+        println!("{}", tr!("Stays in the group: {}", names(&stay)));
+        if !gone.is_empty() {
+            println!("{}", tr!("Leaves the group: {}", names(&gone)));
+        }
+        print!("{}", tr!("Make this computer the group's root, with these devices? [y/N] "));
+        std::io::stdout().flush().ok();
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).ok();
+        if !matches!(line.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("{}", tr!("Nothing changed."));
+            std::process::exit(1);
+        }
+    }
     let card = h.name == "yubikey";
     if terminal {
         if card {

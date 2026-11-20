@@ -161,5 +161,8 @@
  "The group's records wait for records no device has offered.": "سجلات المجموعة تنتظر سجلات لم يعرضها أي جهاز.",
  "Connect the group's root, which has them.": "وصّل جذر المجموعة، فهو يملكها.",
  "Copies wait for their senders' records: {}.": "نسخ تنتظر سجلات مُرسليها: {}.",
- "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "أصبح هذا الجهاز الآن جذر المجموعة بمفتاح الاسترداد الخاص بها، وتبقى كل الأجهزة في المجموعة؛ يُخرج cbb remove الجهاز المفقود. تُعاد تشغيل الخدمة لتوقّع بمفتاح الجذر الجديد."
+ "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "أصبح هذا الجهاز الآن جذر المجموعة بمفتاح الاسترداد الخاص بها، وتبقى كل الأجهزة في المجموعة؛ يُخرج cbb remove الجهاز المفقود. تُعاد تشغيل الخدمة لتوقّع بمفتاح الجذر الجديد.",
+ "Stays in the group: {}": "يبقى في المجموعة: {}",
+ "Leaves the group: {}": "يغادر المجموعة: {}",
+ "Make this computer the group's root, with these devices? [y/N] ": "هل تجعل هذا الحاسوب جذر المجموعة مع هذه الأجهزة؟ [y/N] "
 }

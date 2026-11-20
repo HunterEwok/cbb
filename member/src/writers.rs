@@ -79,7 +79,7 @@ fn device_record(set: &RecordSet, state: &State, id: &DeviceId) -> Option<Device
 
 /// The keys of a device that a removal or a freeze names: its member key,
 /// and its admin key when it holds one.
-fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
+pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     let mut keys = vec![d.key.hash()];
     keys.extend(d.admin);
     keys.sort();
