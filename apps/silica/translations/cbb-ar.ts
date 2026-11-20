@@ -1756,12 +1756,24 @@
         <translation>استولى %1 على المجموعة من هذا الجهاز.</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>تغيير الجهاز الرئيسي للمجموعة في الطريق.</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>تنتظر نسخة حتى يعرف هذا الجهاز أيّ جهاز أرسلها.</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>أضف هاتفًا أو حاسوبًا.</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>أيضًا</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>اطلب من مالك المجموعة أن يسمح له بتلقي الأسرار.</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>إن كانت هذه شبكة منزلك، فاجعلها شبكة المنزل.</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>أبقِ هذا الجهاز قيد التشغيل قرب أجهزة المجموعة الأخرى حتى يصل التغيير.</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>غادر المجموعة على هذا الجهاز ثم انضم مجددًا.</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>اجعل حاسوبًا في المنزل قاعدةً من إعداداته المتقدمة.</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>أنشئ مجموعة جديدة وضمّ أجهزتك إليها.</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>انقل المجموعة إلى جهاز رئيسي جديد بمفتاح استرداد المجموعة.</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>مكتومة: %1.</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>غير متصل: %1.</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>على الجهاز الرئيسي للمجموعة، قرّر من تنبيهاته.</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>لدى المجموعة سجلات من إصدار أحدث.</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>لا ترسل المجموعة أسرارًا إلى هذا الجهاز.</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>لا ترسل المجموعة أي أسرار حتى يقرر مالكها.</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>لا ترسل المجموعة أي شيء إلى هذا الجهاز.</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>سجلات المجموعة أوقفت التبادل.</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>استُخدم مفتاح استرداد المجموعة مرتين، لذا توقفت المجموعة نهائيًا.</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>قائمة نقاط الدخول لخوادم الاتصال قديمة.</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>وقّع مفتاح الجهاز الرئيسي سجلّين مختلفين، لذا توقفت المجموعة.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>سجلات الجهاز الرئيسي تنتظر سجلات لم يمرّرها أي جهاز بعد.</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>لم يلتقِ هذا الحاسوب بمجموعته على هذه الشبكة بعد.</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>يختلف هذا الجهاز والمجموعة حول أيّ جهاز هو الرئيسي.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>شغّل جهازًا آخر من المجموعة.</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>شغّل أجهزة المجموعة الأخرى.</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>شغّل المزامنة.</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>يختلف مشرفان بشأن جهاز: المجموعة تنتظر جهازها الرئيسي.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

@@ -1756,12 +1756,24 @@
         <translation>%1 לקח את הקבוצה מהמכשיר הזה.</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>החלפה של המכשיר הראשי של הקבוצה בדרך.</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>עותק ממתין עד שהמכשיר הזה יידע איזה מכשיר שלח אותו.</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>הוסיפו טלפון או מחשב.</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>עוד</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>בקשו מבעל הקבוצה לאפשר לו לקבל סודות.</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>אם זו הרשת הביתית שלכם, סמנו אותה כרשת הבית.</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>השאירו את המכשיר הזה דלוק ליד שאר מכשירי הקבוצה עד שההחלפה תגיע.</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>צאו מהקבוצה במכשיר הזה והצטרפו שוב.</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>הפכו מחשב בבית לבסיס, בהגדרות המתקדמות שלו.</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>צרו קבוצה חדשה וצרפו אליה את המכשירים שלכם.</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>העבירו את הקבוצה למכשיר ראשי חדש בעזרת מפתח השחזור של הקבוצה.</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>מושתקים: %1.</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>לא מחוברים: %1.</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>במכשיר הראשי של הקבוצה, החליטו בהתראות שלו.</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>בקבוצה יש רשומות של גרסה חדשה יותר.</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>הקבוצה לא שולחת סודות למכשיר הזה.</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>הקבוצה לא שולחת סודות עד שהבעלים שלה יחליטו.</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>הקבוצה לא שולחת דבר למכשיר הזה.</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>הרשומות של הקבוצה עצרו את ההחלפה.</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>מפתח השחזור של הקבוצה שימש פעמיים, ולכן הקבוצה נעצרה לצמיתות.</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>רשימת נקודות הכניסה של שרתי החיבור לא עדכנית.</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>המפתח של המכשיר הראשי חתם על שתי היסטוריות שונות, ולכן הקבוצה נעצרה.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>הרשומות של המכשיר הראשי ממתינות לרשומות שאף מכשיר עוד לא העביר.</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>המחשב הזה עוד לא פגש את הקבוצה שלו ברשת הזו.</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>המכשיר הזה והקבוצה חלוקים לגבי איזה מכשיר הוא הראשי.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>הפעילו מכשיר אחר של הקבוצה.</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>הדליקו את שאר מכשירי הקבוצה.</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>הפעילו את הסנכרון.</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>שני מנהלים חלוקים לגבי מכשיר: הקבוצה ממתינה למכשיר הראשי שלה.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

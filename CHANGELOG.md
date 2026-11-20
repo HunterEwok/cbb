@@ -16,6 +16,13 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- The phones' kits read the group as the 0.6 member gives it: its state, its notices, the
+  "who stays" list before a change of root, and the events of a change of root and of a key
+  the member asks for (`GroupState`, `Notice`, `ChangePreview` in both kits, checked against
+  `testdata/interop/member-group.json`); "Why it does not sync" in every app says the reasons of
+  the 0.6 records: two admins in conflict, two histories of the root, a recovery key used twice,
+  a change of root arriving, a stuck checkpoint, a device that disagrees about the root, no
+  secrets or nothing sent here, and a copy waiting for its sender.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.

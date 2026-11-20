@@ -2613,6 +2613,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Thread({ restartSync() }, "restart").start()
             }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
+            is CoreMember.Event.State -> Log.i(TAG, "the group's state changed: stop ${e.state.stop}, ${e.state.devices.size} devices")
+            is CoreMember.Event.NoticeAdded -> Log.i(TAG, "a notice about the group: ${e.notice.kind}")
+            is CoreMember.Event.RootChanged -> Log.w(TAG, "the group's root changed from ${e.from} to ${e.to} (step ${e.seq})")
+            is CoreMember.Event.NeedKey -> Log.i(TAG, "the node asks for a ${e.kind} key")
+            is CoreMember.Event.KeyDone -> Log.i(TAG, "the node no longer needs a key")
             is CoreMember.Event.Message -> when (val m = e.message) {
                 is Member.Message.Credentials -> {
                     val fresh = addCredentials(m.credentials)

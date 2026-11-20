@@ -1756,12 +1756,24 @@
         <translation>%1 ने इस डिवाइस से समूह ले लिया।</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>समूह के मुख्य डिवाइस का बदलाव आ रहा है।</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>एक कॉपी तब तक प्रतीक्षा करती है जब तक यह डिवाइस न जान ले कि उसे किस डिवाइस ने भेजा।</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>कोई फ़ोन या कंप्यूटर जोड़ें।</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>और</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>समूह के मालिक से कहें कि वह इसे सीक्रेट पाने दे।</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>अगर यह आपका घरेलू नेटवर्क है, तो इसे घरेलू के रूप में चिह्नित करें।</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>बदलाव आने तक इस डिवाइस को समूह के दूसरे डिवाइसों के पास चालू रखें।</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>इस डिवाइस पर समूह छोड़ें, फिर दोबारा शामिल हों।</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>घर के किसी कंप्यूटर को उसकी उन्नत सेटिंग्स में बेस बनाएँ।</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>नया समूह बनाएँ और अपने डिवाइस उसमें जोड़ें।</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>समूह की रिकवरी कुंजी से समूह को नए मुख्य डिवाइस पर ले जाएँ।</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>म्यूट: %1।</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>ऑफ़लाइन: %1।</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>समूह के मुख्य डिवाइस पर, उसकी सूचनाओं में निर्णय लें।</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>समूह में नए संस्करण के रिकॉर्ड हैं।</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>समूह इस डिवाइस को सीक्रेट नहीं भेजता।</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>समूह इस डिवाइस को कुछ नहीं भेजता।</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>समूह के रिकॉर्ड ने आदान-प्रदान रोक दिया है।</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>समूह की रिकवरी कुंजी दो बार इस्तेमाल हुई, इसलिए समूह हमेशा के लिए रुक गया।</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>कनेक्शन सर्वरों के प्रवेश बिंदुओं की सूची पुरानी है।</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>मुख्य डिवाइस की कुंजी ने दो अलग-अलग इतिहासों पर हस्ताक्षर किए, इसलिए समूह रुक गया।</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>मुख्य डिवाइस के रिकॉर्ड ऐसे रिकॉर्ड की प्रतीक्षा कर रहे हैं जिन्हें किसी डिवाइस ने आगे नहीं भेजा।</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>यह कंप्यूटर इस नेटवर्क पर अभी अपने समूह से नहीं मिला है।</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>यह डिवाइस और समूह इस पर असहमत हैं कि मुख्य डिवाइस कौन-सा है।</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>समूह का कोई दूसरा डिवाइस चालू करें।</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>समूह के दूसरे डिवाइस चालू करें।</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>सिंक चालू करें।</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>दो एडमिन एक डिवाइस को लेकर असहमत हैं: समूह अपने मुख्य डिवाइस की प्रतीक्षा कर रहा है।</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

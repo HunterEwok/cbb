@@ -1756,12 +1756,24 @@
         <translation>%1 забрал группу у этого устройства.</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>Смена главного устройства группы уже в пути.</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>Копия ждёт, пока это устройство узнает, какое устройство её отправило.</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>Добавьте телефон или компьютер.</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>Попросите владельца группы разрешить ему получать секреты.</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>Если это ваша домашняя сеть, отметьте её как домашнюю.</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>Держите это устройство включённым рядом с другими устройствами группы, пока смена не придёт.</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>Выйдите из группы на этом устройстве и вступите снова.</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>Сделайте домашний компьютер базой в его расширенных настройках.</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>Создайте новую группу и подключите к ней свои устройства.</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>Перенесите группу на новое главное устройство с помощью ключа восстановления группы.</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>Заглушены: %1.</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>Не в сети: %1.</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>На главном устройстве группы примите решение в его оповещениях.</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>В группе есть записи новой версии.</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>Группа не пересылает этому устройству секреты.</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>Группа не пересылает секреты, пока её владелец не решит.</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>Группа ничего не пересылает этому устройству.</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>Записи группы остановили обмен.</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>Ключ восстановления группы использовали дважды, поэтому группа остановилась навсегда.</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>Список точек входа серверов связи устарел.</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>Ключ главного устройства подписал две разные истории, поэтому группа остановилась.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>Записи главного устройства ждут записей, которые ещё ни одно устройство не передало.</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>Этот компьютер ещё не встречал свою группу в этой сети.</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>Это устройство и группа расходятся в том, какое устройство главное.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>Включите другое устройство группы.</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>Включите другие устройства группы.</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>Включите синхронизацию.</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>Два админа расходятся во мнении об устройстве: группа ждёт решения главного устройства.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

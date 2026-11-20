@@ -1756,12 +1756,24 @@
         <translation>%1 tomó el grupo de este dispositivo.</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>Está en camino un cambio del dispositivo principal del grupo.</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>Una copia espera hasta que este dispositivo sepa qué dispositivo la envió.</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>Añade un teléfono o un ordenador.</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>Además</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>Pide al propietario del grupo que le permita recibir secretos.</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>Si es tu red de casa, márcala como la de casa.</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>Mantén este dispositivo encendido cerca de los demás dispositivos del grupo hasta que llegue.</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>Sal del grupo en este dispositivo y vuelve a unirte.</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>Haz que un ordenador de casa sea la base, en su configuración avanzada.</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>Crea un grupo nuevo y une tus dispositivos a él.</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>Mueve el grupo a un nuevo dispositivo principal con la clave de recuperación del grupo.</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>Silenciados: %1.</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>Sin conexión: %1.</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>En el dispositivo principal del grupo, decide en sus avisos.</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>El grupo tiene registros de una versión más nueva.</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>El grupo no envía secretos a este dispositivo.</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>El grupo no envía secretos hasta que su propietario decida.</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>El grupo no envía nada a este dispositivo.</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>Los registros del grupo detienen el intercambio.</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>La clave de recuperación del grupo se usó dos veces, así que el grupo se detuvo para siempre.</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>La lista de puntos de entrada de los servidores de conexión está desactualizada.</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>La clave del dispositivo principal firmó dos historiales distintos, así que el grupo se detuvo.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>Los registros del dispositivo principal esperan registros que ningún dispositivo ha transmitido.</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>Este ordenador aún no ha encontrado su grupo en esta red.</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>Este dispositivo y el grupo no coinciden sobre cuál es el dispositivo principal.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>Enciende otro dispositivo del grupo.</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>Enciende los demás dispositivos del grupo.</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>Activa la sincronización.</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>Dos administradores no coinciden sobre un dispositivo: el grupo espera a su dispositivo principal.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

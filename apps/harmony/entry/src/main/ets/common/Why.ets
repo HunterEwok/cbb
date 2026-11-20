@@ -11,8 +11,9 @@ import { Why } from '../model/Member';
 const TITLED: string[] = ['not_in_group', 'removed', 'taken_over', 'frozen', 'cert_expired', 'cert_ending', 'stopped',
   'secrets_stopped', 'sync_off', 'only_device', 'away_off', 'new_network', 'no_hub', 'tunnel_blocked', 'hub_unreachable',
   'alone', 'relay_down', 'hub_waiting', 'muted', 'forwarder_down', 'entries_stale', 'newer', 'unreached',
-  'devices_offline', 'devices_sync_off', 'devices_muted', 'update'];
-const NO_ACTION: string[] = ['secrets_stopped', 'devices_offline', 'devices_sync_off', 'devices_muted', 'update'];
+  'devices_offline', 'devices_sync_off', 'devices_muted', 'update',
+  'admins_conflict', 'root_two_histories', 'recovery_fork', 'change_arriving', 'checkpoint_stuck', 'owner_disagrees', 'no_secrets_here', 'nothing_here', 'copy_waits'];
+const NO_ACTION: string[] = ['secrets_stopped', 'devices_offline', 'devices_sync_off', 'devices_muted', 'update', 'copy_waits'];
 
 // What is wrong.
 export function whyTitle(r: Why): string {

@@ -1756,12 +1756,24 @@
         <translation>%1 kilichukua kikundi kutoka kifaa hiki.</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>Mabadiliko ya kifaa kikuu cha kikundi yako njiani.</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>Nakala inasubiri hadi kifaa hiki kijue ni kifaa gani kiliituma.</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>Ongeza simu au kompyuta.</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>Pia</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>Mwombe mmiliki wa kikundi akiruhusu kupokea siri.</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>Ikiwa huu ni mtandao wa nyumbani kwako, uweke kama wa nyumbani.</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>Weka kifaa hiki kikiwa kimewashwa karibu na vifaa vingine vya kikundi hadi mabadiliko yafike.</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>Ondoka kwenye kikundi kwenye kifaa hiki, kisha ujiunge tena.</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>Fanya kompyuta ya nyumbani kuwa kituo, kwenye mipangilio yake ya hali ya juu.</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>Unda kikundi kipya na uunganishe vifaa vyako kwacho.</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>Hamisha kikundi kwenda kifaa kikuu kipya kwa ufunguo wa kurejesha wa kikundi.</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>Vimenyamazishwa: %1.</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>Nje ya mtandao: %1.</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>Kwenye kifaa kikuu cha kikundi, amua katika arifa zake.</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>Kikundi kina rekodi za toleo jipya zaidi.</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>Kikundi hakitumi siri kwa kifaa hiki.</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>Kikundi hakitumi siri zozote hadi mmiliki wake aamue.</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>Kikundi hakitumi chochote kwa kifaa hiki.</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>Rekodi za kikundi zimesimamisha ubadilishanaji.</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>Ufunguo wa kurejesha wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa.</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>Orodha ya vituo vya kuingia vya seva za muunganisho imepitwa na wakati.</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>Ufunguo wa kifaa kikuu ulitia sahihi historia mbili tofauti, kwa hivyo kikundi kimesimama.</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>Rekodi za kifaa kikuu zinasubiri rekodi ambazo hakuna kifaa kimezipitisha.</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>Kompyuta hii bado haijakutana na kikundi chake kwenye mtandao huu.</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>Kifaa hiki na kikundi hawakubaliani kuhusu kifaa kipi ni kikuu.</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>Washa kifaa kingine cha kikundi.</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>Washa vifaa vingine vya kikundi.</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>Washa usawazishaji.</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>Wasimamizi wawili hawakubaliani kuhusu kifaa: kikundi kinasubiri kifaa chake kikuu.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

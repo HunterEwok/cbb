@@ -216,6 +216,21 @@ public final class CoreMember: @unchecked Sendable {
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
         case mute(muted: Bool, forMS: Int64, by: String)
+        /// The group's state changed (a record came, a device joined or
+        /// left).
+        case state(GroupState)
+        /// A new notice about the group.
+        case notice(Notice)
+        /// The group's root changed by its recovery key: every device shows
+        /// it and cannot turn it off, with "This wasn't me". from and to are
+        /// the old and new root's devices, seq the change's step.
+        case rootChanged(from: String, to: String, seq: UInt64)
+        /// The member needs a key of the phone's (kind spare_admin): the app
+        /// makes it and answers with `keyMade(_:public:)` and the token.
+        case needKey(token: UInt64, kind: String)
+        /// The member no longer needs the key public (a point): the app may
+        /// delete it.
+        case keyDone(public: Data)
         /// Something in the member broke (docs/core-api.md, "Panics"):
         /// details say what and where. The app logs it, shows it and
         /// starts the member again.
@@ -683,6 +698,67 @@ public final class CoreMember: @unchecked Sendable {
     /// The devices connected now, by ID.
     public func connected() -> Set<String> { Set(((try? peers()) ?? []).map(\.device)) }
 
+    // MARK: The group in 0.6
+
+    // The member keeps and evaluates the records (docs/core-api.md, "The
+    // member"); the app reads what it shows and asks for what the person
+    // decides.
+
+    /// The group as the member sees it now.
+    public func group() throws -> GroupState { try run("group", Optional<Empty>.none, as: GroupState.self) }
+
+    /// The member's notices about the group, newest first.
+    public func notices() throws -> [Notice] {
+        struct R: Decodable { var notices: [Notice] }
+        return try run("notices", Optional<Empty>.none, as: R.self).notices
+    }
+
+    /// Hides the notice id until something about it changes.
+    public func dismiss(_ id: String) throws {
+        struct A: Encodable { var id: String }
+        try run("dismiss", A(id: id))
+    }
+
+    /// Tells the member the person kept the recovery key: "sheet" or
+    /// "yubikey".
+    public func recoverySaved(_ how: String) throws {
+        struct A: Encodable { var how: String }
+        try run("recovery_saved", A(how: how))
+    }
+
+    /// Answers `Event.needKey`: the app made the key public (DER).
+    public func keyMade(_ token: UInt64, public: Data) throws {
+        struct A: Encodable { var token: UInt64, `public`: Data }
+        try run("key_made", A(token: token, public: try Self.point(`public`)))
+    }
+
+    /// Who stays after a change of root with the recovery key, before
+    /// anything is signed: the core writes the list; leaveOut are the
+    /// devices the person unticked. The recovery keys are derived inside
+    /// the call and dropped at its end.
+    public func changePreview(_ recovery: RecoveryInput, leaveOut: [String] = []) throws -> ChangePreview {
+        struct A: Encodable { var action = "change_preview", recovery: RecoveryInput, leave_out: [String] }
+        return try manage(A(recovery: recovery, leave_out: leaveOut), sign: { _ in throw Core.Mismatch(reason: "a preview signs nothing") },
+                          as: ChangePreview.self)
+    }
+
+    /// Changes the group's root to this phone's new root key rootPublic
+    /// (DER), which sign signs with (Face ID before each use): the recovery
+    /// key signs the change, the new root its first records, and leaveOut
+    /// are removed in the same act. overWaiting writes over a change whose
+    /// records never came; offer it only after a sync failed. It returns
+    /// the change's step.
+    @discardableResult
+    public func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], rootPublic: Data, dropHubs: Bool = false, overWaiting: Bool = false,
+                           sign: @escaping (Data) throws -> Data) throws -> UInt64 {
+        struct A: Encodable {
+            var action = "change_root", recovery: RecoveryInput, leave_out: [String], drop_hubs: Bool, over_waiting: Bool, `public`: Data
+        }
+        struct R: Decodable { var seq: UInt64? }
+        return try manage(A(recovery: recovery, leave_out: leaveOut, drop_hubs: dropHubs, over_waiting: overWaiting,
+                            public: try Self.point(rootPublic)), sign: sign, as: R.self).seq ?? 0
+    }
+
     // MARK: Taking the group over
 
     /// Where a claim to take the group over stands, as finish_takeover
@@ -852,7 +928,7 @@ public final class CoreMember: @unchecked Sendable {
     struct Wire: Decodable {
         var type: String
         var text: String?
-        var kind: Member.Kind?
+        var kind: String?
         var ttl_ms: UInt64?
         var line: String?
         var copy: Copy?
@@ -871,6 +947,11 @@ public final class CoreMember: @unchecked Sendable {
         var for_ms: Int64?
         var by: String?
         var details: String?
+        var state: GroupState?
+        var notice: Notice?
+        var to: String?
+        var seq: UInt64?
+        var `public`: Data?
     }
 
     struct WireMessage: Decodable {
@@ -889,7 +970,7 @@ public final class CoreMember: @unchecked Sendable {
         switch w.type {
         case "write":
             guard let text = w.text else { return nil }
-            return .write(text: text, kind: w.kind ?? .text, ttlMS: w.ttl_ms)
+            return .write(text: text, kind: w.kind.flatMap(Member.Kind.init(rawValue:)) ?? .text, ttlMS: w.ttl_ms)
         case "log": return w.line.map { .log($0) }
         case "copy": return w.copy.map { .copy($0) }
         case "identity":
@@ -905,6 +986,13 @@ public final class CoreMember: @unchecked Sendable {
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
+        case "state": return w.state.map { .state($0) }
+        case "notice": return w.notice.map { .notice($0) }
+        case "root_changed": return .rootChanged(from: w.from ?? "", to: w.to ?? "", seq: w.seq ?? 0)
+        case "need_key":
+            guard let token = w.token, let kind = w.kind else { return nil }
+            return .needKey(token: token, kind: kind)
+        case "key_done": return w.public.map { .keyDone(public: $0) }
         case "panic": return .panic(details: w.details ?? "")
         case "caller":
             guard let token = w.token, let port = w.port, let device = w.device else { return nil }

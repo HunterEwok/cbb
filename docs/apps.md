@@ -266,6 +266,11 @@ shows its code and the member's own words.
 | `frozen` | stop | another admin froze this computer's admin key |
 | `cert_expired` | stop | its certificate ended: an admin at home renews it |
 | `stopped` | stop | the group's records stop the exchange until the root decides |
+| `admins_conflict` | stop | two admins disagree about a device: the group waits for its root to decide |
+| `root_two_histories` | stop | the root's key signed two histories: move the group to a new root with the recovery key |
+| `recovery_fork` | stop | the recovery key signed two changes at one step: the group stopped for good, make a new one |
+| `owner_disagrees` | stop | this device and its peers follow different roots: leave, then join again |
+| `nothing_here` | stop | the group sends this device nothing |
 | `sync_off` | stop | sync is off here, until a time or until turned on |
 | `away_off` | stop | no device of the group is on this network: turn on Everywhere |
 | `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
@@ -276,12 +281,16 @@ shows its code and the member's own words.
 | `hub_waiting` | stop | this device is the hub and nobody connected yet |
 | `alone` | stop | connected, but no other device of the group is online |
 | `secrets_stopped` | warn | the group sends no secrets until the root decides |
+| `no_secrets_here` | warn | the group sends this device no secrets |
+| `change_arriving` | warn | a change of root is arriving and its records are not all here: keep the device near the others |
+| `checkpoint_stuck` | warn | a checkpoint of the root waits for records no device has offered |
 | `muted` | warn | an admin muted this device: its copies do not reach the group |
 | `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
 | `newer` | warn | the group has records of a newer version: update |
 | `unreached` | warn | members at home cannot connect to this computer: its firewall |
 | `cert_ending` | warn | its certificate ends within 30 days |
 | `only_device` | info | the group's only device: add a phone or a computer |
+| `copy_waits` | info | a copy waits until this device learns the device that sent it |
 | `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
 | `update` | info | a newer CBB is available |
 

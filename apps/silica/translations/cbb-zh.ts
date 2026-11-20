@@ -1756,12 +1756,24 @@
         <translation>%1 已从此设备接管群组。</translation>
     </message>
     <message>
+        <source>A change of the group's main device is on its way.</source>
+        <translation>群组主设备的更换正在传来。</translation>
+    </message>
+    <message>
+        <source>A copy waits until this device learns which device sent it.</source>
+        <translation>有一份副本在等待，直到此设备得知是哪台设备发送的。</translation>
+    </message>
+    <message>
         <source>Add a phone or a computer.</source>
         <translation>添加一部手机或一台电脑。</translation>
     </message>
     <message>
         <source>Also</source>
         <translation>另外</translation>
+    </message>
+    <message>
+        <source>Ask the group's owner to let it have secrets.</source>
+        <translation>请群组的所有者允许它接收机密内容。</translation>
     </message>
     <message>
         <source>Ask the group's owner to restore its rights.</source>
@@ -1820,6 +1832,10 @@
         <translation>如果这是你的家庭网络，请将它标记为家庭网络。</translation>
     </message>
     <message>
+        <source>Keep this device on near the group's other devices until it arrives.</source>
+        <translation>在更换到达前，让此设备保持开启并靠近群组的其他设备。</translation>
+    </message>
+    <message>
         <source>Leave the group on this device, then join again.</source>
         <translation>在此设备上退出群组，然后重新加入。</translation>
     </message>
@@ -1832,6 +1848,14 @@
         <translation>在家中某台电脑的高级设置中，将它设为主站。</translation>
     </message>
     <message>
+        <source>Make a new group and join your devices to it.</source>
+        <translation>新建一个群组，并把你的设备加入其中。</translation>
+    </message>
+    <message>
+        <source>Move the group to a new main device with the group's recovery key.</source>
+        <translation>用群组的恢复密钥把群组移到新的主设备。</translation>
+    </message>
+    <message>
         <source>Muted: %1.</source>
         <translation>已静音：%1。</translation>
     </message>
@@ -1842,6 +1866,10 @@
     <message>
         <source>Offline: %1.</source>
         <translation>离线：%1。</translation>
+    </message>
+    <message>
+        <source>On the group's main device, decide in its alerts.</source>
+        <translation>在群组的主设备上，于其提醒中作出决定。</translation>
     </message>
     <message>
         <source>Start a group or join one.</source>
@@ -1876,8 +1904,16 @@
         <translation>群组中有较新版本的记录。</translation>
     </message>
     <message>
+        <source>The group sends no secrets to this device.</source>
+        <translation>群组不会向此设备发送机密内容。</translation>
+    </message>
+    <message>
         <source>The group sends no secrets until its owner decides.</source>
         <translation>在所有者做出决定之前，群组不会发送任何秘密。</translation>
+    </message>
+    <message>
+        <source>The group sends nothing to this device.</source>
+        <translation>群组不会向此设备发送任何内容。</translation>
     </message>
     <message>
         <source>The group's owner decides on its alerts.</source>
@@ -1888,8 +1924,20 @@
         <translation>群组的记录已停止交换。</translation>
     </message>
     <message>
+        <source>The group's recovery key was used twice, so the group stopped for good.</source>
+        <translation>群组的恢复密钥被使用了两次，因此群组已永久停止。</translation>
+    </message>
+    <message>
         <source>The list of the connection servers' entry points is out of date.</source>
         <translation>连接服务器的入口列表已过期。</translation>
+    </message>
+    <message>
+        <source>The main device's key signed two different histories, so the group stopped.</source>
+        <translation>主设备的密钥签署了两份不同的历史，因此群组已停止。</translation>
+    </message>
+    <message>
+        <source>The main device's records wait for records no device has passed on.</source>
+        <translation>主设备的记录在等待尚无设备转发的记录。</translation>
     </message>
     <message>
         <source>The tunnel to the base %1 does not get through.</source>
@@ -1898,6 +1946,10 @@
     <message>
         <source>This computer has not met its group on this network.</source>
         <translation>这台电脑尚未在此网络中遇到它的群组。</translation>
+    </message>
+    <message>
+        <source>This device and the group disagree about which device is the main one.</source>
+        <translation>此设备与群组对哪台设备是主设备意见不一。</translation>
     </message>
     <message>
         <source>This device is in no group.</source>
@@ -1948,8 +2000,16 @@
         <translation>打开群组中的另一台设备。</translation>
     </message>
     <message>
+        <source>Turn on the group's other devices.</source>
+        <translation>打开群组的其他设备。</translation>
+    </message>
+    <message>
         <source>Turn sync on.</source>
         <translation>打开同步。</translation>
+    </message>
+    <message>
+        <source>Two admins disagree about a device: the group waits for its main device.</source>
+        <translation>两位管理员对一台设备意见不一：群组在等待其主设备决定。</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>

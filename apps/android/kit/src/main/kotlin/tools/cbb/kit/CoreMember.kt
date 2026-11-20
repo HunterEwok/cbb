@@ -230,6 +230,24 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
 
+        /** The group's state changed (a record came, a device joined or left). */
+        class State(val state: GroupState) : Event()
+
+        /** A new notice about the group. */
+        class NoticeAdded(val notice: Notice) : Event()
+
+        /**
+         * The group's root changed by its recovery key: every device shows it and cannot turn it off,
+         * with "This wasn't me". from and to are the old and new root's devices, seq the change's step.
+         */
+        class RootChanged(val from: String, val to: String, val seq: Long) : Event()
+
+        /** The member needs a key of the phone's, kind spare_admin: the app makes it and answers with [keyMade] and the token. */
+        class NeedKey(val token: Long, val kind: String) : Event()
+
+        /** The member no longer needs the key public: the app may delete it. */
+        class KeyDone(val public: ByteArray) : Event()
+
         /**
          * Something in the member broke (docs/core-api.md, "Panics"): details say what and
          * where. The app logs it, shows it and starts the member again.
@@ -440,6 +458,70 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun disconnect(device: String) {
         call("disconnect", Wire.obj("device" to Wire.str(device)))
     }
+
+    // The group in 0.6 (docs/core-api.md, "The member"): the member keeps and evaluates the
+    // records; the app reads what it shows and asks for what the person decides.
+
+    /** The group as the member sees it now. */
+    fun group(): GroupState = GroupState.fromJson(call("group"))
+
+    /** The member's notices about the group, newest first. */
+    fun notices(): List<Notice> = call("notices").objects("notices").map(Notice::fromJson)
+
+    /** Hides the notice id until something about it changes. */
+    fun dismiss(id: String) {
+        call("dismiss", Wire.obj("id" to Wire.str(id)))
+    }
+
+    /** Tells the member the person kept the recovery key, on a sheet or on a YubiKey ("sheet" or "yubikey"). */
+    fun recoverySaved(how: String) {
+        call("recovery_saved", Wire.obj("how" to Wire.str(how)))
+    }
+
+    /** Answers [Event.NeedKey]: the app made the key whose point (or DER public key) is public. */
+    fun keyMade(token: Long, public: ByteArray) {
+        call("key_made", Wire.obj("token" to Wire.num(token), "public" to Wire.bytes(point(public))))
+    }
+
+    /**
+     * Who stays after a change of root with the recovery key, before anything is signed: the
+     * core writes the list; leaveOut are the devices the person unticked. The recovery keys
+     * are derived inside the call and dropped at its end.
+     */
+    fun changePreview(recovery: RecoveryInput, leaveOut: List<String> = emptyList()): ChangePreview = ChangePreview.fromJson(
+        manage(
+            Wire.obj(
+                "action" to Wire.str("change_preview"),
+                "recovery" to recovery.toJson(),
+                "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            ),
+        ) { throw IllegalStateException("a preview signs nothing") },
+    )
+
+    /**
+     * Changes the group's root to this phone's new root key rootPublic, which sign signs with
+     * (Face ID before each use): the recovery key signs the change, the new root its first
+     * records, and leaveOut are removed in the same act. overWaiting writes over a change
+     * whose records never came; offer it only after a sync failed.
+     */
+    fun changeRoot(
+        recovery: RecoveryInput,
+        leaveOut: List<String>,
+        rootPublic: ByteArray,
+        sign: (ByteArray) -> ByteArray,
+        dropHubs: Boolean = false,
+        overWaiting: Boolean = false,
+    ): Long = manage(
+        Wire.obj(
+            "action" to Wire.str("change_root"),
+            "recovery" to recovery.toJson(),
+            "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            "drop_hubs" to JsonPrimitive(dropHubs),
+            "over_waiting" to JsonPrimitive(overWaiting),
+            "public" to Wire.bytes(point(rootPublic)),
+        ),
+        sign,
+    ).optLong("seq") ?: 0
 
     /** The callbacks of the manage calls under way. */
     private val signing = mutableListOf<SignFn>()
@@ -724,6 +806,11 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "state" -> o.optObject("state")?.let { Event.State(GroupState.fromJson(it)) }
+                "notice" -> o.optObject("notice")?.let { Event.NoticeAdded(Notice.fromJson(it)) }
+                "root_changed" -> Event.RootChanged(o.optString("from") ?: "", o.optString("to") ?: "", o.optLong("seq") ?: 0)
+                "need_key" -> Event.NeedKey(o.optLong("token") ?: return null, o.optString("kind") ?: return null)
+                "key_done" -> Event.KeyDone(o.optBytes("public") ?: return null)
                 "panic" -> Event.Panic(o.optString("details") ?: "")
                 "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null

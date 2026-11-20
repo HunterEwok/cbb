@@ -113,6 +113,15 @@ struct WhyList: View {
         case "devices_sync_off": Text("Sync is off on: \(names).")
         case "devices_muted": Text("Muted: \(names).")
         case "update": Text("CBB \(value) is available.")
+        case "admins_conflict": Text("Two admins disagree about a device: the group waits for its main device.")
+        case "root_two_histories": Text("The main device's key signed two different histories, so the group stopped.")
+        case "recovery_fork": Text("The group's recovery key was used twice, so the group stopped for good.")
+        case "change_arriving": Text("A change of the group's main device is on its way.")
+        case "checkpoint_stuck": Text("The main device's records wait for records no device has passed on.")
+        case "owner_disagrees": Text("This device and the group disagree about which device is the main one.")
+        case "no_secrets_here": Text("The group sends no secrets to this device.")
+        case "nothing_here": Text("The group sends nothing to this device.")
+        case "copy_waits": Text("A copy waits until this device learns which device sent it.")
         default: Text(verbatim: r.code)
         }
     }
@@ -144,6 +153,14 @@ struct WhyList: View {
         case "entries_stale": Text("Update CBB on a computer of the group.")
         case "newer": Text("Update CBB on this device.")
         case "unreached": Text("Let CBB through this computer's firewall.")
+        case "admins_conflict": Text("On the group's main device, decide in its alerts.")
+        case "root_two_histories": Text("Move the group to a new main device with the group's recovery key.")
+        case "recovery_fork": Text("Make a new group and join your devices to it.")
+        case "change_arriving": Text("Keep this device on near the group's other devices until it arrives.")
+        case "checkpoint_stuck": Text("Turn on the group's other devices.")
+        case "owner_disagrees": Text("Leave the group on this device, then join again.")
+        case "no_secrets_here": Text("Ask the group's owner to let it have secrets.")
+        case "nothing_here": Text("Ask the group's owner to restore its rights.")
         default: nil
         }
     }
