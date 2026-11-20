@@ -14,19 +14,15 @@
 // right click's menu on a tile, and drag and drop: on a tile to paste on its
 // device, beside the tiles to send to the group.
 
-import { common } from '@kit.AbilityKit';
 import { unifiedDataChannel, uniformTypeDescriptor } from '@kit.ArkData';
 import { router } from '@kit.ArkUI';
 import { KeyCode } from '@kit.InputKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
-import { scanQr } from '../common/Scan';
 import { copyIn, Shared } from '../common/Share';
 import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
-import { Admit } from '../model/Admit';
-import { isInvitation } from '../model/Invite';
 import { Alert, Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
 import { BusyLine, ErrorText } from '../components/Common';
@@ -292,7 +288,7 @@ struct Main {
       return true;
     }
     if (ctrl && e.keyCode === KeyCode.KEYCODE_N && app.isAdmin()) {
-      this.scanCode();
+      this.addDevice();
       return true;
     }
     if (ctrl || this.section.startsWith('s:')) {
@@ -384,28 +380,9 @@ struct Main {
     });
   }
 
-  // Adds a device: in a group of 0.6 by this phone's pairing window, else by
-  // scanning a code: a device's join code adds it, an invitation opens its page.
-  async scanCode(): Promise<void> {
-    // In a group of 0.6 the new device dials this phone's pairing window.
-    if (app.pairsOn06()) {
-      router.pushUrl({ url: 'pages/OpenWindow' });
-      return;
-    }
-    const s = await scanQr(getContext(this) as common.UIAbilityContext);
-    if (s.text === undefined) {
-      if (s.failure !== undefined) {
-        this.error = Errors.shown(s.failure);
-      }
-      return;
-    }
-    if (Admit.isJoinCode(s.text)) {
-      router.pushUrl({ url: 'pages/AddDevice', params: { 'qr': s.text } as Record<string, Object> });
-    } else if (isInvitation(s.text)) {
-      this.error = t('main_invitation_in_group');
-    } else {
-      this.error = t('error_not_join_code');
-    }
+  // Adds a device: the new device dials this phone's pairing window.
+  addDevice(): void {
+    router.pushUrl({ url: 'pages/OpenWindow' });
   }
 
   // Saves the files of the last copy where the user picks.
@@ -455,7 +432,7 @@ struct Main {
   menu(): MenuElement[] {
     const items: MenuElement[] = [];
     if (app.isAdmin()) {
-      items.push({ value: app.pairsOn06() ? t('admit_title') : t('main_scan'), action: () => { this.scanCode(); } });
+      items.push({ value: t('admit_title'), action: () => { this.addDevice(); } });
       items.push({ value: t('main_invite'), action: () => { router.pushUrl({ url: 'pages/Invite' }); } });
     }
     items.push({ value: t('collection_new'), action: () => { router.pushUrl({ url: 'pages/CollectionName' }); } });

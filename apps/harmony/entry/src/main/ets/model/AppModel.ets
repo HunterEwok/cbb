@@ -16,7 +16,6 @@ import { ensure, forget } from '../core/Keys';
 import { Joined, Membership, sealSecret } from '../core/Membership';
 import { OS, osVersion, phoneName, STORE } from '../core/Phone';
 import { t } from '../core/Text';
-import { Admit } from './Admit';
 import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
@@ -175,7 +174,6 @@ export class AppModel {
   // Pairing in a group of 0.6: the admin's window and the new phone's joiner.
   readonly window: PairWindow = new PairWindow();
   readonly joiner: Joiner = new Joiner();
-  readonly admit: Admit = new Admit();
   readonly invite: Invite = new Invite();
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
@@ -256,21 +254,13 @@ export class AppModel {
         // Joined from afar: sync away from home goes on, and the member
         // offers its tunnel key to the hub through the invitation's guest
         // tunnel until the hub answers.
-        if (this.join.byInvite) {
-          this.member.joinedByInvite(this.join.invitation());
-        }
+        this.member.joinedByInvite(this.join.invitation());
       });
     };
   }
 
   isAdmin(): boolean {
     return this.membership !== undefined && this.membership.isAdmin();
-  }
-
-  // Which pages pair: those of 0.6 without a group, as a new group is one
-  // of 0.6, and in a group of 0.6.
-  pairsOn06(): boolean {
-    return this.membership === undefined || this.membership.isV06();
   }
 
   // On 0.6 the group's records say who is an admin; the member's devices
@@ -424,21 +414,8 @@ export class AppModel {
     return seal.ok.key;
   }
 
-  // Listens for the device that scans this phone's QR code. The phone
-  // joins as a member; the group's root may make it an admin later, with
-  // the admin key its hellos offer.
-  startJoin(): void {
-    this.join.start(this.dir);
-  }
-
   startJoinByInvite(text: string): void {
     this.join.startInvite(this.dir, text);
-  }
-
-  startAdmit(qr: string): void {
-    if (this.membership !== undefined) {
-      this.admit.admit(qr, this.member, this.membership);
-    }
   }
 
   startInvite(seconds: number): void {

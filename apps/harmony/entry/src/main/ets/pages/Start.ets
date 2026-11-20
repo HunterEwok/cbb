@@ -46,7 +46,7 @@ struct Start {
         })
         KeyGuardNote({ hint: true })
         this.choice($r('app.string.start_join'), $r('app.string.start_join_note'), false, () => {
-          router.pushUrl({ url: app.pairsOn06() ? 'pages/JoinWindow' : 'pages/Join' });
+          router.pushUrl({ url: 'pages/JoinWindow' });
         })
         this.choice($r('app.string.start_invitation'), $r('app.string.start_invitation_note'), false, () => {
           router.pushUrl({ url: 'pages/Invitation' });

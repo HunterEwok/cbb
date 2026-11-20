@@ -55,8 +55,9 @@ they look, so both apps are built to the same plan.
    the sheet, **Add a device** has the core announce the window by mDNS, and **Join a group**
    first finds the one window announced on the home network by itself; a window's code can
    still be pasted (Aurora) or scanned (HarmonyOS). Who is an admin comes from the member's
-   `devices` there. A group of 0.5 keeps its old
-   screens until the end of the wave removes them.
+   `devices` there. No app listens any more for a device that scans the
+   phone's own code: joining at home always goes through the window. A remote invitation and
+   a restore keep their own screens.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own

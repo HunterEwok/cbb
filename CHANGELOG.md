@@ -2640,6 +2640,10 @@ made with 0.5 is set up again once. The details follow.
 
 ### Removed
 
+- The phone apps' join by the phone's own QR code (the phone listened and the group's device
+  scanned it and dialed in) and their old "Add a device" screen that scanned such a code: every
+  phone app joins and adds at home through the pairing window ([phone apps](docs/apps.md),
+  "Screens"). A remote invitation and a restore keep their screens.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;
