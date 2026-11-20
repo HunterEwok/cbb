@@ -31,6 +31,7 @@ pub mod bugd;
 mod bugs;
 pub mod button;
 mod cli;
+pub mod commands;
 mod confirm;
 pub mod content;
 pub mod control;

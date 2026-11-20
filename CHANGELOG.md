@@ -31,6 +31,8 @@ made with 0.5 is set up again once. The details follow.
   device's local key, holds the group's keys statements and passes them on in message `keys`,
   and seals, checks, opens and judges copies of 0.6 on the core (`member/src/sealed.rs`),
   ready for the service's switch to 0.6.
+- `member/` sends and takes commands of 0.6 on the core (`member/src/commands.rs`), their orders
+  sealed to the receiver, with every signer's counter kept across restarts in `commands.cbor`.
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in
   `core/tests/records_model.rs`.
