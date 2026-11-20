@@ -71,7 +71,7 @@ pub mod live;
 mod logfile;
 mod media_cli;
 pub mod mesh;
-mod mute;
+pub mod mute;
 #[cfg(all(test, feature = "tunnel"))]
 mod nettest;
 pub mod networks;

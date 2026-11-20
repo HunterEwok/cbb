@@ -122,6 +122,16 @@ fn make(hardware: &dyn Fn() -> Option<Arc<dyn ExternalKey>>) -> Result<Made> {
 }
 
 impl Own {
+    /// The keys an app holds itself (a phone's, signing through its
+    /// callback): nothing is kept in a file.
+    pub fn from_keys(
+        member: Arc<dyn ExternalKey>,
+        admin: Option<Arc<dyn ExternalKey>>,
+        root: Option<Arc<dyn ExternalKey>>,
+    ) -> Own {
+        Own { member, admin, root, spare: None, member_pkcs8: None }
+    }
+
     /// The keys in dir/keys.json, made on first use with a member key
     /// alone.
     pub fn load(dir: &Path) -> Result<Own> {

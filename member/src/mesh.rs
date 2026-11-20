@@ -406,6 +406,21 @@ impl Mesh {
         Ok(out)
     }
 
+    /// As write, with a key the caller holds (a phone's admin or root key,
+    /// which its app signs with): the records judge whether it may.
+    pub fn write_by<T>(
+        &self,
+        signer: &dyn cbb_core::identity::ExternalKey,
+        f: impl FnOnce(&mut RecordSet, &dyn cbb_core::identity::ExternalKey) -> Result<T>,
+    ) -> Result<T> {
+        let out = {
+            let mut set = self.set.lock().unwrap();
+            f(&mut set, signer)?
+        };
+        self.changed()?;
+        Ok(out)
+    }
+
     /// Records this device wrote (by its own keys, through the set's
     /// writers): kept and passed on with a hello to every peer.
     pub fn changed(&self) -> Result<()> {

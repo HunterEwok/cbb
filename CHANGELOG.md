@@ -67,6 +67,11 @@ made with 0.5 is set up again once. The details follow.
   other operation answers that it is not on the records of 0.6 yet, with that as its cause
   in debug mode, until its part moves over. mDNS publishes the group tag of 0.6, the first
   8 bytes of the group ID.
+- A phone's app runs the member of 0.6 when its data directory holds the group's `group.cbor`
+  (`ffi/src/member/live.rs`): the member key signs through the app's callback, the clipboard,
+  the devices, sync, the mute, why, and removing, renaming, freezing and thawing a device
+  with the app's admin or root key. Every other operation answers that it is not on the
+  records of 0.6 yet, with that as its cause in debug mode, until its part moves over.
 - `member/` runs a member of 0.6 for the service (`member/src/live.rs`): the member connection
   and the clipboard state together, a copy from the group written when the rule says so.
   Discovery finds, dials and takes peers for it and for the member of 0.5 alike, through one

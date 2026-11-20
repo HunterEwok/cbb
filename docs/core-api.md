@@ -107,6 +107,20 @@ unread, key}`: `media` is the manifest of images or files, and `key` what the bu
 it by (a text by itself, an image by `"\u0000image:"` and the hex SHA-256 of its PNG or JPEG
 part, files by `"\u0000files:"` and the copy's ID).
 
+On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
+`cbb_member_start` runs the member of 0.6 instead (`ffi/src/member/live.rs`, over
+`cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
+`device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
+`device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
+age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
+`current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
+`set_mute`, `sync`, `muted`, `peers`, `devices` and `why`; `cbb_member_manage` takes `remove`,
+`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
+Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
+`cbb_invite_new`, answers that it does not work in this build yet, with the cause
+`not on the records of 0.6 yet` in its details, until its part moves over. Images and files
+of a copy are not written yet: its text is, and the log says why the rest is not.
+
 ### The member's operations
 
 A phone's `cbb_member_call` and a computer's control socket (protocol.md, section 8: the
