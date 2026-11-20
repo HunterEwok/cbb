@@ -62,7 +62,7 @@ kits), so a reader that fails in another way also shows as a difference.
   it on Linux.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
-  (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
+  (`internal/group`), `FuzzForwardWire`
   (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
   `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,

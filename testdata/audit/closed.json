@@ -558,9 +558,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -613,9 +613,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -668,9 +668,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -723,9 +723,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -778,9 +778,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -1438,9 +1438,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1523,9 +1523,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1608,9 +1608,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1693,9 +1693,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1778,9 +1778,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1863,9 +1863,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1948,9 +1948,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2033,9 +2033,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2143,9 +2143,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2228,9 +2228,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2313,9 +2313,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2443,9 +2443,9 @@
   "id": "cbb-audit-69",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2653,9 +2653,9 @@
   "id": "cbb-audit-72",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2708,9 +2708,9 @@
   "id": "cbb-audit-73",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2763,9 +2763,9 @@
   "id": "cbb-audit-74",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2878,9 +2878,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -3018,9 +3018,14 @@
   "id": "cbb-audit-80",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/relay_test.go",
-    "name": "TestRemovedAdmin"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_device_left_out_goes"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "credentials_it_refuses"
    }
   ]
  },

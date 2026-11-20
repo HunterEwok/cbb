@@ -7,8 +7,7 @@
 //! `online`, `call`, `ok`, t 94 to 99), each one frame of the format. A
 //! device is known by its pseudonym, the hash of its server key for the
 //! period (32 bytes), and a call by a ticket of 16 bytes; the relay's own
-//! code names them in base64, as it names the devices of `cbb-relay/2`
-//! that register with credentials, so both protocols share it.
+//! code and the link name them in base64.
 
 use std::net::TcpStream;
 use std::time::Duration;
@@ -213,6 +212,91 @@ mod tests {
         assert_eq!(request(body(&answer)).unwrap().answer, b64(&[4; 16]));
         assert!(request(body(&msg(t::T_RELAY_WATCH, vec![]))).unwrap().watch);
         assert!(request(body(&msg(t::T_RELAY_DIAL, vec![(2, Value::Bytes(&[3; 31]))]))).is_err());
+    }
+
+    /// A peer that sends a byte now and then, each well within the time a
+    /// read may wait, still runs out of the request's time.
+    #[test]
+    fn a_request_has_one_deadline() {
+        use std::io::Write as _;
+        use std::time::Instant;
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut peer = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        let (c, _) = ln.accept().unwrap();
+        let dribble = std::thread::spawn(move || {
+            // A frame of 1024 bytes, one byte every 100 ms.
+            let _ = peer.write_all(&1024u32.to_be_bytes());
+            for _ in 0..30 {
+                std::thread::sleep(Duration::from_millis(100));
+                if peer.write_all(b" ").is_err() {
+                    return;
+                }
+            }
+        });
+        let start = Instant::now();
+        assert!(read_request(&c, Duration::from_millis(600)).is_err());
+        let took = start.elapsed();
+        assert!(took < Duration::from_millis(1500), "the request took {took:?}");
+        drop(c);
+        dribble.join().unwrap();
+    }
+
+    #[test]
+    fn frames_are_read_exactly() {
+        let mut buf = msg(t::T_RELAY_OK, vec![]);
+        let n = buf.len();
+        buf.extend_from_slice(b"after");
+        let mut r = &buf[..];
+        assert_eq!(read(&mut r, MAX_FRAME).unwrap().0, t::T_RELAY_OK);
+        assert_eq!(r, b"after");
+        assert_eq!(n, 4 + 64, "on the grid");
+        let mut big = &(u32::try_from(MAX_FRAME + 1).unwrap().to_be_bytes())[..];
+        assert!(read(&mut big, MAX_FRAME).is_err());
+    }
+
+    /// Over random frames: a frame is never read past its end, nor taken
+    /// without its length, cut short, off the grid or over the limit.
+    #[test]
+    fn random_frames_are_read_exactly() {
+        let mut x = 2026u64;
+        let mut next = move |n: usize| {
+            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((x >> 33) as usize) % n
+        };
+        let seeds = [
+            msg(t::T_RELAY_WATCH, vec![]),
+            msg(t::T_RELAY_DIAL, vec![(2, Value::Bytes(&[3; 32]))]),
+            msg(t::T_RELAY_ANSWER, vec![(2, Value::Bytes(&[4; 16]))]),
+            challenge(&[5; 32], true),
+        ];
+        let limit = super::super::wire::MAX_LINE;
+        for i in 0..20_000 {
+            let seed = &seeds[i % seeds.len()][4..];
+            let n = match next(5) {
+                0 => seed.len(),
+                1 => next(limit + 2),
+                2 => 0,
+                3 => limit + 1 + next(1 << 20),
+                _ => seed.len() + 64 * next(4),
+            };
+            let mut data = u32::try_from(n).unwrap().to_be_bytes().to_vec();
+            data.extend_from_slice(seed);
+            for _ in 0..next(64) {
+                data.push(next(256) as u8);
+            }
+            data.truncate(next(data.len() + 1).max(data.len().min(next(2) * data.len())));
+            let mut r = &data[..];
+            let got = read(&mut r, limit);
+            if data.len() < 4 + n || frame::length(n.to_be_bytes()[4..].try_into().unwrap(), limit).is_err() {
+                assert!(got.is_err(), "a frame of {n} bytes, {} in all", data.len());
+                continue;
+            }
+            if let Ok((_, body)) = got {
+                assert_eq!(body, &data[4..4 + n]);
+                assert_eq!(r, &data[4 + n..], "read past the frame");
+                let _ = request(&body);
+            }
+        }
     }
 
     #[test]

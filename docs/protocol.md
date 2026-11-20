@@ -286,7 +286,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 | Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
-| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
+| Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/3`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
 | Join QR text | `cbb://join?code=` followed by the six-digit code (section 7) | `phone.JoinQR`, `phone.ParseJoinQR` |
 
@@ -3833,16 +3833,16 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
-`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), with a device's side in Go
-(`internal/relay`) that its tests check it with from outside, and on the phones through
-the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
+`cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), and on the
+phones through the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
 - The relay listens on one port number, UDP for WireGuard and TCP for registrations. Its
   key file holds an ECDSA P-256 key with a self-signed certificate, which devices pin as a
   forwarder's (section 13), and its WireGuard key.
-- It serves only the groups it is started for (`cbb relay -group`, by tag), and refuses
+- It serves only the groups it is started for (`cbb relay -group`, each by its root key and
+  the two halves of its recovery key, from which it computes the Group ID), and refuses
   every other; an open relay (`cbb relay -open`) serves every group whose device registers,
   within the limits below.
 - A device's service takes a relay only with the user's consent (`consent` on the control
@@ -3879,48 +3879,48 @@ new key on every device.
 
 ### Registration
 
-Framing: as for the forwarder (section 13, "Registration"): one frame per message
-(Conventions, "Frames"), at most 1 MiB in all from the other side.
+A device of 0.6 registers by `cbb-relay/3`, the one protocol the relay speaks. Each message is
+one frame of the format (section 4, "Frames"), a map with its type `t` in field 0, its
+length on the format's grid; the relay takes at most 64 KiB from the device:
 
-1. The device connects over TCP and runs TLS 1.3 with ALPN `cbb-relay/2` and no
-   server name. It MUST accept only the pinned key. A device whose period's members' credential
-   lists its server key (section 18) presents only the certificate of that key, as a hub to
-   its forwarder (section 13, step 1). Any other presents its member certificate, its admin
-   CA if it has one, and the group's roots (the group CA, then the new roots of the claims that took effect).
-2. With a member certificate, the relay checks that the leaf names a device (section 1) and
-   verifies it, for client authentication, to one of the presented self-signed CAs whose
-   tag is among the groups it serves. That tag names the group. A group that took a new root
-   (a claim, section 10) is served under each of its tags the relay is given.
-3. The key proof is the forwarder's (section 13, step 3) with the label
-   `cbb relay key`: `{"e": bytes, "roots": bool}` from the relay, `{"key":
-   bytes, "proof": bytes, "records": [record], "credentials": [credential], "roots":
-   [bytes]}` from the device, with the device's WireGuard key.
-   - With a member certificate, `records` are the group's authority records, as for the
-     forwarder. The relay keeps them for the group in memory while it runs. It refuses a
-     device whose member certificate chain they refuse, as a member does (section 10: its
-     key revoked or frozen, or its admin CA removed without keeping it), and drops a
-     registered device as soon as a later registration's records refuse its chain.
-   - With a server certificate, `credentials` are the period's hubs' and members'
-     credentials, and the relay checks them (section 18, "What a server checks"); the
-     period's tag names the group, kept apart from the tags of group CAs. A relay that
-     serves a fixed list of groups sets `roots` in its challenge, and the device adds the
-     period credential to `credentials` and the group's roots, DER, the group CA first, as
-     `roots`; an open relay sets no `roots` and never sees them. The device uses a fresh
-     WireGuard key for each such registration, so the key links no two of them.
-4. The relay answers `{"key": bytes, "psk": bytes, "addr": string}`: its own WireGuard
-   public key, a new preshared key for this registration, and the device's tunnel address,
-   which the relay chooses at random in fd00:cbb::/32 (not from the device ID, so no group
-   can take another's address). Or it answers `{"error": string}` and closes: the proof is
-   wrong, the records remove the device, the credentials do not verify, have expired, do not
-   list the device, are older than the relay saw or come from another period key than the
-   one it saw first for the tag, another device registered that WireGuard key, or the group
-   has 64 devices there.
+| t | Message | From | Fields |
+|---|---|---|---|
+| 90 | `relay/challenge` | relay | 2 `e`, the relay's ephemeral X25519 key (32 bytes); 3 `root`, 1 when the device must show its period credential and its root |
+| 91 | `relay/register` | device | 2 `key`, its WireGuard key (an X25519 key); 3 `proof` (32 bytes); 4 `credentials`, at most 3 envelopes; 5 `root`, the group's root key (ES256), when asked |
+| 92 | `relay/registered` | relay | 2 `key`, the relay's WireGuard key (X25519); 3 `psk`, a new preshared key (32 bytes); 4 `addr`, the device's tunnel address (text) |
+| 93 | `relay/error` | relay | 2 `reason`, text of at most 256 bytes |
+
+1. The device connects over TCP and runs TLS 1.3 with ALPN `cbb-relay/3` and no server
+   name. It MUST accept only the pinned key. It presents only the certificate of its server
+   key for the period (section 18), as a hub to its forwarder (section 13, step 1); the
+   certificate names neither a device nor a group. The relay refuses any other ALPN and any
+   other chain.
+2. The relay sends `relay/challenge`. A relay that serves a fixed list of groups sets `root`;
+   an open relay does not, and never sees the period credential or the root.
+3. The device answers `relay/register` with a fresh WireGuard key, so the key links no two
+   of its registrations, and the proof that it holds it: HMAC-SHA256 keyed with X25519 of
+   that key and `e`, over 32 bytes the TLS session exports with the label `cbb relay key`
+   (RFC 8446, section 7.5). `credentials` are the period's hubs' and members' credentials,
+   and, when `root` was asked, the period credential too, with the root key in field 5.
+4. The relay checks them (section 18, "What a server checks"): they hold together, have not
+   expired, the members' credential lists the hash of the certificate's key, and on a relay
+   with a list the period credential is signed by the root of a listed group. The period's
+   tag names the group there (as `period <tag in hex>`, also in the list of refused groups).
+5. The relay answers `relay/registered`: its own WireGuard public key, a new preshared key
+   for this registration, and the device's tunnel address, which the relay chooses at random
+   in fd00:cbb::/32, so no group can take another's address. Or it answers `relay/error`
+   and closes: the frame or a message breaks the format, the proof is wrong, the credentials
+   do not verify, have expired, do not list the device, are older than the relay saw or come
+   from another period key than the one it saw first for the tag, another device registered
+   that WireGuard key, the group is refused, or a limit is reached. The whole setup, from
+   the TCP connection to the answer, has one deadline of 15 s.
    A device has one registration: a new one replaces the old, whose connection closes.
-5. The registration lasts while the connection does; neither side sends anything more on
+6. The registration lasts while the connection does; neither side sends anything more on
    it. The relay keeps the device as a WireGuard peer, with its key, the preshared key and
    the tunnel address as its only allowed address, until the connection closes, and then
    drops it at once with all its connections. The device registers again whenever the
-   connection breaks, with a backoff of 1 s doubling to 60 s.
+   connection breaks, with a backoff of 1 s doubling to 60 s, and at once with the newer
+   credentials of a new period.
 
 ### Inside the tunnel
 
@@ -3928,32 +3928,32 @@ The device runs a WireGuard client with the relay as its only peer, at the relay
 tunnel address `fd00:cbb::1`, with a keepalive every 25 s. The relay listens only on TCP
 8764 at that address, and knows each connection's device by its tunnel address. Each
 connection starts with one frame from the device, a request; the relay answers with
-frames of its own, notes, each of at most 64 KiB. A device's **name** there is its device ID when it registered with
-its member certificate, and its **pseudonym** when it registered with credentials: the
-fingerprint of its server key (Conventions, "Fingerprints"), which the other members map to its device through
-its server credential (section 18), and the relay to nothing. So the relay holds no device
-ID, and a device's pseudonym changes with each period.
+frames of its own, notes, each of at most 64 KiB. A device's **name** there is its
+pseudonym, the hash of its server key (32 bytes), which the other members map to its device
+through the members' credential and their own records, and the relay to nothing. So the
+relay holds no device ID, and a device's name changes with each period.
 
-| Request | Meaning |
-|---------|---------|
-| `{"watch": true}` | keep this connection for the notes; a new watch replaces the old |
-| `{"dial": "<name>"}` | join this connection to that device's |
-| `{"answer": "<ticket>"}` | answer the call with that ticket |
+| t | Request | Fields | Meaning |
+|---|---|---|---|
+| 94 | `relay/watch` | | keep this connection for the notes; a new watch replaces the old |
+| 95 | `relay/dial` | 2 `name` (32 bytes) | join this connection to that device's |
+| 96 | `relay/answer` | 2 `ticket` (16 bytes) | answer the call with that ticket |
 
-| Note | Meaning |
-|------|---------|
-| `{"online": [...]}` | on the watch: the names of the group's other devices on the relay, sorted, sent at once and whenever they change |
-| `{"call": "<name>", "ticket": "<base64>"}` | on the watch: that device dials this one; the ticket is 16 random bytes |
-| `{"ok": true}` | on a dial and on its answer: the two connections are joined; the member protocol follows on both at once |
-| `{"error": string}` | the request failed; the relay closes the connection |
+| t | Note | Fields | Meaning |
+|---|---|---|---|
+| 97 | `relay/online` | 2 names, sorted, at most 64; absent when there are none | on the watch: the group's other devices on the relay, sent at once and whenever they change |
+| 98 | `relay/call` | 2 `name`; 3 `ticket`, 16 random bytes | on the watch: that device dials this one |
+| 99 | `relay/ok` | | on a dial and on its answer: the two connections are joined; the member protocol follows on both at once |
+| 93 | `relay/error` | 2 `reason` | the request failed; the relay closes the connection |
 
 1. Each device keeps one watch. For each device on the relay with a higher name than
    its own (as byte strings), the device dials it whenever it has no member connection
    to it another way (at home, for example, it has one), with a backoff of 1 s doubling to
    60 s.
 2. The relay MUST call the other device only within the dialer's group, and only one that has a
-   watch. It waits 10 s for the answer, then sends both connections `ok` and copies the
-   bytes between them, unchanged, until either closes, and then closes both.
+   watch. It waits 10 s for the answer, then sends both connections `relay/ok` and copies the
+   bytes between them, unchanged, until either closes, and then closes both. A dial names a
+   pseudonym, never an address: the relay dials nowhere.
 3. The dialing device runs member TLS as the client for the device that name stands for
    (section 4); the answering one as the server, and it MUST close the connection unless the
    client certificate names the device the call came from. So the relay can join two devices,
@@ -3972,25 +3972,15 @@ ID, and a device's pseudonym changes with each period.
    from one group, 32 from the devices that registered from one IP address, 64 from one
    network, 64 from one wide network and 128 from one IPv6 provider. A connection in a tunnel sends
    its request within 5 s. The relay closes a connection over a limit at once.
-   A device, in turn, ends its watch on a note longer than 64 KiB or an `online` list of
-   more than 64 names or with a name that is not a device ID or a pseudonym (32 lowercase
-   hex characters, or a fingerprint), and leaves unanswered a call with such a name, a ticket
-   that is not 16 bytes in base64, or past 16 calls it is answering at once.
+   A device, in turn, ends its watch on a note longer than 16 KiB or one that breaks the
+   format, and leaves unanswered a call past 16 it is answering at once.
 5. An open relay also limits: 4096 groups at a time; 16 registrations from one IP address,
    64 from one network (an IPv4 /24 or an IPv6 /64), 256 from one wide network (an IPv4
    /16 or an IPv6 /48) and 1024 from one IPv6 provider (a /32); and 1 MiB a second of copying for each group, both ways together,
-   after a burst of two seconds' worth. It keeps at most 256 KiB of a group's authority
-   records, 1 MiB of the records one network brought, 4 MiB of those one wide network
-   brought and 16 MiB of those one IPv6 provider brought, and 128 MiB of all groups' records, and refuses a registration that would take
-   it past any of them rather than keep part of them. It verifies
-   a record once, when it first gets it, and keeps the verified set, so a group's later
-   registrations that send the same records cost no checks; each new record is charged to
-   what the address and network that sent it may start by the second. A registration over
-   a limit gets `{"error": string}`. It forgets a group's records, or its period's key,
-   versions and members' list, once the group's last device leaves. A registration it
-   refuses leaves it as it was: the devices registered before stay, and it keeps nothing of
-   the refused device's group, its period or records, except the records of a group it
-   holds devices of that verified, which take effect for those devices. A newer members'
+   after a burst of two seconds' worth. A registration over a limit gets `relay/error`. It
+   forgets a group's period (its key, versions and members' list) once the group's last
+   device leaves. A registration it refuses leaves it as it was: the devices registered
+   before stay, and it keeps nothing of the refused device's group or period. A newer members'
    credential counts the devices it leaves out as gone when the relay checks its limits.
 
 ### What it keeps
@@ -3998,10 +3988,10 @@ ID, and a device's pseudonym changes with each period.
 Only its key file. Registrations and connections live in memory while they last; the relay
 logs none of them (a relay SHOULD NOT), and with `CBB_DEBUG=1` it logs counts each minute. It learns which
 devices of a group are on it, which of them connect to each other, when and how much,
-which a hub would not let out; what the devices send each other it cannot read. From devices
-that register with credentials it learns them only by pseudonym, under the period's tag,
-both new each period; from the others, their device IDs, the group's tag and roots, and
-its authority records.
+which a hub would not let out; what the devices send each other it cannot read. It learns
+them only by pseudonym, under the period's tag, both new each period; a relay with a list
+also sees the group's root key and period credential. It never sees a device ID, a record
+or a member certificate.
 
 ## 15. Commands
 
@@ -4827,15 +4817,16 @@ the server credential whose key has that hash.
 ### What a server checks
 
 A device presents one hubs' credential, and to a relay also the members' credential, and to
-a relay that serves a fixed list of groups also the period credential with the group's roots
-(the relay's challenge asks with `"roots": true`). The server MUST check that:
+a relay that serves a fixed list of groups also the period credential with the group's root
+key (the relay's challenge sets `root`, section 14). The server MUST check that:
 
 1. none has expired;
 2. the members' credential is of the same period (`group`) and the hubs' credential's
    signer, or a key among its `admins`, signed it;
 3. the period credential, if any, has the hubs' credential's tag as `tag` and its signer's
-   key as `key`, and a relay with a fixed list of groups takes it only when one of the roots
-   shown is a self-signed CA of a group it serves whose key signed the period;
+   key as `key`, and a relay with a fixed list of groups takes it only when the root key shown
+   signed the period and, with the recovery key the list gives, makes the Group ID of a group
+   it serves;
 4. the hash of the device's certificate key is among the `hubs` (the forwarder) or the
    `members` (the relay);
 5. the period key is the one it first saw for the period's tag: the forwarder keeps, in
@@ -4848,8 +4839,9 @@ a relay that serves a fixed list of groups also the period credential with the g
 The first period key a server sees for a tag counts: only the group's devices know the tag,
 and a removed device's period ends with its removal.
 
-A forwarder and a relay keep a group that registered with credentials apart from the groups
-that registered with records, which they name by the group CA's tag (sections 13 and 14).
+A forwarder keeps a group that registered with credentials apart from the groups that
+registered with records, which it names by the group CA's tag (section 13). A relay takes
+registrations with credentials alone (section 14).
 
 ## 19. Registries
 
@@ -4865,7 +4857,7 @@ does not know unless its section says it refuses it.
 | `cbb-pair/3` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
 | `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
-| `cbb-relay/2` | TCP on the relay's port (8764 by default) | 14 |
+| `cbb-relay/3` | TCP on the relay's port (8764 by default) | 14 |
 | (WireGuard, AmneziaWG) | UDP on the hub's, forwarder's or relay's port (8764 by default) | 11, 13, 14 |
 | (VLESS over XHTTP) | TCP 443 on the web server in front of a forwarder | 11, 13 |
 | (mDNS) | UDP 5353, 224.0.0.251 and ff02::fb | 3 |

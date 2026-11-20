@@ -416,7 +416,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 

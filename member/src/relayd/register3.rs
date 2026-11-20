@@ -8,9 +8,8 @@
 //! (`cbb_core::blind::credential`): the hubs' credential, the members'
 //! credential that lists its server key, and on a relay that serves a list
 //! of groups the period credential, signed by the root of a group on the
-//! list. The relay never sees a record or a device ID. The registrations
-//! of 0.5 (`cbb-relay/2`) go on beside these for the devices not yet
-//! updated, until 0.7.
+//! list. The relay never sees a record or a device ID; it takes no other
+//! registration.
 
 use std::io::Write;
 use std::net::TcpStream;
@@ -23,7 +22,7 @@ use cbb_core::blind::credential::{Credential, TYPE_HUBS, TYPE_MEMBERS, TYPE_PERI
 use cbb_core::certs::{self, Cert};
 use gotatun::x25519;
 
-use super::records::Shown;
+use super::period::Shown;
 use super::register::addr_of;
 use super::server::{Inner, Member};
 use super::wire::Deadline;
@@ -157,7 +156,10 @@ impl Inner {
         s.write_all(&wire3::challenge(e.as_bytes(), !self.cfg.open))
             .and_then(|()| s.flush())
             .map_err(|e| Error::msg(format!("relay: {e}")))?;
-        let (_, body) = wire3::read(&mut s, MAX_FRAME)?;
+        let body = match wire3::read(&mut s, MAX_FRAME) {
+            Ok((_, b)) => b,
+            Err(e) => return Err(refuse(&mut s, e.message())),
+        };
         let claim = match Register::read(&body) {
             Ok(c) => c,
             Err(e) => return Err(refuse(&mut s, e.message())),
@@ -182,9 +184,9 @@ impl Inner {
             Ok(x) => x,
             Err(msg) => return Err(refuse(&mut s, &msg)),
         };
-        // The period's tag names the group here; the prefix keeps it apart
-        // from the tags of 0.5.
-        let tag = format!("period3 {}", certs::hex(&shows.hubs.group));
+        // The period's tag names the group here, as the list of refused
+        // groups names it.
+        let tag = format!("period {}", certs::hex(&shows.hubs.group));
         let shown = Shown {
             signer: shows.hubs.signer_hash().0,
             hubs: shows.hubs.version,
@@ -200,13 +202,11 @@ impl Inner {
             tag: tag.clone(),
             device: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, leaf),
             leaf,
-            chain: vec![cert],
             key: claim.key,
             psk,
             from: addr_of(raw),
             raw: raw_clone,
             share,
-            v3: true,
         });
         if self.stopping() {
             drop(st);

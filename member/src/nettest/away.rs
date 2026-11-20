@@ -133,7 +133,9 @@ fn a_member_reaches_its_hub_through_the_tunnel() {
     let _ = runner.join();
 }
 
-fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
+/// A relay of a list of groups of 0.6, which g is not on: a group on the
+/// records of 0.5 has no credentials to show it.
+fn relay_server(_g: &Group) -> (crate::relayd::server::Relay, String) {
     use base64::Engine;
     let keys = crate::relayd::keys::Keys::new().unwrap();
     let pin =
@@ -141,7 +143,7 @@ fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
     let s = crate::relayd::server::Relay::start(crate::relayd::server::Config {
         listen: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
         keys,
-        groups: vec![certs::tag(&g.root)],
+        groups: vec![crate::nettest::blind::Blind::new(1).listed()],
         open: false,
         limits: Default::default(),
         log: Arc::new(|_| {}),

@@ -101,8 +101,6 @@ fn test_limits() -> Result<super::limits::Limits> {
         per_wide: usize,
         per_provider: usize,
         byte_rate: f64,
-        group_record_bytes: usize,
-        record_bytes: usize,
         streams: usize,
     }
     let Ok(v) = std::env::var("CBB_RELAY_LIMITS") else { return Ok(Default::default()) };
@@ -114,8 +112,6 @@ fn test_limits() -> Result<super::limits::Limits> {
         per_wide: l.per_wide,
         per_provider: l.per_provider,
         byte_rate: l.byte_rate,
-        group_record_bytes: l.group_record_bytes,
-        record_bytes: l.record_bytes,
         streams: l.streams,
     })
 }
@@ -210,8 +206,8 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         "cbb relay: listening on UDP and TCP port {} for {serving}; its key, for cbb global relay -key: {pin}",
         relay.addr().port()
     ));
-    // The Go tests that run against this relay (internal/relay) read its
-    // counts more often than once a minute.
+    // Tests that run against this relay read its counts more often than
+    // once a minute.
     let every = std::env::var("CBB_RELAY_STATS_MS").ok().and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0);
     let tick = Duration::from_millis(every.unwrap_or(1000));
     let mut ticks = 0u64;

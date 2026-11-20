@@ -1664,27 +1664,24 @@ relay, or a hub.
   device leaves.
 - Each device turns it on with `cbb global relay ADDRESS -key KEY`, in place of a hub, after
   the user agrees; the key is the pin of the relay's own key, as with the forwarder.
-- A device registers with its member certificate and proves it holds its WireGuard key, as
-  a hub does with the forwarder. The relay then gives it a tunnel, a preshared key and a
-  tunnel address of the relay's choosing, and drops it when the registration ends.
+- A device registers with the certificate of its server key for the period and the period's
+  credentials (D-67, D-75, protocol.md, section 18), and proves it holds a fresh WireGuard
+  key. The relay then gives it a tunnel, a preshared key and a tunnel address of the relay's
+  choosing, and drops it when the registration ends.
 - Inside the tunnels the relay listens on one port. Each device keeps a connection there
   for notes: which of its group's devices are on the relay, and calls. The device with the
-  lower ID dials the other through the relay; the relay calls the other, joins the two
+  lower pseudonym dials the other through the relay; the relay calls the other, joins the two
   connections once it answers, and copies the bytes. Member TLS then runs end to end
   between the two devices, and the answering device checks that the certificate is the
   caller's, so the relay cannot pose as a device.
 - The relay sees which devices of a group are online, which of them talk, when and how
-  much; it cannot read the clipboard or pose as a device. A device still revoked by the
-  group's records can register, since the relay does not read the records, but the other
-  devices' member TLS refuses it, so it learns only who is online.
-- A device whose group's credentials list it registers with them instead (D-67, D-75,
-  protocol.md, section 18): the relay then sees a certificate of the device's server key and
-  the period's hubs' and members' credentials, knows the device only by a pseudonym, the hash
-  of that key, under the period's tag, and gets a fresh WireGuard key at each registration;
-  all of it changes each month, and it holds no device ID, root or record. It refuses a
+  much; it cannot read the clipboard or pose as a device. It knows a device only by a
+  pseudonym, the hash of its server key, under the period's tag; all of it changes each
+  month, and it holds no device ID or record. It refuses a
   device the members' credential does not list, and drops one a newer credential leaves out.
   A relay that serves a fixed list of groups also sees the period credential and the group's
-  roots, since it knows its groups by them; an open relay never does.
+  root key, since it knows its groups by them; an open relay never does. It speaks only
+  `cbb-relay/3`: there is no registration of 0.5.
 - The wire format is in docs/protocol.md, section 14.
 
 #### Blocked networks

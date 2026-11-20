@@ -1,77 +1,37 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The relay server against registrations made by hand: the settings it
-//! refuses to start with, the certificates, claims, records and credentials
-//! it refuses, and the requests in the tunnel it turns down.
+//! The relay server against registrations of `cbb-relay/3` made by hand:
+//! the settings it refuses to start with, the certificates, claims and
+//! credentials it refuses, the requests in the tunnel it turns down, the
+//! groups it keeps apart, the devices a newer members' credential drops,
+//! what a refused registration leaves, and its log, which names no device
+//! and no address.
 
+use std::io::Write;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-
-use cbb_core::authority::Record;
-use cbb_core::certs::{self, Cert, b64};
-use cbb_core::credential::Credential;
-use cbb_core::identity::{ExternalKey, FileKey};
+use cbb_core::certs::{self, Cert};
+use cbb_core::format::cbor::Value;
+use cbb_core::format::frame;
+use cbb_core::identity::ExternalKey;
+use cbb_core::msg::tables as t;
 
 use super::keys::Keys;
 use super::limits::Limits;
 use super::server::{self, Relay};
 use super::wire::Note;
+use super::wire3::{self, PROTOCOL, Register};
 use crate::forward::{Registrar, prove};
-use crate::nettest::{Group, new_key, now_ms, wait_for};
-use crate::relay::{PROTOCOL, RELAY_ADDR};
+use crate::nettest::blind::Blind;
+use crate::nettest::{Group, wait_for};
+use crate::relay::RELAY_ADDR;
 use crate::tunnel::{self, Link, State};
 
 const PROOF_LABEL: &[u8] = b"cbb relay key";
-
-// The device's side of the messages, as member/src/relay.rs writes them,
-// with every field open to the test.
-
-#[derive(Deserialize)]
-struct Challenge {
-    #[serde(with = "b64")]
-    e: Vec<u8>,
-    #[serde(default)]
-    roots: bool,
-}
-
-#[derive(Serialize, Clone)]
-struct Claim {
-    #[serde(with = "b64")]
-    key: Vec<u8>,
-    #[serde(with = "b64")]
-    proof: Vec<u8>,
-    records: Vec<Record>,
-    credentials: Vec<Credential>,
-    #[serde(with = "b64::list")]
-    roots: Vec<Vec<u8>>,
-}
-
-#[derive(Deserialize, Debug, Default)]
-struct Welcome {
-    #[serde(default)]
-    error: String,
-    #[serde(with = "b64::opt", default)]
-    key: Option<Vec<u8>>,
-    #[serde(with = "b64::opt", default)]
-    psk: Option<Vec<u8>>,
-    #[serde(default)]
-    addr: String,
-}
-
-#[derive(Serialize, Default)]
-struct Request {
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    watch: bool,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    dial: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
-    answer: String,
-}
 
 fn config(open: bool, groups: Vec<String>) -> server::Config {
     server::Config {
@@ -86,37 +46,83 @@ fn config(open: bool, groups: Vec<String>) -> server::Config {
     }
 }
 
-fn start(open: bool, groups: Vec<String>) -> (Relay, Vec<certs::KeyHash>) {
-    let cfg = config(open, groups);
+fn start_with(cfg: server::Config) -> (Relay, Vec<certs::KeyHash>) {
     let pin = Cert::parse(&cfg.keys.cert).unwrap().key_hash();
     (Relay::start(cfg).unwrap(), vec![pin])
 }
 
-/// A registration up to the relay's challenge.
+fn start(open: bool, groups: Vec<String>) -> (Relay, Vec<certs::KeyHash>) {
+    start_with(config(open, groups))
+}
+
+fn msg(ty: u64, mut fields: Vec<(u16, Value<'_>)>) -> Vec<u8> {
+    fields.insert(0, (frame::FIELD_T, Value::Uint(ty)));
+    frame::write(&Value::Map(fields))
+}
+
+/// A registration up to the relay's challenge: its ephemeral key and
+/// whether it asks for the period and the root.
 struct Reg {
     reg: Registrar,
-    ch: Challenge,
+    e: Vec<u8>,
+    root: bool,
     proof_key: [u8; 32],
 }
 
+/// The relay's last message: its keys and the tunnel address, or why it
+/// refused.
+type Welcome = Result<([u8; 32], [u8; 32], String), String>;
+
 fn connect(s: &Relay, pins: &[certs::KeyHash], chain: &[Vec<u8>], key: &Arc<dyn ExternalKey>) -> crate::Result<Reg> {
-    let mut reg = Registrar::connect(s.addr(), pins, chain, key, PROTOCOL, "relay")?;
+    let mut reg = Registrar::connect(s.addr(), pins, chain, key, PROTOCOL, "relay")?.on_grid();
     let proof_key = reg.export(PROOF_LABEL)?;
-    let ch: Challenge = reg.read(&AtomicBool::new(false))?;
-    Ok(Reg { reg, ch, proof_key })
+    let body = reg.next_frame(&AtomicBool::new(false))?.unwrap();
+    let (ty, v, _) = cbb_core::msg::read_noted(&body).unwrap();
+    if ty == t::T_RELAY_ERROR {
+        return Err(crate::Error::msg(v.get(2).and_then(Value::as_text).unwrap_or_default().to_string()));
+    }
+    assert_eq!(ty, t::T_RELAY_CHALLENGE);
+    let e = v.get(2).and_then(Value::as_bytes).unwrap().to_vec();
+    Ok(Reg { reg, e, root: v.get(3).and_then(Value::as_uint) == Some(1), proof_key })
+}
+
+/// Device i of g, by its server key's certificate.
+fn connect_as(g: &Blind, i: usize, s: &Relay, pins: &[certs::KeyHash]) -> Reg {
+    let key: Arc<dyn ExternalKey> = g.servers[i].clone();
+    connect(s, pins, &[g.servers[i].cert().unwrap()], &key).unwrap()
 }
 
 impl Reg {
-    /// A claim that proves wg.
-    fn claim(&self, wg: &[u8; 32]) -> Claim {
-        let (public, proof) = prove(wg, &self.ch.e, &self.proof_key).unwrap();
-        Claim { key: public.to_vec(), proof, records: Vec::new(), credentials: Vec::new(), roots: Vec::new() }
+    /// A claim that proves wg, with the credentials creds.
+    fn claim(&self, wg: &[u8; 32], creds: &[Vec<u8>], root: Option<Vec<u8>>) -> Register {
+        let (public, proof) = prove(wg, &self.e, &self.proof_key).unwrap();
+        Register { key: public, proof: proof.try_into().unwrap(), credentials: creds.to_vec(), root }
     }
 
-    fn send(mut self, c: &Claim) -> (Registrar, Welcome) {
-        self.reg.write(c).unwrap();
-        let w: Welcome = self.reg.read(&AtomicBool::new(false)).unwrap();
+    fn send_raw(mut self, frame: &[u8]) -> (Registrar, Welcome) {
+        self.reg.send(frame).unwrap();
+        let w = match self.reg.next_frame(&AtomicBool::new(false)) {
+            Ok(Some(body)) => {
+                let (ty, v, _) = cbb_core::msg::read_noted(&body).unwrap();
+                if ty == t::T_RELAY_ERROR {
+                    Err(v.get(2).and_then(Value::as_text).unwrap_or_default().to_string())
+                } else {
+                    let key = cbb_core::format::Key::from_value(v.get(2).unwrap()).unwrap();
+                    Ok((
+                        key.public.try_into().unwrap(),
+                        v.get(3).and_then(Value::as_bytes).unwrap().try_into().unwrap(),
+                        v.get(4).and_then(Value::as_text).unwrap().to_string(),
+                    ))
+                }
+            }
+            Ok(None) => Err("no answer".into()),
+            Err(e) => Err(format!("closed: {e}")),
+        };
         (self.reg, w)
+    }
+
+    fn send(self, c: &Register) -> (Registrar, Welcome) {
+        self.send_raw(&c.write())
     }
 }
 
@@ -124,28 +130,33 @@ fn wg() -> [u8; 32] {
     tunnel::new_key().unwrap().try_into().unwrap()
 }
 
-/// The device i of g registers with claim, made from a claim that proves a
+/// The hubs' and members' credentials of g at version 1, every device
+/// listed, and the period credential.
+fn creds(g: &Blind) -> (Vec<Vec<u8>>, Vec<u8>) {
+    let [period, hubs, members] = g.credentials(1, &(0..g.servers.len()).collect::<Vec<_>>());
+    (vec![hubs, members], period)
+}
+
+/// Device i of g registers with credentials on an open relay, with a
 /// fresh key; the relay's answer.
-fn register(g: &Group, i: usize, s: &Relay, pins: &[certs::KeyHash], f: impl FnOnce(&mut Claim)) -> Welcome {
-    let r = connect(s, pins, &g.chain(i), &g.key(i)).unwrap();
-    let mut c = r.claim(&wg());
+fn register(g: &Blind, i: usize, s: &Relay, pins: &[certs::KeyHash], f: impl FnOnce(&mut Register)) -> Welcome {
+    let r = connect_as(g, i, s, pins);
+    let mut c = r.claim(&wg(), &creds(g).0, None);
     f(&mut c);
     r.send(&c).1
 }
 
 #[track_caller]
 fn refused(w: &Welcome, what: &str) {
-    assert!(!w.error.is_empty() && w.error.contains(what), "{what:?}: {w:?}");
+    assert!(w.as_ref().is_err_and(|e| e.contains(what)), "{what:?}: {w:?}");
 }
 
 #[test]
 fn settings_it_does_not_start_with() {
-    let err = |open, groups: Vec<&str>| {
-        Relay::start(config(open, groups.into_iter().map(String::from).collect())).err().unwrap().to_string()
-    };
-    assert!(err(true, vec!["0011223344556677"]).contains("serves every group"));
+    let err = |open, groups: Vec<String>| Relay::start(config(open, groups)).err().unwrap().to_string();
+    assert!(err(true, vec![Blind::new(1).listed()]).contains("serves every group"));
     assert!(err(false, vec![]).contains("no group to serve"));
-    assert!(err(false, vec!["not a tag"]).contains("not a group's tag"));
+    assert!(err(false, vec!["0011223344556677".into()]).contains("is not a group of 0.6"), "a tag of 0.5");
     // A port taken.
     let (s, _) = start(true, Vec::new());
     let mut cfg = config(true, Vec::new());
@@ -154,26 +165,21 @@ fn settings_it_does_not_start_with() {
     assert!(!s.stopped());
 }
 
-/// What a claim may not be: a key of another length or of low order, a
-/// proof of another key, too many records.
+/// What a claim may not be: a key of low order, a proof of another key,
+/// no credentials, a message that is not a claim.
 #[test]
 fn claims_it_refuses() {
-    let g = Group::new(1);
+    let g = Blind::new(1);
     let (s, pins) = start(true, Vec::new());
-    refused(&register(&g, 0, &s, &pins, |c| c.key.truncate(31)), "not 32 bytes");
-    refused(&register(&g, 0, &s, &pins, |c| c.key = vec![0; 32]), "not an X25519 key");
+    refused(&register(&g, 0, &s, &pins, |c| c.key = [0; 32]), "not an X25519 key");
     let other = x25519_public(&wg());
-    refused(&register(&g, 0, &s, &pins, |c| c.key = other.to_vec()), "does not hold that WireGuard key");
-    let rec = g.records.all()[0].clone();
-    refused(&register(&g, 0, &s, &pins, |c| c.records = vec![rec; 1025]), "too many records");
-    // A claim that does not decode: the relay closes the connection.
-    let mut r = connect(&s, &pins, &g.chain(0), &g.key(0)).unwrap();
-    r.reg.write(&serde_json::json!({"key": 5})).unwrap();
-    assert!(r.reg.read::<Welcome>(&AtomicBool::new(false)).is_err());
+    refused(&register(&g, 0, &s, &pins, |c| c.key = other), "does not hold that WireGuard key");
+    refused(&register(&g, 0, &s, &pins, |c| c.credentials.clear()), "breaks");
+    let r = connect_as(&g, 0, &s, &pins);
+    refused(&r.send_raw(&msg(t::T_RELAY_WATCH, vec![])).1, "not a claim");
     // After all of them, the device registers.
     let w = register(&g, 0, &s, &pins, |_| {});
-    assert!(w.error.is_empty(), "{w:?}");
-    assert_eq!(w.key.map(|k| k.len()), Some(32));
+    assert!(w.is_ok(), "{w:?}");
 }
 
 fn x25519_public(k: &[u8; 32]) -> [u8; 32] {
@@ -181,139 +187,97 @@ fn x25519_public(k: &[u8; 32]) -> [u8; 32] {
 }
 
 /// Two devices may not register the same WireGuard key; the relay of a
-/// fixed list refuses a group it does not serve.
+/// list refuses a group it does not serve.
 #[test]
 fn a_key_taken_and_a_group_not_served() {
-    let g = Group::new(2);
+    let g = Blind::new(2);
     let (s, pins) = start(true, Vec::new());
     let key = wg();
-    let r = connect(&s, &pins, &g.chain(0), &g.key(0)).unwrap();
-    let c = r.claim(&key);
+    let (cs, _) = creds(&g);
+    let r = connect_as(&g, 0, &s, &pins);
+    let c = r.claim(&key, &cs, None);
     let (_keep, w) = r.send(&c);
-    assert!(w.error.is_empty(), "{w:?}");
-    let r = connect(&s, &pins, &g.chain(1), &g.key(1)).unwrap();
-    let c = r.claim(&key);
+    assert!(w.is_ok(), "{w:?}");
+    let r = connect_as(&g, 1, &s, &pins);
+    let c = r.claim(&key, &cs, None);
     refused(&r.send(&c).1, "another device registered that WireGuard key");
 
-    let other = Group::new(1);
-    let (closed, pins) = start(false, vec![certs::tag(&other.root)]);
-    let err = connect(&closed, &pins, &g.chain(0), &g.key(0)).err().unwrap().to_string();
-    assert!(err.contains("closed") || err.contains("broke") || err.contains("answer"), "{err}");
+    let (closed, pins) = start(false, vec![Blind::new(1).listed()]);
+    let r = connect_as(&g, 0, &closed, &pins);
+    assert!(r.root);
+    let (cs, period) = creds(&g);
+    let mut all = cs.clone();
+    all.push(period);
+    let c = r.claim(&wg(), &all, Some(g.root()));
+    refused(&r.send(&c).1, "not of a group this relay serves");
 }
 
-/// Certificates that name no device of a group: a group CA as the device's
-/// certificate, and a chain longer than any device has.
+/// What the device shows in its TLS: the certificate of its server key
+/// alone, which is no CA's.
 #[test]
 fn certificates_it_refuses() {
-    let g = Group::new(1);
+    let g = Blind::new(1);
     let (s, pins) = start(true, Vec::new());
-    let root: Arc<dyn ExternalKey> = g.root_key.clone();
-    assert!(connect(&s, &pins, std::slice::from_ref(&g.root.der), &root).is_err());
-    let mut long = g.chain(0);
-    for _ in 0..9 {
-        long.push(g.root.der.clone());
-    }
-    assert!(connect(&s, &pins, &long, &g.key(0)).is_err());
-    // The relay still takes the device's own chain.
-    assert!(register(&g, 0, &s, &pins, |_| {}).error.is_empty());
+    let old = Group::new(1);
+    let root: Arc<dyn ExternalKey> = old.root_key.clone();
+    let alone = "show the certificate of your server key alone";
+    let e = connect(&s, &pins, std::slice::from_ref(&old.root.der), &root).err().unwrap().to_string();
+    assert!(e.contains(alone), "a CA: {e}");
+    let key: Arc<dyn ExternalKey> = g.servers[0].clone();
+    let two = vec![g.servers[0].cert().unwrap(), old.root.der.clone()];
+    let e = connect(&s, &pins, &two, &key).err().unwrap().to_string();
+    assert!(e.contains(alone), "a chain: {e}");
+    // The relay still takes the server key's own certificate.
+    assert!(register(&g, 0, &s, &pins, |_| {}).is_ok());
 }
 
-/// A device the group's records remove is refused, and so are records
-/// that are not the group's.
-#[test]
-fn records_that_refuse() {
-    let mut g = Group::new(3);
-    let (s, pins) = start(true, Vec::new());
-    let before = g.records.all().to_vec();
-    // Device 2 registers while the records still hold it.
-    let r = connect(&s, &pins, &g.chain(2), &g.key(2)).unwrap();
-    let mut c = r.claim(&wg());
-    c.records = before.clone();
-    let (_two, w) = r.send(&c);
-    assert!(w.error.is_empty(), "{w:?}");
-    assert!(wait_for(Duration::from_secs(5), || s.stats().1 == 1));
-    g.revoke(2);
-    let records = g.records.all().to_vec();
-    // Its own claim with the record that removes it is refused, and the
-    // relay forgets the records a refused registration brought.
-    refused(&register(&g, 2, &s, &pins, |c| c.records = records.clone()), "");
-    // Device 1 brings them: the relay keeps them and drops device 2.
-    let r = connect(&s, &pins, &g.chain(1), &g.key(1)).unwrap();
-    let mut c = r.claim(&wg());
-    c.records = records.clone();
-    let (_one, w) = r.send(&c);
-    assert!(w.error.is_empty(), "{w:?}");
-    assert!(wait_for(Duration::from_secs(5), || s.stats().1 == 1), "{:?}", s.stats());
-    // Device 2 is refused now without records of its own.
-    refused(&register(&g, 2, &s, &pins, |_| {}), "");
-    // Records of another group do not verify and change nothing.
-    let other = Group::new(1);
-    let theirs = other.records.all().to_vec();
-    let w = register(&g, 0, &s, &pins, |c| c.records = theirs.clone());
-    assert!(w.error.is_empty(), "{w:?}");
-    refused(&register(&g, 2, &s, &pins, |_| {}), "");
-}
-
-/// A device that registers with the group's credentials: the server key's
-/// certificate alone, and the credentials that must list it.
+/// The credentials must list the device and be the group's; a relay of a
+/// list wants the period credential and the root that signed it; a group
+/// takes no credentials older than ones the relay saw.
 #[test]
 fn credentials_it_refuses() {
-    let g = Group::new(1);
-    let server = new_key();
-    let other = new_key();
-    let creds = g.period(std::slice::from_ref(&server), 1);
-    let not_listed = g.period(std::slice::from_ref(&other), 1);
-    let cert = |k: &Arc<FileKey>| {
-        certs::server_cert_by(&k.public(), &mut |tbs| crate::identity::sign_external(&**k, tbs)).unwrap()
+    let g = Blind::new(2);
+    let (open, pins_open) = start(true, Vec::new());
+    let [_, hubs, only_one] = g.credentials(1, &[1]);
+    refused(&register(&g, 0, &open, &pins_open, |c| c.credentials = vec![hubs.clone()]), "no members' credential");
+    refused(
+        &register(&g, 0, &open, &pins_open, |c| c.credentials = vec![hubs.clone(), only_one.clone()]),
+        "does not list this device",
+    );
+    let other = Blind::new(1);
+    let [_, their_hubs, _] = other.credentials(1, &[0]);
+    let (cs, period) = creds(&g);
+    refused(&register(&g, 0, &open, &pins_open, |c| c.credentials[0] = their_hubs.clone()), "do not verify");
+    let mut bad = cs[1].clone();
+    let n = bad.len();
+    bad[n - 1] ^= 1;
+    refused(&register(&g, 0, &open, &pins_open, |c| c.credentials[1] = bad.clone()), "do not verify");
+    // Version 2 seen, version 1 is older.
+    let [_, h2, m2] = g.credentials(2, &[0, 1]);
+    let (_two, w) = {
+        let r = connect_as(&g, 1, &open, &pins_open);
+        let c = r.claim(&wg(), &[h2, m2], None);
+        r.send(&c)
     };
-    let key: Arc<dyn ExternalKey> = server.clone();
-    let with = |s: &Relay, pins: &[certs::KeyHash], f: &dyn Fn(&mut Claim)| {
-        let r = connect(s, pins, &[cert(&server)], &key).unwrap();
-        let mut c = r.claim(&wg());
-        f(&mut c);
+    assert!(w.is_ok(), "{w:?}");
+    refused(&register(&g, 0, &open, &pins_open, |_| {}), "older than ones this relay saw");
+
+    // A relay of a list asks for the period credential and the root.
+    let (closed, pins) = start(false, vec![g.listed()]);
+    assert!(connect_as(&g, 0, &closed, &pins).root, "a relay of a list asks for the root");
+    assert!(!connect_as(&g, 0, &open, &pins_open).root);
+    let send = |cs: &[Vec<u8>], root: Option<Vec<u8>>| {
+        let r = connect_as(&g, 0, &closed, &pins);
+        let c = r.claim(&wg(), cs, root);
         r.send(&c).1
     };
-    let (open, pins) = start(true, Vec::new());
-    let pins_open = pins.clone();
-    let listed: Vec<Credential> = creds[1..].to_vec();
-    assert!(with(&open, &pins, &|c| c.credentials = listed.clone()).error.is_empty());
-    refused(&with(&open, &pins, &|_| {}), "do not verify");
-    refused(&with(&open, &pins, &|c| c.credentials = vec![creds[1].clone()]), "no members' credential");
-    refused(&with(&open, &pins, &|c| c.credentials = not_listed[1..].to_vec()), "does not list this device");
-    let mut bad = listed.clone();
-    bad[1].body.push(b' ');
-    refused(&with(&open, &pins, &|c| c.credentials = bad.clone()), "do not verify");
-
-    // A relay of a fixed list wants the period credential and a root of a
-    // group it serves.
-    let (closed, pins) = start(false, vec![certs::tag(&g.root)]);
-    let r = connect(&closed, &pins, &[cert(&server)], &key).unwrap();
-    assert!(r.ch.roots, "a relay of a fixed list asks for the roots");
-    assert!(!connect(&open, &pins_open, &[cert(&server)], &key).unwrap().ch.roots);
-    refused(&with(&closed, &pins, &|c| c.credentials = listed.clone()), "no root of its group");
-    let full = creds.to_vec();
-    refused(&with(&closed, &pins, &|c| c.credentials = full.clone()), "not of a group this relay serves");
-    let roots = vec![g.root.der.clone(); 9];
-    refused(
-        &with(&closed, &pins, &|c| {
-            c.credentials = full.clone();
-            c.roots = roots.clone();
-        }),
-        "no root of its group",
-    );
-    let stranger = Group::new(1);
-    refused(
-        &with(&closed, &pins, &|c| {
-            c.credentials = full.clone();
-            c.roots = vec![b"junk".to_vec(), stranger.root.der.clone()];
-        }),
-        "not of a group this relay serves",
-    );
-    let w = with(&closed, &pins, &|c| {
-        c.credentials = full.clone();
-        c.roots = vec![g.root.der.clone()];
-    });
-    assert!(w.error.is_empty(), "{w:?}");
+    refused(&send(&cs, Some(g.root())), "no root of its group");
+    let mut all = cs.clone();
+    all.push(period.clone());
+    refused(&send(&all, None), "not of a group this relay serves");
+    refused(&send(&all, Some(other.root())), "not of a group this relay serves");
+    let w = send(&all, Some(g.root()));
+    assert!(w.is_ok(), "{w:?}");
 }
 
 /// A registered device's tunnel to the relay.
@@ -322,16 +286,16 @@ struct Tunneled {
     link: Link,
 }
 
-fn tunneled(g: &Group, i: usize, s: &Relay, pins: &[certs::KeyHash]) -> Tunneled {
+fn tunneled_by(g: &Blind, i: usize, s: &Relay, pins: &[certs::KeyHash], cs: &[Vec<u8>]) -> Tunneled {
     let key = wg();
-    let r = connect(s, pins, &g.chain(i), &g.key(i)).unwrap();
-    let c = r.claim(&key);
+    let r = connect_as(g, i, s, pins);
+    let c = r.claim(&key, cs, None);
     let (reg, w) = r.send(&c);
-    assert!(w.error.is_empty(), "{w:?}");
+    let (relay_key, psk, addr) = w.unwrap();
     let hub = tunnel::Hub {
         device: "relay".into(),
-        key: w.key.unwrap(),
-        psk: w.psk.unwrap(),
+        key: relay_key.to_vec(),
+        psk: psk.to_vec(),
         endpoints: vec![s.addr()],
         next: Vec::new(),
         obfuscation: None,
@@ -339,32 +303,59 @@ fn tunneled(g: &Group, i: usize, s: &Relay, pins: &[certs::KeyHash]) -> Tunneled
         next_obfuscation: None,
         next_vless: None,
     };
-    let own: Ipv6Addr = w.addr.parse().unwrap();
+    let own: Ipv6Addr = addr.parse().unwrap();
     let link = Link::start_at(&State::with_key(&key).unwrap(), &hub, own, RELAY_ADDR, Arc::new(|_| {})).unwrap();
     Tunneled { _reg: reg, link }
+}
+
+fn tunneled(g: &Blind, i: usize, s: &Relay, pins: &[certs::KeyHash]) -> Tunneled {
+    tunneled_by(g, i, s, pins, &creds(g).0)
+}
+
+fn read_note(c: &mut TcpStream) -> Note {
+    let (_, body) = wire3::read(c, super::wire::MAX_LINE).unwrap();
+    let (ty, v, _) = cbb_core::msg::read_noted(&body).unwrap();
+    let b64 = |b: &[u8]| base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b);
+    let bytes = |n| v.get(n).and_then(Value::as_bytes).map(b64).unwrap_or_default();
+    match ty {
+        t::T_RELAY_ONLINE => Note {
+            online: Some(
+                v.get(2).and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(Value::as_bytes).map(b64).collect(),
+            ),
+            ..Note::default()
+        },
+        t::T_RELAY_CALL => Note { call: bytes(2), ticket: bytes(3), ..Note::default() },
+        t::T_RELAY_OK => Note { ok: true, ..Note::default() },
+        t::T_RELAY_ERROR => Note::error(v.get(2).and_then(Value::as_text).unwrap_or_default()),
+        _ => panic!("a note of type {ty}"),
+    }
+}
+
+fn unb64(s: &str) -> Vec<u8> {
+    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s).unwrap()
+}
+
+fn dial(to: &str) -> Vec<u8> {
+    msg(t::T_RELAY_DIAL, vec![(2, Value::Bytes(&unb64(to)))])
+}
+
+fn answer(ticket: &str) -> Vec<u8> {
+    msg(t::T_RELAY_ANSWER, vec![(2, Value::Bytes(&unb64(ticket)))])
+}
+
+fn watch() -> Vec<u8> {
+    msg(t::T_RELAY_WATCH, vec![])
 }
 
 impl Tunneled {
     /// Sends a request on a new connection through the tunnel, and the
     /// relay's first note on it.
-    fn ask(&self, r: &Request) -> (TcpStream, Note) {
+    fn ask(&self, r: &[u8]) -> (TcpStream, Note) {
         let mut c = TcpStream::connect(self.link.local()).unwrap();
         c.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
-        super::wire::write_frame(&mut c, r, super::wire::MAX_LINE).unwrap();
-        let f = super::wire::read_frame(&mut c, super::wire::MAX_LINE).unwrap();
-        (c, note(&f))
-    }
-}
-
-fn note(f: &[u8]) -> Note {
-    let v: serde_json::Value = serde_json::from_slice(f).unwrap();
-    let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or_default().to_string();
-    Note {
-        online: v.get("online").map(|o| serde_json::from_value(o.clone()).unwrap()),
-        call: s("call"),
-        ticket: s("ticket"),
-        ok: v.get("ok").and_then(|x| x.as_bool()).unwrap_or(false),
-        error: s("error"),
+        c.write_all(r).unwrap();
+        let n = read_note(&mut c);
+        (c, n)
     }
 }
 
@@ -373,44 +364,153 @@ fn note(f: &[u8]) -> Note {
 /// left unanswered.
 #[test]
 fn requests_it_turns_down() {
-    let mut g = Group::new(2);
-    if g.id(0) > g.id(1) {
-        g.devs.swap(0, 1);
-    }
+    let g = Blind::new(2);
     let (s, pins) = start(true, Vec::new());
     let a = tunneled(&g, 0, &s, &pins);
     let b = tunneled(&g, 1, &s, &pins);
-    assert_eq!(a.ask(&Request::default()).1.error, "an unknown request");
-    let dial = |to: &str| Request { dial: to.into(), ..Request::default() };
-    assert_eq!(a.ask(&dial(&g.id(0))).1.error, "that device is not on the relay");
-    assert_eq!(a.ask(&dial("00112233445566778899aabbccddeeff")).1.error, "that device is not on the relay");
-    assert_eq!(a.ask(&dial(&g.id(1))).1.error, "that device is not listening yet");
-    let answer = Request { answer: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Request::default() };
-    assert_eq!(a.ask(&answer).1.error, "no such call");
+    assert_eq!(a.ask(&msg(t::T_RELAY_OK, vec![])).1.error, "an unknown request");
+    assert_eq!(a.ask(&dial(&g.name(0))).1.error, "that device is not on the relay");
+    assert_eq!(a.ask(&dial(&("A".repeat(43) + "="))).1.error, "that device is not on the relay");
+    assert_eq!(a.ask(&dial(&g.name(1))).1.error, "that device is not listening yet");
+    assert_eq!(a.ask(&answer("AAAAAAAAAAAAAAAAAAAAAA==")).1.error, "no such call");
 
     // b watches: it hears of a, and of a's call, which it leaves.
-    let (mut w, first) = b.ask(&Request { watch: true, ..Request::default() });
-    assert_eq!(first.online, Some(vec![g.id(0)]));
+    let (mut w, first) = b.ask(&watch());
+    assert_eq!(first.online, Some(vec![g.name(0)]));
     let started = std::time::Instant::now();
     let caller = std::thread::spawn({
         let a = a.link.local();
-        let to = g.id(1);
+        let to = dial(&g.name(1));
         move || {
             let mut c = TcpStream::connect(a).unwrap();
             c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
-            super::wire::write_frame(&mut c, &dial(&to), super::wire::MAX_LINE).unwrap();
-            note(&super::wire::read_frame(&mut c, super::wire::MAX_LINE).unwrap())
+            c.write_all(&to).unwrap();
+            read_note(&mut c)
         }
     });
-    let call = note(&super::wire::read_frame(&mut w, super::wire::MAX_LINE).unwrap());
-    assert_eq!(call.call, g.id(0));
+    let call = read_note(&mut w);
+    assert_eq!(call.call, g.name(0));
     assert!(!call.ticket.is_empty());
     assert_eq!(caller.join().unwrap().error, "that device did not answer");
     assert!(started.elapsed() >= server::CALL_TIMEOUT - Duration::from_secs(1));
     // An answer too late finds no call.
-    let late = Request { answer: call.ticket, ..Request::default() };
-    assert_eq!(b.ask(&late).1.error, "no such call");
+    assert_eq!(b.ask(&answer(&call.ticket)).1.error, "no such call");
     drop(w);
     assert!(wait_for(Duration::from_secs(5), || s.stats().1 == 2));
-    let _ = now_ms();
+}
+
+/// A device that asks the relay to join it to an address, not to a device
+/// of its group, reaches nothing: a dial names a pseudonym of 32 bytes,
+/// and the relay only joins two of a group's registered devices, never
+/// dialing anywhere.
+#[test]
+fn a_dial_reaches_no_address() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let hits = Arc::new(AtomicUsize::new(0));
+    let ln = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    let addr = ln.local_addr().unwrap().to_string();
+    std::thread::spawn({
+        let hits = hits.clone();
+        move || {
+            for c in ln.incoming() {
+                if c.is_err() {
+                    return;
+                }
+                hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+    let g = Blind::new(1);
+    let (s, pins) = start(true, Vec::new());
+    let a = tunneled(&g, 0, &s, &pins);
+    for to in [addr.as_str(), "1.1.1.1:443", "example.com:443", "[::1]:22"] {
+        let as_text = msg(t::T_RELAY_DIAL, vec![(2, Value::Text(to))]);
+        let as_bytes = msg(t::T_RELAY_DIAL, vec![(2, Value::Bytes(to.as_bytes()))]);
+        for r in [as_text, as_bytes] {
+            // The relay turns it down, or closes a request the format
+            // does not take.
+            let mut c = TcpStream::connect(a.link.local()).unwrap();
+            c.set_read_timeout(Some(Duration::from_secs(15))).unwrap();
+            c.write_all(&r).unwrap();
+            if let Ok((_, body)) = wire3::read(&mut c, super::wire::MAX_LINE) {
+                let (ty, v, _) = cbb_core::msg::read_noted(&body).unwrap();
+                assert_eq!(ty, t::T_RELAY_ERROR, "a dial to {to}");
+                assert!(v.get(2).and_then(Value::as_text).is_some_and(|w| !w.is_empty()), "a dial to {to}");
+            }
+        }
+    }
+    assert_eq!(hits.load(Ordering::SeqCst), 0, "a connection reached an address a device asked for");
+}
+
+/// Two groups on one open relay: a device of one hears only of its own
+/// group and cannot dial a device of the other.
+#[test]
+fn groups_apart() {
+    let (one, two) = (Blind::new(1), Blind::new(1));
+    let (s, pins) = start(true, Vec::new());
+    let a = tunneled(&one, 0, &s, &pins);
+    let b = tunneled(&two, 0, &s, &pins);
+    assert_eq!(s.stats(), (2, 2));
+    let (_w, first) = a.ask(&watch());
+    assert_eq!(first.online, Some(vec![]), "nobody else of its group");
+    assert_eq!(a.ask(&dial(&two.name(0))).1.error, "that device is not on the relay");
+    assert_eq!(b.ask(&dial(&one.name(0))).1.error, "that device is not on the relay");
+}
+
+/// A newer members' credential that leaves a device out drops it from the
+/// relay, and the device cannot come back with the older one.
+#[test]
+fn a_device_left_out_goes() {
+    let g = Blind::new(3);
+    let (s, pins) = start(true, Vec::new());
+    let _a = tunneled(&g, 0, &s, &pins);
+    let _c = tunneled(&g, 2, &s, &pins);
+    assert!(wait_for(Duration::from_secs(5), || s.stats().1 == 2));
+    let [_, h2, m2] = g.credentials(2, &[0, 1]);
+    let _b = tunneled_by(&g, 1, &s, &pins, &[h2, m2]);
+    assert!(wait_for(Duration::from_secs(5), || s.stats().1 == 2), "{:?}", s.stats());
+    refused(&register(&g, 2, &s, &pins, |_| {}), "older than ones this relay saw");
+}
+
+/// A refused registration leaves the relay as it was: no group, device or
+/// period of it.
+#[test]
+fn a_refused_registration_leaves_nothing() {
+    let g = Blind::new(2);
+    let (s, pins) = start(true, Vec::new());
+    let [_, hubs, only_one] = g.credentials(1, &[1]);
+    refused(&register(&g, 0, &s, &pins, |c| c.credentials = vec![hubs, only_one]), "does not list this device");
+    let st = s.inner().lock();
+    assert!(st.groups.is_empty() && st.by_addr.is_empty() && st.periods.is_empty() && st.members.is_empty());
+}
+
+/// The relay's log, verbose included, names no device and no address of
+/// one, through registrations, refusals and a call.
+#[test]
+fn its_log_names_no_device() {
+    let lines = Arc::new(Mutex::new(Vec::<String>::new()));
+    let mut cfg = config(true, Vec::new());
+    cfg.log = {
+        let lines = lines.clone();
+        Arc::new(move |l: &str| lines.lock().unwrap().push(l.to_string()))
+    };
+    let (s, pins) = start_with(cfg);
+    let g = Blind::new(2);
+    let a = tunneled(&g, 0, &s, &pins);
+    let b = tunneled(&g, 1, &s, &pins);
+    let (_w, _) = b.ask(&watch());
+    let _ = a.ask(&dial(&g.name(1)));
+    let [_, hubs, only_one] = g.credentials(1, &[1]);
+    refused(&register(&g, 0, &s, &pins, |c| c.credentials = vec![hubs, only_one]), "");
+    drop((a, b));
+    drop(s);
+    let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    for l in lines.lock().unwrap().iter() {
+        assert!(!l.contains("127.0.0.1"), "an address: {l}");
+        for i in 0..2 {
+            let name = g.name(i);
+            let h = hex(&unb64(&name));
+            assert!(!l.contains(&name) && !l.contains(&h) && !l.contains(&g.ids[i]), "a device: {l}");
+        }
+    }
 }

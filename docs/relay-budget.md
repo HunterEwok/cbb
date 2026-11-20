@@ -46,7 +46,7 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
    inside one /32, which a provider has by the ten thousand. Every cap of a wide network has
    a cap of the IPv6 provider above it.
 4. **What a stranger leaves behind ends.** Registrations end with their connections; a
-   group's records and period on the relay go with its last device; the forwarder's versions
+   group's period on the relay goes with its last device; the forwarder's versions
    go when their credential expires, at most 35 days after they were kept.
 
 ## The relay
@@ -56,9 +56,7 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 | Registration being set up | a goroutine and a TLS handshake, about 50 KiB; one ECDH | 15 s at most | address, network, wide network, provider | 16, 64, 128, 128 | 256 | the connection is closed |
 | Setup, paid by the second | 4 units | | address, network, wide network, provider | 64, 256, 1024, 2048 units a second; bursts of 1536, 4096, 8192, 16384 | | the connection is closed |
 | Registered device (open relay) | a tunnel peer and its entry, about 2 KiB | while its connection lasts | address, network, wide network, provider; group | 16, 64, 256, 1024; 64 devices of a group | 4096 groups; 4096 devices, so that each device's watch has its connection | refused |
-| A group's authority records | their bytes; one ECDSA check each, once | until the group's last device leaves | the group; the network, wide network and provider that brought them | 256 KiB a group; 1 MiB a network, 4 MiB a wide network, 16 MiB a provider | 128 MiB | refused, none of them kept |
-| Record check | about 45 µs | | address, network, wide network, provider | 1 unit each, from the same allowance as setups | | refused |
-| Period (registration with credentials) | the period key, versions and members' list | until the group's last device leaves | the group | one per period tag | 4096 groups | refused |
+| Period | the period key, versions and members' list | until the group's last device leaves | the group | one per period tag | 4096 groups | refused |
 | Request being read in a tunnel | a goroutine | 5 s at most | device, group; address, network, wide network, provider the device registered from | 16, 32; 32, 64, 64, 128 | 256 | the connection is closed |
 | Call waiting for an answer | a ticket | 10 s at most | the called device | 16 | | refused |
 | Joined connections | two copies | while both last | the group | 256 | | refused |
@@ -72,12 +70,10 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 What the relay guarantees:
 
 - **A device registered before cannot be pushed out** by any number of strangers: nothing
-  they register removes another group's devices, records or period.
+  they register removes another group's devices or period.
 - **A new group from elsewhere finds room** unless strangers hold 4096 groups, which takes at
   least 16 wide networks (4096 / 256) holding their registrations open, and over IPv6 at
-  least 4 providers (4096 / 1024), or 128 MiB of records, which takes at least 32 wide
-  networks (128 MiB / 4 MiB), over IPv6 in at least 8 providers (128 MiB / 16 MiB)
-  (`TestRegistrationsBoundByProvider`).
+  least 4 providers (4096 / 1024).
 - **Requests**: strangers in fewer than 4 wide networks (256 / 64), or over IPv6 in fewer
   than 2 providers (256 / 128), cannot take every request slot, and each slot is free again
   within 5 s.
@@ -85,7 +81,7 @@ What the relay guarantees:
   than 2 providers, cannot take every setup slot, and each is free again within 15 s. One
   provider may hold half of the setups and half of the requests being read: these slots are
   short-lived and refilled in seconds, so this is the accepted bound; the state that lasts
-  (registrations, records) takes at least 4 providers.
+  (registrations) takes at least 4 providers.
 - **The tunnel**: each registered device has its watch's connection, since the relay
   registers no more devices than half its tunnel's connections; the other half is for calls,
   and strangers in one address hold 128 of them (1/32), in one network 256, in one wide
@@ -126,7 +122,7 @@ What the relay guarantees:
   `handshakes_are_shared_by_source`, `garbage_does_not_put_the_hub_under_load`). A device's
   hub does the same; an AmneziaWG hub, which sends no cookies, has the same shares.
 - After strangers register and leave, the relay keeps nothing of them but their sources'
-  allowances, which it forgets once full again (`TestOpenRelayForgetsStrangers`).
+  allowances, which it forgets once full again (`open_relay_forgets_strangers`).
 
 A relay for the user's own groups (`-group`) has the limits of every relay (setups, requests,
 calls, members) and serves no stranger's group at all.
@@ -272,20 +268,20 @@ before it changed is refused when it is added, or dropped with the others.
 
 ## Tests
 
-The guarantees above are tested, in Go:
+The guarantees above are tested, the forwarder's in Go and the relay's in Rust
+(`member/src/relayd/tests.rs`, `member/src/nettest/relayd.rs`):
 
 - a refused registration, for each reason, leaves the server as it was:
-  `TestRefusedRegistrationLeavesState` (relay), `TestRefusedRegistrationLeavesForwarder`;
+  `a_refused_registration_leaves_nothing` (relay), `TestRefusedRegistrationLeavesForwarder`;
 - for each payer, sources at their cap leave room for a group from elsewhere and never push
   out one that came before, with random sources, groups and orders under a fixed seed:
-  `TestCountProperty`, `TestOpenRelayBudgetProperty`, `TestVersionsBudgetProperty`;
-- what strangers leave behind is bounded and measured: `TestOpenRelayForgetsStrangers`,
+  `TestCountProperty`, `open_relay_budget_property`, `TestVersionsBudgetProperty`;
+- what strangers leave behind is bounded and measured: `open_relay_forgets_strangers`,
   `TestVersionsMemoryBounded`;
 - the payers of each kind: `TestCountProvider`, `TestVersionsWideNetworkLeavesRoom`,
-  `TestVersionsProviderLeavesRoom`, `TestRegistrationsBoundByProvider`,
+  `TestVersionsProviderLeavesRoom`, `registrations_bound_by_provider`,
   `TestMemoryChargesTheSource`,
-  `TestMemoryKeepsGroupsThatAreAway`,
-  `TestRecordBytesChargedToTheSource`, `TestRequestsBoundByWideNetwork`,
+  `TestMemoryKeepsGroupsThatAreAway`, `requests_bound_by_wide_network`,
   `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
 - XHTTP takes no upload over its limit and queues no more than its limit for a session
   that no client opened: `TestXHTTPHoldsLittleForStrangers`.

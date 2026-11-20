@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
+// Package relay runs the blind relay, the Rust cbb-relay, for the Go tests
+// of the service: its keys, its process and how a device reaches it. The
+// relay's own tests, with a device's side of cbb-relay/3, are Rust's
+// (member/src/relayd, member/src/relay.rs).
 package relay
 
 import (
@@ -23,12 +27,21 @@ import (
 	"github.com/HunterEwok/cbb/internal/testhook"
 )
 
+// Link is how a device reaches a relay: its address, the same for UDP and
+// TCP, and the pin of its key.
+type Link struct {
+	Endpoint netip.AddrPort
+	Pin      string
+}
+
 // Config says how Start runs cbb-relay.
 type Config struct {
 	Listen string // the address of its port, the same for UDP and TCP; 127.0.0.1:0 when empty
 	Keys   Keys   // its keys; new ones when zero
 
-	// Groups are the tags of the groups the relay serves (-group). Open
+	// Groups are the groups of 0.6 the relay serves (-group), each its
+	// root key and the two halves of its recovery key in hex, separated by
+	// colons. Open
 	// serves any group that registers in their place (-open), within
 	// Limits.
 	Groups []string
@@ -45,15 +58,13 @@ type Config struct {
 // CBB_RELAY_LIMITS; a zero field keeps the relay's default
 // (member/src/relayd/limits.rs).
 type Limits struct {
-	Groups           int     `json:"groups"`
-	PerAddress       int     `json:"per_address"`
-	PerNetwork       int     `json:"per_network"`
-	PerWide          int     `json:"per_wide"`
-	PerProvider      int     `json:"per_provider"`
-	ByteRate         float64 `json:"byte_rate"`
-	GroupRecordBytes int     `json:"group_record_bytes"`
-	RecordBytes      int     `json:"record_bytes"`
-	Streams          int     `json:"streams"`
+	Groups      int     `json:"groups"`
+	PerAddress  int     `json:"per_address"`
+	PerNetwork  int     `json:"per_network"`
+	PerWide     int     `json:"per_wide"`
+	PerProvider int     `json:"per_provider"`
+	ByteRate    float64 `json:"byte_rate"`
+	Streams     int     `json:"streams"`
 }
 
 // StatsInterval is how often a relay that Start runs logs its counts.
