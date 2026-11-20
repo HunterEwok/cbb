@@ -150,6 +150,42 @@ made with 0.5 is set up again once. The details follow.
   device's an admin mutes it for the group or unmutes it; a long press or a right click
   picks the time. The tile shows the new state at once and never leaves the list while
   the command goes out.
+- The 0.6 format's vectors have a manifest (`testdata/format/FROZEN`) and CI's `format` job:
+  every vector must match it, `gen.py` must write the same bytes and the Go reader must take
+  them; once the format is declared frozen, a listed vector changes only in a commit that
+  counts a format break, at most one before 1.0 (`tools/formatfreeze`).
+- A generator of groups of records v3 from a fixed seed (`cbb_core::groupgen`, feature
+  `testkit`): about 5, 100 and 1000 records, and a group at the format's ceilings (the set's
+  4096 units filled, 256 devices, the root and the admins at their ceilings, two changes of root,
+  checkpoints with gaps). `core/tests/ceilings.rs` measures the evaluation and a member's set
+  on them, in time and in peak memory, against a budget.
+- Time in tests: the core's rules of days walked with a moved clock (`core/src/longrules.rs`:
+  the weekly key change with a sleeping device, a guarded leaf's 35 days, a clock set back, a
+  change of root by the recovery key that waits for no clock), and the Rust service's running time moved by the tests as its wall
+  clock already was (`CBB_TEST_AHEAD_FILE`'s second number, `testClock.run`); every read of
+  the wall clock in the service goes through `uptime::wall_ms()`, which `tools/repocheck`
+  enforces (docs/testing.md, "Time").
+- Power loss in tests: a member's saved state cut at every byte of every save, through the
+  flash store and in the service's state files, must come back whole and act on nothing
+  twice (docs/testing.md, "Power loss"). The service removes the temporary files a write cut
+  short left behind, once they are an hour old.
+- A simulation of a whole group in one process (`core/src/sim`): 3 to 12 members on a network
+  that drops, duplicates, reorders and splits, with crashes, moved clocks, changes of root, forks
+  and members off for days, all from one seed; after the network goes quiet every member must
+  hold the same records and show each copy once, and a removed member must open nothing sealed
+  after its removal. A failure prints a one-line replay; the nightly run takes a thousand fresh
+  seeds (docs/testing.md, "The simulation").
+- Recovery drills that run by themselves (`tools/e2e/drills.sh`): the root lost and taken back
+  with the recovery key, a new phone restoring the group, a device restored from yesterday's
+  backup getting back in, a removed device restored from an older backup staying out.
+- Soak stands (`tools/soak/soak.sh`): a small group runs for days, its members killed at random
+  moments, a calm stand and one under load (bursts, texts at the limit, files, eight members)
+  side by side, with one line a day of what arrived, how fast, and the members' memory and open
+  files, and a pass or fail line at the end; seven days on a release candidate are a release
+  condition (docs/testing.md, "Soak").
+- A sheet of the dangerous screens (`CBB_DANGEROUS_SHEET`, docs/testing.md): every screen of the
+  tray app and the Android app where a person decides something the group's safety depends on, in all eight
+  languages, as one HTML file to read before a release.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text

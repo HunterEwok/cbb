@@ -66,6 +66,8 @@ pub mod format;
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 pub mod group;
+#[cfg(any(test, feature = "testkit"))]
+pub mod groupgen;
 pub mod hlc;
 pub mod hubkey;
 pub mod identity;
@@ -74,6 +76,8 @@ pub mod issue;
 pub mod join;
 pub mod keyboard;
 pub mod keystore;
+#[cfg(test)]
+mod longrules;
 pub mod manage;
 pub mod media;
 pub mod msg;
@@ -81,6 +85,8 @@ pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;
 pub mod peer;
+#[cfg(test)]
+mod powerloss;
 pub mod records;
 pub mod recovery;
 pub mod release;
@@ -89,6 +95,8 @@ pub mod rule;
 pub mod seal;
 pub mod secret;
 pub mod sheet;
+#[cfg(test)]
+mod sim;
 pub mod slhdsa;
 pub mod store;
 pub mod strict;
