@@ -71,6 +71,12 @@ pub trait Peers: Send + Sync + 'static {
     fn networks(&self) -> Option<Arc<Networks>>;
     /// A pairing window is open.
     fn window_open(&self) -> bool;
+    /// What a pairing window announces as `f` beside `p=1`: the hex of
+    /// the member key's hash, which the new device checks the TLS key by
+    /// (docs/protocol.md, section 3); empty for none.
+    fn window_fingerprint(&self) -> String {
+        String::new()
+    }
     /// Discovery found the device on the home network, or lost it.
     fn found(&self, id: &DeviceId, here: bool);
     /// The devices of the group as their IDs show, sorted.
@@ -1105,12 +1111,16 @@ fn browse_with<P: Peers>(
         // it back first would have the new one probe against the old one's
         // records, which mdns-sd takes for another device's and renames this
         // one ("ID (2)"), which nobody finds by its ID.
+        let fp = if window { node.window_fingerprint() } else { String::new() };
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !dials && !as_phone {
             txt.push(("r", "listen"));
         }
         if window {
             txt.push(("p", "1"));
+            if !fp.is_empty() {
+                txt.push(("f", &fp));
+            }
         }
         let host = format!("{}.", me.host_name());
         let info = match at {

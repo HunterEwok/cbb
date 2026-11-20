@@ -399,6 +399,10 @@ impl Peers for Live {
         self.window_open.load(Ordering::SeqCst)
     }
 
+    fn window_fingerprint(&self) -> String {
+        certs::hex(&self.mesh.own().hash().0)
+    }
+
     fn found(&self, id: &certs::DeviceId, here: bool) {
         let Some(d) = of(id) else { return };
         let mut home = self.home.lock().unwrap();

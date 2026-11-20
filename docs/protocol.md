@@ -390,10 +390,12 @@ TXT strings (each at most 255 bytes):
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
 | `j` | `1` | until the switch to the core (wave 5): present only on a device that listens to join; it has no `g`, so no member dials it as one |
-| `f` | fingerprint | with `p` in 0.6: the hex of the key hash of the member's TLS key, as its window's QR code's `fp` (section 7); with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints") |
+| `f` | fingerprint | with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything; with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
-The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
+A computer or a phone whose pairing window of 0.6 is open publishes `v=1`, `g=<tag>`, `p=1`,
+`f=<key hash>` (`member/src/discovery.rs`), so that a new device that browses for it (the
+Aurora app) dials the one window and checks its key. The Go code publishes them in the order `v=1`, `g=<tag>`, `p=1`; a
 member without `dials` publishes `v=1`, `g=<tag>`, `r=listen`. A receiver MUST ignore keys it does not
 know, MUST match keys without regard to case, and MUST take as the value what follows the first `=`.
 A member MUST NOT dial a peer whose `g` is not its group's tag.
@@ -4062,6 +4064,15 @@ them all off there (design.md, "Quick actions"); `away-off` turns sync away from
 the receiver (section 11), which only its own user turns on again (D-45); `mute` keeps the
 receiver's copies from the group for a while or until `unmute` ends it (design.md, "Muting a
 device").
+
+On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-off`, `action`,
+`actions-off`, `away-off`, `mute` and `unmute` as commands of format section 6
+(`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
+checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
+receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
+carrying the command out went wrong. `hub` and a small device's own command answer that they
+are not on the records of 0.6 yet; `away-off` is done at once, as the member of 0.6 syncs only
+at home.
 
 ### The command
 

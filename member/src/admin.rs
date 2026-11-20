@@ -1713,7 +1713,7 @@ const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists 
 /// Whether the group's key level lets a device whose key is in store be
 /// its root, an admin or a hub, as Go's levelAllows; at the level files a
 /// key in a file needs consent, which hint says how to give.
-fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
+pub(crate) fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
     let msg = match () {
         _ if store == "rootless" => format!(
             "{name} is installed without root, so every program of its user can read its keys; such a device is never the group's root, an admin or a hub (D-79)"

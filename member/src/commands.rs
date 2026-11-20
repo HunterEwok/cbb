@@ -143,6 +143,25 @@ impl Book {
     }
 }
 
+/// The cause of an error with which a member refuses a command it took
+/// (status refused: its user or its settings say no), as against one it
+/// failed to carry out.
+#[derive(Debug)]
+pub struct Refuse;
+
+impl std::fmt::Display for Refuse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the device refuses the command")
+    }
+}
+
+impl std::error::Error for Refuse {}
+
+/// The error that refuses a command, for why.
+pub fn refuse(why: impl Into<String>) -> Error {
+    Error::with(why, Refuse)
+}
+
 /// A command taken: its type, ID, signer and opened orders.
 #[derive(Debug)]
 pub struct Taken {
