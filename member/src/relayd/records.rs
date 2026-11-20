@@ -51,6 +51,26 @@ pub struct Period {
     pub members: Option<Vec<KeyHash>>,
 }
 
+/// What a registration's credentials show of their period, from either
+/// protocol: the key that signed the hubs' credential (the period key),
+/// the hubs' credential's version, and the members' credential's version
+/// with the server keys it lists.
+pub struct Shown {
+    pub signer: KeyHash,
+    pub hubs: u64,
+    pub members: Option<(u64, Vec<KeyHash>)>,
+}
+
+impl From<&Presented> for Shown {
+    fn from(p: &Presented) -> Shown {
+        Shown {
+            signer: p.signer,
+            hubs: p.hubs.version,
+            members: p.members.as_ref().map(|m| (m.version, m.members.clone())),
+        }
+    }
+}
+
 /// Why the relay refuses a device of a group: what the records refuse,
 /// except a stop of the exchange, under which the group's devices still
 /// exchange records through the relay.
@@ -182,13 +202,13 @@ impl Inner {
     /// Checks the credentials p against what the relay holds for their
     /// period: they are of the key that registered it first, and no older
     /// than the ones it saw. It changes nothing; take_period_locked does.
-    pub fn check_period_locked(st: &State, tag: &str, p: &Presented) -> Option<String> {
+    pub fn check_period_locked(st: &State, tag: &str, p: &Shown) -> Option<String> {
         let cur = st.periods.get(tag)?;
-        let members = p.members.as_ref().map_or(0, |m| m.version);
+        let members = p.members.as_ref().map_or(0, |m| m.0);
         if cur.signer != p.signer {
             return Some("another key registered this group's period first".into());
         }
-        if p.hubs.version < cur.hubs || members < cur.members_version {
+        if p.hubs < cur.hubs || members < cur.members_version {
             return Some("the group's credentials are older than ones this relay saw".into());
         }
         None
@@ -196,29 +216,29 @@ impl Inner {
 
     /// The devices of the period tag that the credentials p would leave out
     /// when taken.
-    pub fn leaving_locked(st: &State, tag: &str, p: &Presented) -> Option<Vec<KeyHash>> {
-        let members = p.members.as_ref()?;
+    pub fn leaving_locked(st: &State, tag: &str, p: &Shown) -> Option<Vec<KeyHash>> {
+        let (version, members) = p.members.as_ref()?;
         if let Some(cur) = st.periods.get(tag)
             && cur.members.is_some()
-            && members.version <= cur.members_version
+            && *version <= cur.members_version
         {
             return None;
         }
-        Some(members.members.clone())
+        Some(members.clone())
     }
 
     /// Takes the credentials p, which check_period_locked let through, for
     /// their period; the devices a newer members' credential no longer
     /// lists go.
-    pub fn take_period_locked(&self, st: &mut State, tag: &str, p: &Presented) {
-        let (version, listed) = p.members.as_ref().map_or((0, Vec::new()), |m| (m.version, m.members.clone()));
+    pub fn take_period_locked(&self, st: &mut State, tag: &str, p: &Shown) {
+        let (version, listed) = p.members.clone().unwrap_or_default();
         let cur = st.periods.entry(tag.to_string()).or_insert(Period {
             signer: p.signer,
             hubs: 0,
             members_version: 0,
             members: None,
         });
-        cur.hubs = p.hubs.version;
+        cur.hubs = p.hubs;
         if version > cur.members_version || cur.members.is_none() {
             cur.members_version = version;
             cur.members = Some(listed.clone());

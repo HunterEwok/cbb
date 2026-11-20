@@ -16,6 +16,10 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- The relay takes devices of 0.6 by their own protocol, `cbb-relay/3`, on the same port: a
+  certificate of the server key alone, the format's messages and the period's server
+  credentials only, so it sees no record and no device ID; `-group` names a group of 0.6 by its
+  root and recovery keys. Devices of 0.5 keep `cbb-relay/2` until 0.7.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

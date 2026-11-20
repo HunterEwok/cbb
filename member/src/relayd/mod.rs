@@ -14,8 +14,10 @@ pub mod limits;
 pub mod records;
 pub mod refused;
 pub mod register;
+pub mod register3;
 pub mod server;
 pub mod wire;
+pub mod wire3;
 
 pub use server::{Config, Relay};
 

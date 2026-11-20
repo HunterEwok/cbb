@@ -119,6 +119,7 @@ fn counted(inner: &Inner, from: Option<IpAddr>, share: &Arc<GroupShare>) -> Arc<
         from,
         raw: conn(),
         share: share.clone(),
+        v3: false,
     })
 }
 
@@ -144,6 +145,7 @@ fn fake_member(inner: &Inner, tag: &str, from: Option<IpAddr>) -> Result<Arc<Mem
         from,
         raw: conn(),
         share: inner.share_locked(&st, tag),
+        v3: false,
     });
     inner.admit_locked(&mut st, &m, None)?;
     inner.add_locked(&mut st, &m).map_err(|e| e.to_string())?;

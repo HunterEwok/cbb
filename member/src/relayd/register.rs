@@ -19,7 +19,7 @@ use cbb_core::certs::{self, Cert, Usage};
 use cbb_core::credential::{self, Presented};
 use gotatun::x25519;
 
-use super::records::refused_here;
+use super::records::{Shown, refused_here};
 use super::server::{Inner, Member, spawn};
 use super::wire::{self, Challenge, Claim, MAX_CLAIM, Welcome};
 use crate::error::{Error, Result};
@@ -201,6 +201,9 @@ impl Inner {
         while s.conn.is_handshaking() {
             s.conn.complete_io(&mut s.sock).map_err(|e| Error::msg(format!("relay: {e}")))?;
         }
+        if s.conn.alpn_protocol() == Some(super::wire3::PROTOCOL) {
+            return self.register3(raw, s);
+        }
         if s.conn.alpn_protocol() != Some(crate::relay::PROTOCOL) {
             return Err(Error::msg("relay: the device does not speak the registration protocol"));
         }
@@ -268,6 +271,7 @@ impl Inner {
             from: addr_of(raw),
             raw: raw_clone,
             share,
+            v3: false,
         });
         // The group's registrations that check records take turns, until
         // this one has added its device.
@@ -327,7 +331,8 @@ impl Inner {
         // What was checked before the records may have changed meanwhile.
         let mut refusal = None;
         let mut leaving = None;
-        if let Some(p) = &presented {
+        let shown = presented.as_ref().map(Shown::from);
+        if let Some(p) = &shown {
             refusal = Inner::check_period_locked(&st, &tag, p);
             leaving = Inner::leaving_locked(&st, &tag, p);
         }
@@ -355,7 +360,7 @@ impl Inner {
                 return Err(e);
             }
         };
-        if let Some(p) = &presented {
+        if let Some(p) = &shown {
             self.take_period_locked(&mut st, &tag, p);
         }
         drop(st);

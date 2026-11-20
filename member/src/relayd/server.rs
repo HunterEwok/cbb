@@ -176,6 +176,9 @@ pub(super) struct Member {
     /// Its registration's TCP connection, open while it is registered.
     pub raw: TcpStream,
     pub share: Arc<GroupShare>,
+    /// It registered by the protocol of 0.6 (`wire3`), which its
+    /// connections in the tunnel speak too.
+    pub v3: bool,
 }
 
 /// What changes of a registered device, under the relay's lock.
@@ -252,6 +255,8 @@ impl State {
 pub(super) struct Inner {
     pub cfg: Config,
     pub allowed: Vec<String>,
+    /// The groups of 0.6 the relay serves, by their root and recovery key.
+    pub listed: Vec<super::register3::Listed>,
     pub limits: Limits,
     pub tls: Arc<rustls::ServerConfig>,
     pub hub: Mutex<Option<Hub>>,
@@ -283,7 +288,12 @@ impl Relay {
             }
             _ => {}
         }
+        let mut listed = Vec::new();
         for g in &cfg.groups {
+            if g.contains(':') {
+                listed.push(super::register3::Listed::parse(g)?);
+                continue;
+            }
             if g.len() != 16 || !g.bytes().all(|b| b.is_ascii_hexdigit()) {
                 return Err(Error::msg(format!(
                     "relay: {g:?} is not a group's tag, 16 hex characters as cbb status shows it"
@@ -291,7 +301,11 @@ impl Relay {
             }
         }
         let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
-        let tls = cbb_core::tls::registration_server(&cfg.keys.cert, &cfg.keys.key, crate::relay::PROTOCOL, &clock)?;
+        let mut tls =
+            cbb_core::tls::registration_server(&cfg.keys.cert, &cfg.keys.key, crate::relay::PROTOCOL, &clock)?;
+        // The devices of 0.6 register by their own protocol on the same
+        // port; those of 0.5 keep theirs.
+        tls.alpn_protocols.push(super::wire3::PROTOCOL.to_vec());
         let (tcp, local) = listen(cfg.listen)?;
         let limits = if cfg.open { cfg.limits.with_defaults() } else { Limits::default() };
         let (held, record_bytes) = if cfg.open {
@@ -318,10 +332,11 @@ impl Relay {
             request_wait: REQUEST_TIMEOUT,
             now: None,
         };
-        let allowed = cfg.groups.iter().map(|g| g.to_ascii_lowercase()).collect();
+        let allowed = cfg.groups.iter().filter(|g| !g.contains(':')).map(|g| g.to_ascii_lowercase()).collect();
         let inner = Arc::new(Inner {
             cfg,
             allowed,
+            listed,
             limits,
             tls: Arc::new(tls),
             hub: Mutex::new(None),
@@ -868,7 +883,7 @@ impl Inner {
     /// Reads the request of m's connection c, waiting for it at most wait,
     /// and does what it asks.
     fn serve_stream(self: &Arc<Self>, m: &Arc<Member>, sid: u64, c: TcpStream, wait: Duration) {
-        let req = match wire::read_request(&c, wait) {
+        let req = match if m.v3 { super::wire3::read_request(&c, wait) } else { wire::read_request(&c, wait) } {
             Ok(r) => r,
             Err(_) => {
                 self.free_request(m);
@@ -886,7 +901,7 @@ impl Inner {
             self.serve_answer(m, sid, c, &req.answer);
         } else {
             self.free_request(m);
-            let _ = wire::send_note(&c, &Note::error("an unknown request"), NOTE_TIMEOUT);
+            let _ = Self::note_to(m, &c, &Note::error("an unknown request"));
             self.close_stream(m, sid, &c);
         }
     }
@@ -926,7 +941,7 @@ impl Inner {
             })
             .ok()
         });
-        self.write_notes(&c, &rx, &gone);
+        self.write_notes(m, &c, &rx, &gone);
         let _ = c.shutdown(Shutdown::Both);
         if let Some(r) = reader {
             let _ = r.join();
@@ -941,11 +956,16 @@ impl Inner {
         }
     }
 
-    fn write_notes(&self, c: &TcpStream, rx: &Receiver<Note>, gone: &AtomicBool) {
+    /// Sends a note to m on c, in m's protocol.
+    fn note_to(m: &Member, c: &TcpStream, n: &Note) -> Result<()> {
+        if m.v3 { super::wire3::send_note(c, n, NOTE_TIMEOUT) } else { wire::send_note(c, n, NOTE_TIMEOUT) }
+    }
+
+    fn write_notes(&self, m: &Member, c: &TcpStream, rx: &Receiver<Note>, gone: &AtomicBool) {
         loop {
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(n) => {
-                    if wire::send_note(c, &n, NOTE_TIMEOUT).is_err() {
+                    if Self::note_to(m, c, &n).is_err() {
                         return;
                     }
                 }
@@ -1006,7 +1026,7 @@ impl Inner {
         drop(st);
         self.free_request(m);
         let refuse = |msg: &str| {
-            let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
+            let _ = Self::note_to(m, &c, &Note::error(msg));
             self.close_stream(m, sid, &c);
             if charged {
                 self.free_stream(m);
@@ -1053,8 +1073,8 @@ impl Inner {
                 return;
             }
         };
-        let joined = wire::send_note(&other, &Note { ok: true, ..Note::default() }, NOTE_TIMEOUT).is_ok()
-            && wire::send_note(&c, &Note { ok: true, ..Note::default() }, NOTE_TIMEOUT).is_ok();
+        let joined = Self::note_to(&t, &other, &Note { ok: true, ..Note::default() }).is_ok()
+            && Self::note_to(m, &c, &Note { ok: true, ..Note::default() }).is_ok();
         if joined {
             let _ = c.set_write_timeout(None);
             let _ = other.set_write_timeout(None);
@@ -1087,7 +1107,7 @@ impl Inner {
             }
         }
         drop(st);
-        let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
+        let _ = Self::note_to(m, &c, &Note::error(msg));
         self.close_stream(m, sid, &c);
     }
 }

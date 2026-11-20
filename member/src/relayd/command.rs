@@ -20,7 +20,7 @@ const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] [-refused FI
   -listen ADDRESS  the address to listen on, UDP and TCP (default :8764)
   -key FILE        the relay's keys, made on the first run
   -refused FILE    the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the key; \"none\" refuses none)
-  -group TAGS      the tags of the groups to serve, separated by commas, as cbb status shows them
+  -group TAGS      the groups to serve, separated by commas: a group of 0.5 by its tag, as cbb status shows it; a group of 0.6 by ROOT:RECOVERY:RECOVERY2, its keys in hex
   -open            serve every group that registers, within limits per group and per network, in place of -group
   -show-key        print the key for cbb global relay -key and stop";
 
