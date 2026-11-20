@@ -25,7 +25,7 @@ mod races;
 pub mod xhttp;
 
 pub fn now_ms() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
+    crate::uptime::wall_ms()
 }
 
 pub fn new_key() -> Arc<FileKey> {

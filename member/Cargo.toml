@@ -33,6 +33,11 @@ required-features = ["tunnel"]
 # cbbw.exe, the same program without a console window, which Windows starts
 # at sign-in for the agent (packaging/windows/install.ps1).
 [[bin]]
+name = "cbb-push"
+path = "src/push_main.rs"
+required-features = ["tunnel"]
+
+[[bin]]
 name = "cbbw"
 path = "src/windowless.rs"
 required-features = ["windowless"]
@@ -83,6 +88,10 @@ zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
 hkdf = "0.13"
 aes = "0.9"
+# The push service's way to FCM (src/pushd/fcm.rs): a Google service
+# account's key is RSA, and its OAuth assertion RS256. Signing only, in
+# constant time on crypto-bigint, which the core already brings.
+rsa = { version = "0.10.0", default-features = false, features = ["std", "encoding", "pkcs1v15"] }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 # A YubiKey's management key (src/piv/recovery.rs): Triple DES up to firmware
 # 5.6, AES (the aes above) from 5.7, for the PIV challenge and response only.
@@ -116,6 +125,9 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials", 
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 # The properties of the service's copies: their order, the clock, the rule.
 proptest = { version = "1", default-features = false, features = ["std"] }
+
+# The push tests build registrations, whose key is kept in Zeroizing.
+zeroize = { version = "1.9", default-features = false, features = ["alloc"] }
 
 # Asks for a TXT record from port 5353 in discovery's tests; mdns-sd already
 # brings it.

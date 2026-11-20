@@ -78,10 +78,15 @@ pub mod phone;
 #[cfg(feature = "tunnel")]
 mod phone_attest;
 pub mod piv;
+#[cfg(feature = "tunnel")]
+pub mod push;
+#[cfg(feature = "tunnel")]
+pub mod pushd;
+#[cfg(feature = "tunnel")]
+pub mod pusher;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
-#[cfg(feature = "tunnel")]
 pub mod relayd;
 pub mod releases;
 mod remotepaste;

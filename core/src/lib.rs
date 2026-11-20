@@ -87,6 +87,7 @@ pub mod pair_session;
 pub mod peer;
 #[cfg(test)]
 mod powerloss;
+pub mod push;
 pub mod records;
 pub mod recovery;
 pub mod release;

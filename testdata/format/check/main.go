@@ -1105,6 +1105,7 @@ func main() {
 	checkWave4(dir)
 	checkMember(dir)
 	checkFuture(dir)
+	checkPush(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)

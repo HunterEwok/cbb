@@ -14,12 +14,12 @@
 // other language's file holds the translation of every string under its ID.
 // A place is one of
 //
-//	ios, ios-share, ios-watch, ios-widgets, ios-shortcuts, mac   the String Catalogs, keyed by the English
-//	ios-plist:KEY                                                 the iPhone app's InfoPlist catalog, keyed by KEY
-//	tray                                                          the tray app, keyed by the English
-//	aurora:CONTEXT                                                the Aurora app's Qt context, keyed by the English
-//	android:NAME, wear:NAME                                       the Android app's and the watch's resource NAME
-//	harmony:NAME, harmony-wear:NAME                               the HarmonyOS app's and its watch's string NAME
+//	ios, ios-share, ios-push, ios-watch, ios-widgets, ios-shortcuts, mac   the String Catalogs, keyed by the English
+//	ios-plist:KEY                                                          the iPhone app's InfoPlist catalog, keyed by KEY
+//	tray                                                                   the tray app, keyed by the English
+//	aurora:CONTEXT                                                         the Aurora app's Qt context, keyed by the English
+//	android:NAME, wear:NAME                                                the Android app's and the watch's resource NAME
+//	harmony:NAME, harmony-wear:NAME                                        the HarmonyOS app's and its watch's string NAME
 //
 // Every text is plain: Generate escapes it for Android's resources, the
 // XML of Qt's files and the HarmonyOS app's JSON.
@@ -68,6 +68,7 @@ var catalogs = map[string]string{
 	"ios-shortcuts": "apps/ios/CBB/Resources/AppShortcuts.xcstrings",
 	"ios-plist":     "apps/ios/CBB/Resources/InfoPlist.xcstrings",
 	"ios-share":     "apps/ios/ShareExtension/Localizable.xcstrings",
+	"ios-push":      "apps/ios/NotificationService/Localizable.xcstrings",
 	"ios-watch":     "apps/ios/Watch/Localizable.xcstrings",
 	"ios-widgets":   "apps/ios/Widgets/Localizable.xcstrings",
 	"mac":           "apps/macos/CBBMac/Resources/Localizable.xcstrings",
@@ -108,7 +109,7 @@ var androidName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 func place(p string) (kind, key string, err error) {
 	kind, key, _ = strings.Cut(p, ":")
 	switch kind {
-	case "ios", "ios-shortcuts", "ios-share", "ios-watch", "ios-widgets", "mac", "tray":
+	case "ios", "ios-shortcuts", "ios-share", "ios-push", "ios-watch", "ios-widgets", "mac", "tray":
 		if key != "" {
 			return "", "", fmt.Errorf("place %q takes no key", p)
 		}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- What only the F-Droid build has (docs/apps.md, "F-Droid"); the build merges it into src/main's. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Push while the app is closed: the UnifiedPush distributor's events (PushPlatform). -->
+        <service
+            android:name=".PushMessages"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

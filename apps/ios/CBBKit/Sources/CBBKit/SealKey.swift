@@ -23,8 +23,9 @@ public enum SealKey {
 
     static let service = "tools.cbb.seal"
 
+    /// In the app's own access group, never the push group's.
     private static func query(_ account: String) -> [CFString: Any] {
-        [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]
+        KeychainIdentity.inGroup([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account])
     }
 
     /// The secret under account, made and kept on its first use.
