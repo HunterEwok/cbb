@@ -373,8 +373,44 @@ final class LiveGroup: GroupController {
     func refresh() async {
         take(peers: (try? node?.peers()) ?? [])
         pullRecords()
+        if let n = node, let ns = try? n.notices() { notices = ns }
         entries.reload()
         await finishTakeOverIfDue()
+    }
+
+    // MARK: The group in 0.6
+
+    /// The member's notices about the group, as the last refresh read them.
+    private(set) var notices: [Notice] = []
+
+    /// The change of root the member told of last, until the person saw it.
+    private(set) var rootChanged: AppModel.RootChange?
+
+    func dismissNotice(_ id: String) async throws {
+        guard let n = node else { throw Failure.unreachable }
+        try n.dismiss(id)
+        notices = (try? n.notices()) ?? notices.filter { $0.id != id }
+    }
+
+    func rootChangeSeen() { rootChanged = nil }
+
+    /// A device's name as the group's devices show it, else its ID.
+    private func name(of id: String) -> String { devices.first { $0.id == id }?.name ?? id }
+
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview {
+        guard let n = node else { throw Failure.unreachable }
+        return try n.changePreview(recovery, leaveOut: leaveOut)
+    }
+
+    /// Moves the group's root to this phone (docs/design.md, "Changing the
+    /// root"): a new root key in the Secure Enclave behind Face ID, and the
+    /// member signs the change with the recovery key and the new root's
+    /// first records with that key.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws {
+        guard let n = node else { throw Failure.unreachable }
+        let root = try await newRootKey(reason: String(localized: "Make this phone the group's main device", bundle: .app))
+        try n.changeRoot(recovery, leaveOut: leaveOut, rootPublic: root.publicKeyDER, overWaiting: overWaiting) { try root.signature(digest: $0) }
+        notices = (try? n.notices()) ?? notices
     }
 
     /// Keeps what the connected members' hellos and reach messages say.
@@ -2025,6 +2061,12 @@ final class LiveGroup: GroupController {
             // The core kept the certificate an admin renewed for this phone;
             // the app renews its own (renewOwnCertificate) and keeps that.
             syncLog.notice("the member got a renewed certificate or a new root")
+        case let .rootChanged(from, to, seq):
+            // Every device shows it, and nobody turns it off.
+            rootChanged = AppModel.RootChange(from: name(of: from), to: name(of: to), seq: seq)
+            Task { await refresh() }
+        case .state, .notice:
+            Task { await refresh() }
         default:
             break
         }

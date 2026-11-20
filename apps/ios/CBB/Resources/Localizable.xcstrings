@@ -369,6 +369,52 @@
         }
       }
     },
+    "%@ is now the group's main device, in place of %@.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أصبح %@ الآن الجهاز الرئيسي للمجموعة بدلًا من %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ es ahora el dispositivo principal del grupo, en lugar de %@."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ הוא עכשיו המכשיר הראשי של הקבוצה, במקום %@."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ अब %2$@ की जगह समूह का मुख्य डिवाइस है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ теперь главное устройство группы вместо %@."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ sasa ni kifaa kikuu cha kikundi, mahali pa %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 现在是群组的主设备，取代了 %2$@。"
+          }
+        }
+      }
+    },
     "%@ joined the group.": {
       "localizations": {
         "ar": {
@@ -599,6 +645,52 @@
         }
       }
     },
+    "%@ was removed before the main device changed, and counts again now: remove it again if it should not be in the group.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُزيل %@ قبل تغيير الجهاز الرئيسي، وصار يُحسب مجددًا الآن: أزله مرة أخرى إن لم يكن مكانه في المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ se quitó antes de que cambiara el dispositivo principal y ahora vuelve a contar: quítalo de nuevo si no debe estar en el grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ הוסר לפני שהמכשיר הראשי השתנה, ועכשיו הוא נספר שוב: הסירו אותו שוב אם הוא לא אמור להיות בקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को मुख्य डिवाइस बदलने से पहले हटाया गया था, और अब फिर गिना जाता है: अगर इसे समूह में नहीं होना चाहिए तो फिर से हटाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ было удалено до смены главного устройства и теперь снова считается: удалите его снова, если ему не место в группе."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kiliondolewa kabla kifaa kikuu hakijabadilika, na sasa kinahesabiwa tena: kiondoe tena ikiwa hakipaswi kuwa kwenye kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 在主设备更换前已被移除，现在又被计入：如果它不该在群组里，请再次移除。"
+          }
+        }
+      }
+    },
     "%@ was removed from the group.": {
       "localizations": {
         "ar": {
@@ -691,6 +783,52 @@
         }
       }
     },
+    "%lld of %lld devices are connected now. The others learn of the change when they connect. An unticked device is removed, and joins again only as a new device.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld من %lld أجهزة متصلة الآن. تعلم الأجهزة الأخرى بالتغيير عند اتصالها. يُزال الجهاز غير المحدد، ولا ينضم مجددًا إلا كجهاز جديد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora hay %lld de %lld dispositivos conectados. Los demás sabrán del cambio cuando se conecten. Un dispositivo sin marcar se quita y solo vuelve a unirse como dispositivo nuevo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld מתוך %lld מכשירים מחוברים עכשיו. האחרים יידעו על השינוי כשיתחברו. מכשיר שלא מסומן מוסר, וחוזר רק כמכשיר חדש."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अभी %2$lld में से %1$lld डिवाइस जुड़े हैं। बाकी जुड़ने पर बदलाव के बारे में जानेंगे। बिना टिक वाला डिवाइस हटा दिया जाता है, और केवल नए डिवाइस के रूप में फिर जुड़ सकता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сейчас подключено %lld из %lld устройств. Остальные узнают о смене, когда подключатся. Устройство без галочки удаляется и вернётся только как новое."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa %lld kati ya %lld vimeunganishwa sasa. Vingine vitajua mabadiliko vikiunganishwa. Kifaa kisichowekewa alama kinaondolewa, na kinajiunga tena kama kifaa kipya tu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在 %2$lld 台设备中有 %1$lld 台已连接。其他设备连接时会得知这次更换。未勾选的设备会被移除，只能作为新设备重新加入。"
+          }
+        }
+      }
+    },
     "%lld of %lld online": {
       "localizations": {
         "ar": {
@@ -779,6 +917,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组主设备的更换正在传来。"
+          }
+        }
+      }
+    },
+    "A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيير للجهاز الرئيسي في الطريق بالفعل، ولم تصل كل سجلاته بعد. اتصل بأجهزتك أولًا؛ ولا تكتب فوقه إلا إذا كان ذلك التغيير لن يصل أبدًا، مثلًا لأن الهاتف الذي أجراه قد فُقد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य डिवाइस का एक बदलाव पहले से रास्ते में है, और उसके सारे रिकॉर्ड अभी नहीं आए हैं। पहले अपने डिवाइस से जुड़ें; उसके ऊपर तभी लिखें जब वह बदलाव कभी नहीं आएगा, जैसे कि उसे करने वाला फ़ोन खो गया हो।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mabadiliko ya kifaa kikuu tayari yako njiani, na rekodi zake hazijafika zote. Unganisha vifaa vyako kwanza; andika juu yake tu ikiwa mabadiliko hayo hayatafika kamwe, kwa mfano kwa sababu simu iliyoyafanya imepotea."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一次主设备更换已在途中，其记录尚未全部到达。请先连接你的设备；只有在那次更换永远不会到达时才覆盖它，例如发起它的手机已丢失。"
           }
         }
       }
@@ -7180,6 +7364,52 @@
         }
       }
     },
+    "Hide": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخفاء"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסתרה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "छिपाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ficha"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏"
+          }
+        }
+      }
+    },
     "Hold the YubiKey": {
       "localizations": {
         "ar": {
@@ -10860,6 +11090,98 @@
         }
       }
     },
+    "Make this phone the group's main device": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل هذا الهاتف الجهاز الرئيسي للمجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer de este teléfono el dispositivo principal del grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להפוך את הטלפון הזה למכשיר הראשי של הקבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन को समूह का मुख्य डिवाइस बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать этот телефон главным устройством группы"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya simu hii kuwa kifaa kikuu cha kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把这部手机设为群组的主设备"
+          }
+        }
+      }
+    },
+    "Make this phone the main device": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل هذا الهاتف الجهاز الرئيسي"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer de este teléfono el dispositivo principal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להפוך את הטלפון הזה למכשיר הראשי"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन को मुख्य डिवाइस बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать этот телефон главным устройством"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya simu hii kuwa kifaa kikuu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把这部手机设为主设备"
+          }
+        }
+      }
+    },
     "Meet at this relay": {
       "localizations": {
         "ar": {
@@ -11270,6 +11592,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "用群组的恢复密钥把群组移到新的主设备。"
+          }
+        }
+      }
+    },
+    "Move the group to this phone": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقل المجموعة إلى هذا الهاتف"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasar el grupo a este teléfono"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להעביר את הקבוצה לטלפון הזה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह को इस फ़ोन पर ले आएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенести группу на этот телефон"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hamishia kikundi kwenye simu hii"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把群组移到这部手机"
           }
         }
       }
@@ -12102,6 +12470,52 @@
         }
       }
     },
+    "Next": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التالي"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הבא"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आगे"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Далее"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endelea"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步"
+          }
+        }
+      }
+    },
     "No YubiKey was held to the phone. Try again.": {
       "localizations": {
         "ar": {
@@ -12466,6 +12880,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "五分钟内没有手机扫描代码。请重试。"
+          }
+        }
+      }
+    },
+    "No word from the admin %@ for a long time: its admin rights end in %lld days unless it connects.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أخبار من المشرف %@ منذ وقت طويل: تنتهي صلاحياته كمشرف بعد %lld يومًا ما لم يتصل."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay noticias del administrador %@ desde hace mucho: sus derechos de administrador terminan en %lld días si no se conecta."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אין חדשות מהמנהל %@ כבר זמן רב: הרשאות הניהול שלו יסתיימו בעוד %lld ימים אם לא יתחבר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन %1$@ से बहुत समय से कोई खबर नहीं: अगर वह नहीं जुड़ता तो उसके एडमिन अधिकार %2$lld दिनों में खत्म हो जाएँगे।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От администратора %@ давно нет вестей: его права администратора закончатся через %lld дн., если он не подключится."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna habari kutoka kwa msimamizi %@ kwa muda mrefu: haki zake za msimamizi zinaisha baada ya siku %lld isipounganishwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理员 %1$@ 已很久没有消息：除非它连接，否则其管理员权限将在 %2$lld 天后结束。"
+          }
+        }
+      }
+    },
+    "No word from the admin %@ for a long time: its admin rights end now.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أخبار من المشرف %@ منذ وقت طويل: تنتهي صلاحياته كمشرف الآن."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay noticias del administrador %@ desde hace mucho: sus derechos de administrador terminan ahora."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אין חדשות מהמנהל %@ כבר זמן רב: הרשאות הניהול שלו מסתיימות עכשיו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन %@ से बहुत समय से कोई खबर नहीं: उसके एडमिन अधिकार अभी खत्म होते हैं।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От администратора %@ давно нет вестей: его права администратора заканчиваются сейчас."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna habari kutoka kwa msimamizi %@ kwa muda mrefu: haki zake za msimamizi zinaisha sasa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理员 %@ 已很久没有消息：其管理员权限现在结束。"
           }
         }
       }
@@ -12880,6 +13386,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "应用关闭时通知我"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حسنًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceptar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אישור"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ठीक है"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sawa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
           }
         }
       }
@@ -13662,6 +14214,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "只有管理员手机可以执行此操作。"
+          }
+        }
+      }
+    },
+    "Only the recovery key changes the main device, and nothing undoes it. Leave the group on each of your devices, then make a new group and join them to it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وحده مفتاح الاسترداد يغيّر الجهاز الرئيسي، ولا شيء يتراجع عن ذلك. غادر المجموعة على كل جهاز من أجهزتك، ثم أنشئ مجموعة جديدة وضمّها إليها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo la clave de recuperación cambia el dispositivo principal, y nada lo deshace. Sal del grupo en cada uno de tus dispositivos; luego crea un grupo nuevo y únelos a él."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רק מפתח השחזור משנה את המכשיר הראשי, ושום דבר לא מבטל זאת. צאו מהקבוצה בכל אחד מהמכשירים שלכם, ואז צרו קבוצה חדשה וצרפו אותם אליה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "केवल रिकवरी कुंजी ही मुख्य डिवाइस बदलती है, और कुछ भी इसे पलट नहीं सकता। अपने हर डिवाइस पर समूह छोड़ें, फिर नया समूह बनाएँ और उन्हें उसमें जोड़ें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Только ключ восстановления меняет главное устройство, и ничто это не отменяет. Выйдите из группы на каждом своём устройстве, затем создайте новую группу и подключите их к ней."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufunguo wa urejeshaji pekee ndio hubadilisha kifaa kikuu, na hakuna kinachotengua hilo. Ondoka kwenye kikundi kwenye kila kifaa chako, kisha unda kikundi kipya na uviunganishe nacho."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有恢复密钥能更换主设备，且无法撤销。请在你的每台设备上退出群组，然后新建一个群组并让它们加入。"
           }
         }
       }
@@ -15874,6 +16472,98 @@
         }
       }
     },
+    "Removals that wait for admins fill %@ of the main device's room for records: bring those admins online.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغل عمليات الإزالة التي تنتظر المشرفين %@ من مساحة الجهاز الرئيسي للسجلات: اجعل هؤلاء المشرفين متصلين."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las eliminaciones que esperan a administradores ocupan %@ del espacio del dispositivo principal para registros: conecta a esos administradores."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסרות שממתינות למנהלים תופסות %@ מהמקום של המכשיר הראשי לרשומות: חברו את המנהלים האלה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एडमिन का इंतज़ार करते हटाने मुख्य डिवाइस की रिकॉर्ड जगह का %@ भरते हैं: उन एडमिन को ऑनलाइन लाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удаления, ждущие администраторов, занимают %@ места главного устройства для записей: подключите этих администраторов."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uondoaji unaosubiri wasimamizi unajaza %@ ya nafasi ya kifaa kikuu kwa rekodi: waunganishe wasimamizi hao."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待管理员的移除操作占用了主设备记录空间的 %@：请让这些管理员上线。"
+          }
+        }
+      }
+    },
+    "Removals wait until every admin has seen them.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنتظر عمليات الإزالة حتى يراها كل مشرف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las eliminaciones esperan hasta que todos los administradores las hayan visto."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הסרות ממתינות עד שכל מנהל יראה אותן."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हटाना तब तक रुका रहता है जब तक हर एडमिन उसे देख न ले।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удаления ждут, пока их не увидит каждый администратор."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uondoaji unasubiri hadi kila msimamizi auone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除操作会等到每位管理员都看到为止。"
+          }
+        }
+      }
+    },
     "Remove": {
       "localizations": {
         "ar": {
@@ -16146,6 +16836,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除恢复密钥？"
+          }
+        }
+      }
+    },
+    "Removed": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُزال"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitado"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מוסר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हटाया जाएगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалено"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinaondolewa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移除"
+          }
+        }
+      }
+    },
+    "Removed earlier": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُزيل سابقًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitado antes"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הוסר קודם"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पहले हटाया गया"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалено раньше"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liliondolewa awali"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此前已移除"
           }
         }
       }
@@ -17530,6 +18312,52 @@
         }
       }
     },
+    "Scan the code on the group's recovery sheet, or type its text. The key stays on this phone only for this change.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح الرمز الموجود على ورقة استرداد المجموعة أو اكتب نصه. يبقى المفتاح على هذا الهاتف لهذا التغيير فقط."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanea el código de la hoja de recuperación del grupo o escribe su texto. La clave se queda en este teléfono solo para este cambio."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "סרקו את הקוד שבדף השחזור של הקבוצה, או הקלידו את הטקסט שלו. המפתח נשאר בטלפון הזה רק לצורך השינוי הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी शीट पर दिया कोड स्कैन करें, या उसका पाठ टाइप करें। कुंजी इस फ़ोन पर केवल इस बदलाव के लिए रहती है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отсканируйте код с листа восстановления группы или введите его текст. Ключ остаётся на этом телефоне только на время этой смены."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changanua msimbo ulio kwenye karatasi ya urejeshaji ya kikundi, au andika maandishi yake. Ufunguo unabaki kwenye simu hii kwa mabadiliko haya tu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描群组恢复纸上的二维码，或输入其文字。密钥只为这次更换留在这部手机上。"
+          }
+        }
+      }
+    },
     "Search devices": {
       "localizations": {
         "ar": {
@@ -18358,6 +19186,52 @@
         }
       }
     },
+    "Someone has the group's recovery key": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شخص ما لديه مفتاح استرداد المجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alguien tiene la clave de recuperación del grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "למישהו יש את מפתח השחזור של הקבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी के पास समूह की रिकवरी कुंजी है"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У кого-то есть ключ восстановления группы"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mtu fulani ana ufunguo wa urejeshaji wa kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有人拿到了群组的恢复密钥"
+          }
+        }
+      }
+    },
     "Something in CBB broke. It started again.": {
       "localizations": {
         "ar": {
@@ -18584,6 +19458,190 @@
           "stringUnit": {
             "state": "translated",
             "value": "创建一个群组或加入一个群组。"
+          }
+        }
+      }
+    },
+    "Stays": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يبقى"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se queda"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשאר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रहेगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остаётся"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinabaki"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留下"
+          }
+        }
+      }
+    },
+    "Stays, and stays an admin": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يبقى، ويبقى مشرفًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se queda, y sigue siendo administrador"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשאר, ונשאר מנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रहेगा, और एडमिन बना रहेगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остаётся и остаётся администратором"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinabaki, na kinabaki msimamizi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留下，仍是管理员"
+          }
+        }
+      }
+    },
+    "Stays, frozen until you unfreeze it": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يبقى، مجمّدًا حتى تلغي تجميده"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se queda, congelado hasta que lo descongeles"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשאר, מוקפא עד שתפשירו אותו"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रहेगा, जब तक आप अनफ़्रीज़ न करें तब तक फ़्रीज़ रहेगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остаётся, заморожено, пока вы его не разморозите"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinabaki, kimegandishwa hadi ukiyeyushe"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留下，冻结到你解冻为止"
+          }
+        }
+      }
+    },
+    "Stays, no longer an admin: make it an admin again later": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يبقى، لكنه لم يعد مشرفًا: اجعله مشرفًا مرة أخرى لاحقًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se queda, ya sin ser administrador: hazlo administrador de nuevo más tarde"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "נשאר, אבל כבר לא מנהל: הפכו אותו למנהל שוב מאוחר יותר"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रहेगा, पर एडमिन नहीं रहेगा: बाद में फिर से एडमिन बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остаётся, но уже не администратор: сделайте его администратором позже"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinabaki, si msimamizi tena: kifanye msimamizi tena baadaye"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留下，但不再是管理员：之后可再设为管理员"
           }
         }
       }
@@ -21854,6 +22912,52 @@
         }
       }
     },
+    "The frozen admin %@ holds removals back: unfreeze it or remove it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المشرف المجمّد %@ يؤخر عمليات الإزالة: ألغِ تجميده أو أزله."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El administrador congelado %@ retiene las eliminaciones: descongélalo o quítalo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המנהל המוקפא %@ מעכב הסרות: הפשירו אותו או הסירו אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फ़्रीज़ किया गया एडमिन %@ हटाने को रोक रहा है: उसे अनफ़्रीज़ करें या हटाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Замороженный администратор %@ задерживает удаления: разморозьте его или удалите."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Msimamizi aliyegandishwa %@ anazuia uondoaji: kiyeyushe au kiondoe."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被冻结的管理员 %@ 阻碍了移除操作：请解冻或移除它。"
+          }
+        }
+      }
+    },
     "The group has records of a newer version.": {
       "localizations": {
         "ar": {
@@ -22544,6 +23648,52 @@
         }
       }
     },
+    "The group's main device changed": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر الجهاز الرئيسي للمجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El dispositivo principal del grupo cambió"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הראשי של הקבוצה השתנה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का मुख्य डिवाइस बदल गया"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Главное устройство группы сменилось"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kikuu cha kikundi kimebadilika"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的主设备已更换"
+          }
+        }
+      }
+    },
     "The group's owner decides on its alerts.": {
       "localizations": {
         "ar": {
@@ -22632,6 +23782,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的记录已停止交换。"
+          }
+        }
+      }
+    },
+    "The group's recovery key is not saved yet: without it, losing this phone means making the group again.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُحفظ مفتاح استرداد المجموعة بعد: بدونه، فقدان هذا الهاتف يعني إنشاء المجموعة من جديد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave de recuperación del grupo aún no está guardada: sin ella, perder este teléfono significa crear el grupo de nuevo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתח השחזור של הקבוצה עדיין לא נשמר: בלעדיו, אובדן הטלפון הזה פירושו ליצור את הקבוצה מחדש."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी कुंजी अभी सहेजी नहीं गई है: इसके बिना यह फ़ोन खोने का मतलब है समूह फिर से बनाना।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления группы ещё не сохранён: без него потеря этого телефона означает создавать группу заново."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufunguo wa urejeshaji wa kikundi bado haujahifadhiwa: bila huo, kupoteza simu hii kunamaanisha kuunda kikundi upya."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的恢复密钥尚未保存：没有它，丢失这部手机就意味着要重新建立群组。"
           }
         }
       }
@@ -23832,6 +25028,52 @@
         }
       }
     },
+    "The recovery key's text, as on the sheet": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نص مفتاح الاسترداد كما في الورقة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto de la clave de recuperación, como en la hoja"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטקסט של מפתח השחזור, כמו בדף"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिकवरी कुंजी का पाठ, जैसा शीट पर है"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст ключа восстановления, как на листе"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maandishi ya ufunguo wa urejeshaji, kama yalivyo kwenye karatasi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复密钥的文字，与纸上一致"
+          }
+        }
+      }
+    },
     "The relay does not take this phone. Check its address and key.": {
       "localizations": {
         "ar": {
@@ -24472,6 +25714,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "此 YubiKey 的管理密钥不是出厂密钥，因此应用无法在其中存放密钥。请改用打印的恢复单。"
+          }
+        }
+      }
+    },
+    "This cannot be undone. Face ID confirms it, and the group's devices follow this phone as soon as they connect.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن التراجع عن هذا. يؤكده Face ID، وتتبع أجهزة المجموعة هذا الهاتف فور اتصالها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto no se puede deshacer. Face ID lo confirma, y los dispositivos del grupo siguen a este teléfono en cuanto se conectan."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אי אפשר לבטל את זה. Face ID מאשר זאת, ומכשירי הקבוצה עוברים לטלפון הזה ברגע שהם מתחברים."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसे पलटा नहीं जा सकता। Face ID इसकी पुष्टि करता है, और समूह के डिवाइस जुड़ते ही इस फ़ोन का अनुसरण करते हैं।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это нельзя отменить. Face ID подтверждает, и устройства группы переходят к этому телефону, как только подключатся."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hili haliwezi kutenduliwa. Face ID inalithibitisha, na vifaa vya kikundi vinafuata simu hii mara tu vinapounganishwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作无法撤销。由面容 ID 确认，群组的设备一连接就会跟随这部手机。"
           }
         }
       }
@@ -25856,6 +27144,52 @@
         }
       }
     },
+    "This phone has a removal to confirm; it does so with your next admin action.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono tiene una eliminación que confirmar; lo hace con tu próxima acción de administrador."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לטלפון הזה יש הסרה לאשר; הוא יעשה זאת בפעולת הניהול הבאה שלכם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii ina uondoaji wa kuthibitisha; itafanya hivyo kwa hatua yako ijayo ya msimamizi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机有一项移除待确认；它会在你下一次管理操作时确认。"
+          }
+        }
+      }
+    },
     "This phone holds the group's root, and the group has other devices: %@. Remove them first, or let an admin phone take the group over.": {
       "localizations": {
         "ar": {
@@ -26174,6 +27508,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机已加入群组。离家时它通过群组的中心节点同步。"
+          }
+        }
+      }
+    },
+    "This phone is now the group's main device. The other devices hear of it as soon as they connect.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الهاتف هو الآن الجهاز الرئيسي للمجموعة. تعلم الأجهزة الأخرى بذلك فور اتصالها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este teléfono es ahora el dispositivo principal del grupo. Los demás dispositivos se enteran en cuanto se conectan."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הטלפון הזה הוא עכשיו המכשיר הראשי של הקבוצה. המכשירים האחרים יידעו על כך ברגע שיתחברו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह फ़ोन अब समूह का मुख्य डिवाइस है। बाकी डिवाइस जुड़ते ही इसके बारे में जानेंगे।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Этот телефон теперь главное устройство группы. Остальные устройства узнают об этом, как только подключатся."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Simu hii sasa ni kifaa kikuu cha kikundi. Vifaa vingine vitajua mara tu vinapounganishwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这部手机现在是群组的主设备。其他设备一连接就会得知。"
           }
         }
       }
@@ -26634,6 +28014,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机自己的密钥未经验证，因此群组暂时不能要求经验证的密钥。"
+          }
+        }
+      }
+    },
+    "This wasn't me": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم أكن أنا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No fui yo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "זה לא הייתי אני"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह मैंने नहीं किया"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это был не я"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si mimi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不是我做的"
           }
         }
       }
@@ -28708,6 +30134,52 @@
         }
       }
     },
+    "Who stays in the group": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يبقى في المجموعة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quién se queda en el grupo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מי נשאר בקבוצה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह में कौन रहेगा"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кто остаётся в группе"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nani anabaki kwenye kikundi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "谁留在群组里"
+          }
+        }
+      }
+    },
     "Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.": {
       "localizations": {
         "ar": {
@@ -28842,6 +30314,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "拥有自己的密钥后，手表可以冻结管理员电脑、移除非管理员设备，并关闭远程粘贴、快捷操作和离家同步。它需要密码和手腕检测。请先在手表上打开 CBB。"
+          }
+        }
+      }
+    },
+    "With the group's recovery key, this phone becomes the main device, for example when the old one is lost.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بمفتاح استرداد المجموعة، يصبح هذا الهاتف الجهاز الرئيسي، مثلًا عند فقدان الجهاز السابق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con la clave de recuperación del grupo, este teléfono pasa a ser el dispositivo principal, por ejemplo cuando se pierde el anterior."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בעזרת מפתח השחזור של הקבוצה, הטלפון הזה הופך למכשיר הראשי, למשל כשהקודם אבד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी कुंजी से यह फ़ोन मुख्य डिवाइस बन जाता है, जैसे जब पुराना खो जाए।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "С ключом восстановления группы этот телефон становится главным устройством, например когда прежнее потеряно."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwa ufunguo wa urejeshaji wa kikundi, simu hii inakuwa kifaa kikuu, kwa mfano kifaa cha zamani kikipotea."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用群组的恢复密钥，这部手机可以成为主设备，例如旧的主设备丢失时。"
+          }
+        }
+      }
+    },
+    "Write a new change over it": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب تغييرًا جديدًا فوقه"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir un cambio nuevo encima"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לכתוב מעליו שינוי חדש"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उसके ऊपर नया बदलाव लिखें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записать поверх новую смену"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andika mabadiliko mapya juu yake"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用新的更换覆盖它"
           }
         }
       }

@@ -245,6 +245,36 @@ suggests making a second phone an admin.
 Errors are one line in plain words with the next step ("Turn on the computer that holds
 the group", not a status code), never a dialog that must be dismissed.
 
+### Notices
+
+The member keeps a short list of things the person should know about the group's records
+(its `notices`), and Home shows each in a sentence of the app's own, under the alerts: a
+change of the main device on its way, an admin that has been silent so long that its admin
+rights end soon (35 days in all), removals waiting until every admin has seen them and how
+much of the main device's room they take, a removal this phone still has to confirm, a frozen
+admin that holds removals back, a checkpoint waiting for records no device passed on, a device
+removed before the main device changed that counts again, and a recovery key not saved yet.
+A notice the member marks as one that may be hidden has a button that hides it; the others
+stay until what they say is over. A kind the app does not know is not shown.
+
+### Changing the main device
+
+Only the group's recovery key changes the main device, and it does so at once. On a phone
+that is not the main device, Settings, under the recovery key, offers "Move the group to this
+phone". The person scans the code on the recovery sheet or types its text; the key stays on
+the phone only for this change. The core then writes the list of who stays, one row per
+device with what the change does to it (stays, stays an admin, stays without its admin
+rights, stays frozen until the new main device unfreezes it, removed, or removed earlier).
+The person only unticks devices; each unticked device is removed in the same act, and the old
+main device starts unticked. When another change is already on its way and its records have
+not all arrived, the list says so, and the change is written over it only after the person
+turns that on. Face ID confirms the change; it cannot be undone.
+
+Every device of the group then shows, until the person has seen it, that the main device
+changed, which device it is now and which it replaces, with "This wasn't me". That button
+explains that someone has the recovery key and offers to leave the group: nothing undoes a
+change of the main device, so the way out is a new group.
+
 ## Why it does not sync
 
 A screen in the advanced settings of every app (the iPhone, Android, Aurora, the Mac and the

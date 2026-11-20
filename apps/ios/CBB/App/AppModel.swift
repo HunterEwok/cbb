@@ -161,9 +161,33 @@ protocol GroupController: AnyObject {
     func setRelay(address: String, pin: String) async throws
     /// Why the phone does not sync, the reason that stops the most first.
     func why() async -> [WhyReason]
+    /// The member's notices about the group (docs/apps.md, "Notices"),
+    /// newest first.
+    var notices: [Notice] { get }
+    /// Hides a notice until something about it changes.
+    func dismissNotice(_ id: String) async throws
+    /// The last change of the group's root the member told of, until the
+    /// person has seen it.
+    var rootChanged: AppModel.RootChange? { get }
+    /// The person saw the change of root.
+    func rootChangeSeen()
+    /// Who stays after moving the group's root to this phone with the
+    /// recovery key, before anything is signed; leaveOut are the devices
+    /// the person unticked.
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview
+    /// Moves the group's root to this phone with the recovery key: a new
+    /// root key in the Secure Enclave, Face ID, and leaveOut removed in the
+    /// same act; overWaiting writes over a change whose records never came.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws
 }
 
 extension GroupController {
+    var notices: [Notice] { [] }
+    func dismissNotice(_ id: String) async throws {}
+    var rootChanged: AppModel.RootChange? { nil }
+    func rootChangeSeen() {}
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview { throw LiveGroup.Failure.noGroup }
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws { throw LiveGroup.Failure.noGroup }
     /// A stand-in tag for the tests' and previews' groups.
     var groupTag: String? { hasGroup ? "group" : nil }
     func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
@@ -422,6 +446,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var keyLevel: String?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
+    /// The member's notices about the group, newest first.
+    @Published private(set) var notices: [Notice] = []
+    /// A change of the group's root the person has not seen yet.
+    @Published private(set) var rootChanged: RootChange?
+
+    /// A change of the group's root, as the notice on every device shows
+    /// it: the old and the new root's names, and the change's step.
+    struct RootChange: Equatable, Sendable {
+        var from: String
+        var to: String
+        var seq: UInt64
+    }
     /// Whether the group's root handed the group to this phone, which may
     /// take it now.
     @Published private(set) var handedOver = false
@@ -1026,6 +1062,8 @@ final class AppModel: ObservableObject {
         handedOver = group.handedOver
         removed = group.removed
         recoveryMade = group.recoveryMade
+        notices = group.notices
+        rootChanged = group.rootChanged
         keyLevel = group.keyLevel
         incomingMS = group.incomingMS
         await refreshAway()
@@ -1320,6 +1358,48 @@ final class AppModel: ObservableObject {
         }
         devices = group.devices
         alerts = group.alerts
+    }
+
+    /// Hides a notice until something about it changes.
+    func dismiss(notice: Notice) async {
+        do {
+            try await group.dismissNotice(notice.id)
+        } catch {
+            message = Self.describe(error)
+        }
+        notices = group.notices
+    }
+
+    /// The person saw the change of the group's root.
+    func rootChangeSeen() {
+        group.rootChangeSeen()
+        rootChanged = nil
+    }
+
+    /// Who stays after moving the group's root to this phone; nil, with
+    /// the message set, when the key does not fit or the member refuses.
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async -> ChangePreview? {
+        do {
+            return try await group.changePreview(recovery, leaveOut: leaveOut)
+        } catch {
+            message = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Moves the group's root to this phone; true once it is the root.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async -> Bool {
+        busy = true
+        defer { busy = false }
+        do {
+            try await group.changeRoot(recovery, leaveOut: leaveOut, overWaiting: overWaiting)
+            message = String(localized: "This phone is now the group's main device. The other devices hear of it as soon as they connect.", bundle: .app)
+            await refresh()
+            return true
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
     }
 
     /// Takes the group the root handed to this phone (cbb handover), after

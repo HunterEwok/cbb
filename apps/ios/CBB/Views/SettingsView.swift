@@ -29,6 +29,8 @@ struct SettingsView: View {
     @State private var relayKey = ""
     /// Whether the question about what a relay learns is showing.
     @State private var askingRelay = false
+    /// Whether the change of the main device to this phone is showing.
+    @State private var changeRoot = false
     /// Taps on the version; seven show the error details switch, as
     /// Android's build number shows its developer options.
     @State private var versionTaps = 0
@@ -54,6 +56,15 @@ struct SettingsView: View {
             }
             if shows(.recovery), model.isRoot {
                 RecoverySection()
+            }
+            if shows(.recovery), !model.isRoot, model.phase == .home {
+                Section {
+                    Button { changeRoot = true } label: { Text("Move the group to this phone") }
+                        .accessibilityIdentifier("change-root")
+                } footer: {
+                    Text("With the group's recovery key, this phone becomes the main device, for example when the old one is lost.")
+                }
+                .listRowBackground(palette.surface)
             }
             if part == nil {
                 Section {
@@ -99,6 +110,7 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(AppBackground())
         .navigationTitle(part?.title ?? Text("Settings"))
+        .sheet(isPresented: $changeRoot) { ChangeRootView() }
         .task {
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
