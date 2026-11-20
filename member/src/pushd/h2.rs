@@ -288,7 +288,7 @@ impl<S: Read + Write> Conn<S> {
     ) -> Result<()> {
         match kind {
             SETTINGS if flags & ACK == 0 => {
-                for s in p.chunks_exact(6) {
+                for s in p.as_chunks::<6>().0 {
                     let id = u16::from_be_bytes([s[0], s[1]]);
                     let v = u32::from_be_bytes([s[2], s[3], s[4], s[5]]);
                     match id {

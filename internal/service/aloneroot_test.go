@@ -1595,7 +1595,10 @@ func TestAloneRelayProject(t *testing.T) {
 	if err := os.WriteFile(pemFile, signer.rootsPEM(t), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
+	// The project relay's own name resolves to nothing, as offline (see
+	// TestProjectRelayNewKey): with a network, the device would look the
+	// relay up again when the test's relay drops it, and reach the live one.
+	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
 	group := pi.status(t).Group
 	serve := func(keys relay.Keys, at string) (*relay.Process, func()) {
 		return runRelay(t, keys, at, group)
