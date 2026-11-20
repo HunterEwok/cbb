@@ -19,8 +19,80 @@ use std::time::{Duration, Instant};
 
 use crate::certs::DeviceId;
 use crate::interfaces;
-use crate::node::Node;
+use crate::networks::Networks;
 use crate::pair::home_address;
+
+/// What discovery needs of the member it finds and dials peers for: the
+/// old member (`node::Node`) and the member of 0.6 (`live::Live`) both
+/// give it, so that browsing, dialing and listening are one code.
+pub trait Peers: Send + Sync + 'static {
+    /// This device.
+    fn me(&self) -> DeviceId;
+    /// The service is stopping.
+    fn is_closed(&self) -> bool;
+    /// The member is paused: it neither dials nor takes connections.
+    fn is_paused(&self) -> bool;
+    /// How many times the dial loops were asked to try at once.
+    fn redials(&self) -> usize;
+    /// Waits up to d, or until kick; reports whether it was kicked.
+    fn nap(&self, d: Duration) -> bool;
+    /// Wakes whatever waits in nap.
+    fn kick(&self);
+    /// A connection to the device is up.
+    fn connected(&self, id: &DeviceId) -> bool;
+    /// A connection to the device is up that a dial to addr would not
+    /// replace.
+    fn connected_for(&self, id: &DeviceId, addr: &SocketAddr) -> bool;
+    /// Marks whether the member did not dial this one, so that this one
+    /// dials it.
+    fn set_unreached(&self, id: &DeviceId, unreached: bool);
+    /// Connects to the member at addr and runs the connection until it
+    /// ends, telling how the dial ended.
+    fn dial_ended(&self, addr: SocketAddr, peer: Option<DeviceId>) -> crate::error::Result<Dialed>;
+    /// Runs a connection that came to the member port until it ends;
+    /// handshaken is called once the handshake is over, and admit checks
+    /// the peer before it is served.
+    fn accept_checked(
+        &self,
+        sock: TcpStream,
+        addr: SocketAddr,
+        handshaken: &mut dyn FnMut(),
+        admit: Option<&Admit>,
+    ) -> crate::error::Result<()>;
+    /// The member port takes a connection that came to the local address
+    /// from the address from.
+    fn takes_on(&self, local: SocketAddr, from: SocketAddr) -> bool;
+    /// Writes a line to the log.
+    fn logf(&self, s: &str);
+    /// This device dials the members it finds (its record gives it the
+    /// capability).
+    fn can_dial(&self) -> bool;
+    /// The known networks, on a computer's service.
+    fn networks(&self) -> Option<Arc<Networks>>;
+    /// A pairing window is open.
+    fn window_open(&self) -> bool;
+    /// Discovery found the device on the home network, or lost it.
+    fn found(&self, id: &DeviceId, here: bool);
+    /// The devices of the group as their IDs show, sorted.
+    fn known(&self) -> Vec<String>;
+}
+
+/// How a dial ended (`Peers::dial_ended`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dialed {
+    /// The connection came up (or one to the peer stayed in its place).
+    pub up: bool,
+    /// This member ended it to connect again: dial at once.
+    pub again: bool,
+    /// The device the handshake found at the address, when it got that far:
+    /// a dial loop given only an address learns which member is there.
+    pub id: Option<DeviceId>,
+}
+
+/// Checks a connection a listener took, by the source port of its loopback
+/// connection and the device its certificate names, before it is served:
+/// a blind relay's calls only from the device the relay announced.
+pub type Admit = Arc<dyn Fn(u16, &DeviceId) -> bool + Send + Sync>;
 
 const SERVICE: &str = "_cbb._tcp.local.";
 
@@ -365,7 +437,7 @@ fn remember(found: &mut HashMap<String, Addrs>, key: String, addrs: Vec<SocketAd
 /// ended the connection to connect again (a new hello), a second after a
 /// connection that came up ended, and after a round of failures 1 s,
 /// doubling to 30 s.
-fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
+fn dial_loop<P: Peers>(node: Arc<P>, addrs: Addrs, peer: Option<DeviceId>) {
     dial_loop_as(node, addrs, peer, false)
 }
 
@@ -373,8 +445,8 @@ fn dial_loop(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>) {
 /// which dials this one (docs/protocol.md, section 4, "Who dials whom"):
 /// it dials only once no connection to it has been up for
 /// FALLBACK, a firewall may stop that member's dials, or at once on
-/// Node::redial, as Go's later dialer.
-fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bool) {
+/// a redial (`Peers::redials`), as Go's later dialer.
+fn dial_loop_as<P: Peers>(node: Arc<P>, addrs: Addrs, peer: Option<DeviceId>, later: bool) {
     let mut wait = FIRST_WAIT;
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
@@ -408,7 +480,7 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
             redials = r;
         }
         // A connection up to the peer is left alone; a loopback address
-        // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
+        // (the tunnel's, a relay's) replaces one at home (`Peers::connected_for`).
         // Dialed again, the lower device ID's new connection would replace
         // it every time.
         let known = peer.as_ref().or(found.as_ref());
@@ -476,7 +548,7 @@ fn next_wait(last: Duration, up: bool, again: bool) -> Duration {
 /// Listens on the member port, on all addresses, for the members that dial
 /// this one; only home network addresses may connect. It returns the port,
 /// or None when it cannot listen: the member then only dials.
-pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
+pub fn listen<P: Peers>(node: Arc<P>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<u16> {
     listen_until(node, port, false, None, Arc::new(AtomicBool::new(false)), log)
 }
 
@@ -485,11 +557,11 @@ pub fn listen(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) 
 /// With loopback it listens on 127.0.0.1 only, for the connections a
 /// phone's tunnel or relay link makes there; admit checks each connection
 /// before it is served.
-pub fn listen_until(
-    node: Arc<Node>,
+pub fn listen_until<P: Peers>(
+    node: Arc<P>,
     port: u16,
     loopback: bool,
-    admit: Option<crate::node::Admit>,
+    admit: Option<Admit>,
     stop: Arc<AtomicBool>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 ) -> Option<u16> {
@@ -565,17 +637,17 @@ pub struct Listener {
 
 impl Listener {
     /// Listens on port (0: any free one), or None when it cannot.
-    pub fn open(node: Arc<Node>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<Listener> {
+    pub fn open<P: Peers>(node: Arc<P>, port: u16, log: Arc<dyn Fn(&str) + Send + Sync>) -> Option<Listener> {
         Self::open_with(node, port, false, None, log)
     }
 
     /// As open, on the loopback address only with loopback, each connection
     /// checked by admit before it is served.
-    pub fn open_with(
-        node: Arc<Node>,
+    pub fn open_with<P: Peers>(
+        node: Arc<P>,
         port: u16,
         loopback: bool,
-        admit: Option<crate::node::Admit>,
+        admit: Option<Admit>,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Option<Listener> {
         let stop = Arc::new(AtomicBool::new(false));
@@ -613,7 +685,7 @@ pub struct Dialers {
 impl Dialers {
     /// Dials the member the app knows as key at addrs; peer is its device
     /// ID when the app knows it. A key found again takes the new addresses.
-    pub fn found(&self, node: &Arc<Node>, key: &str, addrs: Vec<SocketAddr>, peer: Option<DeviceId>) {
+    pub fn found<P: Peers>(&self, node: &Arc<P>, key: &str, addrs: Vec<SocketAddr>, peer: Option<DeviceId>) {
         // The loopback address too: the tunnel's port to the hub is there.
         let mut addrs: Vec<SocketAddr> = addrs.into_iter().filter(|a| home_address(a.ip())).collect();
         addrs.sort_by_key(|a| (a.ip().is_ipv6(), a.ip().is_loopback()));
@@ -627,7 +699,7 @@ impl Dialers {
     }
 
     /// Stops dialing the member the app lost.
-    pub fn lost(&self, node: &Node, key: &str) {
+    pub fn lost(&self, node: &dyn Peers, key: &str) {
         if let Some(a) = self.found.lock().unwrap().remove(key) {
             *a.lock().unwrap() = None;
             node.kick();
@@ -650,8 +722,8 @@ pub fn preopen() -> Result<(), mdns_sd::Error> {
 /// Starts dialing: the members at the given addresses, and, with mdns, the
 /// members of the group tag that browsing finds. With a port, it also
 /// publishes this member there.
-pub fn start(
-    node: Arc<Node>,
+pub fn start<P: Peers>(
+    node: Arc<P>,
     tag: String,
     statics: Vec<SocketAddr>,
     mdns: bool,
@@ -675,7 +747,7 @@ pub fn start(
 /// Starts dialing as a phone does: it publishes nothing and listens on no
 /// port, so it dials every member that browsing finds, those with `r=listen` too,
 /// whatever their device IDs.
-pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send + Sync>) {
+pub fn start_as_phone<P: Peers>(node: Arc<P>, tag: String, log: Arc<dyn Fn(&str) + Send + Sync>) {
     std::thread::spawn(move || {
         if let Err(e) = browse(node, &tag, None, true, &*log) {
             log(&format!("cbb: finding the members failed: {e}"));
@@ -856,8 +928,8 @@ fn ask_again() {
     });
 }
 
-fn browse(
-    node: Arc<Node>,
+fn browse<P: Peers>(
+    node: Arc<P>,
     tag: &str,
     port: Option<u16>,
     as_phone: bool,
@@ -912,8 +984,8 @@ fn browse(
 /// daemon's cache is flooded (true), which the caller answers with a new
 /// daemon.
 #[allow(clippy::too_many_arguments)]
-fn browse_with(
-    node: &Arc<Node>,
+fn browse_with<P: Peers>(
+    node: &Arc<P>,
     tag: &str,
     port: Option<u16>,
     as_phone: bool,
@@ -924,7 +996,7 @@ fn browse_with(
 ) -> Result<bool, mdns_sd::Error> {
     set_interfaces(daemon);
     start_trace();
-    let me = node.identity().id.clone();
+    let me = node.me();
     if let Ok(events) = daemon.monitor() {
         let n = node.clone();
         std::thread::spawn(move || {
@@ -941,7 +1013,7 @@ fn browse_with(
     }
     // A member that dials publishes itself without a role; one that does
     // not says so, and every other member dials it.
-    let dials = node.can(cbb_core::authority::CAP_DIALS);
+    let dials = node.can_dial();
     // The protocol version, the group tag, r=listen on a member that does
     // not dial, and p=1 while a pairing window is open, which a joiner
     // looks for.
@@ -1116,7 +1188,7 @@ fn browse_with(
                 // the members dialed are bounded, as in Go; a device the
                 // records name takes the place of one they do not.
                 if !found.contains_key(&id) && found.len() >= MAX_FOUND {
-                    let known = node.records().lock().unwrap().known();
+                    let known = node.known();
                     match evicts(found.keys(), &known, &id) {
                         Some(k) => {
                             if let Some(a) = found.remove(&k) {
@@ -1166,7 +1238,7 @@ fn browse_with(
                 // the relay meanwhile (a false goodbye costs a call there).
                 let Some(id) = instance_id(&fullname) else { continue };
                 node.found(&id, false);
-                let known = node.records().lock().unwrap().known();
+                let known = node.known();
                 if goodbye_stops(&known, &id)
                     && let Some(cur) = found.remove(&id)
                 {
