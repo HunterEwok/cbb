@@ -234,9 +234,11 @@ fn the_weekly_key_change_with_a_device_that_sleeps_through_it() {
 #[test]
 fn a_device_clock_that_goes_back_does_not_stop_the_weekly_change() {
     // A clock set back by more than a day: the newest epoch looks made in
-    // the future, so a new one is made at once rather than waiting weeks
-    // for the clock to catch up; the previous one is kept, as at any
-    // change, and from then the weeks count on the clock as it is.
+    // the future, so the wall clock is taken for wrong and nothing is made
+    // or erased until it has stayed behind a whole week by its own count
+    // (keystore::rotate); then a new epoch is made rather than waiting
+    // weeks for the clock to catch up, and from then the weeks count on
+    // the clock as it is.
     let mut w = Keys::new();
     w.rotate("laptop", T0 + 8 * DAY);
     assert_eq!(epochs(&w.stores["laptop"]), alloc::vec![1, 2]);
@@ -249,8 +251,8 @@ fn a_device_clock_that_goes_back_does_not_stop_the_weekly_change() {
             assert!(r.erased.is_empty(), "day {day}: {:?}", r.erased);
         }
     }
-    assert_eq!(made, alloc::vec![(0, alloc::vec![1]), (7, alloc::vec![2])]);
-    assert_eq!(epochs(&w.stores["laptop"]), alloc::vec![3, 4]);
+    assert_eq!(made, alloc::vec![(7, alloc::vec![1])]);
+    assert_eq!(epochs(&w.stores["laptop"]), alloc::vec![2, 3]);
     assert_eq!(WEEK_MS, 7 * DAY);
 }
 

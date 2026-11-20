@@ -530,7 +530,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let code = pair::normalize_code(line.trim())?;
         let h = control::Header {
             op: "join".into(),
-            code,
+            code: code.to_string(),
             address: code_addr.unwrap_or_default(),
             name: given_name.unwrap_or_default(),
             caps: given_caps,
