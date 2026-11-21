@@ -892,10 +892,10 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     s.copy(&g, Role::Origin, &[phone], None, &|_| None);
     assert_eq!(s.waiting(), 0);
     // An event: the phone hears of a removal.
-    s.event(&g, &[13; 16], push::EVENT_REMOVED, Some(laptop), true, Some(1));
+    s.event(&g, None, &[13; 16], push::EVENT_REMOVED, Some(laptop), true, Some(1));
     assert!(wait_for(|| w.fake.bodies() == 2));
     // A device that does not send events sends none.
-    s.event(&g, &[14; 16], push::EVENT_REMOVED, Some(laptop), false, Some(1));
+    s.event(&g, None, &[14; 16], push::EVENT_REMOVED, Some(laptop), false, Some(1));
     assert_eq!(s.waiting(), 0);
     // An older registration changes nothing; push off drops it.
     s.registration(&g, &phone, PHONE, &read_reg(&registration(50, t0, 0, pk)));
@@ -923,12 +923,12 @@ fn only_a_phone_or_a_computer_registers_and_only_for_the_kinds_it_asks() {
     // It asked for events only: a copy wakes nothing, an event does.
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
     assert_eq!(s.waiting(), 0);
-    s.event(&g, &[1; 16], push::EVENT_JOINED, None, true, Some(5));
+    s.event(&g, None, &[1; 16], push::EVENT_JOINED, None, true, Some(5));
     assert_eq!(s.waiting(), 1);
     // A newer registration drops what waited under the older one.
     s.registration(&g, &phone, ROLE_MEMBER, &read_reg(&registration(52, 2, push::KIND_COPIES, [9; 32])));
     assert_eq!(s.waiting(), 0);
-    s.event(&g, &[2; 16], push::EVENT_JOINED, None, true, Some(5));
+    s.event(&g, None, &[2; 16], push::EVENT_JOINED, None, true, Some(5));
     assert_eq!(s.waiting(), 0);
     // A message that is not a registration changes nothing.
     s.registration(&g, &phone, ROLE_MEMBER, &Value::Map(vec![]));
@@ -1357,7 +1357,7 @@ fn the_previous_face_serves_push_only_until_the_phone_registers_again() {
     // The removal: its registration goes, and the event wakes the phone
     // under the previous face.
     s.forget(&g, &removed);
-    s.event(&g, &[1; 16], push::EVENT_REMOVED, Some(removed), true, Some(5));
+    s.event(&g, None, &[1; 16], push::EVENT_REMOVED, Some(removed), true, Some(5));
     assert!(wait_for(|| w.fake.bodies() == 1), "the remaining phone was not woken");
     assert_eq!(w.fake.got.lock().unwrap().len(), 1, "something went to the removed device");
     assert!(s.needs_face(&g, &[60; 16]));
@@ -1365,14 +1365,14 @@ fn the_previous_face_serves_push_only_until_the_phone_registers_again() {
     // no more, and sends go under the new one.
     s.registration(&g, &phone, PHONE, &read_reg(&registration(61, t0 + 1, push::KIND_EVENTS, [9; 32])));
     assert!(!s.needs_face(&g, &[60; 16]));
-    s.event(&g, &[2; 16], push::EVENT_JOINED, None, true, Some(6));
+    s.event(&g, None, &[2; 16], push::EVENT_JOINED, None, true, Some(6));
     assert!(wait_for(|| w.fake.bodies() == 2));
     // A phone still on the previous face once it expired: nothing goes,
     // and it is asked to register again.
     let late = DeviceId([4; 16]);
     s.registration(&g, &late, PHONE, &read_reg(&registration_in([3; 16], [60; 16], t0, push::KIND_EVENTS, [6; 32])));
     *faces.previous_expires.lock().unwrap() = 1;
-    s.event(&g, &[3; 16], push::EVENT_JOINED, None, true, Some(7));
+    s.event(&g, None, &[3; 16], push::EVENT_JOINED, None, true, Some(7));
     assert!(wait_for(|| s.waiting() == 0));
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(w.fake.bodies(), 3, "only the phone on the current face got the event");

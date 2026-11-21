@@ -320,7 +320,8 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   toward the service's pin in the newest `keys.json` (use `push`): the current period's
   server key and its hubs' and members' credentials, and the previous period's face, kept
   until it expires for the registrations made under it and never for a new one. The phones'
-  events (rule 33: a device joined or was removed, the root changed) come from the records
+  events (rule 33: a device joined or was removed, the root changed, a device's own record
+  changed, the group stopped) come from the records
   applied, each with the first 16 bytes of its record's ID as its ID, sent by a hub, else
   the root's or an admin's device ([core API](core-api.md), "Push"). `mesh::push_e2e` runs it
   end to end: three members, a push service with a fake platform that `keys.json` names, a
@@ -1918,8 +1919,9 @@ with their names, systems and dates:
   the new one; never for a registration of a device the records show removed (that
   registration is dropped at the removal); nothing else of an ended period is kept. The
   sender decides which faces it still needs (`member/src/pusher.rs`, `Sender::needs_face`);
-  keeping and dropping the previous face's key in the member's credentials comes with the
-  member's switch to the core (wave 5), until which the sender is given only current faces.
+  the member keeps the previous face in `push-previous.cbor` while it serves and makes its
+  server key again from the server secret and the period's tag, so a restart keeps it too
+  (`member/src/mesh/push.rs`).
 
 #### What is left to hide
 

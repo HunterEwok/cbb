@@ -511,11 +511,18 @@ of the group's face) and `Saved` (where the registrations are kept).
 On the records of 0.6 the mesh calls the seam (`member/src/mesh/push.rs`). Events (rule 33's,
 `pushbody/event`) come from the records a member applies: a device record that adds a device
 (`joined`, naming it), a `revoke` (`removed`, naming the device when it removes one) and a
-recovery record that changed the root (`root`), each with the record's own time. The event's
-`id` is the first 16 bytes of the record's ID, so every member that applies the record gives
-the same ID and a phone woken by a hub and by the root shows the event once (a copy's
-notification keeps the copy's random ID). A hub sends them, else the root's device or an
-admin's when the group has no hub. `waiting`, `own_record` and `stopped` are not sent yet.
+recovery record that changed the root (`root`), a device record that changes a device
+already in the group (`own_record`, to that device's phone alone) and the records that stop
+the group (`stopped`, once, when the state comes to stop the exchange with every device or
+halts, named by the lowest of the records its conflicts name), each with the record's own
+time. The event's `id` is the first 16 bytes of the record's ID, so every member that applies
+the record gives the same ID and a phone woken by a hub and by the root shows the event once
+(a copy's notification keeps the copy's random ID). A hub sends them, else the root's device
+or an admin's when the group has no hub. `waiting` is not sent yet: on 0.6 a device waits to
+join only while the inviting admin's window is open, so no member holds a waiting device to
+tell of. The previous period's face is kept in `push-previous.cbor` in the group's directory
+(the group, the service's pin and address, the credentials, the tag and their expiry; the
+server key comes again from the server secret and the tag), so a restart does not lose it.
 
 Every honest sender of one body makes the same bytes (the nonce is derived from the plaintext, a
 copy is reduced with age 0, an event carries its record's time), so the service drops a repeat by

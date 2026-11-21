@@ -339,13 +339,16 @@ impl Sender {
         }
     }
 
-    /// A record was applied that the group's phones hear of. `sends` says
-    /// whether this device sends events: a hub, else the root's or an
-    /// admin's device when the group has no hub. `record_ms` is the
-    /// record's own time, so that every sender makes the same body.
+    /// A record was applied that the group's phones hear of: every phone,
+    /// or the phone `to` alone (its own record). `sends` says whether this
+    /// device sends events: a hub, else the root's or an admin's device
+    /// when the group has no hub. `record_ms` is the record's own time, so
+    /// that every sender makes the same body.
+    #[allow(clippy::too_many_arguments)]
     pub fn event(
         &self,
         group: &GroupId,
+        to: Option<&DeviceId>,
         id: &[u8; 16],
         event: u64,
         device: Option<DeviceId>,
@@ -356,7 +359,8 @@ impl Sender {
             return;
         }
         let body = Body::Event { id: *id, event, device: device.map(|d| d.0), time_ms: record_ms };
-        let phones: Vec<DeviceId> = self.lock().regs.keys().filter(|(g, _)| g == group).map(|(_, d)| *d).collect();
+        let phones: Vec<DeviceId> =
+            self.lock().regs.keys().filter(|(g, d)| g == group && to.is_none_or(|t| t == d)).map(|(_, d)| *d).collect();
         for p in phones {
             self.queue(group, &p, push::KIND_EVENTS, &body, Some(4));
         }

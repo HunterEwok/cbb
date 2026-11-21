@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The member of 0.6 sends the phones the push events `own_record` (to the phone whose record
+  changed) and `stopped` (once, when the group's records stop it), and keeps the push
+  service's previous face across a restart, so a phone registered in the period before still
+  gets its pushes until that face expires.
 - `cbb resolve` works on the records of 0.6: the root voids both histories of every key that
   signed two, and the admin computer whose key it was signs again by itself what its log
   (`signed-records.json`) says it signed; the core's writer then goes on below the fork
