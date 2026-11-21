@@ -474,6 +474,9 @@ fn recovers_the_group_with_its_sheet() {
     assert!(!desk.err_with(true, json!({"op": "recover"}), &broken).is_empty());
 
     desk.ok_with(true, json!({"op": "recover"}), sheet.as_bytes());
+    // Until it restarts with the new root key the records name it the
+    // root already: a second claim would make another root.
+    has(&desk.err_with(true, json!({"op": "recover"}), sheet.as_bytes()), "root already");
     // It restarts by itself to sign with the new key; as systemd would,
     // the test starts it again.
     desk.wait_exit(Duration::from_secs(30));

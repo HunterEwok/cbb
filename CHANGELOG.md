@@ -2843,6 +2843,11 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb recovery` refuses a second claim on the device that just became the root, in the
+  moment before it restarts with its new root key, instead of making another root.
+- The Rust member's takeover and recovery tests run on the records of 0.6: an admin is made
+  with the key it offered the root, a takeover, a claim's delay and a handover are refused
+  with the way to `cbb recovery`, and recovery takes the sheet that `cbb new` showed.
 - On the records of 0.6 a join with an invitation whose hub does not answer through the
   guest tunnel (an invitation used up, a hub that is off) ends within about 20 seconds with
   why, instead of waiting minutes for an admin that cannot be reached.

@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -440,19 +439,15 @@ func (s *testService) isAdmin(t *testing.T) bool {
 	return false
 }
 
-// TestAloneTakeover: the Rust service joins a Go computer's group as a
-// member (cbb pair), offers an admin key, and the Go root makes
-// it an admin; with the root lost, it takes the group over (cbb takeover)
-// after the root's delay of 0s, becomes the root, and a Go computer of the
-// group follows it.
+// TestAloneTakeover: the Rust service joins a group of 0.6 as a member
+// (cbb pair) with an admin key it offers the root, and the root makes it an
+// admin with that key (D-118), as it makes the laptop one; no admin CA
+// travels. The root changes only with the recovery key (D-117): a claim's
+// delay on the root, a handover and a takeover by an admin of the lost root
+// are each refused with the way that is left, cbb recovery
+// (TestAloneRecovery), and the admin stays an admin.
 func TestAloneTakeover(t *testing.T) {
-	bin := os.Getenv("CBB_TEST_ALONE")
-	if bin == "" {
-		t.Skip("CBB_TEST_ALONE is not set")
-	}
-	if runtime.GOOS != "linux" {
-		t.Skip("the Rust member's tests run on Linux")
-	}
+	bin := aloneBin(t)
 	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
@@ -471,109 +466,63 @@ func TestAloneTakeover(t *testing.T) {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2 && st.Status.Role == "member"
 	})
+	if !rust.on06() || !desk.on06() {
+		t.Fatal("the group is not on the records of 0.6")
+	}
 
 	adminOn(t, cli, desk, "rust")
 	waitFor(t, "the Rust member an admin", func() bool { return rust.isAdmin(t) })
-	// The records say so as soon as they reach it; its admin CA comes in
-	// a message after them, which a slow member, as under qemu, may still
-	// be reading when the desk below is lost. Without it, it is no admin.
-	waitFor(t, "the Rust member's admin CA", func() bool {
-		id, err := group.Load(dir)
-		return err == nil && id.AdminCA != nil
-	})
-	// The laptop gets its admin CA over its connection to the desk, which
-	// the desk's new admin may have just made it open again.
-	laptopID := laptop.status(t).Device
-	waitFor(t, "the desk connected to the laptop", func() bool {
-		return slices.ContainsFunc(desk.status(t).Peers, func(p control.Device) bool { return p.ID == laptopID })
-	})
 	if out, err := runCLI(cli, desk.socket, "", "admin", "-allow-file-key", "laptop"); err != nil {
 		t.Fatalf("cbb admin laptop on the desk: %v\n%s", err, out)
 	}
 	waitFor(t, "the laptop an admin", func() bool { return laptop.isAdmin(t) })
-	if out, err := runCLI(cli, desk.socket, "", "takeover", "-delay", "0s"); err != nil {
-		t.Fatalf("cbb takeover -delay on the desk: %v\n%s", err, out)
-	}
-	waitFor(t, "the Rust member has the delay", func() bool { return recordsHold(dir, "takeover_delay_ms") })
 
-	// The desk is lost; the Rust admin takes the group over.
-	desk.stop()
-	if out, err := runCLI(cli, rust.socket, "", "takeover", "laptop"); err == nil || !strings.Contains(out, "not the group's root") {
-		t.Errorf("a takeover from a device that is not the root: %v\n%s", err, out)
-	}
-	if out, err := runCLI(cli, rust.socket, "", "takeover", "desk"); err != nil {
-		t.Fatalf("cbb takeover: %v\n%s", err, out)
-	}
-	waitFor(t, "the Rust member the root", rootIs(t, rust, "rust"))
-	waitFor(t, "the laptop follows the new root", rootIs(t, laptop, "rust"))
-	// The laptop's admin CA was the lost root's; the new root gives it one.
-	waitFor(t, "the laptop's admin CA from the new root", func() bool {
-		id, err := group.Load(laptop.dir)
-		return err == nil && id.AdminCA != nil && len(id.Roots) > 0 && !id.StaleAdminCA()
-	})
-	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
-	if err != nil || !strings.Contains(string(raw), `"root_key"`) || strings.Contains(string(raw), `"claim"`) {
-		t.Errorf("the identity file after the takeover: %v\n%s", err, raw)
-	}
-	must := func(args ...string) {
+	refused := func(s *testService, what string, args ...string) {
 		t.Helper()
-		if out, err := runCLI(cli, rust.socket, "", args...); err != nil {
-			t.Fatalf("cbb %s: %v\n%s", strings.Join(args, " "), err, out)
+		out, err := runCLI(cli, s.socket, "", args...)
+		if err == nil || !strings.Contains(out, "cbb recovery") {
+			t.Errorf("%s: %v\n%s", what, err, out)
 		}
 	}
-	// As the root it renames the laptop, which takes the record.
-	must("rename", "laptop", "notebook")
-	waitFor(t, "the laptop renamed under the new root", func() bool {
-		m, err := laptop.do(t, control.Header{Op: control.OpDevices}, "")
-		if err != nil {
-			return false
-		}
-		for _, d := range m.Devices {
-			if d.Self {
-				return d.Name == "notebook"
-			}
-		}
-		return false
-	})
-}
+	refused(desk, "cbb takeover -delay on the root", "takeover", "-delay", "0s")
+	refused(desk, "cbb handover on the root", "handover", "rust")
 
-// recordsHold reports whether a body of the records file in dir holds text.
-func recordsHold(dir, text string) bool {
-	raw, err := os.ReadFile(filepath.Join(dir, "records.json"))
-	if err != nil {
-		return false
+	// The desk is lost; its admin cannot take the group over by itself.
+	desk.stop()
+	refused(rust, "cbb takeover on an admin", "takeover", "desk")
+	if !rust.isAdmin(t) || !laptop.isAdmin(t) {
+		t.Error("an admin lost its rights with the refused takeover")
 	}
-	var f struct {
-		Records []struct {
-			Body []byte `json:"body"`
-		} `json:"records"`
-	}
-	if json.Unmarshal(raw, &f) != nil {
-		return false
-	}
-	for _, r := range f.Records {
-		if bytes.Contains(r.Body, []byte(text)) {
-			return true
-		}
-	}
-	return false
+	waitFor(t, "the desk is still the root", rootIs(t, rust, "desk"))
 }
 
 // TestAloneRecovery: a Rust member that is no admin claims the group with
 // its recovery key when the root is lost (cbb recovery, with the text of
-// the sheet's QR code), becomes the root, and the Go computer follows.
+// the sheet's QR code that cbb new showed once, D-117), leaves the lost
+// root out, becomes the root, and the laptop follows. A broken sheet,
+// another group's sheet and a claim by the root itself are refused.
 func TestAloneRecovery(t *testing.T) {
-	bin := os.Getenv("CBB_TEST_ALONE")
-	if bin == "" {
-		t.Skip("CBB_TEST_ALONE is not set")
-	}
-	if runtime.GOOS != "linux" {
-		t.Skip("the Rust member's tests run on Linux")
-	}
+	bin := aloneBin(t)
 	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
+	sheetOf := func(s *testService) string {
+		t.Helper()
+		m, err := s.do(t, control.Header{Op: control.OpNew}, "")
+		if err != nil {
+			t.Fatalf("new on %s: %v", s.name, err)
+		}
+		var sheet struct {
+			Sheet string `json:"sheet"`
+			QR    string `json:"qr"`
+		}
+		if err := json.Unmarshal(m.Payload, &sheet); err != nil || sheet.QR == "" || sheet.Sheet == "" {
+			t.Fatalf("the recovery sheet of cbb new on %s: %v, %q", s.name, err, m.Payload)
+		}
+		return sheet.QR
+	}
+	qr := sheetOf(desk)
 	pairWith(t, desk, laptop)
 
 	dir := joinAloneAs(t, bin, desk, "rust", nil)
@@ -588,38 +537,33 @@ func TestAloneRecovery(t *testing.T) {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 2
 	})
-	if out, err := runCLI(cli, desk.socket, "", "takeover", "-delay", "0s"); err != nil {
-		t.Fatalf("cbb takeover -delay on the desk: %v\n%s", err, out)
-	}
-	waitFor(t, "the Rust member has the delay", func() bool { return recordsHold(dir, "takeover_delay_ms") })
 
-	recover := func(text string) (string, error) { return runCLI(cli, rust.socket, text+"\n", "recovery") }
-	if out, err := recover("cbb://recover?g=0&k=AA&c=AA"); err == nil {
-		t.Errorf("a broken sheet: %s", out)
+	recover := func(s *testService, text string, args ...string) (string, error) {
+		return runCLI(cli, s.socket, text+"\n", append([]string{"recovery"}, args...)...)
 	}
-	desk.stop()
-	sheet := addRecovery(t, desk)
-	desk = restartService(t, &h, desk)
-	waitFor(t, "the Rust member holds the recovery key's record", func() bool { return recordsHold(dir, `"recovery"`) })
-	qr := func(group string) string {
-		k, err := sheet.Key.Bytes()
-		if err != nil {
-			t.Fatal(err)
-		}
-		enc := base64.RawURLEncoding.EncodeToString
-		return "cbb://recover?g=" + group + "&k=" + enc(k) + "&c=" + enc(sheet.Cert)
+	if out, err := recover(rust, "cbb://recover?g=0&k=AA&c=AA"); err == nil || !strings.Contains(out, "sheet") {
+		t.Errorf("a broken sheet: %v\n%s", err, out)
 	}
-	if out, err := recover(qr("0123456789abcdef")); err == nil || !strings.Contains(out, "another group") {
+	other := startService(t, &h, "other")
+	if out, err := recover(rust, sheetOf(other)); err == nil || !strings.Contains(out, "another group") {
 		t.Errorf("a sheet of another group: %v\n%s", err, out)
 	}
+	if out, err := recover(desk, qr); err == nil || !strings.Contains(out, "root already") {
+		t.Errorf("the root claimed its own group: %v\n%s", err, out)
+	}
+
 	desk.stop()
-	if out, err := recover(qr(sheet.Group)); err != nil {
+	if out, err := recover(rust, qr, "-leave", "desk"); err != nil {
 		t.Fatalf("cbb recovery: %v\n%s", err, out)
 	}
 	waitFor(t, "the Rust member the root", rootIs(t, rust, "rust"))
 	waitFor(t, "the laptop follows the new root", rootIs(t, laptop, "rust"))
-	if out, err := recover(qr(sheet.Group)); err == nil {
-		t.Errorf("the new root claimed the group again: %s", out)
+	waitFor(t, "the lost root left the laptop's group", func() bool {
+		m, err := laptop.do(t, control.Header{Op: control.OpDevices}, "")
+		return err == nil && !slices.ContainsFunc(m.Devices, func(d control.Device) bool { return d.Name == "desk" })
+	})
+	if out, err := recover(rust, qr); err == nil || !strings.Contains(out, "root already") {
+		t.Errorf("the new root claimed the group again: %v\n%s", err, out)
 	}
 }
 

@@ -796,7 +796,13 @@ impl Service {
     fn live_recover(&self, live: &Live, h: &Header, payload: &[u8]) -> Result<Message> {
         let st = live.mesh.state();
         let own = live.mesh.own();
-        if own.root.as_ref().is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()))
+        // The records name it the root as soon as a recovery wrote them,
+        // before the restart gives it the new root key.
+        if st.root_device == Some(live.mesh.device())
+            || own
+                .root
+                .as_ref()
+                .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()))
         {
             return Err(Error::msg("this device is the group's root already"));
         }
