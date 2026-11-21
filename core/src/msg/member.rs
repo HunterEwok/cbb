@@ -148,7 +148,9 @@ pub static REACH: Table = Table {
     fields: &[f(2, "reach/devices", Ty::Set { of: &Ty::Bytes(16), max: crate::records::MAX_DEVICES }, false)],
 };
 
-/// `evidence` (t 19): an attestation of one of the sender's keys.
+/// `evidence` (t 19): an attestation of one of the sender's keys: its
+/// format, the hash of the key it attests (the sender's member key) and
+/// the format's data, a map of its own table ([`evidence_data`]).
 pub static EVIDENCE: Table = Table {
     shape: "evidence/shape",
     fields: &[
@@ -158,9 +160,113 @@ pub static EVIDENCE: Table = Table {
     ],
 };
 
+/// `evidence/format`: Android's Key Attestation, sent by a phone to every
+/// peer.
+pub const EVIDENCE_ANDROID: u64 = 1;
+/// `evidence/format`: a TPM's certification of the key, sent by a computer
+/// to every peer.
+pub const EVIDENCE_TPM: u64 = 2;
+/// `evidence/format`: the root's credential, encrypted to the TPM's
+/// endorsement key, sent to the device whose TPM evidence checked out.
+pub const EVIDENCE_TPM_CREDENTIAL: u64 = 3;
+/// `evidence/format`: what the TPM opened of the credential, sent back to
+/// the root.
+pub const EVIDENCE_TPM_ACTIVATED: u64 = 4;
+
+/// The largest certificate of an attestation's chain.
+pub const MAX_EVIDENCE_CERT: usize = 8 << 10;
+/// The most certificates of an attestation's chain.
+pub const MAX_EVIDENCE_CHAIN: usize = 10;
+/// The largest TPM structure an attestation carries.
+pub const MAX_TPM_STRUCTURE: usize = 2 << 10;
+
+const CERT: Ty = Ty::BytesUpTo(MAX_EVIDENCE_CERT);
+const TPM: Ty = Ty::BytesUpTo(MAX_TPM_STRUCTURE);
+
+/// `evidence/data` of format 1, Android's Key Attestation (protocol.md
+/// section 17, "Evidence"): the group tag the key was made with (the
+/// group ID's first 8 bytes; absent for a key made outside a group), the
+/// challenge's salt and the Keystore's chain, leaf first, DER.
+pub static EVIDENCE_ANDROID_DATA: Table = Table {
+    shape: "evidence/android/shape",
+    fields: &[
+        f(1, "evidence/android/group_tag", Ty::Bytes(8), false),
+        f(2, "evidence/android/salt", Ty::Bytes(16), true),
+        f(3, "evidence/android/chain", Ty::Array { of: &CERT, max: MAX_EVIDENCE_CHAIN }, true),
+    ],
+};
+
+/// `evidence/data` of format 2, a TPM's certification of the key (section
+/// 17, "TPM evidence"): as Android's, the chain the endorsement key's
+/// certificate first, then the TPM's structures: `TPM2B_PUBLIC` of the
+/// endorsement key, the attestation key and the key, the `TPMS_ATTEST` of
+/// `TPM2_Certify` and the attestation key's `TPMT_SIGNATURE` of it.
+pub static EVIDENCE_TPM_DATA: Table = Table {
+    shape: "evidence/tpm/shape",
+    fields: &[
+        f(1, "evidence/tpm/group_tag", Ty::Bytes(8), false),
+        f(2, "evidence/tpm/salt", Ty::Bytes(16), true),
+        f(3, "evidence/tpm/chain", Ty::Array { of: &CERT, max: MAX_EVIDENCE_CHAIN }, true),
+        f(4, "evidence/tpm/ek", TPM, true),
+        f(5, "evidence/tpm/ak", TPM, true),
+        f(6, "evidence/tpm/key", TPM, true),
+        f(7, "evidence/tpm/attest", TPM, true),
+        f(8, "evidence/tpm/signature", TPM, true),
+    ],
+};
+
+/// `evidence/data` of format 3: `TPM2_MakeCredential`'s ID object and
+/// encrypted seed.
+pub static EVIDENCE_CREDENTIAL_DATA: Table = Table {
+    shape: "evidence/credential/shape",
+    fields: &[f(1, "evidence/credential/credential", TPM, true), f(2, "evidence/credential/secret", TPM, true)],
+};
+
+/// `evidence/data` of format 4: the 32 bytes `TPM2_ActivateCredential`
+/// recovered.
+pub static EVIDENCE_ACTIVATED_DATA: Table =
+    Table { shape: "evidence/activated/shape", fields: &[f(1, "evidence/activated/secret", Ty::Bytes(32), true)] };
+
+/// The table of `evidence/data` for format, which the message's own table
+/// bounds to 1..4.
+pub fn evidence_table(format: u64) -> Option<&'static Table> {
+    Some(match format {
+        EVIDENCE_ANDROID => &EVIDENCE_ANDROID_DATA,
+        EVIDENCE_TPM => &EVIDENCE_TPM_DATA,
+        EVIDENCE_TPM_CREDENTIAL => &EVIDENCE_CREDENTIAL_DATA,
+        EVIDENCE_TPM_ACTIVATED => &EVIDENCE_ACTIVATED_DATA,
+        _ => return None,
+    })
+}
+
+/// Reads an `evidence` message's `data` of format: one item of the CBOR
+/// profile, a map that its format's table takes.
+pub fn evidence_data(format: u64, data: &[u8]) -> Result<crate::format::Value<'_>, crate::format::Rule> {
+    let table = evidence_table(format).ok_or(crate::format::Rule::field("evidence/format"))?;
+    let v = crate::format::cbor::decode(data)?;
+    super::check_map(table, &v)?;
+    Ok(v)
+}
+
 /// Every table of this file, for the vectors.
-pub static ALL: [&Table; 12] =
-    [&HELLO, &HELLO_DEVICE, &PING, &BYE, &HAVE, &WANT, &RELEASE, &ENTRIES, &GET, &MISSING, &REACH, &EVIDENCE];
+pub static ALL: [&Table; 16] = [
+    &HELLO,
+    &HELLO_DEVICE,
+    &PING,
+    &BYE,
+    &HAVE,
+    &WANT,
+    &RELEASE,
+    &ENTRIES,
+    &GET,
+    &MISSING,
+    &REACH,
+    &EVIDENCE,
+    &EVIDENCE_ANDROID_DATA,
+    &EVIDENCE_TPM_DATA,
+    &EVIDENCE_CREDENTIAL_DATA,
+    &EVIDENCE_ACTIVATED_DATA,
+];
 
 /// The table of message type t, if this file numbers it.
 pub fn of(t: u64) -> Option<&'static Table> {

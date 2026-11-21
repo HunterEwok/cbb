@@ -1244,6 +1244,49 @@
       "widest": "an attestation's chain or a TPM's quote with its certificates"
     },
     {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE_CERT",
+      "reached": [
+        "vec:messages5.json:android-key evidence, a certificate of 8192 bytes",
+        "vec:messages5.json:android-key evidence, a certificate of 8193 bytes"
+      ],
+      "refusal": "evidence/android/chain",
+      "value": 8192,
+      "widest": "a certificate of an attestation's chain: Android's with Remote Key Provisioning, a TPM maker's"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE_CHAIN",
+      "reached": [
+        "vec:messages5.json:android-key evidence, 10 certificates",
+        "vec:messages5.json:android-key evidence, 11 certificates"
+      ],
+      "refusal": "evidence/android/chain",
+      "value": 10,
+      "widest": "an attestation's chain, leaf or endorsement key's certificate first"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_TPM_STRUCTURE",
+      "reached": [
+        "vec:messages5.json:TPM evidence, a structure of 2048 bytes",
+        "vec:messages5.json:TPM evidence, a structure of 2049 bytes"
+      ],
+      "refusal": "evidence/tpm/ek",
+      "value": 2048,
+      "widest": "a TPM structure: an RSA endorsement key's TPM2B_PUBLIC, an encrypted seed"
+    },
+    {
+      "class": "frozen",
+      "name": "join::guest::MAX_DATA",
+      "reached": [
+        "a_guest_data_holds_at_its_bound"
+      ],
+      "refusal": "guest/data",
+      "value": 16384,
+      "widest": "bytes of a guest's connection in one guest message"
+    },
+    {
       "class": "reader",
       "name": "sheet::MAX_INPUT",
       "reached": [

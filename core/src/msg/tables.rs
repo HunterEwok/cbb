@@ -238,7 +238,7 @@ pub static GUEST: Table = Table {
         f(6, "guest/offer", Ty::Map(&OFFER), false),
         f(7, "guest/reason", REASON, false),
         f(8, "guest/conn", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
-        f(9, "guest/data", Ty::BytesUpTo(16384), false),
+        f(9, "guest/data", Ty::BytesUpTo(crate::join::guest::MAX_DATA), false),
         f(10, "guest/device", ID16, false),
         f(11, "guest/invite", INVITE_ID, false),
     ],

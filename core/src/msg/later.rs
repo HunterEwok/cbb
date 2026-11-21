@@ -166,6 +166,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&m::REACH, 2, Refuse, "absent reaches nobody"),
     o(&m::WANT, 2, Refuse, "absent asks for no record"),
     o(&m::WANT, 3, Refuse, "absent asks for no list"),
+    o(&m::EVIDENCE_ANDROID_DATA, 1, Refuse, "absent is a key made outside a group, which the root takes"),
+    o(&m::EVIDENCE_TPM_DATA, 1, Refuse, "absent is a key made outside a group, which the root takes"),
 ];
 
 /// What a value out of range of field n of the table reads as: its row, or

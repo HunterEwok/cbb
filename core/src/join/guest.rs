@@ -148,4 +148,13 @@ mod tests {
         // Another message type.
         assert!(Guest::read(&crate::hubkey::hubs_message(crate::hubkey::HubSays::Serving)).is_err());
     }
+
+    /// A `data` message holds [`MAX_DATA`] bytes and no more.
+    #[test]
+    fn a_guest_data_holds_at_its_bound() {
+        let data = |n: usize| Guest { key: [1; 32], op: Op::Data { conn: 1, data: alloc::vec![9; n] } }.encode();
+        assert!(Guest::read(&data(MAX_DATA)).is_ok());
+        let got = crate::msg::check(&data(MAX_DATA + 1)).err().map(|r| r.name());
+        assert_eq!(got, Some("guest/data"));
+    }
 }

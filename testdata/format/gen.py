@@ -2117,6 +2117,7 @@ LATER = {
     ("hello", 18): "absent", ("hello", 19): "absent", ("hello", 20): "bits 1", ("hello", 21): "absent",
     ("hello/device", 1): "absent", ("hello/device", 2): "absent", ("hello/device", 3): "absent",
     ("hello/device", 5): "absent",
+    ("evidence/android", 1): "refuse", ("evidence/tpm", 1): "refuse",
 }
 TRANSPORTS = ("obfuscation", "vless")
 
@@ -3080,7 +3081,29 @@ TABLES5 = {
         (3, "evidence/key", "bytes 32", True),
         (4, "evidence/data", "bytes 1..65536", True),
     ],
+    # An evidence message's data, a map of the table of its format (1..4).
+    "evidence/android": [
+        (1, "evidence/android/group_tag", "bytes 8", False),
+        (2, "evidence/android/salt", "bytes 16", True),
+        (3, "evidence/android/chain", "array 1..10 of bytes 1..8192", True),
+    ],
+    "evidence/tpm": [
+        (1, "evidence/tpm/group_tag", "bytes 8", False),
+        (2, "evidence/tpm/salt", "bytes 16", True),
+        (3, "evidence/tpm/chain", "array 1..10 of bytes 1..8192", True),
+        (4, "evidence/tpm/ek", "bytes 1..2048", True),
+        (5, "evidence/tpm/ak", "bytes 1..2048", True),
+        (6, "evidence/tpm/key", "bytes 1..2048", True),
+        (7, "evidence/tpm/attest", "bytes 1..2048", True),
+        (8, "evidence/tpm/signature", "bytes 1..2048", True),
+    ],
+    "evidence/credential": [
+        (1, "evidence/credential/credential", "bytes 1..2048", True),
+        (2, "evidence/credential/secret", "bytes 1..2048", True),
+    ],
+    "evidence/activated": [(1, "evidence/activated/secret", "bytes 32", True)],
 }
+EVIDENCE_FORMATS = {1: "evidence/android", 2: "evidence/tpm", 3: "evidence/credential", 4: "evidence/activated"}
 MESSAGE_TYPES5 = {1: "hello", 3: "ping", 4: "bye", 6: "have", 12: "release", 13: "get", 14: "missing",
                   18: "reach", 19: "evidence", 25: "entries", 30: "want"}
 TABLES.update(TABLES5)
@@ -3926,6 +3949,50 @@ def wave5_vectors():
     # the_member_messages_hold_at_their_bounds): written out here they
     # would pass the repository's limit on one file.
     out["take"], out["refuse"] = take, refuse
+
+    # An evidence message's data, by its format (section 17).
+    data_take, data_refuse = [], []
+    tag, salt = GROUP[:8], fake("challenge salt", 16)
+    cert = fake("certificate", 600)
+    tpm = {4: fake("ek", 314), 5: fake("ak", 90), 6: fake("key", 90), 7: fake("attest", 150),
+           8: fake("signature", 76)}
+
+    def data(name, fmt, d):
+        rule = check_map(EVIDENCE_FORMATS[fmt], d)
+        assert rule is None, (name, rule)
+        data_take.append({"name": name, "format": fmt, "data": enc(d).hex()})
+
+    def bad_data(name, fmt, d, rule):
+        got = check_map(EVIDENCE_FORMATS[fmt], d)
+        assert got == rule, (name, got, rule)
+        data_refuse.append({"name": name, "format": fmt, "rule": rule, "data": enc(d).hex()})
+
+    data("android-key evidence", 1, {1: tag, 2: salt, 3: [cert, cert, cert]})
+    data("android-key evidence of a key made outside a group", 1, {2: salt, 3: [cert]})
+    data("android-key evidence, 10 certificates", 1, {2: salt, 3: [cert] * 10})
+    data("android-key evidence, a certificate of 8192 bytes", 1, {2: salt, 3: [fake("certificate", 8192)]})
+    data("TPM evidence", 2, {1: tag, 2: salt, 3: [cert], **tpm})
+    data("TPM evidence, a structure of 2048 bytes", 2, {2: salt, 3: [cert], **tpm, 4: fake("ek", 2048)})
+    data("the root's TPM credential", 3, {1: fake("id object", 68), 2: fake("encrypted seed", 256)})
+    data("the TPM's activated credential", 4, {1: fake("credential value", 32)})
+    data("evidence data with a field of a later version", 4, {1: fake("credential value", 32), 300: "later"})
+    bad_data("android-key evidence without a salt", 1, {3: [cert]}, "evidence/android/salt")
+    bad_data("android-key evidence, a salt of 15 bytes", 1, {2: salt[:15], 3: [cert]}, "evidence/android/salt")
+    bad_data("android-key evidence, a group tag of 16 bytes", 1, {1: GROUP, 2: salt, 3: [cert]},
+             "evidence/android/group_tag")
+    bad_data("android-key evidence, 11 certificates", 1, {2: salt, 3: [cert] * 11}, "evidence/android/chain")
+    bad_data("android-key evidence, a certificate of 8193 bytes", 1, {2: salt, 3: [fake("certificate", 8193)]},
+             "evidence/android/chain")
+    bad_data("android-key evidence, no certificate", 1, {2: salt, 3: []}, "evidence/android/chain")
+    bad_data("TPM evidence without its signature", 2, {1: tag, 2: salt, 3: [cert], **{k: v for k, v in tpm.items() if k != 8}},
+             "evidence/tpm/signature")
+    bad_data("TPM evidence, a structure of 2049 bytes", 2, {2: salt, 3: [cert], **tpm, 4: fake("ek", 2049)},
+             "evidence/tpm/ek")
+    bad_data("a TPM credential without its seed", 3, {1: fake("id object", 68)}, "evidence/credential/secret")
+    bad_data("an activated credential of 31 bytes", 4, {1: fake("credential value", 31)},
+             "evidence/activated/secret")
+    bad_data("evidence data that is no map", 4, [fake("credential value", 32)], "evidence/activated/shape")
+    out["data_take"], out["data_refuse"] = data_take, data_refuse
     return out
 
 

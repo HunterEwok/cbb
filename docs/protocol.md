@@ -540,7 +540,7 @@ change the mode, or change what the person compares or approves.
 | 16 | `hubs` | hub to hub | 11 |
 | 17 | `guest` | an admin and a hub, about an invitation's guest | 12 |
 | 18 | `reach` | 2 device IDs, sorted, at most 256 | 4 |
-| 19 | `evidence` | 2 `format`; 3 `key`; 4 `data` | 17 |
+| 19 | `evidence` | 2 `format` 1 `android-key`, 2 `tpm`, 3 `tpm-credential`, 4 `tpm-activated`; 3 `key` the attested key's hash; 4 `data` a map of its format's table | 17 |
 | 20 | `grant` | the leaf's grant | 10 |
 | 21 | `nonce` | from a leaf: 2 a one-use nonce of 16 bytes; to a leaf without field 2: "give me one" | 15 |
 | 22 | `beacon` | 2 the beacon envelope | 10 |
@@ -4702,11 +4702,40 @@ nothing: the record keeps the `hardware` of the device's hello. A computer whose
 hello, as one admitted by pairing) gets a record that says `hardware`; on the records of
 0.6 the root signs it when the member's hello comes (`writers::store_from_hello`), and a
 member whose hello says `rootless` gets `store` `rootless` without an admin key, powers or
-commands. A member of 0.6 sends no TPM evidence yet: the `evidence` message (t 19) carries
-the formats, and the encoding of its `data` for them is still to be fixed. Nothing goes to the
+commands. On the records of 0.6 the same evidence goes in the `evidence` message (t 19),
+below. Nothing goes to the
 TPM's maker: a TPM whose EK certificate is not in its NV, as Intel's and AMD's firmware TPMs
 often, stays `hardware` (the strict key level will fetch theirs). The phones do not check
 TPM evidence yet; a phone as the group's root ignores it.
+
+### Evidence on the records of 0.6
+
+On the records of 0.6 each evidence above is one `evidence` message (t 19): field 2 `format`
+1 `android-key`, 2 `tpm`, 3 `tpm-credential`, 4 `tpm-activated`; field 3 `key`, the hash of
+the attested key, which MUST be the sender's member key (a receiver ignores evidence of any
+other key, as it ignores a format it does not know); field 4 `data`, one item of the CBOR
+profile, a map of its format's table (`msg::member::evidence_data`, the vectors' `data_take`
+and `data_refuse` in `testdata/format/messages5.json`):
+
+| Format | Fields of `data` |
+| --- | --- |
+| 1 `android-key` | 1 `group_tag` (8 bytes, absent for a key made outside a group); 2 `salt` (16 bytes); 3 `chain`, 1 to `msg::member::MAX_EVIDENCE_CHAIN` (10) certificates of at most `msg::member::MAX_EVIDENCE_CERT` (8192) bytes, DER, leaf first |
+| 2 `tpm` | 1 `group_tag`, 2 `salt` and 3 `chain` as format 1, the endorsement key's certificate first; 4 `ek`, 5 `ak`, 6 `key`, 7 `attest`, 8 `signature`: the TPM structures above, each at most `msg::member::MAX_TPM_STRUCTURE` (2048) bytes |
+| 3 `tpm-credential` | 1 `credential`, the ID object; 2 `secret`, the encrypted seed |
+| 4 `tpm-activated` | 1 `secret`, the 32 bytes recovered |
+
+The message's own bound on `data`, `msg::member::MAX_EVIDENCE` (65536), caps the whole encoded
+map, so a chain at its widest leaves no room for the TPM's structures at theirs. In formats 3
+and 4 `key` is the attested member key's hash too, the key of the device whose TPM the
+credential is for: a device drops a credential whose `key` is not its own member key's, and
+the root an answer whose `key` is not the one its credential went for.
+
+The group tag is the group ID's first 8 bytes; the challenge takes it as its 16 lowercase hex
+characters, as above, and the member key as the SubjectPublicKeyInfo of the sender's member key
+(ES256). A `group_tag` of another length refuses the data, never reads as absent, since absent
+is a key made outside a group, which the root takes. The root records what the evidence proves
+in the device's record, `store` 4 (`proven`) with `proof` 1 `android-tee`, 2
+`android-strongbox` or 3 `tpm`, as above.
 
 ### Revoked attestations
 
@@ -5107,6 +5136,10 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `msg::member::MAX_ARCHIVE` | 64 | frozen | a release archive's name, 61 bytes at the widest | `hello/device` |
 | `msg::member::MAX_RELEASE_FILE` | 524288 | frozen | a release file of a 256 KiB body in base64 with its signature | `release/release` |
 | `msg::member::MAX_EVIDENCE` | 65536 | frozen | an attestation's chain or a TPM's quote with its certificates | `evidence/data` |
+| `msg::member::MAX_EVIDENCE_CERT` | 8192 | frozen | a certificate of an attestation's chain: Android's with Remote Key Provisioning, a TPM maker's | `evidence/android/chain` |
+| `msg::member::MAX_EVIDENCE_CHAIN` | 10 | frozen | an attestation's chain, leaf or endorsement key's certificate first | `evidence/android/chain` |
+| `msg::member::MAX_TPM_STRUCTURE` | 2048 | frozen | a TPM structure: an RSA endorsement key's TPM2B_PUBLIC, an encrypted seed | `evidence/tpm/ek` |
+| `join::guest::MAX_DATA` | 16384 | frozen | bytes of a guest's connection in one guest message | `guest/data` |
 | `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `not_sheet` |
 <!-- bounds:end -->
 

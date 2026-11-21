@@ -671,6 +671,16 @@ fn the_member_messages_are_the_vectors() {
         let rule = r["rule"].as_str().unwrap();
         assert_eq!(check(&unhex(&r["message"])).err().map(|e| e.name()), Some(rule), "{}", r["name"]);
     }
+    // An evidence message's data, by its format.
+    for t in v["data_take"].as_array().unwrap() {
+        let data = unhex(&t["data"]);
+        assert!(member::evidence_data(t["format"].as_u64().unwrap(), &data).is_ok(), "{}", t["name"]);
+    }
+    for r in v["data_refuse"].as_array().unwrap() {
+        let data = unhex(&r["data"]);
+        let got = member::evidence_data(r["format"].as_u64().unwrap(), &data).err().map(|e| e.name());
+        assert_eq!(got, r["rule"].as_str(), "{}", r["name"]);
+    }
 }
 
 /// The member messages at their widest and one past it, built here rather
