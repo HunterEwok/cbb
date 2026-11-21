@@ -132,6 +132,9 @@ pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
         let a: Args = serde_json::from_slice(request)
             .map_err(|e| Error::msg(format!("the YubiKey request does not decode: {e}")))?;
         let app = AppCard { f, ctx };
+        if a.transport == "pcsc" {
+            return pcsc(&a);
+        }
         let mut ccid;
         let mut apdu;
         let card: &mut dyn Card = match a.transport.as_str() {
@@ -145,31 +148,49 @@ pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
             }
             other => return Err(Error::msg(format!("there is no YubiKey transport {other:?}"))),
         };
-        match a.op.as_str() {
-            "inspect" => {
-                let i = recovery::inspect(card, &a.pin)?;
-                Ok(json!({ "default_key": i.default_key }))
-            }
-            "seal" => {
-                let read = crate::member::live::recovery_read(&a.recovery)?;
-                let typed = Zeroizing::new(a.management.clone());
-                let mut asked = false;
-                let mut ask = |_alg: u8| {
-                    // The key the app was given, once: a wrong one is not
-                    // tried again.
-                    if typed.is_empty() || std::mem::replace(&mut asked, true) {
-                        return None;
-                    }
-                    Some(Zeroizing::new(typed.to_vec()))
-                };
-                let s = recovery::seal(card, &a.pin, &read.secret, &mut ask, a.replace_default)?;
-                Ok(json!({ "default_key": s.default_key, "replaced": s.replaced, "warning": s.warning }))
-            }
-            "open" => {
-                let secret = recovery::open(card, &a.pin)?;
-                Ok(json!({ "secret": b64(secret.as_ref()) }))
-            }
-            other => Err(Error::msg(format!("there is no YubiKey step {other:?}"))),
-        }
+        step(card, &a)
     })())
+}
+
+/// One step (Args' op) on card.
+fn step(card: &mut dyn Card, a: &Args) -> Result<Value> {
+    match a.op.as_str() {
+        "inspect" => {
+            let i = recovery::inspect(card, &a.pin)?;
+            Ok(json!({ "default_key": i.default_key }))
+        }
+        "seal" => {
+            let read = crate::member::live::recovery_read(&a.recovery)?;
+            let typed = Zeroizing::new(a.management.clone());
+            let mut asked = false;
+            let mut ask = |_alg: u8| {
+                // The key the app was given, once: a wrong one is not
+                // tried again.
+                if typed.is_empty() || std::mem::replace(&mut asked, true) {
+                    return None;
+                }
+                Some(Zeroizing::new(typed.to_vec()))
+            };
+            let s = recovery::seal(card, &a.pin, &read.secret, &mut ask, a.replace_default)?;
+            Ok(json!({ "default_key": s.default_key, "replaced": s.replaced, "warning": s.warning }))
+        }
+        "open" => {
+            let secret = recovery::open(card, &a.pin)?;
+            Ok(json!({ "secret": b64(secret.as_ref()) }))
+        }
+        other => Err(Error::msg(format!("there is no YubiKey step {other:?}"))),
+    }
+}
+
+/// A step on the card pcscd reaches (the transport `pcsc`, for a phone whose
+/// system runs pcscd, as Aurora OS does): `open` takes the one card with a
+/// key in slot 95, so that no other card is asked for the PIN; `inspect`
+/// and `seal` the one card that answers SELECT PIV.
+fn pcsc(a: &Args) -> Result<Value> {
+    if a.op == "open" {
+        let secret = recovery::open_one(&a.pin)?;
+        return Ok(json!({ "secret": b64(secret.as_ref()) }));
+    }
+    let mut card = cbb_member::piv::one_piv_card()?;
+    step(card.as_mut(), a)
 }

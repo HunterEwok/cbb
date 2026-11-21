@@ -446,6 +446,28 @@ pub fn sign_with_card(key_hash: &[u8; 32], pin: &str, public: &[u8], digest: &[u
     sign(k.card.as_mut(), k.slot, public, digest)
 }
 
+/// The one card of cards that answers SELECT PIV, for a step on a card that
+/// need not hold a key of cbb yet (`inspect`, `seal`): none, or two, is
+/// refused before anything is asked of either.
+pub fn one_piv(cards: Vec<Box<dyn Card>>) -> Result<Box<dyn Card>> {
+    let mut found = Vec::new();
+    for mut c in cards {
+        if select(c.as_mut()).is_ok() {
+            found.push(c);
+        }
+    }
+    match found.len() {
+        0 => Err(Error::msg(NO_CARD)),
+        1 => Ok(found.pop().expect("one card")),
+        _ => Err(Error::msg(TWO_CARDS)),
+    }
+}
+
+/// `one_piv` among the cards PC/SC finds.
+pub fn one_piv_card() -> Result<Box<dyn Card>> {
+    one_piv(cards()?)
+}
+
 /// Every card in the readers PC/SC lists, connected.
 fn cards() -> Result<Vec<Box<dyn Card>>> {
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -1029,6 +1051,22 @@ pub(crate) mod tests {
         let mut c = one.clone();
         select(&mut c).unwrap();
         assert!(certificate(&mut c, 0x9c).is_err(), "a slot that is not retired");
+    }
+
+    #[test]
+    fn one_piv_takes_the_only_card_with_piv() {
+        struct NoPiv;
+        impl Card for NoPiv {
+            fn transmit(&mut self, _: &[u8]) -> Result<Vec<u8>> {
+                Ok(vec![0x6a, 0x82])
+            }
+        }
+        let a = new_card(21);
+        let mut got = one_piv(vec![Box::new(NoPiv), Box::new(a.clone())]).unwrap();
+        select(got.as_mut()).unwrap();
+        assert_eq!(one_piv(vec![Box::new(new_card(22)), Box::new(new_card(23))]).err().unwrap().message(), TWO_CARDS);
+        assert_eq!(one_piv(vec![Box::new(NoPiv)]).err().unwrap().message(), NO_CARD);
+        assert_eq!(one_piv(Vec::new()).err().unwrap().message(), NO_CARD);
     }
 
     /// The factory key is Yubico's published one.

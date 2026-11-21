@@ -155,7 +155,10 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
  * "management"} seals the sheet's secret (recovery as manage's change_root
  * takes it) and answers {"default_key","replaced","warning"}; "open" {"pin"}
  * answers {"secret"}, base64, for change_root's recovery. "transport" is
- * "apdu" (the default) or "ccid_bulk", as cbb_transmit_fn says.
+ * "apdu" (the default) or "ccid_bulk", as cbb_transmit_fn says, or "pcsc"
+ * on a system that runs pcscd (Aurora OS): the core is the PC/SC client
+ * and never calls transmit, which must still be a function; open takes the
+ * one card with cbb's key, inspect and seal the one card that has PIV.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
 

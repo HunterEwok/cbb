@@ -378,7 +378,11 @@ YubiKey on USB-C, whose CCID interface the app claimed) it only moves bytes: a c
 writes them to the bulk-out endpoint, a call without reads one bulk-in transfer (empty when
 nothing came within about a second), and the core frames each APDU as CCID's
 `PC_to_RDR_XfrBlock` and waits through the card's time extensions while it waits for its
-touch (`cbb_member::piv::ccid`). The card holds the recovery secret itself
+touch (`cbb_member::piv::ccid`). With `pcsc` (a phone whose system runs pcscd, as Aurora OS
+does, which takes a YubiKey plugged into USB-C itself) the core is pcscd's client, as `cbb` is
+on a Linux computer, and never calls the function, which must still be one: `open` takes the
+one card with a key in slot 95, so that no other card is asked for the PIN, and `inspect` and
+`seal` the one card that answers PIV's SELECT; two such cards are refused. The card holds the recovery secret itself
 (protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`):
 `inspect` (`pin`) checks that the card can take it, with nothing written, and answers
 `{"default_key"}`, true while the card has its factory management key, which the app tells the

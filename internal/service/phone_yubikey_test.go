@@ -22,6 +22,8 @@ import (
 func TestFFIPhoneYubiKey(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	var h hub
+	// No pcscd here: the transport pcsc must reach for it and say so.
+	t.Setenv("PCSCLITE_CSOCK_NAME", filepath.Join(t.TempDir(), "no-pcscd"))
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	sheet := newGroup(t, pi)
@@ -80,6 +82,13 @@ func TestFFIPhoneYubiKey(t *testing.T) {
 	}
 	if got := piv(map[string]any{"op": "open", "pin": "123456", "transport": "lightning"}); !strings.Contains(got, "no YubiKey transport") {
 		t.Errorf("a transport there is none of: %s", got)
+	}
+	// A phone whose system runs pcscd (Aurora OS): the core is the PC/SC
+	// client, and the app's callback is not called.
+	for _, op := range []string{"open", "inspect"} {
+		if got := piv(map[string]any{"op": op, "pin": "123456", "transport": "pcsc"}); !strings.Contains(got, "needs pcscd") {
+			t.Errorf("%s over pcsc without pcscd: %s", op, got)
+		}
 	}
 	newRoot := func(req map[string]any) string {
 		t.Helper()
