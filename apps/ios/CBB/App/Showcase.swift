@@ -49,8 +49,6 @@ final class ShowcaseGroup: GroupController {
     func setMuted(_ id: String, _ on: Bool, forMS: Int64) async throws {
         if let i = computers.firstIndex(where: { $0.id == id }) { computers[i].muted = on ? AppModel.Hold(until: nil) : nil }
     }
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw PendingGroup.Failure.notReady }
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw PendingGroup.Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { .sent(to: computers.filter(\.online).map(\.name)) }
 }
 #endif

@@ -191,7 +191,28 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<An
     Some(Announcement(daemon))
 }
 
-/// An announcement of announce_joiner: dropping it shuts the mDNS daemon
+/// Announces a phone's open home window of 0.6 (docs/protocol.md,
+/// "Pairing in 0.6"): the phone's device ID, as text, as the instance, its
+/// member port, and TXT `v=1`, `g=<tag>`, `p=1`, the hash of its member key
+/// `f` and the window's ID `i` (hex), never the digits, for a joiner
+/// without a camera, as a computer's window is announced. Dropping the
+/// announcement sends the goodbyes.
+pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str, window_id: &str) -> Option<Announcement> {
+    let daemon = mdns_sd::ServiceDaemon::new().ok()?;
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+    let txt = [("v", "1"), ("g", tag), ("p", "1"), ("f", fingerprint), ("i", window_id)];
+    let info =
+        mdns_sd::ServiceInfo::new(SERVICE, id, &format!("cb-{id}.local."), "", port, &txt[..]).ok()?.enable_addr_auto();
+    daemon.register(info).ok()?;
+    Some(Announcement(daemon))
+}
+
+/// An announcement of announce_joiner or announce_window: dropping it shuts the mDNS daemon
 /// down, which sends the goodbyes.
 pub struct Announcement(mdns_sd::ServiceDaemon);
 

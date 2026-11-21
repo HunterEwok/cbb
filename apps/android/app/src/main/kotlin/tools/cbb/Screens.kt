@@ -259,54 +259,15 @@ private fun StartLanguageMenu(model: AppModel) {
 
 // Joining
 
-/** Joining another phone's group: this phone's QR code, which the other phone scans in Add a device. */
+/** Joining another phone's group: by an accepted invitation, or by the pairing window of a phone of the group. */
 @Composable
 private fun JoinScreen(model: AppModel) {
     if (model.joiningInvite != null) {
         JoinByInviteScreen(model)
         return
     }
-    val palette = LocalPalette.current
-    LaunchedEffect(Unit) { model.join() }
-    BackHandler { model.cancelJoin() }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
-    ) {
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        Text(
-            stringResource(R.string.join_title),
-            style = MaterialTheme.typography.headlineMedium,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            color = palette.accent,
-        )
-        val code = model.joinCode
-        if (code != null) {
-            val label = stringResource(R.string.join_qr_label)
-            QrCode(
-                code.qrText,
-                Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                    .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
-                    .semantics { contentDescription = label },
-            )
-            Text(
-                code.grouped,
-                style = MaterialTheme.typography.headlineLarge,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
-            )
-            val hint = if (model.isTv) R.string.join_hint_tv else R.string.join_hint
-            Text(stringResource(hint), textAlign = TextAlign.Center, color = palette.textDim)
-        } else if (model.message == null) {
-            CircularProgressIndicator(color = palette.accent)
-        }
-        model.message?.let { NoteText(it) }
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        QuietButton(stringResource(R.string.cancel), onClick = { model.cancelJoin() })
-    }
+    // The new phone dials a window (docs/protocol.md, section 6, "The window and who dials").
+    JoinByWindowScreen(model)
 }
 
 /**
@@ -526,12 +487,16 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
 // Adding
 
 /**
- * The camera with a frame; the text of the QR code by hand when there is no
- * camera or it is not allowed. With restore, it scans the recovery sheet's
- * QR code instead, on a phone without a group.
+ * Add a device: the pairing window (Pairing06.kt). With restore, on a phone
+ * without a group: the camera with a frame reads the recovery sheet's QR
+ * code, or its text is typed when there is no camera or it is not allowed.
  */
 @Composable
 internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
+    if (!restore) {
+        WindowScreen(model, close)
+        return
+    }
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -556,7 +521,7 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
         if (adding == null) {
             adding = scope.launch {
                 try {
-                    if (if (restore) model.restore(text.trim()) else model.scanned(text)) close()
+                    if (model.restore(text.trim())) close()
                 } finally {
                     adding = null
                 }
@@ -566,17 +531,17 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
     BackHandler { close() }
     // The recovery key typed or pasted stays out of screenshots and the
     // recent apps' preview.
-    if (restore) SecureWindow()
-    Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
+    SecureWindow()
+    Page(stringResource(R.string.restore_title), close) {
         // Restoring makes this device the group's root, as making the group does.
-        if (restore) MainKeyNote(model, hint = false)
+        MainKeyNote(model, hint = false)
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
                 modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
                 onError = { cameraError = it },
             )
-            Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.restore_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         } else if (cameraError != null) {
             // The camera did not start: the text of the QR code still works.
             NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
@@ -596,33 +561,31 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
             modifier = Modifier.fillMaxWidth(),
         )
-        AccentButton(stringResource(if (restore) R.string.restore_go else R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
-        if (restore) {
-            var askingPin by remember { mutableStateOf(false) }
-            QuietButton(stringResource(R.string.yubikey_restore), onClick = { askingPin = true }, enabled = !model.busy)
-            if (askingPin) {
-                YubiKeyPinDialog(
-                    stringResource(R.string.yubikey_restore_title),
-                    stringResource(R.string.yubikey_restore_body),
-                    dismiss = { askingPin = false },
-                ) { pin ->
-                    if (adding == null) {
-                        adding = scope.launch {
-                            try {
-                                if (model.restoreWithCard(pin)) close()
-                            } finally {
-                                adding = null
-                            }
+        AccentButton(stringResource(R.string.restore_go), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
+        var askingPin by remember { mutableStateOf(false) }
+        QuietButton(stringResource(R.string.yubikey_restore), onClick = { askingPin = true }, enabled = !model.busy)
+        if (askingPin) {
+            YubiKeyPinDialog(
+                stringResource(R.string.yubikey_restore_title),
+                stringResource(R.string.yubikey_restore_body),
+                dismiss = { askingPin = false },
+            ) { pin ->
+                if (adding == null) {
+                    adding = scope.launch {
+                        try {
+                            if (model.restoreWithCard(pin)) close()
+                        } finally {
+                            adding = null
                         }
                     }
                 }
             }
-            YubiKeyPrompt(model) { adding?.cancel() }
         }
+        YubiKeyPrompt(model) { adding?.cancel() }
         if (model.busy) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
                 CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
-                Text(if (model.retries > 0) stringResource(R.string.not_ready_yet, model.retries) else stringResource(R.string.connecting))
+                Text(stringResource(R.string.connecting))
             }
         } else {
             model.message?.let { NoteText(it) }
@@ -669,6 +632,7 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
             if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
         }
         if (shows(SettingsPart.RECOVERY) && home && model.isRoot) RecoverySection(model)
+        if (shows(SettingsPart.RECOVERY) && home && !model.isRoot) ChangeRootSection(model)
         if (part == null && home) {
             Row(
                 Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {
@@ -975,6 +939,11 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
             Text(status, color = if (relay.status == RelayOnPhone.Status.CONNECTED) palette.accent else palette.textDim)
             // The relay's error underneath, when details are on.
             relay.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
+            // On a group of 0.6 the relay is the group's, which only the root sets.
+            if (!relay.editable) {
+                Tip(R.string.relay_by_root)
+                return@Column
+            }
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },

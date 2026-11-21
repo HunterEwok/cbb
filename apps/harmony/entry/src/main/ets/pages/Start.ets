@@ -15,6 +15,10 @@ struct Start {
   async makeGroup(): Promise<void> {
     if (await app.makeGroup()) {
       router.replaceUrl({ url: 'pages/Main' });
+      // A group of 0.6 shows its recovery sheet once.
+      if (app.recoveryText.length > 0) {
+        router.pushUrl({ url: 'pages/Recovery' });
+      }
     }
   }
 
@@ -42,7 +46,7 @@ struct Start {
         })
         KeyGuardNote({ hint: true })
         this.choice($r('app.string.start_join'), $r('app.string.start_join_note'), false, () => {
-          router.pushUrl({ url: 'pages/Join' });
+          router.pushUrl({ url: 'pages/JoinWindow' });
         })
         this.choice($r('app.string.start_invitation'), $r('app.string.start_invitation_note'), false, () => {
           router.pushUrl({ url: 'pages/Invitation' });

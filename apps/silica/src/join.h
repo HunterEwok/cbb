@@ -1,96 +1,71 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Joining a group by the phone's QR code (docs/protocol.md, section 6, "The
-// joiner listens"): the phone listens on the member port and shows the QR
-// code, the group's phone or computer scans it and dials in, and the core
-// (ffi's cbb_join_*) runs the pairing inside its own TLS, signing with
-// the key in the key store. Or by a remote invitation (section 12): the
-// core starts the invitation's guest tunnel, the phone dials its loopback
-// port, and the inviting admin admits the phone by the fingerprint it
-// shows. This class only moves the bytes.
+// Joining a group of 0.6 from afar by a remote invitation (docs/protocol.md,
+// section 12), through ffi's cbb_joiner_* with the invitation's text: the
+// phone dials the hub through the invitation's guest tunnel and shows its
+// fingerprint, which the inviting admin compares; once admitted, the set is
+// kept where the member then starts, and the member reaches the hub through
+// that tunnel until the hub's offer comes. A phone joins at home by a
+// pairing window's QR code (pairing06.h).
 #pragma once
 
-#include "membership.h"
+#include "errors.h"
 
-#include <QByteArray>
 #include <QObject>
-#include <QPointer>
 #include <QString>
-#include <QStringList>
+#include <QTimer>
 
-class QTcpServer;
-class QTcpSocket;
-struct cbb_join;
+struct cbb_joiner;
 
 class Join : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString state READ state NOTIFY changed)
-    Q_PROPERTY(QString code READ code NOTIFY changed)
-    Q_PROPERTY(QStringList modules READ modules NOTIFY changed)
-    Q_PROPERTY(QString qr READ qr NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     Q_PROPERTY(QString fingerprint READ fingerprint NOTIFY changed)
     Q_PROPERTY(bool byInvite READ byInvite NOTIFY changed)
 
 public:
-    // The member port, which the QR code names.
-    static const quint16 port = 8764;
-
     explicit Join(QObject *parent = nullptr);
     ~Join() override;
 
-    // idle, listening, dialing (by an invitation), joining (a device
-    // dialed in, or the invitation's hub answered), joined or failed.
+    // idle, dialing (until the hub answered through the guest tunnel),
+    // joining (waiting for the inviting admin), joined or failed.
     QString state() const { return m_state; }
-    QString code() const { return m_code; }
-    // The QR code's rows, '1' for a dark module.
-    QStringList modules() const { return m_modules; }
-    QString qr() const { return m_qr; }
     QString error() const { return m_error; }
     // The words the phone shows while it joins by an invitation, which the
     // inviting admin compares.
     QString fingerprint() const { return m_fingerprint; }
     bool byInvite() const { return !m_invite.isEmpty(); }
-    // The invitation the phone joins by, until it joined.
+    // The invitation the phone joins by.
     QString invite() const { return m_invite; }
 
-    // Starts listening as a phone named name with system os ("aurora" or
-    // "sailfish") and the key's public point; with adminKey, the admin
-    // key's, it asks to be an admin, which only the group's root admits.
-    void start(const QString &name, const QString &os, const QByteArray &publicKey, const QByteArray &adminKey = QByteArray());
-    // Joins by a remote invitation's text, which the user accepted.
-    void startInvite(const QString &name, const QString &os, const QByteArray &publicKey, const QString &invite);
+    // Joins by a remote invitation's text, which the user accepted, as the
+    // phone named name with system os and the member key's public point,
+    // keeping the set in dir.
+    void startInvite(const QString &invite, const QString &dir, const QString &name, const QString &os, const QByteArray &publicKey);
     Q_INVOKABLE void stop();
     // Ends the join with f shown on the page.
     void fail(const Failure &f);
 
 signals:
     void changed();
-    // The phone joined; membership is saved.
-    void joined(const Membership &membership);
+    // The phone joined the group (its ID in hex) as the device device; the
+    // set is in dir.
+    void joined(const QString &group, const QString &device);
 
 private:
-    void accept();
-    void dialInvite();
-    void inviteAttemptEnded();
-    void feed(const QByteArray &data);
+    void poll();
+    void free();
     void setState(const QString &state);
 
-    cbb_join *m_join = nullptr;
-    QTcpServer *m_server = nullptr;
-    QPointer<QTcpSocket> m_conn;
-    QByteArray m_publicKey;
-    bool m_admin = false;
-    int m_wrongCodes = 0;
+    cbb_joiner *m_joiner = nullptr;
+    QTimer m_poll;
+    quint64 m_version = 0;
+    bool m_answered = false;
     QString m_state = QStringLiteral("idle");
-    QString m_code;
-    QStringList m_modules;
-    QString m_qr;
     QString m_error;
-    QString m_fingerprint;
     QString m_invite;
-    quint16 m_invitePort = 0;
-    int m_inviteAttempts = 0;
+    QString m_fingerprint;
 };

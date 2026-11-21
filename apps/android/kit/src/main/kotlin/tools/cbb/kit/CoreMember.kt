@@ -230,6 +230,27 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
 
+        /** An admin turned this phone's sync off ([off]) or on again; the member of 0.6 carried it out and keeps it. */
+        class Sync(val off: Boolean, val by: String) : Event()
+
+        /** The group's state changed (a record came, a device joined or left). */
+        class State(val state: GroupState) : Event()
+
+        /** A new notice about the group. */
+        class NoticeAdded(val notice: Notice) : Event()
+
+        /**
+         * The group's root changed by its recovery key: every device shows it and cannot turn it off,
+         * with "This wasn't me". from and to are the old and new root's devices, seq the change's step.
+         */
+        class RootChanged(val from: String, val to: String, val seq: Long) : Event()
+
+        /** The member needs a key of the phone's, kind spare_admin: the app makes it and answers with [keyMade] and the token. */
+        class NeedKey(val token: Long, val kind: String) : Event()
+
+        /** The member no longer needs the key public: the app may delete it. */
+        class KeyDone(val public: ByteArray) : Event()
+
         /**
          * Something in the member broke (docs/core-api.md, "Panics"): details say what and
          * where. The app logs it, shows it and starts the member again.
@@ -307,6 +328,97 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun listen(what: Listen = Listen.HOME, port: Int = 0): Int =
         call("listen", Wire.obj("port" to Wire.num(port.toLong()), "kind" to Wire.str(what.wire))).optLong("port")?.toInt()
             ?: throw Core.Mismatch("listen answered no port")
+
+    /** A hub's registration with its forwarder, as the member's sync away from home shows it. */
+    data class ForwarderState(val endpoint: String, val registered: Boolean, val seen: String, val entriesStale: Boolean, val error: String, val detail: String)
+
+    /** This phone's link to the group's blind relay. */
+    data class RelayState(val endpoint: String, val connected: Boolean, val online: List<String>, val error: String, val detail: String)
+
+    /**
+     * Sync away from home on a group of 0.6, as the member runs it (`away_status`, docs/core-api.md): a hub (standing
+     * by while a hub above it serves) with its port, clients, endpoints and forwarder; else the hub it reaches and
+     * whether through the tunnel now; the relay link; the last error with its detail.
+     */
+    data class AwayState(
+        val hub: Boolean,
+        val standby: Boolean,
+        val port: Int,
+        val clients: Int,
+        val obfuscated: Boolean,
+        val vless: Boolean,
+        val endpoints: List<String>,
+        val hubDevice: String,
+        val through: Boolean,
+        val keysInFile: Boolean,
+        val forwarder: ForwarderState?,
+        val relay: RelayState?,
+        val error: String,
+        val detail: String,
+    ) {
+        companion object {
+            private fun strings(o: JsonObject, key: String): List<String> = o.optArray(key)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+
+            /** The answer's `away`, null while sync away from home is off and nothing failed. */
+            fun of(answer: JsonObject): AwayState? = answer.optObject("away")?.let { a ->
+                AwayState(
+                    a.optBool("hub") ?: false, a.optBool("standby") ?: false, (a.optLong("port") ?: 0).toInt(), (a.optLong("clients") ?: 0).toInt(),
+                    a.optBool("obfuscated") ?: false, a.optBool("vless") ?: false, strings(a, "endpoints"), a.optString("hub_device") ?: "",
+                    a.optBool("through") ?: false, a.optBool("keys_in_file") ?: false,
+                    a.optObject("forwarder")?.let { f ->
+                        ForwarderState(f.optString("endpoint") ?: "", f.optBool("registered") ?: false, f.optString("seen") ?: "",
+                            f.optBool("entries_stale") ?: false, f.optString("error") ?: "", f.optString("detail") ?: "")
+                    },
+                    a.optObject("relay")?.let { r ->
+                        RelayState(r.optString("endpoint") ?: "", r.optBool("connected") ?: false, strings(r, "online"),
+                            r.optString("error") ?: "", r.optString("detail") ?: "")
+                    },
+                    a.optString("error") ?: "", a.optString("detail") ?: "",
+                )
+            }
+        }
+
+        /** Sync away from home is on: the member keeps its tunnel keys; a failure while it is off shows only error. */
+        val isOn: Boolean get() = keysInFile
+    }
+
+    /** On a group of 0.6: sync away from home as the member runs it, null while it is off. */
+    fun awayStatus(): AwayState? = AwayState.of(call("away_status"))
+
+    /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
+    fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
+
+    /**
+     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key), with the
+     * computers' hub: reached away from home through the forwarder at forwarder (`host:port`, its key's pin key or
+     * `default` for the project's), or at addrs ("ip:port") on the UDP port (0: any free one), hidden as obfuscateOff
+     * and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
+     */
+    fun serveAsHub(
+        port: Int = 0,
+        addrs: List<String> = emptyList(),
+        forwarder: String = "",
+        key: String = "",
+        obfuscateOff: Boolean = false,
+        vlessOff: Boolean = false,
+    ): AwayState? = AwayState.of(
+        call(
+            "hub",
+            Wire.obj(
+                "port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
+                "forwarder" to Wire.str(forwarder), "key" to Wire.str(key),
+                "obfuscate_off" to JsonPrimitive(obfuscateOff), "vless_off" to JsonPrimitive(vlessOff),
+            ),
+        ),
+    )
+
+    /** On a group of 0.6: stops serving as a hub; its clients go to the next hub in the group's order. */
+    fun stopHub(): AwayState? = AwayState.of(call("hub_off"))
+
+    /** On the root of a group of 0.6: the group's relays, each "address pin", or "default" alone; none meets at no relay. */
+    fun setRelays(relays: List<String>, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
+        root(Wire.obj("action" to Wire.str("relay"), "relays" to JsonArray(relays.map { JsonPrimitive(it) })), public, sign)
+            .optArray("relays")?.map { (it as JsonPrimitive).content } ?: emptyList()
 
     /** Closes the port [listen] opened for [what], or every one with null. */
     fun unlisten(what: Listen? = null) {
@@ -440,6 +552,70 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun disconnect(device: String) {
         call("disconnect", Wire.obj("device" to Wire.str(device)))
     }
+
+    // The group in 0.6 (docs/core-api.md, "The member"): the member keeps and evaluates the
+    // records; the app reads what it shows and asks for what the person decides.
+
+    /** The group as the member sees it now. */
+    fun group(): GroupState = GroupState.fromJson(call("group"))
+
+    /** The member's notices about the group, newest first. */
+    fun notices(): List<Notice> = call("notices").objects("notices").map(Notice::fromJson)
+
+    /** Hides the notice id until something about it changes. */
+    fun dismiss(id: String) {
+        call("dismiss", Wire.obj("id" to Wire.str(id)))
+    }
+
+    /** Tells the member the person kept the recovery key, on a sheet or on a YubiKey ("sheet" or "yubikey"). */
+    fun recoverySaved(how: String) {
+        call("recovery_saved", Wire.obj("how" to Wire.str(how)))
+    }
+
+    /** Answers [Event.NeedKey]: the app made the key whose point (or DER public key) is public. */
+    fun keyMade(token: Long, public: ByteArray) {
+        call("key_made", Wire.obj("token" to Wire.num(token), "public" to Wire.bytes(point(public))))
+    }
+
+    /**
+     * Who stays after a change of root with the recovery key, before anything is signed: the
+     * core writes the list; leaveOut are the devices the person unticked. The recovery keys
+     * are derived inside the call and dropped at its end.
+     */
+    fun changePreview(recovery: RecoveryInput, leaveOut: List<String> = emptyList()): ChangePreview = ChangePreview.fromJson(
+        manage(
+            Wire.obj(
+                "action" to Wire.str("change_preview"),
+                "recovery" to recovery.toJson(),
+                "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            ),
+        ) { throw IllegalStateException("a preview signs nothing") },
+    )
+
+    /**
+     * Changes the group's root to this phone's new root key rootPublic, which sign signs with
+     * (Face ID before each use): the recovery key signs the change, the new root its first
+     * records, and leaveOut are removed in the same act. overWaiting writes over a change
+     * whose records never came; offer it only after a sync failed.
+     */
+    fun changeRoot(
+        recovery: RecoveryInput,
+        leaveOut: List<String>,
+        rootPublic: ByteArray,
+        sign: (ByteArray) -> ByteArray,
+        dropHubs: Boolean = false,
+        overWaiting: Boolean = false,
+    ): Long = manage(
+        Wire.obj(
+            "action" to Wire.str("change_root"),
+            "recovery" to recovery.toJson(),
+            "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            "drop_hubs" to JsonPrimitive(dropHubs),
+            "over_waiting" to JsonPrimitive(overWaiting),
+            "public" to Wire.bytes(point(rootPublic)),
+        ),
+        sign,
+    ).optLong("seq") ?: 0
 
     /** The callbacks of the manage calls under way. */
     private val signing = mutableListOf<SignFn>()
@@ -724,6 +900,12 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                     Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
                 }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "sync" -> Event.Sync(o.optBool("off") ?: return null, o.optString("by") ?: "")
+                "state" -> o.optObject("state")?.let { Event.State(GroupState.fromJson(it)) }
+                "notice" -> o.optObject("notice")?.let { Event.NoticeAdded(Notice.fromJson(it)) }
+                "root_changed" -> Event.RootChanged(o.optString("from") ?: "", o.optString("to") ?: "", o.optLong("seq") ?: 0)
+                "need_key" -> Event.NeedKey(o.optLong("token") ?: return null, o.optString("kind") ?: return null)
+                "key_done" -> Event.KeyDone(o.optBytes("public") ?: return null)
                 "panic" -> Event.Panic(o.optString("details") ?: "")
                 "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null

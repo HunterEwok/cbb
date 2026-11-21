@@ -16,11 +16,11 @@ import { ensure, forget } from '../core/Keys';
 import { Joined, Membership, sealSecret } from '../core/Membership';
 import { OS, osVersion, phoneName, STORE } from '../core/Phone';
 import { t } from '../core/Text';
-import { Admit } from './Admit';
 import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
 import { Join } from './Join';
+import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
 import { CheckedPaste, Paste, PasteAnswer } from './Paste';
@@ -122,6 +122,19 @@ function restoreFailure(f: Failure): Failure {
   return new Failure(shown, `${f.details} (${f.message})`);
 }
 
+// The core's answer of a new group of 0.6 (ffi's found.rs).
+interface Sheet06 {
+  qr?: string;
+  text?: string[];
+  modules?: string[];
+}
+
+interface Made06 {
+  group?: string;
+  device?: string;
+  recovery?: Sheet06;
+}
+
 @ObservedV2
 export class AppModel {
   @Trace membership: Membership | undefined = undefined;
@@ -158,7 +171,9 @@ export class AppModel {
 
   readonly member: Member = new Member();
   readonly join: Join = new Join();
-  readonly admit: Admit = new Admit();
+  // Pairing in a group of 0.6: the admin's window and the new phone's joiner.
+  readonly window: PairWindow = new PairWindow();
+  readonly joiner: Joiner = new Joiner();
   readonly invite: Invite = new Invite();
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
@@ -195,6 +210,7 @@ export class AppModel {
     }
     this.member.onDevices = (devices: Device[]) => {
       this.events.observe(devices);
+      this.adminFromRecords(devices);
     };
     // A member that broke stops and starts again; the user sees what
     // broke, the details only in debug mode (Errors.shown).
@@ -226,21 +242,68 @@ export class AppModel {
     this.member.onAdminCa = (ca: string, from: string) => {
       this.adminCaArrived(ca, from);
     };
-    this.join.onJoined = (j: Membership) => {
-      this.membership = j;
-      this.startMember().then(() => {
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        if (this.join.byInvite) {
-          this.member.joinedByInvite(this.join.invitation());
-        }
-      });
+    // A phone that joined a group of 0.6: the set is in the app's files.
+    this.joiner.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
+      }
+    };
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    this.join.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
+      }
     };
   }
 
   isAdmin(): boolean {
     return this.membership !== undefined && this.membership.isAdmin();
+  }
+
+  // On 0.6 the group's records say who is an admin; the member's devices
+  // list them.
+  private adminFromRecords(devices: Device[]): void {
+    const m = this.membership;
+    if (m === undefined || !m.isV06()) {
+      return;
+    }
+    const self = devices.find((d: Device) => d.self === true);
+    if (self === undefined) {
+      return;
+    }
+    const admin = self.admin === true;
+    if (admin === (m.member.admin06 === true)) {
+      return;
+    }
+    const next = m.copy();
+    next.member.admin06 = admin;
+    if (this.keep(next)) {
+      Errors.log(`admin: the records ${admin ? 'make' : 'no longer make'} this phone an admin`);
+    }
+  }
+
+  // As an admin of a group of 0.6: opens the member's pairing window.
+  openWindow(): void {
+    if (this.membership === undefined || !this.membership.isV06() || !this.membership.isAdmin()) {
+      return;
+    }
+    this.window.open(this.member);
+  }
+
+  // Without a group: joins a group of 0.6 by text, the six digits a window
+  // of the group shows (the window announced at home), or a window's QR code
+  // text, scanned or pasted.
+  joinByWindow(text: string): void {
+    if (this.membership !== undefined) {
+      return;
+    }
+    const digits = text.replace(/\s/g, '');
+    if (/^[0-9]{6}$/.test(digits)) {
+      this.joiner.start(this.dir, '', digits, phoneName(), OS);
+    } else {
+      this.joiner.start(this.dir, text, '', phoneName(), OS);
+    }
   }
 
   isRoot(): boolean {
@@ -304,11 +367,10 @@ export class AppModel {
     return true;
   }
 
+  // A group of 0.6: the set is kept in the app's files, where the member
+  // then starts on it (ffi's cbb_group_new with dir), and its recovery
+  // sheet is shown once (pages/Recovery).
   private async newGroup(): Promise<Failure | undefined> {
-    const seal = this.sealKey();
-    if (seal instanceof Failure) {
-      return seal;
-    }
     const member = await ensure('member');
     if (member.ok === undefined) {
       return member.failure;
@@ -318,25 +380,29 @@ export class AppModel {
       return root.failure;
     }
     const request: Record<string, Object> = {
+      'dir': this.dir,
       'name': phoneName(),
       'os': OS,
       'store': STORE,
       'public': member.ok.public,
-      'root_public': root.ok.public,
-      'seal': seal
+      'root_public': root.ok.public
     };
-    const group = read<Joined>(await cbb.groupNew(JSON.stringify(request)), 'group');
+    const group = read<Made06>(await cbb.groupNew(JSON.stringify(request)), 'group');
     if (group.ok === undefined) {
       return group.failure;
     }
-    const m = new Membership(group.ok);
-    m.member.root = true;
+    const m = Membership.of06(group.ok.device ?? '', group.ok.group ?? '', true);
+    if (!m.isV06() || m.member.device.length === 0) {
+      return new Failure(t('error_broken'), 'group: no device in the answer');
+    }
     const saved = m.save(this.dir);
     if (saved !== undefined) {
       return saved;
     }
     Errors.log(`group: made ${m.groupTag()} as its root`);
     this.membership = m;
+    this.recoveryText = (group.ok.recovery?.text ?? []).join('\n');
+    this.recoveryModules = group.ok.recovery?.modules ?? [];
     return undefined;
   }
 
@@ -352,21 +418,8 @@ export class AppModel {
     return seal.ok.key;
   }
 
-  // Listens for the device that scans this phone's QR code. The phone
-  // joins as a member; the group's root may make it an admin later, with
-  // the admin key its hellos offer.
-  startJoin(): void {
-    this.join.start(this.dir);
-  }
-
   startJoinByInvite(text: string): void {
-    this.join.startInvite(this.dir, text);
-  }
-
-  startAdmit(qr: string): void {
-    if (this.membership !== undefined) {
-      this.admit.admit(qr, this.member, this.membership);
-    }
+    this.join.startInvite(this.dir, text, phoneName(), OS);
   }
 
   startInvite(seconds: number): void {
@@ -668,6 +721,11 @@ export class AppModel {
   // Meets the group at the blind relay at relay with key, or leaves it
   // with both empty. Shows why not.
   async setRelay(relay: string, key: string): Promise<boolean> {
+    // On a group of 0.6 the relay is the group's: the root writes it into
+    // the group's settings, and every device meets the others there.
+    if (this.isV06()) {
+      return this.setGroupRelay(relay, key);
+    }
     const failure = await this.member.setRelay(relay, key);
     if (failure !== undefined) {
       this.show(Errors.shown(failure));
@@ -676,6 +734,29 @@ export class AppModel {
     this.prefs?.putSync('relay', relay);
     this.prefs?.putSync('relay_key', key);
     this.prefs?.flush();
+    this.show('');
+    return true;
+  }
+
+  // Whether the group is of 0.6, whose relay is the group's setting.
+  isV06(): boolean {
+    return this.membership !== undefined && this.membership.isV06();
+  }
+
+  // The root of a group of 0.6 sets the group's relay (manage relay): the
+  // address with its key's pin, the project's with the key 'default', or
+  // none with both empty.
+  private async setGroupRelay(relay: string, key: string): Promise<boolean> {
+    if (!this.isRoot()) {
+      this.show(Errors.shown(new Failure(t('relay_by_root'), 'relay: only the root sets the group\'s relay')));
+      return false;
+    }
+    const relays: string[] = relay.length === 0 ? [] : key === 'default' ? ['default'] : [`${relay} ${key}`];
+    const a = await this.runManage('relay', '', { 'relays': relays } as Record<string, Object>);
+    if (a === undefined) {
+      return false;
+    }
+    Errors.log(relays.length > 0 ? `relay: the group meets at ${relay}` : 'relay: the group meets at no relay');
     this.show('');
     return true;
   }
@@ -691,7 +772,7 @@ export class AppModel {
       }
     }
     const relay = this.relayAddress();
-    if (relay.length > 0) {
+    if (relay.length > 0 && !this.isV06()) {
       const failure = await this.member.setRelay(relay, this.relayKey());
       if (failure !== undefined) {
         Errors.log(`servers: the relay was not met again: ${failure.message} (${failure.details})`);

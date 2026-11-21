@@ -29,6 +29,8 @@ struct SettingsView: View {
     @State private var relayKey = ""
     /// Whether the question about what a relay learns is showing.
     @State private var askingRelay = false
+    /// Whether the change of the main device to this phone is showing.
+    @State private var changeRoot = false
     /// Taps on the version; seven show the error details switch, as
     /// Android's build number shows its developer options.
     @State private var versionTaps = 0
@@ -54,6 +56,15 @@ struct SettingsView: View {
             }
             if shows(.recovery), model.isRoot {
                 RecoverySection()
+            }
+            if shows(.recovery), !model.isRoot, model.phase == .home {
+                Section {
+                    Button { changeRoot = true } label: { Text("Move the group to this phone") }
+                        .accessibilityIdentifier("change-root")
+                } footer: {
+                    Text("With the group's recovery key, this phone becomes the main device, for example when the old one is lost.")
+                }
+                .listRowBackground(palette.surface)
             }
             if part == nil {
                 Section {
@@ -99,6 +110,7 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(AppBackground())
         .navigationTitle(part?.title ?? Text("Settings"))
+        .sheet(isPresented: $changeRoot) { ChangeRootView() }
         .task {
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
@@ -417,25 +429,31 @@ extension SettingsView {
             if let error = relay.error, AppModel.showsErrorDetails {
                 Text(verbatim: error).font(.caption).foregroundStyle(palette.textDim)
             }
-            TextField(text: $relayAddress) { Text("Relay address, such as 198.51.100.9:8764") }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.numbersAndPunctuation)
-            TextField(text: $relayKey) { Text("Relay key, 44 characters") }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .font(.system(.body, design: .monospaced))
-            let empty = relayAddress.trimmingCharacters(in: .whitespaces).isEmpty && relayKey.trimmingCharacters(in: .whitespaces).isEmpty
-            Button {
-                if empty {
-                    saveRelay()
-                } else {
-                    askingRelay = true
+            // On a group of 0.6 the relay is the group's, which only the root sets.
+            if relay.editable {
+                TextField(text: $relayAddress) { Text("Relay address, such as 198.51.100.9:8764") }
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.numbersAndPunctuation)
+                TextField(text: $relayKey) { Text("Relay key, 44 characters") }
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+                let empty = relayAddress.trimmingCharacters(in: .whitespaces).isEmpty && relayKey.trimmingCharacters(in: .whitespaces).isEmpty
+                Button {
+                    if empty {
+                        saveRelay()
+                    } else {
+                        askingRelay = true
+                    }
+                } label: {
+                    Text(empty ? "Leave the relay" : "Meet at this relay")
                 }
-            } label: {
-                Text(empty ? "Leave the relay" : "Meet at this relay")
+                .disabled(switching || (relayAddress == (relay.relay?.endpoint ?? "") && relayKey == (relay.relay?.pin ?? "")))
+            } else {
+                Text("The group's root sets the relay for every device; this phone meets the others there while sync away from home is on.")
+                    .font(.caption).foregroundStyle(palette.textDim)
             }
-            .disabled(switching || (relayAddress == (relay.relay?.endpoint ?? "") && relayKey == (relay.relay?.pin ?? "")))
             if let note = model.relayNote {
                 Text(verbatim: note).font(.caption).foregroundStyle(palette.danger)
             }

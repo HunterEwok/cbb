@@ -49,23 +49,18 @@ export const memberManageWatch: (member: Handle, request: string) => Promise<str
 export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 
-export const joinNew: (request: string) => Promise<Made>;
-export const joinAccept: (join: Handle) => Promise<string>;
-export const joinFeed: (join: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const joinFinish: (join: Handle, saved: boolean) => Promise<string>;
-export const joinAnnounce: (join: Handle, port: number) => boolean;
-export const joinAnswered: (join: Handle) => boolean;
-export const joinFree: (join: Handle) => Promise<void>;
-
-export const admitNew: (member: Handle, request: string, which: Which) => Promise<Made>;
-export const admitDial: (admit: Handle) => Promise<string>;
-export const admitFeed: (admit: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const admitFree: (admit: Handle) => Promise<void>;
-
 export const inviteNew: (member: Handle, request: string, which: Which) => Promise<Made>;
 export const inviteNext: (invite: Handle, version: number, timeoutMs: number) => Promise<string>;
 export const inviteAnswer: (invite: Handle, yes: boolean) => void;
 export const inviteFree: (invite: Handle) => Promise<void>;
+
+// Pairing in a group of 0.6: the admin's window and the new phone's joiner.
+export const windowNew: (member: Handle, request: string, which: Which) => Promise<Made>;
+export const windowNext: (window: Handle, version: number, timeoutMs: number) => Promise<string>;
+export const windowFree: (window: Handle) => Promise<void>;
+export const joinerNew: (request: string) => Promise<Made>;
+export const joinerNext: (joiner: Handle, version: number, timeoutMs: number) => Promise<string>;
+export const joinerFree: (joiner: Handle) => Promise<void>;
 
 export const tunnel: (request: string) => Promise<string>;
 export const tunnelRegister: (request: string) => Promise<string>;

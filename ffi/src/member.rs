@@ -444,6 +444,12 @@ enum Event<'a> {
         for_ms: i64,
         by: &'a str,
     },
+    /// An admin turned the phone's sync off or on (a group of 0.6): the
+    /// member did it; the app shows it.
+    Sync {
+        off: bool,
+        by: &'a str,
+    },
 }
 
 #[derive(Deserialize)]
@@ -566,7 +572,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 /// (`live::Phone`) when the app's folder holds the group's `group.cbor`.
 pub enum Member {
     Old(Old),
-    Live(live::Phone),
+    Live(Box<live::Phone>),
 }
 
 impl Member {
@@ -574,7 +580,7 @@ impl Member {
     pub fn start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> (Option<Member>, Vec<u8>) {
         if live::on_06(request) {
             return match live::Phone::start(request, sign, events, ctx) {
-                Ok(p) => (Some(Member::Live(p)), answer(Ok(json!({})))),
+                Ok(p) => (Some(Member::Live(Box::new(p))), answer(Ok(json!({})))),
                 Err(e) => (None, answer::<()>(Err(e))),
             };
         }
@@ -619,18 +625,19 @@ impl Member {
 
     /// Admitting a device by its QR code; on 0.6 it moves to the core's
     /// join session (docs/core-api.md).
-    pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
+    /// A pairing window on the records of 0.6; a member of 0.5 has none.
+    pub fn window(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::window::Window>, Vec<u8>) {
         match self {
-            Member::Old(m) => m.admit(request, sign, ctx),
-            Member::Live(_) => (None, answer::<()>(Err(cbb_member::live::not_yet("admitting a device from a phone")))),
+            Member::Old(_) => (None, answer::<()>(Err(Error::msg("a group of 0.5 admits by the device's QR code")))),
+            Member::Live(p) => p.window(request, sign, ctx),
         }
     }
 
-    /// A remote invitation; on 0.6 it moves to the core's join session.
+    /// A remote invitation: on 0.6 the member's (`Live::open_invitation`).
     pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
         match self {
             Member::Old(m) => m.invite(request, sign, ctx),
-            Member::Live(_) => (None, answer::<()>(Err(cbb_member::live::not_yet("a remote invitation")))),
+            Member::Live(p) => crate::invite::Invite::new_live(p.live(), request, sign, ctx),
         }
     }
 }
@@ -1337,12 +1344,6 @@ impl Old {
             }
             Ok(json!({}))
         })())
-    }
-
-    /// Starts admitting the device whose QR code the app scanned
-    /// (src/admit.rs), with the issuing key's callback.
-    pub fn admit(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::admit::Admit>, Vec<u8>) {
-        crate::admit::Admit::new(self.node.clone(), request, sign, ctx)
     }
 
     /// Makes a remote invitation as an admin (src/invite.rs).

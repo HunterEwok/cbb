@@ -169,6 +169,7 @@ void Member::stop()
     m_peerTimer.stop();
     cbb_member_stop(m_member);
     m_member = nullptr;
+    m_listening = false;
     m_peers.clear();
     m_devices.clear();
     m_alerts.clear();
@@ -438,8 +439,22 @@ void Member::event(const QByteArray &json)
         const QString details = e.value(QStringLiteral("details")).toString();
         Errors::log(QStringLiteral("member: %1").arg(details));
         emit panicked(details);
-    } else if (type == QStringLiteral("mute")) {
+    } else if (type == QStringLiteral("mute") || type == QStringLiteral("sync")) {
         pollMuted();
+    } else if (type == QStringLiteral("root_changed")) {
+        // Every device shows it until the person saw it, and nobody turns it off.
+        const QString from = e.value(QStringLiteral("from")).toString();
+        const QString to = e.value(QStringLiteral("to")).toString();
+        Errors::log(QStringLiteral("member: the group's root changed from %1 to %2").arg(from, to));
+        m_rootChanged = QVariantMap{
+            {QStringLiteral("from"), deviceName(from)},
+            {QStringLiteral("to"), deviceName(to)},
+            {QStringLiteral("seq"), e.value(QStringLiteral("seq")).toDouble()},
+        };
+        emit devicesChanged();
+        pollDevices();
+    } else if (type == QStringLiteral("state") || type == QStringLiteral("notice")) {
+        pollDevices();
     } else if (type == QStringLiteral("command")) {
         command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
                 e.value(QStringLiteral("command")).toObject());
@@ -464,6 +479,22 @@ bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
     }
     call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
     return failure->isNull();
+}
+
+bool Member::listen(Failure *failure)
+{
+    if (!m_member) {
+        *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
+        return false;
+    }
+    if (m_listening)
+        return true;
+    const QJsonObject a = call(m_member, QStringLiteral("listen"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("home")}}, failure);
+    if (!failure->isNull())
+        return false;
+    m_listening = true;
+    Errors::log(QStringLiteral("member: listening on port %1").arg(a.value(QStringLiteral("port")).toInt()));
+    return true;
 }
 
 void Member::command(double token, const QString &from, const QJsonObject &record)
@@ -643,21 +674,6 @@ void Member::pollPeers()
     pollAway();
 }
 
-void Member::joinedByInvite(const QString &invite)
-{
-    if (!m_member)
-        return;
-    Failure failure;
-    const QJsonObject a = call(m_member, QStringLiteral("joined_by_invite"), QJsonObject{{QStringLiteral("invite"), invite}}, &failure);
-    if (!failure.isNull()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
-    }
-    Errors::log(QStringLiteral("member: joined by an invitation; sync away from home is on"));
-    readAway(a.value(QStringLiteral("away")));
-}
-
 void Member::setAway(bool on)
 {
     if (!m_member)
@@ -753,13 +769,51 @@ void Member::pollDevices()
     Failure viewFailure;
     const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
     const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
-    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView) {
+    Failure noticesFailure;
+    const QJsonObject ns = call(m_member, QStringLiteral("notices"), QJsonObject(), &noticesFailure);
+    const QVariantList notices =
+        noticesFailure.isNull() ? ns.value(QStringLiteral("notices")).toArray().toVariantList() : m_notices;
+    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView || notices != m_notices) {
         m_devices = devices;
         m_alerts = alerts;
         m_why = why;
         m_rootView = rootView;
+        m_notices = notices;
         emit devicesChanged();
     }
+}
+
+void Member::dismissNotice(const QString &id)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    call(m_member, QStringLiteral("dismiss"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+    }
+    pollDevices();
+}
+
+void Member::rootChangeSeen()
+{
+    if (m_rootChanged.isEmpty())
+        return;
+    m_rootChanged.clear();
+    emit devicesChanged();
+}
+
+QString Member::deviceName(const QString &id) const
+{
+    for (const QVariant &v : m_devices) {
+        const QVariantMap d = v.toMap();
+        if (d.value(QStringLiteral("device")).toString() == id) {
+            const QString name = d.value(QStringLiteral("name")).toString();
+            return name.isEmpty() ? id : name;
+        }
+    }
+    return id;
 }
 
 QJsonObject Member::view(const QJsonValue &op, Failure *failure) const

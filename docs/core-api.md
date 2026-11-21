@@ -39,29 +39,6 @@ with `cbb_free`; `cbb_abi` gives the ABI. `ffi/bind.sh` builds the library for t
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
 `libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call.
 
-Built with the feature `join` (only the Aurora app's library, `bind.sh aurora`), the library
-also lets a phone join by its QR code with a key the core does not hold, the Aurora app's key
-in OP-TEE: `cbb_join_new` takes the phone's name, its system, its public key, the addresses
-for the QR code and a callback that signs a SHA-256 digest with the key, and answers the QR
-code's text and modules and the code; for each connection a member dials, `cbb_join_accept`
-starts an attempt and `cbb_join_feed` takes the bytes that arrive and answers those to send
-and whether the member admitted the phone (with its certificate, the group CA, the roots and
-the records file); `cbb_join_finish` tells the member whether the app stored it, and
-`cbb_join_free` ends the joiner. In the build with the member, `cbb_join_announce` announces the
-joiner by mDNS on the port the app listens on until it is freed, so that a computer of the group
-admits it by the code typed there. `cbb_join_new_admin` does the same for a phone that asks to be
-an admin: the request names `admin_public`, the admin key's public point, and a second callback
-signs with that key; the phone's info offers the key with its proof (docs/protocol.md,
-section 6, ADa), and the joined answer carries `admin_ca`, the admin CA the group's root
-issued for it. With `invite`, a remote invitation's text, in the request (in the build with the
-tunnel), the joiner dials instead of listening (docs/protocol.md, section 12): it starts the
-invitation's guest tunnel, `cbb_join_new` answers the tunnel's loopback `port` and the
-`fingerprint` the phone shows, the app dials the port for each attempt, `cbb_join_accept`
-answers `send`, the first bytes, and `cbb_join_answered` says whether the invitation's hub has
-answered through the tunnel, for the app to tell a hub that never answered from an attempt
-that failed. The pairing runs inside the core's TLS (`cbb_core::pair_session`); the app only
-moves the bytes.
-
 ### The member
 
 Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
@@ -112,14 +89,82 @@ On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
 `cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
 `device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
 `device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
-age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
-`current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
-`set_mute`, `sync`, `muted`, `peers`, `devices` and `why`; `cbb_member_manage` takes `remove`,
-`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
-Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
-`cbb_invite_new`, answers that it does not work in this build yet, with the cause
-`not on the records of 0.6 yet` in its details, until its part moves over. Images and files
-of a copy are not written yet: its text is, and the log says why the rest is not.
+age_ms, kind, text, media, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
+turned the phone's sync off or on), `log` and `panic`. It carries out by itself the commands
+an admin sends the phone that the records let through (`cbb_member::orders`, as the service's
+`live_command`): `mute`, `unmute` and the sync mode, kept in `mute.json` and `sync.json` and
+sent out in its next hello; it answers the paste, action and away switches with nothing to
+do, and refuses an action, a hub change, a device change and, until the apps take it, a paste.
+Its operations are `copy`, `copy_media` (images or files, sealed and kept to serve, as the
+service's), `fetch` (a copy's images or files, fetched from the member it came from and opened
+into `out`), `current`, `waiting`, `took` and `sends` (the button's rule, `cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
+`resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
+(`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
+update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
+hub}]}`: `admin` is whether the admin key the records name for the device is one of the
+group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
+`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge,
+`mute` (`for_ms`), `unmute`, `sync_off`, `sync_on`, `paste` (`text`, `method`, `enter`,
+`kind`), `paste_off`, `actions_off` and `away_off`, commands for another device signed with that
+key and sent over the phone's connection to it, as the service sends them (the answer is that
+device's: `{status, reason}`), and on the root `key_level` (`level`; `{below}`) and
+`make_admin` (`device`, `allow_file_key`, with the admin key the device offered when it joined
+by this phone's window), both by the core's key level rule (`cbb_core::keylevel`).
+The root also names its `hubs` (1 to 16 devices, by name or device ID), which the records
+judge: a phone is a hub only with an admin key; and the group's `relay` (`relays`, each
+`address pin`, or `default` alone for the project's relay; none meets at no relay; `{relays}`:
+their addresses), written in the group's settings, where every device of the group meets the
+others while sync away from home is on (protocol.md section 14). Everything else, and `cbb_member_servers` and
+`cbb_member_manage_watch`, answers that it does not work in this build yet, with the cause
+`not on the records of 0.6 yet` in its details, until its part moves over. A copy with
+images or files comes as a `write` of kind `media` and a `copy` event with its manifest
+(`media`), which the app fetches.
+
+A phone of 0.6 lets a device join at home through a home window, `cbb_window_new`
+(`ffi/src/window.rs`), while its member port listens: the request names the admitting key (the
+phone's admin key or the root's, signing through the callback until `cbb_window_free`), the
+phone's home addresses, how long the window stays open (five minutes by default, an hour at
+most) and whether the core announces it by mDNS (`mdns`, on Aurora; the iPhone and Android
+announce it with the system's DNS-SD, `p=1`, `f` and `i` from the answer). It answers the QR
+code `cbb://pair?addr=…&fp=…&i=…&c=…` (the addresses with the member port, the hash of the
+phone's member key, the window's ID and its six digits) and its modules, the six `digits` to
+show beside it for a device that types them, the window's `id` and the key's `fingerprint`.
+The new device dials; its TLS session of `cbb-pair/3` reaches the window through the member
+port and proves the digits (protocol.md, "Pairing in 0.6"): nobody is asked whether anything
+matches. `cbb_window_next` waits for the next state: `open`, `joining` while a device pairs,
+`done` with the device that joined (the window is then closed), `failed` with the error of that
+attempt (the window stays open for another), `closed` when its time is up or after three wrong
+codes (with the error). The phone writes the device's record by the core's admission rules
+(`join::decide::joiner_record`: at home a member or a phone reads, sends and takes secrets, a
+member that can be a hub may be one when the root admits it, a watch only reads) and sends the
+Welcome (`ffi/src/pair06.rs`). A phone that holds the group's root key keeps the admin key a
+device offered with its proof over the session (`cbb_member::offered`), as a computer's root
+does. One attempt at a time; another
+gets `busy`.
+
+The new phone joins with `cbb_joiner_new` (`ffi/src/joiner.rs`): the request names the app's
+folder, the scanned QR code, or the six digits the person typed (`digits`, with an empty `qr`:
+on a phone without a camera, or when the scan failed; the core then finds the one window
+announced by mDNS, and refuses when there is more than one), what the phone says of itself and
+its member key. It dials the window's addresses in turn over TLS of `cbb-pair/3`, takes only
+the member whose key the window names, proves the digits, and `cbb_joiner_next` gives its
+state: `dialing`, `done` with the group, the phone's device ID and the name of the member that
+let it in once the checked set is kept in the folder (the app then starts its member there), or
+`failed` (a wrong code says so). A phone that holds a group already is refused.
+`cbb_joiner_new_admin` also offers the phone's admin key (`admin_public`, its own signing
+callback) with its signature over the session's exporter (`join::sign_admin_pop`), as a
+computer that may be an admin does: the group's root keeps it, and makes the phone an admin with
+it later (`cbb admin`, "Make it an admin").
+With `invite`, a remote invitation's text of 0.6 (`cbb://join#`, in the build with the
+tunnel), the phone joins from afar instead (docs/protocol.md, section 12): a text that is no
+invitation is refused at once; the joiner starts the invitation's guest tunnel to the hub
+(`cbb_member::live::invite::guest_link`), its first state carries the `fingerprint` the phone
+shows for the inviting admin to compare, and it dials the hub's guest address through the
+tunnel, the pairing's steps waiting as long as the admin may take to confirm. Its states also
+say `answered` once the hub answered through the tunnel, for the app to tell a hub that never
+answered from an attempt that failed. The invitation and the group's tunnel state are kept with
+the set (`invite-guest`), so that the member, once started, reaches the hub through the guest
+tunnel until the hub's offer comes.
 
 ### The member's operations
 
@@ -166,10 +211,10 @@ after the header, and an operation that answers more than once marks the last an
 | `alerts` | phone | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
 | `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
-| `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day (the Aurora app; the iPhone and Android apps do it with their own tunnels and the tunnel's `guest_start`); only with the feature `tunnel` |
+| `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day on a group of the records before 0.6 only: on 0.6 the joiner keeps the invitation with the set and the member reaches the hub through its guest tunnel on its own; only with the feature `tunnel` |
 | `servers` | phone | none | `{"period_due"}`: whether the group's server keys need a period the root key signs (protocol.md, section 18), after `cbb_member_servers`; the app of a root phone then signs it with `cbb_member_manage`'s `period` |
-| `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off` for `hub`; `anyway` for `hub_off` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, the root or an admin, is one of the group's hubs with the member's own WireGuard (`member/src/away/serve.rs`), registered with the forwarder, or stops being one; `hub_off` refuses while the group has no other hub unless `anyway` (protocol.md, section 11, "Stopping a hub"); only after `cbb_member_servers` and with the feature `tunnel` (the Harmony app; the iPhone and Android apps run their own hub through `cbb_tunnel`) |
-| `relay` | phone | `relay` (`host:port`, empty to leave it), `key` (its pin, `default` for the project's) | `{"away"}` with `relay` `{endpoint, connected, online, error, detail}`: the phone meets the group at the blind relay in place of a hub, registered with the group's server credentials (protocol.md, sections 14 and 18), once the app showed what a relay learns; leaving it turns sync away from home on again with new keys; only after `cbb_member_servers` and with the feature `tunnel` |
+| `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off` for `hub`, on 0.6 also `port` (the UDP port) and `addrs` (`ip:port`, reached from afar without the forwarder); `anyway` for `hub_off` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, the root or an admin, is one of the group's hubs with the member's own WireGuard (`member/src/away/serve.rs`), registered with the forwarder, or stops being one; `hub_off` refuses while the group has no other hub unless `anyway` (protocol.md, section 11, "Stopping a hub"); only after `cbb_member_servers` and with the feature `tunnel` (the Harmony app; the iPhone and Android apps run their own hub through `cbb_tunnel`). On 0.6 the records must give this phone an admin key, the hub is the Live hub the computers run (`member/src/live/away.rs`), which also serves the guests of invitations, needs no `cbb_member_servers`, and `hub_off` hands its clients to the next hub in the order, so `anyway` is not needed |
+| `relay` | phone | `relay` (`host:port`, empty to leave it), `key` (its pin, `default` for the project's) | `{"away"}` with `relay` `{endpoint, connected, online, error, detail}`: the phone meets the group at the blind relay in place of a hub, registered with the group's server credentials (protocol.md, sections 14 and 18), once the app showed what a relay learns; leaving it turns sync away from home on again with new keys; only after `cbb_member_servers` and with the feature `tunnel`. On 0.6 the relay is the group's, which the root sets with the manage action `relay`, and the Live member meets there by itself, its link shown as `relay` in `away_status`; this operation answers that it does not work in this build |
 | `attest_status`, `attest` | phone | `keys` and `status` for `attest_status`: the mirror's `keys.json` and `attest-status.json` as the app fetched them | `{"pending", "revoked"?}`: `attest_status` takes the revocation list of Android attestations when it checks out against the release keys and is not older than the one kept (`attest-status.json`, protocol.md section 17, "Revoked attestations"), and answers how many certificates it revokes; `pending` is how many Android peers' evidence waits for the root key, which `cbb_member_manage`'s `attest` records (`member/src/phone_attest.rs`, the core's `cbb_core::attest`); only with the feature `tunnel` |
 | `add_records` | phone | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | phone | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
@@ -231,29 +276,28 @@ admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mu
 event); every other command for the phone goes to the app as a `command` event, as `cbb`
 refuses it. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
-the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
-both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
+the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join by the
+home window, sync both ways, a pause and an admin's mute against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
 `cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
-`TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
-listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the root makes an admin
-with the admin key its hellos offer, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
-root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
+`TestFFIJoinerMadeAdmin` a phone that joins by the root's window offering its admin key and
+that the root makes an admin with it later, `TestFFIJoinerAdmin` that admin phone opening its
+own window, by which a Go computer joins, `TestFFIPhoneRoot` a phone that makes its own group of 0.6, lets a Go computer join by its
+window and renames, mutes, turns the sync off and on and removes it as its root, and `TestFFIMember` the calls: an address handed in, the button's rule, images both ways,
 and pausing.
 
 `cbb_qr_read` (feature `join`, `src/qr.rs`) reads the QR codes in a grey camera frame with the
-`rqrr` crate, since Aurora gives an app no reader of its own. An admin phone admits a device by the device's QR code with `cbb_admit_new`, `cbb_admit_dial`,
-`cbb_admit_feed` and `cbb_admit_free` (`src/admit.rs` over `cbb_core::admit`): the app dials one
-of the code's addresses and passes the connection's bytes; the core checks the joiner against the
-code's fingerprint, confirms the code first, issues the member certificate with the phone's admin
-CA (`cbb_core::issue`, the key signing through the callback), and an admin CA when the group's
-root admits a phone that asks to be an admin, sends the Welcome and adds the device record to the
-group (docs/protocol.md, section 6, "The joiner listens"). `cbb_group_new` (feature `join`,
+`rqrr` crate, since Aurora gives an app no reader of its own. `cbb_group_new` (feature `join`,
 `cbb_core::admit::new_group`) makes a group of the phone's own, as the iPhone's
 `PhoneGroup.create` does: a root CA for the app's root key, the phone's member certificate and its
 device record holding the root, all signed through the callback; its answer has a join's
 fields, so the app keeps it as it keeps a join, and admits with the root key and no admin CA.
+On 0.6 the request names the app's `dir` (`src/found.rs`): the core makes the recovery secret
+(`cbb_member::founding::new_recovery`), writes the phone's record under the root through the
+callback, keeps the set in `dir`, where `cbb_member_start` then reads it, and answers
+`{"group","device","recovery":{"qr","text","modules"}}`, the recovery sheet the app shows once and keeps
+nowhere.
 `cbb_member_manage` (feature `member`, `cbb_core::manage`) signs an admin's change to a device
 through the same callback, as the phone kits' `PhoneGroup` does: a removal (every key of the
 device, its admin key among them; not the phone itself, nor the root's phone, which is taken
@@ -336,13 +380,18 @@ An admin phone makes a remote invitation with `cbb_invite_new` (`ffi/src/invite.
 request names the public point of the key it issues with and its admin CA (none on the root),
 how long the invitation is valid and optionally the hub; the member opens the guest tunnel on
 the phone when it is the group's hub, else through a connected hub (docs/protocol.md, section
-12, "Through the hub"), and runs the pairing window, signing through the callback. It answers
+12, "Through the hub"), and runs the pairing window, signing through the callback. On a group of
+0.6 the request needs no admin CA and names the `kind` of device invited (`computer` or empty,
+or `phone`); the member opens the invitation with `Live::open_invitation`, the key must be the
+root's or an admin's, and each pairing the hub passes is admitted by the core's admission rules
+once the user said yes (`ffi/src/window.rs`, `admit_on`). It answers
 the invitation's text and the QR code's modules; it waits for the hub, so the app calls it off
 its main thread. `cbb_invite_next` waits for the invitation's next state (`open`, `joining` with
 the device's name, system and fingerprint, `done` with the device that joined, `failed` with
 the error), `cbb_invite_answer` answers whether to admit the joining device, and
 `cbb_invite_free` ends it and waits until its window closed. `TestFFIInviteThroughHub` and
-`TestFFIJoinInvite` run both sides through the example `phone-on-linux`.
+`TestFFIJoinInvite` run both sides through the example `phone-on-linux`, and the Kotlin kit's
+`InviteKitTest` a phone that joins through an admin phone serving as the hub.
 
 Built with the feature `tunnel` (the iPhone and Android libraries), the library is also the
 phones' tunnel (`ffi/src/tunnel.rs`, whose comment lists the requests): `cbb_tunnel` takes

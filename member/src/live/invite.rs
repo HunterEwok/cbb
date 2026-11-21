@@ -518,6 +518,84 @@ impl Live {
     }
 }
 
+/// An invitation opened on this hub or through one: its window state
+/// (`Open`), its guest's pairing connections, how long it lasts, and what
+/// ends its guest.
+pub struct Opening {
+    pub open: cbb_core::join::invitation::Open,
+    pub pairs: mpsc::Receiver<Pair>,
+    pub lifetime: Duration,
+    /// The guest's public key, and the hub it goes through when not this
+    /// one.
+    pub public: [u8; 32],
+    pub through: Option<DeviceId>,
+}
+
+impl Live {
+    /// Opens a remote invitation of 0.6 for a device of `role` (a computer,
+    /// ROLE_MEMBER, or a phone): on this hub unless another is named, or
+    /// this device serves as none, and then through a hub (docs/protocol.md,
+    /// section 12). `expires` is how long it lasts, an hour when None, a
+    /// day at most. The service's `cbb invite` and a phone's app run its
+    /// window on what this gives, and end it with [`Live::invitation_ended`].
+    pub fn open_invitation(
+        self: &Arc<Self>,
+        named: Option<DeviceId>,
+        role: u64,
+        expires: Option<Duration>,
+    ) -> Result<Opening> {
+        use cbb_core::join::invitation::{Open, Profile};
+        use cbb_core::records::body::{RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+        let here = match named {
+            Some(d) => d == self.mesh.device(),
+            None => self.away().is_some_and(|a| a.is_hub_now()),
+        };
+        let lifetime = expires.unwrap_or(crate::inviter::DEFAULT_LIFETIME);
+        if lifetime > crate::inviter::MAX_LIFETIME {
+            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
+        }
+        let profile = Profile {
+            role,
+            rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
+            home_only: false,
+            guarded: false,
+        };
+        let now = || crate::uptime::wall_ms().max(0).unsigned_abs();
+        let expires_ms = now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX));
+        let mut invitation = Invitation::new(Vec::new(), profile);
+        let keys = crate::inviter::GuestKeys::new()?;
+        let (opened, through) = if here {
+            (self.open_guest(keys.key, keys.public, keys.psk)?, None)
+        } else {
+            let (o, hub) = self.open_through(named, (keys.key, keys.public, keys.psk), expires_ms, invitation.id)?;
+            (o, Some(hub))
+        };
+        invitation.paths = vec![opened.path];
+        let open = Open {
+            invitation,
+            name: String::new(),
+            created_ms: now(),
+            expires_ms,
+            used: false,
+            failures: 0,
+            allowed_key: None,
+            attempt: None,
+            next_attempt: 0,
+        };
+        Ok(Opening { open, pairs: opened.pairs, lifetime, public: keys.public, through })
+    }
+
+    /// The invitation opened with [`Live::open_invitation`] ended, with the
+    /// device admitted by it or none: its guest goes, at once or once that
+    /// device's first member connection came through it.
+    pub fn invitation_ended(self: &Arc<Self>, o: &Opening, admitted: Option<DeviceId>) {
+        match o.through {
+            None => self.guest_ended(&o.public, admitted),
+            Some(_) => self.through_ended(&o.public, admitted),
+        }
+    }
+}
+
 /// Why an invitation is refused on a device that does not serve as a hub.
 pub const NOT_SERVING: &str = "invitations come from a hub of the group, and this device is none; make it one with cbb global hub, or invite on a hub";
 

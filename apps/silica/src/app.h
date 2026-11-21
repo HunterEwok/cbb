@@ -4,7 +4,6 @@
 // What the QML pages show: the app, the core, the system and the phone's key.
 #pragma once
 
-#include "admit.h"
 #include "blekeyboard.h"
 #include "bugs.h"
 #include "events.h"
@@ -12,6 +11,7 @@
 #include "join.h"
 #include "member.h"
 #include "membership.h"
+#include "pairing06.h"
 #include "pastereceiver.h"
 #include "platform/osinfo.h"
 
@@ -56,8 +56,11 @@ class App : public QObject
     // Why the last code the camera read is not a recovery sheet's.
     Q_PROPERTY(QString restoreHint READ restoreHint NOTIFY restoreChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
+    // Pairing in a group of 0.6: the admin's window and the new phone's
+    // joiner.
+    Q_PROPERTY(PairWindow *window READ window CONSTANT)
+    Q_PROPERTY(Joiner *joiner READ joiner CONSTANT)
     Q_PROPERTY(Member *member READ member CONSTANT)
-    Q_PROPERTY(Admit *admit READ admit CONSTANT)
     Q_PROPERTY(Invite *invite READ invite CONSTANT)
     Q_PROPERTY(Events *events READ events CONSTANT)
     // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
@@ -119,8 +122,9 @@ public:
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
     Join *join() { return &m_join; }
+    PairWindow *window() { return &m_window; }
+    Joiner *joiner() { return &m_joiner; }
     Member *member() { return &m_node; }
-    Admit *admit() { return &m_admit; }
     Invite *invite() { return &m_invite; }
     Events *events() { return &m_events; }
     Bugs *bugs() { return &m_bugs; }
@@ -145,29 +149,28 @@ public:
 
     // Finds or makes the phone's key, off the GUI thread.
     Q_INVOKABLE void setUpKey();
-    // Listens for the device that scans this phone's QR code. The phone
-    // joins as a member; first it finds its admin key, or makes it behind
-    // the admin PIN unless the user cancels, off the GUI thread, for its
-    // member's hellos to offer the root, which may make it an admin later.
-    Q_INVOKABLE void startJoin();
-    // Stops listening, and drops a join that waits for the admin key.
+    // Stops a join by an invitation.
     Q_INVOKABLE void stopJoin();
     // For a member phone whose hellos offer no admin key (it joined
     // without one): makes the key behind the admin PIN and restarts the
     // member, whose hellos then offer it.
     Q_INVOKABLE void prepareAdmin();
-    // Adds the device whose join code (a cbb://join link) the camera read,
-    // with the admin key, found off the GUI thread.
-    // makeAdmin: the root makes a phone that asks an admin.
-    Q_INVOKABLE void startAdmit(const QString &qr, bool makeAdmin = false);
     // Makes a remote invitation for a device far away, valid for seconds,
     // as an admin (docs/protocol.md, section 12).
     Q_INVOKABLE void startInvite(int seconds = 3600);
     // Joins by a remote invitation's text, which the user accepted.
     Q_INVOKABLE void startJoinByInvite(const QString &text);
-    // Makes a group of the phone's own, its root key the admin key in the
-    // TEE (docs/protocol.md, section 3), and starts the member as its root.
+    // Makes a group of 0.6 of the phone's own, its root key the admin key
+    // in the TEE (docs/protocol.md, section 3), shows its recovery sheet
+    // (recoveryText, recoveryModules) and starts the member as its root.
     Q_INVOKABLE void makeGroup();
+    // As an admin of a group of 0.6: opens the member's pairing window with
+    // the admin key, found off the GUI thread behind the admin PIN.
+    Q_INVOKABLE void openWindow();
+    // Without a group: joins a group of 0.6 by text, the six digits a
+    // window of the group shows (the window announced at home), or a
+    // window's QR code text.
+    Q_INVOKABLE void joinByWindow(const QString &text);
     // An admin's change to a device of the group (remove, rename, thaw,
     // make_admin as the root, for a computer) or command for it (mute, unmute), signed with the admin key, or the
     // root's, off the GUI thread; managed() tells when it is done.
@@ -265,6 +268,8 @@ signals:
     void pinChanged(bool ok, bool locked, int triesLeft);
     void recoveryChanged();
     void restoreChanged();
+    // makeGroup made the group; its recovery sheet waits to be shown.
+    void groupMade();
 
 private:
     // Before the admin key signs: true when the PIN is asked first, run
@@ -304,8 +309,9 @@ private:
     QByteArray m_publicKey;
     Membership m_member;
     Join m_join;
+    PairWindow m_window;
+    Joiner m_joiner;
     Member m_node;
-    Admit m_admit;
     Invite m_invite;
     Events m_events;
     Bugs m_bugs;
@@ -326,6 +332,4 @@ private:
     QStringList m_belowLevel;
     QString m_restoreState;
     QString m_restoreHint;
-    QByteArray m_joinOffer; // the admin key the joining phone's hellos will offer
-    int m_joinSerial = 0;   // bumped by each start and stop of a join
 };

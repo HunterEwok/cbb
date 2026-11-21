@@ -100,7 +100,7 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
         return when (this) {
             LOOK, ABOUT -> true
             NOTIFICATIONS, PASTE, GROUP, WHY -> home
-            RECOVERY -> home && model.isRoot
+            RECOVERY -> home
             AWAY -> home && (model.hub != null || model.blindRelay != null)
         }
     }

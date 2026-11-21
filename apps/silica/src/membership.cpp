@@ -51,6 +51,8 @@ bool writeFile(const QString &name, const QByteArray &data, Failure *failure)
 
 QString Membership::groupTag() const
 {
+    if (isV06())
+        return group06.left(16);
     if (groupCa.isEmpty())
         return QString();
     return QString::fromLatin1(QCryptographicHash::hash(groupCa, QCryptographicHash::Sha256).left(8).toHex());
@@ -70,6 +72,8 @@ Membership Membership::fromJoined(const QJsonObject &j)
     m.root = j.value(QStringLiteral("root")).toBool();
     m.claim = b64(j.value(QStringLiteral("claim")));
     m.adminOffer = b64(j.value(QStringLiteral("admin_offer")));
+    m.group06 = j.value(QStringLiteral("group06")).toString();
+    m.admin06 = j.value(QStringLiteral("admin06")).toBool();
     return m;
 }
 
@@ -98,7 +102,7 @@ Membership Membership::load(Failure *failure)
 
 bool Membership::save(Failure *failure) const
 {
-    return writeFile(QStringLiteral("records.json"), records, failure) && saveIdentity(failure);
+    return (isV06() || writeFile(QStringLiteral("records.json"), records, failure)) && saveIdentity(failure);
 }
 
 bool Membership::saveIdentity(Failure *failure) const
@@ -123,12 +127,17 @@ bool Membership::saveIdentity(Failure *failure) const
         o.insert(QStringLiteral("claim"), b64(claim));
     if (!adminOffer.isEmpty() && !isAdmin())
         o.insert(QStringLiteral("admin_offer"), b64(adminOffer));
+    if (isV06()) {
+        o.insert(QStringLiteral("group06"), group06);
+        if (admin06)
+            o.insert(QStringLiteral("admin06"), true);
+    }
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 
 bool Membership::remove(Failure *failure)
 {
-    for (const QString &name : {QStringLiteral("member.json"), QStringLiteral("records.json")}) {
+    for (const QString &name : {QStringLiteral("member.json"), QStringLiteral("records.json"), QStringLiteral("group.cbor"), QStringLiteral("local.json")}) {
         QFile f(dataDir() + QLatin1Char('/') + name);
         if (f.exists() && !f.remove()) {
             *failure = {QCoreApplication::translate("Errors", "The phone could not leave the group."), QStringLiteral("membership: %1: %2").arg(name, f.errorString())};

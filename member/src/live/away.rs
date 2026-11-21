@@ -52,6 +52,53 @@ impl Live {
         std::thread::spawn(move || super::relay::meet(&w));
     }
 
+    /// Starts sync away from home with its state in `dir`, as the service
+    /// and a phone's app do: on when the state holds its keys (a device
+    /// that joined by an invitation keeps them there), and `via` sends the
+    /// tunnel's packets to a local UDP port that leads to the hub.
+    pub fn start_away(
+        self: &Arc<Self>,
+        dir: std::path::PathBuf,
+        via: Option<std::net::SocketAddr>,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> crate::error::Result<()> {
+        let me = cbb_core::certs::DeviceId::parse(&super::id_text(&self.mesh.device()))
+            .map_err(|_| crate::error::Error::msg("this device's ID does not read"))?;
+        self.with_away(Arc::new(Away::new(dir, self.tag(), me, log).via(via)));
+        Ok(())
+    }
+
+    /// Sync away from home for a status: where it stands and, on a hub,
+    /// its forwarder and relay; None while it was not started.
+    pub fn away_status(&self) -> Option<crate::control::Away> {
+        let away = self.away()?;
+        let standby = away.is_hub_now() && self.is_standing_by();
+        // The hubs this member is connected to first, by any way, then the
+        // rest, each in the group's order of hubs: the status names the
+        // first it keeps an offer of.
+        let connected = self.mesh.connected();
+        let (mut order, rest): (Vec<_>, Vec<_>) =
+            self.mesh.hub_order().into_iter().partition(|id| connected.contains(id));
+        order.extend(rest);
+        let order: Vec<String> = order.iter().map(|id| cbb_core::certs::hex(&id.0)).collect();
+        let mut a = away.live_status_as(standby, &order)?;
+        let entries_held = self.mesh.entries().and_then(|e| e.current(crate::uptime::wall_ms())).is_some();
+        a.forwarder = away.live_forwarder(entries_held);
+        a.relay = self.relay_status();
+        a.standby = standby;
+        Some(a)
+    }
+
+    /// Turns sync away from home on with new tunnel keys and sends
+    /// `tunnel` to the hubs connected.
+    pub fn away_on(&self) -> crate::error::Result<()> {
+        let away =
+            self.away().ok_or_else(|| crate::error::Error::msg("sync away from home did not start on this device"))?;
+        away.turn_on()?;
+        self.tunnel_to_hubs();
+        Ok(())
+    }
+
     /// Whether this hub stands by while a hub above it serves.
     pub fn is_standing_by(&self) -> bool {
         self.standing_by.load(std::sync::atomic::Ordering::SeqCst)

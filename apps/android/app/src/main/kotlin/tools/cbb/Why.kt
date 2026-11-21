@@ -121,6 +121,15 @@ internal fun whyTitle(r: WhyReason): String {
         "devices_sync_off" -> stringResource(R.string.why_devices_sync_off_t, names)
         "devices_muted" -> stringResource(R.string.why_devices_muted_t, names)
         "update" -> stringResource(R.string.why_update_t, r.value)
+        "admins_conflict" -> stringResource(R.string.why_admins_conflict_t)
+        "root_two_histories" -> stringResource(R.string.why_root_two_histories_t)
+        "recovery_fork" -> stringResource(R.string.why_recovery_fork_t)
+        "change_arriving" -> stringResource(R.string.why_change_arriving_t)
+        "checkpoint_stuck" -> stringResource(R.string.why_checkpoint_stuck_t)
+        "owner_disagrees" -> stringResource(R.string.why_owner_disagrees_t)
+        "no_secrets_here" -> stringResource(R.string.why_no_secrets_here_t)
+        "nothing_here" -> stringResource(R.string.why_nothing_here_t)
+        "copy_waits" -> stringResource(R.string.why_copy_waits_t)
         else -> r.code
     }
 }
@@ -148,6 +157,14 @@ internal fun whyAction(r: WhyReason): String? = when (r.code) {
     "muted" -> stringResource(R.string.why_muted_d)
     "forwarder_down" -> stringResource(R.string.why_forwarder_down_d)
     "entries_stale" -> stringResource(R.string.why_entries_stale_d)
+    "admins_conflict" -> stringResource(R.string.why_admins_conflict_d)
+    "root_two_histories" -> stringResource(R.string.why_root_two_histories_d)
+    "recovery_fork" -> stringResource(R.string.why_recovery_fork_d)
+    "change_arriving" -> stringResource(R.string.why_change_arriving_d)
+    "checkpoint_stuck" -> stringResource(R.string.why_checkpoint_stuck_d)
+    "owner_disagrees" -> stringResource(R.string.why_owner_disagrees_d)
+    "no_secrets_here" -> stringResource(R.string.why_no_secrets_here_d)
+    "nothing_here" -> stringResource(R.string.why_nothing_here_d)
     "newer" -> stringResource(R.string.why_newer_d)
     "unreached" -> stringResource(R.string.why_unreached_d)
     else -> null

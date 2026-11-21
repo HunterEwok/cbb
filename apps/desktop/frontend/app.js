@@ -1086,6 +1086,15 @@ function whyTitle(r) {
     case "devices_sync_off": return t("Sync is off on: %s.", names);
     case "devices_muted": return t("Muted: %s.", names);
     case "update": return t("CBB %s is available.", r.value);
+    case "admins_conflict": return t("Two admins disagree about a device: the group waits for its main device.");
+    case "root_two_histories": return t("The main device's key signed two different histories, so the group stopped.");
+    case "recovery_fork": return t("The group's recovery key was used twice, so the group stopped for good.");
+    case "change_arriving": return t("A change of the group's main device is on its way.");
+    case "checkpoint_stuck": return t("The main device's records wait for records no device has passed on.");
+    case "owner_disagrees": return t("This device and the group disagree about which device is the main one.");
+    case "no_secrets_here": return t("The group sends no secrets to this device.");
+    case "nothing_here": return t("The group sends nothing to this device.");
+    case "copy_waits": return t("A copy waits until this device learns which device sent it.");
     default: return r.code;
   }
 }
@@ -1112,6 +1121,14 @@ function whyAction(r) {
     case "muted": return t("Unmute it from a trusted device of the group.");
     case "forwarder_down": return t("Devices away from home may not reach it; CBB tries again by itself.");
     case "entries_stale": return t("Update CBB on a computer of the group.");
+    case "admins_conflict": return t("On the group's main device, decide in its alerts.");
+    case "root_two_histories": return t("Move the group to a new main device with the group's recovery key.");
+    case "recovery_fork": return t("Make a new group and join your devices to it.");
+    case "change_arriving": return t("Keep this device on near the group's other devices until it arrives.");
+    case "checkpoint_stuck": return t("Turn on the group's other devices.");
+    case "owner_disagrees": return t("Leave the group on this device, then join again.");
+    case "no_secrets_here": return t("Ask the group's owner to let it have secrets.");
+    case "nothing_here": return t("Ask the group's owner to restore its rights.");
     case "newer": return t("Update CBB on this device.");
     case "unreached": return t("Let CBB through this computer's firewall.");
     default: return "";

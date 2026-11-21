@@ -32,6 +32,12 @@ pub(crate) fn root() -> K {
     K(SigningKey::from_slice(&[1; 32]).unwrap())
 }
 
+/// The public point of another fixed key, made from the byte b.
+#[cfg(feature = "tunnel")]
+pub(crate) fn root_like(b: u8) -> Vec<u8> {
+    K(SigningKey::from_slice(&[b; 32]).unwrap()).public()
+}
+
 fn temp(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("cbb-mesh-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);

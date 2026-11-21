@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSysInfo>
 #include <QThread>
@@ -340,21 +341,47 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
             startMember();
         });
     });
-    connect(&m_join, &Join::joined, this, [this](const Membership &m) {
-        m_member = m;
-        if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
-            Membership next = m;
-            next.adminOffer = m_joinOffer;
-            keep(next);
-        }
-        m_joinOffer.clear();
+    // A phone that joined a group of 0.6: the set is in the app's folder.
+    connect(&m_joiner, &Joiner::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
         emit groupChanged();
         startMember();
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        if (m_join.byInvite())
-            m_node.joinedByInvite(m_join.invite());
+    });
+    // On 0.6 the group's records say who is an admin; the member's devices
+    // list them.
+    connect(&m_node, &Member::devicesChanged, this, [this]() {
+        if (!m_member.isV06())
+            return;
+        for (const QVariant &v : m_node.devices()) {
+            const QVariantMap d = v.toMap();
+            if (!d.value(QStringLiteral("self")).toBool())
+                continue;
+            const bool admin = d.value(QStringLiteral("admin")).toBool();
+            if (admin != m_member.admin06) {
+                Membership next = m_member;
+                next.admin06 = admin;
+                if (keep(next)) {
+                    Errors::log(QStringLiteral("admin: the records %1 this phone an admin").arg(admin ? QStringLiteral("make") : QStringLiteral("no longer make")));
+                    emit groupChanged();
+                }
+            }
+            return;
+        }
+    });
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    connect(&m_join, &Join::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
+        emit groupChanged();
+        startMember();
     });
     // The root made this phone an admin: the member checks the admin CA
     // first, then the phone keeps it and signs with it.
@@ -419,52 +446,8 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin()
-{
-    if (m_publicKey.isEmpty()) {
-        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
-        return;
-    }
-    if (m_busy)
-        return;
-    const int serial = ++m_joinSerial;
-    m_joinOffer.clear();
-    const auto listen = [this, serial]() {
-        if (serial == m_joinSerial)
-            m_join.start(phoneName(), phoneOs(), m_publicKey);
-    };
-    // The admin key, which the member's hellos offer the root for its
-    // "Make an admin": found without the PIN, or made behind it.
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, serial, listen]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (serial != m_joinSerial)
-            return;
-        if (key.state == KeyStore::State::Ready) {
-            Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-            m_joinOffer = key.publicKey;
-            listen();
-            return;
-        }
-        if (key.pinNeeded && m_adminPin != QStringLiteral("locked")
-            && askPin([this]() { startJoin(); }, listen,
-                      QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.")))
-            return;
-        Errors::log(QStringLiteral("key: joining without an admin key: %1 (%2)").arg(key.failure.message, key.failure.details));
-        listen();
-    });
-    thread->start();
-}
-
 void App::stopJoin()
 {
-    ++m_joinSerial;
-    m_joinOffer.clear();
     m_join.stop();
 }
 
@@ -499,37 +482,6 @@ void App::prepareAdmin()
         // The hellos of the new connections offer it.
         m_node.stop();
         startMember();
-    });
-    thread->start();
-}
-
-void App::startAdmit(const QString &qr, bool makeAdmin)
-{
-    if (!m_member.isAdmin()) {
-        m_admit.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("admit: not an admin")});
-        return;
-    }
-    if (m_busy)
-        return;
-    if (askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); },
-               [this]() { m_admit.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("admit: no PIN")}); }))
-        return;
-    m_busy = true;
-    emit keyChanged();
-    m_admit.setPreparing();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, qr, makeAdmin]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (key.state != KeyStore::State::Ready) {
-            if (key.pinNeeded && askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); }))
-                return;
-            m_admit.fail(key.failure);
-            return;
-        }
-        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
     });
     thread->start();
 }
@@ -572,7 +524,7 @@ void App::startJoinByInvite(const QString &text)
                             QStringLiteral("join: in a group")}));
         return;
     }
-    m_join.startInvite(phoneName(), phoneOs(), m_publicKey, text);
+    m_join.startInvite(text, Membership::directory(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::resolve(const QStringList &records)
@@ -1109,23 +1061,17 @@ void App::makeGroup()
     }
     if (askPin([this]() { makeGroup(); }))
         return;
-    Failure failure;
-    const QByteArray secret = sealSecret(&failure);
-    const QJsonObject seal = secret.isEmpty() ? QJsonObject()
-        : Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
-    if (!failure.isNull()) {
-        show(Errors::shown(failure));
-        return;
-    }
     m_busy = true;
     emit keyChanged();
     auto *thread = new GroupThread;
+    // A group of 0.6: the set is kept in the app's folder, where the member
+    // then starts on it (ffi's cbb_group_new with dir).
     thread->request = QJsonObject{
+        {QStringLiteral("dir"), Membership::directory()},
         {QStringLiteral("name"), phoneName()},
         {QStringLiteral("os"), phoneOs()},
         {QStringLiteral("store"), KeyStore::store()},
         {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
-        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
     };
     connect(thread, &QThread::finished, this, [this, thread]() {
         const QJsonObject group = thread->group;
@@ -1140,19 +1086,88 @@ void App::makeGroup()
             show(Errors::shown(failure));
             return;
         }
-        Membership m = Membership::fromJoined(group);
+        Membership m;
+        m.device = group.value(QStringLiteral("device")).toString();
+        m.group06 = group.value(QStringLiteral("group")).toString();
         m.root = true;
-        if (m.isNull() || !m.save(&failure)) {
+        if (m.isNull() || !m.isV06() || !m.save(&failure)) {
             show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("group: no device in the answer")} : failure));
             return;
         }
         Errors::log(QStringLiteral("group: made %1 as its root").arg(m.groupTag()));
         m_member = m;
+        // The recovery sheet, shown once and then forgotten (RecoveryPage).
+        const QJsonObject sheet = group.value(QStringLiteral("recovery")).toObject();
+        QStringList lines;
+        for (const QJsonValue &l : sheet.value(QStringLiteral("text")).toArray())
+            lines.append(l.toString());
+        m_recoveryText = lines.join(QLatin1Char('\n'));
+        m_recoveryModules.clear();
+        for (const QJsonValue &row : sheet.value(QStringLiteral("modules")).toArray())
+            m_recoveryModules.append(row.toString());
         show(QString());
         emit groupChanged();
+        emit recoveryChanged();
+        emit groupMade();
         startMember();
     });
     thread->start();
+}
+
+void App::openWindow()
+{
+    if (!m_member.isV06() || !m_member.isAdmin()) {
+        m_window.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("window: not an admin")});
+        return;
+    }
+    if (m_busy)
+        return;
+    if (askPin([this]() { openWindow(); },
+               [this]() { m_window.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("window: no PIN")}); }))
+        return;
+    Failure failure;
+    if (!m_node.listen(&failure)) {
+        m_window.fail(failure);
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    m_window.setPreparing();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (m_window.state() != QStringLiteral("preparing"))
+            return; // closed while the key was found
+        if (key.state != KeyStore::State::Ready) {
+            if (key.pinNeeded && askPin([this]() { openWindow(); }, std::function<void()>()))
+                return;
+            m_window.fail(key.failure);
+            return;
+        }
+        m_window.open(m_node.handle(), key.publicKey);
+    });
+    thread->start();
+}
+
+void App::joinByWindow(const QString &text)
+{
+    if (!m_member.isNull())
+        return;
+    if (m_publicKey.isEmpty()) {
+        m_joiner.fail({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("joiner: no key")});
+        return;
+    }
+    const QString t = text.trimmed();
+    QString digits = t;
+    digits.remove(QLatin1Char(' '));
+    static const QRegularExpression six(QStringLiteral("^[0-9]{6}$"));
+    if (six.match(digits).hasMatch())
+        m_joiner.start(Membership::directory(), QString(), digits, phoneName(), phoneOs(), m_publicKey);
+    else
+        m_joiner.start(Membership::directory(), t, QString(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::leave()

@@ -43,52 +43,11 @@ uint8_t *cbb_last_panic(size_t *answer_len);
 uint8_t *cbb_test_panic(size_t *answer_len);
 
 /*
- * Joining a group by the phone's QR code with a key the core does not hold
- * (src/join.rs), only in a library built with the feature join (the Aurora
- * app). The answers are JSON as cbb_call's, given back with cbb_free; the
- * app does the sockets and passes each connection's bytes.
- */
-
-/*
  * Signs the 32-byte SHA-256 digest at digest with the device key: writes an
  * ECDSA P-256 signature, DER, to sig (72 bytes of room) and its length to
  * sig_len. Returns 0 when it signed.
  */
 typedef int32_t (*cbb_sign_fn)(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sig_len);
-
-typedef struct cbb_join cbb_join;
-
-cbb_join *cbb_join_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
-                       size_t *answer_len);
-/*
- * As cbb_join_new, for a phone that asks to be an admin: the request names
- * "admin_public", the admin key's public point, and admin_sign with
- * admin_ctx signs with that key. The joined answer carries "admin_ca" when
- * the member made the phone an admin.
- */
-cbb_join *cbb_join_new_admin(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, cbb_sign_fn admin_sign,
-                             void *admin_ctx, uint8_t **answer, size_t *answer_len);
-uint8_t *cbb_join_accept(cbb_join *j, size_t *answer_len);
-uint8_t *cbb_join_feed(cbb_join *j, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
-uint8_t *cbb_join_finish(cbb_join *j, int32_t saved, size_t *answer_len);
-/*
- * Announces the joiner by mDNS while the app listens on port, so that a
- * computer of the group finds it by the code typed there; the announcement
- * ends with cbb_join_free. Returns 1 when it announced. Only in the build
- * with the member (the Aurora app's).
- */
-int32_t cbb_join_announce(cbb_join *j, uint16_t port);
-/*
- * With "invite" in the request, a remote invitation's text, the joiner
- * dials in place of listening (docs/protocol.md, section 12): it starts the
- * invitation's guest tunnel, the answer's "port" is the tunnel's loopback
- * port, which the app dials for each attempt, and cbb_join_accept's answer
- * has "send", the first bytes to send. cbb_join_answered returns 1 once the
- * invitation's hub answered through the tunnel. Only in the build with the
- * tunnel.
- */
-int32_t cbb_join_answered(const cbb_join *j);
-void cbb_join_free(cbb_join *j);
 
 /*
  * The member inside the app (src/member.rs), only in a library built with the
@@ -256,36 +215,23 @@ uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t st
  * {"name","os","store":"hardware"|"file","root_public","public","seal"?}, the
  * keys' points base64, and sign the root key's callback, called during this
  * call only; the answer has a join's fields (device, cert, group_ca, roots,
- * records).
+ * records). On 0.6 the request also names "dir" (src/found.rs; no "seal"):
+ * the set is kept there for cbb_member_start, and the answer is
+ * {"group","device","recovery":{"qr","text":[4 lines],"modules"}}, the recovery sheet,
+ * which the core keeps nowhere.
  */
 uint8_t *cbb_group_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
 /*
- * Admitting a device by its QR code as an admin of the group (src/admit.rs),
- * only with the feature member: request is {"qr","public","admin_ca","make_admin"},
- * public the point of the key sign holds (the phone's admin key, or the root's
- * key with no admin_ca), and the answer {"addrs"} to dial. For each address,
- * cbb_admit_dial starts a connection and cbb_admit_feed takes what arrives;
- * both answer {"send","state","wrong_code","device","confirmed","error"}, state
- * pending, admitted (the device is in the group, its record sent; device is
- * {"device","name","os","role","admin"}), done or failed. m stays running
- * until cbb_admit_free.
- */
-typedef struct cbb_admit cbb_admit;
-
-cbb_admit *cbb_admit_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
-                         uint8_t **answer, size_t *answer_len);
-uint8_t *cbb_admit_dial(cbb_admit *a, size_t *answer_len);
-uint8_t *cbb_admit_feed(cbb_admit *a, const uint8_t *data, size_t len, int64_t now_ms, size_t *answer_len);
-void cbb_admit_free(cbb_admit *a);
-
-/*
  * A remote invitation an admin phone makes (src/invite.rs): request is
- * {"public","admin_ca","expires","hub"} as for cbb_admit_new, expires in
- * seconds (an hour when 0, a day at most) and hub a device ID or empty for
- * any connected hub; sign with ctx signs until cbb_invite_free. The answer
- * is {"invite","expires","modules"}; it waits for the hub, so the app calls
- * it off its main thread. cbb_invite_next waits up to timeout_ms for a
+ * {"public","admin_ca","expires","hub","kind"}, public the point of the key
+ * sign holds (the phone's admin key, or the root's key with no admin_ca; a
+ * member of 0.6 needs no admin_ca), expires in seconds (an hour when 0, a
+ * day at most), hub a device ID or empty for any connected hub, and kind
+ * the device invited on 0.6, "computer" (or empty) or "phone"; sign with
+ * ctx signs until cbb_invite_free. The answer is {"invite","expires",
+ * "modules"}; it waits for the hub, so the app calls it off its main
+ * thread. cbb_invite_next waits up to timeout_ms for a
  * state past version and answers {"version","state","joining","name",
  * "device","error"}, state open, joining (joining is
  * {"device","name","os","fingerprint"}: the app asks the user and answers
@@ -299,6 +245,55 @@ cbb_invite *cbb_invite_new(const cbb_member *m, const uint8_t *request, size_t l
 uint8_t *cbb_invite_next(const cbb_invite *i, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
 void cbb_invite_answer(const cbb_invite *i, int32_t yes);
 void cbb_invite_free(cbb_invite *i);
+
+/*
+ * A home window on a member of 0.6 (src/window.rs): an admin phone, or the
+ * root phone, lets a device join at home by six digits. The member port
+ * must listen (the member's "listen"). request is
+ * {"public","addrs","expires","mdns"}: the admitting key (admin or root),
+ * which sign with ctx signs with until cbb_window_free; the phone's home
+ * addresses without a port; seconds open (five minutes when 0, an hour at
+ * most); mdns to have the core announce it (Aurora; the other apps announce
+ * p=1, f and i with the system's DNS-SD). The answer is
+ * {"qr","digits","id","fingerprint","expires","modules"}: qr a
+ * cbb://pair link with the addresses, the phone's key hash, the window's ID
+ * and its digits; digits the six to show for a device that types them. The
+ * new device dials and proves the digits; nobody is asked. cbb_window_next
+ * waits up to timeout_ms for a state past version and answers
+ * {"version","state","name","device","error"}, state open, joining (a
+ * device pairs), done (a device joined: device, name; the window is
+ * closed), failed (that attempt failed; the window stays open) or closed
+ * (its time is up, or three wrong codes: error). cbb_window_free closes it.
+ */
+typedef struct cbb_window cbb_window;
+cbb_window *cbb_window_new(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                           uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_window_next(const cbb_window *w, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
+void cbb_window_free(cbb_window *w);
+
+/*
+ * A new phone joins a group of 0.6 by a home window (src/joiner.rs):
+ * request is {"dir","qr","digits","name","os","public"}: qr the window's QR
+ * code text, or empty with digits the six the person typed (the core then
+ * finds the one window announced by mDNS); public the member key, which
+ * sign with ctx signs with until cbb_joiner_free. It dials the window's
+ * addresses on a thread of its own, takes only the member whose key the
+ * window names and proves the digits. The answer is the first state;
+ * cbb_joiner_next waits up to timeout_ms for a state past version and
+ * answers {"version","state","group","device","name","error"}, state
+ * dialing, done (the set is kept in dir: start the member on it; name is
+ * the member that let it in) or failed. cbb_joiner_free ends it.
+ * cbb_joiner_new_admin also offers the admin key the request names in
+ * admin_public, admin_sign with admin_ctx signing its proof over the
+ * session: the group's root keeps it and makes the phone an admin later.
+ */
+typedef struct cbb_joiner cbb_joiner;
+cbb_joiner *cbb_joiner_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, uint8_t **answer,
+                           size_t *answer_len);
+cbb_joiner *cbb_joiner_new_admin(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, cbb_sign_fn admin_sign,
+                                 void *admin_ctx, uint8_t **answer, size_t *answer_len);
+uint8_t *cbb_joiner_next(const cbb_joiner *j, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
+void cbb_joiner_free(cbb_joiner *j);
 
 /*
  * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with

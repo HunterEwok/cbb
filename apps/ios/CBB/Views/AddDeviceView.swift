@@ -3,9 +3,9 @@
 import SwiftUI
 import VisionKit
 
-/// The camera with a frame; the six digits by hand when there is no camera.
-/// With restore, it reads the recovery sheet's QR code instead, on a phone
-/// without a group, and the key may be pasted by hand.
+/// "Add a device": the pairing window (WindowView). With restore, on a
+/// phone without a group: the camera with a frame reads the recovery
+/// sheet's QR code, or its text is pasted by hand.
 struct AddDeviceView: View {
     let restore: Bool
     @EnvironmentObject private var model: AppModel
@@ -13,7 +13,7 @@ struct AddDeviceView: View {
     @Environment(\.palette) private var palette
     @Environment(\.themeStyle) private var style
     @State private var typed = ""
-    /// The device being admitted; leaving the sheet cancels it.
+    /// The restore under way; leaving the sheet cancels it.
     @State private var adding: Task<Void, Never>?
     @State private var askingCard = false
     @State private var pin = ""
@@ -21,45 +21,42 @@ struct AddDeviceView: View {
     init(restore: Bool = false) { self.restore = restore }
 
     var body: some View {
+        if !restore {
+            WindowView()
+        } else {
+            scanner
+        }
+    }
+
+    /// Scanning the recovery sheet's QR code.
+    private var scanner: some View {
         NavigationStack {
             VStack(spacing: Tokens.spacingLarge) {
                 if QRScanner.available {
                     QRScanner { text in add(text) }
                     .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                     .frame(maxHeight: 360)
-                    if restore {
-                        Text("Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.")
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text("Point the camera at the QR code the new device shows.")
-                            .multilineTextAlignment(.center)
-                    }
+                    Text("Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.")
+                        .multilineTextAlignment(.center)
                 } else {
-                    if restore {
-                        Text("Paste the text of the recovery sheet's QR code.")
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text("Paste the text of the QR code of cbb pair.")
-                            .multilineTextAlignment(.center)
-                    }
+                    Text("Paste the text of the recovery sheet's QR code.")
+                        .multilineTextAlignment(.center)
                     TextField(String(localized: "QR code text", bundle: .app), text: $typed, axis: .vertical)
                         .font(.system(.body, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(Tokens.spacingMedium)
                         .glassCard()
-                    Button(restore ? String(localized: "Restore", bundle: .app) : String(localized: "Add", bundle: .app)) { add(typed) }
+                    Button(String(localized: "Restore", bundle: .app)) { add(typed) }
                     .buttonStyle(AccentButtonStyle())
                     .disabled(typed.isEmpty || model.busy)
                 }
-                if restore && YubiKeyNfc.available {
+                if YubiKeyNfc.available {
                     Button { askingCard = true } label: { Text("Use a YubiKey instead") }
                         .buttonStyle(GlassButtonStyle())
                         .disabled(model.busy)
                 }
-                if model.busy && model.retries > 0 {
-                    ProgressView { Text("The device is not ready yet. Trying again (\(model.retries))…") }
-                } else if model.busy {
+                if model.busy {
                     ProgressView { Text("Connecting to the device…") }
                 } else if let message = model.message {
                     Text(message).foregroundStyle(palette.danger)
@@ -68,7 +65,7 @@ struct AddDeviceView: View {
             }
             .padding(Tokens.spacingLarge)
             .background(AppBackground())
-            .navigationTitle(restore ? Text("Restore the group") : Text("Add a device"))
+            .navigationTitle(Text("Restore the group"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -97,11 +94,11 @@ struct AddDeviceView: View {
         }
     }
 
-    /// Admits the device of the scanned or pasted text, one at a time.
+    /// Restores with the scanned or pasted text, one at a time.
     private func add(_ text: String) {
         guard adding == nil else { return }
         adding = Task {
-            if await (restore ? model.restore(text) : model.scanned(text)) { dismiss() }
+            if await model.restore(text) { dismiss() }
             adding = nil
         }
     }

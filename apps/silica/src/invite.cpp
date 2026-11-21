@@ -17,7 +17,7 @@
 
 namespace {
 
-// The longest side of a camera frame the QR reader gets, as Admit's.
+// The longest side of a camera frame the QR reader gets.
 const int maxFrameSide = 1024;
 
 // How often the page's state is asked of the core.

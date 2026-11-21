@@ -9,39 +9,38 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
-    let qr = "cbb://join?code=246802&addr=192.168.1.20:8767&fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D"
+    /// A home window's QR code (docs/protocol.md, "Pairing in 0.6").
+    let qr = "cbb://pair?addr=192.168.1.20:8764&fp=" + String(repeating: "ab", count: 32) + "&i=" + String(repeating: "11", count: 16)
+        + "&c=123456"
 
-    func testRead() {
-        guard case let .joinCode(jc) = AppModel.read(scanned: qr) else { return XCTFail() }
-        XCTAssertEqual(jc.code, "246802")
-        XCTAssertEqual(jc.addrs, ["192.168.1.20:8767"])
-        for text in ["", "https://example.com", "cbb://join?code=246802", "cbb://join?code=12&addr=a:1&fp=x"] {
-            XCTAssertEqual(AppModel.read(scanned: text), .notCBB, text)
+    /// Only a window's code or six digits are dialed; anything else says
+    /// why, with nothing joined.
+    func testJoinByWindowRefusesOtherCodes() async {
+        let g = FakeGroup()
+        let m = AppModel(group: g)
+        for text in ["", "https://example.com", "cbb://join?code=246802&addr=192.168.1.20:8767&fp=x", "cbb://invite#x", "12345", "1234567",
+                     "12a456", "١٢٣٤٥٦"] {
+            let ok = await m.joinByWindow(text)
+            XCTAssertFalse(ok, text)
+            XCTAssertNotNil(m.message, text)
         }
+        XCTAssertTrue(g.windows.isEmpty)
+        XCTAssertFalse(g.hasGroup)
+        // Pasted from a terminal, spaces and newline included.
+        let ok = await m.joinByWindow(" " + qr + "\n")
+        XCTAssertTrue(ok)
+        XCTAssertEqual(g.windows, [qr])
     }
 
-    /// The text cbb pair prints under its QR code, as Go's
-    /// phone.JoinQR writes it (percent-encoded, an IPv6 address too), reads
-    /// as pasted from a terminal, spaces and newline included.
-    func testReadGoJoinText() {
-        let text = "cbb://join?code=246802&addr=192.168.1.20%3A8767&addr=%5Bfd00%3A%3A5%5D%3A8767&fp=qFnj7Uv%2BCE%2FWNnna2IEmMaLbkA6tHcKf0VijTRzekKA%3D"
-        for pasted in [text, " " + text + "\n"] {
-            guard case let .joinCode(jc) = AppModel.read(scanned: pasted) else { return XCTFail(pasted) }
-            XCTAssertEqual(jc.code, "246802")
-            XCTAssertEqual(jc.addrs, ["192.168.1.20:8767", "[fd00::5]:8767"])
-            XCTAssertEqual(jc.fingerprint, "qFnj7Uv+CE/WNnna2IEmMaLbkA6tHcKf0VijTRzekKA=")
-        }
-    }
-
-    func testTheMoreTellingFailure() {
-        let handshake = TLSTransport.Failure.notReady("handshake failed")
-        func isHandshake(_ e: Error) -> Bool {
-            if case TLSTransport.Failure.notReady("handshake failed") = e { return true }
-            return false
-        }
-        XCTAssertTrue(isHandshake(LiveGroup.telling(nil, handshake)))
-        XCTAssertTrue(isHandshake(LiveGroup.telling(handshake, TLSTransport.Failure.timedOut)), "a later timeout hides nothing")
-        XCTAssertTrue(isHandshake(LiveGroup.telling(TLSTransport.Failure.timedOut, handshake)), "an address that answered says more")
+    /// Six digits typed from a window's screen, spaces aside, go to the
+    /// window found at home.
+    func testJoinByWindowTakesSixDigits() async {
+        let g = FakeGroup()
+        let m = AppModel(group: g)
+        let ok = await m.joinByWindow(" 123 456 ")
+        XCTAssertTrue(ok)
+        XCTAssertEqual(g.windows, [""])
+        XCTAssertEqual(g.digits, ["123456"])
     }
 
     func testSyncFromShortcut() async {
@@ -154,19 +153,16 @@ final class AppModelTests: XCTestCase {
         var isAdmin = true
         var prepared = 0
         func prepare() throws { prepared += 1 }
-        var joinCode = JoinCode(code: "135790", addrs: ["192.168.1.30:50000"], fingerprint: "fp")
-        var shown: [JoinCode] = []
-        func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
-            show(joinCode)
-            shown.append(joinCode)
+        var computers: [AppModel.Computer] = []
+        /// The windows' codes dialed and the digits typed: joining one puts
+        /// the phone in its group, as a member.
+        var windows: [String] = []
+        var digits: [String] = []
+        func joinByWindow(_ qr: String, digits typed: String) async throws {
+            windows.append(qr)
+            if !typed.isEmpty { digits.append(typed) }
             hasGroup = true
             isAdmin = false
-        }
-        var computers: [AppModel.Computer] = []
-        var admitted: [JoinCode] = []
-        func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
-            admitted.append(code)
-            hasGroup = true
             computers = [.init(id: "a", name: "pi", online: true)]
         }
         var syncResult: AppModel.SyncResult = .sent(to: [])
@@ -207,7 +203,7 @@ final class AppModelTests: XCTestCase {
     func testLeave() async {
         let g = FakeGroup()
         let m = AppModel(group: g)
-        let ok = await m.scanned(qr)
+        let ok = await m.joinByWindow(qr)
         XCTAssertTrue(ok)
         g.isRoot = true
         var left = await m.leave()
@@ -318,14 +314,14 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(m.arranged.map(\.id), ["d:me", "c:c1", "d:b"])
     }
 
-    func testScanGoesHome() async {
+    func testJoinByWindowGoesHome() async {
         let g = FakeGroup()
         let m = AppModel(group: g)
         XCTAssertEqual(m.phase, .start)
-        let bad = await m.scanned("not a code")
+        let bad = await m.joinByWindow("not a code")
         XCTAssertFalse(bad)
         XCTAssertNotNil(m.message)
-        let ok = await m.scanned(qr)
+        let ok = await m.joinByWindow(qr)
         XCTAssertTrue(ok)
         XCTAssertEqual(m.phase, .home)
         XCTAssertEqual(m.computers.map(\.name), ["pi"])
@@ -343,15 +339,14 @@ final class AppModelTests: XCTestCase {
         let m = AppModel(group: g)
         m.startJoining()
         XCTAssertEqual(m.phase, .joining)
-        await m.join()
-        XCTAssertEqual(g.shown, [g.joinCode])
+        _ = await m.joinByWindow(qr)
+        XCTAssertEqual(g.windows, [qr])
         XCTAssertEqual(m.phase, .home)
-        XCTAssertNil(m.joinCode)
         XCTAssertFalse(m.isAdmin)
 
         let pending = AppModel()
         pending.startJoining()
-        await pending.join()
+        _ = await pending.joinByWindow(qr)
         XCTAssertEqual(pending.phase, .joining, "the screen stays, with the error")
         XCTAssertNotNil(pending.message)
         pending.cancelJoin()
@@ -362,14 +357,13 @@ final class AppModelTests: XCTestCase {
     func testJoinQRText() {
         let jc = JoinCode(code: "246802", addrs: ["192.168.1.20:8767", JoinCode.address(host: "fd00::5", port: 8767)], fingerprint: "abc_-")
         XCTAssertEqual(JoinCode(qr: jc.qrText), jc)
-        XCTAssertEqual(AppModel.read(scanned: jc.qrText), .joinCode(jc))
         XCTAssertTrue(JoinCode(code: JoinCode.newCode(), addrs: [], fingerprint: "").codeIsValid)
     }
 
     func testPendingGroup() async {
         let m = AppModel()
         XCTAssertEqual(m.phase, .start)
-        let ok = await m.scanned(qr)
+        let ok = await m.joinByWindow(qr)
         XCTAssertFalse(ok)
         XCTAssertEqual(m.message, AppModel.describe(PendingGroup.Failure.notReady))
     }

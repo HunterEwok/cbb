@@ -344,6 +344,8 @@ export class Member {
   recentLog: string[] = [];
 
   private handle: Handle | null = null;
+  // The member port is open (listen), for a pairing window of 0.6.
+  private listening: boolean = false;
   private timer: number = -1;
   private dir: string = '';
   private tookImage: string = '';
@@ -451,6 +453,7 @@ export class Member {
       return;
     }
     this.handle = null;
+    this.listening = false;
     clearInterval(this.timer);
     this.timer = -1;
     await cbb.memberStop(h);
@@ -467,6 +470,20 @@ export class Member {
     this.readAway(undefined);
     this.periodDue = false;
     Errors.log('member: stopped');
+  }
+
+  // Opens the member port at home, which a pairing window of 0.6 needs
+  // (the member's listen op); a second call keeps it open.
+  async listen(): Promise<Failure | undefined> {
+    if (this.listening) {
+      return undefined;
+    }
+    const r = await this.call<Object>('listen', { 'kind': 'home' } as Record<string, Object>);
+    if (r.ok === undefined) {
+      return r.failure;
+    }
+    this.listening = true;
+    return undefined;
   }
 
   // Asks the member: {"op","args"}.
@@ -669,18 +686,6 @@ export class Member {
       return;
     }
     Errors.log(on ? 'member: sync away from home is on' : 'member: sync away from home is off');
-    this.readAway(a.ok.away);
-  }
-
-  // After joining by a remote invitation: sync away from home on, the
-  // tunnel key offered through the invitation's guest tunnel.
-  async joinedByInvite(invite: string): Promise<void> {
-    const a = await this.call<AwayAnswer>('joined_by_invite', { 'invite': invite } as Record<string, Object>);
-    if (a.ok === undefined) {
-      this.error = Errors.shown(a.failure as Failure);
-      return;
-    }
-    Errors.log('member: joined by an invitation; sync away from home is on');
     this.readAway(a.ok.away);
   }
 
@@ -963,7 +968,7 @@ export class Member {
       this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
     } else if (e.type === 'identity') {
       this.onIdentity(e.cert ?? '', e.issuer ?? '', e.roots ?? []);
-    } else if (e.type === 'mute') {
+    } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
     } else if (e.type === 'command') {
       if (e.command !== undefined) {

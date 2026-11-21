@@ -33,8 +33,9 @@ struct Hub {
     const disguise = app.hubDisguise();
     this.strictWeb = disguise === 'vless';
     this.strictVpn = disguise !== 'plain';
-    this.relay = app.relayAddress();
-    this.relayKey = app.relayKey();
+    // On a group of 0.6 the relay is the group's, as the member meets it.
+    this.relay = app.isV06() ? app.member.relayAt : app.relayAddress();
+    this.relayKey = app.isV06() ? '' : app.relayKey();
     app.show('');
   }
 
@@ -219,35 +220,42 @@ struct Hub {
         }
 
         this.section(t('relay_title'))
-        this.note(t('relay_body'))
-        TextInput({ placeholder: $r('app.string.relay_address'), text: this.relay })
-          .onChange((v: string) => {
-            this.relay = v;
-          })
-        TextInput({ placeholder: $r('app.string.relay_key'), text: this.relayKey })
-          .maxLength(KEY_LENGTH)
-          .onChange((v: string) => {
-            this.relayKey = v;
-          })
-        Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
-        ErrorText({ text: app.member.relayError })
-        Row({ space: 8 }) {
-          Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
-            .layoutWeight(1)
-            .enabled(!this.busy && !app.busy && app.member.running)
-            .onClick(() => {
-              this.meet();
+        // On a group of 0.6 the relay is the group's, which only the root sets.
+        if (app.isV06() && !app.isRoot()) {
+          this.note(t('relay_by_root'))
+          Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
+          ErrorText({ text: app.member.relayError })
+        } else {
+          this.note(t('relay_body'))
+          TextInput({ placeholder: $r('app.string.relay_address'), text: this.relay })
+            .onChange((v: string) => {
+              this.relay = v;
             })
-          if (app.member.relayAt.length > 0) {
-            Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          TextInput({ placeholder: $r('app.string.relay_key'), text: this.relayKey })
+            .maxLength(KEY_LENGTH)
+            .onChange((v: string) => {
+              this.relayKey = v;
+            })
+          Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
+          ErrorText({ text: app.member.relayError })
+          Row({ space: 8 }) {
+            Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
               .layoutWeight(1)
-              .enabled(!this.busy && !app.busy)
+              .enabled(!this.busy && !app.busy && app.member.running)
               .onClick(() => {
-                this.leave();
+                this.meet();
               })
+            if (app.member.relayAt.length > 0) {
+              Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+                .layoutWeight(1)
+                .enabled(!this.busy && !app.busy)
+                .onClick(() => {
+                  this.leave();
+                })
+            }
           }
+          .width('100%')
         }
-        .width('100%')
 
         BusyLine({ busy: this.busy || app.busy })
         ErrorText({ text: app.error })

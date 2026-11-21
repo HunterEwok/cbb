@@ -16,6 +16,56 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- The phones' kits read the group as the 0.6 member gives it: its state, its notices, the
+  "who stays" list before a change of root, and the events of a change of root and of a key
+  the member asks for (`GroupState`, `Notice`, `ChangePreview` in both kits, checked against
+  `testdata/interop/member-group.json`); "Why it does not sync" in every app says the reasons of
+  the 0.6 records: two admins in conflict, two histories of the root, a recovery key used twice,
+  a change of root arriving, a stuck checkpoint, a device that disagrees about the root, no
+  secrets or nothing sent here, and a copy waiting for its sender.
+- The iPhone and Android apps show the member's notices about the group on Home, move the
+  group's main device to the phone with the recovery key and the "who stays" list the core
+  writes, and show on every device that the main device changed, with "This wasn't me"
+  ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
+  and the change too.
+- A phone of 0.6 opens a home window (`cbb_window_new`, docs/core-api.md): it shows six digits
+  and a QR code with its addresses, key hash, window ID and the digits; a device that proves the
+  digits is admitted by its root or admin key under the core's admission rules and gets the
+  Welcome, with nobody asked; three wrong codes close the window, one success closes it too
+  (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
+- The iPhone and Android apps of 0.6 run sync away from home, the phone as a hub and the
+  link to the group's relay through the Live member, with the same cards as before; the
+  root phone sets the group's relay, which every device meets at, on HarmonyOS too
+  ([phone apps](docs/apps.md), "Screens").
+- A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
+  (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
+  proves the digits, and the checked set is kept in the app's folder before the member hears it
+  was (`ffi/src/joiner.rs`). The iPhone's and Android's
+  kits open the window and join by it (`CorePairing.Window`, `CorePairing.Joiner`).
+- A phone's member of 0.6 carries out the commands an admin sends it that the records let
+  through, as the service does: mute, unmute and the sync mode, kept and sent in its next hello,
+  with a `sync` event for the app; it follows the button's rule (`waiting`, `took`, `sends`).
+- A phone of 0.6 offers its admin key when it joins (`cbb_joiner_new_admin`), for the root to
+  make it an admin later; a root phone keeps the key a device offered through its window, lets a
+  computer that can be a hub be one, mutes, unmutes, turns the sync of another device off and
+  on and sends it pastes by command, and as the root sets the key level and makes admins
+  (`cbb_member_manage`).
+- A phone of 0.6 copies images and files to the group and fetches the group's (`copy_media`,
+  `fetch`), on the service's media of 0.6.
+- A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
+  its root key signs its own record, the set is kept for the member, and the recovery sheet goes
+  to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers
+  `group`, the state the apps show (the group, its root, the phone's place, the devices).
+- The Android and iPhone apps pair on 0.6: "Add a device" makes a group of 0.6 on a phone without one
+  (its recovery sheet shown once) and opens the pairing window with its QR code, announced by
+  NSD or Bonjour; "Add a device" shows the window's six digits under the code;
+  "Join a group" scans a window's code, or takes the six digits typed, finds the window by NSD or
+  Bonjour and dials it; nobody is asked ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
+- The Aurora and HarmonyOS apps pair on 0.6 too: "Create a group" makes a group of 0.6 and shows
+  its recovery sheet once, "Add a device" opens the pairing window, which the core announces by
+  mDNS, and "Join a group" takes the six digits the window shows and finds that window on the home
+  network (or dials a window's code, pasted on Aurora, scanned on HarmonyOS); nobody is asked. The 0.6
+  recovery sheet's answer carries its QR code's modules for the apps to draw.
 - `release-sign -push ADDRESS=KEY.pem` lists the project's push service's key in `keys.json`
   (use `push`), as `-relay` and `-forwarder` list theirs: the members show the service a face
   only once a `keys.json` names it, since no pin of it is built in. Two such pins may stand
@@ -124,6 +174,12 @@ made with 0.5 is set up again once. The details follow.
   An admin that is not the hub makes the invitation through a hub of the group (`-hub`, or
   the first of the hub order connected): the hub lets the guest in and passes its pairing to
   the admin's window in `guest` messages.
+- The phone apps join a group of 0.6 from afar by a remote invitation (`cbb://join#...`):
+  the phone dials the hub through the invitation's guest tunnel, shows its fingerprint for the
+  inviting admin to compare, and its member reaches the hub through that tunnel until the hub's
+  offer comes. An admin phone of 0.6 invites a computer or a phone, on itself as the group's
+  hub or through a hub, and admits by the core's rules once the person confirms the
+  fingerprint; an admin phone serves as the group's hub with the same hub as the computers.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and
@@ -2794,6 +2850,10 @@ made with 0.5 is set up again once. The details follow.
 
 ### Removed
 
+- The phone apps' join by the phone's own QR code (the phone listened and the group's device
+  scanned it and dialed in) and their old "Add a device" screen that scanned such a code: every
+  phone app joins and adds at home through the pairing window ([phone apps](docs/apps.md),
+  "Screens"). A remote invitation and a restore keep their screens.
 - Sync away from home in a group made before 0.6: `cbb` refuses `away`, `hub`, `invite` from
   afar and an invitation of such a group, and says to start a group of 0.6 (D-122). In a
   group of 0.6 a hub that serves with new settings (a new forwarder) starts again with them,

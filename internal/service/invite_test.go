@@ -24,11 +24,18 @@ import (
 // there.
 func inviteHub(t *testing.T, h *hub, pi *testService) (inv *control.Client, text string) {
 	t.Helper()
+	return inviteHubFor(t, h, pi, "")
+}
+
+// inviteHubFor is inviteHub with an invitation for a kind of device:
+// "phone", or a computer when empty.
+func inviteHubFor(t *testing.T, h *hub, pi *testService, kind string) (inv *control.Client, text string) {
+	t.Helper()
 	makeHub(t, h, pi)
 	inv = pi.dial(t)
 	t.Cleanup(func() { inv.Close() })
 	inv.SetDeadline(time.Now().Add(60 * time.Second))
-	m, err := inv.Do(&control.Message{Header: control.Header{Op: control.OpInvite, Expires: 600}})
+	m, err := inv.Do(&control.Message{Header: control.Header{Op: control.OpInvite, Kind: kind, Expires: 600}})
 	if err != nil {
 		t.Fatal(err)
 	}

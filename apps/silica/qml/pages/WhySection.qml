@@ -42,6 +42,15 @@ Column {
         case "devices_sync_off": return qsTr("Sync is off on: %1.").arg(names)
         case "devices_muted": return qsTr("Muted: %1.").arg(names)
         case "update": return qsTr("CBB %1 is available.").arg(r.value)
+        case "admins_conflict": return qsTr("Two admins disagree about a device: the group waits for its main device.")
+        case "root_two_histories": return qsTr("The main device's key signed two different histories, so the group stopped.")
+        case "recovery_fork": return qsTr("The group's recovery key was used twice, so the group stopped for good.")
+        case "change_arriving": return qsTr("A change of the group's main device is on its way.")
+        case "checkpoint_stuck": return qsTr("The main device's records wait for records no device has passed on.")
+        case "owner_disagrees": return qsTr("This device and the group disagree about which device is the main one.")
+        case "no_secrets_here": return qsTr("The group sends no secrets to this device.")
+        case "nothing_here": return qsTr("The group sends nothing to this device.")
+        case "copy_waits": return qsTr("A copy waits until this device learns which device sent it.")
         default: return r.code
         }
     }
@@ -70,6 +79,14 @@ Column {
         case "entries_stale": return qsTr("Update CBB on a computer of the group.")
         case "newer": return qsTr("Update CBB on this device.")
         case "unreached": return qsTr("Let CBB through this computer's firewall.")
+        case "admins_conflict": return qsTr("On the group's main device, decide in its alerts.")
+        case "root_two_histories": return qsTr("Move the group to a new main device with the group's recovery key.")
+        case "recovery_fork": return qsTr("Make a new group and join your devices to it.")
+        case "change_arriving": return qsTr("Keep this device on near the group's other devices until it arrives.")
+        case "checkpoint_stuck": return qsTr("Turn on the group's other devices.")
+        case "owner_disagrees": return qsTr("Leave the group on this device, then join again.")
+        case "no_secrets_here": return qsTr("Ask the group's owner to let it have secrets.")
+        case "nothing_here": return qsTr("Ask the group's owner to restore its rights.")
         default: return ""
         }
     }

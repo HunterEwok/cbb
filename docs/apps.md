@@ -40,6 +40,27 @@ they look, so both apps are built to the same plan.
    phone's device page ("Make it an admin"), with the admin key its hellos offer
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
    the pull-down menu, as in every Silica app.
+
+   On 0.6 (every phone app) the new device always dials
+   (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
+   without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
+   set kept where the member runs) and shows its recovery sheet once; on the root phone, or a
+   phone the records name an admin, it then opens the home window: its QR code and six digits
+   on screen, announced by NSD (Bonjour on the iPhone) with `p=1`, `f` and `i` (never the
+   digits), open for five minutes. **Join a group** opens the camera and dials the window of the
+   code it reads; where scanning fails, or there is no camera, the person types the six digits
+   (or pastes the code's text), and the app finds the window with `p=1` and `i` by NSD or
+   Bonjour and builds the code itself (`Discovery.windowLink`). The new device proves the digits
+   and joins; nobody is asked anything. A wrong code joins no one and writes nothing; three
+   close the window, and so does the device that joins. The device list, who is the root and who is
+   an admin come from the member's `group` (docs/core-api.md). On Aurora and HarmonyOS, whose
+   apps have no DNS-SD of the system here, **Create a group** makes the group of 0.6 and shows
+   the sheet, **Add a device** has the core announce the window by mDNS, and **Join a group**
+   takes the six digits the window shows and has the core find that window on the home
+   network; a window's code can still be pasted (Aurora) or scanned (HarmonyOS). Who is an admin comes from the member's
+   `devices` there. No app listens any more for a device that scans the
+   phone's own code: joining at home always goes through the window. A remote invitation and
+   a restore keep their own screens.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
@@ -221,6 +242,23 @@ they look, so both apps are built to the same plan.
    `HubOnPhone` and the Swift kit's `HubOnPhone` drive the tunnel's hub, the tunnel's connections
    come to a member port on the loopback address, and on a home network the hub takes members
    on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3).
+   In a group of 0.6 the Live member runs all of it in the app's process, in user space as
+   before: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
+   port and the addresses, and how its tunnel hides) and the link to the group's relay, and
+   it keeps their keys and the hub's clients itself; the cards read where they stand from
+   `away_status` (docs/core-api.md). The apps keep only what the user chose for the hub (on,
+   forwarder, disguise, home networks, and on Android the background): Android's `AwayOn06`
+   in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
+   app is in front (on Android also in the background when allowed). Turning the switch off
+   stops the hub at once, which hands its clients to the group's next hub. The app going to
+   the background on its own does not: on Android, without leave to run there, the hub stops
+   after a minute there; on the iPhone the member pauses and the hub stays one. So a short
+   trip away hands nobody over, and the clients wait out the gap as for any hub that goes
+   quiet, then move on to the next hub.
+   A hub without a forwarder is reached at the phone's addresses on the home network. The relay is the group's setting: the root sets it with
+   the fingerprint, the face or the screen lock (the manage action `relay`), and the other
+   devices show where their link to it stands, with "The group's root sets the relay for
+   every device".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
    (docs/protocol.md, section 12): on this phone while it is the group's registered hub,
    else through a hub of the group it is connected to. The phone shows the invitation's QR
@@ -244,6 +282,39 @@ suggests making a second phone an admin.
 
 Errors are one line in plain words with the next step ("Turn on the computer that holds
 the group", not a status code), never a dialog that must be dismissed.
+
+### Notices
+
+The member keeps a short list of things the person should know about the group's records
+(its `notices`), and Home shows each in a sentence of the app's own, under the alerts, on the iPhone, Android
+and Aurora: a
+change of the main device on its way, an admin that has been silent so long that its admin
+rights end soon (35 days in all), removals waiting until every admin has seen them and how
+much of the main device's room they take, a removal this phone still has to confirm, a frozen
+admin that holds removals back, a checkpoint waiting for records no device passed on, a device
+removed before the main device changed that counts again, and a recovery key not saved yet.
+A notice the member marks as one that may be hidden has a button that hides it; the others
+stay until what they say is over. A kind the app does not know is not shown.
+
+### Changing the main device
+
+Only the group's recovery key changes the main device, and it does so at once. On an iPhone
+or an Android phone that is not the main device, Settings, in its recovery part, offers "Move
+the group to this phone". The person scans the code on the recovery sheet or types its text; the key stays on
+the phone only for this change. The core then writes the list of who stays, one row per
+device with what the change does to it (stays, stays an admin, stays without its admin
+rights, stays frozen until the new main device unfreezes it, removed, or removed earlier).
+The person only unticks devices; each unticked device is removed in the same act, and the old
+main device starts unticked. When another change is already on its way and its records have
+not all arrived, the list says so, and the change is written over it only after the person
+turns that on. Face ID on the iPhone, the fingerprint or the screen lock on Android, confirms
+the change; it cannot be undone. On Android the window keeps out of screenshots while the key
+is on it.
+
+Every device of the group then shows, until the person has seen it, that the main device
+changed, which device it is now and which it replaces, with "This wasn't me". That button
+explains that someone has the recovery key and offers to leave the group: nothing undoes a
+change of the main device, so the way out is a new group.
 
 ## Why it does not sync
 
@@ -269,6 +340,11 @@ shows its code and the member's own words.
 | `frozen` | stop | the group's records froze this device's keys |
 | `nothing_here` | stop | the group's records give this device nothing |
 | `stopped` | stop | the group's records stop the exchange until the root decides |
+| `admins_conflict` | stop | two admins disagree about a device: the group waits for its root to decide |
+| `root_two_histories` | stop | the root's key signed two histories: move the group to a new root with the recovery key |
+| `recovery_fork` | stop | the recovery key signed two changes at one step: the group stopped for good, make a new one |
+| `owner_disagrees` | stop | this device and its peers follow different roots: leave, then join again |
+| `nothing_here` | stop | the group sends this device nothing |
 | `sync_off` | stop | sync is off here, until a time or until turned on |
 | `away_off` | stop | no device of the group is on this network: turn on Everywhere |
 | `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
@@ -279,6 +355,9 @@ shows its code and the member's own words.
 | `hub_waiting` | stop | this device is the hub and nobody connected yet |
 | `alone` | stop | connected, but no other device of the group is online |
 | `secrets_stopped` | warn | the group sends no secrets until the root decides |
+| `no_secrets_here` | warn | the group sends this device no secrets |
+| `change_arriving` | warn | a change of root is arriving and its records are not all here: keep the device near the others |
+| `checkpoint_stuck` | warn | a checkpoint of the root waits for records no device has offered |
 | `muted` | warn | an admin muted this device: its copies do not reach the group |
 | `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
 | `no_secrets_here` | warn | the group seals no secrets to this device |
@@ -287,6 +366,7 @@ shows its code and the member's own words.
 | `checkpoint_stuck` | warn | the root's checkpoint waits for records no device has offered |
 | `unreached` | warn | members at home cannot connect to this computer: its firewall |
 | `only_device` | info | the group's only device: add a phone or a computer |
+| `copy_waits` | info | a copy waits until this device learns the device that sent it |
 | `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
 | `copy_waits` | info | copies wait for their senders' records (`devices`) |
 | `update` | info | a newer CBB is available |
@@ -1167,7 +1247,8 @@ settings, why it does not sync and the lab.
   group without a computer the root or an admin phone is the hub itself (Settings, "This phone
   as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
   strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  user read what it learns. In a group of 0.6 that relay is the group's, which the root phone
+  sets (the manage action `relay`) and the other phones show read-only. The core runs both (`cbb_member_servers`, docs/core-api.md), with
   the server and period keys in HUKS; the root phone signs the next period of the group's
   server credentials (docs/protocol.md, section 18) with the root key when it renews the
   certificates, after the face, fingerprint or PIN.
@@ -1399,8 +1480,8 @@ the app on real devices.
   in "Add a device". The Start screen has one button for it on every phone, "Join a group",
   answered by any admin of the group, which admits the phone as a member; the root makes it
   an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
-  `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
-  kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
+  `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*` and
+  `cbb_invite_*`). An
   admin phone that removes the root
   phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
   Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the

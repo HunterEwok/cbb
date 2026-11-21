@@ -99,13 +99,6 @@ protocol GroupController: AnyObject {
     func runAction(_ id: String, name: String) async throws
     /// Turns every quick action off on a device; only an admin phone does.
     func actionsOff(_ id: String) async throws
-    /// Admits the device whose QR code the user scanned; retrying is told
-    /// each time the device did not answer yet and is dialed again.
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
-    /// Joins another phone's group as a member: listens, hands show the QR
-    /// code for the other phone to scan, and returns once this phone is in
-    /// the group. The root makes it an admin later from its device page.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
     /// Joins a group from afar by a remote invitation the user accepted;
@@ -161,9 +154,50 @@ protocol GroupController: AnyObject {
     func setRelay(address: String, pin: String) async throws
     /// Why the phone does not sync, the reason that stops the most first.
     func why() async -> [WhyReason]
+    /// The member's notices about the group (docs/apps.md, "Notices"),
+    /// newest first.
+    var notices: [Notice] { get }
+    /// Hides a notice until something about it changes.
+    func dismissNotice(_ id: String) async throws
+    /// The last change of the group's root the member told of, until the
+    /// person has seen it.
+    var rootChanged: AppModel.RootChange? { get }
+    /// The person saw the change of root.
+    func rootChangeSeen()
+    /// Who stays after moving the group's root to this phone with the
+    /// recovery key, before anything is signed; leaveOut are the devices
+    /// the person unticked.
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview
+    /// Moves the group's root to this phone with the recovery key: a new
+    /// root key in the Secure Enclave, Face ID, and leaveOut removed in the
+    /// same act; overWaiting writes over a change whose records never came.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws
+    /// Whether the group is on the records of 0.6.
+    var isV06: Bool { get }
+    /// Makes a group of 0.6 on this phone and returns its recovery sheet,
+    /// which the app shows once.
+    func newGroup06() async throws -> Core.RecoverySheet
+    /// Opens the home window of a group of 0.6: shown gets its QR code and
+    /// six digits; returns the name of the device that joined.
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String
+    /// Joins a group of 0.6 by a window's QR code, or by the six digits
+    /// typed from its screen (qr empty).
+    func joinByWindow(_ qr: String, digits: String) async throws
 }
 
 extension GroupController {
+    var isV06: Bool { false }
+    func newGroup06() async throws -> Core.RecoverySheet { throw PendingGroup.Failure.notReady }
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String {
+        throw PendingGroup.Failure.notReady
+    }
+    func joinByWindow(_ qr: String, digits: String) async throws { throw PendingGroup.Failure.notReady }
+    var notices: [Notice] { [] }
+    func dismissNotice(_ id: String) async throws {}
+    var rootChanged: AppModel.RootChange? { nil }
+    func rootChangeSeen() {}
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview { throw LiveGroup.Failure.noGroup }
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws { throw LiveGroup.Failure.noGroup }
     /// A stand-in tag for the tests' and previews' groups.
     var groupTag: String? { hasGroup ? "group" : nil }
     func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
@@ -367,11 +401,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    enum ScanResult: Equatable {
-        case joinCode(JoinCode)
-        case notCBB
-    }
-
     @Published private(set) var phase: Phase
     @Published private(set) var computers: [Computer] = []
     @Published private(set) var devices: [Computer] = [] {
@@ -396,11 +425,6 @@ final class AppModel: ObservableObject {
     /// broke"); in debug mode a break shows whole in `message` instead.
     @Published private(set) var bug: BugReports.Offer?
     @Published private(set) var busy = false
-    /// How many times a device being added that has not answered yet was
-    /// dialed again; 0 before that.
-    @Published private(set) var retries = 0
-    /// The QR code this phone shows while it waits to join a group.
-    @Published private(set) var joinCode: JoinCode?
     /// A remote invitation the user scanned, opened or pasted, which waits
     /// to be accepted or declined (docs/apps.md, Start).
     struct PendingInvite: Equatable, Identifiable {
@@ -422,6 +446,18 @@ final class AppModel: ObservableObject {
     @Published private(set) var keyLevel: String?
     /// What the group's records stop and what ends it.
     @Published private(set) var alerts: [GroupAlert] = []
+    /// The member's notices about the group, newest first.
+    @Published private(set) var notices: [Notice] = []
+    /// A change of the group's root the person has not seen yet.
+    @Published private(set) var rootChanged: RootChange?
+
+    /// A change of the group's root, as the notice on every device shows
+    /// it: the old and the new root's names, and the change's step.
+    struct RootChange: Equatable, Sendable {
+        var from: String
+        var to: String
+        var seq: UInt64
+    }
     /// Whether the group's root handed the group to this phone, which may
     /// take it now.
     @Published private(set) var handedOver = false
@@ -503,6 +539,9 @@ final class AppModel: ObservableObject {
         var relay: HubState.Forwarder?
         var online = 0
         var through = 0
+        /// Whether this phone sets the relay: on a group of 0.6 only the
+        /// root does, for the whole group.
+        var editable = true
     }
 
     @Published private(set) var blindRelay: BlindRelay?
@@ -659,44 +698,6 @@ final class AppModel: ObservableObject {
         return try result.get()
     }
 
-    /// Reads what the camera saw, or what the user typed: the text of the QR
-    /// code of cbb pair.
-    nonisolated static func read(scanned text: String) -> ScanResult {
-        guard let jc = JoinCode(qr: text), jc.codeIsValid, !jc.addrs.isEmpty, !jc.fingerprint.isEmpty else { return .notCBB }
-        return .joinCode(jc)
-    }
-
-    /// Admits a scanned computer; on success the app goes Home.
-    func scanned(_ text: String) async -> Bool {
-        guard case let .joinCode(jc) = Self.read(scanned: text) else {
-            message = String(localized: "Not a CBB QR code.", bundle: .app)
-            return false
-        }
-        busy = true
-        retries = 0
-        defer {
-            busy = false
-            retries = 0
-        }
-        Island.show(.adding, String(localized: "Adding a device…", bundle: .app))
-        do {
-            try await group.admit(jc) { [weak self] in self?.retries += 1 }
-            computers = group.computers
-            devices = group.devices
-            phase = .home
-            message = nil
-            Island.end(.adding, last: String(localized: "The device is in the group.", bundle: .app))
-            return true
-        } catch is CancellationError {
-            Island.end(.adding)
-            return false
-        } catch {
-            message = Self.describe(error)
-            Island.end(.adding, last: String(localized: "The device was not added.", bundle: .app))
-            return false
-        }
-    }
-
     /// At the first launch: makes this phone's own key, once.
     func prepare() {
         guard phase == .start, !defaults.bool(forKey: Self.preparedKey) else { return }
@@ -777,23 +778,6 @@ final class AppModel: ObservableObject {
         inviteFingerprint = nil
     }
 
-    /// Joins another phone's group: shows this phone's QR code until an
-    /// admin phone scans it, then goes Home. The join screen runs it as its
-    /// task, so leaving the screen cancels it and stops listening.
-    func join() async {
-        do {
-            try await group.join { [weak self] code in self?.joinCode = code }
-            computers = group.computers
-            devices = group.devices
-            isAdmin = group.isAdmin
-            phase = .home
-        } catch is CancellationError {
-        } catch {
-            message = Self.describe(error)
-        }
-        joinCode = nil
-    }
-
     /// Restores the group with the recovery key from the sheet's QR code,
     /// on a phone without a group: the claim goes out, the app goes Home,
     /// and Home shows the time left until this phone becomes the root.
@@ -854,8 +838,91 @@ final class AppModel: ObservableObject {
     }
 
     /// Leaves the join screen without joining.
+    // MARK: Pairing on 0.6: the window and the joiner
+
+    /// The recovery sheet of the group of 0.6 this phone just made, shown
+    /// once until the person says it is kept.
+    @Published var newSheet: Core.RecoverySheet?
+    /// The open window's QR code and its six digits, while "Add a device"
+    /// shows them.
+    @Published private(set) var windowQr: String?
+    @Published private(set) var windowDigits: String?
+
+    private func endPairing() {
+        windowQr = nil
+        windowDigits = nil
+    }
+
+    /// "Add a device" on 0.6: makes the group first on a phone without one
+    /// (its recovery sheet shows over the window), then opens the window
+    /// until a device joins. The screen runs it as its task, so leaving it
+    /// closes the window. Returns whether a device joined.
+    func addByWindow() async -> Bool {
+        message = nil
+        defer { endPairing() }
+        do {
+            if !group.hasGroup {
+                busy = true
+                defer { busy = false }
+                newSheet = try await group.newGroup06()
+                await refresh()
+                isAdmin = group.isAdmin
+                phase = .home
+            }
+            let name = try await group.openWindow { [weak self] qr, digits in
+                self?.windowQr = qr
+                self?.windowDigits = digits
+            }
+            log.info("\(name, privacy: .public) joined through this phone's window")
+            await refresh()
+            message = String(localized: "The device joined the group.", bundle: .app)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// Joins a group of 0.6 by a window's scanned or pasted QR code, or by
+    /// the six digits the person typed from the window's screen (the window
+    /// is then found on the home network), then goes Home. The join screen
+    /// runs it, so leaving it cancels it.
+    func joinByWindow(_ text: String) async -> Bool {
+        let qr = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = qr.filter { !$0.isWhitespace }
+        let typed = digits.count == 6 && digits.allSatisfy { $0.isASCII && $0.isNumber }
+        guard typed || qr.hasPrefix(Self.windowQR) else {
+            message = String(localized: "This is neither a pairing window's QR code nor its six digits. On a phone of the group, tap + to show them.", bundle: .app)
+            return false
+        }
+        message = nil
+        busy = true
+        defer {
+            busy = false
+            endPairing()
+        }
+        do {
+            try await group.joinByWindow(typed ? "" : qr, digits: typed ? digits : "")
+            await refresh()
+            // A member: the root makes it an admin later.
+            isAdmin = group.isAdmin
+            phase = .home
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
+    }
+
+    /// How the QR code of a pairing window of 0.6 starts (docs/protocol.md,
+    /// section 7, "The window's QR code").
+    static let windowQR = "cbb://pair?"
+
     func cancelJoin() {
-        joinCode = nil
         joiningInvite = nil
         inviteFingerprint = nil
         message = nil
@@ -1026,6 +1093,8 @@ final class AppModel: ObservableObject {
         handedOver = group.handedOver
         removed = group.removed
         recoveryMade = group.recoveryMade
+        notices = group.notices
+        rootChanged = group.rootChanged
         keyLevel = group.keyLevel
         incomingMS = group.incomingMS
         await refreshAway()
@@ -1320,6 +1389,48 @@ final class AppModel: ObservableObject {
         }
         devices = group.devices
         alerts = group.alerts
+    }
+
+    /// Hides a notice until something about it changes.
+    func dismiss(notice: Notice) async {
+        do {
+            try await group.dismissNotice(notice.id)
+        } catch {
+            message = Self.describe(error)
+        }
+        notices = group.notices
+    }
+
+    /// The person saw the change of the group's root.
+    func rootChangeSeen() {
+        group.rootChangeSeen()
+        rootChanged = nil
+    }
+
+    /// Who stays after moving the group's root to this phone; nil, with
+    /// the message set, when the key does not fit or the member refuses.
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async -> ChangePreview? {
+        do {
+            return try await group.changePreview(recovery, leaveOut: leaveOut)
+        } catch {
+            message = Self.describe(error)
+            return nil
+        }
+    }
+
+    /// Moves the group's root to this phone; true once it is the root.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async -> Bool {
+        busy = true
+        defer { busy = false }
+        do {
+            try await group.changeRoot(recovery, leaveOut: leaveOut, overWaiting: overWaiting)
+            message = String(localized: "This phone is now the group's main device. The other devices hear of it as soon as they connect.", bundle: .app)
+            await refresh()
+            return true
+        } catch {
+            message = Self.describe(error)
+            return false
+        }
     }
 
     /// Takes the group the root handed to this phone (cbb handover), after
@@ -1790,8 +1901,6 @@ final class PendingGroup: GroupController {
     func prepare() throws {}
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

@@ -90,24 +90,94 @@ struct ManageArgs {
     device: String,
     #[serde(default)]
     name: String,
+    /// How long a mute lasts, 0 for until an admin ends it.
+    #[serde(default)]
+    for_ms: i64,
+    /// A paste: its text, pasted or typed (`method`), with Enter after it,
+    /// a text or a secret (`kind`), or `media` for the group's copy of
+    /// images or files.
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    method: String,
+    #[serde(default)]
+    enter: bool,
+    #[serde(default)]
+    kind: String,
+    /// With make_admin: the person consented to a device that keeps its
+    /// keys in a file, which the group's key level must allow too.
+    #[serde(default)]
+    allow_file_key: bool,
+    /// With hubs: the devices the root names as the group's hubs, 1 to 16
+    /// in their order, by name or device ID.
+    #[serde(default)]
+    hubs: Vec<String>,
+    /// With relay, on the root: the group's relays, each "address pin"
+    /// (its key's pin in base64), or "default" alone for the project's;
+    /// none meets at no relay.
+    #[serde(default)]
+    relays: Vec<String>,
+    /// With key_level: proven, hardware or files.
+    #[serde(default)]
+    level: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
+}
+
+/// What the phone says of itself in its hellos.
+#[derive(Clone)]
+struct Me {
+    name: String,
+    os: String,
+    os_version: String,
+    version: String,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+impl Me {
+    /// Puts the phone's hello, with its board's mode and mute, in the
+    /// member's hellos, and sends it to the members connected now, so
+    /// that they show a mute or sync turned off at once.
+    fn hello(&self, live: &Live) {
+        self.set_hello(live);
+        if let Err(e) = live.mesh.changed() {
+            (self.log)(&format!("cbb: the new hello did not go: {}", e.for_log()));
+        }
+    }
+
+    fn set_hello(&self, live: &Live) {
+        let b = &live.board;
+        let muted = b.mute_left();
+        live.mesh.set_hello(cbb_member::hello::Hello {
+            name: self.name.clone(),
+            os: cbb_core::format::print::os_number(&self.os),
+            mode: if b.mode() == cbb_core::clip::Mode::Own { 2 } else { 1 },
+            muted: muted.is_some(),
+            muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
+            device: cbb_member::hello::Device {
+                form: roster::form_number("phone"),
+                version: self.version.clone(),
+                os_version: self.os_version.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }
 }
 
 /// The phone's member on the records of 0.6.
 pub struct Phone {
     live: Arc<Live>,
     dir: PathBuf,
-    name: String,
-    os: String,
-    os_version: String,
-    version: String,
+    me: Me,
     dialers: Dialers,
     /// The member port the app opened while it is in the front.
     port: Mutex<Option<Listener>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     stopped: AtomicBool,
     panics: u64,
+    /// What the phone itself sent or took last, for the one button's rule.
+    own: cbb_member::button::Own,
 }
 
 fn addrs(list: &[String]) -> Result<Vec<std::net::SocketAddr>> {
@@ -120,6 +190,20 @@ fn kind_name(k: Kind) -> &'static str {
         Kind::Secret => "secret",
         Kind::Media => "media",
     }
+}
+
+/// A copy the button's rule gives, as the app reads it, in the shape of
+/// 0.5's.
+fn event_json(e: &cbb_core::clip::Event) -> Value {
+    json!({
+        "id": e.id,
+        "origin": e.origin,
+        "age_ms": e.age,
+        "kind": kind_name(e.kind),
+        "text": e.text,
+        "media": e.media,
+        "key": cbb_member::button::key_of(e).unwrap_or_default(),
+    })
 }
 
 /// The group's current copy as the app reads it, in the shape of 0.5's.
@@ -168,21 +252,35 @@ impl Phone {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
+        // Sync away from home, with its state in the app's folder: on at
+        // once for a phone that joined by an invitation, which reaches the
+        // hub through the invitation's guest tunnel until it holds the
+        // hub's offer.
+        live.start_away(dir.clone(), None, log.clone())?;
+        let me = Me { name: a.name, os: a.os, os_version: a.os_version, version: a.version, log: log.clone() };
+        {
+            // The commands for the phone itself, which the core took and
+            // checked; the member holds the live member weakly, as the
+            // member holds this.
+            let (weak, me, dir) = (Arc::downgrade(&live), me.clone(), dir.clone());
+            live.mesh.on_command(Box::new(move |t| match weak.upgrade() {
+                Some(l) => carry_out(&l, &me, &dir, &ev, t),
+                None => Err(Error::msg("the member stopped")),
+            }));
+        }
         let panics = crate::guard::watch(Box::new(move |details: &str| ev.send(&Event::Panic { details })));
         let p = Phone {
             live,
             dir,
-            name: a.name,
-            os: a.os,
-            os_version: a.os_version,
-            version: a.version,
+            me,
             dialers: Dialers::default(),
             port: Mutex::new(None),
             log,
             stopped: AtomicBool::new(false),
             panics,
+            own: cbb_member::button::Own::default(),
         };
-        p.hello();
+        p.me.set_hello(&p.live);
         let tag = p.live.tag();
         cbb_member::discovery::start(p.live.clone(), tag.clone(), addrs(&a.peers)?, false, None, p.log.clone());
         if a.mdns {
@@ -191,23 +289,9 @@ impl Phone {
         Ok(p)
     }
 
-    /// What the phone says of itself in its hellos.
+    /// What the phone says of itself in its hellos, sent at once.
     fn hello(&self) {
-        let b = &self.live.board;
-        let muted = b.mute_left();
-        self.live.mesh.set_hello(cbb_member::hello::Hello {
-            name: self.name.clone(),
-            os: cbb_core::format::print::os_number(&self.os),
-            mode: if b.mode() == cbb_core::clip::Mode::Own { 2 } else { 1 },
-            muted: muted.is_some(),
-            muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
-            device: cbb_member::hello::Device {
-                version: self.version.clone(),
-                os_version: self.os_version.clone(),
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+        self.me.hello(&self.live);
     }
 
     /// Answers a request of cbb_member_call.
@@ -235,7 +319,60 @@ impl Phone {
                     other => return Err(Error::msg(format!("a copy is a text or a secret, not {other:?}"))),
                 };
                 l.send(&c.text, kind, Via::Phone)?;
+                self.own.sent(&c.text);
                 done()
+            }
+            // Images or files the phone copies, sealed and kept to serve, as
+            // the service's copy_media; a phone's copy is always deliberate.
+            "copy_media" => {
+                use cbb_member::content::Source;
+                let a: super::MediaArgs = args(a)?;
+                let parts = a
+                    .parts
+                    .into_iter()
+                    .map(|p| {
+                        let src = match (p.dir, p.data, p.file) {
+                            (true, _, _) => Source::Dir,
+                            (false, Some(d), _) => Source::Bytes(d),
+                            (false, None, Some(f)) => Source::File(PathBuf::from(f)),
+                            _ => return Err(Error::msg("a part with neither data nor a file")),
+                        };
+                        let part =
+                            cbb_core::media::Part { kind: p.kind, path: p.path, dir: p.dir, ..Default::default() };
+                        Ok((part, src))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                l.copy_media(&a.text, parts, Via::Phone, true)?;
+                Ok(json!({ "copy": self.own_media_json(&a.text) }))
+            }
+            // The images or files of a copy from the group, fetched from the
+            // member it came from and opened into a new folder.
+            "fetch" => {
+                let a: super::FetchArgs = args(a)?;
+                let from = l.media_to_paste(&a.id)?;
+                let parts = l.open_media(&from, a.max, Path::new(&a.out))?;
+                Ok(json!({ "parts": parts.iter().map(|(p, at)| super::part_json(p, at)).collect::<Vec<_>>() }))
+            }
+            // The one button's rule (cbb_member::button), on the group's
+            // current copy.
+            "waiting" => {
+                let me = id_text(&l.mesh.device());
+                let window = Duration::from_millis(l.board.lifetimes().0);
+                let ev = cbb_member::button::waiting(self.current_event(), &me, window, &self.own);
+                Ok(json!({ "copy": ev.map(|e| event_json(&e)) }))
+            }
+            "took" => {
+                let id = arg("id");
+                let id = id.as_str().ok_or_else(|| Error::msg("took needs the copy's id"))?;
+                if let Some(ev) = self.current_event().filter(|e| e.id == id) {
+                    self.own.took(&ev);
+                }
+                done()
+            }
+            "sends" => {
+                let board = arg("board");
+                let board = board.as_str().unwrap_or_default();
+                Ok(json!({ "sends": cbb_member::button::sends(board, self.current_event().as_ref(), &self.own) }))
             }
             "current" => {
                 Ok(json!({ "copy": l.board.current().map(|c| current_json(&c, cbb_member::uptime::wall_ms())) }))
@@ -329,10 +466,104 @@ impl Phone {
                 Ok(json!({ "peers": ps }))
             }
             "devices" => Ok(json!({ "devices": self.devices() })),
+            // Sync away from home: on with new tunnel keys, or off; and its
+            // state, null while it is off.
+            "away" => {
+                if arg("on").as_bool().unwrap_or(false) {
+                    l.away_on()?;
+                } else {
+                    l.away_off(std::time::Duration::ZERO)?;
+                }
+                Ok(json!({ "away": l.away_status() }))
+            }
+            // The phone as a hub of the group (the records must make it
+            // one: an admin key), as cbb global hub does on a computer and
+            // with the arguments of the phone of 0.5: reached away from
+            // home through the forwarder (`forwarder`, its key's pin `key`,
+            // or `default` for the project's) or at `addrs` ("ip:port") on
+            // the UDP `port`, hidden as `obfuscate_off` and `vless_off` say.
+            // The Live hub serves its clients and the guests of invitations
+            // at the guest address.
+            "hub" => {
+                if !l.mesh.may_be_hub(&l.mesh.device()) {
+                    return Err(Error::msg(
+                        "the group's records do not make this phone a hub; only an admin phone can be one",
+                    ));
+                }
+                let away = l.away().ok_or_else(|| Error::msg("sync away from home did not start on this phone"))?;
+                let text = |k: &str| arg(k).as_str().unwrap_or_default().to_string();
+                let addrs = arg("addrs")
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                    .unwrap_or_default();
+                let h = cbb_member::control::Header {
+                    name: "hub".into(),
+                    forwarder: resolve(&text("forwarder"))?,
+                    forwarder_key: text("key"),
+                    obfuscate_off: arg("obfuscate_off").as_bool().unwrap_or(false),
+                    vless_off: arg("vless_off").as_bool().unwrap_or(false),
+                    port: arg("port").as_i64().unwrap_or(0),
+                    addrs,
+                    consent: true,
+                    ..Default::default()
+                };
+                away.make_hub(&h)?;
+                Ok(json!({ "away": l.away_status() }))
+            }
+            // A Live hub that stops hands its clients to the next hub in
+            // the group's order (D-122), so `anyway` of 0.5 is not needed.
+            "hub_off" => {
+                l.stop_being_hub()?;
+                Ok(json!({ "away": l.away_status() }))
+            }
+            "away_status" => Ok(json!({ "away": l.away_status() })),
+            "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
         }
+    }
+
+    /// The group's current copy as the button's rule reads it.
+    /// The copy of images or files the phone just made, as the app lists
+    /// it: its ID once it went to the group, and the manifest kept to
+    /// serve it.
+    fn own_media_json(&self, text: &str) -> Value {
+        let l = &self.live;
+        let manifest = match l.media_to_paste("") {
+            Ok(cbb_member::live::MediaFrom::Own(m)) => Some(m.manifest),
+            _ => None,
+        };
+        let id = l.media_copy().map(|i| certs::hex(&i)).unwrap_or_default();
+        let ev = cbb_core::clip::Event {
+            id,
+            origin: id_text(&l.mesh.device()),
+            kind: Kind::Media,
+            text: text.to_string(),
+            media: manifest,
+            ..Default::default()
+        };
+        event_json(&ev)
+    }
+
+    fn current_event(&self) -> Option<cbb_core::clip::Event> {
+        let c = self.live.board.current()?;
+        let kind = if c.content.manifest.is_some() {
+            Kind::Media
+        } else if c.content.is_secret() {
+            Kind::Secret
+        } else {
+            Kind::Text
+        };
+        Some(cbb_core::clip::Event {
+            id: certs::hex(&c.id),
+            origin: id_text(&c.origin),
+            age: cbb_member::uptime::wall_ms().saturating_sub(c.at_ms).max(0),
+            kind,
+            text: c.content.text.clone().unwrap_or_default(),
+            media: c.content.manifest.clone(),
+            ..Default::default()
+        })
     }
 
     /// Every device of the group as the app shows it.
@@ -343,8 +574,8 @@ impl Phone {
             id: l.mesh.device(),
             mode: if l.board.mode() == cbb_core::clip::Mode::Own { "own" } else { "shared" }.into(),
             muted_until_ms: muted.map(|m| if m == 0 { 0 } else { cbb_member::uptime::wall_ms().saturating_add(m) }),
-            os_version: self.os_version.clone(),
-            version: self.version.clone(),
+            os_version: self.me.os_version.clone(),
+            version: self.me.version.clone(),
             ..Default::default()
         };
         roster::devices(&lock(&l.mesh.set()), &me, &l.mesh.hellos(), cbb_member::uptime::wall_ms())
@@ -399,8 +630,11 @@ impl Phone {
     }
 
     /// An admin's change to a device, signed with the app's admin or root
-    /// key: remove, rename, freeze and thaw; the records judge whether the
-    /// key may.
+    /// key: remove, rename, freeze and thaw, or a command for another
+    /// device (mute, unmute, sync_off, sync_on, paste, paste_off,
+    /// actions_off, away_off), sent as the computer's service sends it and
+    /// answered by that device (`{status, reason}`); the records judge
+    /// whether the key may.
     pub fn manage(&self, request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         answer((|| -> Result<Value> {
             if self.stopped.load(Ordering::SeqCst) {
@@ -427,10 +661,183 @@ impl Phone {
                     let on = a.action == "freeze";
                     mesh.write_by(&key, |set, k| writers::freeze(set, k, &a.device, on, now))?.0
                 }
+                "mute" | "unmute" | "sync_off" | "sync_on" | "paste" | "paste_off" | "actions_off" | "away_off" => {
+                    if named_me() {
+                        return Err(Error::msg("this phone's own switches are its own, not a command"));
+                    }
+                    let o = self.order(&a)?;
+                    let d = writers::find(&mesh.state(), &a.device)?.clone();
+                    let r = mesh
+                        .command(&key, d.id, o.kind(), o.orders()?.as_deref())
+                        .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
+                    let status = match r.status {
+                        1 => "done",
+                        s if s == cbb_core::commands::STATUS_REFUSED => "refused",
+                        _ => "failed",
+                    };
+                    return Ok(
+                        json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }),
+                    );
+                }
+                "relay" => {
+                    let given: Vec<(String, String)> = a
+                        .relays
+                        .iter()
+                        .map(|r| match r.trim().split_once(' ') {
+                            Some((addr, pin)) => (addr.to_string(), pin.trim().to_string()),
+                            None if r.trim() == "default" => (String::new(), "default".to_string()),
+                            None => (r.trim().to_string(), String::new()),
+                        })
+                        .collect();
+                    let relays = self.live.set_relays(Some(&key), &given)?;
+                    return Ok(json!({ "relays": relays.into_iter().map(|r| r.endpoint).collect::<Vec<_>>() }));
+                }
+                "hubs" => {
+                    mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
+                    return Ok(json!({ "hubs": a.hubs }));
+                }
+                "make_admin" => self.make_admin(&a, &key, now)?,
+                "key_level" => return self.key_level(&a, &key, now),
                 other => return Err(not_yet(&format!("the admin's action {other:?}"))),
             };
             Ok(json!({ "device": id_text(&d.id), "name": d.name }))
         })())
+    }
+
+    /// The group's key level as the records set it.
+    fn level(&self) -> &'static str {
+        use cbb_core::records::body::{LEVEL_FILES, LEVEL_PROVEN};
+        match self.live.mesh.state().settings.level() {
+            LEVEL_PROVEN => "proven",
+            LEVEL_FILES => "files",
+            _ => "hardware",
+        }
+    }
+
+    /// The root's "Make it an admin", as the service's cbb admin: the
+    /// device's record again with the admin key it offered when it paired
+    /// with this phone (`cbb_member::offered`), if the key level allows
+    /// where it keeps its keys.
+    fn make_admin(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<cbb_core::records::eval::DeviceState> {
+        use cbb_core::records::body::{CAP_ADMIN, ROLE_PHONE, STORE_ROOTLESS};
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        if st.roots.last() != Some(&cbb_core::records::Key::es256(key.public.clone()).hash()) {
+            return Err(Error::msg("only the group's root makes admins"));
+        }
+        let d = writers::find(&st, &a.device)?.clone();
+        if d.id == mesh.device() {
+            return Err(Error::msg("this phone is the group's root, which is more than an admin"));
+        }
+        if d.role != ROLE_PHONE && d.caps & CAP_ADMIN == 0 {
+            return Err(Error::msg(format!(
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
+                d.name
+            )));
+        }
+        if d.admin.is_some() {
+            return Err(Error::msg(format!("{} is already an admin", d.name)));
+        }
+        if d.store == STORE_ROOTLESS {
+            return Err(Error::msg(format!(
+                "{} is installed without root, so every program of its user can read its keys; such a device is never an admin (D-79)",
+                d.name
+            )));
+        }
+        let Some(point) = cbb_member::offered::get(mesh.dir(), &id_text(&d.id))? else {
+            return Err(Error::msg(format!(
+                "{} offered this phone no admin key when it joined (another admin admitted it, or it cannot be one then): pair it with this phone again to make it an admin",
+                d.name
+            )));
+        };
+        let store = self.devices().into_iter().find(|x| x.id == id_text(&d.id)).map(|x| x.store).unwrap_or_default();
+        cbb_core::keylevel::allows(self.level(), &store, &d.name, "allow keys in a file for it", a.allow_file_key)?;
+        Ok(mesh.write_by(key, |set, k| writers::make_admin(set, k, &a.device, &point, now))?.0)
+    }
+
+    /// The root's key level, as the service's cbb keys: never one this
+    /// phone's own keys do not pass. Answers `{below}`, the admins and hubs
+    /// whose keys the new level would not let in, which stay until removed.
+    fn key_level(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<Value> {
+        use cbb_core::records::body::{LEVEL_FILES, LEVEL_HARDWARE, LEVEL_PROVEN};
+        let level = match a.level.as_str() {
+            "proven" => LEVEL_PROVEN,
+            "hardware" => LEVEL_HARDWARE,
+            "files" => LEVEL_FILES,
+            _ => return Err(Error::msg("the key level is proven, hardware or files")),
+        };
+        let mesh = &self.live.mesh;
+        let me = id_text(&mesh.device());
+        let devices = self.devices();
+        let own = devices.iter().find(|d| d.id == me).map(|d| d.store.clone()).unwrap_or_default();
+        cbb_core::keylevel::allows(&a.level, &own, "this phone, the group's root,", "", true)?;
+        // The default, hardware, is written as no level at all (format 4.5).
+        let kept = if level == LEVEL_HARDWARE { 0 } else { level };
+        mesh.write_by(key, |set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
+        let st = mesh.state();
+        let below: Vec<String> = devices
+            .into_iter()
+            .filter(|d| d.id != me)
+            .filter(|d| d.admin || st.hubs.iter().any(|h| id_text(h) == d.id))
+            .filter(|d| cbb_core::keylevel::allows(&a.level, &d.store, &d.name, "", true).is_err())
+            .map(|d| d.name)
+            .collect();
+        Ok(json!({ "below": below }))
+    }
+
+    /// The command a manage request names, built and checked as the
+    /// service builds it (`cbb_member::orders`).
+    fn order(&self, a: &ManageArgs) -> Result<cbb_member::orders::Order> {
+        use cbb_member::orders::{Order, Way, What};
+        Ok(match a.action.as_str() {
+            "mute" => {
+                cbb_member::mute::until(a.for_ms)?;
+                Order::Mute((a.for_ms > 0).then_some(a.for_ms.unsigned_abs()))
+            }
+            "unmute" => Order::Unmute,
+            "sync_off" => Order::Mode(cbb_core::clip::Mode::Own),
+            "sync_on" => Order::Mode(cbb_core::clip::Mode::Shared),
+            "paste_off" => Order::PasteOff,
+            "actions_off" => Order::ActionsOff,
+            "away_off" => Order::AwayOff,
+            _ => {
+                let way = match a.method.as_str() {
+                    "" | "paste" => Way::Paste,
+                    "type" => Way::Type,
+                    m => return Err(Error::msg(format!("a paste is pasted or typed, not {m:?}"))),
+                };
+                let what = match a.kind.as_str() {
+                    "" | "text" => What::Text(a.text.clone()),
+                    "secret" => What::Secret(a.text.clone()),
+                    "media" => {
+                        if way == Way::Type {
+                            return Err(Error::msg("images and files are pasted, not typed"));
+                        }
+                        let id = self.live.media_copy().ok_or_else(|| {
+                            Error::msg("the group's current copy is no images or files that this phone reads")
+                        })?;
+                        What::Media(id)
+                    }
+                    k => return Err(Error::msg(format!("a paste is a text or a secret, not {k:?}"))),
+                };
+                Order::Paste { way, enter: a.enter, what }
+            }
+        })
+    }
+
+    /// Opens a pairing window with the admitting key behind sign
+    /// (`crate::window`): the member port must listen.
+    /// The member underneath, for the inviter of `cbb_invite_new`.
+    pub fn live(&self) -> Arc<Live> {
+        self.live.clone()
+    }
+
+    pub fn window(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::window::Window>, Vec<u8>) {
+        if self.stopped.load(Ordering::SeqCst) {
+            return (None, answer::<()>(Err(Error::msg("the member stopped"))));
+        }
+        let port = lock(&self.port).as_ref().map(|l| l.port);
+        crate::window::Window::open(self.live.clone(), port, request, sign, ctx)
     }
 
     /// What the watch asks is not on the records of 0.6 yet.
@@ -439,20 +846,70 @@ impl Phone {
     }
 }
 
-/// A copy from the group to write to the phone's clipboard: its text, and
-/// the copy itself for the app's list. Images and files are not fetched on
-/// the records of 0.6 yet: their text goes, and the log says why the rest
-/// does not.
-fn deliver(ev: &Events, w: &Write) {
-    let mut kind = w.kind;
-    if w.media.is_some() {
-        let e = not_yet("writing a copy's images or files");
-        ev.send(&Event::Log { line: &format!("cbb: a copy from the group: {}", e.for_log()) });
-        if w.text.is_empty() {
-            return;
+/// Carries out a command for the phone itself that the core took and
+/// checked (format section 6, `cbb_member::orders`), as the computer's
+/// member does: a mute or its end and the mode (sync off or on) here, the
+/// app hearing of each; the switches a phone does not have are off
+/// already; an error refuses or fails it, with why.
+fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::commands::Taken) -> Result<()> {
+    use cbb_member::commands::refuse;
+    use cbb_member::orders::Order;
+    let st = live.mesh.state();
+    // Who signed it: a device's own key or its admin key, or the root's.
+    let root = st.roots.last() == Some(&t.signer);
+    let by = st
+        .devices
+        .iter()
+        .find(|d| d.key.hash() == t.signer || d.admin.as_ref() == Some(&t.signer))
+        .or_else(|| if root { st.root_device.and_then(|r| st.devices.iter().find(|d| d.id == r)) } else { None });
+    let by_id = by.map(|d| id_text(&d.id)).unwrap_or_default();
+    let who = by.map(|d| d.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| by_id.clone());
+    let log = |line: &str| ev.send(&Event::Log { line });
+    match Order::read(t.kind, t.orders.as_deref())? {
+        Order::Mute(ms) => {
+            let now = cbb_member::uptime::wall_ms();
+            let until = ms.map_or(0, |ms| now.saturating_add(i64::try_from(ms).unwrap_or(i64::MAX)));
+            live.board.set_mute(until);
+            cbb_member::mute::save(dir, &live.board, &by_id)?;
+            me.hello(live);
+            let for_ms = if until == 0 { 0 } else { until.saturating_sub(now).max(1) };
+            log(&format!("cbb: {who} muted this phone"));
+            ev.send(&Event::Mute { muted: true, for_ms, by: &by_id });
+            Ok(())
         }
-        kind = Kind::Text;
+        Order::Unmute => {
+            live.board.unmute();
+            cbb_member::mute::save(dir, &live.board, &by_id)?;
+            me.hello(live);
+            log(&format!("cbb: {who} ended this phone's mute"));
+            ev.send(&Event::Mute { muted: false, for_ms: 0, by: &by_id });
+            Ok(())
+        }
+        Order::Mode(m) => {
+            let on = m == cbb_core::clip::Mode::Shared;
+            cbb_member::sync::set(dir, &live.board, on, 0)?;
+            me.hello(live);
+            log(&format!("cbb: {who} turned sync {} on this phone", if on { "on" } else { "off" }));
+            ev.send(&Event::Sync { off: !on, by: &by_id });
+            Ok(())
+        }
+        // A phone of 0.6 takes no remote paste, has no quick actions and
+        // does not sync away from home: each of them is off already.
+        Order::PasteOff | Order::ActionsOff | Order::AwayOff => Ok(()),
+        Order::Action(_) => Err(refuse("a phone has no quick actions")),
+        Order::Hub(_) => {
+            Err(refuse("a phone does not become the hub by a command; move the hub from the phone that is the hub"))
+        }
+        Order::Device { .. } => Err(refuse("a phone carries out no small device's own command")),
+        Order::Paste { .. } => Err(not_yet("a remote paste on a phone")),
     }
+}
+
+/// A copy from the group to write to the phone's clipboard: its text, and
+/// the copy itself for the app's list, with the manifest of its images or
+/// files, which the app fetches (the op `fetch`) and writes itself.
+fn deliver(ev: &Events, w: &Write) {
+    let kind = if w.media.is_some() { Kind::Media } else { w.kind };
     let ttl_ms = w.ttl.map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
     ev.send(&Event::Write { text: &w.text, kind: kind_name(kind), ttl_ms });
     let id = certs::hex(&w.id);
@@ -463,9 +920,80 @@ fn deliver(ev: &Events, w: &Write) {
             "age_ms": 0,
             "kind": kind_name(kind),
             "text": w.text,
+            "media": w.media,
             "key": id,
         }),
     });
+}
+
+/// The group's state as the apps show it (inventory 4.5): the group,
+/// its root, this device's place and the devices that count. A device is
+/// an admin when the admin key the records name for it is one of the
+/// group's admins. Removed devices are not listed: the apps get no more
+/// of the group than they show.
+fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Value {
+    use cbb_core::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
+    use cbb_core::records::eval::{DeviceState, Stop};
+    let role = |r: u64| match r {
+        ROLE_MEMBER => "computer",
+        ROLE_PHONE => "phone",
+        ROLE_WATCH => "watch",
+        ROLE_LEAF => "leaf",
+        _ => "unknown",
+    };
+    let st = &set.state();
+    let admin = |d: &DeviceState| d.admin.as_ref().is_some_and(|h| set.is_admin(h));
+    let mine = st.devices.iter().find(|d| d.id == *me);
+    let devices: Vec<Value> = st
+        .devices
+        .iter()
+        .map(|d| {
+            json!({
+                "device": id_text(&d.id), "name": d.name, "os": cbb_core::format::print::os_name(d.os),
+                "role": role(d.role), "admin": admin(d), "frozen": d.frozen, "hub": st.hubs.contains(&d.id),
+            })
+        })
+        .collect();
+    json!({
+        "group": certs::b64::encode(&st.group.0),
+        "root": st.roots.last().map(|r| certs::b64::encode(&r.0)).unwrap_or_default(),
+        "root_device": st.root_device.as_ref().map(id_text).unwrap_or_default(),
+        "me": {
+            "device": id_text(me),
+            "role": mine.map_or("", |d| role(d.role)),
+            "admin": mine.is_some_and(admin),
+            "frozen": mine.is_some_and(|d| d.frozen),
+            "leaf": mine.is_some_and(|d| d.role == ROLE_LEAF),
+        },
+        "stop": match st.stop {
+            Stop::None => "none",
+            Stop::Secrets => "secrets",
+            Stop::Full => "full",
+        },
+        "halted": st.halted(),
+        "update_needed": st.update_needed,
+        "too_old": st.too_old,
+        "change_arriving": st.first_missing.is_some() || st.list_missing.is_some(),
+        "devices": devices,
+    })
+}
+
+/// A forwarder's address as `ip:port`, looked up when it is a name (an IPv4
+/// address first); empty stays empty.
+fn resolve(s: &str) -> Result<String> {
+    use std::net::{SocketAddr, ToSocketAddrs as _};
+    let s = s.trim();
+    if s.is_empty() || s.parse::<SocketAddr>().is_ok() {
+        return Ok(s.to_string());
+    }
+    let addrs: Vec<SocketAddr> =
+        s.to_socket_addrs().map_err(|e| Error::with(format!("cannot look up {s}"), e))?.collect();
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4())
+        .or(addrs.first())
+        .map(SocketAddr::to_string)
+        .ok_or_else(|| Error::msg(format!("{s} has no address")))
 }
 
 #[cfg(test)]
@@ -548,11 +1076,21 @@ mod tests {
         assert_eq!(ok(&call("muted", Value::Null))["sync_off"], true);
         ok(&call("sync", json!({ "on": true })));
         assert!(ok(&call("why", Value::Null))["why"].is_array());
+        let g = ok(&call("group", Value::Null));
+        assert_eq!(g["root_device"], device.as_str(), "{g}");
+        assert_eq!(g["me"]["device"], device.as_str());
+        assert_eq!(g["me"]["role"], "computer");
+        assert_eq!(g["me"]["admin"], false, "the root is no admin");
+        assert_eq!((g["stop"].as_str(), g["halted"].as_bool()), (Some("none"), Some(false)));
+        assert_eq!(g["devices"].as_array().unwrap().len(), 1);
+        assert_eq!(g["devices"][0]["name"], "phone");
 
         // What has not moved answers why, never nothing.
-        for op in ["away", "hub", "records"] {
+        for op in ["records", "answer"] {
             assert!(error(&call(op, Value::Null)).contains("does not work in this build yet"), "{op}");
         }
+        // A root phone is no hub until the root names it.
+        assert!(error(&call("hub", Value::Null)).contains("do not make this phone a hub"));
         let manage = |action: &str, device: &str, name: &str| {
             let r = json!({ "action": action, "device": device, "name": name, "public": b64(&root.0.public()) });
             m.manage(r.to_string().as_bytes(), sign, ctx(root))
@@ -560,9 +1098,23 @@ mod tests {
         assert_eq!(ok(&manage("rename", "phone", "tablet"))["name"], "phone");
         assert_eq!(ok(&call("devices", Value::Null))["devices"][0]["name"], "tablet");
         assert!(error(&manage("remove", "tablet", "")).contains("cannot remove itself"));
-        assert!(error(&manage("mute", "tablet", "")).contains("does not work in this build yet"));
-        let (a, ans) = m.admit(b"{}", sign, ctx(root));
-        assert!(a.is_none() && error(&ans).contains("does not work in this build yet"));
+        // A command names another device; this phone's own switches are its own.
+        assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
+        assert!(error(&manage("hand_over", "tablet", "")).contains("does not work in this build yet"));
+        // The root sets the group's relays, and none again.
+        let pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+        let relay = json!({ "action": "relay", "relays": [format!("203.0.113.9:8764 {pin}")], "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(relay.to_string().as_bytes(), sign, ctx(root)))["relays"], json!(["203.0.113.9:8764"]));
+        let bad = json!({ "action": "relay", "relays": ["203.0.113.9:8764 nope"], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(bad.to_string().as_bytes(), sign, ctx(root))).contains("is not a relay's key"));
+        let none = json!({ "action": "relay", "relays": [], "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(none.to_string().as_bytes(), sign, ctx(root)))["relays"], json!([]));
+        // The root names its hubs, which the records judge: a phone is a hub
+        // only with an admin key, never by the hubs record.
+        let hubs = json!({ "action": "hubs", "hubs": ["tablet"], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(hubs.to_string().as_bytes(), sign, ctx(root))).contains("may not be a hub"));
+        let none = json!({ "action": "hubs", "hubs": [], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(none.to_string().as_bytes(), sign, ctx(root))).contains("1 to 16 hubs"));
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");
