@@ -27,8 +27,8 @@
 //! key", "PIV PIN-only mode" (docs.yubico.com, YubiKey SDK user's manual)
 //! and "Yubico extensions" (developers.yubico.com/PIV), read 2026-11-14.
 
-// The command line and the service call these with wave 5, when the 0.6
-// groups replace 0.5's; until then only the tests do.
+// The recovery opens a card (`open_one`); a computer seals none in 0.6,
+// the root phone does, so `inspect` and `seal` serve the tests here.
 #![cfg_attr(not(test), allow(dead_code))]
 
 use cbb_core::secret::Zeroizing;
@@ -471,6 +471,33 @@ pub fn seal(
         return Err(Error::msg("the YubiKey does not read back what cbb wrote"));
     }
     Ok(out)
+}
+
+/// Opens the secret on the one YubiKey PC/SC finds with a key in slot 95,
+/// after its PIN and a touch (`open`): the card is chosen before the PIN,
+/// so that a wrong card costs no PIN attempt.
+pub fn open_one(pin: &str) -> Result<Zeroizing<[u8; 32]>> {
+    open_among(super::cards()?, pin)
+}
+
+/// `open_one` among cards.
+fn open_among(cards: Vec<Box<dyn Card>>, pin: &str) -> Result<Zeroizing<[u8; 32]>> {
+    let mut found = Vec::new();
+    let mut last = super::NO_CARD;
+    for mut c in cards {
+        if super::select(c.as_mut()).is_err() {
+            continue;
+        }
+        last = NONE;
+        if matches!(metadata(c.as_mut(), yk::SLOT), Ok(Some(_))) {
+            found.push(c);
+        }
+    }
+    match found.len() {
+        0 => Err(Error::msg(last)),
+        1 => open(found[0].as_mut(), pin),
+        _ => Err(Error::msg(super::TWO_CARDS)),
+    }
 }
 
 /// Opens the secret on a YubiKey: its key in slot 95 must be one cbb asked
