@@ -428,13 +428,10 @@ fn a_hub_of_0_6_registers_with_its_forwarder() {
     let b = open(&db);
     let f = Forwarder::start(welcome(), Some("203.0.113.9:51820"));
     let no = Forwarder::start(Arc::new(|_: &crate::forward::v3::Register| Answer::Refused("full".into())), None);
-    // The forwarders as the project's keys.json would name them: the
-    // group shows each a face.
-    for l in [&a, &b] {
-        for fw in [&f, &no] {
-            l.mesh.add_test_server(crate::faces::Server { pin: fw.pin, address: fw.addr.to_string() });
-        }
-    }
+    // The forwarders as the root's hub command names them: the root makes
+    // each a face, which b takes from it.
+    let servers = [&f, &no].map(|fw| crate::faces::Server { pin: fw.pin, address: fw.addr.to_string() });
+    a.mesh.set_hub_forwarders(b.mesh.device(), servers.to_vec()).unwrap();
     // At home: the root lists b's server key on the forwarder's face.
     let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
     let dialer = a.clone();

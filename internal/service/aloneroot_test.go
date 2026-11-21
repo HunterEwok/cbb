@@ -47,6 +47,32 @@ func adminOn(t *testing.T, cli string, root *testService, name string) {
 	}
 }
 
+// forwardHub names the device name the group's hub (cbb hubs) and makes it
+// a hub at its own UDP port, then has the root order it to the forwarder at
+// addr with the key of pin (cbb global hub -on): the root signs the
+// forwarder's pin in the hub command and gives the forwarder a face of its
+// own, whose hubs' credential the hub registers with (docs/protocol.md,
+// section 13).
+func forwardHub(t *testing.T, cli string, root, s *testService, name, addr, pin string) {
+	t.Helper()
+	// The hubs' credential lists the hubs of the root's hubs record.
+	if _, err := root.do(t, control.Header{Op: control.OpHubs, Hubs: []string{name}}, ""); err != nil {
+		t.Fatalf("cbb hubs %s on %s: %v", name, root.name, err)
+	}
+	port := freeUDP(t)
+	req := control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}, Consent: true}
+	waitFor(t, name+" a hub", func() bool {
+		_, err := s.do(t, req, "")
+		if err != nil && !strings.Contains(err.Error(), "admin") && !strings.Contains(err.Error(), "records do not make") {
+			t.Fatalf("cbb global hub on %s: %v", name, err)
+		}
+		return err == nil
+	})
+	if out, err := runCLI(cli, root.socket, "", "global", "hub", "-on", name, "-forwarder", addr, "-forwarder-key", pin); err != nil {
+		t.Fatalf("cbb global hub -on %s on %s: %v\n%s", name, root.name, err, out)
+	}
+}
+
 // cbbCLI is the command line the tests run against the services: the Rust
 // cbb's, which CBB_TEST_RUST_SERVICE names.
 func cbbCLI(t *testing.T) string {
@@ -411,18 +437,7 @@ func TestAloneTakeover(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, desk, laptop)
 
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -539,18 +554,7 @@ func TestAloneRecovery(t *testing.T) {
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, desk, laptop)
 
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -649,28 +653,10 @@ func TestAloneHubForwarder(t *testing.T) {
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, desk, laptop)
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
-	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
-	waitFor(t, "the Rust member a hub", func() bool {
-		_, err := rust.do(t, req, "")
-		if err != nil && !strings.Contains(err.Error(), "admin") {
-			t.Fatalf("cbb global hub on the Rust member: %v", err)
-		}
-		return err == nil
-	})
+	forwardHub(t, cli, desk, rust, "rust", f.Addr().String(), forward.Pin(cert.Leaf))
 	waitFor(t, "the Rust hub registers with the forwarder", func() bool {
 		a := rust.status(t).Away
 		return a != nil && a.Forwarder != nil && a.Forwarder.Registered && a.Forwarder.Seen != ""
@@ -735,28 +721,10 @@ func TestAloneHubCredential(t *testing.T) {
 	desk := startService(t, &h, "desk")
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, desk, laptop)
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	rust := startAloneEnv(t, bin, dir, []string{"CBB_TEST_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
-	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
-	waitFor(t, "the Rust member a hub", func() bool {
-		_, err := rust.do(t, req, "")
-		if err != nil && !strings.Contains(err.Error(), "admin") {
-			t.Fatalf("cbb global hub on the Rust member: %v", err)
-		}
-		return err == nil
-	})
+	forwardHub(t, cli, desk, rust, "rust", f.Addr().String(), forward.Pin(cert.Leaf))
 	// The desk, the root, lists the Rust admin's server key in the hubs'
 	// credential; the Rust hub then registers with it in place of its
 	// member certificate and the records.
@@ -935,18 +903,7 @@ func TestAloneHubVLESS(t *testing.T) {
 	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
-	c, code := openWindow(t, desk)
-	rustDir := t.TempDir()
-	join := exec.Command(bin, "-state", rustDir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	rustDir := joinAloneAs(t, bin, desk, "rust", nil)
 	free, err = net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -955,15 +912,7 @@ func TestAloneHubVLESS(t *testing.T) {
 	free.Close()
 	rust := startAlone(t, bin, rustDir, "-no-mdns", "-port", strings.TrimPrefix(rustAt, "127.0.0.1:"), "-peer", desk.addr())
 	adminOn(t, cli, desk, "rust")
-	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(),
-		ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
-	waitFor(t, "the Rust member a hub", func() bool {
-		_, err := rust.do(t, req, "")
-		if err != nil && !strings.Contains(err.Error(), "admin") {
-			t.Fatalf("cbb global hub at a forwarder with VLESS on the Rust member: %v", err)
-		}
-		return err == nil
-	})
+	forwardHub(t, cli, desk, rust, "rust", f.Addr().String(), forward.Pin(cert.Leaf))
 	waitFor(t, "the Rust hub registers with the forwarder", func() bool {
 		a := rust.status(t).Away
 		return a != nil && a.Forwarder != nil && a.Forwarder.Registered
@@ -1083,18 +1032,7 @@ func TestAloneRelay(t *testing.T) {
 	}
 	var h hub
 	desk := startService(t, &h, "desk")
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected to the desk", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")

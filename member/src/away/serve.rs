@@ -498,6 +498,38 @@ impl Away {
         }
     }
 
+    /// The hub of 0.6 at the period of its forwarder's face (`period`, the
+    /// face's tag in hex; docs/protocol.md, section 11, "The hub's key"):
+    /// it holds the next key and settings, and serves with them once due
+    /// (`State::rotate`). Gives whether they changed, for the clients to
+    /// take the new offer, and whether the hub serves with the next key now,
+    /// for its tunnel to start again.
+    pub fn rotate_live(&self, period: &str) -> (bool, bool) {
+        let ahead = i64::try_from(hub_key_ahead().as_millis()).unwrap_or(i64::MAX);
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return (false, false) };
+        let mut next = st.clone();
+        let (changed, switched) = match next.rotate(period, crate::uptime::wall_ms(), ahead) {
+            Ok(r) => r,
+            Err(e) => {
+                (self.log)(&format!("cbb: {}", e.for_log()));
+                return (false, false);
+            }
+        };
+        if !changed {
+            return (false, false);
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return (false, false);
+        }
+        if switched {
+            (self.log)("cbb: the hub serves with its key and settings for the new period from now on");
+        }
+        *st = next;
+        (true, switched)
+    }
+
     /// Stops the hub, with every connection through it.
     pub(super) fn stop_serving(&self) {
         self.serving.lock().unwrap().take();

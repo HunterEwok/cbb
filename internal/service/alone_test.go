@@ -1326,6 +1326,12 @@ func joinAlone(t *testing.T, bin string, pi *testService) string {
 // joinAloneEnv is joinAlone with env added to cbb pair's environment.
 func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) string {
 	t.Helper()
+	return joinAloneAs(t, bin, pi, "small", env)
+}
+
+// joinAloneAs is joinAloneEnv for a device of the name given.
+func joinAloneAs(t *testing.T, bin string, pi *testService, name string, env []string) string {
+	t.Helper()
 	c, code, link := openWindowLink(t, pi)
 	defer c.Close()
 	if link != "" {
@@ -1333,24 +1339,24 @@ func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) strin
 	}
 	pa := pi.addr()
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "small", "-code", pa)
+	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", name, "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
 	if env != nil {
 		join.Env = append(os.Environ(), env...)
 	}
-	join.Stderr = testWriter{t, "small join: ", nil}
+	join.Stderr = testWriter{t, name + " join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {
 		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
-	if m, err := c.Receive(); err != nil || m.Name != "small" {
+	if m, err := c.Receive(); err != nil || m.Name != name {
 		t.Fatalf("pair on pi ended with %+v, %v", m, err)
 	}
 	if link != "" {
 		// A group of 0.6 has no CA keys: the device keeps the group's
 		// records and its own key, and no identity.json.
 		if _, err := os.Stat(filepath.Join(dir, "group.cbor")); err != nil {
-			t.Fatalf("the small device keeps no records of 0.6: %v", err)
+			t.Fatalf("%s keeps no records of 0.6: %v", name, err)
 		}
 		return dir
 	}
@@ -1359,7 +1365,7 @@ func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) strin
 		t.Fatal(err)
 	}
 	if strings.Contains(string(raw), "_key") {
-		t.Error("the small device saved a CA key")
+		t.Errorf("%s saved a CA key", name)
 	}
 	return dir
 }
@@ -1883,6 +1889,11 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
+	// The root names itself the group's hub (cbb hubs); its own forwarder
+	// gets a face of its own, whose hubs' credential it registers with.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}

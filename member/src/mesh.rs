@@ -142,10 +142,9 @@ pub struct Mesh {
     /// The group's server credentials, which this member keeps, brings up
     /// to date and passes on (`crate::faces`).
     faces: Faces,
-    /// Servers a test shows a face to besides the group's, as if the
-    /// project's keys.json named them.
-    #[cfg(test)]
-    test_servers: Mutex<Vec<crate::faces::Server>>,
+    /// The forwarders of the group's hubs, as this device knows them as
+    /// the root (`faces::HubForwarders`).
+    hub_forwarders: crate::faces::HubForwarders,
     /// The push sender (`crate::pusher`), and where it keeps the phones'
     /// registrations (`mesh/push.rs`).
     push: push::Sender,
@@ -320,8 +319,7 @@ impl Mesh {
                 releases: RwLock::new(None),
                 entries: RwLock::new(None),
                 faces,
-                #[cfg(test)]
-                test_servers: Mutex::new(Vec::new()),
+                hub_forwarders: crate::faces::HubForwarders::open(dir),
                 log,
                 closed: AtomicBool::new(false),
             }
@@ -544,16 +542,10 @@ impl Mesh {
         &self.faces
     }
 
-    /// Shows server a face too, as if the project's keys.json named it.
-    #[cfg(test)]
-    pub fn add_test_server(&self, server: crate::faces::Server) {
-        self.test_servers.lock().unwrap().push(server);
-    }
-
     /// Brings the server credentials up to date as far as this device can
     /// (`Faces::refresh`), a face for each of the group's servers (the
-    /// project's and the group's own relays, `faces::group_servers`), and
-    /// sends what it signed to every peer.
+    /// project's, the group's own relays and its hubs' forwarders,
+    /// `faces::group_servers`), and sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
         // A removed or frozen device's push registration goes with it,
         // and the push service's previous face is kept for those under it.
@@ -561,10 +553,9 @@ impl Mesh {
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
         let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
-        #[cfg_attr(not(test), allow(unused_mut))]
-        let mut servers = crate::faces::group_servers(state, project);
-        #[cfg(test)]
-        servers.extend(self.test_servers.lock().unwrap().iter().cloned());
+        // Only the root makes faces, so only its hubs' forwarders count.
+        let forwarders = if root.is_some() { self.hub_forwarders.servers(state) } else { Vec::new() };
+        let servers = crate::faces::group_servers(state, project, forwarders);
         match self.faces.refresh(state, &s, &servers) {
             Ok(signed) => {
                 for (server, envs) in signed {
@@ -576,6 +567,21 @@ impl Mesh {
             Err(e) => self.logf(&format!("cbb: the server credentials: {}", e.for_log())),
         }
         self.push_faces.look(self, state);
+    }
+
+    /// Whether this device holds the group's current root key.
+    pub fn is_root(&self) -> bool {
+        self.own.root.as_deref().is_some_and(|r| self.state().is_root(&Key::es256(r.public()).hash()))
+    }
+
+    /// Notes the forwarders of the hub `hub` (none forgets them), as the
+    /// root's hub command names them or its own hub serves with: each gets
+    /// a face of its own.
+    pub fn set_hub_forwarders(&self, hub: DeviceId, servers: Vec<crate::faces::Server>) -> Result<()> {
+        if self.hub_forwarders.set(hub, servers)? {
+            self.refresh_faces(&self.state());
+        }
+        Ok(())
     }
 
     /// Takes message `member-credentials` from a peer: the new ones go on

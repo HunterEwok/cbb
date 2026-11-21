@@ -2023,6 +2023,10 @@ made with 0.5 is set up again once. The details follow.
   OPNsense's ruleset and lists the service under System > Diagnostics > Services. pfSense,
   unsupported: the installer prints the rules to add and starts the service through
   `cbb.sh`.
+- In a group of 0.6 a hub registers with a forwarder of the group's own: the root gives each
+  forwarder its hub commands name, and its own hub's, a face of its own, whose hubs'
+  credential lists the hubs of its `hubs` record; and a hub serves with a key of its own for
+  each period of its forwarder's face, as in 0.5.
 
 ### Changed
 - The cleaning of a remote paste's text and its refusal of nothing but control characters are

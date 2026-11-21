@@ -442,18 +442,36 @@ fn serve_hub(w: &Weak<Live>) {
                 if is_hub {
                     l.logf("cbb: the hub stands by, since a hub above it serves");
                 } else {
+                    l.note_own_forwarder(&away);
                     l.hubs_say(None, cbb_core::hubkey::HubSays::Stopped);
                     l.logf("cbb: the hub stopped");
                 }
             }
+            (Some(_), None) if away.rotate_live(&l.hub_period(&away)).1 => {
+                // The keys for the period are made before the hub listens,
+                // so that its first clients get the offer it serves with.
+            }
             (Some(s), None) => match l.start_hub(&away, s) {
                 Ok(r) => {
+                    l.note_own_forwarder(&away);
                     *l.hub.lock().unwrap() = Some(r);
                     l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
                 }
                 Err(e) => away.failed(Some(&e)),
             },
             (Some(_), Some((h, report))) => {
+                // A new period of the forwarder's face: the next key, and
+                // the hub serves with it once due, starting again.
+                let (changed, switched) = away.rotate_live(&l.hub_period(&away));
+                if switched {
+                    l.hub.lock().unwrap().take();
+                }
+                if changed {
+                    let connected = l.mesh.connected();
+                    for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
+                        l.mesh.disconnect(d);
+                    }
+                }
                 for (key, psk) in h.take_handshakes() {
                     if let Err(e) = away.hub_handshaked(&key, &psk) {
                         l.logf(&format!("cbb: {}", e.for_log()));
@@ -520,6 +538,31 @@ pub(super) struct HubRun {
 }
 
 impl Live {
+    /// The period a hub of 0.6 serves its key for: the tag, in hex, of its
+    /// forwarder's face, else of the project's forwarder's; empty without
+    /// one (the hub serves with the key its hello offers).
+    fn hub_period(&self, away: &Away) -> String {
+        let project = crate::faces::PROJECT_FORWARDER_PINS.iter().filter_map(|p| {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD.decode(p).ok().and_then(|b| <[u8; 32]>::try_from(b).ok())
+        });
+        let pins: Vec<[u8; 32]> = away.hub_forwarder_pins().unwrap_or_default().into_iter().chain(project).collect();
+        let faces = self.mesh.faces();
+        pins.iter().find_map(|p| faces.kept(p).tag()).map(|t| cbb_core::certs::hex(&t)).unwrap_or_default()
+    }
+
+    /// On the root, the forwarder its own hub serves with gets a face of its
+    /// own (`Mesh::set_hub_forwarders`), and none once it stopped.
+    fn note_own_forwarder(&self, away: &Away) {
+        if !self.mesh.is_root() {
+            return;
+        }
+        let servers = away.own_forwarder().map(|(address, pin)| crate::faces::Server { pin, address });
+        if let Err(e) = self.mesh.set_hub_forwarders(self.me, servers.into_iter().collect()) {
+            self.logf(&format!("cbb: the hub's forwarder: {}", e.for_log()));
+        }
+    }
+
     /// Starts the hub's tunnel with settings, its connections going to a
     /// loopback port where this member takes them, and its registration with
     /// its forwarder under the hubs' credential of the forwarder's face.

@@ -840,23 +840,28 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
 
 /// The servers a group of 0.6 shows a face to: the project's
 /// (`project_servers`), then the relays of its own that the root set in the
-/// group's settings (format 4.5, field 15; D-121), each pin and address
-/// once. The project's come first: a member keeps at most [`MAX_FACES`],
+/// group's settings (format 4.5, field 15; D-121), then the forwarders of
+/// its hubs that the root named (`HubForwarders`), each pin and address
+/// pin once. The project's come first: a member keeps at most [`MAX_FACES`],
 /// and a hub registers with the project's forwarder.
-pub fn group_servers(state: &State, project: Vec<Server>) -> Vec<Server> {
+pub fn group_servers(state: &State, project: Vec<Server>, forwarders: Vec<Server>) -> Vec<Server> {
     if cfg!(not(feature = "tunnel")) {
         // Without sync away from home a group meets no server.
         return Vec::new();
     }
     let mut out = project;
-    for s in state.settings.servers.iter().filter(|s| s.kind == cbb_core::records::body::SERVER_RELAY) {
-        let server = Server { pin: s.pin, address: s.endpoint.clone() };
-        if !out.contains(&server) {
+    let relays = state.settings.servers.iter().filter(|s| s.kind == cbb_core::records::body::SERVER_RELAY);
+    for server in relays.map(|s| Server { pin: s.pin, address: s.endpoint.clone() }).chain(forwarders) {
+        // A face is kept by its server's pin: one for each.
+        if !out.iter().any(|s| s.pin == server.pin) {
             out.push(server);
         }
     }
     out
 }
+
+mod forwarders;
+pub use forwarders::HubForwarders;
 
 #[cfg(test)]
 mod tests;

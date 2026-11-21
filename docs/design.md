@@ -317,8 +317,11 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   in `period-key`. Peers get them in message `member-credentials` (t 11) when a connection
   opens, and the mesh brings them up to date when the set changes and on the sealing key's
   beat. Each server gets a face of its own (A-55): the root makes a period for each server's
-  pin (the project's relay, forwarder and push service for now), and every message `credentials` names the
-  server it is for.
+  pin (the project's relay, forwarder and push service, the group's own relays, and the
+  forwarders of its hubs, which the root keeps in `hub-forwarders.json` from its `hub`
+  commands and its own hub; D-121), and every message `credentials` names the server it is
+  for. A hub of 0.6 serves with a key of its own for each period of its forwarder's face
+  (protocol section 11, "The hub's key"; `Away::rotate_live`).
 - **Push.** On the records of 0.6 the mesh drives the push sender (`pusher.rs`) through its
   seam (`mesh/push.rs`): message `push` (t 28) from a phone or a computer over its own
   connection is its registration, kept in `push.cbor` (each device's message as it came) and

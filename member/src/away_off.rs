@@ -111,6 +111,10 @@ impl Away {
     pub fn own_forwarder(&self) -> Option<(String, [u8; 32])> {
         None
     }
+
+    pub fn hub_settings(&self) -> Option<([u8; 32], Option<serde_json::Value>, u16)> {
+        None
+    }
 }
 
 /// A forwarder a hub command names: this build reaches none.

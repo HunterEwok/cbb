@@ -99,7 +99,6 @@ fn shown(id: &DeviceId) -> certs::DeviceId {
 }
 
 /// A device ID in hex, as `tunnel.json` keeps it.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub(crate) fn id_of_hex(s: &str) -> Option<DeviceId> {
     of(&certs::DeviceId::parse(s).ok()?)
 }

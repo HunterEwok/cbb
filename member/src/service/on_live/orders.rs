@@ -168,8 +168,11 @@ impl Service {
             .first()
             .map(|(a, pin)| (a.clone(), base64::engine::general_purpose::STANDARD.encode(pin)))
             .unwrap_or_default();
+        // A hub set again keeps the UDP port it listens on.
+        let port = away.hub_settings().map_or(0, |(_, _, port)| i64::from(port));
         let hdr = Header {
             addrs: h.hub.iter().map(|(e, _)| e.clone()).collect(),
+            port,
             forwarder: fwd,
             forwarder_key: key,
             ..Default::default()
@@ -216,6 +219,7 @@ impl Service {
             "hub" => {
                 let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
                 let name = self.live_order(live, &h.device, &o)?;
+                note_forwarders(live, &h.device, &o)?;
                 (self.log)(&format!("cbb: {name} is one of the group's hubs now"));
                 Ok(name)
             }
@@ -227,6 +231,7 @@ impl Service {
                 if other {
                     let o = Order::Hub(crate::orders::Hub { stop: true, ..Default::default() });
                     let name = self.live_order(live, &h.device, &o)?;
+                    note_forwarders(live, &h.device, &o)?;
                     (self.log)(&format!("cbb: {name} is no hub of the group any more"));
                     Ok(name)
                 } else {
@@ -246,6 +251,7 @@ impl Service {
                 }
                 let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
                 let name = self.live_order(live, &h.device, &o)?;
+                note_forwarders(live, &h.device, &o)?;
                 live.stop_being_hub()?;
                 (self.log)(&format!("cbb: the hub moved to {name}"));
                 Ok(name)
@@ -469,4 +475,18 @@ impl Service {
         }
         Ok(())
     }
+}
+
+/// On the root, the forwarders a hub command it sent named become the
+/// hub's (`Mesh::set_hub_forwarders`), each with a face of its own; a stop
+/// forgets them. An admin's names none: the root alone makes faces.
+fn note_forwarders(live: &Live, target: &str, o: &Order) -> Result<()> {
+    let Order::Hub(h) = o else { return Ok(()) };
+    if !live.mesh.is_root() {
+        return Ok(());
+    }
+    let hub = writers::find(&live.mesh.state(), target)?.id;
+    let servers =
+        h.forwarders.iter().map(|(address, pin)| crate::faces::Server { pin: *pin, address: address.clone() });
+    live.mesh.set_hub_forwarders(hub, servers.collect())
 }
