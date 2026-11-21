@@ -486,7 +486,10 @@ extension SettingsView {
             ForEach(watches) { w in
                 Text(verbatim: w.name)
             }
-            if watches.isEmpty {
+            if model.group.isV06 {
+                // The watch signs nothing in a group of 0.6 (D-124).
+                Text("In this group the watch shows the devices only: its emergency actions come with CBB 0.7.").font(.footnote).foregroundStyle(palette.textDim)
+            } else if watches.isEmpty {
                 Button {
                     Task {
                         switching = true
@@ -498,7 +501,7 @@ extension SettingsView {
                 }
                 .disabled(switching)
             }
-            if watches.isEmpty { TipView(SettingTip.watch) }
+            if watches.isEmpty && !model.group.isV06 { TipView(SettingTip.watch) }
         } header: {
             Text("Apple Watch")
         }

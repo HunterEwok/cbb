@@ -471,6 +471,7 @@
   "In the group [aurora:DeviceCard]": {"en": "In the group", "in": ["aurora:DeviceCard"]},
   "In the secure element": {"in": ["aurora:SettingsPage"]},
   "In the secure element (HUKS)": {"in": ["harmony:settings_key_tee"]},
+  "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": {"in": ["android:watch_later", "harmony-wear:watch_later", "harmony:watch_later", "ios", "ios-watch", "wear:watch_later"]},
   "Incoming copies": {"in": ["ios"]},
   "Install %1$s": {"in": ["android:update_install"]},
   "Installing %1$s…": {"in": ["android:update_installing"]},

@@ -16,6 +16,10 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- In a group of 0.6 the root phone can add a watch with the key the watch made and a member
+  key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
+  signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its
+  emergency actions come with 0.7 instead of offering them.
 - A phone that is the root of a group of 0.6 checks the Android phones' attestations in the
   core again and records what they show when its app hands it the root key, with the
   revocation list its app fetched (`attest_status`, `attest` and the manage action `attest`

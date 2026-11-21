@@ -18,8 +18,10 @@ class WatchStateTest {
             theme = "swiss",
             details = true,
             group = "tag",
+            signs = false,
         )
         assertEquals(s, WatchState.decode(s.encode()))
+        assertEquals(s.copy(signs = true), WatchState.decode(s.copy(signs = true).encode()))
         assertEquals(WatchState(), WatchState.decode(WatchState().encode()))
     }
 

@@ -612,6 +612,7 @@
     <string name="view_next">הצגה כ-%1$s</string>
     <string name="void_both_histories">ביטול שתי ההיסטוריות</string>
     <string name="watch_body">עם מפתח משלו, השעון יכול להקפיא מחשב מנהל, להסיר מכשיר שאינו מנהל, ולכבות הדבקה מרחוק, פעולות מהירות וסנכרון מחוץ לבית. הוא צריך נעילת מסך, וזיהוי הענידה על פרק היד צריך להיות מופעל.</string>
+    <string name="watch_later">בקבוצה הזו השעון רק מציג את המכשירים: פעולות החירום שלו יגיעו עם CBB 0.7.</string>
     <string name="watch_made_admin">השעון הוא עכשיו מנהל. הוא יכול להקפיא מחשב מנהל, להסיר מכשיר שאינו מנהל ולכבות דברים.</string>
     <string name="watch_make_admin">הפיכת השעון למנהל</string>
     <string name="watch_not_protected">השעון צריך נעילת מסך. הגדירו אחת בשעון, השאירו אותו על פרק היד ונסו שוב.</string>

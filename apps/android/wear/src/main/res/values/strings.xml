@@ -35,5 +35,6 @@
     <string name="stale">As the phone last said.</string>
     <string name="sync">Sync</string>
     <string name="watch_admin">This watch is an admin of the group.</string>
+    <string name="watch_later">In this group the watch shows the devices only: its emergency actions come with CBB 0.7.</string>
     <string name="watch_phone">This watch\'s phone</string>
 </resources>

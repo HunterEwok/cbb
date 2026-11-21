@@ -34,5 +34,6 @@
     <string name="stale">जैसा फ़ोन ने पिछली बार बताया।</string>
     <string name="sync">सिंक</string>
     <string name="watch_admin">यह घड़ी समूह की एडमिन है।</string>
+    <string name="watch_later">इस समूह में घड़ी केवल डिवाइस दिखाती है: इसकी आपात कार्रवाइयाँ CBB 0.7 में आएँगी।</string>
     <string name="watch_phone">इस घड़ी का फ़ोन</string>
 </resources>

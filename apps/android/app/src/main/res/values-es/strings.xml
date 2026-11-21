@@ -612,6 +612,7 @@
     <string name="view_next">Mostrar como %1$s</string>
     <string name="void_both_histories">Anular ambos historiales</string>
     <string name="watch_body">Con una clave propia, el reloj puede congelar un ordenador de administrador, quitar un dispositivo que no sea administrador y desactivar el pegado remoto, las acciones rápidas y la sincronización fuera de casa. Necesita un bloqueo de pantalla, y su detección en la muñeca debería estar activada.</string>
+    <string name="watch_later">En este grupo el reloj solo muestra los dispositivos: sus acciones de emergencia llegarán con CBB 0.7.</string>
     <string name="watch_made_admin">Ahora el reloj es administrador. Puede congelar un ordenador de administrador, quitar un dispositivo que no sea administrador y desactivar cosas.</string>
     <string name="watch_make_admin">Hacer administrador al reloj</string>
     <string name="watch_not_protected">El reloj necesita un bloqueo de pantalla. Configura uno en el reloj, mantenlo en la muñeca y vuelve a intentarlo.</string>

@@ -616,6 +616,7 @@
     <string name="view_next">Show as %1$s</string>
     <string name="void_both_histories">Void both histories</string>
     <string name="watch_body">With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a screen lock, and its on-wrist detection should be on.</string>
+    <string name="watch_later">In this group the watch shows the devices only: its emergency actions come with CBB 0.7.</string>
     <string name="watch_made_admin">The watch is an admin now. It can freeze an admin computer, remove a device that is no admin and turn things off.</string>
     <string name="watch_make_admin">Make the watch an admin</string>
     <string name="watch_not_protected">The watch needs a screen lock. Set one on the watch, keep it on your wrist, then try again.</string>

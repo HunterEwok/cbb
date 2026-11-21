@@ -36,6 +36,7 @@
     {"name": "stale", "value": "As the phone last said."},
     {"name": "sync", "value": "Sync"},
     {"name": "watch_admin", "value": "This watch is an admin of the group."},
+    {"name": "watch_later", "value": "In this group the watch shows the devices only: its emergency actions come with CBB 0.7."},
     {"name": "watch_phone", "value": "This watch's phone"}
   ]
 }

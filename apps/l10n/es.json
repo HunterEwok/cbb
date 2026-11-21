@@ -469,6 +469,7 @@
   "In the group [aurora:DeviceCard]": "En el grupo",
   "In the secure element": "En el elemento seguro",
   "In the secure element (HUKS)": "En el elemento seguro (HUKS)",
+  "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": "En este grupo el reloj solo muestra los dispositivos: sus acciones de emergencia llegarán con CBB 0.7.",
   "Incoming copies": "Copias entrantes",
   "Install %1$s": "Instalar %1$s",
   "Installing %1$s…": "Instalando %1$s…",

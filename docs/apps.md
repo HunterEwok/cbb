@@ -572,6 +572,11 @@ the body (`PhoneGroup.watchBody`), checks that it says what was asked, checks th
 signs with its key; the phone adds the record to the group or passes the command on, and
 says when it is done.
 
+In a group of 0.6 the watch signs nothing (D-124): it shows the group, and the phone's state
+says `signs` false, so the watch offers no action and says that its emergency actions come
+with CBB 0.7, as the root phone's Settings do in place of making it an admin. The same holds
+for the Wear OS and HarmonyOS watches.
+
 ## Wear OS
 
 The Wear OS app (`apps/android/wear`, Wear OS 3, Compose for Wear OS) is the Apple Watch

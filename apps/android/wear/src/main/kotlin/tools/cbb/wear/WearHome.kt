@@ -136,7 +136,9 @@ fun WearHome(model: WearModel) {
                             Text(s.events[i], color = palette.text, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
                         }
                     }
-                    if (model.admin) {
+                    if (s.signs == false) {
+                        item { Text(stringResource(R.string.watch_later), color = palette.textDim, style = MaterialTheme.typography.bodySmall) }
+                    } else if (model.admin) {
                         item { Text(stringResource(R.string.watch_admin), color = palette.textDim, style = MaterialTheme.typography.bodySmall) }
                     }
                     if (!model.reachable) {

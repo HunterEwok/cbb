@@ -58,6 +58,10 @@ struct WatchState: Codable, Equatable {
     var sync: Bool?
     /// The latest events, newest first.
     var events: [String] = []
+    /// Whether the watch's emergency actions work in the phone's group:
+    /// false in a group of 0.6, where the watch signs nothing and only
+    /// shows the group (D-124; they come with 0.7); nil without a group.
+    var signs: Bool?
     /// The phone's theme, by its name in Tokens.themes.
     var theme = Tokens.themes[0].name
 

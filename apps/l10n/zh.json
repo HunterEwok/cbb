@@ -469,6 +469,7 @@
   "In the group [aurora:DeviceCard]": "在群组中",
   "In the secure element": "在安全元件中",
   "In the secure element (HUKS)": "在安全元件中（HUKS）",
+  "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": "在这个群组中，手表只显示设备：它的紧急操作将在 CBB 0.7 中提供。",
   "Incoming copies": "收到的副本",
   "Install %1$s": "安装 %1$s",
   "Installing %1$s…": "正在安装 %1$s…",

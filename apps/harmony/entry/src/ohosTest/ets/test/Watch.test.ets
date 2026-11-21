@@ -10,13 +10,13 @@ import { decodeAsk, decodeState, encode, fit, MAX_MESSAGE, WatchDevice, WatchSta
 function state(devices: number, events: number): WatchState {
   const ds: WatchDevice[] = [];
   for (let i = 0; i < devices; i++) {
-    ds.push({ id: `device-${i}`, name: `A computer with a long name ${i}`, form: 'computer', online: i % 2 === 0, collection: '', phone: i === 0 });
+    ds.push({ id: `device-${i}`, name: `A computer with a long name ${i}`, form: 'computer', online: i % 2 === 0, collection: '', phone: i === 0, actions: [] });
   }
   const es: string[] = [];
   for (let i = 0; i < events; i++) {
     es.push(`An event that says what happened in the group ${i}`);
   }
-  return { type: 'state', group: true, devices: ds, more: 0, online: 1, total: devices, sync: true, away: 'home', events: es };
+  return { type: 'state', group: true, devices: ds, more: 0, online: 1, total: devices, sync: true, away: 'home', events: es, admin: false, signs: true };
 }
 
 export default function watchTest() {

@@ -126,8 +126,14 @@ credentials, but its root key stays with the app: `period` hands it over to sign
 that are due (protocol.md section 18; `{period_due, period_overdue}` after), and `relay`,
 `forwarder` and `hubs` signed with the root key renew a due period with it too; the away ops
 answer `period_due` and `period_overdue` (expired, so the group's relay and its hubs'
-forwarders take nobody), both false on a phone that is not the root. Everything else, and `cbb_member_servers` and
-`cbb_member_manage_watch`, answers that it does not work in this build yet, with the cause
+forwarders take nobody), both false on a phone that is not the root. A root phone checks its
+peers' Android attestations in the core (`attest_status` takes the revocation list the app
+fetched, `attest` answers how many wait, and manage's `attest` records them with the root key;
+protocol.md section 17). It adds a watch with manage's `add_watch` (`key`, the watch's admin
+key as a SubjectPublicKeyInfo; `name`, `os`), whose member key nobody keeps (D-124),
+answered `{device, name}`; a watch signs nothing in 0.6, so `watch_actions` answers none and
+`cbb_member_manage_watch` refuses, saying its actions come with 0.7. Everything else, and
+`cbb_member_servers`, answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest
 (`media`), which the app fetches.
@@ -385,8 +391,9 @@ watch may do to a device. The watch signs on itself: `cbb_member_manage_watch` t
 watch's `action` for `device`, its device ID as `watch`, its key's point as `public` and its
 `admin_ca`, checks the action against `watch_actions`, and has the app's `cbb_sign_body_fn`
 carry each record or command whole to the watch, which checks it before it signs
-(`ExternalKey::sign_data`, `ffi/src/watch.rs`). `TestFFIPhoneWatch` makes a watch an admin in
-`phone-on-linux` and turns remote paste off on the laptop and removes it from the wrist.
+(`ExternalKey::sign_data`, `ffi/src/watch.rs`); that is a group of 0.5's. In a group of 0.6
+(above) `TestFFIPhoneWatch` adds a watch in `phone-on-linux`, which is listed as a watch, may
+do nothing to a device and is refused an action from the wrist.
 
 An admin phone makes a remote invitation with `cbb_invite_new` (`ffi/src/invite.rs`): the
 request names the public point of the key it issues with and its admin CA (none on the root),

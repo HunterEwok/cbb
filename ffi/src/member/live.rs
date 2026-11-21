@@ -126,6 +126,10 @@ struct ManageArgs {
     forwarder: String,
     #[serde(default)]
     key: String,
+    /// With add_watch: the watch's system (watchos, wearos or harmonyos);
+    /// its admin key is `key`, a SubjectPublicKeyInfo in base64.
+    #[serde(default)]
+    os: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
 }
@@ -170,6 +174,10 @@ impl Me {
         });
     }
 }
+
+/// Why a watch does nothing to a group of 0.6 from the wrist.
+const WATCH_SIGNS_NOTHING: &str =
+    "on a group of 0.6 the watch shows the group and signs nothing: its emergency actions come with cbb 0.7";
 
 /// The phone's member on the records of 0.6.
 pub struct Phone {
@@ -771,6 +779,10 @@ impl Phone {
                 }
                 "make_admin" => self.make_admin(&a, &key, now)?,
                 "key_level" => return self.key_level(&a, &key, now),
+                "add_watch" => return self.add_watch(&a, &key, now),
+                // On 0.6 a watch signs nothing from the wrist (D-124): it
+                // shows the group and may do nothing to a device.
+                "watch_actions" => return Ok(json!({ "actions": [] })),
                 // The root's key, handed over for the Android evidence that
                 // waits: the phone checks it and records what it proves
                 // (protocol.md, section 17), as a root computer's helper does.
@@ -975,8 +987,31 @@ impl Phone {
     }
 
     /// What the watch asks is not on the records of 0.6 yet.
+    /// An action from the watch's wrist: none on 0.6, where the watch
+    /// signs nothing and only shows the group (D-124; signing on the watch
+    /// comes with 0.7).
     pub fn manage_watch(&self) -> Vec<u8> {
-        answer::<()>(Err(not_yet("an admin's action from the watch")))
+        answer::<()>(Err(Error::msg(WATCH_SIGNS_NOTHING)))
+    }
+
+    /// The root makes the watch a device of the group whose admin key is
+    /// the one the watch made (`a.key`, a SubjectPublicKeyInfo in base64),
+    /// with a member key nobody keeps (D-124): answers its device ID and
+    /// name.
+    fn add_watch(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<Value> {
+        #[derive(serde::Deserialize)]
+        struct Der(#[serde(with = "certs::b64")] Vec<u8>);
+        let Der(spki) =
+            serde_json::from_value(json!(a.key.trim())).map_err(|_| Error::msg("the watch's key is not base64"))?;
+        let point = certs::p256_spki(&spki)
+            .ok_or_else(|| Error::msg("the watch's key is no P-256 key"))?
+            .to_sec1_point(false)
+            .as_bytes()
+            .to_vec();
+        let name = if a.name.trim().is_empty() { "Watch" } else { a.name.trim() };
+        let os = if a.os.is_empty() { "harmonyos" } else { a.os.as_str() };
+        let (id, _) = self.live.mesh.write_by(key, |set, k| writers::add_watch(set, k, name, os, &point, now))?;
+        Ok(json!({ "device": id_text(&id), "name": name }))
     }
 }
 

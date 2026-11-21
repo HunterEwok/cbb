@@ -469,6 +469,7 @@
   "In the group [aurora:DeviceCard]": "В группе",
   "In the secure element": "В защищённом элементе",
   "In the secure element (HUKS)": "В защищённом элементе (HUKS)",
+  "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": "В этой группе часы только показывают устройства: экстренные действия с часов появятся в CBB 0.7.",
   "Incoming copies": "Входящие копии",
   "Install %1$s": "Установить %1$s",
   "Installing %1$s…": "Устанавливаю %1$s…",

@@ -386,6 +386,7 @@
     {"name": "try_again", "value": "重试"},
     {"name": "watch_admin_body", "value": "拥有自己的密钥后，手表可以冻结管理员电脑、移除非管理员设备，并关闭远程粘贴、快捷操作和离家同步。它需要屏幕锁定，并且应开启佩戴检测。"},
     {"name": "watch_admin_title", "value": "手表作为管理员"},
+    {"name": "watch_later", "value": "在这个群组中，手表只显示设备：它的紧急操作将在 CBB 0.7 中提供。"},
     {"name": "watch_made_admin", "value": "手表现在是管理员。它可以冻结管理员电脑、移除非管理员设备并关闭各项功能。"},
     {"name": "watch_make_admin", "value": "让手表成为管理员"},
     {"name": "watch_not_protected", "value": "手表需要屏幕锁定。请在手表上设置一个，将它戴在手腕上，然后重试。"},

@@ -164,7 +164,9 @@ struct Watch {
             link.reachable && !link.asking, (on: boolean) => {
               link.ask('away', on);
             })
-          if ((link.state as WatchState).admin === true) {
+          if ((link.state as WatchState).group && (link.state as WatchState).signs === false) {
+            Text(t('watch_later')).fontSize(11).fontColor($r('app.color.secondary'))
+          } else if ((link.state as WatchState).admin === true) {
             Text(t('watch_admin')).fontSize(11).fontColor($r('app.color.secondary'))
           }
           if (link.failed) {

@@ -253,9 +253,11 @@ export struct SettingsBody {
             if (watch.linked || watch.admin) {
               Column({ space: 6 }) {
                 Text($r('app.string.watch_admin_title')).fontColor($r('app.color.text'))
-                Text(watch.admin ? $r('app.string.watch_made_admin') : $r('app.string.watch_admin_body'))
+                // The watch signs nothing in a group of 0.6 (D-124).
+                Text(app.isV06() ? $r('app.string.watch_later')
+                  : watch.admin ? $r('app.string.watch_made_admin') : $r('app.string.watch_admin_body'))
                   .fontSize(12).fontColor($r('app.color.secondary'))
-                if (!watch.admin) {
+                if (!watch.admin && !app.isV06()) {
                   Button($r('app.string.watch_make_admin'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
                     .enabled(!watch.making && !app.busy)
                     .onClick(() => {

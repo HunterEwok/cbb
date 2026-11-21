@@ -388,6 +388,7 @@
     {"name": "try_again", "value": "Try again"},
     {"name": "watch_admin_body", "value": "With a key of its own, the watch can freeze an admin computer, remove a device that is no admin, and turn remote paste, quick actions and sync away from home off. It needs a screen lock, and its on-wrist detection should be on."},
     {"name": "watch_admin_title", "value": "The watch as an admin"},
+    {"name": "watch_later", "value": "In this group the watch shows the devices only: its emergency actions come with CBB 0.7."},
     {"name": "watch_made_admin", "value": "The watch is an admin now. It can freeze an admin computer, remove a device that is no admin and turn things off."},
     {"name": "watch_make_admin", "value": "Make the watch an admin"},
     {"name": "watch_not_protected", "value": "The watch needs a screen lock. Set one on the watch, keep it on your wrist, then try again."},

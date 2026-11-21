@@ -998,9 +998,10 @@ mod watch {
     use p256::ecdsa::SigningKey;
     use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-    /// The watch's admin key; fixed, as a test's.
+    /// The watch's admin key; fixed, as a test's, and none of the phone's
+    /// own keys (seeds 7 and 8 up).
     fn key() -> SigningKey {
-        SigningKey::from_slice(&[7u8; 32]).unwrap()
+        SigningKey::from_slice(&[0x77u8; 32]).unwrap()
     }
 
     static ADMITTED: Mutex<Option<serde_json::Value>> = Mutex::new(None);

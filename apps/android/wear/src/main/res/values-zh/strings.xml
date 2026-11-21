@@ -34,5 +34,6 @@
     <string name="stale">以手机最后报告的为准。</string>
     <string name="sync">同步</string>
     <string name="watch_admin">这块手表是群组的管理员。</string>
+    <string name="watch_later">在这个群组中，手表只显示设备：它的紧急操作将在 CBB 0.7 中提供。</string>
     <string name="watch_phone">这块手表的手机</string>
 </resources>

@@ -886,7 +886,9 @@ private fun WatchSection(model: AppModel) {
     Section(stringResource(R.string.watch_title)) {
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
             watches.forEach { Text(it.name, fontWeight = FontWeight.SemiBold) }
-            if (watches.isEmpty()) {
+            // The watch signs nothing in a group of 0.6 (D-124).
+            val later = model.group.isV06
+            if (watches.isEmpty() && !later) {
                 Button(onClick = {
                     busy = true
                     scope.launch {
@@ -897,7 +899,7 @@ private fun WatchSection(model: AppModel) {
             }
             model.watchNote?.let { NoteText(it) }
             Text(
-                stringResource(if (watches.isEmpty()) R.string.watch_body else R.string.watch_replace),
+                stringResource(if (later) R.string.watch_later else if (watches.isEmpty()) R.string.watch_body else R.string.watch_replace),
                 style = MaterialTheme.typography.bodyMedium,
                 color = palette.textDim,
             )

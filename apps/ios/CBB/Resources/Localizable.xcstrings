@@ -7594,6 +7594,52 @@
         }
       }
     },
+    "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "في هذه المجموعة تعرض الساعة الأجهزة فقط: ستأتي إجراءاتها الطارئة مع CBB 0.7."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En este grupo el reloj solo muestra los dispositivos: sus acciones de emergencia llegarán con CBB 0.7."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקבוצה הזו השעון רק מציג את המכשירים: פעולות החירום שלו יגיעו עם CBB 0.7."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस समूह में घड़ी केवल डिवाइस दिखाती है: इसकी आपात कार्रवाइयाँ CBB 0.7 में आएँगी।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В этой группе часы только показывают устройства: экстренные действия с часов появятся в CBB 0.7."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Katika kikundi hiki saa inaonyesha vifaa tu: vitendo vyake vya dharura vitakuja na CBB 0.7."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这个群组中，手表只显示设备：它的紧急操作将在 CBB 0.7 中提供。"
+          }
+        }
+      }
+    },
     "Incoming copies": {
       "localizations": {
         "ar": {

@@ -612,6 +612,7 @@
     <string name="view_next">Onyesha kama %1$s</string>
     <string name="void_both_histories">Batilisha historia zote mbili</string>
     <string name="watch_body">Ikiwa na ufunguo wake, saa inaweza kugandisha kompyuta ya msimamizi, kuondoa kifaa kisicho msimamizi, na kuzima kubandika kwa mbali, vitendo vya haraka na kusawazisha ukiwa mbali na nyumbani. Inahitaji kufuli ya skrini, na utambuzi wa kuvaliwa kwenye kifundo cha mkono unapaswa kuwashwa.</string>
+    <string name="watch_later">Katika kikundi hiki saa inaonyesha vifaa tu: vitendo vyake vya dharura vitakuja na CBB 0.7.</string>
     <string name="watch_made_admin">Saa sasa ni msimamizi. Inaweza kugandisha kompyuta ya msimamizi, kuondoa kifaa kisicho msimamizi na kuzima vitu.</string>
     <string name="watch_make_admin">Fanya saa kuwa msimamizi</string>
     <string name="watch_not_protected">Saa inahitaji kufuli ya skrini. Weka moja kwenye saa, iache kwenye kifundo cha mkono, kisha ujaribu tena.</string>

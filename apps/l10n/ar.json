@@ -469,6 +469,7 @@
   "In the group [aurora:DeviceCard]": "في المجموعة",
   "In the secure element": "في العنصر الآمن",
   "In the secure element (HUKS)": "في العنصر الآمن (HUKS)",
+  "In this group the watch shows the devices only: its emergency actions come with CBB 0.7.": "في هذه المجموعة تعرض الساعة الأجهزة فقط: ستأتي إجراءاتها الطارئة مع CBB 0.7.",
   "Incoming copies": "النسخ الواردة",
   "Install %1$s": "تثبيت %1$s",
   "Installing %1$s…": "جارٍ تثبيت %1$s…",

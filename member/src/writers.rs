@@ -313,6 +313,72 @@ pub fn make_admin(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
+/// On the group's root (signer holds the current root key), writes the
+/// device record of a watch (docs/protocol.md, section 10, "Watches"):
+/// it reads through its phone, its admin key is `admin`, the one the
+/// watch made and keeps, with a watch's powers and commands
+/// (`AdminKind::Watch`). Its device ID comes from a member key nobody
+/// keeps (D-124): made here, read for its public half, and dropped at
+/// once, never stored, logged or sent, so nothing can sign a statement or
+/// a copy as the watch. Gives the watch's device ID and the records added.
+pub fn add_watch(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    name: &str,
+    os: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceId, Vec<Record>)> {
+    let member = {
+        let pkcs8 = cbb_core::secret::Zeroizing::new(cbb_core::identity::new_key()?);
+        let k = cbb_core::identity::signing_key(&pkcs8)?;
+        k.verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    };
+    add_watch_with(set, signer, &member, name, os, admin, now_ms)
+}
+
+/// add_watch with the watch's member key given, for the tests.
+fn add_watch_with(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    member: &[u8],
+    name: &str,
+    os: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceId, Vec<Record>)> {
+    use cbb_core::records::body::{AdminKind, RIGHT_READ, ROLE_WATCH};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Err(Error::msg("only the group's root adds a watch"));
+    }
+    if !["watchos", "wearos", "harmonyos"].contains(&os) {
+        return Err(Error::msg(format!("a watch runs watchos, wearos or harmonyos, not {os:?}")));
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(Error::msg("the watch needs a name"));
+    }
+    if st.devices.iter().any(|d| d.name == name) {
+        return Err(Error::msg(format!("another device of the group is named {name}")));
+    }
+    let admin = Key::es256(admin.to_vec());
+    let hash = admin.hash();
+    if st.devices.iter().any(|o| o.key.hash() == hash || o.admin == Some(hash)) || st.roots.contains(&hash) {
+        return Err(Error::msg("the watch's admin key belongs to another key of the group"));
+    }
+    let mut d = Device::new(Key::es256(member.to_vec()), name, ROLE_WATCH);
+    let id = d.key.device_id();
+    d.rights = RIGHT_READ;
+    d.os = cbb_core::format::print::os_number(os);
+    d.admin = Some(admin);
+    (d.powers, d.commands) = AdminKind::Watch.grants();
+    let out = set
+        .write_record(&st, signer, Kind::device(d), now_ms)
+        .map_err(|e| Error::msg(format!("cannot add the watch: {e}")))?;
+    Ok((id, out))
+}
+
 /// On the group's root, records where a member's keys live as its hello
 /// says (docs/protocol.md, section 17): a record that says `file` while the
 /// hello says hardware gets `hardware`, and a hello that says rootless

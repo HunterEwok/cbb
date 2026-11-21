@@ -55,6 +55,10 @@ export interface WatchState {
   events: string[];
   // The watch is an admin of the group.
   admin: boolean;
+  // Whether the watch's emergency actions work in the phone's group: false
+  // in a group of 0.6, where the watch signs nothing and only shows the
+  // group (D-124; they come with 0.7).
+  signs: boolean;
 }
 
 // The watch's ask: hello (send the state), sync or away with on; key, the

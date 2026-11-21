@@ -2573,6 +2573,14 @@ signs it; the phone adds the record to its records and sends it, or passes the c
 it passes its own (section 15). A watch is listed as an admin while its admin key is neither
 revoked nor frozen.
 
+On the records of 0.6 the root writes a watch's `device` record with role `watch`, `rights`
+`read`, its admin key the one the watch made, and the powers and commands of
+`AdminKind::Watch`; its member key, from which its device ID comes, is made for the record
+and dropped at once, so nothing signs a keys statement or a copy as the watch, and no copy is
+sealed to it (D-124). In 0.6 a watch signs nothing from the wrist: records sign a digest
+(`records::key::sign_es256`), which a watch that must see what it signs refuses, and the
+watch apps read the bodies of 0.5; signing on the watch comes with 0.7.
+
 #### Chains and numbers
 
 A signer's records form a chain: the record with `seq` n names in `prev` the ID of the one
