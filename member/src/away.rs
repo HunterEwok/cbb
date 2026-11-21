@@ -27,6 +27,7 @@ mod hubs;
 mod invite;
 mod meet;
 mod movehub;
+mod offer;
 mod serve;
 mod toward;
 

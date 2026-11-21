@@ -32,7 +32,8 @@ impl Away {
         next.save(&self.dir)?;
         *st = next;
         let msg = hubkey::message(&public, &confirm);
-        let v = cbb_core::format::cbor::decode(&msg).map_err(|r| Error::msg(format!("the tunnel message breaks {r}")))?;
+        let v =
+            cbb_core::format::cbor::decode(&msg).map_err(|r| Error::msg(format!("the tunnel message breaks {r}")))?;
         Ok(Some(frame::write(&v)))
     }
 

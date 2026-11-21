@@ -65,7 +65,7 @@ pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
 /// began a rekey, so a rekey, which WireGuard starts once a session is two
 /// minutes old, does not leave an endpoint that works.
 pub(crate) const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
-const MAX_ENDPOINTS: usize = 8;
+pub const MAX_ENDPOINTS: usize = 8;
 pub(crate) const TCP_BUFFER: usize = 64 << 10;
 /// The connections through the tunnel's local port at once; this member
 /// makes one or two.
@@ -328,6 +328,18 @@ pub struct Hub {
     pub next_obfuscation: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_vless: Option<serde_json::Value>,
+    /// The hub's own key on each forwarder endpoint (its key for that
+    /// face, the offer's field 9); an endpoint not named takes `key`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub faces: Vec<Face>,
+}
+
+/// The key a hub serves WireGuard under on one forwarder endpoint.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Face {
+    pub endpoint: SocketAddr,
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
 }
 
 impl core::fmt::Debug for Hub {
@@ -340,6 +352,7 @@ impl core::fmt::Debug for Hub {
             .field("next", &self.next)
             .field("obfuscation", &self.obfuscation.as_ref().map(|_| "<hidden>"))
             .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("faces", &self.faces)
             .finish()
     }
 }
@@ -380,6 +393,12 @@ impl Hub {
     /// VLESS.
     pub fn reachable(&self) -> bool {
         !self.endpoints.is_empty() || self.vless.is_some()
+    }
+
+    /// The hub's key on the endpoint at: its key for that forwarder's face,
+    /// or `key`.
+    pub fn key_at(&self, at: &SocketAddr) -> &[u8] {
+        self.faces.iter().find(|f| f.endpoint == *at).map_or(&self.key, |f| &f.key)
     }
 
     /// The offer as the hub serves it with its next key: that key, and the
@@ -1035,6 +1054,7 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
         vless: o.vless.clone(),
         next_obfuscation: o.next_obfuscation.clone(),
         next_vless: o.next_vless.clone(),
+        faces: Vec::new(),
     })
 }
 

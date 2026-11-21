@@ -82,6 +82,7 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
         vless: None,
         next_obfuscation: None,
         next_vless: None,
+        faces: Vec::new(),
     };
     let me = cbb_core::certs::DeviceId::parse(&g.id(1)).unwrap();
     let link = Link::start(&State::with_key(&client_key).unwrap(), &hub, &me, Arc::new(|_| {})).unwrap();

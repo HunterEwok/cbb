@@ -302,6 +302,7 @@ fn tunneled_by(g: &Blind, i: usize, s: &Relay, pins: &[certs::KeyHash], cs: &[Ve
         vless: None,
         next_obfuscation: None,
         next_vless: None,
+        faces: Vec::new(),
     };
     let own: Ipv6Addr = addr.parse().unwrap();
     let link = Link::start_at(&State::with_key(&key).unwrap(), &hub, own, RELAY_ADDR, Arc::new(|_| {})).unwrap();
