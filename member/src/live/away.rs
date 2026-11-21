@@ -153,6 +153,26 @@ impl Live {
         above || ladder.lost.is_some_and(|t| t.elapsed() < AGAIN_AFTER)
     }
 
+    /// This hub of 0.6 stops being one: each client connected gets an offer
+    /// that says the hub moved, so that it takes the next hub in the order,
+    /// and then the hub's settings go; its tunnel stops, and it tells the
+    /// other hubs, once the loop sees it.
+    pub fn stop_being_hub(&self) -> crate::error::Result<()> {
+        let away = self.away.get().ok_or_else(|| crate::error::Error::msg("this device is no hub of the group"))?;
+        if !away.is_hub_now() {
+            return Err(crate::error::Error::msg("this device is no hub of the group"));
+        }
+        let connected = self.mesh.connected();
+        for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
+            let Some(psk) = self.mesh.tunnel_psk(d, true) else { continue };
+            let Some(offer) = away.moved_encoding(&psk.confirm) else { continue };
+            if let Ok(f) = crate::away::offer_result(&self.mesh.device(), &psk.confirm, &offer) {
+                self.mesh.send(d, f);
+            }
+        }
+        away.unhub()
+    }
+
     /// Gives the hub's tunnel, while it runs, the clients and keys held.
     fn give_hub_peers(&self) {
         let hub = self.hub.lock().unwrap().as_ref().map(|r| r.hub.clone());
@@ -177,6 +197,12 @@ impl Live {
         }
         let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) else { return };
         let Some(offer) = v.get(6) else { return };
+        // A hub that moved or stopped: a connection through its tunnel
+        // ends, and the next hub in the order is tried.
+        if offer.get(6).is_some() && away.through_hub().is_some_and(|d| hub_id(&d) == Some(*peer)) {
+            let (mesh, peer) = (self.mesh.clone(), *peer);
+            std::thread::spawn(move || mesh.disconnect(&peer));
+        }
         match away.take_offer(peer, offer) {
             Ok(true) => {
                 self.logf(&format!("cbb: {} is one of the group's hubs for sync away from home", id_text4(peer)))

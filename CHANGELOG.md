@@ -96,6 +96,9 @@ made with 0.5 is set up again once. The details follow.
   root's hubs record in the user's order first; a hub stands by while a hub above it serves
   and says so in `hubs` (t 16), and serves again a minute after losing it. The hubs record
   keeps the user's order instead of sorting it.
+  `cbb global hub -on DEVICE`, `cbb global hub off [-on DEVICE]` and `cbb global move DEVICE`
+  work on 0.6 by a `hub` command; a hub that stops tells its clients connected that it moved,
+  and they take the next hub in the order.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

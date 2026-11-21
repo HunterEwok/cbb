@@ -26,7 +26,7 @@ use crate::wire::{self, TunnelOffer};
 /// group.MaxHubClients.
 const MAX_CLIENTS: usize = 256;
 
-const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
+pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
 
 /// A hub command's order, as Go's group.HubOrder.
 #[derive(Serialize, Deserialize, Default)]

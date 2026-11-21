@@ -16,16 +16,7 @@ fn until(what: &str, f: impl Fn() -> bool) {
 }
 
 fn open(dir: &Path) -> Arc<Live> {
-    Live::open(
-        dir,
-        own(dir),
-        Arc::new(|s: &str| {
-            if std::env::var_os("CBB_TEST_LOG").is_some() {
-                eprintln!("{s}")
-            }
-        }),
-    )
-    .unwrap()
+    Live::open(dir, own(dir), Arc::new(|_| {})).unwrap()
 }
 
 #[test]

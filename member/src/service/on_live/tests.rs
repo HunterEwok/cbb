@@ -80,10 +80,34 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     assert!(e.message().contains("only an admin can change the devices list"), "{}", e.message());
 
     // What has not moved yet answers so, with its cause.
-    for (op, name) in [("away", "hub-off"), ("away", "move"), ("invite", "")] {
-        let e = ask(&a, op, |h| h.name = name.into()).unwrap_err();
-        assert!(e.find::<NotYet>().is_some(), "{op} {name}: {}", e.for_log());
-    }
+    let e = ask(&a, "invite", |_| {}).unwrap_err();
+    assert!(e.find::<NotYet>().is_some(), "invite: {}", e.for_log());
+    // No hub to stop or move here.
+    let e = ask(&a, "away", |h| h.name = "hub-off".into()).unwrap_err();
+    assert!(e.message().contains("no other hub"), "{}", e.message());
+    let e = ask(&a, "away", |h| (h.name, h.force) = ("hub-off".into(), true)).unwrap_err();
+    assert!(e.message().contains("no hub of the group"), "{}", e.message());
+    let e = ask(&a, "away", |h| h.name = "move".into()).unwrap_err();
+    assert!(e.message().contains("names the device"), "{}", e.message());
+    // A hub command that names another device's key as the hub is not for
+    // this device: refused, whoever signed it.
+    let order = crate::orders::Order::Hub(crate::orders::Hub {
+        hub: Some(("127.0.0.1:9".into(), [9; 32])),
+        forwarders: Vec::new(),
+        stop: false,
+    });
+    let t = crate::commands::Taken {
+        kind: order.kind(),
+        id: [1; 16],
+        signer: cbb_core::records::KeyHash([2; 32]),
+        orders: order.orders().unwrap(),
+    };
+    let e = a.live_command(&la, &t).unwrap_err();
+    assert!(e.message().contains("names another device as the hub"), "{}", e.message());
+    let stop = crate::orders::Order::Hub(crate::orders::Hub { stop: true, ..Default::default() });
+    let t = crate::commands::Taken { kind: stop.kind(), orders: stop.orders().unwrap(), ..t };
+    let e = a.live_command(&la, &t).unwrap_err();
+    assert!(e.message().contains("no hub of the group"), "{}", e.message());
     // A device the records do not make a hub is refused as one.
     let e = ask(&a, "away", |h| (h.name, h.consent) = ("hub".into(), true)).unwrap_err();
     assert!(e.message().contains("do not make this device a hub"), "{}", e.message());

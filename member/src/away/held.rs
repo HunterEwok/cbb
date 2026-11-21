@@ -272,6 +272,71 @@ impl Away {
     }
 }
 
+impl Away {
+    /// The offer that tells a client this hub moved, or stopped being one,
+    /// confirming the tag confirm: the hub's key and `moved`; None while
+    /// this device is no hub. The client forgets the hub and takes the next
+    /// in the order.
+    pub fn moved_encoding(&self, confirm: &[u8; 32]) -> Option<Vec<u8>> {
+        let cur = self.st.lock().unwrap();
+        let st = cur.as_ref().filter(|s| s.is_hub)?;
+        let hub_key = crate::tunnel::public_key_of(&st.serving_key().ok()?);
+        let v = Value::Map(vec![(1, key_value(&hub_key)), (6, Value::Uint(1)), (8, Value::Bytes(confirm))]);
+        cbb_core::msg::read_map(&cbb_core::msg::tables::OFFER, &v).ok()?;
+        Some(v.encode())
+    }
+
+    /// This device stops being a hub of 0.6: its settings and the clients
+    /// it held go, and its tunnel stops once the loop sees it. Refused on a
+    /// device that is no hub.
+    pub fn unhub(&self) -> Result<()> {
+        let mut cur = self.st.lock().unwrap();
+        let st = cur.as_mut().filter(|s| s.is_hub).ok_or_else(|| Error::msg("this device is no hub of the group"))?;
+        let mut next = st.clone();
+        next.is_hub = false;
+        next.retired = true;
+        next.endpoints.clear();
+        next.listen_port = 0;
+        next.held.clear();
+        next.forwarder = None;
+        next.obfuscation = None;
+        next.save(&self.dir)?;
+        *st = next;
+        drop(cur);
+        (self.log)("cbb: this device is no hub of the group any more");
+        Ok(())
+    }
+
+    /// The hub's own forwarder, its address and its pin, while it is a hub
+    /// with one.
+    pub fn own_forwarder(&self) -> Option<(String, [u8; 32])> {
+        let cur = self.st.lock().unwrap();
+        let f = cur.as_ref().filter(|s| s.is_hub)?.forwarder.as_ref()?;
+        Some((f.endpoint.to_string(), super::serve::pin_bytes(&f.pin).ok()?))
+    }
+
+    /// Whether this device is a hub now.
+    pub fn is_hub_now(&self) -> bool {
+        self.st.lock().unwrap().as_ref().is_some_and(|s| s.is_hub)
+    }
+
+    /// The hub a member connection goes through the tunnel to now, if any.
+    pub fn through_hub(&self) -> Option<String> {
+        if !self.through.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
+        self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone())
+    }
+}
+
+/// A forwarder as a hub command names it (field 11): its address with a
+/// port and the pin of its key, from `-forwarder` and `-forwarder-key`
+/// (`default` for the project's).
+pub fn forwarder_named(fwd: &str, key: &str) -> Result<Option<(String, [u8; 32])>> {
+    let Some(f) = super::serve::forwarder_of(fwd, key)? else { return Ok(None) };
+    Ok(Some((f.endpoint.to_string(), super::serve::pin_bytes(&f.pin)?)))
+}
+
 fn key_value(k: &[u8]) -> Value<'_> {
     cbb_core::format::Key::new(cbb_core::format::Alg::X25519, k).to_value()
 }

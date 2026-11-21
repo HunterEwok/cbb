@@ -4058,17 +4058,27 @@ On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-o
 (`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
 checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
 receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
-carrying the command out went wrong. `hub` and a small device's own command answer that they
-are not on the records of 0.6 yet; `away-off` turns sync away from home off on the receiver,
-which only its own user turns on again.
+carrying the command out went wrong. A small device's own command answers that it is not on
+the records of 0.6 yet; `away-off` turns sync away from home off on the receiver, which only
+its own user turns on again; `hub` makes the receiver a hub or stops it being one (below).
 
-A `hub` command of 0.6 orders field 10 (the hub to use, an endpoint with its key), 11 (the
+A `hub` command of 0.6 orders field 10 (the hub: its address away from home and the hash of
+its member key, the format's 32-byte reference to a signer, so that every reader knows which
+device the hub is), 11 (the
 forwarders, 1 to 8, each `[address, pin]`, an address once: the pin of the forwarder's key, 32
 bytes, comes signed by the root with its address, so the hub takes no forwarder's key on first
 use) or 13 (stop being a hub, alone). Field 12, the clients with their keys and
 pre-shared keys, is retired and refused (`orders/hub`), and its number is not used again: a
 client gives each hub its key in message `tunnel` (t 15), and the pre-shared key is never sent,
 since both ends export it from their own connection (`core/src/hubkey.rs`).
+The receiver, a computer the records make a hub with sync away from home on, refuses a command
+whose field 10 names another device's key, and otherwise becomes a hub at that address with
+the first forwarder of field 11, as `cbb global hub` makes it one (`cbb global hub -on DEVICE`
+sends it, with one address on 0.6); with field 13 it stops being a hub (`cbb global hub off -on
+DEVICE`). `cbb global move DEVICE` sends the new hub its command, by default with this hub's
+forwarder, and once it is done stops this hub. A hub that stops sends each client connected an
+offer with `moved` and the tag of that connection's key; the client forgets the hub, ends a
+connection through its tunnel and takes the next hub in the order.
 
 ### The command
 

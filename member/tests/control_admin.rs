@@ -287,6 +287,59 @@ fn commands_reach_a_member() {
     desk.wait("sync away from home is off at desk", |st| st["away"].is_null());
 }
 
+/// The root makes a member a hub with a hub command, stops it being one,
+/// and moves its own hub to it; each comes back with the member's result.
+#[test]
+fn hub_commands_reach_a_member() {
+    let g = group(&["root", "desk"]);
+    let (root, desk) = (&g[0], &g[1]);
+    let port = || std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    // A device the records do not make a hub is refused before anything goes.
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": ["127.0.0.1:9"]})),
+        "do not make desk a hub",
+    );
+    root.ok(true, json!({"op": "hubs", "hubs": ["root", "desk"]}));
+    // Desk has sync away from home off: it refuses, with why, once it took
+    // the hubs record.
+    let off = json!({"op": "away", "name": "hub", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]});
+    wait_for(
+        "desk refuses for sync away from home",
+        || root.err(true, off.clone()).contains("sync away from home is off").then_some(()),
+        || desk.log(),
+    );
+    desk.ok(true, json!({"op": "away", "name": "on", "consent": true}));
+    has(
+        &root
+            .err(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": ["127.0.0.1:1", "127.0.0.1:2"]})),
+        "one address",
+    );
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub", "device": "desk"})),
+        "an address away from home or a forwarder",
+    );
+    let m = root
+        .ok(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]}));
+    assert_eq!(m.s("name"), "desk");
+    desk.wait("desk is a hub", |st| st["away"]["hub"] == true);
+    // It stops being one: refused while the group would have no other
+    // hub, unless forced.
+    root.ok(true, json!({"op": "away", "name": "hub-off", "device": "desk", "force": true}));
+    desk.wait("desk is no hub", |st| st["away"]["hub"] != true);
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub-off", "device": "desk", "force": true})),
+        "no hub of the group",
+    );
+    // The root's own hub moves to desk.
+    has(&root.err(true, json!({"op": "away", "name": "move", "device": "desk"})), "no hub of the group");
+    root.ok(true, json!({"op": "away", "name": "hub", "consent": true, "addrs": [format!("127.0.0.1:{}", port())], "port": port()}));
+    root.wait("root is a hub", |st| st["away"]["hub"] == true);
+    has(&root.err(true, json!({"op": "away", "name": "move"})), "names the device");
+    root.ok(true, json!({"op": "away", "name": "move", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]}));
+    desk.wait("desk is the hub", |st| st["away"]["hub"] == true);
+    root.wait("root is no hub", |st| st["away"]["hub"] != true);
+}
+
 /// One pairing at a time, a join only outside a group; a home window
 /// takes a wrong code as one of its three tries and tells the window, and
 /// the third closes it.

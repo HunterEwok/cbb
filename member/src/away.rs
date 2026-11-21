@@ -32,8 +32,9 @@ mod offer;
 mod serve;
 mod toward;
 
-pub use held::offer_result;
+pub use held::{forwarder_named, offer_result};
 pub use invite::{GuestTunnel, join_invite, keep_guest};
+pub(crate) use movehub::NO_OTHER_HUB;
 pub use movehub::is_stop;
 
 /// The project's relay and forwarder by name, and the pins built in for
