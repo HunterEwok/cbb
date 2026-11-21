@@ -484,7 +484,7 @@ impl Peers for Live {
     fn accept_checked(
         &self,
         sock: TcpStream,
-        _addr: SocketAddr,
+        addr: SocketAddr,
         handshaken: &mut dyn FnMut(),
         admit: Option<&Admit>,
     ) -> Result<()> {
@@ -494,8 +494,16 @@ impl Peers for Live {
         if self.is_paused() {
             return Err(Error::msg("the member is paused"));
         }
-        if admit.is_some() {
-            return Err(not_yet("a listener that checks its callers (a relay's)"));
+        if let Some(admit) = admit {
+            // A blind relay's call: a member connection from the device the
+            // relay said calls from that port, and nothing else.
+            handshaken();
+            return self
+                .mesh
+                .accept_checked(sock, &|id| {
+                    crate::certs::DeviceId::parse(&id_text(id)).is_ok_and(|d| admit(addr.port(), &d))
+                })
+                .map(|_| ());
         }
         self.mesh.accept_port_with(sock, handshaken).map(|_| ())
     }

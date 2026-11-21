@@ -306,8 +306,21 @@ fn the_root_sets_the_groups_relay() {
     })
     .unwrap_err();
     assert!(e.message().contains("given twice"), "{}", e.message());
-    // The project's relay: the group's own go.
+    // The project's relay: the group's own go, and the settings name the
+    // project's by name with its key's pin, so the root's consent is
+    // recorded; it takes consent as any relay.
+    let e = relay("cbb.tools:8765", "default", false).unwrap_err();
+    assert!(e.message().contains("a relay learns"), "{}", e.message());
     let m = relay("cbb.tools:8765", "default", true).unwrap();
+    assert_eq!(m.header.relays, [crate::away::PROJECT_RELAY]);
+    let servers = la.mesh.state().settings.servers;
+    assert_eq!(servers.len(), 1);
+    assert_eq!((servers[0].kind, servers[0].endpoint.as_str()), (SERVER_RELAY, crate::away::PROJECT_RELAY));
+    let built_in = crate::faces::project_servers(None, uptime::wall_ms());
+    assert!(built_in.iter().any(|s| s.address == crate::away::PROJECT_RELAY && s.pin == servers[0].pin));
+    // Off: no relay, which needs no consent; no entries never mean the
+    // project's relay.
+    let m = relay("off", "", false).unwrap();
     assert!(m.header.relays.is_empty());
     assert!(la.mesh.state().settings.servers.is_empty());
     la.close();

@@ -97,6 +97,7 @@ fn usage_text() -> String {
                                       meet the group's other devices at a blind relay, for a group
                                       without a hub: the project's ({PROJECT_RELAY}) or these, up to
                                       16; in a group of 0.6 on the root, which signs them for the group
+       cbb global relay off           in a group of 0.6, on the root: the group meets at no relay
        cbb global hubs DEVICE...      on the root, or an admin that may be a hub: the group's main
                                       hubs, in the order they serve, before the others
        cbb global allow               let this computer's service reach the group's servers as they
@@ -407,6 +408,10 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
             }
             (h.device, h.addrs, h.forwarder, h.forwarder_key) = (device.clone(), f.rest.clone(), fwd, fwd_key);
         }
+        "relay" if rest.len() == 1 && rest[0] == "off" => {
+            // The group meets at no relay: the root's settings name none.
+            h.relay = "off".into();
+        }
         "relay" => {
             net.check()?;
             let (relays, yes) = match relay_args(rest) {
@@ -476,7 +481,7 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
         // A group on the records of 0.6: the root signed the relays in the
         // group's settings, and every device takes them from there.
         if m.header.relays.is_empty() {
-            println!("The group meets at the project's relay alone now.");
+            println!("The group meets at no relay now.");
         } else {
             println!(
                 "The group's relays are {} now; every device of the group takes them from the group's settings.",

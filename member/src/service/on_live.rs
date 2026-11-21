@@ -641,7 +641,8 @@ impl Service {
     /// asks the root, which has not moved to the records of 0.6 yet.
     fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
         use cbb_core::records::body::{SERVER_RELAY, Server};
-        if !h.consent {
+        let off = h.relay == "off" && h.relays.is_empty();
+        if !h.consent && !off {
             return Err(Error::msg(
                 "a relay learns which devices of the group talk, when and how much, and their addresses; run cbb global relay and read what it says",
             ));
@@ -665,11 +666,21 @@ impl Service {
             (a.to_string(), k.to_string())
         }));
         let mut relays: Vec<Server> = Vec::new();
-        for (addr, key) in given {
+        for (addr, key) in given.filter(|_| !off) {
             if key == "default" {
                 if !h.relays.is_empty() {
                     return Err(Error::msg("the project's relay goes alone: cbb global relay default"));
                 }
+                // The project's relay, by name, with the pin of its key the
+                // newest keys.json gives (else the one built in): the
+                // root's consent is in the group's settings.
+                let now = uptime::wall_ms();
+                let pin = crate::faces::project_servers(live.mesh.entries().as_deref(), now)
+                    .into_iter()
+                    .find(|s| s.address == crate::away::PROJECT_RELAY)
+                    .map(|s| s.pin)
+                    .ok_or_else(|| Error::msg("this build knows no key of the project's relay"))?;
+                relays.push(Server { kind: SERVER_RELAY, endpoint: crate::away::PROJECT_RELAY.to_string(), pin });
                 break;
             }
             let endpoint = match addr.parse::<std::net::SocketAddr>() {
@@ -716,7 +727,7 @@ impl Service {
         })?;
         let endpoints: Vec<String> = relays.into_iter().map(|r| r.endpoint).collect();
         (self.log)(&if endpoints.is_empty() {
-            "cbb: the group meets at the project's relay alone now".to_string()
+            "cbb: the group meets at no relay now".to_string()
         } else {
             format!("cbb: the group's relays are {} now", endpoints.join(", "))
         });

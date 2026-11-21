@@ -789,6 +789,23 @@ impl Mesh {
         self.run(sock, s, false, Some(&exporter))
     }
 
+    /// As `accept`, with a check of the device the peer's certificate
+    /// names before the connection is served: a blind relay's call only from
+    /// the device the relay said calls.
+    pub fn accept_checked(self: &Arc<Self>, sock: TcpStream, check: &dyn Fn(&DeviceId) -> bool) -> Result<DeviceId> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
+        let peer = Key::es256(point.to_vec()).device_id();
+        if !check(&peer) {
+            let _ = sock.shutdown(std::net::Shutdown::Both);
+            return Err(Error::msg(format!("{} is not the caller this listener expects", hex(&peer.0[..4]))));
+        }
+        self.run(sock, s, false, Some(&exporter))
+    }
+
     /// Takes a connection on the member port, where members connect
     /// (`cbb/4`) and a device that joins pairs (`cbb-pair/3`): a member by
     /// its standing in the records, a pairing to the open window. The

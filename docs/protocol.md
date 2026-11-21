@@ -3917,10 +3917,14 @@ new key on every device. In a group of 0.6 it is the group's setting instead (th
 record's `servers`, section 10): the root's service, on the `away` request with `name` `relay`
 and `consent`, signs a new `settings` record whose relays (kind 2) are the ones given, `relay`
 with `relay_key` and then each of `relays` (`address pin`, as `cbb global relay` with several
-`address -key KEY` sends them), each address once, keeping the entries of other kinds, or none
-for `relay_key` `default`, which goes alone; its answer names their addresses in `relays`
-(empty for the project's). A device not on the records of 0.6 refuses `relays`: it meets at
-one relay. A device that is not the root is refused; an admin's
+`address -key KEY` sends them), each address once, keeping the entries of other kinds; for
+`relay_key` `default`, which goes alone, one entry for the project's relay, its name
+(`cbb.tools:8765`) with the pin of its key the newest keys.json gives (else the one built in),
+so that the root's consent is in the group's settings. With `relay` `off` (`cbb global relay
+off`, no consent asked) it removes every relay. Its answer names their addresses in `relays`.
+A group meets at a relay only when its settings name one: no relay entries mean no relay,
+never the project's by default. A device not on the records of 0.6 refuses `relays`: it meets
+at one relay. A device that is not the root is refused; an admin's
 request to the root has not moved yet (`NotYet`). Every device makes a face for each relay
 the settings name (`faces::group_servers`), after the project's servers.
 
