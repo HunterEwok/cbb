@@ -138,11 +138,16 @@ impl Service {
         if let Some(p) = port {
             log(&format!("cbb: listening on port {p}"));
         }
+        discovery::start(live.clone(), tag, cfg.peers.clone(), cfg.mdns, port, log.clone());
         // The address this device joined at, given by hand (an SSH forward,
-        // a VPN address that mDNS does not reach), is dialed too.
-        let mut peers = cfg.peers.clone();
-        peers.extend(self.joined_at.lock().unwrap().take());
-        discovery::start(live.clone(), tag, peers, cfg.mdns, port, log.clone());
+        // a VPN address that mDNS does not reach), is dialed while the
+        // device has no connection: with mDNS only after discovery had its
+        // time, so that of two members the lower ID still dials (section 4,
+        // "Who dials whom").
+        if let Some(addr) = self.joined_at.lock().unwrap().take() {
+            let grace = if cfg.mdns { discovery::fallback() + Duration::from_secs(5) } else { Duration::ZERO };
+            keep_joined(Arc::downgrade(&live), addr, grace, log.clone());
+        }
         {
             // On the group's root: where a member's keys live, as its hello
             // says (docs/protocol.md, section 17).
@@ -1431,6 +1436,42 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
         _ => return None,
     };
     Some(why)
+}
+
+/// Dials `addr`, where this device joined, after `grace` and then while
+/// it has no connection to the group, as the old member's keep_joined.
+fn keep_joined(
+    live: std::sync::Weak<Live>,
+    addr: std::net::SocketAddr,
+    grace: Duration,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+) {
+    const MIN: Duration = Duration::from_secs(1);
+    const MAX: Duration = Duration::from_secs(30);
+    std::thread::spawn(move || {
+        std::thread::sleep(grace);
+        let mut backoff = MIN;
+        while let Some(l) = live.upgrade() {
+            if l.is_closed() {
+                return;
+            }
+            if !l.mesh.connected().is_empty() {
+                drop(l);
+                std::thread::sleep(MIN);
+                continue;
+            }
+            let start = Instant::now();
+            if let Err(e) = l.mesh.dial(addr, None) {
+                log(&format!("cbb: connection at {addr}, where this device joined: {}", e.for_log()));
+            }
+            drop(l);
+            if start.elapsed() > MAX {
+                backoff = MIN;
+            }
+            std::thread::sleep(backoff);
+            backoff = (backoff * 2).min(MAX);
+        }
+    });
 }
 
 /// Why a member that is no admin mutes no other device and ends no mute

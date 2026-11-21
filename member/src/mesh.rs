@@ -830,6 +830,9 @@ impl Mesh {
         };
         match taken {
             Some(Ok(true)) => {
+                if t == m::T_ENTRIES {
+                    self.logf(&format!("cbb: took newer entry points from {}", hex(&conn.peer.0)));
+                }
                 // Newer here: passed on to the others with a new hello.
                 let hello = self.hello_frame(&self.set.lock().unwrap());
                 self.broadcast(&hello, Some(&conn.peer));
@@ -1097,6 +1100,10 @@ impl Mesh {
             if let Some(old) = conns.insert(peer, conn.clone()) {
                 old.close();
             }
+        }
+        // Each connection with the address it went to or came from.
+        if let Ok(addr) = sock.peer_addr() {
+            self.logf(&format!("connected to {} at {addr}", hex(&peer.0)));
         }
         let writer = {
             let conn = conn.clone();

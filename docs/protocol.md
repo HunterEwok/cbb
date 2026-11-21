@@ -605,8 +605,9 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   the group only through the tunnel.
 - A computer that joined at an address the user gave (`cbb pair -code ADDRESS`, as through
   an SSH forward or a VPN) also dials the member that admitted it at that address, whatever
-  the rules above say, while discovery does not find that member and no other connection to
-  it is up. It keeps doing so, with the same waits, until it holds the hub's tunnel offer
+  the rules above say, while no connection to the group is up; with mDNS on it first waits as
+  long as the fallback dial above (30 s, and 5 s more), so that of two members that find each
+  other the lower device ID still dials. It keeps doing so, with the same waits, until it holds the hub's tunnel offer
   (section 11) or the service stops; the address is not stored.
 - Addresses come from discovery; a member MUST NOT authenticate a peer by resolving a
   `.local` name, since the certificate, not the name, says who the peer is. They are tried IPv4

@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a device that joins dials the member it joined through only when no
+  connection came by the time the fallback dial would come, so that two members keep one
+  connection between them; each member logs the address it is connected at and when it takes
+  newer entry points from a peer.
 - On the records of 0.6: a device's hello goes to the members connected again when it changes
   (a mute, sync off, a quick action), and the mute in it says the time left, not its end;
   only an admin ends a mute an admin set, and on the control socket only an admin mutes
