@@ -684,79 +684,6 @@ napi_value memberStop(napi_env env, napi_callback_info info)
         [](napi_env env) { return undefined(env); });
 }
 
-// ---- joining by an invitation ----
-
-// joinNew(request: string): Promise<{handle, answer}>; the phone joins as
-// a member, signing with its member key.
-napi_value joinNew(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    auto joiner = std::make_shared<cbb_join *>(nullptr);
-    auto answer = std::make_shared<std::string>();
-    return later(
-        env,
-        [req, joiner, answer]() {
-            uint8_t *out = nullptr;
-            size_t len = 0;
-            *joiner = cbb_join_new(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &out, &len);
-            *answer = take(out, len);
-        },
-        [joiner, answer](napi_env env) { return made(env, *joiner, *answer); });
-}
-
-// joinAccept(handle): Promise<string>, a new attempt.
-napi_value joinAccept(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return laterString(env, [j]() {
-        size_t len = 0;
-        return take(cbb_join_accept(j, &len), len);
-    });
-}
-
-// joinFeed(handle, data: ArrayBuffer, nowMs: number): Promise<string>
-napi_value joinFeed(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    const std::vector<uint8_t> data = bytesOf(env, a.v[1]);
-    const int64_t now = intOf(env, a.v[2]);
-    return laterString(env, [j, data, now]() {
-        size_t len = 0;
-        return take(cbb_join_feed(j, data.data(), data.size(), now, &len), len);
-    });
-}
-
-// joinFinish(handle, saved: boolean): Promise<string>
-napi_value joinFinish(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    const bool saved = boolOf(env, a.v[1]);
-    return laterString(env, [j, saved]() {
-        size_t len = 0;
-        return take(cbb_join_finish(j, saved ? 1 : 0, &len), len);
-    });
-}
-
-// joinAnswered(handle): boolean
-napi_value joinAnswered(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return boolean(env, j && cbb_join_answered(j) == 1);
-}
-
-// joinFree(handle): Promise<void>; the invitation's tunnel closes on it.
-napi_value joinFree(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return later(env, [j]() { cbb_join_free(j); }, [](napi_env env) { return undefined(env); });
-}
-
 // ---- remote invitations ----
 
 // inviteNew(member, request: string, which): Promise<{handle, answer}>
@@ -961,12 +888,6 @@ napi_value init(napi_env env, napi_value exports)
         {"memberManageWatch", nullptr, memberManageWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinNew", nullptr, joinNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAccept", nullptr, joinAccept, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFeed", nullptr, joinFeed, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFinish", nullptr, joinFinish, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAnswered", nullptr, joinAnswered, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFree", nullptr, joinFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNew", nullptr, inviteNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNext", nullptr, inviteNext, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteAnswer", nullptr, inviteAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},

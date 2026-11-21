@@ -124,13 +124,9 @@ impl Service {
             }));
         }
         self.live_hello(&live);
-        {
-            let me = crate::certs::DeviceId::parse(&id_text(&live.mesh.device()))?;
-            // -tunnel-via sends the tunnel's packets to a local UDP port that
-            // leads to the hub (cbb next link -udp).
-            let away = crate::away::Away::new(cfg.state_dir.clone(), live.tag(), me, log.clone()).via(cfg.tunnel_via);
-            live.with_away(Arc::new(away));
-        }
+        // -tunnel-via sends the tunnel's packets to a local UDP port that
+        // leads to the hub (cbb next link -udp).
+        live.start_away(cfg.state_dir.clone(), cfg.tunnel_via, log.clone())?;
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         // The attestations of member keys (docs/protocol.md, section 17).
         live.with_attestations();
@@ -1154,8 +1150,7 @@ impl Service {
         r: control::Reader<UnixStream>,
         out: &mut UnixStream,
     ) -> Result<()> {
-        use cbb_core::join::invitation::{Invitation, Open, Profile};
-        use cbb_core::records::body::{RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+        use cbb_core::records::body::{ROLE_MEMBER, ROLE_PHONE};
         let h = &m.header;
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
             return Err(Error::msg(NOT_ADMITTER));
@@ -1166,58 +1161,24 @@ impl Service {
             "" => None,
             d => Some(writers::find(&live.mesh.state(), d)?.id),
         };
-        let here = match named {
-            Some(d) => d == live.mesh.device(),
-            None => live.away().is_some_and(|a| a.is_hub_now()),
+        let expires = match h.expires {
+            n if n <= 0 => None,
+            n => Some(Duration::from_secs(n as u64)),
         };
-        let lifetime = match h.expires {
-            n if n <= 0 => crate::inviter::DEFAULT_LIFETIME,
-            n => Duration::from_secs(n as u64),
-        };
-        if lifetime > crate::inviter::MAX_LIFETIME {
-            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
-        }
         let role = match h.kind.as_str() {
             "" | "computer" => ROLE_MEMBER,
             "phone" => ROLE_PHONE,
             k => return Err(Error::msg(format!("an invitation is for a computer or a phone, not {k:?}"))),
         };
-        let profile = Profile {
-            role,
-            rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
-            home_only: false,
-            guarded: false,
-        };
-        let now = || crate::uptime::wall_ms().max(0) as u64;
-        let expires_ms = now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX));
-        let mut invitation = Invitation::new(Vec::new(), profile);
-        let keys = crate::inviter::GuestKeys::new()?;
-        let (opened, through) = if here {
-            (live.open_guest(keys.key, keys.public, keys.psk)?, None)
-        } else {
-            let (o, hub) = live.open_through(named, (keys.key, keys.public, keys.psk), expires_ms, invitation.id)?;
+        let mut o = live.open_invitation(named, role, expires)?;
+        if let Some(hub) = o.through {
             (self.log)(&format!("cbb: the invitation goes through the hub {}", id_text(&hub)));
-            (o, Some(hub))
-        };
-        invitation.paths = vec![opened.path];
-        let mut open = Open {
-            invitation,
-            name: String::new(),
-            created_ms: now(),
-            expires_ms,
-            used: false,
-            failures: 0,
-            allowed_key: None,
-            attempt: None,
-            next_attempt: 0,
-        };
+        }
         // However it ends, the guest goes, unless a device was admitted.
         let mut admitted = None;
-        let res = self.run_invite(&mut open, &opened.pairs, lifetime, r, out, live, &mut admitted);
-        match through {
-            None => live.guest_ended(&keys.public, admitted),
-            Some(_) => live.through_ended(&keys.public, admitted),
-        }
+        let lifetime = o.lifetime;
+        let res = self.run_invite(&mut o.open, &o.pairs, lifetime, r, out, live, &mut admitted);
+        live.invitation_ended(&o, admitted);
         res
     }
 
@@ -1395,24 +1356,9 @@ fn relay_group(set: &cbb_core::records::RecordSet) -> String {
     format!("{}:{}:{}", hex(set.root().public()), hex(r.k1.public()), hex(r.k2.public()))
 }
 
-/// Sync away from home on a group of 0.6 for status: where it stands and,
-/// on a hub, its forwarder.
+/// Sync away from home on a group of 0.6 for status.
 fn away_status(live: &Live) -> Option<control::Away> {
-    let away = live.away()?;
-    let standby = away.is_hub_now() && live.is_standing_by();
-    // The hubs this member is connected to first, by any way, then the
-    // rest, each in the group's order of hubs: the status names the first
-    // it keeps an offer of.
-    let connected = live.mesh.connected();
-    let (mut order, rest): (Vec<_>, Vec<_>) = live.mesh.hub_order().into_iter().partition(|id| connected.contains(id));
-    order.extend(rest);
-    let order: Vec<String> = order.iter().map(|id| cbb_core::certs::hex(&id.0)).collect();
-    let mut a = away.live_status_as(standby, &order)?;
-    let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
-    a.forwarder = away.live_forwarder(entries_held);
-    a.relay = live.relay_status();
-    a.standby = standby;
-    Some(a)
+    live.away_status()
 }
 
 #[cfg(test)]

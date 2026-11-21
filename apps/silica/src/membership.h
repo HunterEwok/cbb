@@ -46,7 +46,8 @@ struct Membership
     // the group CA's SHA-256, in hex; empty when the phone is in no group.
     QString groupTag() const;
 
-    // From the core's answer of a join (ffi's cbb_join_feed, joined).
+    // From the JSON of a group the core gave (a restore's answer) or of
+    // member.json.
     static Membership fromJoined(const QJsonObject &joined);
 
     // The saved membership, or a null one when the phone is in no group.

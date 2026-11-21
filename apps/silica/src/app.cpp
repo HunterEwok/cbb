@@ -372,15 +372,16 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
             return;
         }
     });
-    connect(&m_join, &Join::joined, this, [this](const Membership &m) {
-        m_member = m;
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    connect(&m_join, &Join::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
         emit groupChanged();
         startMember();
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        if (m_join.byInvite())
-            m_node.joinedByInvite(m_join.invite());
     });
     // The root made this phone an admin: the member checks the admin CA
     // first, then the phone keeps it and signs with it.
@@ -523,7 +524,7 @@ void App::startJoinByInvite(const QString &text)
                             QStringLiteral("join: in a group")}));
         return;
     }
-    m_join.startInvite(phoneName(), phoneOs(), m_publicKey, text);
+    m_join.startInvite(text, Membership::directory(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::resolve(const QStringList &records)

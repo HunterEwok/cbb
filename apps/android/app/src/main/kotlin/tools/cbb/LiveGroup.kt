@@ -109,7 +109,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** An admin muted this phone: its copies do not reach the group. */
     class Muted : Exception("an admin muted this phone: its copies do not reach the group")
 
-    class Failure(val kind: Kind) : Exception(kind.name) {
+    class Failure(val kind: Kind, cause: Throwable? = null) : Exception(kind.name, cause) {
         enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP_COMPUTER, NO_GROUP, ROOT_LEAVES, HUB_UNREACHABLE }
     }
 
@@ -560,11 +560,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             nodeDir.mkdirs()
             CorePairing.Joiner(nodeDir.path, code, PhoneGroup.validName(deviceName), "android", member.publicKeyDER, member::signDigest)
         }
+        follow(j, invite = false)
+    }
+
+    /** Follows a joiner to its end: on done the member starts on the group it keeps; by an invitation, a hub that never answered is HUB_UNREACHABLE. */
+    private suspend fun follow(j: CorePairing.Joiner, invite: Boolean) {
         try {
             var version = 0L
+            var answered = false
             while (true) {
                 val st = withContext(Dispatchers.IO) { j.next(version, 1000) }
                 version = st.version
+                answered = answered || st.answered
                 when (st.state) {
                     "done" -> {
                         withContext(Dispatchers.IO) {
@@ -576,7 +583,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                         }
                         return
                     }
-                    "failed" -> throw st.failure ?: Failure(Failure.Kind.UNREACHABLE)
+                    "failed" -> throw if (invite && !answered) Failure(Failure.Kind.HUB_UNREACHABLE, st.failure) else st.failure ?: Failure(Failure.Kind.UNREACHABLE)
                 }
             }
         } finally {
@@ -1065,66 +1072,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     // Joining
 
     /**
-     * Joins a group from afar by a remote invitation's text
-     * (docs/protocol.md, section 12), which the user scanned, opened or
-     * pasted and accepted: the core starts the invitation's guest tunnel,
-     * the phone dials it and proves the invitation's secret, and the hub's
-     * admin admits it by the fingerprint shown hands it. Sync away from
-     * home goes on, and the phone offers its tunnel key to the hub through
-     * the guest tunnel until the hub answers.
+     * Joins a group of 0.6 from afar by a remote invitation's text
+     * (docs/protocol.md, section 12): this phone dials the hub through the
+     * invitation's guest tunnel and shows its fingerprint (shown) for the
+     * inviting admin to compare; once admitted, the member starts on the
+     * group it keeps and reaches the hub through that tunnel until the
+     * hub's offer comes. A hub that never answered is HUB_UNREACHABLE.
      */
     suspend fun joinByInvite(text: String, shown: (String) -> Unit) {
         if (hasGroup) return
-        val inv = (Core.readInvite(text) as? Core.InviteReading.Read)?.invitation ?: throw Failure(Failure.Kind.NO_GROUP)
-        val joining = withContext(Dispatchers.IO) {
+        val j = withContext(Dispatchers.IO) {
             val member = memberSigner()
-            CorePairing.Joining(
-                PhoneGroup.validName(deviceName), "android", member.publicKeyDER, sealKey(), emptyList(), member::signDigest,
-                invite = text,
-            )
+            nodeDir.mkdirs()
+            CorePairing.Joiner(nodeDir.path, "", PhoneGroup.validName(deviceName), "android", member.publicKeyDER, member::signDigest, invite = text)
         }
-        val joined = try {
-            shown(joining.fingerprint)
-            withContext(Dispatchers.IO) { dialInvite(joining) }
-        } finally {
-            joining.close()
-        }
-        withContext(Dispatchers.IO) {
-            inviteFile.writeText(listOf(text.trim(), inv.hub, System.currentTimeMillis().toString()).joinToString("\n"))
-            synchronized(lock) {
-                newDeviceMode()
-                state = joined
-            }
-            startSync()
-            setAwayFromHome(true)
-        }
-    }
-
-    /** Dials the invitation's guest tunnel a few times until the hub's admin admits this phone; blocks. */
-    private fun dialInvite(joining: CorePairing.Joining): PhoneGroup {
-        var failure: Exception? = null
-        repeat(INVITE_ATTEMPTS) { attempt ->
-            if (attempt > 0) Thread.sleep(DIAL_PAUSE_MS)
-            try {
-                java.net.Socket("127.0.0.1", joining.port).use { socket ->
-                    // The admin has up to 5 minutes to confirm the device.
-                    socket.soTimeout = INVITE_DEADLINE_MS.toInt()
-                    var group: PhoneGroup? = null
-                    joining.attempt(socket) { joined ->
-                        PhoneGroup.of(joined, root = false).also { it.save(file); group = it }
-                        true
-                    }
-                    group?.let { return it }
-                }
-            } catch (e: CorePairing.Failure) {
-                // The admin declined, or the secret was refused: no retry.
-                throw e
-            } catch (e: Exception) {
-                failure = e
-            }
-        }
-        if (!joining.answered) throw Failure(Failure.Kind.HUB_UNREACHABLE)
-        throw failure ?: Failure(Failure.Kind.UNREACHABLE)
+        shown(j.fingerprint)
+        follow(j, invite = true)
     }
 
     /**
@@ -3269,13 +3232,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         /** How long a member that browsing finds counts as at home without a connection to it. */
         private const val NEAR_GRACE_MS = 30_000L
-
-        /** The pause between two dials of the invitation's guest tunnel. */
-        const val DIAL_PAUSE_MS = 2_000L
-
-        /** How many times joinByInvite dials the guest tunnel, and how long one attempt may take with the admin's confirmation. */
-        const val INVITE_ATTEMPTS = 5
-        const val INVITE_DEADLINE_MS = 360_000L
 
         /** How long the hub keeps the guest of the invitation this phone joined by, as the core's guest grace. */
         const val GUEST_GRACE_MS = 24 * 3600 * 1000L

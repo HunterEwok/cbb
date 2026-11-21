@@ -179,9 +179,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     }
 
     /// The group the core made with this phone's root key
-    /// (CorePairing.newGroup), or the group a phone joined through the core
-    /// (CorePairing.Joining): a member of it, and an admin when the
-    /// admitting phone sent its admin CA.
+    /// (CorePairing.newGroup): a member of it, and the root.
     public static func of(_ c: CorePairing.Group, root: Bool) -> PhoneGroup {
         var g = PhoneGroup(device: c.device, groupCA: c.groupCA, memberCert: c.cert, computers: [])
         (g.memberIssuer, g.isRoot, g.adminCA) = (c.issuer, root, root ? nil : c.adminCA)

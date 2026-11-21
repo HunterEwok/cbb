@@ -329,6 +329,14 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         call("listen", Wire.obj("port" to Wire.num(port.toLong()), "kind" to Wire.str(what.wire))).optLong("port")?.toInt()
             ?: throw Core.Mismatch("listen answered no port")
 
+    /**
+     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key) on the UDP
+     * port (0: any free one), reached from afar at addrs ("ip:port"): its clients and the guests of invitations come in
+     * through its tunnel. The answer holds the phone's sync away from home (`away`).
+     */
+    fun serveAsHub(port: Int, addrs: List<String>): JsonObject =
+        call("hub", Wire.obj("port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) })))
+
     /** Closes the port [listen] opened for [what], or every one with null. */
     fun unlisten(what: Listen? = null) {
         call("unlisten", Wire.obj("kind" to (what?.let { Wire.str(it.wire) } ?: JsonNull)))

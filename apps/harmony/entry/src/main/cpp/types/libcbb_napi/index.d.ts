@@ -49,13 +49,6 @@ export const memberManageWatch: (member: Handle, request: string) => Promise<str
 export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 
-export const joinNew: (request: string) => Promise<Made>;
-export const joinAccept: (join: Handle) => Promise<string>;
-export const joinFeed: (join: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const joinFinish: (join: Handle, saved: boolean) => Promise<string>;
-export const joinAnswered: (join: Handle) => boolean;
-export const joinFree: (join: Handle) => Promise<void>;
-
 export const inviteNew: (member: Handle, request: string, which: Which) => Promise<Made>;
 export const inviteNext: (invite: Handle, version: number, timeoutMs: number) => Promise<string>;
 export const inviteAnswer: (invite: Handle, yes: boolean) => void;

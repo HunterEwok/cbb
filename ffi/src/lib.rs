@@ -141,8 +141,6 @@ pub unsafe extern "C" fn cbb_test_panic(answer_len: *mut usize) -> *mut u8 {
 }
 
 #[cfg(feature = "member")]
-pub mod admit;
-#[cfg(feature = "member")]
 pub(crate) mod found;
 #[cfg(feature = "member")]
 pub mod invite;
@@ -241,175 +239,6 @@ pub unsafe extern "C" fn cbb_group_new(
     to_c(guard::answer(|| join::new_group(req, sign, ctx as usize)), answer_len)
 }
 
-/// A joiner that listens with the app's key (src/join.rs): `request` is
-/// its JSON, `sign` the key's callback with `ctx`, which must stay valid
-/// until `cbb_join_free`. Writes the answer to `answer` and `answer_len`
-/// and returns the joiner, or null when the answer is an error.
-///
-/// # Safety
-///
-/// `request` must point to `len` readable bytes, `answer` and `answer_len`
-/// to writable pointers, for the time of the call.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_new(
-    request: *const u8,
-    len: usize,
-    sign: join::SignFn,
-    ctx: *mut core::ffi::c_void,
-    answer: *mut *mut u8,
-    answer_len: *mut usize,
-) -> *mut join::Join {
-    if request.is_null() || answer.is_null() || answer_len.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: the caller gives len readable bytes at request.
-    let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = guard::or(|| (None, guard::panicked()), || join::Join::new(req, sign, ctx as usize, None));
-    // SAFETY: the caller gives a writable pointer at answer.
-    unsafe { answer.write(to_c(ans, answer_len)) };
-    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
-}
-
-/// As `cbb_join_new`, for a phone that asks to be an admin: the request
-/// names `admin_public`, the admin key's public point, and `admin_sign`
-/// with `admin_ctx` signs with that key, as `sign` does with the device
-/// key. The joined answer carries `admin_ca` when the member made the phone
-/// an admin.
-///
-/// # Safety
-///
-/// As `cbb_join_new`; `admin_sign` and `admin_ctx` stay valid as `sign`
-/// and `ctx` do.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments, reason = "a C function takes each callback and its context")]
-pub unsafe extern "C" fn cbb_join_new_admin(
-    request: *const u8,
-    len: usize,
-    sign: join::SignFn,
-    ctx: *mut core::ffi::c_void,
-    admin_sign: join::SignFn,
-    admin_ctx: *mut core::ffi::c_void,
-    answer: *mut *mut u8,
-    answer_len: *mut usize,
-) -> *mut join::Join {
-    if request.is_null() || answer.is_null() || answer_len.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: the caller gives len readable bytes at request.
-    let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = guard::or(
-        || (None, guard::panicked()),
-        || join::Join::new(req, sign, ctx as usize, Some((admin_sign, admin_ctx as usize))),
-    );
-    // SAFETY: the caller gives a writable pointer at answer.
-    unsafe { answer.write(to_c(ans, answer_len)) };
-    j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
-}
-
-/// Starts an attempt for a connection the app accepted.
-///
-/// # Safety
-///
-/// `j` must be a joiner of `cbb_join_new`, not freed, used by one thread
-/// at a time; `answer_len` writable.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_accept(j: *mut join::Join, answer_len: *mut usize) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(guard::answer(|| j.accept()), answer_len)
-}
-
-/// Passes the `len` bytes at `data` that arrived on the attempt's
-/// connection; `now_ms` is the wall clock in Unix milliseconds, or 0 for
-/// the system's.
-///
-/// # Safety
-///
-/// As `cbb_join_accept`, and `data` must point to `len` readable bytes (or
-/// be null with `len` 0).
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_feed(
-    j: *mut join::Join,
-    data: *const u8,
-    len: usize,
-    now_ms: i64,
-    answer_len: *mut usize,
-) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
-    if data.is_null() && len != 0 {
-        return core::ptr::null_mut();
-    }
-    let input: &[u8] = if len == 0 {
-        &[]
-    } else {
-        // SAFETY: the caller gives len readable bytes at data.
-        unsafe { core::slice::from_raw_parts(data, len) }
-    };
-    to_c(guard::answer(|| j.feed(input, now_ms)), answer_len)
-}
-
-/// Ends a joined attempt: `saved` nonzero when the app stored the result.
-///
-/// # Safety
-///
-/// As `cbb_join_accept`.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_finish(j: *mut join::Join, saved: i32, answer_len: *mut usize) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(guard::answer(|| j.finish(saved != 0)), answer_len)
-}
-
-/// Announces the joiner by mDNS while the app listens on `port`, until it
-/// is freed; returns 1 when it announced, 0 when mDNS is not at hand.
-///
-/// # Safety
-///
-/// As `cbb_join_accept`.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32 {
-    // SAFETY: as the function's contract says.
-    let Some(j) = (unsafe { j.as_mut() }) else { return 0 };
-    i32::from(guard::or(|| false, || j.announce(port)))
-}
-
-/// Whether the hub of the invitation the joiner joins by has answered
-/// through its guest tunnel: 1 when it has, 0 when not (or with no
-/// invitation). A failed attempt whose hub never answered says the hub is
-/// off or cannot be reached.
-///
-/// # Safety
-///
-/// `j` must be a joiner of `cbb_join_new`, not freed.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_answered(j: *const join::Join) -> i32 {
-    // SAFETY: as the function's contract says.
-    let Some(j) = (unsafe { j.as_ref() }) else { return 0 };
-    i32::from(guard::or(|| false, || j.answered()))
-}
-
-/// Frees a joiner; null does nothing.
-///
-/// # Safety
-///
-/// `j` must be null or a joiner of `cbb_join_new`, not freed before.
-#[cfg(feature = "join")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_join_free(j: *mut join::Join) {
-    if !j.is_null() {
-        // SAFETY: j is a box cbb_join_new let go of.
-        guard::or(|| (), || drop(unsafe { Box::from_raw(j) }));
-    }
-}
-
 /// Starts the member inside the app (src/member.rs): `request` is its
 /// JSON, `sign` the key's callback and `event` the callback for its events,
 /// both with `ctx`, which must stay valid, and callable from any thread,
@@ -420,7 +249,8 @@ pub unsafe extern "C" fn cbb_join_free(j: *mut join::Join) {
 ///
 /// # Safety
 ///
-/// As `cbb_join_new`.
+/// `request` must point to `len` readable bytes; `answer` and `answer_len`
+/// writable; `ctx` valid for both callbacks as said.
 #[cfg(feature = "member")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_member_start(
@@ -641,107 +471,11 @@ pub unsafe extern "C" fn cbb_member_manage_watch(
     to_c(guard::answer(|| m.manage_watch(req, sign_body, ctx as usize)), answer_len)
 }
 
-/// Starts admitting a device by its QR code, as an admin of the group
-/// (src/admit.rs): `request` is `{"qr", "public", "admin_ca", "make_admin"}`
-/// and `sign` with `ctx` signs with the key `public` names, the phone's
-/// admin key or the root's, until `cbb_admit_free`. Writes the answer,
-/// `{"addrs"}` to dial, to `answer` and `answer_len` and returns the
-/// admission, or null when the answer is an error.
-///
-/// # Safety
-///
-/// `m` must be a running member of `cbb_member_start`, which stays running
-/// until `cbb_admit_free`; the rest as `cbb_join_new`.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_admit_new(
-    m: *const member::Member,
-    request: *const u8,
-    len: usize,
-    sign: join::SignFn,
-    ctx: *mut core::ffi::c_void,
-    answer: *mut *mut u8,
-    answer_len: *mut usize,
-) -> *mut admit::Admit {
-    if request.is_null() || answer.is_null() || answer_len.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: as the function's contract says.
-    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
-    // SAFETY: the caller gives len readable bytes at request.
-    let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (a, ans) = guard::or(|| (None, guard::panicked()), || m.admit(req, sign, ctx as usize));
-    // SAFETY: the caller gives a writable pointer at answer.
-    unsafe { answer.write(to_c(ans, answer_len)) };
-    a.map_or(core::ptr::null_mut(), |a| Box::into_raw(Box::new(a)))
-}
-
-/// Starts on a connection the app is dialing to one of the addresses,
-/// ending the one before: the answer is as `cbb_admit_feed` gives it, its
-/// `send` the first bytes to send.
-///
-/// # Safety
-///
-/// `a` must be an admission of `cbb_admit_new`, not freed, used by one
-/// thread at a time; `answer_len` writable.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_admit_dial(a: *mut admit::Admit, answer_len: *mut usize) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(a) = (unsafe { a.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(guard::answer(|| a.dial()), answer_len)
-}
-
-/// Passes the `len` bytes at `data` that arrived on the connection; `now_ms`
-/// is the wall clock in Unix milliseconds, or 0 for the system's. The
-/// answer is `{"send", "state", "wrong_code", "device", "confirmed",
-/// "error"}`, state pending, admitted (the device is in the group now),
-/// done or failed.
-///
-/// # Safety
-///
-/// As `cbb_admit_dial`, and `data` must point to `len` readable bytes (or
-/// be null with `len` 0).
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_admit_feed(
-    a: *mut admit::Admit,
-    data: *const u8,
-    len: usize,
-    now_ms: i64,
-    answer_len: *mut usize,
-) -> *mut u8 {
-    // SAFETY: as the function's contract says.
-    let Some(a) = (unsafe { a.as_mut() }) else { return core::ptr::null_mut() };
-    if data.is_null() && len != 0 {
-        return core::ptr::null_mut();
-    }
-    let input: &[u8] = if len == 0 {
-        &[]
-    } else {
-        // SAFETY: the caller gives len readable bytes at data.
-        unsafe { core::slice::from_raw_parts(data, len) }
-    };
-    to_c(guard::answer(|| a.feed(input, now_ms)), answer_len)
-}
-
-/// Frees an admission; null does nothing.
-///
-/// # Safety
-///
-/// `a` must be null or an admission of `cbb_admit_new`, not freed before.
-#[cfg(feature = "member")]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
-    if !a.is_null() {
-        // SAFETY: a is a box cbb_admit_new let go of.
-        guard::or(|| (), || drop(unsafe { Box::from_raw(a) }));
-    }
-}
-
 /// Makes a remote invitation as an admin of the group (src/invite.rs):
-/// `request` is `{"public", "admin_ca", "expires", "hub"}` and `sign` with
-/// `ctx` signs with the key `public` names until `cbb_invite_free`. Writes
+/// `request` is `{"public", "admin_ca", "expires", "hub", "kind"}` and
+/// `sign` with `ctx` signs with the key `public` names until
+/// `cbb_invite_free`; a member of 0.6 needs no `admin_ca` and invites a
+/// `kind` of device, "computer" (or empty) or "phone". Writes
 /// the answer, `{"invite", "expires", "modules"}`, to `answer` and
 /// `answer_len` and returns the invitation, or null when the answer is an
 /// error. It waits for the hub's answer, so the app calls it off its main
@@ -749,7 +483,9 @@ pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
 ///
 /// # Safety
 ///
-/// As `cbb_admit_new`, until `cbb_invite_free`.
+/// `m` is a running member, `request` holds `len` readable bytes, `answer`
+/// and `answer_len` are writable; `sign` stays callable with `ctx` until
+/// `cbb_invite_free`.
 #[cfg(feature = "member")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_invite_new(
@@ -840,7 +576,9 @@ pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
 ///
 /// # Safety
 ///
-/// As `cbb_admit_new`, until `cbb_window_free`.
+/// `m` is a running member, `request` holds `len` readable bytes, `answer`
+/// and `answer_len` are writable; `sign` stays callable with `ctx` until
+/// `cbb_window_free`.
 #[cfg(feature = "member")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_window_new(
@@ -1206,6 +944,7 @@ mod tests {
     #[cfg(feature = "join")]
     #[test]
     fn joiner_and_qr_through_c() {
+        #[cfg(feature = "member")]
         unsafe extern "C" fn no_sign(_: *mut core::ffi::c_void, _: *const u8, _: *mut u8, _: *mut usize) -> i32 {
             -1
         }
@@ -1239,23 +978,32 @@ mod tests {
             let got = error(cbb_qr_read(frame.as_ptr(), w, 2, isize::MAX as usize, &mut n), n);
             assert!(got.get("error").is_some(), "{got}");
         }
-        let req = b"{not json";
-        let mut ans: *mut u8 = core::ptr::null_mut();
         // SAFETY: req, ans and n live for each call; null joiners do nothing.
         unsafe {
-            let j = cbb_join_new(req.as_ptr(), req.len(), no_sign, core::ptr::null_mut(), &mut ans, &mut n);
-            assert!(j.is_null());
-            assert!(error(ans, n).get("error").is_some());
-            assert!(cbb_join_new(core::ptr::null(), 0, no_sign, core::ptr::null_mut(), &mut ans, &mut n).is_null());
-            assert!(
-                cbb_join_new(req.as_ptr(), req.len(), no_sign, core::ptr::null_mut(), core::ptr::null_mut(), &mut n)
+            #[cfg(feature = "member")]
+            {
+                let req = b"{not json";
+                let mut ans: *mut u8 = core::ptr::null_mut();
+                let j = cbb_joiner_new(req.as_ptr(), req.len(), no_sign, core::ptr::null_mut(), &mut ans, &mut n);
+                assert!(j.is_null());
+                assert!(error(ans, n).get("error").is_some());
+                assert!(
+                    cbb_joiner_new(core::ptr::null(), 0, no_sign, core::ptr::null_mut(), &mut ans, &mut n).is_null()
+                );
+                assert!(
+                    cbb_joiner_new(
+                        req.as_ptr(),
+                        req.len(),
+                        no_sign,
+                        core::ptr::null_mut(),
+                        core::ptr::null_mut(),
+                        &mut n
+                    )
                     .is_null()
-            );
-            let none = core::ptr::null_mut();
-            assert!(cbb_join_accept(none, &mut n).is_null());
-            assert!(cbb_join_feed(none, req.as_ptr(), req.len(), 0, &mut n).is_null());
-            assert!(cbb_join_finish(none, 1, &mut n).is_null());
-            cbb_join_free(none);
+                );
+                assert!(cbb_joiner_next(core::ptr::null(), 0, 0, &mut n).is_null());
+                cbb_joiner_free(core::ptr::null_mut());
+            }
             assert!(to_c(Vec::new(), core::ptr::null_mut()).is_null());
             let p = to_c(b"{}".to_vec(), &mut n);
             assert_eq!((core::slice::from_raw_parts(p, n), n), (&b"{}"[..], 2));

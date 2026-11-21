@@ -689,18 +689,6 @@ export class Member {
     this.readAway(a.ok.away);
   }
 
-  // After joining by a remote invitation: sync away from home on, the
-  // tunnel key offered through the invitation's guest tunnel.
-  async joinedByInvite(invite: string): Promise<void> {
-    const a = await this.call<AwayAnswer>('joined_by_invite', { 'invite': invite } as Record<string, Object>);
-    if (a.ok === undefined) {
-      this.error = Errors.shown(a.failure as Failure);
-      return;
-    }
-    Errors.log('member: joined by an invitation; sync away from home is on');
-    this.readAway(a.ok.away);
-  }
-
   async pollDevices(): Promise<void> {
     if (this.handle === null) {
       return;

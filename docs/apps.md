@@ -1462,8 +1462,8 @@ the app on real devices.
   in "Add a device". The Start screen has one button for it on every phone, "Join a group",
   answered by any admin of the group, which admits the phone as a member; the root makes it
   an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
-  `CorePairing` over ffi's `cbb_group_new`, `cbb_admit_*` and `cbb_join_*`; the Swift
-  kit's `CorePairing.Listener` and `Connection` are the plain TCP sockets around it). An
+  `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*` and
+  `cbb_invite_*`). An
   admin phone that removes the root
   phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
   Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the

@@ -3397,8 +3397,8 @@ A device that shares no network with the group joins through the hub's tunnel wi
 invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
 `cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
 on the computers and small devices, in the phones' member through ffi (`cbb_invite_*`,
-`cbb_join_*` with `invite`, the tunnel's `guest_start`), and on a phone that is the group's hub
-(the Rust tunnel's `hub_invite`, the kits' `InvitationWindow`). The text is read by the Rust
+`cbb_joiner_*` with `invite`), and on an admin phone that is the group's hub (the member's
+Live hub, ffi's `hub` operation). The text is read by the Rust
 core (`cbb_core::invite`) and Go's `internal/invite`.
 
 ### The invitation
@@ -3587,12 +3587,11 @@ and fewer for one admin.
 
 The phone joins in its app: Start's Join with an invitation reads the QR code, the text or
 the file, and the invitation waits to be accepted or declined. Accepted, the core starts the
-guest tunnel in the app's process and gives the app its loopback port, which the app dials
-for each attempt (`cbb_join_new` with `invite`, `cbb_join_accept`, `cbb_join_feed`); the
-phone is the TLS client of the pairing and shows the fingerprint the admin compares. Once
-admitted it saves its membership, turns sync away from home on, and offers its own tunnel
-key to the hub through the guest tunnel until the hub answers (the iPhone's and Android's
-`AwayFromHome`, the Aurora app through the member's `joined_by_invite`).
+guest tunnel in the app's process and dials the hub's guest address through it
+(`cbb_joiner_new` with `invite`); the phone is the TLS client of the pairing and shows the
+fingerprint the admin compares. Once admitted it keeps the set with the invitation, and its
+member, once started, reaches the hub through the guest tunnel and offers its own tunnel key
+until the hub's offer comes, as a computer that joined by an invitation does.
 
 ### On a phone that is the hub
 

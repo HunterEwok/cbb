@@ -359,6 +359,28 @@ fn attempt(
     session: cbb_core::tls::Session,
     exporter: PairExporter,
 ) -> Result<(String, String)> {
+    let way = cbb_member::join::Way { open, network: Network::Home };
+    admit_on(live, key, way, sock, session, exporter, None, &mut |_| true)
+}
+
+/// One pairing attempt of a window or an invitation on the phone's member
+/// (`way`), with the admitting key the app holds: once the device proved
+/// the code, `confirm` is asked with its fingerprint (an invitation's
+/// admin answers; a home window says yes), a no declines it, and a yes
+/// writes its record, bounded by `profile` (the invitation's), or by the
+/// home profile of the role it asks for when None, and sends the Welcome.
+/// Gives the device's ID and name once it is in the group.
+#[allow(clippy::too_many_arguments, reason = "each is one input of the admission")]
+pub(crate) fn admit_on(
+    live: &Live,
+    key: &dyn ExternalKey,
+    way: cbb_member::join::Way<'_>,
+    sock: TcpStream,
+    session: cbb_core::tls::Session,
+    exporter: PairExporter,
+    profile: Option<&cbb_core::join::invitation::Profile>,
+    confirm: &mut dyn FnMut(&cbb_member::admitting::Asked<'_>) -> bool,
+) -> Result<(String, String)> {
     let mesh = &live.mesh;
     let joiner = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the device showed no key"))?;
     let own_pub = mesh.own().member.public();
@@ -371,34 +393,38 @@ fn attempt(
         device: cbb_core::format::DeviceId(me.0),
         name: state.device(&me).map(|d| d.name.clone()).unwrap_or_default(),
     };
-    let _ = sock.set_read_timeout(Some(STEP));
+    let _ = sock.set_read_timeout(Some(if way.network == Network::Home {
+        STEP
+    } else {
+        cbb_member::pair::CONFIRM_WAIT.saturating_add(STEP)
+    }));
     let mut conn = cbb_member::tls::Stream::new(session, sock);
     let s = MemberSession::new(own, joiner, adb, exporter);
     let now = || cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+    let joiner_key = Key::es256(joiner.to_vec());
     let mut statement = None;
     let mut pop_holds = false;
-    let way = cbb_member::join::Way { open, network: Network::Home };
     let info = cbb_member::join::member(&mut conn, s, way, &now, &mut |info, s| {
+        let asked = cbb_member::admitting::Asked {
+            info,
+            device: joiner_key.device_id(),
+            fingerprint: certs::b64::encode(&joiner_key.hash().0),
+        };
+        if !confirm(&asked) {
+            return Err(Error::with("the device was not admitted", cbb_member::admitting::Declined));
+        }
         statement.clone_from(&info.keys);
         pop_holds = s.admin_pop_holds();
+        let home = crate::pair06::home_profile(info.role, info.caps);
         mesh.write_by(key, |set, k| {
-            crate::pair06::admit(
-                set,
-                k,
-                &own_pub,
-                &joiner,
-                info,
-                &crate::pair06::home_profile(info.role, info.caps),
-                s,
-                now(),
-            )
+            crate::pair06::admit(set, k, &own_pub, &joiner, info, profile.unwrap_or(&home), s, now())
         })
     })?;
     conn.close();
     if let Some(env) = statement {
         mesh.take_statement(&env)?;
     }
-    let device = id_text(&Key::es256(joiner.to_vec()).device_id());
+    let device = id_text(&joiner_key.device_id());
     // The root keeps the admin key the device offered with its proof over
     // this session, as a computer's root does (cbb_member::offered), for
     // making it an admin later; an admin keeps none.

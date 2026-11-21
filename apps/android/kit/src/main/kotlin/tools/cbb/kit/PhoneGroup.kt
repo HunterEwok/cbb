@@ -946,9 +946,7 @@ class PhoneGroup internal constructor(
 
         /**
          * The group the core made with this phone's root key
-         * (CorePairing.newGroup), or the group a phone joined through the
-         * core (CorePairing.Joining): a member of it, and an admin when the
-         * admitting phone sent its admin CA.
+         * (CorePairing.newGroup): a member of it, and the root.
          */
         fun of(c: CorePairing.Group, root: Boolean): PhoneGroup {
             val g = PhoneGroup(c.device, c.groupCA, c.cert)

@@ -248,14 +248,12 @@ export class AppModel {
         this.startMember();
       }
     };
-    this.join.onJoined = (j: Membership) => {
-      this.membership = j;
-      this.startMember().then(() => {
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        this.member.joinedByInvite(this.join.invitation());
-      });
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    this.join.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
+      }
     };
   }
 
@@ -421,7 +419,7 @@ export class AppModel {
   }
 
   startJoinByInvite(text: string): void {
-    this.join.startInvite(this.dir, text);
+    this.join.startInvite(this.dir, text, phoneName(), OS);
   }
 
   startInvite(seconds: number): void {

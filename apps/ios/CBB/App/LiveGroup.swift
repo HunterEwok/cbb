@@ -52,8 +52,6 @@ final class LiveGroup: GroupController {
     nonisolated static let caLabel = "tools.cbb.group-root"
     /// The admin key of a phone that joined another phone's group.
     nonisolated static let adminLabel = "tools.cbb.admin"
-    /// The pause between two dials of an invitation's guest tunnel.
-    static let dialPause: Duration = .seconds(2)
     /// How long joinComputer browses for a pairing window, and then for a
     /// second one.
     static let browseFor: TimeInterval = 10
@@ -469,13 +467,22 @@ final class LiveGroup: GroupController {
         let code = qr.isEmpty ? try await findHomeWindow(digits: digits) : qr
         let j = try CorePairing.Joiner(dir: memberDir, qr: code, name: PhoneGroup.validName(UIDevice.current.name), os: "ios",
                                        publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
+        try await follow(j, invite: false)
+    }
+
+    /// Follows a joiner to its end: on done the member starts on the group
+    /// it keeps; by an invitation, a hub that never answered is
+    /// hubUnreachable.
+    private func follow(_ j: CorePairing.Joiner, invite: Bool) async throws {
         defer { j.close() }
         var version: UInt64 = 0
+        var answered = false
         while true {
             try Task.checkCancellation()
             let v = version
             let st = try await Task.detached { try j.next(after: v) }.value
             version = st.version
+            answered = answered || st.answered
             switch st.state {
             case "done":
                 let g = PhoneGroup.of06(device: st.device, group: st.group, root: false)
@@ -488,6 +495,7 @@ final class LiveGroup: GroupController {
                 await refresh()
                 return
             case "failed":
+                if invite && !answered { throw Failure.hubUnreachable }
                 if let f = st.failure { throw f }
                 throw Failure.unreachable
             default:
@@ -829,69 +837,22 @@ final class LiveGroup: GroupController {
 
     // MARK: Joining
 
-    /// Joins a group from afar by a remote invitation's text
-    /// (docs/protocol.md, section 12), which the user scanned, opened or
-    /// pasted and accepted: the core starts the invitation's guest tunnel,
-    /// the phone dials it and proves the invitation's secret, and the hub's
-    /// admin admits it by the fingerprint shown hands it. Sync away from
-    /// home goes on, and the phone offers its tunnel key to the hub through
-    /// the guest tunnel until the hub answers.
+    /// Joins a group of 0.6 from afar by a remote invitation's text
+    /// (docs/protocol.md, section 12): this phone dials the hub through the
+    /// invitation's guest tunnel and shows its fingerprint (shown) for the
+    /// inviting admin to compare; once admitted, the member starts on the
+    /// group it keeps and reaches the hub through that tunnel until the
+    /// hub's offer comes.
     func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws {
         guard state == nil else { return }
-        guard case .invitation(let inv) = try Core.readInvite(text) else { throw Failure.noGroup }
         let member = try memberSigner()
-        let joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: [], sign: { try member.signature(digest: $0) }, invite: text)
-        defer { joining.close() }
-        shown(joining.fingerprint)
-        let file = file
-        var joined: PhoneGroup?
-        var failure: Error?
-        for attempt in 0..<Self.inviteAttempts where joined == nil {
-            try Task.checkCancellation()
-            if attempt > 0 { try await Task.sleep(for: Self.dialPause) }
-            let c = CorePairing.Connection(host: "127.0.0.1", port: joining.port, timeout: TLSTransport.connectTimeout)
-            // The admin has up to 5 minutes to confirm the device.
-            let deadline = Task {
-                try await Task.sleep(for: Self.inviteDeadline)
-                c.close()
-            }
-            defer {
-                deadline.cancel()
-                c.close()
-            }
-            do {
-                try await c.start()
-                _ = try await joining.attempt(c) { j in
-                    let g = PhoneGroup.of(j, root: false)
-                    guard (try? g.save(to: file)) != nil else { return false }
-                    joined = g
-                    return true
-                }
-            } catch let e as CorePairing.Failure {
-                // The admin declined, or the secret was refused: no retry.
-                throw e
-            } catch {
-                if Task.isCancelled { throw CancellationError() }
-                failure = error
-            }
-        }
-        guard let joined else {
-            if !joining.answered { throw Failure.hubUnreachable }
-            throw failure ?? Failure.unreachable
-        }
-        try? InviteKeychain.save(InviteGuest(invite: text.trimmingCharacters(in: .whitespacesAndNewlines), hub: inv.hub, joined: Date()))
-        try modeBox.newDevice()
-        forgetCredentials()
-        state = joined
-        try startSync()
-        try await setAwayFromHome(true)
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let j = try CorePairing.Joiner(dir: memberDir, qr: "", invite: text, name: PhoneGroup.validName(UIDevice.current.name),
+                                       os: "ios", publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
+        shown(j.fingerprint)
+        try await follow(j, invite: true)
     }
 
-    /// How many times joinByInvite dials the guest tunnel, and how long one
-    /// attempt may take with the admin's confirmation.
-    static let inviteAttempts = 5
-    static let inviteDeadline: Duration = .seconds(360)
     /// How long the hub keeps the guest of the invitation this phone joined
     /// by, as the core's guest grace.
     static let guestGrace: TimeInterval = 24 * 3600

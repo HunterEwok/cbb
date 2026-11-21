@@ -108,6 +108,10 @@ struct ManageArgs {
     /// keys in a file, which the group's key level must allow too.
     #[serde(default)]
     allow_file_key: bool,
+    /// With hubs: the devices the root names as the group's hubs, 1 to 16
+    /// in their order, by name or device ID.
+    #[serde(default)]
+    hubs: Vec<String>,
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
@@ -243,6 +247,11 @@ impl Phone {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
+        // Sync away from home, with its state in the app's folder: on at
+        // once for a phone that joined by an invitation, which reaches the
+        // hub through the invitation's guest tunnel until it holds the
+        // hub's offer.
+        live.start_away(dir.clone(), None, log.clone())?;
         let me = Me { name: a.name, os: a.os, os_version: a.os_version, version: a.version, log: log.clone() };
         {
             // The commands for the phone itself, which the core took and
@@ -452,6 +461,57 @@ impl Phone {
                 Ok(json!({ "peers": ps }))
             }
             "devices" => Ok(json!({ "devices": self.devices() })),
+            // Sync away from home: on with new tunnel keys, or off; and its
+            // state, null while it is off.
+            "away" => {
+                if arg("on").as_bool().unwrap_or(false) {
+                    l.away_on()?;
+                } else {
+                    l.away_off(std::time::Duration::ZERO)?;
+                }
+                Ok(json!({ "away": l.away_status() }))
+            }
+            // The phone as a hub of the group (the records must make it
+            // one: an admin key), as cbb global hub does on a computer and
+            // with the arguments of the phone of 0.5: reached away from
+            // home through the forwarder (`forwarder`, its key's pin `key`,
+            // or `default` for the project's) or at `addrs` ("ip:port") on
+            // the UDP `port`, hidden as `obfuscate_off` and `vless_off` say.
+            // The Live hub serves its clients and the guests of invitations
+            // at the guest address.
+            "hub" => {
+                if !l.mesh.may_be_hub(&l.mesh.device()) {
+                    return Err(Error::msg(
+                        "the group's records do not make this phone a hub; only an admin phone can be one",
+                    ));
+                }
+                let away = l.away().ok_or_else(|| Error::msg("sync away from home did not start on this phone"))?;
+                let text = |k: &str| arg(k).as_str().unwrap_or_default().to_string();
+                let addrs = arg("addrs")
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                    .unwrap_or_default();
+                let h = cbb_member::control::Header {
+                    name: "hub".into(),
+                    forwarder: resolve(&text("forwarder"))?,
+                    forwarder_key: text("key"),
+                    obfuscate_off: arg("obfuscate_off").as_bool().unwrap_or(false),
+                    vless_off: arg("vless_off").as_bool().unwrap_or(false),
+                    port: arg("port").as_i64().unwrap_or(0),
+                    addrs,
+                    consent: true,
+                    ..Default::default()
+                };
+                away.make_hub(&h)?;
+                Ok(json!({ "away": l.away_status() }))
+            }
+            // A Live hub that stops hands its clients to the next hub in
+            // the group's order (D-122), so `anyway` of 0.5 is not needed.
+            "hub_off" => {
+                l.stop_being_hub()?;
+                Ok(json!({ "away": l.away_status() }))
+            }
+            "away_status" => Ok(json!({ "away": l.away_status() })),
             "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
@@ -614,6 +674,10 @@ impl Phone {
                         json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }),
                     );
                 }
+                "hubs" => {
+                    mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
+                    return Ok(json!({ "hubs": a.hubs }));
+                }
                 "make_admin" => self.make_admin(&a, &key, now)?,
                 "key_level" => return self.key_level(&a, &key, now),
                 other => return Err(not_yet(&format!("the admin's action {other:?}"))),
@@ -745,6 +809,11 @@ impl Phone {
 
     /// Opens a pairing window with the admitting key behind sign
     /// (`crate::window`): the member port must listen.
+    /// The member underneath, for the inviter of `cbb_invite_new`.
+    pub fn live(&self) -> Arc<Live> {
+        self.live.clone()
+    }
+
     pub fn window(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::window::Window>, Vec<u8>) {
         if self.stopped.load(Ordering::SeqCst) {
             return (None, answer::<()>(Err(Error::msg("the member stopped"))));
@@ -891,6 +960,24 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
     })
 }
 
+/// A forwarder's address as `ip:port`, looked up when it is a name (an IPv4
+/// address first); empty stays empty.
+fn resolve(s: &str) -> Result<String> {
+    use std::net::{SocketAddr, ToSocketAddrs as _};
+    let s = s.trim();
+    if s.is_empty() || s.parse::<SocketAddr>().is_ok() {
+        return Ok(s.to_string());
+    }
+    let addrs: Vec<SocketAddr> =
+        s.to_socket_addrs().map_err(|e| Error::with(format!("cannot look up {s}"), e))?.collect();
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4())
+        .or(addrs.first())
+        .map(SocketAddr::to_string)
+        .ok_or_else(|| Error::msg(format!("{s} has no address")))
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
@@ -981,9 +1068,11 @@ mod tests {
         assert_eq!(g["devices"][0]["name"], "phone");
 
         // What has not moved answers why, never nothing.
-        for op in ["away", "hub", "records"] {
+        for op in ["records", "answer"] {
             assert!(error(&call(op, Value::Null)).contains("does not work in this build yet"), "{op}");
         }
+        // A root phone is no hub until the root names it.
+        assert!(error(&call("hub", Value::Null)).contains("do not make this phone a hub"));
         let manage = |action: &str, device: &str, name: &str| {
             let r = json!({ "action": action, "device": device, "name": name, "public": b64(&root.0.public()) });
             m.manage(r.to_string().as_bytes(), sign, ctx(root))
@@ -994,8 +1083,12 @@ mod tests {
         // A command names another device; this phone's own switches are its own.
         assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
         assert!(error(&manage("hand_over", "tablet", "")).contains("does not work in this build yet"));
-        let (a, ans) = m.admit(b"{}", sign, ctx(root));
-        assert!(a.is_none() && error(&ans).contains("does not work in this build yet"));
+        // The root names its hubs, which the records judge: a phone is a hub
+        // only with an admin key, never by the hubs record.
+        let hubs = json!({ "action": "hubs", "hubs": ["tablet"], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(hubs.to_string().as_bytes(), sign, ctx(root))).contains("may not be a hub"));
+        let none = json!({ "action": "hubs", "hubs": [], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(none.to_string().as_bytes(), sign, ctx(root))).contains("1 to 16 hubs"));
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");

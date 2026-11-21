@@ -143,9 +143,6 @@ public:
     Q_INVOKABLE void dismissNotice(const QString &id);
     // The person saw that the group's main device changed.
     Q_INVOKABLE void rootChangeSeen();
-    // After joining by a remote invitation: turns sync away from home on
-    // and offers the tunnel key through the invitation's guest tunnel.
-    void joinedByInvite(const QString &invite);
 
 signals:
     void changed();

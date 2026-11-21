@@ -324,7 +324,8 @@ public final class CoreMember: @unchecked Sendable {
         }
     }
 
-    /// The member's handle, which an admission (CorePairing.Admitting) runs on.
+    /// The member's handle, which a pairing window or an invitation
+    /// (CorePairing.Window, CorePairing.Inviting) runs on.
     let handle: OpaquePointer
     private let context: Context
     private let lock = NSLock()
@@ -522,6 +523,15 @@ public final class CoreMember: @unchecked Sendable {
         struct A: Encodable { var port: UInt16, kind: Listen }
         struct R: Decodable { var port: UInt16 }
         return try run("listen", A(port: port, kind: what), as: R.self).port
+    }
+
+    /// On a group of 0.6, serves as a hub of the group (the records must
+    /// make this phone one: an admin key) on the UDP port (0 for any free
+    /// one), reached from afar at addrs ("ip:port"): its clients and the
+    /// guests of invitations come in through its tunnel.
+    public func serveAsHub(port: UInt16, addrs: [String]) throws {
+        struct A: Encodable { var port: UInt16, addrs: [String] }
+        try run("hub", A(port: port, addrs: addrs))
     }
 
     /// Closes the member port for what, or every one with nil.

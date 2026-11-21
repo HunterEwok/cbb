@@ -13,6 +13,15 @@
 //! the app's folder (`group.cbor`, as `cbb_member::set` writes it) and only
 //! then does the phone tell the member it kept it. The app then starts its
 //! member on that folder.
+//!
+//! From afar it joins by a remote invitation's text (`cbb://join#…`,
+//! docs/protocol.md, section 12; in the build with the tunnel): the core
+//! starts the invitation's guest tunnel to the hub and dials the hub's
+//! guest address through it, the invitation's secret is CPace's password,
+//! and the inviting admin admits the phone by its name and the fingerprint
+//! the answer gives, which the phone shows. The invitation is kept in the
+//! folder (`invite-guest`), so that the member reaches the hub through the
+//! guest tunnel until it holds the hub's offer.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -65,6 +74,9 @@ struct NewArgs {
     /// phone an admin with it later.
     #[serde(with = "certs::b64::opt", default)]
     admin_public: Option<Vec<u8>>,
+    /// A remote invitation's text, to join from afar in place of a window.
+    #[serde(default)]
+    invite: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -80,6 +92,13 @@ struct StateAnswer {
     device: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     name: String,
+    /// By an invitation: the fingerprint of the phone's key, which the
+    /// phone shows for the inviting admin to compare, and whether the hub
+    /// answered through the guest tunnel.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    fingerprint: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    answered: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<ErrorAnswer>,
 }
@@ -161,7 +180,13 @@ impl Joiner {
             (None, None) => None,
             _ => return Err(Error::msg("the admin key needs both its public key and its callback")),
         };
-        let code = if a.qr.trim().is_empty() {
+        let invite = a.invite.trim().to_string();
+        let code = if !invite.is_empty() {
+            // A text that is no invitation fails here, as wrong digits do,
+            // not on the joiner's thread.
+            Invitation::parse(&invite).map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+            Err(String::new())
+        } else if a.qr.trim().is_empty() {
             let digits: String = a.digits.chars().filter(|c| !c.is_whitespace()).collect();
             if home_secret(&digits).is_none() {
                 return Err(Error::msg("type the six digits the pairing window shows"));
@@ -176,6 +201,8 @@ impl Joiner {
         if cbb_member::set::load(&dir, &local)?.is_some() {
             return Err(Error::msg("this phone is in a group already: leave it first"));
         }
+        let fingerprint =
+            if invite.is_empty() { String::new() } else { certs::b64::encode(&Key::es256(a.public.clone()).hash().0) };
         let key: Arc<dyn ExternalKey> = Arc::new(AppKey { public: a.public, sign, ctx });
         let shared = Arc::new(Shared {
             st: Mutex::new(StateAnswer {
@@ -184,6 +211,8 @@ impl Joiner {
                 group: String::new(),
                 device: String::new(),
                 name: String::new(),
+                fingerprint,
+                answered: false,
                 error: None,
             }),
             changed: Condvar::new(),
@@ -195,9 +224,13 @@ impl Joiner {
         std::thread::Builder::new()
             .name("pair-join".into())
             .spawn(move || {
-                let got = code
-                    .or_else(|digits| find(&digits))
-                    .and_then(|t| run(t, key, admin, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local)));
+                let got = if invite.is_empty() {
+                    code.or_else(|digits| find(&digits)).and_then(|t| {
+                        run(t, key, admin, info, &sh, &Opts::HOME, &|a| cbb_member::set::save(&dir, &a.set, &local))
+                    })
+                } else {
+                    by_invite(&invite, &dir, key, admin, info, &sh, &|a| cbb_member::set::save(&dir, &a.set, &local))
+                };
                 match got {
                     Ok((group, device, name)) => sh.set(|s| {
                         s.state = "done";
@@ -250,6 +283,110 @@ fn find(digits: &str) -> Result<Target> {
     Ok(Target { addrs: w.addrs, invitation, fp: w.fp })
 }
 
+/// How a join waits: each step of the session, whether the hub must have
+/// answered through a guest tunnel within a while, and whether the last
+/// message is waited on before the connection is let go.
+struct Opts {
+    step: Duration,
+    answered: Option<Arc<AtomicBool>>,
+    linger: bool,
+}
+
+impl Opts {
+    const HOME: Opts = Opts { step: STEP, answered: None, linger: false };
+}
+
+/// How many connections a join by an invitation tries while each ends
+/// before its TLS handshake, as a computer's (`cbb_member::live::invite`).
+#[cfg(feature = "tunnel")]
+const HANDSHAKE_TRIES: u32 = 5;
+/// How long a join by an invitation waits for the hub's first answer
+/// through the guest tunnel: WireGuard tries its handshake every 5 s.
+const ANSWER_WAIT: Duration = Duration::from_secs(20);
+
+/// Joins by a remote invitation's text: through its guest tunnel to the
+/// hub's guest address, as `cbb pair -invite` does (`cbb_member::live::
+/// invite::join`), with the invitation and a tunnel state of the group's
+/// tag kept in `dir` before the set.
+#[cfg(feature = "tunnel")]
+fn by_invite(
+    text: &str,
+    dir: &std::path::Path,
+    key: Arc<dyn ExternalKey>,
+    admin: Option<Arc<dyn ExternalKey>>,
+    info: Info,
+    sh: &Arc<Shared>,
+    store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
+) -> Result<(String, String, String)> {
+    use cbb_member::live::invite;
+    let inv = Invitation::parse(text).map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+    let link = invite::guest_link(&inv, Arc::new(|_: &str| {}))?;
+    let answered = link.answered_flag();
+    {
+        // Tell the app once the hub answered, for it to tell a hub that
+        // never answered from an attempt that failed.
+        let (sh, answered) = (sh.clone(), answered.clone());
+        std::thread::spawn(move || {
+            while !sh.cancelled.load(Ordering::SeqCst) && sh.lock().state == "dialing" {
+                if answered.load(Ordering::SeqCst) {
+                    sh.set(|s| s.answered = true);
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+    }
+    let keep = |a: &cbb_core::join::session::Admitted| -> Result<()> {
+        cbb_member::tunnel::State::new(&cbb_member::live::tag(&a.state))?.save(dir)?;
+        cbb_member::files::write_atomic(&dir.join(invite::GUEST_FILE), text.as_bytes(), 0o600)?;
+        store(a)
+    };
+    let opts = Opts {
+        step: cbb_member::pair::CONFIRM_WAIT.saturating_add(Duration::from_secs(60)),
+        answered: Some(answered),
+        linger: true,
+    };
+    let mut tries: u32 = 0;
+    loop {
+        tries = tries.saturating_add(1);
+        let target = Target { addrs: vec![link.local()], invitation: inv.clone(), fp: None };
+        let got = run(target, key.clone(), admin.clone(), info.clone(), sh, &opts, &keep);
+        // A join quicker than the watch above still says the hub answered.
+        if link.answered() && !sh.lock().answered {
+            sh.set(|s| s.answered = true);
+        }
+        match got {
+            // Never answered through the tunnel: no further try helps.
+            Err(e) if !link.answered() => {
+                return Err(e.context(
+                    "the group's hub did not answer: check that the invitation is still valid and that the hub is on",
+                ));
+            }
+            // A connection that ended before its handshake never reached
+            // the window, as when the hub passes it to an admin not
+            // connected just then: it counts as no attempt.
+            Err(e) if tries < HANDSHAKE_TRIES && e.message().starts_with(cbb_member::joining::NO_HANDSHAKE) => {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            res => return res,
+        }
+    }
+}
+
+/// A build without the tunnel joins at home only.
+#[cfg(not(feature = "tunnel"))]
+fn by_invite(
+    _text: &str,
+    _dir: &std::path::Path,
+    _key: Arc<dyn ExternalKey>,
+    _admin: Option<Arc<dyn ExternalKey>>,
+    _info: Info,
+    _sh: &Arc<Shared>,
+    _store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
+) -> Result<(String, String, String)> {
+    Err(Error::msg("this build joins at home only, by a pairing window"))
+}
+
 /// Dials the window's addresses in turn and runs the session with the
 /// first member whose key the window names: gives the group's and this
 /// phone's IDs and the member's name once the set is kept.
@@ -259,6 +396,7 @@ fn run(
     admin: Option<Arc<dyn ExternalKey>>,
     mut info: Info,
     sh: &Shared,
+    opts: &Opts,
     store: &dyn Fn(&cbb_core::join::session::Admitted) -> Result<()>,
 ) -> Result<(String, String, String)> {
     let own_point: [u8; 65] =
@@ -283,7 +421,28 @@ fn run(
                 continue;
             }
         };
-        let _ = sock.set_read_timeout(Some(STEP));
+        let _ = sock.set_read_timeout(Some(opts.step));
+        // A hub that never answers through the guest tunnel (an invitation
+        // used up, a hub off) ends the try after ANSWER_WAIT, not after the
+        // whole wait for the admin.
+        let tried = Arc::new(AtomicBool::new(false));
+        if let (Some(answered), Ok(watch)) = (&opts.answered, sock.try_clone()) {
+            let (answered, tried) = (answered.clone(), tried.clone());
+            std::thread::spawn(move || {
+                let start = Instant::now();
+                let until = start.checked_add(ANSWER_WAIT).unwrap_or(start);
+                while Instant::now() < until && !tried.load(Ordering::SeqCst) {
+                    if answered.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !tried.load(Ordering::SeqCst) && !answered.load(Ordering::SeqCst) {
+                    let _ = watch.shutdown(std::net::Shutdown::Both);
+                }
+            });
+        }
+        let kept = if opts.linger { sock.try_clone().ok() } else { None };
         let (cfg, exporter) = bykey::exporting_client(bykey::client(
             &tls_key,
             None,
@@ -309,7 +468,15 @@ fn run(
         // The first member that answered with the right key tried the
         // session: its outcome is the outcome.
         let invitation = invitation.take().ok_or_else(|| Error::msg("the window was tried already"))?;
-        return session(&mut conn, own_point, member, x, info, invitation, store).map_err(|e| {
+        let got = session(&mut conn, own_point, member, x, info, invitation, store);
+        tried.store(true, Ordering::SeqCst);
+        // The last message must reach the hub before the guest tunnel
+        // stops: the hub ends the connection once it has it.
+        if let (Ok(_), Some(kept)) = (&got, &kept) {
+            let _ = kept.set_read_timeout(Some(Duration::from_secs(5)));
+            let _ = (&mut &*kept).read(&mut [0u8; 64]);
+        }
+        return got.map_err(|e| {
             // A member with no window open ends the connection at once.
             let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
             if eof { e.context(format!("{addr} has no pairing window open: open Add a device there again")) } else { e }
@@ -362,6 +529,7 @@ fn why(e: PairError, other: &'static str) -> &'static str {
         PairError::Closed => "the window is closed: open a new one",
         PairError::Expired => "the window's time is up: open a new one",
         PairError::Busy => "another device is pairing with that window: try again in a moment",
+        PairError::Declined => "whoever made the invitation did not admit this phone",
         _ => other,
     }
 }
