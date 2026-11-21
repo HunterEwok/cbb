@@ -861,7 +861,7 @@ pub fn group_servers(state: &State, project: Vec<Server>, forwarders: Vec<Server
 }
 
 mod forwarders;
-pub use forwarders::HubForwarders;
+pub use forwarders::{FILE as FORWARDERS_FILE, HubForwarders};
 
 #[cfg(test)]
 mod tests;

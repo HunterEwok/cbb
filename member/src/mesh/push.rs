@@ -24,14 +24,7 @@ use crate::files;
 use crate::pusher::{self, Face};
 pub(super) use crate::pusher::{Role, Sender};
 
-/// The file the phones' registrations are kept in.
-pub(super) const FILE: &str = "push.cbor";
-/// The file the previous period's face is kept in while it serves, so
-/// that a restart does not lose it: the group, the service's pin and
-/// address, the credentials, the period's tag and when they expire. The
-/// server key is not kept: it comes again from the server secret and the
-/// tag.
-pub(super) const PREVIOUS_FILE: &str = "push-previous.cbor";
+pub(super) use super::{PUSH_FILE as FILE, PUSH_PREVIOUS_FILE as PREVIOUS_FILE};
 
 /// The push service's face of the group, by the newest keys.json held
 /// (use `push`; no pin is built in) and the group's current period; and

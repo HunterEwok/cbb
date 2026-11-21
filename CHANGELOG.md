@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 `cbb global relay` on an admin says that only the group's root sets
+  the group's relay, instead of "not done yet"; `cbb leave` sees a group of 0.6 and deletes
+  its push registrations, server faces and secret as well; the root's leave with other
+  devices says to remove them first.
 - On the records of 0.6 `cbb update` reaches the mirror away from home through the hub's
   VLESS settings again (control operation `update_way`), as with 0.5: a hub's own
   forwarder's with the group's VLESS user ID, else the hub the member goes through or tries

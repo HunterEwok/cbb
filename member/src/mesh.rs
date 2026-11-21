@@ -1376,6 +1376,14 @@ mod media;
 pub use media::SentMedia;
 mod signed;
 pub use signed::FILE_NAME as SIGNED_FILE;
+/// The file the phones' push registrations are kept in.
+pub const PUSH_FILE: &str = "push.cbor";
+/// The file the push service's previous face is kept in while it serves,
+/// so that a restart does not lose it: the group, the service's pin and
+/// address, the credentials, the period's tag and when they expire. The
+/// server key is not kept: it comes again from the server secret and the
+/// tag.
+pub const PUSH_PREVIOUS_FILE: &str = "push-previous.cbor";
 #[cfg(feature = "tunnel")]
 mod push;
 #[cfg(not(feature = "tunnel"))]

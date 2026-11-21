@@ -21,7 +21,9 @@ const (
 var groupFiles = []string{
 	"identity.json", "credentials.json", "server-keys.json", "seal.json", signedFile, "tunnel.json",
 	"entries.json", "networks.json", "attest-status.json", contentDir, "pastes.json", "actions-log.json",
-	"mute.json", "before-0.6", "records.json", signed06File,
+	"mute.json", "before-0.6", "records.json", signed06File, "push.cbor", "push-previous.cbor",
+	"server-credentials.cbor", "period-key", "server-secret", "hub-forwarders.json", "invite-guest",
+	records06File, "keys.json", "local.json",
 }
 
 // The remote paste targets as the Rust cbb names them (member/src/service.rs).

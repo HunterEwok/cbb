@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use crate::error::{Error, Result};
+use crate::identity::Stored as _;
 use crate::{actions, identity, records, remotepaste, sealkey};
 
 /// The answer to a leave in no group.
@@ -15,8 +16,10 @@ pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is noth
 /// What a device keeps of its group in the state directory, as Go's
 /// groupFiles: its keys, the tunnel's (only in builds with it), the entry
 /// points and the revocation list it took, the parts of copies, the logs
-/// that name the group's devices, the mute, a group left before 0.6, and
-/// the records last, so that a leave cut short is seen as a group still.
+/// that name the group's devices, the mute, a group left before 0.6, the
+/// group's faces toward its servers and the phones' push registrations,
+/// and the records last, so that a leave cut short is seen as a group
+/// still.
 pub const GROUP_FILES: &[&str] = &[
     identity::FILE_NAME,
     sealkey::FILE_NAME,
@@ -32,8 +35,6 @@ pub const GROUP_FILES: &[&str] = &[
     crate::mute::FILE_NAME,
     crate::signed::FILE_NAME,
     records::OLD_GROUP_DIR,
-    records::FILE_NAME,
-    crate::set::FILE_NAME,
     crate::set::LOCAL_FILE,
     crate::offered::FILE_NAME,
     crate::own::FILE_NAME,
@@ -42,7 +43,23 @@ pub const GROUP_FILES: &[&str] = &[
     crate::commands::FILE_NAME,
     crate::mesh::MARKS_FILE,
     crate::mesh::SIGNED_FILE,
+    crate::mesh::PUSH_FILE,
+    crate::mesh::PUSH_PREVIOUS_FILE,
+    crate::faces::FILE,
+    crate::faces::PERIOD_KEY_FILE,
+    crate::faces::SECRET_FILE,
+    crate::faces::FORWARDERS_FILE,
+    crate::live::invite::GUEST_FILE,
+    records::FILE_NAME,
+    crate::set::FILE_NAME,
 ];
+
+/// Whether dir holds a group, of 0.6 or from before it: its records or
+/// the device's identity, as a leave cut short leaves them last.
+pub fn in_group(dir: &Path) -> bool {
+    matches!(identity::Identity::load(dir), Ok(Some(_)) | Err(_))
+        || [records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| dir.join(f).exists())
+}
 
 /// Deletes the group's files from dir and turns remote paste and the quick
 /// actions off, since they were allowed to the admins of the group it

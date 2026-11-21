@@ -1344,7 +1344,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
     };
     // In no group there is nothing to ask about; a state this user cannot
     // read gets the question, and the service says what it can do.
-    if matches!(identity::Identity::load(&g.state), Ok(None)) && !g.state.join(records::FILE_NAME).exists() {
+    if !leave::in_group(&g.state) {
         return Err(Error::msg(leave::NOTHING_TO_LEAVE));
     }
     if !yes {
@@ -1368,7 +1368,9 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
         println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
-        if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
+        if identity::Identity::load(&g.state).ok().flatten().is_none()
+            && ![records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| g.state.join(f).exists())
+        {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;

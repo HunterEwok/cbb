@@ -210,8 +210,8 @@ group there.
 In a group of 0.6 the relay is a setting of the group, not of each device: run the command
 once on the group's root (the computer that created the group), which signs the address and
 the key's pin in the group's settings, and every device takes it from there
-([protocol](../protocol.md), section 10, the `settings` record's `servers`). An admin computer
-asks the root to; that step is still moving to 0.6. The root may name several relays, up to
+([protocol](../protocol.md), section 10, the `settings` record's `servers`). Only the root sets it:
+on an admin computer the command says to run it on the root. The root may name several relays, up to
 16: `sudo cbb global relay 198.51.100.9:8764 -key <key> 203.0.113.5:8764 -key <other key>`. `sudo cbb global relay default` on the root
 takes the group's own relay away, and the group meets at the project's alone.
 

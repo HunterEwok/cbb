@@ -46,7 +46,7 @@ func TestLeave(t *testing.T) {
 	pairWith(t, pi, deck)
 	waitFor(t, "the deck lists the pi", func() bool { return listed(deck.devices(t)) == "deck pi" })
 
-	if _, err := pi.do(t, control.Header{Op: control.OpLeave}, ""); err == nil || !strings.Contains(err.Error(), "cbb handover") {
+	if _, err := pi.do(t, control.Header{Op: control.OpLeave}, ""); err == nil || !strings.Contains(err.Error(), "remove them first") {
 		t.Errorf("the root left a group with other devices: %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestLeaveDamaged(t *testing.T) {
 		t.Fatal(err)
 	}
 	pi.stop()
-	if err := os.WriteFile(filepath.Join(pi.dir, group.FileName), []byte("{"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(pi.dir, records06File), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	pi = restartService(t, &h, pi)

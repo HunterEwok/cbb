@@ -693,8 +693,8 @@ impl Service {
     /// takes it from there and shows it a face (`faces::group_servers`).
     /// The relays given (`relay` and `relays`) take the place of those the
     /// settings named; `default`, the project's relay, leaves the group
-    /// with the project's alone. The answer's `relays` names them. An admin
-    /// asks the root, which has not moved to the records of 0.6 yet.
+    /// with the project's alone. The answer's `relays` names them. Only the
+    /// root sets them, an admin as well as a member is told so.
     fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
         use cbb_core::records::body::{SERVER_RELAY, Server};
         let off = h.relay == "off" && h.relays.is_empty();
@@ -709,13 +709,11 @@ impl Service {
             .root
             .as_ref()
             .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
+        // An admin too: on 0.6 only the root sets it (the owner,
+        // 2026-11-21); an admin asking the root comes with a command of
+        // its own in 0.7.
         if !root {
-            if writers::signer(own, &st).is_some() {
-                return Err(not_yet("an admin asking the group's root for a relay"));
-            }
-            return Err(Error::msg(
-                "only the group's root sets the group's relay: run cbb global relay on the computer that created the group",
-            ));
+            return Err(Error::msg("only the group's root sets the group's relay: run cbb global relay on the root"));
         }
         let given = std::iter::once((h.relay.clone(), h.relay_key.clone())).chain(h.relays.iter().map(|r| {
             let (a, k) = r.split_once(' ').unwrap_or((r, ""));

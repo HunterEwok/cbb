@@ -420,3 +420,17 @@ func hubOrderIn(dir string) []group.DeviceID {
 	}
 	return recs.HubOrder()
 }
+
+// TestRelayOnTheRootAlone: on the records of 0.6 only the group's root sets
+// the group's relay; an admin is told to run it there.
+func TestRelayOnTheRootAlone(t *testing.T) {
+	var h hub
+	pi := startService(t, &h, "pi")
+	deck := startService(t, &h, "deck")
+	pairWith(t, pi, deck)
+	makeAdmin(t, pi, deck)
+	_, err := deck.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: "default", Consent: true}, "")
+	if err == nil || !strings.Contains(err.Error(), "only the group's root sets the group's relay") {
+		t.Errorf("cbb global relay on an admin: %v", err)
+	}
+}
