@@ -62,6 +62,16 @@ impl Live {
         self.away.get()
     }
 
+    /// The way over VLESS by which `cbb update` reaches the mirror on the
+    /// hub's forwarder (protocol.md section 16): a hub's own forwarder's,
+    /// with the group's VLESS user ID, or that of the hub this member goes
+    /// through or tries first in the group's order of hubs; None without
+    /// sync away from home or without VLESS.
+    pub fn update_way(&self) -> Option<serde_json::Value> {
+        let order: Vec<String> = self.mesh.hub_order().iter().map(|d| cbb_core::certs::hex(&d.0)).collect();
+        self.away.get()?.update_way_in(&order)
+    }
+
     /// Sends `tunnel` to every device connected that may be a hub: sync
     /// away from home was turned on.
     pub fn tunnel_to_hubs(&self) {

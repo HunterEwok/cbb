@@ -466,6 +466,12 @@ fn a_hub_of_0_6_registers_with_its_forwarder() {
         crate::tunnel::State::load(&db).unwrap().unwrap().forwarder.is_some_and(|fw| fw.vless.is_some())
     });
     assert_eq!(id_of(&vless_id()), user);
+    // cbb update reaches the mirror through the hub's own forwarder, with
+    // the group's VLESS user ID; a device without sync away from home has
+    // no such way.
+    let way_id = || b.update_way().and_then(|v| v.get("id").and_then(|i| i.as_str()).map(id_of));
+    assert_eq!(way_id(), Some(user));
+    assert!(a.update_way().is_none(), "no sync away from home");
     // Set again keeping its settings: the same VLESS user ID.
     away.make_hub(&crate::control::Header { keep: true, consent: true, ..Default::default() }).unwrap();
     assert_eq!(id_of(&vless_id()), user);
@@ -482,6 +488,7 @@ fn a_hub_of_0_6_registers_with_its_forwarder() {
         assert!(Instant::now() < end, "no refusal shown: {:?}", away.live_forwarder(false));
         std::thread::sleep(Duration::from_millis(50));
     }
+    assert!(b.update_way().is_none(), "no VLESS, no way for cbb update");
     a.close();
     b.close();
 }

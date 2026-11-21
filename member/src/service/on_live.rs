@@ -451,11 +451,21 @@ impl Service {
                 .and_then(|r| r.current(uptime::wall_ms()))
                 .ok_or_else(|| Error::msg("this device holds no signed release"))
                 .map(|set| control::reply(Header { done: true, ..Default::default() }, set.get().as_bytes().to_vec())),
-            // No device is a hub or syncs away from home on the records
-            // of 0.6 yet (cbb global answers that it is moving): it wants
-            // no archives, and has no way to update away from home.
+            // A hub of 0.6 fetches no archives for the members yet.
             "release_want" => Ok(control::reply(Header { done: true, ..Default::default() }, b"null".to_vec())),
-            "update_way" => Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new())),
+            "update_way" => {
+                #[cfg(feature = "tunnel")]
+                let way = live.update_way();
+                // Built without the tunnel: no hub, so no way over VLESS.
+                #[cfg(not(feature = "tunnel"))]
+                let way: Option<serde_json::Value> = None;
+                match way.map(|v| serde_json::to_vec(&v)).transpose() {
+                    Ok(data) => {
+                        Ok(control::reply(Header { done: true, ..Default::default() }, data.unwrap_or_default()))
+                    }
+                    Err(e) => Err(Error::with("cannot encode the VLESS settings", e)),
+                }
+            }
             "entries_get" => live
                 .mesh
                 .entries()

@@ -275,6 +275,46 @@ mod tests {
         assert!(read(&DeviceId([9; 16]), &lone).is_err());
     }
 
+    /// `cbb update` reaches the mirror through the VLESS settings of the
+    /// hub this member goes through, else of the first hub in the group's
+    /// order it keeps an offer of; none for a hub outside the order.
+    #[test]
+    fn the_update_way_is_the_hub_s_vless() {
+        let dir = std::env::temp_dir().join(format!("cbb-away-update-way-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let me = crate::certs::DeviceId::parse(&"d".repeat(32)).unwrap();
+        let away = Away::new(dir.clone(), "g".into(), me, Arc::new(|_: &str| {}));
+        away.turn_on().unwrap();
+        let (k, f) = ([1u8; 32], [3u8; 32]);
+        let offer = V::Map(vec![
+            (1, key(&k)),
+            (2, V::Array(vec![V::Text("192.0.2.1:51820"), V::Text("203.0.113.5:8443")])),
+            (
+                4,
+                V::Map(vec![
+                    (1, V::Bytes(&ID)),
+                    (2, V::Uint(443)),
+                    (3, V::Text("www.example.com")),
+                    (4, V::Text("/AbC-12_xyz0123456")),
+                ]),
+            ),
+            (9, V::Array(vec![V::Map(vec![(1, V::Text("203.0.113.5:8443")), (2, key(&f))])])),
+        ]);
+        let hub = "09".repeat(16);
+        assert!(away.update_way_in(std::slice::from_ref(&hub)).is_none(), "no offer");
+        assert!(away.take_offer(&DeviceId([9; 16]), &offer).unwrap());
+        let way = away.update_way_in(std::slice::from_ref(&hub)).unwrap();
+        assert_eq!(
+            (&way["endpoint"], &way["id"]),
+            (&"203.0.113.5:443".into(), &"11223344-5566-4788-99aa-bbccddeeff00".into())
+        );
+        assert!(away.update_way_in(&[]).is_none(), "a hub outside the order");
+        away.set_through(Some(&hub));
+        assert_eq!(away.update_way_in(&[]), Some(way), "the hub it goes through");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     /// The offer is kept per hub and replaces the hub's earlier one; one
     /// that says the hub moved forgets it; nothing while away is off.
     #[test]

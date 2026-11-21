@@ -328,7 +328,13 @@ impl Away {
     /// the group's VLESS user ID, or the hub's this member uses or tries
     /// first; None without VLESS.
     pub fn update_way(&self, node: &Node) -> Option<serde_json::Value> {
-        let order = node.hub_order();
+        self.update_way_in(&node.hub_order())
+    }
+
+    /// The way of [`Away::update_way`] in the group's order of hubs
+    /// `order` (device IDs in hex): the member on the records of 0.6 gives
+    /// its own order (`Live::update_way`).
+    pub fn update_way_in(&self, order: &[String]) -> Option<serde_json::Value> {
         let cur = self.st.lock().unwrap();
         let st = cur.as_ref()?;
         if st.is_hub {
@@ -338,7 +344,7 @@ impl Away {
             return Some(v);
         }
         let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
-        let hub = using.and_then(|d| st.hub(&d).cloned()).or_else(|| st.hubs_to_try(&order).into_iter().next());
+        let hub = using.and_then(|d| st.hub(&d).cloned()).or_else(|| st.hubs_to_try(order).into_iter().next());
         hub?.vless
     }
 

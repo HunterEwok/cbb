@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 `cbb update` reaches the mirror away from home through the hub's
+  VLESS settings again (control operation `update_way`), as with 0.5: a hub's own
+  forwarder's with the group's VLESS user ID, else the hub the member goes through or tries
+  first.
 - The member of 0.6 sends the phones the push events `own_record` (to the phone whose record
   changed) and `stopped` (once, when the group's records stop it), and keeps the push
   service's previous face across a restart, so a phone registered in the period before still
