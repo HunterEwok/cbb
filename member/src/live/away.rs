@@ -103,7 +103,9 @@ impl Live {
         let Some(offer) = away.offer_encoding(&tag) else { return };
         match crate::away::offer_result(&self.mesh.device(), &tag, &offer) {
             Ok(f) => {
-                self.mesh.send(peer, f);
+                if self.mesh.send(peer, f) {
+                    self.guest_offered(peer);
+                }
             }
             Err(e) => self.logf(&format!("cbb: the hub's offer: {}", e.for_log())),
         }
@@ -176,11 +178,12 @@ impl Live {
     }
 
     /// Gives the hub's tunnel, while it runs, the clients and keys held.
-    fn give_hub_peers(&self) {
+    pub(super) fn give_hub_peers(&self) {
         let hub = self.hub.lock().unwrap().as_ref().map(|r| r.hub.clone());
         let (Some(away), Some(hub)) = (self.away.get(), hub) else { return };
         let st = self.mesh.state();
-        let peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
+        let mut peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
+        peers.extend(self.guest_peers());
         if let Err(e) = hub.set_peers_at(peers, self.own_tunnel_addr()) {
             self.logf(&format!("cbb: the hub could not take its clients: {}", e.for_log()));
         }
@@ -255,6 +258,11 @@ fn reach_hubs(w: &Weak<Live>) {
             .collect();
         kept.sort_by_key(|(at, ..)| *at);
         let (hubs, ids): (Vec<_>, Vec<_>) = kept.into_iter().map(|(_, h, id)| (h, id)).unzip();
+        // A device that joined by invitation reaches the hub through the
+        // invitation's guest tunnel until it holds the hub's offer.
+        if hubs.is_empty() && !l.is_paused() && l.through_guest(&away) {
+            continue;
+        }
         let connected = l.mesh.connected();
         if hubs.is_empty() || l.is_paused() || ids.iter().any(|id| connected.contains(id) || l.at_home(id)) {
             drop(l);
@@ -447,9 +455,15 @@ impl Live {
         let port = if port == 0 { crate::tunnel::MEMBER_PORT } else { port };
         let ln = std::net::TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
         let local = ln.local_addr().context("cannot open the hub's local port")?.port();
+        // A guest's connections go to their own port (docs/protocol.md,
+        // section 12): its invitation's pairing, or its admitted device.
+        let guest_ln = std::net::TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
+        let guest_port = guest_ln.local_addr().context("cannot open the hub's local port")?.port();
         let st = self.mesh.state();
-        let peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
-        let target: crate::hub::Target = Arc::new(move |_| Some(local));
+        let mut peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
+        peers.extend(self.guest_peers());
+        let target: crate::hub::Target =
+            Arc::new(move |a| Some(if crate::hub::is_guest(&a) { guest_port } else { local }));
         let start = |ip: std::net::IpAddr| {
             crate::hub::Hub::start(
                 &key,
@@ -474,6 +488,16 @@ impl Live {
                 std::thread::spawn(move || {
                     let _ = mesh.accept(sock);
                 });
+            }
+        });
+        let (w, h) = (Arc::downgrade(self), Arc::downgrade(&hub));
+        std::thread::spawn(move || {
+            for sock in guest_ln.incoming() {
+                let (Some(l), Some(hub), Ok(sock)) = (w.upgrade(), h.upgrade(), sock) else { return };
+                let from = sock.peer_addr().ok().and_then(|a| hub.tunnel_addr(a.port()));
+                drop(hub);
+                let Some(from) = from.filter(crate::hub::is_guest) else { continue };
+                std::thread::spawn(move || l.serve_guest(sock, from));
             }
         });
         self.logf(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));

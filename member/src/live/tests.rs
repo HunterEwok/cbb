@@ -58,7 +58,9 @@ fn a_copy_goes_through_discovery_s_dial_and_listen_to_the_clipboard() {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     crate::discovery::start(b.clone(), b.tag(), vec![addr], false, None, log);
     until("the connection", || Peers::connected(&*b, &a.me()) && Peers::connected(&*a, &b.me()));
-    assert_eq!(a.known(), b.known());
+    // a holds a record b lacks (two_dirs' device c), which syncs over the
+    // connection after it came up: both then know the same devices.
+    until("the records to sync", || a.known() == b.known() && a.known().len() == 3);
     // The statements cross after the hellos.
     let end = Instant::now() + Duration::from_secs(10);
     loop {

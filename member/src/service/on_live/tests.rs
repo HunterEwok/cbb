@@ -79,9 +79,9 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     let e = ask(&a, "rename", |h| (h.device, h.name) = ("b".into(), "bee".into())).unwrap_err();
     assert!(e.message().contains("only an admin can change the devices list"), "{}", e.message());
 
-    // What has not moved yet answers so, with its cause.
-    let e = ask(&a, "invite", |_| {}).unwrap_err();
-    assert!(e.find::<NotYet>().is_some(), "invite: {}", e.for_log());
+    // Neither invites: an invitation comes from the root or an admin.
+    let e = invite_now(&a, &la, |_| {}).unwrap_err();
+    assert!(e.message().contains("only the group's root or an admin adds devices"), "{}", e.message());
     // No hub to stop or move here.
     let e = ask(&a, "away", |h| h.name = "hub-off".into()).unwrap_err();
     assert!(e.message().contains("no other hub"), "{}", e.message());
@@ -137,6 +137,15 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
 
 /// The client's side of a pairing: reads the service's answers to the
 /// last, and gives the tries it was told failed and that last answer.
+/// cbb invite on svc, answered at once: an error, before anything opens.
+fn invite_now(svc: &Service, live: &Arc<Live>, f: impl FnOnce(&mut Header)) -> Result<()> {
+    let (_cli, srv) = UnixStream::pair().unwrap();
+    let mut h = Header { op: "invite".into(), ..Default::default() };
+    f(&mut h);
+    let mut out = srv.try_clone().unwrap();
+    svc.live_invite(live, &Message::new(h, Vec::new()), control::Reader::new(srv), &mut out)
+}
+
 fn client(conn: UnixStream) -> std::thread::JoinHandle<(usize, Message)> {
     std::thread::spawn(move || {
         let mut r = control::Reader::new(conn);
@@ -336,4 +345,144 @@ fn the_root_sets_the_groups_relay() {
     .unwrap_err();
     assert!(e.message().contains("only the group's root sets the group's relay"), "{}", e.message());
     lb.close();
+}
+
+/// A remote invitation of 0.6 end to end (docs/protocol.md, section 12):
+/// the root, a hub, invites a computer that shares no network with it. The
+/// computer pairs through the invitation's guest tunnel at the hub's guest
+/// address; the admin declines its first attempt and admits the second,
+/// each after the computer proved the secret, so nothing was written for
+/// the first. The new member then reaches the hub through the guest tunnel,
+/// hands it its tunnel key, forgets the invitation, and reaches the hub
+/// with its own key from then on.
+#[test]
+fn a_computer_joins_from_afar_with_an_invitation() {
+    let base = std::env::temp_dir().join(format!("cbb-svc-invite-{}", std::process::id()));
+    let (da, dc) = (base.join("a"), base.join("c"));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&da).unwrap();
+    std::fs::create_dir_all(&dc).unwrap();
+    let me = crate::founding::Me {
+        name: "desk",
+        os: 1,
+        caps: cbb_core::records::body::CAP_ADMIN | cbb_core::records::body::CAP_HUB,
+    };
+    crate::founding::found_with(&da, &me, uptime::wall_ms() as u64, &|| None).unwrap();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("a: {l}"));
+    let a = Service::new(&config(&da, Vec::new()), log, false);
+    let la = a.start_live(&config(&da, Vec::new())).unwrap();
+    // Not a hub yet: refused, and nothing opens.
+    let e = invite_now(&a, &la, |_| {}).unwrap_err();
+    assert!(e.message().contains("this device is none"), "{}", e.message());
+    // The root is the hub, with an address away from home.
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let hub_port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let h = Header {
+        addrs: vec![format!("127.0.0.1:{hub_port}")],
+        port: i64::from(hub_port),
+        consent: true,
+        ..Default::default()
+    };
+    la.away().unwrap().make_hub(&h).unwrap();
+    ask(&a, "hubs", |h| h.hubs = vec!["desk".into()]).unwrap();
+    // An invitation through another hub has not moved yet; one for a
+    // watch is no invitation.
+    let e = invite_now(&a, &la, |h| h.device = "00112233445566778899aabbccddeeff".into()).unwrap_err();
+    assert!(e.find::<NotYet>().is_some(), "{}", e.for_log());
+    let e = invite_now(&a, &la, |h| h.kind = "watch".into()).unwrap_err();
+    assert!(e.message().contains("a computer or a phone"), "{}", e.message());
+    assert!(invite_now(&a, &la, |h| h.expires = 25 * 3600).is_err(), "a day at most");
+
+    let (a_cli, a_srv) = UnixStream::pair().unwrap();
+    let inviting = {
+        let (a2, la2) = (a.clone(), la.clone());
+        std::thread::spawn(move || {
+            let h = Header { op: "invite".into(), expires: 600, ..Default::default() };
+            let mut out = a_srv.try_clone().unwrap();
+            a2.live_invite(&la2, &Message::new(h, Vec::new()), control::Reader::new(a_srv), &mut out)
+        })
+    };
+    let mut r = control::Reader::new(a_cli.try_clone().unwrap());
+    let opened = r.read().unwrap().unwrap();
+    assert!(opened.header.error.is_empty(), "{}", opened.header.error);
+    assert_eq!(opened.header.expires, 600);
+    let text = opened.header.invite.clone();
+    let inv = cbb_core::join::invitation::Invitation::parse(&text).unwrap();
+    let path = crate::live::invite::guest_path(&inv).unwrap();
+    assert_eq!(path.endpoints, vec![format!("127.0.0.1:{hub_port}")]);
+    assert!(path.obfuscation.is_some(), "the group's AmneziaWG settings");
+    assert_eq!(inv.profile.role, cbb_core::records::body::ROLE_MEMBER);
+    assert!(!inv.profile.home_only);
+    // The admin: no to the first device, yes to the second.
+    let admin = {
+        let mut w = a_cli;
+        std::thread::spawn(move || {
+            let (mut asked, mut refused, mut prints) = (0, 0, Vec::new());
+            loop {
+                let m = r.read().unwrap().unwrap();
+                assert!(m.header.error.is_empty(), "{}", m.header.error);
+                if m.header.done {
+                    return (asked, refused, prints, m.header.name);
+                }
+                if m.header.refused {
+                    refused += 1;
+                }
+                if let Some(j) = m.header.joining {
+                    prints.push(j.fingerprint);
+                    let yes = asked > 0;
+                    asked += 1;
+                    let answer = Header { op: "answer".into(), consent: yes, ..Default::default() };
+                    control::write(&mut w, &Message::new(answer, Vec::new())).unwrap();
+                }
+            }
+        })
+    };
+
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("c: {l}"));
+    let c = Service::new(&config(&dc, Vec::new()), log, false);
+    let join = || {
+        let (c_cli, c_srv) = UnixStream::pair().unwrap();
+        let h =
+            Header { op: "join".into(), invite: text.clone(), consent: true, name: "far".into(), ..Default::default() };
+        let mut out = c_srv.try_clone().unwrap();
+        let got = c.live_join(&Message::new(h, Vec::new()), control::Reader::new(c_srv), &mut out);
+        let shown = control::Reader::new(c_cli).read().unwrap().unwrap().header.fingerprint;
+        (got, shown)
+    };
+    let (got, _) = join();
+    let e = got.unwrap_err();
+    assert!(e.message().contains("did not admit"), "{}", e.for_log());
+    assert!(!in_group(&dc));
+    assert!(!la.mesh.state().devices.iter().any(|d| d.name == "far"), "nothing written for a no");
+    let (got, shown) = join();
+    got.unwrap();
+    let (asked, refused, prints, name) = admin.join().unwrap();
+    assert_eq!((asked, refused, name.as_str()), (2, 1, "far"));
+    assert_eq!(prints[1], shown, "the admin sees the fingerprint the device shows");
+    inviting.join().unwrap().unwrap();
+    assert!(in_group(&dc));
+    assert!(dc.join(crate::live::invite::GUEST_FILE).exists(), "kept until the hub's offer");
+    until("the record", || la.mesh.state().devices.iter().any(|d| d.name == "far"));
+
+    // The new member knows no address of the hub's at home: it reaches the
+    // hub through the guest tunnel first, then with its own key.
+    let lc = c.start_live(&config(&dc, Vec::new())).unwrap();
+    let a_id = id_text(&la.mesh.device());
+    let away = lc.away().unwrap().clone();
+    let end = Instant::now() + Duration::from_secs(60);
+    while !away.live_status().is_some_and(|s| s.hub_device == a_id) {
+        assert!(Instant::now() < end, "never took the hub's offer: {:?}", away.live_status());
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let end = Instant::now() + Duration::from_secs(60);
+    while dc.join(crate::live::invite::GUEST_FILE).exists()
+        || !lc.mesh.connected().contains(&la.mesh.device())
+        || !away.live_status().is_some_and(|s| s.through)
+    {
+        assert!(Instant::now() < end, "never reached the hub with its own key: {:?}", away.live_status());
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    lc.close();
+    la.close();
 }

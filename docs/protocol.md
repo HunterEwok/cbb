@@ -3543,6 +3543,38 @@ and joins only once the user accepts; declining sends nothing.
    their key store) and tries again through the guest tunnel, after a restart too, for up to
    24 hours.
 
+### On the records of 0.6
+
+A group of 0.6 makes the invitation of the format's table `invite` (`cbb://join#...`,
+W.3 of the format), on a hub that serves (`member/src/live/invite.rs`, the control operation
+`invite` in `member/src/service/on_live.rs`); through another hub is not yet built. It
+carries no group and no hub, only one-time values and one guest path: the hub's addresses
+away from home (its forwarder's after its own, at most eight), the key it serves under, the
+guest's one-time WireGuard key and pre-shared key, and the group's obfuscation settings.
+
+- Its profile is a computer's (role member) or, with `cbb invite -phone`, a phone's, with
+  the rights a home window gives (read, send, secrets, and hub for a member with the cap
+  that the root admits); never home only.
+- Inside a guest tunnel the hub also answers at its guest address, `fd00:cbc::1`: the
+  invitation names no hub, so the guest dials TCP 8764 there. It is the first address of
+  the guests' prefix and no guest's (a guest whose address it would be is refused); only a
+  guest's packets may reach it. There a connection gets only the pairing (`cbb-pair/3`) of
+  its invitation, one attempt at a time, and once the admin admitted a device, member TLS
+  from that device alone.
+- The pairing is section 8's, by the invitation, from network `guest`. Once the device
+  proved the secret, the member writes nothing yet: the operation `invite` answers a partial
+  `joining` with the device's name, system, device ID and key fingerprint (standard base64 of
+  its key hash, which the device shows too), and the admin answers once (`answer` with
+  `consent`), within 5 minutes. A no, or no answer, ends the attempt as failed: the device
+  gets pair error 7 (`declined`), nothing is written, and the invitation takes the next
+  attempt at once; three failed attempts close it. A yes writes the device's record and
+  sends the Welcome. The device waits for each answer that long.
+- The device that joined keeps the invitation in `invite-guest` (mode 0600) and turns sync
+  away from home on before it keeps the set. Until it holds a hub's offer, its member dials
+  the hub through the guest tunnel; its `tunnel` (t 15) there gets the hub's offer, and the
+  hub drops the guest once that connection ends, or a day after the admission. The device
+  then forgets the invitation and reaches the hub with its own key.
+
 ### Through the hub
 
 An admin that is not the hub makes the invitation through a hub it is connected to: the
@@ -5008,8 +5040,9 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Members' tunnel addresses | `fd00:cbb::/32` followed by the first 96 bits of the device ID | 11 |
 | Guests' tunnel addresses | `fd00:cbc::/32` followed by the first 96 bits of SHA-256 of the guest key | 12 |
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
+| The hub's guest address, inside a guest tunnel (0.6) | `fd00:cbc::1` | 12 |
 | Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
-| Remote invitation | `cbb://invite#...`, file `.cbbinvite` | 12 |
+| Remote invitation | `cbb://invite#...`, file `.cbbinvite`; on 0.6 `cbb://join#...` | 12 |
 
 ### Bounds
 

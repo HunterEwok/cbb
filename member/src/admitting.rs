@@ -67,6 +67,45 @@ pub fn at_home(
     exporter: PairExporter,
     open: &mut Open,
 ) -> Result<Info> {
+    admit(mesh, sock, session, exporter, Way { open, network: Network::Home }, &mut |_| true)
+}
+
+/// What the admin is asked about a device that proved a remote
+/// invitation's secret, before anything is written: what it says of
+/// itself, its device ID and its key's fingerprint, which the device shows
+/// too (docs/protocol.md, section 12).
+pub struct Asked<'a> {
+    pub info: &'a Info,
+    pub device: cbb_core::records::DeviceId,
+    pub fingerprint: String,
+}
+
+/// The admin did not admit the device: the joiner hears `declined`.
+#[derive(Debug)]
+pub struct Declined;
+
+impl std::fmt::Display for Declined {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the admin did not admit the device")
+    }
+}
+
+impl std::error::Error for Declined {}
+
+/// Runs the member's side of a pairing by the invitation `way` keeps open,
+/// from the network it names: once the joiner proved the secret, confirm
+/// is asked (a remote invitation asks the admin; a home window, where the
+/// typed digits are the check, says yes), and only a yes writes the
+/// joiner's record. Gives what the joiner said of itself once it is in the
+/// group.
+pub fn admit(
+    mesh: &Mesh,
+    sock: TcpStream,
+    session: tls::Session,
+    exporter: PairExporter,
+    way: Way<'_>,
+    confirm: &mut dyn FnMut(&Asked<'_>) -> bool,
+) -> Result<Info> {
     let joiner = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the device showed no key"))?;
     let own: [u8; 65] = mesh
         .own()
@@ -90,8 +129,15 @@ pub fn at_home(
     let now = || crate::uptime::wall_ms().max(0) as u64;
     let mut statement = None;
     let mut pop_holds = false;
-    let way = Way { open, network: Network::Home };
     let info = join::member(&mut stream, session_m, way, &now, &mut |info, s| {
+        let asked = Asked {
+            info,
+            device: joiner_key.device_id(),
+            fingerprint: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, joiner_key.hash().0),
+        };
+        if !confirm(&asked) {
+            return Err(Error::with("the device was not admitted", Declined));
+        }
         statement.clone_from(&info.keys);
         pop_holds = s.admin_pop_holds();
         mesh.write(|set, signer| {

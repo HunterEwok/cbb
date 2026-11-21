@@ -488,7 +488,8 @@ impl RunningHub {
         let public = key32(&State::with_key(&guest_key)?.public_key())?;
         let peer = Peer {
             key: public,
-            psk: guest_psk, older_psks: Vec::new(),
+            psk: guest_psk,
+            older_psks: Vec::new(),
             addr: hub::guest_addr(&public),
             until: Instant::now().checked_add(Duration::from_secs(lifetime)),
             source: None,

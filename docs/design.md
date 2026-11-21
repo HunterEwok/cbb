@@ -1629,6 +1629,11 @@ devices alike.
     admin signs its certificate as for any other device. In a phone group whose hub holds
     no CA keys the request goes to the admin phone through the hub, inside member TLS, at
     home or through the phone's own tunnel.
+  - On the records of 0.6 the invitation (`cbb://join#...`) names no hub and no group: its
+    guest path holds the hub's key and addresses, the guest key pair and the obfuscation
+    settings, and the guest dials the hub at the hub's guest address `fd00:cbc::1`, which
+    only guests reach. Once the device proved the secret the admin confirms it, and only
+    then is its record written; it is invited as a computer or as a phone.
   - With its certificate the device offers its own tunnel key in its first hello through
     the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
     with its own key as an ordinary client. The guest stays for a day after the admission

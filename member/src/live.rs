@@ -142,6 +142,8 @@ pub struct Live {
     /// The link to the group's blind relay, while the device meets the
     /// group there.
     meeting: Mutex<Option<relay::Meeting>>,
+    /// The guests of the invitations this hub keeps open.
+    guests: invite::Guests,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -190,6 +192,7 @@ impl Live {
             hub: Mutex::new(None),
             ladder: Mutex::new(away::Ladder::default()),
             meeting: Mutex::new(None),
+            guests: Default::default(),
             log,
         });
         live.settle(&live.mesh.state());
@@ -560,6 +563,7 @@ impl Peers for Live {
 }
 
 mod away;
+pub mod invite;
 mod relay;
 
 #[cfg(test)]

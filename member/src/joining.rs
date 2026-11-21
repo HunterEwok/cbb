@@ -96,6 +96,23 @@ pub fn over(
     invitation: Invitation,
     fp: Option<KeyHash>,
 ) -> Result<Box<Admitted>> {
+    over_with(dir, sock, who, me, invitation, fp, STEP_TIMEOUT, &|_| Ok(()))
+}
+
+/// over, waiting up to `step` for each of the member's answers (a remote
+/// invitation's admin confirms the device first), with `before` called
+/// with the checked Welcome before the set is kept.
+#[allow(clippy::too_many_arguments)]
+pub fn over_with(
+    dir: &Path,
+    sock: TcpStream,
+    who: &str,
+    me: &Me<'_>,
+    invitation: Invitation,
+    fp: Option<KeyHash>,
+    step: Duration,
+    before: &dyn Fn(&Admitted) -> Result<()>,
+) -> Result<Box<Admitted>> {
     std::fs::create_dir_all(dir).map_err(|e| Error::with(format!("cannot make {}", dir.display()), e))?;
     let local = crate::set::local_key(dir)?;
     if crate::set::load(dir, &local)?.is_some() {
@@ -114,7 +131,7 @@ pub fn over(
         cbb_core::alpn::PAIR,
         &tls::clock(),
     )?);
-    sock.set_read_timeout(Some(STEP_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+    sock.set_read_timeout(Some(step)).map_err(|e| Error::with("cannot set the timeout", e))?;
     let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
     tls::handshake(&mut s, &sock, "the handshake with the member failed")?;
     let member = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the member showed no key"))?;
@@ -149,7 +166,10 @@ pub fn over(
         exporter: x,
     };
     let now = || crate::uptime::wall_ms().max(0) as u64;
-    let got = join::joiner(&mut stream, j, &now, &mut |a| crate::set::save(dir, &a.set, &local));
+    let got = join::joiner(&mut stream, j, &now, &mut |a| {
+        before(a)?;
+        crate::set::save(dir, &a.set, &local)
+    });
     // A member with no window open ends the connection at once.
     got.map_err(|e| {
         let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);

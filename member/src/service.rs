@@ -2353,7 +2353,10 @@ impl Service {
             return;
         }
         // A join of 0.6 is by a home window's six digits or its QR code.
-        if m.header.op == "join" && m.header.invite.is_empty() && !m.header.listen {
+        if m.header.op == "join"
+            && (m.header.invite.is_empty() || m.header.invite.trim().starts_with(cbb_core::join::invitation::PREFIX))
+            && !m.header.listen
+        {
             if let Err(e) = self.live_join(&m, r, &mut out) {
                 (self.log)(&format!("cbb: join: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -2381,6 +2384,13 @@ impl Service {
         if m.header.op == "join" {
             if let Err(e) = self.join(&m, r, &mut out) {
                 (self.log)(&format!("cbb: join: {}", e.for_log()));
+                let _ = control::write(&mut out, &control::failure(&e));
+            }
+            return;
+        }
+        if m.header.op == "invite" && self.live().is_some() {
+            if let Err(e) = self.started(|| self.live()).and_then(|live| self.live_invite(&live, &m, r, &mut out)) {
+                (self.log)(&format!("cbb: invite: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
             }
             return;

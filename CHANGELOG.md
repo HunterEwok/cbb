@@ -105,6 +105,12 @@ made with 0.5 is set up again once. The details follow.
   A member of 0.6 with sync away from home on meets the group at the root's relay under the
   period's credentials of its face, and the relay joins it to the devices it reaches no other
   way; `cbb global` shows the relay.
+  `cbb invite` works on a hub of a group of 0.6: the invitation (`cbb://join#...`) carries a
+  guest path with the hub's key, its addresses and a one-time guest key, for a computer, or a
+  phone with `-phone`. The guest reaches only the hub's guest address `fd00:cbc::1` inside
+  the tunnel, where it pairs; the admin confirms the device by its name and key fingerprint
+  before its record is written. `cbb pair -invite` joins by it, and the new member reaches the
+  hub through the guest tunnel until the hub's offer comes, then with its own key.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

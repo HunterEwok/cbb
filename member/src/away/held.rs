@@ -110,6 +110,38 @@ impl Away {
         Some((st.serving_key().ok()?, st.obfuscation.clone(), st.listen_port))
     }
 
+    /// What a remote invitation's guest path gives of this hub of 0.6
+    /// (docs/protocol.md, section 12): the key it serves under, its
+    /// addresses away from home (its forwarder's after its own, at most
+    /// eight) and the group's AmneziaWG settings, in the format's table.
+    pub fn guest_way(&self) -> Result<([u8; 32], Vec<String>, Option<cbb_core::msg::Obfuscation>)> {
+        let cur = self.st.lock().unwrap();
+        let st = cur.as_ref().filter(|s| s.is_hub).ok_or_else(|| Error::msg("this device is no hub of the group"))?;
+        let endpoints: Vec<String> = st
+            .hub_endpoints()
+            .iter()
+            .take(cbb_core::join::invitation::MAX_ENDPOINTS)
+            .map(ToString::to_string)
+            .collect();
+        if endpoints.is_empty() {
+            return Err(Error::msg(
+                "the hub has no address away from home yet; run cbb global hub with its addresses or a forwarder there",
+            ));
+        }
+        let key = crate::tunnel::key32(&crate::tunnel::public_key_of(&st.serving_key()?))?;
+        let obfuscation = match &st.obfuscation {
+            Some(o) => {
+                let cbor = crate::awg::Obfuscation::from_offer(o)?.to_cbor();
+                Some(
+                    cbb_core::msg::Obfuscation::decode(&cbor, "invite/obfuscation")
+                        .map_err(|r| Error::msg(format!("the group's obfuscation settings break {r}")))?,
+                )
+            }
+            None => None,
+        };
+        Ok((key, endpoints, obfuscation))
+    }
+
     /// The pins the hub's forwarder's key may have, while this device is a
     /// hub with a forwarder: the project's, or the one it was given.
     pub fn hub_forwarder_pins(&self) -> Option<Vec<[u8; 32]>> {

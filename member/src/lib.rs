@@ -584,6 +584,18 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
+    if let Some((path, text)) =
+        invite.as_ref().filter(|(_, t)| t.trim_start().starts_with(cbb_core::join::invitation::PREFIX))
+    {
+        join_invited(g, &name, &caps, given_name, given_caps, text)?;
+        // It is used up, and was a secret; nothing needs it any more.
+        if !path.is_empty() {
+            let _ = std::fs::remove_file(path);
+        }
+        println!("{}", tr!("Joined the group."));
+        wait_for_hub(g);
+        return Ok(());
+    }
     let (joiner, save) = joiner(&g.state, &name)?;
     let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
@@ -684,6 +696,55 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     if invited {
         wait_for_hub(g);
     }
+    Ok(())
+}
+
+/// Joins a group of 0.6 by a remote invitation (cbb pair -invite): through
+/// the running service, with its own -name and -caps unless cbb pair gives
+/// them, or with no service running, into the state folder, before the
+/// service starts. Shows this device's key fingerprint, which the admin
+/// compares before admitting it.
+fn join_invited(
+    g: &Global,
+    name: &str,
+    caps: &[String],
+    given_name: Option<String>,
+    given_caps: Option<Vec<String>>,
+    text: &str,
+) -> Result<()> {
+    let shown = |fp: &str| {
+        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+        println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
+        println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
+        std::io::stdout().flush().ok();
+    };
+    if service_answers(g) {
+        let h = control::Header {
+            op: "join".into(),
+            invite: text.trim().to_string(),
+            consent: true,
+            name: given_name.unwrap_or_default(),
+            caps: given_caps,
+            ..Default::default()
+        };
+        let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        loop {
+            if !m.header.fingerprint.is_empty() {
+                shown(&m.header.fingerprint);
+            }
+            if m.header.done {
+                return Ok(());
+            }
+            m = check(admit_cli::next(&mut r)?)?;
+        }
+    }
+    let me =
+        joining::Me { name, os: cbb_core::format::print::os_number(admin::os_name()), caps: roster::caps_number(caps) };
+    std::fs::create_dir_all(&g.state).context(format!("cannot create {}", g.state.display()))?;
+    let fp = own::Own::load(&g.state)?.hash();
+    shown(&base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0));
+    let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
+    live::invite::join(&g.state, &me, text, log)?;
     Ok(())
 }
 
@@ -802,16 +863,26 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
         (String::new(), line.trim().to_string())
-    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX)
+        || path.trim_start().starts_with(cbb_core::join::invitation::PREFIX)
+    {
         return Err(Error::msg(tr!(
             "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
         )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
-    let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
-    if inv.expired(uptime::wall_ms() / 1000) {
-        return Err(Error::msg("the invitation has expired; ask for a new one"));
+    if text.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
+        // An invitation of 0.6 carries no expiry: the hub refuses it once
+        // its time is over.
+        let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
+            .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+        live::invite::guest_path(&inv)?;
+    } else {
+        let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
+        if inv.expired(uptime::wall_ms() / 1000) {
+            return Err(Error::msg("the invitation has expired; ask for a new one"));
+        }
     }
     println!(
         "{}",

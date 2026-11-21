@@ -1000,6 +1000,170 @@ impl Service {
         }
     }
 
+    /// cbb invite on a hub of a group of 0.6, by its root or an admin: a
+    /// remote invitation through this hub's tunnel (docs/protocol.md,
+    /// section 12), for a computer, or a phone with `kind` "phone", valid
+    /// for `expires` seconds (an hour when 0, a day at most). The answers:
+    /// the invitation's text with its lifetime; for each device that proved
+    /// its secret, a partial `joining` that the client answers (`answer`
+    /// with `consent`) before anything is written, and a partial `refused`
+    /// with why for each that failed; the device's name once it is in the
+    /// group. A client that hangs up cancels it.
+    pub(super) fn live_invite(
+        &self,
+        live: &Arc<Live>,
+        m: &Message,
+        r: control::Reader<UnixStream>,
+        out: &mut UnixStream,
+    ) -> Result<()> {
+        use cbb_core::join::invitation::{Invitation, Open, Profile};
+        use cbb_core::records::body::{RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+        let h = &m.header;
+        if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
+            return Err(Error::msg(NOT_ADMITTER));
+        }
+        let me = id_text(&live.mesh.device());
+        if !h.device.is_empty() && h.device != me {
+            return Err(not_yet("an invitation through another hub"));
+        }
+        let lifetime = match h.expires {
+            n if n <= 0 => crate::inviter::DEFAULT_LIFETIME,
+            n => Duration::from_secs(n as u64),
+        };
+        if lifetime > crate::inviter::MAX_LIFETIME {
+            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
+        }
+        let role = match h.kind.as_str() {
+            "" | "computer" => ROLE_MEMBER,
+            "phone" => ROLE_PHONE,
+            k => return Err(Error::msg(format!("an invitation is for a computer or a phone, not {k:?}"))),
+        };
+        let keys = crate::inviter::GuestKeys::new()?;
+        let opened = live.open_guest(keys.key, keys.public, keys.psk)?;
+        let profile = Profile {
+            role,
+            rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
+            home_only: false,
+            guarded: false,
+        };
+        let now = || crate::uptime::wall_ms().max(0) as u64;
+        let mut open = Open {
+            invitation: Invitation::new(vec![opened.path], profile),
+            name: String::new(),
+            created_ms: now(),
+            expires_ms: now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX)),
+            used: false,
+            failures: 0,
+            allowed_key: None,
+            attempt: None,
+            next_attempt: 0,
+        };
+        // However it ends, the guest goes, unless a device was admitted.
+        let mut admitted = None;
+        let res = self.run_invite(&mut open, &opened.pairs, lifetime, r, out, live, &mut admitted);
+        live.guest_ended(&keys.public, admitted);
+        res
+    }
+
+    /// The invitation's window: answers with its text, then takes its
+    /// guest's pairing connections until a device is admitted (noted in
+    /// admitted), the invitation ends, or the client hangs up.
+    #[allow(clippy::too_many_arguments)]
+    fn run_invite(
+        &self,
+        open: &mut cbb_core::join::invitation::Open,
+        pairs: &mpsc::Receiver<crate::live::invite::Pair>,
+        lifetime: Duration,
+        mut r: control::Reader<UnixStream>,
+        out: &mut UnixStream,
+        live: &Arc<Live>,
+        admitted: &mut Option<cbb_core::records::DeviceId>,
+    ) -> Result<()> {
+        use cbb_core::join::invitation::Network;
+        let now = || crate::uptime::wall_ms().max(0) as u64;
+        // The client's answers, and its hang-up.
+        let (answers, asked) = mpsc::sync_channel::<bool>(1);
+        let hung = Arc::new(AtomicBool::new(false));
+        {
+            let hung = hung.clone();
+            std::thread::spawn(move || {
+                while let Ok(Some(m)) = r.read() {
+                    if m.header.op == "answer" {
+                        let _ = answers.try_send(m.header.consent);
+                    }
+                }
+                hung.store(true, Ordering::SeqCst);
+            });
+        }
+        (self.log)(&format!("cbb: an invitation is open for {} minutes", lifetime.as_secs() / 60));
+        let text = Header { invite: open.invitation.text(), expires: lifetime.as_secs() as i64, ..Default::default() };
+        control::write(out, &control::partial(text))?;
+        let end = Instant::now() + lifetime;
+        loop {
+            if hung.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+            let left = end.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(Error::msg("the invitation's time is over: no device joined with it"));
+            }
+            let (sock, s, x) = match pairs.recv_timeout(left.min(Duration::from_secs(1))) {
+                Ok(p) => p,
+                Err(RecvTimeoutError::Timeout) if !STOP.load(Ordering::SeqCst) => continue,
+                Err(_) => return Err(Error::msg("the service is stopping")),
+            };
+            let mut device = None;
+            let mut confirm = |a: &crate::admitting::Asked<'_>| {
+                device = Some(a.device);
+                let joining = control::Joining {
+                    id: id_text(&a.device),
+                    name: a.info.name.clone(),
+                    os: cbb_core::format::print::os_name(a.info.os).to_string(),
+                    fingerprint: a.fingerprint.clone(),
+                };
+                if control::write(out, &control::partial(Header { joining: Some(joining), ..Default::default() }))
+                    .is_err()
+                {
+                    return false;
+                }
+                // Drops an answer left from before.
+                while asked.try_recv().is_ok() {}
+                let until = Instant::now() + crate::window::CONFIRM_WAIT;
+                while !hung.load(Ordering::SeqCst) && Instant::now() < until {
+                    match asked.recv_timeout(Duration::from_millis(200)) {
+                        Ok(yes) => return yes,
+                        Err(RecvTimeoutError::Timeout) => {}
+                        Err(RecvTimeoutError::Disconnected) => return false,
+                    }
+                }
+                false
+            };
+            let way = crate::join::Way { open: &mut *open, network: Network::Guest };
+            match crate::admitting::admit(&live.mesh, sock, s, x, way, &mut confirm) {
+                Ok(info) => {
+                    *admitted = device;
+                    (self.log)(&format!("cbb: {} joined the group with an invitation", info.name));
+                    let done = Header { name: info.name, done: true, ..Default::default() };
+                    return control::write(out, &control::reply(done, Vec::new()));
+                }
+                Err(e) => {
+                    (self.log)(&format!("cbb: a device did not join with the invitation: {}", e.for_log()));
+                    if let Err(closed) = open.may_use(Network::Guest, now()) {
+                        let why = match closed {
+                            cbb_core::join::PairError::TooMany => {
+                                "the invitation closed after three failed attempts: make a new one with cbb invite"
+                            }
+                            _ => "the invitation closed",
+                        };
+                        return Err(e.context(why));
+                    }
+                    let tried = Header { refused: true, detail: e.for_log(), ..Default::default() };
+                    control::write(out, &control::partial(tried))?;
+                }
+            }
+        }
+    }
+
     /// cbb pair -code on a computer in no group: joins the group of 0.6 by
     /// its home window. `code` is the window's six digits, with the window
     /// found by mDNS (at `address` when given), or the window's QR code
@@ -1022,6 +1186,26 @@ impl Service {
             os: cbb_core::format::print::os_number(crate::admin::os_name()),
             caps: roster::caps_number(&caps),
         };
+        // A remote invitation: through its guest tunnel to the hub, with
+        // sync away from home on, which the user agreed to.
+        if !h.invite.is_empty() {
+            if !h.consent {
+                return Err(Error::msg(
+                    "a device that joins with an invitation syncs away from home, so it needs your consent; run cbb pair -invite and read what it says",
+                ));
+            }
+            std::fs::create_dir_all(&self.state_dir)
+                .map_err(|e| Error::with(format!("cannot make {}", self.state_dir.display()), e))?;
+            let fp = Own::load(&self.state_dir)?.hash();
+            let shown = Header {
+                fingerprint: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0),
+                ..Default::default()
+            };
+            control::write(out, &control::partial(shown))?;
+            crate::live::invite::join(&self.state_dir, &me, &h.invite, self.log.clone())?;
+            (self.log)(&format!("cbb: joined a group of 0.6 with an invitation as {name}"));
+            return control::write(out, &control::reply(Header { done: true, ..Default::default() }, Vec::new()));
+        }
         let at = if h.address.is_empty() { None } else { Some(crate::resolve(&h.address)?) };
         let (addrs, invitation, fp) = crate::joining::window_of(&h.code, at)?;
         let mut last = Error::msg("no address to dial");
@@ -1063,7 +1247,7 @@ mod tests;
 /// The service's operations that need a group and have not moved to the
 /// records of 0.6 yet; any other the service answers as ever (an unknown
 /// one with why).
-const MOVING: &[&str] = &["away", "invite"];
+const MOVING: &[&str] = &["away"];
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";

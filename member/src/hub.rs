@@ -41,6 +41,10 @@ const LISTENERS: usize = 4;
 const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// The prefix of the guests' tunnel addresses (docs/protocol.md, section 12).
 const GUEST_PREFIX: [u8; 4] = [0xfd, 0x00, 0x0c, 0xbc];
+/// The hub's address inside a guest tunnel (docs/protocol.md, section 12):
+/// an invitation of 0.6 names no hub, so a guest dials the hub here, the
+/// first address of the guests' prefix, which no guest takes.
+pub const GUEST_HUB: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0cbc, 0, 0, 0, 0, 0, 1);
 
 /// The Diffie-Hellmans a second on handshake initiations, of initiations
 /// whose mac1 was right, past which the hub is under load, as WireGuard has
@@ -241,6 +245,7 @@ impl Hub {
         let mut iface = Interface::new(Config::new(HardwareAddress::Ip), &mut dev, now());
         iface.update_ip_addrs(|a| {
             let _ = a.push(IpCidr::new(IpAddress::Ipv6(own), 128));
+            let _ = a.push(IpCidr::new(IpAddress::Ipv6(GUEST_HUB), 128));
         });
         // The clients and the guests are behind the tunnel, each a peer.
         let _ = iface.routes_mut().add_default_ipv6_route(own);
@@ -367,7 +372,7 @@ fn check_peers(peers: &[Peer], own: Ipv6Addr) -> Result<()> {
         if 1 + p.older_psks.len() > MAX_PSKS {
             return Err(Error::msg(format!("the hub's client at {} has more than {MAX_PSKS} pre-shared keys", p.addr)));
         }
-        if !keys.insert(p.key) || !addrs.insert(p.addr) || p.addr == own {
+        if !keys.insert(p.key) || !addrs.insert(p.addr) || p.addr == own || p.addr == GUEST_HUB {
             return Err(Error::msg(format!("the hub's client at {} is there twice", p.addr)));
         }
     }
@@ -768,11 +773,13 @@ impl Pump {
                     }
                     let ip: &[u8] = p.as_ref();
                     // Only what comes from the client's own address, as
-                    // WireGuard's allowed IPs would have it, to the hub's.
+                    // WireGuard's allowed IPs would have it, to the hub's;
+                    // a guest's may go to the hub's guest address too.
+                    let to_hub = |a: Ipv6Addr| ip.get(24..40) == Some(&a.octets()[..]);
                     if ip.len() >= 40
                         && ip.first().is_some_and(|b| b >> 4 == 6)
                         && ip.get(8..24) == Some(&s.peer.addr.octets()[..])
-                        && ip.get(24..40) == Some(&self.own.octets()[..])
+                        && (to_hub(self.own) || (is_guest(&s.peer.addr) && to_hub(GUEST_HUB)))
                     {
                         let ip = ip.to_vec();
                         let addr = s.peer.addr;
@@ -963,7 +970,9 @@ impl Pump {
             );
             sock.set_nagle_enabled(false);
             crate::tunnel::set_tcp_timeouts(&mut sock);
-            if sock.listen((IpAddress::Ipv6(self.own), MEMBER_PORT)).is_err() {
+            // On every address of the hub: its own, and its guest address,
+            // which only guests reach.
+            if sock.listen(MEMBER_PORT).is_err() {
                 return;
             }
             let handle = self.sockets.add(sock);
@@ -1226,6 +1235,60 @@ mod tests {
         let mut b = [0u8; 1];
         c.read_exact(&mut b)?;
         Ok(c)
+    }
+
+    /// A guest of 0.6 reaches the hub at its guest address, which names no
+    /// hub; a member's client does not, and no guest takes that address.
+    #[test]
+    fn a_guest_reaches_the_hub_at_its_guest_address() {
+        let (port, _) = target();
+        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
+        let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
+        let (guest_key, member_key) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let psk = crate::certs::random_bytes::<32>();
+        let guest_pub = *PublicKey::from(&StaticSecret::from(guest_key)).as_bytes();
+        let guest = Peer {
+            key: guest_pub,
+            psk,
+            older_psks: Vec::new(),
+            addr: guest_addr(&guest_pub),
+            until: None,
+            source: None,
+        };
+        let member_addr = crate::tunnel::addr("10112233445566778899aabbccddee00").unwrap();
+        let member = Peer {
+            key: *PublicKey::from(&StaticSecret::from(member_key)).as_bytes(),
+            addr: member_addr,
+            ..guest.clone()
+        };
+        assert!(check_peers(&[Peer { addr: GUEST_HUB, ..guest.clone() }], own).is_err(), "no guest at the hub's");
+        let hub = Hub::start_at(
+            &hub_key,
+            own,
+            None,
+            vec![guest.clone(), member],
+            "127.0.0.1:0".parse().unwrap(),
+            Arc::new(move |_| Some(port)),
+            DEVICE_LIMITS,
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+        let h = crate::tunnel::Hub {
+            device: "hub".into(),
+            key: hub_pub.as_bytes().to_vec(),
+            psk: psk.to_vec(),
+            endpoints: vec![format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap()],
+            ..Default::default()
+        };
+        let link = |key: &[u8; 32], from: Ipv6Addr| {
+            let st = crate::tunnel::State::with_key(key).unwrap();
+            crate::tunnel::Link::start_at(&st, &h, from, GUEST_HUB, Arc::new(|_| {})).unwrap()
+        };
+        let g = link(&guest_key, guest.addr);
+        assert!(reach(&g, Duration::from_secs(10)).is_ok(), "the guest reaches the hub");
+        let m = link(&member_key, member_addr);
+        assert!(reach(&m, Duration::from_secs(3)).is_err(), "a member's client does not");
     }
 
     /// Initiations without a valid mac1 and initiations of strangers, sent

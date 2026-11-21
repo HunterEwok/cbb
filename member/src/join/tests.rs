@@ -77,6 +77,16 @@ fn invitation() -> Invitation {
 /// with its root key, by the invitation it keeps open. Gives the joiner's
 /// result, the member's, the member's set and the open invitation.
 fn pair(joiner_invitation: Invitation, open: Open) -> (Result<Box<Admitted>>, Result<Info>, RecordSet, Open) {
+    pair_with(joiner_invitation, open, false)
+}
+
+/// pair, with the member's admin declining the joiner once it proved the
+/// secret when `decline`.
+fn pair_with(
+    joiner_invitation: Invitation,
+    open: Open,
+    decline: bool,
+) -> (Result<Box<Admitted>>, Result<Info>, RecordSet, Open) {
     let (root, laptop, tv) = (Arc::new(K::new(1)), K::new(2), K::new(3));
     let set = Arc::new(Mutex::new(group(&root, &laptop)));
     let clock = crate::tls::clock();
@@ -108,6 +118,9 @@ fn pair(joiner_invitation: Invitation, open: Open) -> (Result<Box<Admitted>>, Re
         let way = Way { open: &mut open, network: Network::Home };
         let joiner_key = Key::es256(joiner.to_vec());
         let r = member(&mut stream, ms, way, &|| NOW, &mut |info, s| {
+            if decline {
+                return Err(Error::with("the device was not admitted", crate::admitting::Declined));
+            }
             let mut set = member_set.lock().unwrap();
             let mut d = Device::new(joiner_key.clone(), &info.name, info.role);
             d.rights = body::RIGHT_READ | body::RIGHT_SEND;
@@ -207,4 +220,19 @@ fn a_wrong_invitation_lets_nothing_in() {
     assert!(j.is_err() && m.is_err());
     assert!(set.state().device_by_key(&K::new(3).key().hash()).is_none());
     assert!(!open.used);
+}
+
+/// The admin declines a device that proved the invitation's secret: the
+/// joiner hears so, nothing is written, and the attempt ends at once,
+/// counted as failed, so that the invitation takes the next one.
+#[test]
+fn a_declined_device_ends_its_attempt() {
+    let inv = invitation();
+    let (j, m, set, mut open) = pair_with(inv.clone(), open(&inv), true);
+    let e = j.err().unwrap();
+    assert!(e.message().contains("did not admit"), "{e:?}");
+    assert!(m.err().unwrap().find::<crate::admitting::Declined>().is_some());
+    assert!(set.state().device_by_key(&K::new(3).key().hash()).is_none(), "nothing written");
+    assert!(!open.used && open.failures == 1 && open.attempt.is_none());
+    assert!(open.begin(Network::Guest, NOW).is_ok(), "the next attempt is taken at once");
 }

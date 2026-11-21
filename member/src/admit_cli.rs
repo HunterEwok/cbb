@@ -234,8 +234,10 @@ fn admin_hint(g: &Global) {
 /// admin that is not the hub it goes through a hub, the first connected
 /// one or -hub's.
 pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str = "cbb invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
+    const USE: &str =
+        "cbb invite [-phone] [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
     let (mut valid, mut out, mut hub) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string(), String::new());
+    let mut phone = false;
     let (mut app, mut answers) = (None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -245,6 +247,7 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
             }
             Some("o") => out = it.next().cloned().ok_or_else(|| usage(USE))?,
             Some("hub") => hub = it.next().cloned().ok_or_else(|| usage(USE))?,
+            Some("phone") => phone = true,
             Some("app") => app = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
             Some("answers") => answers = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
             _ => return Err(usage(USE)),
@@ -253,7 +256,9 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
     if valid <= 0 || valid > INVITE_MAX_MS || app.is_some() != answers.is_some() {
         return Err(usage(USE));
     }
-    let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, ..Default::default() };
+    // A group of 0.6 invites a computer, or with -phone a phone.
+    let kind = if phone { "phone".to_string() } else { String::new() };
+    let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, kind, ..Default::default() };
     if let (Some(app), Some(answers)) = (app, answers) {
         return invite_app(g, h, &app, &answers);
     }
@@ -271,10 +276,16 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
         MONTHS[(until.month as usize).clamp(1, 12) - 1],
         until.day
     );
-    println!("On a new phone, open the CBB app, tap Join with an invitation and scan this:\n");
-    print!("{}", crate::qr(&m.header.invite));
-    println!("\nOr send it in the file {out}. On a new computer run:");
-    println!("\n  cbb pair -invite {out}\n");
+    // A group of 0.6 invites one kind of device: a computer, or a phone.
+    let only = m.header.invite.starts_with(cbb_core::join::invitation::PREFIX);
+    if !only || phone {
+        println!("On a new phone, open the CBB app, tap Join with an invitation and scan this:\n");
+        print!("{}", crate::qr(&m.header.invite));
+    }
+    if !only || !phone {
+        println!("\nSend it in the file {out}. On the new computer run:");
+        println!("\n  cbb pair -invite {out}\n");
+    }
     println!("Pass the code or the file only through a channel you trust: until it is used,");
     println!("whoever has it can ask to join.");
     println!("You confirm the device here before it is admitted. Keep this running; Ctrl+C");
@@ -285,6 +296,11 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
         if m.header.done {
             println!("{} joined the group.", m.header.name);
             return Ok(());
+        }
+        if m.header.refused {
+            println!("\nA device tried the invitation and was not admitted: {}", m.header.detail);
+            println!("The invitation stays open for another attempt.");
+            continue;
         }
         let Some(j) = m.header.joining else { continue };
         println!("\n{} ({}, device {}) used the invitation.", j.name, crate::status_text::os_name(&j.os), j.id);

@@ -818,6 +818,23 @@ impl Mesh {
         self.run(sock, s, false, Some(&exporter))
     }
 
+    /// The server's side of a pairing handshake (`cbb-pair/3` alone) on a
+    /// connection that may only pair: a guest's through the hub's tunnel
+    /// (docs/protocol.md, section 12). Gives the connection, its session
+    /// and the pairing exporter.
+    pub fn pair_handshake(&self, sock: TcpStream) -> Result<(TcpStream, tls::Session, cbb_core::join::PairExporter)> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let cfg = bykey::server(&self.own.tls_key()?, bykey::any_key(), cbb_core::alpn::PAIR, &tls::clock())?;
+        let (cfg, exporter) = bykey::exporting_server(cfg);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        if !cbb_core::alpn::is_pair(s.alpn_protocol()) {
+            return Err(Error::msg("the device did not ask to pair"));
+        }
+        let x = bykey::pairing_exporter(&s, &exporter)?;
+        Ok((sock, s, x))
+    }
+
     /// Takes a connection on the member port, where members connect
     /// (`cbb/4`) and a device that joins pairs (`cbb-pair/3`): a member by
     /// its standing in the records, a pairing to the open window. The
