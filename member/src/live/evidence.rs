@@ -11,9 +11,12 @@
 //! proves in the device's record (`writers::record_proven`); a computer
 //! whose member key is in a TPM sends its own evidence on each connection
 //! and opens the root's credential. Without a helper a member neither
-//! checks nor sends evidence.
+//! checks nor sends evidence, but a phone that is the group's root
+//! (`with_phone_attestations`) checks its peers' Android evidence itself,
+//! with the core's checks and the revocation list its app hands it, when
+//! its app hands it the root key: it signs no record by itself.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -56,6 +59,12 @@ pub(super) struct Attest {
     last: Mutex<HashMap<DeviceId, Vec<u8>>>,
     /// Whether the TPM opens a credential now: one at a time.
     opening: AtomicBool,
+    /// A phone's, with no helper: it keeps Android evidence until its app
+    /// hands it the root key, and takes no other.
+    phone: bool,
+    /// On a phone, the peers whose last evidence was checked under the
+    /// list held.
+    checked: Mutex<HashSet<DeviceId>>,
 }
 
 /// The `evidence` message of format, attesting the key `key`, with data.
@@ -206,29 +215,9 @@ impl Live {
         if crate::helper::shared().is_none() {
             return;
         }
-        let a = Attest {
-            list: Attestations::new(self.mesh.dir()),
-            own: Mutex::new(Vec::new()),
-            pending: Mutex::new(HashMap::new()),
-            last: Mutex::new(HashMap::new()),
-            opening: AtomicBool::new(false),
-        };
-        if self.attest.set(a).is_err() {
+        if !self.start_attest(false) {
             return;
         }
-        let w: Weak<Live> = Arc::downgrade(self);
-        self.mesh.on_evidence(Box::new(move |peer, _, msg| {
-            let (w, peer, msg) = (w.clone(), *peer, msg.to_vec());
-            // The helper may take a while (a TPM is slow): off the
-            // connection's thread.
-            std::thread::spawn(move || {
-                if let Some(l) = w.upgrade()
-                    && let Err(e) = l.evidence_from(&peer, &msg)
-                {
-                    l.logf(&format!("cbb: the attestation from {}: {}", id_text4(&peer), e.for_log()));
-                }
-            });
-        }));
         let w: Weak<Live> = Arc::downgrade(self);
         self.mesh.on_connected(Box::new(move |peer| {
             if let Some(l) = w.upgrade() {
@@ -243,6 +232,47 @@ impl Live {
         });
         let w: Weak<Live> = Arc::downgrade(self);
         std::thread::spawn(move || status_loop(&w));
+    }
+
+    /// Starts the attestations of a phone, which has no helper: it keeps
+    /// the Android evidence its peers send while it is the group's root
+    /// and checks it when its app hands it the root key (`attest_record`),
+    /// under the revocation list its app fetched (`attest_status`). It
+    /// sends no evidence of its own (its app does, through its hello on
+    /// 0.5) and takes no TPM's.
+    pub fn with_phone_attestations(self: &Arc<Self>) {
+        self.start_attest(true);
+    }
+
+    /// Sets the attestations up and takes the peers' evidence; false when
+    /// they were already.
+    fn start_attest(self: &Arc<Self>, phone: bool) -> bool {
+        let a = Attest {
+            list: Attestations::new(self.mesh.dir()),
+            own: Mutex::new(Vec::new()),
+            pending: Mutex::new(HashMap::new()),
+            last: Mutex::new(HashMap::new()),
+            opening: AtomicBool::new(false),
+            phone,
+            checked: Mutex::new(HashSet::new()),
+        };
+        if self.attest.set(a).is_err() {
+            return false;
+        }
+        let w: Weak<Live> = Arc::downgrade(self);
+        self.mesh.on_evidence(Box::new(move |peer, _, msg| {
+            let (w, peer, msg) = (w.clone(), *peer, msg.to_vec());
+            // The helper may take a while (a TPM is slow): off the
+            // connection's thread.
+            std::thread::spawn(move || {
+                if let Some(l) = w.upgrade()
+                    && let Err(e) = l.evidence_from(&peer, &msg)
+                {
+                    l.logf(&format!("cbb: the attestation from {}: {}", id_text4(&peer), e.for_log()));
+                }
+            });
+        }));
+        true
     }
 
     /// Asks the helper for this device's TPM evidence of its member key,
@@ -305,6 +335,18 @@ impl Live {
         let Some(e) = to_json(format, &d) else { return Ok(()) };
         let st = self.mesh.state();
         let Some(dev) = st.devices.iter().find(|x| x.id == *peer) else { return Ok(()) };
+        if a.phone {
+            // A phone keeps its root's Android evidence for its app's root
+            // key, and takes no TPM's.
+            if format == EVIDENCE_ANDROID && key == dev.key.hash() && st.root_device == Some(self.mesh.device()) {
+                // The same evidence again (a peer sends it on each
+                // connection) waits no more than it did.
+                if a.last.lock().unwrap().insert(*peer, msg.to_vec()).as_deref() != Some(msg) {
+                    a.checked.lock().unwrap().remove(peer);
+                }
+            }
+            return Ok(());
+        }
         match format {
             EVIDENCE_ANDROID | EVIDENCE_TPM => {
                 // Evidence of another key than the sender's member key, or
@@ -367,22 +409,127 @@ impl Live {
 
     fn record(&self, peer: &DeviceId, key: &KeyHash, s: Shown, why: &str) -> Result<()> {
         let now = crate::uptime::wall_ms().max(0) as u64;
-        if let Some((d, store, proof)) = self.mesh.write(|set, k| writers::record_proven(set, k, peer, key, s, now))? {
-            let why = if why.is_empty() { String::new() } else { format!(": {why}") };
-            self.logf(&format!(
-                "cbb: the attestation of {} ({}) shows its keys {}{}{why}",
-                d.name,
-                id_text4(&d.id),
-                crate::roster::store_name(store),
-                match proof {
-                    1 => " (android-tee)",
-                    2 => " (android-strongbox)",
-                    3 => " (tpm)",
-                    _ => "",
-                }
-            ));
+        if let Some(d) = self.mesh.write(|set, k| writers::record_proven(set, k, peer, key, s, now))? {
+            self.log_recorded(&d, why);
         }
         Ok(())
+    }
+
+    fn log_recorded(&self, (d, store, proof): &(cbb_core::records::eval::DeviceState, u64, u64), why: &str) {
+        let why = if why.is_empty() { String::new() } else { format!(": {why}") };
+        self.logf(&format!(
+            "cbb: the attestation of {} ({}) shows its keys {}{}{why}",
+            d.name,
+            id_text4(&d.id),
+            crate::roster::store_name(*store),
+            match proof {
+                1 => " (android-tee)",
+                2 => " (android-strongbox)",
+                3 => " (tpm)",
+                _ => "",
+            }
+        ));
+    }
+}
+
+impl Live {
+    /// How many peers' Android evidence waits, on a phone that is the
+    /// group's root, for its app to hand it the root key.
+    pub fn attest_pending(&self) -> usize {
+        let Some(a) = self.attest.get() else { return 0 };
+        let st = self.mesh.state();
+        // A phone holds no root key: its app does.
+        if !a.phone || st.root_device != Some(self.mesh.device()) {
+            return 0;
+        }
+        let checked = a.checked.lock().unwrap();
+        a.last
+            .lock()
+            .unwrap()
+            .keys()
+            .filter(|p| !checked.contains(*p) && st.devices.iter().any(|d| d.id == **p))
+            .count()
+    }
+
+    /// Takes the revocation list's files a phone's app fetched from the
+    /// mirror (keys.json and attest-status.json), when they check out and
+    /// are not older than the list kept; the evidence kept waits to be
+    /// checked again with it. It answers how many certificates the list
+    /// revokes.
+    pub fn attest_status(&self, keys: cbb_core::release::File, status: cbb_core::release::File) -> Result<usize> {
+        let a = self.attest.get().ok_or_else(|| Error::msg("this member keeps no attestations"))?;
+        let (n, changed) = a.list.take_status(keys, status, &|s| self.logf(s))?;
+        if changed {
+            a.checked.lock().unwrap().clear();
+        }
+        Ok(n)
+    }
+
+    /// Checks, on a phone that is the group's root, the Android evidence
+    /// that waits, with the root key its app hands it (signer), and
+    /// records what each proves, as the root computer's helper does; it
+    /// answers how many records it signed. An evidence that proves nothing
+    /// is logged and not checked again until the list changes or the peer
+    /// sends another.
+    pub fn attest_record(&self, signer: &dyn cbb_core::identity::ExternalKey) -> Result<usize> {
+        let Some(a) = self.attest.get().filter(|a| a.phone) else { return Ok(0) };
+        let st = self.mesh.state();
+        if st.roots.last() != Some(&cbb_core::records::Key::es256(signer.public()).hash()) {
+            return Err(Error::msg("only the group's root records what an attestation proves"));
+        }
+        drop(st);
+        let waiting: Vec<(DeviceId, Vec<u8>)> = {
+            let checked = a.checked.lock().unwrap();
+            a.last.lock().unwrap().iter().filter(|(p, _)| !checked.contains(*p)).map(|(p, m)| (*p, m.clone())).collect()
+        };
+        let mut signed = 0;
+        for (peer, msg) in waiting {
+            match self.check_here(&peer, &msg, signer, &a.list.revoked()) {
+                Ok(true) => signed += 1,
+                Ok(false) => {}
+                Err(e) => self.logf(&format!("cbb: the attestation from {}: {}", id_text4(&peer), e.for_log())),
+            }
+            a.checked.lock().unwrap().insert(peer);
+        }
+        Ok(signed)
+    }
+
+    /// Checks a peer's Android evidence message with the core's checks and
+    /// records what it proves with signer; whether it signed a record.
+    #[cfg(feature = "tunnel")]
+    fn check_here(
+        &self,
+        peer: &DeviceId,
+        msg: &[u8],
+        signer: &dyn cbb_core::identity::ExternalKey,
+        revoked: &[String],
+    ) -> Result<bool> {
+        let (_, v, _) = cbb_core::msg::read_noted(msg).map_err(|r| Error::msg(r.to_string()))?;
+        let data = v.get(4).and_then(Value::as_bytes).unwrap_or_default();
+        let d =
+            m::evidence_data(EVIDENCE_ANDROID, data).map_err(|r| Error::msg(format!("the evidence's data: {r}")))?;
+        let e = to_json(EVIDENCE_ANDROID, &d).ok_or_else(|| Error::msg("an attestation that is not understood"))?;
+        let Some(dev) = self.mesh.state().devices.iter().find(|x| x.id == *peer).cloned() else { return Ok(false) };
+        let key = dev.key.hash();
+        let spki = cbb_core::certs::p256_spki_of(dev.key.public());
+        let p = crate::evidence::check_android_here(&e, &spki, &self.tag(), revoked)?;
+        let now = crate::uptime::wall_ms().max(0) as u64;
+        let done = self.mesh.write_by(signer, |set, k| writers::record_proven(set, k, peer, &key, shown(&p), now))?;
+        if let Some(d) = &done {
+            self.log_recorded(d, &p.why);
+        }
+        Ok(done.is_some())
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    fn check_here(
+        &self,
+        _: &DeviceId,
+        _: &[u8],
+        _: &dyn cbb_core::identity::ExternalKey,
+        _: &[String],
+    ) -> Result<bool> {
+        Err(Error::msg("this build checks no Android attestation by itself"))
     }
 }
 

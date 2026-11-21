@@ -258,6 +258,9 @@ impl Phone {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
+        // The Android evidence the peers send, which the phone checks while
+        // it is the group's root, when its app hands it the root key.
+        live.with_phone_attestations();
         // Sync away from home, with its state in the app's folder: on at
         // once for a phone that joined by an invitation, which reaches the
         // hub through the invitation's guest tunnel until it holds the
@@ -540,6 +543,17 @@ impl Phone {
             "away_status" => Ok(self.away_answer()),
             "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
+            // The revocation list of Android attestations the app fetched,
+            // and how many peers' evidence waits for the root key.
+            "attest_status" => {
+                let file = |k: &str| -> Result<cbb_core::release::File> {
+                    serde_json::from_value(arg(k))
+                        .map_err(|_| Error::msg(format!("the revocation list's {k} does not decode")))
+                };
+                let revoked = l.attest_status(file("keys")?, file("status")?)?;
+                Ok(json!({ "revoked": revoked, "pending": l.attest_pending() }))
+            }
+            "attest" => Ok(json!({ "pending": l.attest_pending() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
         }
@@ -757,6 +771,13 @@ impl Phone {
                 }
                 "make_admin" => self.make_admin(&a, &key, now)?,
                 "key_level" => return self.key_level(&a, &key, now),
+                // The root's key, handed over for the Android evidence that
+                // waits: the phone checks it and records what it proves
+                // (protocol.md, section 17), as a root computer's helper does.
+                "attest" => {
+                    let recorded = self.live.attest_record(&key)?;
+                    return Ok(json!({ "recorded": recorded, "pending": self.live.attest_pending() }));
+                }
                 other => return Err(not_yet(&format!("the admin's action {other:?}"))),
             };
             Ok(json!({ "device": id_text(&d.id), "name": d.name }))

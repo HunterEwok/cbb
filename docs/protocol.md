@@ -4793,7 +4793,11 @@ Only the group's root records it; it records no proof for its own device, and a 
 hello says `rootless` keeps `store` 3. A computer sends its TPM's evidence on each new
 connection, to every peer since any may be the root or become it, and answers the root's credential (format 3) with format 4; the root
 takes one exchange at a time per device and keeps the last evidence of each to check again
-against a new revocation list.
+against a new revocation list. A phone that is the group's root has no helper and its app holds
+the root key: it keeps the last Android evidence of each peer, checks it with the core's
+checks (`cbb_core::attest`) under the revocation list its app hands it (`attest_status`), and
+records what it proves when its app hands it the root key (the manage action `attest`); it
+takes no TPM evidence.
 
 ### Revoked attestations
 

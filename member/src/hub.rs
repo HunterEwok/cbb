@@ -1915,7 +1915,10 @@ mod tests {
         assert_eq!(member, 0, "a stream to another port was answered as the member port's");
         assert!(other.is_empty(), "the hub answered {other:?}");
         assert!(host_tcp.accept().is_err(), "a stream from the tunnel reached the device's other services");
-        assert!(host_udp.recv_from(&mut [0u8; 64]).is_err(), "a packet from the tunnel reached the device's other services");
+        assert!(
+            host_udp.recv_from(&mut [0u8; 64]).is_err(),
+            "a packet from the tunnel reached the device's other services"
+        );
         drop(hub);
     }
 }

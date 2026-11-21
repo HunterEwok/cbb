@@ -16,6 +16,10 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- A phone that is the root of a group of 0.6 checks the Android phones' attestations in the
+  core again and records what they show when its app hands it the root key, with the
+  revocation list its app fetched (`attest_status`, `attest` and the manage action `attest`
+  on the 0.6 member; docs/protocol.md, "Evidence on the records of 0.6").
 - The phones' kits read the group as the 0.6 member gives it: its state, its notices, the
   "who stays" list before a change of root, and the events of a change of root and of a key
   the member asks for (`GroupState`, `Notice`, `ChangePreview` in both kits, checked against

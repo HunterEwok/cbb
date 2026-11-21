@@ -87,6 +87,56 @@ fn kept_revocations(k: &Kept, roots: &[release::Key], now_ms: i64) -> Option<(Ve
     }
 }
 
+/// The attestation roots a test names in CBB_TEST_ATTEST_ROOTS (a PEM file
+/// of public keys), in place of Google's, as cbb-helper reads them.
+#[cfg(feature = "tunnel")]
+pub(crate) fn test_attest_roots() -> Option<Vec<Vec<u8>>> {
+    let f = crate::testbuild::env_os("CBB_TEST_ATTEST_ROOTS")?;
+    crate::update::read_public_keys(Path::new(&f)).ok()
+}
+
+/// Checks an Android evidence (the helper's JSON form) of the key spki for
+/// the group tag under the revoked serial numbers, with the core's checks
+/// (cbb_core::attest) and as cbb-helper's attest-android does: on a phone
+/// that is the group's root, which has no helper. A chain a revoked
+/// certificate made shows hardware, unproven.
+#[cfg(feature = "tunnel")]
+pub fn check_android_here(e: &Value, spki: &[u8], tag: &str, revoked: &[String]) -> Result<Proven> {
+    use cbb_core::attest::{self, Policy};
+    #[derive(Deserialize)]
+    struct Android {
+        #[serde(default)]
+        group_tag: String,
+        #[serde(with = "b64", default)]
+        salt: Vec<u8>,
+        #[serde(with = "b64::list", default)]
+        chain: Vec<Vec<u8>>,
+    }
+    let e: Android =
+        serde_json::from_value(e.clone()).map_err(|_| Error::msg("an attestation that is not understood"))?;
+    if !e.group_tag.is_empty() && e.group_tag != tag {
+        return Err(Error::msg("invalid attestation: an attestation made for another group"));
+    }
+    let challenge = attest::challenge(&e.group_tag, &[], &e.salt).map_err(|i| Error::msg(i.to_string()))?;
+    let roots = test_attest_roots();
+    let policy = Policy { strict: false, revoked, roots: roots.as_deref() };
+    match attest::check(&e.chain, spki, &challenge, &policy) {
+        Ok(s) => {
+            let proof = match e.chain.first() {
+                Some(leaf) if s.store == attest::STORE_PROVEN => attest::proof(leaf),
+                _ => String::new(),
+            };
+            Ok(Proven { store: s.store, kind: s.kind, why: s.why, proof })
+        }
+        // The keys may still be in hardware, as the hello says, but Google
+        // no longer vouches for the chain.
+        Err(i) if i.revoked => {
+            Ok(Proven { store: attest::STORE_HARDWARE.to_string(), why: i.to_string(), ..Proven::default() })
+        }
+        Err(i) => Err(Error::msg(i.to_string())),
+    }
+}
+
 #[derive(Deserialize)]
 struct Secret {
     #[serde(with = "b64::opt", default)]
@@ -330,12 +380,6 @@ impl Attestations {
     /// not older than the kept one; whether it changed, for the caller to
     /// check the peers' evidence again.
     pub fn fetch_status_with(&self, log: &dyn Fn(&str)) -> Result<bool> {
-        let path = self.dir.join(STATUS_FILE);
-        let kept_seen = std::fs::read(&path)
-            .ok()
-            .and_then(|d| serde_json::from_slice::<Kept>(&d).ok())
-            .map(|k| k.seen)
-            .unwrap_or_default();
         #[derive(Deserialize)]
         struct Files {
             keys: File,
@@ -343,21 +387,34 @@ impl Attestations {
         }
         let f: Files = serde_json::from_slice(&call("attest-status", &serde_json::json!({}))?)
             .context("the revocation list's files do not decode")?;
+        Ok(self.take_status(f.keys, f.status, log)?.1)
+    }
+
+    /// Takes the list's files (keys.json and attest-status.json, fetched
+    /// by the helper or, on a phone, by its app) when they check out under
+    /// the release roots and are not older than the kept list: how many
+    /// certificates the list revokes, and whether it changed.
+    pub fn take_status(&self, keys: File, status: File, log: &dyn Fn(&str)) -> Result<(usize, bool)> {
+        let path = self.dir.join(STATUS_FILE);
+        let kept_seen = std::fs::read(&path)
+            .ok()
+            .and_then(|d| serde_json::from_slice::<Kept>(&d).ok())
+            .map(|k| k.seen)
+            .unwrap_or_default();
         let roots = crate::update::release_roots();
-        let (st, seen) = release::check_status(&f.keys, &f.status, &roots, crate::update::now_ms(), &kept_seen)?;
-        if seen == kept_seen {
-            return Ok(false); // the same list
-        }
-        let data =
-            serde_json::to_vec(&Kept { keys: f.keys, status: f.status, seen }).context("cannot encode the list")?;
-        write_atomic(&path, &data, 0o600)?;
+        let (st, seen) = release::check_status(&keys, &status, &roots, crate::update::now_ms(), &kept_seen)?;
         let n = st.android_revoked.len();
+        if seen == kept_seen {
+            return Ok((n, false)); // the same list
+        }
+        let data = serde_json::to_vec(&Kept { keys, status, seen }).context("cannot encode the list")?;
+        write_atomic(&path, &data, 0o600)?;
         *self.revoked.lock().unwrap() = st.android_revoked;
         log(&format!(
             "cbb: took the revocation list of Android attestations of {}, {n} certificates",
             crate::node::date(st.time_ms / 1000)
         ));
-        Ok(true)
+        Ok((n, true))
     }
 
     /// Keeps the revocation list current on the group's root: it fetches

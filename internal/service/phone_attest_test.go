@@ -4,14 +4,10 @@
 package service
 
 import (
-	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,17 +20,19 @@ import (
 )
 
 // TestFFIPhoneAttest: a root phone whose app signs through the core keeps
-// the evidence an Android peer sends, records what it proves when its app
-// hands it the root key (manage action attest), takes the revocation list
-// its app fetched, and records the peer's keys as only in hardware once
-// the list revokes the chain's attestation key (docs/protocol.md, section
-// 17).
+// the Android evidence a peer sends (t 19), checks it with the core's
+// checks and records what it proves when its app hands it the root key
+// (manage action attest), takes the revocation list its app fetched, and
+// records the peer's keys as only in hardware once the list revokes the
+// chain's attestation key (docs/protocol.md, section 17, "Evidence on the
+// records of 0.6"). The laptop plays the Android phone: a build for tests
+// sends the evidence a file names as its own (CBB_TEST_OWN_EVIDENCE).
 func TestFFIPhoneAttest(t *testing.T) {
 	if os.Getenv("CBB_PHONE_ON_LINUX") == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	// The release root that signs the list's keys, and the attestation
-	// roots in place of Google's.
+	// roots in place of Google's, which the phone reads at each check.
 	dir := t.TempDir()
 	rootKey, err := release.GenerateSigner()
 	if err != nil {
@@ -64,55 +62,35 @@ func TestFFIPhoneAttest(t *testing.T) {
 	next, in, _, laptop, _, laptopID := rootPhoneWithLaptop(t, &h)
 	call := phoneCall(t, next, in)
 	laptop.stop()
-	id := mustLoad(t, laptop.dir)
+	member := memberKey06(t, laptop.dir)
 
 	salt := make([]byte, 16)
 	challenge, _ := attest.Challenge("", nil, salt)
-	chain, root, err := attesttest.Android(id.Cert.PublicKey, challenge)
+	chain, root, err := attesttest.Android(member, challenge)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(attestRoots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: root}), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	// The laptop's identity plays an Android phone that the phone dials and
-	// that sends its evidence after the hellos.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	evidence, err := json.Marshal([]map[string]any{{"format": "android-key", "key": "member", "salt": salt, "chain": chain}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
-	go func() {
-		raw, err := ln.Accept()
-		if err != nil {
-			return
-		}
-		defer raw.Close()
-		c := tls.Server(raw, id.ServerTLS(group.TLSOptions{}))
-		if err := c.Handshake(); err != nil {
-			t.Logf("the fake phone's handshake: %v", err)
-			return
-		}
-		send := func(m map[string]any) {
-			data, _ := json.Marshal(m)
-			c.Write(append(binary.BigEndian.AppendUint32(nil, uint32(len(data))), data...))
-		}
-		send(map[string]any{"t": "hello", "role": "phone", "hello": map[string]any{"wall_ms": time.Now().UnixMilli()}})
-		send(map[string]any{"t": "evidence", "evidence": map[string]any{"format": "android-key", "key": "member", "salt": salt, "chain": chain}})
-		io.Copy(io.Discard, c)
-	}()
-	call("found", map[string]any{"key": "android", "addrs": []string{ln.Addr().String()}})
-	waitFor(t, "the phone keeps the evidence", func() bool { return call("attest", nil)["pending"] == float64(1) })
+	evidenceFile := filepath.Join(dir, "evidence.json")
+	if err := os.WriteFile(evidenceFile, evidence, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	laptop.env = append(laptop.env, "CBB_TEST_OWN_EVIDENCE="+evidenceFile)
+	laptop = restartService(t, &h, laptop)
+	call("found", map[string]any{"key": "laptop", "addrs": []string{laptop.addr()}})
+	waitUpTo(t, 30*time.Second, "the phone keeps the evidence", func() bool { return call("attest", nil)["pending"] == float64(1) })
 	fmt.Fprintln(in, `MANAGE {"action":"attest"}`)
 	if got := next("MANAGED "); got != `{"ok":{"pending":0,"recorded":1}}` {
 		t.Fatalf("recording the attestation: %s", got)
 	}
-	ln.Close()
 
-	// The real laptop takes the records and shows its keys proven.
-	laptop = restartService(t, &h, laptop)
-	call("found", map[string]any{"key": "laptop", "addrs": []string{laptop.addr()}})
+	// The laptop takes the records and shows its keys proven.
 	store := func() string {
 		for _, d := range laptop.devices(t) {
 			if d.ID == laptopID {

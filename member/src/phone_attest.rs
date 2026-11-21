@@ -211,9 +211,7 @@ impl Attestations {
     }
 }
 
-/// The attestation roots a test names in CBB_TEST_ATTEST_ROOTS (a PEM file
-/// of public keys), in place of Google's, as cbb-helper reads them.
+/// The attestation roots a test names, as cbb-helper reads them.
 fn test_roots() -> Option<Vec<Vec<u8>>> {
-    let f = crate::testbuild::env_os("CBB_TEST_ATTEST_ROOTS")?;
-    crate::update::read_public_keys(Path::new(&f)).ok()
+    crate::evidence::test_attest_roots()
 }
