@@ -311,6 +311,56 @@ pub fn store_from_hello(
     Ok(Some(d))
 }
 
+/// What an attestation showed of a device's keys, for its record
+/// (docs/protocol.md, section 17): the store, and the kind of hardware
+/// when proven (`proof` 1 android-tee, 2 android-strongbox, 3 tpm).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shown {
+    /// The store and proof the attestation proves.
+    Store { store: u64, proof: u64 },
+    /// Proven no more (a revoked certificate): only a record that says
+    /// proven changes, to hardware.
+    NotProven,
+}
+
+/// Records, on the group's root (signer holds the current root key), what
+/// device's attestation of its member key `key` shows, when its record
+/// says otherwise; None when nothing changes: the key is not the record's
+/// (it sends the evidence again when it next connects), the record says
+/// it already, or the device's keys are rootless, which nothing proves.
+pub fn record_proven(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    device: &DeviceId,
+    key: &cbb_core::records::KeyHash,
+    shown: Shown,
+    now_ms: u64,
+) -> Result<Option<(DeviceState, u64, u64)>> {
+    use cbb_core::records::body::{STORE_HARDWARE, STORE_PROVEN, STORE_ROOTLESS};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Ok(None);
+    }
+    let Some(d) = st.devices.iter().find(|d| d.id == *device).cloned() else { return Ok(None) };
+    if d.key.hash() != *key || d.store == STORE_ROOTLESS || st.root_device == Some(d.id) {
+        return Ok(None);
+    }
+    let (store, proof) = match shown {
+        Shown::NotProven if d.store == STORE_PROVEN => (STORE_HARDWARE, 0),
+        Shown::NotProven => return Ok(None),
+        Shown::Store { store, proof } => (store, if store == STORE_PROVEN { proof } else { 0 }),
+    };
+    if (d.store, d.proof) == (store, proof) {
+        return Ok(None);
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    (rec.store, rec.proof) = (store, proof);
+    rec.seen = Vec::new();
+    set.write_record(&st, signer, Kind::device(rec), now_ms)
+        .map_err(|e| Error::msg(format!("cannot record what {}'s attestation proves: {e}", d.name)))?;
+    Ok(Some((d, store, proof)))
+}
+
 /// Makes this device (me) the group's root with the group's recovery key
 /// (rule 33): the change of root, signed by both halves of the recovery
 /// key, naming new_root, with this device's record again as the root's

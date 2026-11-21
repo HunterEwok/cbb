@@ -80,8 +80,8 @@ pub type OnCopy = Box<dyn Fn(&Arrived) + Send + Sync>;
 /// answered as failed.
 pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
 /// A message the member connection passes to the service: credentials,
-/// tunnel, hubs, guest, reach, evidence, waiting and dismiss (its type and
-/// body), from the peer named.
+/// tunnel, hubs, guest, reach, waiting and dismiss, or evidence on its own
+/// hook (its type and body), from the peer named.
 pub type OnOther = Box<dyn Fn(&DeviceId, u64, &[u8]) + Send + Sync>;
 
 /// What runs when a member connection with a device is up, after the
@@ -133,7 +133,8 @@ pub struct Mesh {
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
     on_other: RwLock<Option<OnOther>>,
-    on_connected: RwLock<Option<OnConnected>>,
+    on_connected: RwLock<Vec<OnConnected>>,
+    on_evidence: RwLock<Option<OnOther>>,
     on_peer_hello: RwLock<Option<OnConnected>>,
     on_pair: RwLock<Option<OnPair>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
@@ -314,7 +315,8 @@ impl Mesh {
                 on_command: RwLock::new(None),
                 on_set: RwLock::new(None),
                 on_other: RwLock::new(None),
-                on_connected: RwLock::new(None),
+                on_connected: RwLock::new(Vec::new()),
+                on_evidence: RwLock::new(None),
                 on_peer_hello: RwLock::new(None),
                 on_pair: RwLock::new(None),
                 waiting: Mutex::new(HashMap::new()),
@@ -390,8 +392,17 @@ impl Mesh {
         *self.on_other.write().unwrap() = Some(f);
     }
 
+    /// Adds what runs when a member connection is up: sync away from home
+    /// and the attestations each add one.
     pub fn on_connected(&self, f: OnConnected) {
-        *self.on_connected.write().unwrap() = Some(f);
+        self.on_connected.write().unwrap().push(f);
+    }
+
+    /// Where an `evidence` message (t 19) goes, apart from the other
+    /// messages the service takes, since attestations run without sync
+    /// away from home.
+    pub fn on_evidence(&self, f: OnOther) {
+        *self.on_evidence.write().unwrap() = Some(f);
     }
 
     /// Called with the peer each time a hello from it arrives, once
@@ -1017,7 +1028,7 @@ impl Mesh {
         for (_, f) in self.push.renewals(&peer) {
             let _ = conn.tx.try_send(f);
         }
-        if let Some(f) = &*self.on_connected.read().unwrap() {
+        for f in self.on_connected.read().unwrap().iter() {
             f(&peer);
         }
         let mut x = Exchange::new(self.own.hash(), point);
@@ -1132,12 +1143,17 @@ impl Mesh {
                 | cbb_core::msg::tables::T_HUBS
                 | cbb_core::msg::tables::T_GUEST
                 | m::T_REACH
-                | m::T_EVIDENCE
                 | cbb_core::msg::tables::T_WAITING
                 | cbb_core::msg::tables::T_DISMISS),
             ) => {
                 if let Some(f) = &*self.on_other.read().unwrap() {
                     f(&conn.peer, t, msg);
+                }
+                Ok(())
+            }
+            Some(m::T_EVIDENCE) => {
+                if let Some(f) = &*self.on_evidence.read().unwrap() {
+                    f(&conn.peer, m::T_EVIDENCE, msg);
                 }
                 Ok(())
             }

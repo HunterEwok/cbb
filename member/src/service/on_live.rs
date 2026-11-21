@@ -124,6 +124,8 @@ impl Service {
             live.with_away(Arc::new(away));
         }
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
+        // The attestations of member keys (docs/protocol.md, section 17).
+        live.with_attestations();
         *self.live.write().unwrap() = Some(live.clone());
         let tag = live.tag();
         log(&format!(

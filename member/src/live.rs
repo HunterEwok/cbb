@@ -155,6 +155,9 @@ pub struct Live {
     handoff: Mutex<Option<DeviceId>>,
     /// A thread signs again what a resolve voided (`resign_soon`).
     resigning: std::sync::atomic::AtomicBool,
+    /// The attestations of member keys, once the service started them
+    /// (`with_attestations`).
+    attest: std::sync::OnceLock<evidence::Attest>,
     /// The link to the group's blind relay, while the device meets the
     /// group there.
     #[cfg(feature = "tunnel")]
@@ -222,6 +225,7 @@ impl Live {
             #[cfg(feature = "tunnel")]
             handoff: Mutex::new(None),
             resigning: std::sync::atomic::AtomicBool::new(false),
+            attest: std::sync::OnceLock::new(),
             #[cfg(feature = "tunnel")]
             meeting: Mutex::new(None),
             #[cfg(feature = "tunnel")]
@@ -638,6 +642,7 @@ fn id_text4(id: &DeviceId) -> String {
 
 #[cfg(feature = "tunnel")]
 mod away;
+mod evidence;
 pub mod invite;
 #[cfg(not(feature = "tunnel"))]
 mod off;

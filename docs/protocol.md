@@ -4736,6 +4736,11 @@ characters, as above, and the member key as the SubjectPublicKeyInfo of the send
 is a key made outside a group, which the root takes. The root records what the evidence proves
 in the device's record, `store` 4 (`proven`) with `proof` 1 `android-tee`, 2
 `android-strongbox` or 3 `tpm`, as above.
+Only the group's root records it; it records no proof for its own device, and a device whose
+hello says `rootless` keeps `store` 3. A computer sends its TPM's evidence on each new
+connection, to every peer since any may be the root or become it, and answers the root's credential (format 3) with format 4; the root
+takes one exchange at a time per device and keeps the last evidence of each to check again
+against a new revocation list.
 
 ### Revoked attestations
 

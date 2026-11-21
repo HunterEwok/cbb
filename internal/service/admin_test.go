@@ -309,10 +309,7 @@ func TestEvidence(t *testing.T) {
 	pairWith(t, pi, deck)
 	waitFor(t, "deck is listed", func() bool { return listed(pi.devices(t)) == "deck pi" })
 	deck.stop()
-	id, err := group.Load(deck.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	member := memberKey06(t, deck.dir)
 	salt := make([]byte, 16)
 	challenge, _ := attest.Challenge("", nil, salt)
 	other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -320,7 +317,7 @@ func TestEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, root, err := attesttest.Android(id.Cert.PublicKey, challenge)
+	chain, root, err := attesttest.Android(member, challenge)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,13 +329,21 @@ func TestEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := &fakePhone{t: t, id: id}
-	p.dial(pi.addr(), mustLoad(t, pi.dir))
+	// The deck sends the two chains as a phone sends its own, the one of
+	// another key first (CBB_TEST_OWN_EVIDENCE, a build for tests).
 	ev := func(chain [][]byte) map[string]any {
-		return map[string]any{"t": "evidence", "evidence": map[string]any{"format": "android-key", "key": "member", "salt": salt, "chain": chain}}
+		return map[string]any{"format": "android-key", "key": "member", "salt": salt, "chain": chain}
 	}
-	p.send(ev(wrong))
-	p.send(ev(chain))
+	evidence, err := json.Marshal([]map[string]any{ev(wrong), ev(chain)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidenceFile := dir + "/evidence.json"
+	if err := os.WriteFile(evidenceFile, evidence, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deck.env = append(deck.env, "CBB_TEST_OWN_EVIDENCE="+evidenceFile)
+	deck = restartService(t, &h, deck)
 	store := func() string {
 		for _, d := range pi.devices(t) {
 			if d.Name == "deck" {
@@ -359,6 +364,33 @@ func TestEvidence(t *testing.T) {
 	list.Seq, list.AndroidRevoked = 2, []string{ca.SerialNumber.Text(16)}
 	listMu.Unlock()
 	waitFor(t, "the root records the deck's keys as in hardware", func() bool { return store() == group.StoreHardware })
+}
+
+// memberKey06 is the public member key of the device of 0.6 whose state
+// is in dir, from its keys.json (member/src/own.rs).
+func memberKey06(t *testing.T, dir string) *ecdsa.PublicKey {
+	t.Helper()
+	var f struct {
+		Member struct {
+			PKCS8 []byte `json:"pkcs8"`
+		} `json:"member"`
+	}
+	raw, err := os.ReadFile(dir + "/keys.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &f); err != nil {
+		t.Fatal(err)
+	}
+	k, err := x509.ParsePKCS8PrivateKey(f.Member.PKCS8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ec, ok := k.(*ecdsa.PrivateKey)
+	if !ok {
+		t.Fatalf("the member key is a %T", k)
+	}
+	return &ec.PublicKey
 }
 
 func mustLoad(t *testing.T, dir string) *group.Identity {

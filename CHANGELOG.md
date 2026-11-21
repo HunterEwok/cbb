@@ -2854,6 +2854,12 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Proven keys work on the records of 0.6 as with 0.5: a computer with a TPM sends its
+  evidence (t 19, the data of docs/protocol.md, section 17, "Evidence on the records of
+  0.6") and answers the root's credential; the root checks an Android chain or a TPM's
+  evidence through its helper, records the device as `store` 4 (`proven`) with its `proof`,
+  and as `hardware` again when the revocation list names a certificate of its chain. Only
+  the root records; a rootless device is never recorded as proven.
 - On the records of 0.6 `cbb global relay` on an admin says that only the group's root sets
   the group's relay, instead of "not done yet"; `cbb leave` sees a group of 0.6 and deletes
   its push registrations, server faces and secret as well; the root's leave with other
