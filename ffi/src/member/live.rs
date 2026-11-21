@@ -112,6 +112,11 @@ struct ManageArgs {
     /// in their order, by name or device ID.
     #[serde(default)]
     hubs: Vec<String>,
+    /// With relay, on the root: the group's relays, each "address pin"
+    /// (its key's pin in base64), or "default" alone for the project's;
+    /// none meets at no relay.
+    #[serde(default)]
+    relays: Vec<String>,
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
@@ -674,6 +679,19 @@ impl Phone {
                         json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }),
                     );
                 }
+                "relay" => {
+                    let given: Vec<(String, String)> = a
+                        .relays
+                        .iter()
+                        .map(|r| match r.trim().split_once(' ') {
+                            Some((addr, pin)) => (addr.to_string(), pin.trim().to_string()),
+                            None if r.trim() == "default" => (String::new(), "default".to_string()),
+                            None => (r.trim().to_string(), String::new()),
+                        })
+                        .collect();
+                    let relays = self.live.set_relays(Some(&key), &given)?;
+                    return Ok(json!({ "relays": relays.into_iter().map(|r| r.endpoint).collect::<Vec<_>>() }));
+                }
                 "hubs" => {
                     mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
                     return Ok(json!({ "hubs": a.hubs }));
@@ -1083,6 +1101,14 @@ mod tests {
         // A command names another device; this phone's own switches are its own.
         assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
         assert!(error(&manage("hand_over", "tablet", "")).contains("does not work in this build yet"));
+        // The root sets the group's relays, and none again.
+        let pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+        let relay = json!({ "action": "relay", "relays": [format!("203.0.113.9:8764 {pin}")], "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(relay.to_string().as_bytes(), sign, ctx(root)))["relays"], json!(["203.0.113.9:8764"]));
+        let bad = json!({ "action": "relay", "relays": ["203.0.113.9:8764 nope"], "public": b64(&root.0.public()) });
+        assert!(error(&m.manage(bad.to_string().as_bytes(), sign, ctx(root))).contains("is not a relay's key"));
+        let none = json!({ "action": "relay", "relays": [], "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(none.to_string().as_bytes(), sign, ctx(root)))["relays"], json!([]));
         // The root names its hubs, which the records judge: a phone is a hub
         // only with an admin key, never by the hubs record.
         let hubs = json!({ "action": "hubs", "hubs": ["tablet"], "public": b64(&root.0.public()) });

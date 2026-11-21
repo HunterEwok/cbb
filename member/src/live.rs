@@ -744,6 +744,7 @@ pub mod invite;
 mod off;
 #[cfg(feature = "tunnel")]
 mod relay;
+mod relays;
 #[cfg(feature = "tunnel")]
 mod through;
 

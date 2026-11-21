@@ -744,89 +744,19 @@ impl Service {
     /// with the project's alone. The answer's `relays` names them. Only the
     /// root sets them, an admin as well as a member is told so.
     fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
-        use cbb_core::records::body::{SERVER_RELAY, Server};
         let off = h.relay == "off" && h.relays.is_empty();
         if !h.consent && !off {
             return Err(Error::msg(
                 "a relay learns which devices of the group talk, when and how much, and their addresses; run cbb global relay and read what it says",
             ));
         }
-        let st = live.mesh.state();
-        let own = live.mesh.own();
-        let root = own
-            .root
-            .as_ref()
-            .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
-        // An admin too: on 0.6 only the root sets it (the owner,
-        // 2026-11-21); an admin asking the root comes with a command of
-        // its own in 0.7.
-        if !root {
-            return Err(Error::msg("only the group's root sets the group's relay: run cbb global relay on the root"));
-        }
-        let given = std::iter::once((h.relay.clone(), h.relay_key.clone())).chain(h.relays.iter().map(|r| {
-            let (a, k) = r.split_once(' ').unwrap_or((r, ""));
-            (a.to_string(), k.to_string())
-        }));
-        let mut relays: Vec<Server> = Vec::new();
-        for (addr, key) in given.filter(|_| !off) {
-            if key == "default" {
-                if !h.relays.is_empty() {
-                    return Err(Error::msg("the project's relay goes alone: cbb global relay default"));
-                }
-                // The project's relay, by name, with the pin of its key the
-                // newest keys.json gives (else the one built in): the
-                // root's consent is in the group's settings.
-                let now = uptime::wall_ms();
-                let pin = crate::faces::project_servers(live.mesh.entries().as_deref(), now)
-                    .into_iter()
-                    .find(|s| s.address == crate::faces::PROJECT_RELAY)
-                    .map(|s| s.pin)
-                    .ok_or_else(|| Error::msg("this build knows no key of the project's relay"))?;
-                relays.push(Server { kind: SERVER_RELAY, endpoint: crate::faces::PROJECT_RELAY.to_string(), pin });
-                break;
-            }
-            let endpoint = match addr.parse::<std::net::SocketAddr>() {
-                Ok(ep) if ep.port() != 0 => ep.to_string(),
-                _ => {
-                    return Err(Error::msg(format!(
-                        "{addr:?} is not the relay's address with a port, such as 203.0.113.9:8764"
-                    )));
-                }
-            };
-            use base64::Engine as _;
-            let b64 = base64::engine::general_purpose::STANDARD;
-            let pin = b64
-                .decode(&key)
-                .ok()
-                .filter(|b| b64.encode(b) == key)
-                .and_then(|b| <[u8; 32]>::try_from(b).ok())
-                .ok_or_else(|| {
-                    Error::msg(format!("{key:?} is not a relay's key; cbb relay prints it, 44 characters of base64"))
-                })?;
-            if relays.iter().any(|r| r.endpoint == endpoint) {
-                return Err(Error::msg(format!("the relay {endpoint} is given twice")));
-            }
-            relays.push(Server { kind: SERVER_RELAY, endpoint, pin });
-        }
-        let others = st.settings.servers.iter().filter(|v| v.kind != SERVER_RELAY).count();
-        if relays.len() + others > cbb_core::records::body::MAX_SERVERS {
-            return Err(Error::msg(format!(
-                "a group names at most {} servers in its settings",
-                cbb_core::records::body::MAX_SERVERS
-            )));
-        }
-        let now = uptime::wall_ms().max(0) as u64;
-        live.mesh.write(|set, k| {
-            writers::set_settings(
-                set,
-                k,
-                |s| {
-                    s.servers.retain(|v| v.kind != SERVER_RELAY);
-                    s.servers.extend(relays.iter().cloned());
-                },
-                now,
-            )
-        })?;
+        let given: Vec<(String, String)> = std::iter::once((h.relay.clone(), h.relay_key.clone()))
+            .chain(h.relays.iter().map(|r| {
+                let (a, k) = r.split_once(' ').unwrap_or((r, ""));
+                (a.to_string(), k.to_string())
+            }))
+            .collect();
+        let relays = live.set_relays(None, if off { &[] } else { &given })?;
         let endpoints: Vec<String> = relays.into_iter().map(|r| r.endpoint).collect();
         (self.log)(&if endpoints.is_empty() {
             "cbb: the group meets at no relay now".to_string()
