@@ -2854,6 +2854,8 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 `cbb copy`, of a text or of files, reaches this device's own clipboard
+  again, as well as the group, unless the clipboard holds that text already.
 - On the records of 0.6 a device that joins dials the member it joined through only when no
   connection came by the time the fallback dial would come, so that two members keep one
   connection between them; each member logs the address it is connected at and when it takes

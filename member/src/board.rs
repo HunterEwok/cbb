@@ -235,16 +235,27 @@ impl Board {
     }
 
     /// A deliberate send (cbb send, a phone's paste): always content,
-    /// unless this member is muted.
-    pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<Content> {
+    /// unless this member is muted, and whether it goes to this device's
+    /// own clipboard too: unless the clipboard holds it already, as a copy
+    /// from tmux reaches the desktop's clipboard, whatever the mode.
+    pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<(Content, bool)> {
         let c = content(text, kind, via)?;
         let mut st = self.inner.lock().unwrap();
         if self.muted(&mut st) {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
         let now = (self.wall)();
+        let s = sum(text);
+        let write = !st.local.as_ref().is_some_and(|l| l.sum == s && l.media.is_none());
         st.local = Some(local(text, kind, now));
-        Ok(c)
+        if write {
+            // The watcher reports the write back: no copy of its own.
+            st.written.push_back((s, now));
+            while st.written.len() > WRITTEN {
+                st.written.pop_front();
+            }
+        }
+        Ok((c, write))
     }
 
     /// Whether images or files this member copied go to the group: a
@@ -374,6 +385,18 @@ mod tests {
         assert_eq!(b.current().unwrap().origin, peer);
         // The watcher sees the member's own write: not sent back.
         assert!(b.copied("from peer", Kind::Text, Via::Copy).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_send_goes_to_the_own_clipboard_unless_it_holds_it() {
+        let (b, _) = board();
+        b.set_sync(false, 1_000_500);
+        let (_, write) = b.send("from tmux", Kind::Text, Via::Copy).unwrap();
+        assert!(write, "a deliberate send is written here, whatever the mode");
+        // The watcher reports the write back: no copy of its own.
+        assert!(b.copied("from tmux", Kind::Text, Via::Copy).unwrap().is_none());
+        let (_, write) = b.send("from tmux", Kind::Text, Via::Copy).unwrap();
+        assert!(!write, "the clipboard holds it already");
     }
 
     #[test]

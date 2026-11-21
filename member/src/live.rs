@@ -377,10 +377,26 @@ impl Live {
 
     pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
         self.refuse_forward_only()?;
-        let c = self.board.send(text, kind, via)?;
+        let (c, write) = self.board.send(text, kind, via)?;
         // A group with no other reader yet (this device alone) keeps the
         // copy here, as the board did; nothing goes out.
         self.mesh.copy(&c)?;
+        if write {
+            let (_, secret_ms) = self.board.lifetimes();
+            let w = Write {
+                // A text names no copy: only a paste of images or files does.
+                id: [0; 16],
+                text: text.to_string(),
+                kind,
+                media: None,
+                blob: None,
+                from: self.me,
+                ttl: (kind == Kind::Secret).then(|| Duration::from_millis(secret_ms)),
+            };
+            if let Some(f) = &*self.on_write.read().unwrap() {
+                f(w);
+            }
+        }
         Ok(())
     }
 
@@ -404,7 +420,22 @@ impl Live {
         };
         let m = self.mesh.copy_media(&c, parts, send)?;
         self.board.copied_media(&m.manifest, text);
+        let w = deliberate.then(|| Write {
+            id: m.id.unwrap_or_default(),
+            text: text.to_string(),
+            kind: Kind::Media,
+            media: Some(m.manifest.clone()),
+            // Kept here: nothing to fetch.
+            blob: None,
+            from: self.me,
+            ttl: None,
+        });
         *self.own_media.lock().unwrap() = Some((m, uptime::wall_ms()));
+        // cbb copy FILE puts them in this device's own clipboard too, as a
+        // text cbb copy does (Live::send); a paste opens its own copy.
+        if let (Some(w), Some(f)) = (w, &*self.on_write.read().unwrap()) {
+            f(w);
+        }
         Ok(())
     }
 
