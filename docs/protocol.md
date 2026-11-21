@@ -4046,8 +4046,8 @@ On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-o
 checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
 receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
 carrying the command out went wrong. `hub` and a small device's own command answer that they
-are not on the records of 0.6 yet; `away-off` is done at once, as the member of 0.6 syncs only
-at home.
+are not on the records of 0.6 yet; `away-off` turns sync away from home off on the receiver,
+which only its own user turns on again.
 
 A `hub` command of 0.6 orders field 10 (the hub to use, an endpoint with its key), 11 (the
 forwarders, 1 to 8, each `[address, pin]`, an address once: the pin of the forwarder's key, 32

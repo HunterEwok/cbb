@@ -5,8 +5,9 @@
 //! those this device's root or admin key sends to another device (mute,
 //! sync, remote paste, quick actions and turning them off), and those it
 //! takes and carries out, with the same checks of its user's switches as
-//! on the old records. A hub, away-off or a small device's own command
-//! answers that it is not on the records of 0.6 yet.
+//! on the old records. Away-off turns sync away from home off here; a hub
+//! or a small device's own command answers that it is not on the records
+//! of 0.6 yet.
 
 use super::*;
 
@@ -128,9 +129,7 @@ impl Service {
                 outcome(&res.status, &res.reason)
             }
             Order::AwayOff => {
-                // The member of 0.6 syncs only at home: sync away from home
-                // is off here unless an old one still runs.
-                if let Some(a) = self.away.read().unwrap().clone() {
+                if let Some(a) = live.away() {
                     a.turn_off()?;
                 }
                 (self.log)(&format!("cbb: {who} turned sync away from home off here"));

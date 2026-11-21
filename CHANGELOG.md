@@ -91,6 +91,7 @@ made with 0.5 is set up again once. The details follow.
   face, taking the forwarder's VLESS settings into its offer. `cbb status` and `cbb global`
   on a group of 0.6 show sync away from home, and on a hub its forwarder: where it is, whether
   it registered there, and why not.
+  An `away-off` command turns sync away from home off on a member of 0.6.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

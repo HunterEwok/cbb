@@ -280,7 +280,11 @@ fn commands_reach_a_member() {
     has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "no such!"})), "not an action's name");
     has(&root.err(true, json!({"op": "action_on", "device": "root", "name": "lock"})), "runs on another device");
     has(&root.err(true, json!({"op": "away", "name": "off", "device": "root"})), "-on names this device");
+    // Sync away from home on at desk, and the root turns it off there.
+    desk.ok(true, json!({"op": "away", "name": "on", "consent": true}));
+    desk.wait("sync away from home is on at desk", |st| st["away"].is_object());
     root.ok(true, json!({"op": "away", "name": "off", "device": "desk"}));
+    desk.wait("sync away from home is off at desk", |st| st["away"].is_null());
 }
 
 /// One pairing at a time, a join only outside a group; a home window
