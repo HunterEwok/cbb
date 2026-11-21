@@ -209,6 +209,9 @@ fn relay_args(args: &[String]) -> std::result::Result<(Vec<(String, String)>, bo
             out.push((a, k));
         }
     }
+    if addr.is_none() && key.is_some() && out.last().is_some_and(|(_, k)| k == PROJECT) {
+        return Err("the project's relay (cbb global relay default) takes no -key: cbb knows it".into());
+    }
     if addr.is_some() || key.is_some() || out.is_empty() {
         return Err(String::new());
     }
@@ -751,6 +754,8 @@ mod tests {
             ("192.0.2.1:8764 192.0.2.2:8764 -key AAAA", "has no -key"),
             ("-key AAAA -key BBBB 192.0.2.1:8764", "one -key"),
             ("-key AAAA default", "takes no -key"),
+            ("default -key AAAA", "takes no -key"),
+            ("default -key AAAA 192.0.2.1:8764", "goes alone"),
             ("192.0.2.1:8764 -key default", "goes with the project's relay"),
             ("default 192.0.2.1:8764 -key AAAA", "goes alone"),
             ("192.0.2.1:8764 -key AAAA 192.0.2.1:8764 -key BBBB", "once"),

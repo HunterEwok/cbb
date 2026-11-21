@@ -133,8 +133,10 @@ fn two_members_sync_their_records_and_statements() {
     // Each has the other's statement: each can seal to the other.
     until("the statements", || {
         let st = b.state();
-        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
-            && a.statements.lock().unwrap().sealing(&a.state()).contains_key(&b.device())
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device()) && {
+            let sa = a.state();
+            a.statements.lock().unwrap().sealing(&sa).contains_key(&b.device())
+        }
     });
     // b kept what it learned.
     let local = crate::set::local_key(&b.dir).unwrap();
@@ -152,7 +154,11 @@ fn a_copy_reaches_the_other_member() {
         let _ = tx.lock().unwrap().send((c.content.clone(), c.origin));
     }));
     connect(&a, &b);
-    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    until("the statements", || {
+        // The state first: holding the statements while taking the set would invert mesh's lock order.
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
     let content = Content::text("from b", false);
     assert!(b.copy(&content).unwrap());
     let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -172,7 +178,11 @@ fn a_copy_with_images_brings_its_blob_and_it_opens() {
         let _ = tx.lock().unwrap().send(c.clone());
     }));
     connect(&a, &b);
-    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    until("the statements", || {
+        // The state first: holding the statements while taking the set would invert mesh's lock order.
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
     // Over a megabyte: more than one get, several chunks and segments.
     let png: Vec<u8> = (0..(1 << 20) + 70_000).map(|i| (i % 253) as u8).collect();
     let content = Content { kind: TYPE_MEDIA, text: Some("a picture".into()), ..Content::default() };

@@ -457,7 +457,7 @@ impl Faces {
         // The root's period keys, each the face's pin, tag and scalar.
         let mut period_keys = BTreeMap::new();
         if let Some(b) = read_or_none(&dir.join(PERIOD_KEY_FILE)).ok().flatten() {
-            for r in b.chunks_exact(80) {
+            for r in b.as_chunks::<80>().0 {
                 let (Ok(pin), Ok(tag), Ok(scalar)) =
                     (<[u8; 32]>::try_from(&r[..32]), <[u8; 16]>::try_from(&r[32..48]), <[u8; 32]>::try_from(&r[48..]))
                 else {
