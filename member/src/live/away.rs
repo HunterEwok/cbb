@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use cbb_core::records::DeviceId;
 
-use super::Live;
+use super::{Live, id_text4};
 use crate::away::Away;
 use crate::discovery::Peers as _;
 
@@ -40,6 +40,7 @@ impl Live {
                 cbb_core::msg::tables::T_RESULT => l.offered(peer, msg),
                 cbb_core::msg::tables::T_TUNNEL => l.tunnel_from(peer, msg),
                 cbb_core::msg::tables::T_HUBS => l.hubs_from(peer, msg),
+                cbb_core::msg::tables::T_GUEST => l.guest_from(peer, msg),
                 _ => {}
             }
         }));
@@ -511,8 +512,4 @@ impl Live {
         };
         Ok(HubRun { _registration: registration, report, hub })
     }
-}
-
-fn id_text4(id: &DeviceId) -> String {
-    cbb_core::certs::hex(&id.0[..4])
 }

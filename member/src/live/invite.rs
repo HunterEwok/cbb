@@ -37,6 +37,16 @@ pub type Pair = (TcpStream, tls::Session, PairExporter);
 const TUNNEL_START: Duration = Duration::from_secs(10);
 /// The most invitations of its own the hub keeps open at once.
 pub const MAX_OPEN: usize = crate::inviter::MAX_OPEN;
+/// The most invitations of other admins the hub carries at once.
+const MAX_THROUGH: usize = 16;
+/// The most bytes one pairing connection passes through the hub to its
+/// admin, and the most such connections of one guest at once: a pairing
+/// takes a few kilobytes, one at a time.
+const MAX_PASSED: usize = 1 << 20;
+const MAX_CONNS: usize = 2;
+/// How long a pairing connection passed to an admin may stay silent: the
+/// admin has five minutes to confirm the device.
+const PASS_IDLE: Duration = Duration::from_secs(360);
 /// How long a guest stays at most after its device was admitted, for the
 /// device's first member connection: a device whose service starts late
 /// still reaches the hub.
@@ -51,8 +61,15 @@ pub const GUEST_FILE: &str = "invite-guest";
 /// The guest of an open invitation, on the hub.
 pub(super) struct Guest {
     peer: hub::Peer,
-    /// Where the guest's pairing connections go: the invitation's window.
-    pairs: mpsc::SyncSender<Pair>,
+    /// Where the guest's pairing connections go: the invitation's window,
+    /// on this hub; None for an admin's invitation through it.
+    pairs: Option<mpsc::SyncSender<Pair>>,
+    /// The admin whose invitation it is, when not this hub's own: its
+    /// pairing connections go to that admin, in `guest` messages.
+    owner: Option<DeviceId>,
+    /// The pairing connections passed to the owner, by number.
+    conns: HashMap<u32, TcpStream>,
+    next_conn: u32,
     /// The device the admin admitted, None until then.
     admitted: Option<DeviceId>,
     /// The hub answered the admitted device's `tunnel`.
@@ -78,6 +95,25 @@ impl Live {
     /// and the guest's pairing connections. Refused while this device does
     /// not serve as a hub.
     pub fn open_guest(self: &Arc<Self>, key: [u8; 32], public: [u8; 32], psk: [u8; 32]) -> Result<Opened> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let (hub_key, endpoints, obfuscation) = self.let_in(public, psk, Some(tx), None)?;
+        let path =
+            Path { kind: PathKind::Guest, endpoints, hub_key: Some(hub_key), guest: Some((key, psk)), obfuscation };
+        Ok(Opened { path, pairs: rx })
+    }
+
+    /// Lets a guest into the hub's tunnel, its pairing connections going to
+    /// pairs on this hub, or to the admin owner: refused while this device
+    /// does not serve as a hub, for a key in use, and past the limits.
+    /// Gives what the invitation says of the hub: its key, its addresses
+    /// and the group's obfuscation settings.
+    fn let_in(
+        &self,
+        public: [u8; 32],
+        psk: [u8; 32],
+        pairs: Option<mpsc::SyncSender<Pair>>,
+        owner: Option<DeviceId>,
+    ) -> Result<([u8; 32], Vec<String>, Option<cbb_core::msg::Obfuscation>)> {
         let away = self.away().ok_or_else(|| Error::msg(NOT_SERVING))?;
         if !away.is_hub_now() {
             return Err(Error::msg(NOT_SERVING));
@@ -94,24 +130,41 @@ impl Live {
                 "the hub's tunnel is not running yet; try again in a minute"
             }));
         }
-        let (hub_key, endpoints, obfuscation) = away.guest_way()?;
+        let way = away.guest_way()?;
         let addr = hub::guest_addr(&public);
-        let (tx, rx) = mpsc::sync_channel(1);
         {
             let mut guests = self.guests.lock().unwrap();
-            if guests.len() >= MAX_OPEN {
-                return Err(Error::msg(format!("{MAX_OPEN} invitations are open already")));
+            let through = guests.values().filter(|g| g.owner.is_some());
+            match &owner {
+                None if guests.values().filter(|g| g.owner.is_none()).count() >= MAX_OPEN => {
+                    return Err(Error::msg(format!("{MAX_OPEN} invitations are open already")));
+                }
+                Some(_) if through.clone().count() >= MAX_THROUGH => {
+                    return Err(Error::msg("the hub carries as many invitations of other admins as it takes"));
+                }
+                Some(o) if through.filter(|g| g.owner.as_ref() == Some(o)).count() >= MAX_OPEN => {
+                    return Err(Error::msg(format!("{MAX_OPEN} invitations of this admin are open already")));
+                }
+                _ => {}
             }
             if guests.contains_key(&addr) {
                 return Err(Error::msg("that guest key is in use"));
             }
             let peer = hub::Peer { key: public, psk, older_psks: Vec::new(), addr, until: None, source: None };
-            guests.insert(addr, Guest { peer, pairs: tx, admitted: None, offered: false, done: false });
+            let g = Guest {
+                peer,
+                pairs,
+                owner,
+                conns: HashMap::new(),
+                next_conn: 0,
+                admitted: None,
+                offered: false,
+                done: false,
+            };
+            guests.insert(addr, g);
         }
         self.give_hub_peers();
-        let path =
-            Path { kind: PathKind::Guest, endpoints, hub_key: Some(hub_key), guest: Some((key, psk)), obfuscation };
-        Ok(Opened { path, pairs: rx })
+        Ok(way)
     }
 
     /// The invitation of the guest with the public key ended: with the
@@ -154,9 +207,11 @@ impl Live {
 
     /// Forgets a guest: its packets are dropped from then on.
     fn drop_guest(&self, addr: &Ipv6Addr) {
-        if self.guests.lock().unwrap().remove(addr).is_some() {
-            self.give_hub_peers();
+        let Some(g) = self.guests.lock().unwrap().remove(addr) else { return };
+        for c in g.conns.values() {
+            let _ = c.shutdown(Shutdown::Both);
         }
+        self.give_hub_peers();
     }
 
     /// The guests' peers, for the hub's tunnel.
@@ -178,11 +233,16 @@ impl Live {
     /// pairing of its invitation, and once the admin admitted a device,
     /// that device's member connection alone. Any other is closed.
     pub(super) fn serve_guest(self: &Arc<Self>, sock: TcpStream, from: Ipv6Addr) {
-        let Some((pairs, admitted)) = self.guests.lock().unwrap().get(&from).map(|g| (g.pairs.clone(), g.admitted))
+        let Some((pairs, admitted, owner)) =
+            self.guests.lock().unwrap().get(&from).map(|g| (g.pairs.clone(), g.admitted, g.owner))
         else {
             let _ = sock.shutdown(Shutdown::Both);
             return;
         };
+        // An admin's invitation: its pairing goes to that admin.
+        if let (None, Some(owner)) = (admitted, owner) {
+            return self.pass_to_owner(sock, from, owner);
+        }
         match admitted {
             Some(d) => {
                 let res = self.mesh.accept_checked(sock, &|id| *id == d);
@@ -195,15 +255,23 @@ impl Live {
                     self.logf(&format!("cbb: a member connection through a guest tunnel: {}", e.for_log()));
                 }
             }
-            None => match self.mesh.pair_handshake(sock) {
-                // One attempt at a time: another waits for none.
-                Ok(p) => {
-                    if let Err(mpsc::TrySendError::Full(p) | mpsc::TrySendError::Disconnected(p)) = pairs.try_send(p) {
-                        let _ = p.0.shutdown(Shutdown::Both);
+            None => {
+                let Some(pairs) = pairs else {
+                    let _ = sock.shutdown(Shutdown::Both);
+                    return;
+                };
+                match self.mesh.pair_handshake(sock) {
+                    // One attempt at a time: another waits for none.
+                    Ok(p) => {
+                        if let Err(mpsc::TrySendError::Full(p) | mpsc::TrySendError::Disconnected(p)) =
+                            pairs.try_send(p)
+                        {
+                            let _ = p.0.shutdown(Shutdown::Both);
+                        }
                     }
+                    Err(e) => self.logf(&format!("cbb: a pairing through a guest tunnel: {}", e.for_log())),
                 }
-                Err(e) => self.logf(&format!("cbb: a pairing through a guest tunnel: {}", e.for_log())),
-            },
+            }
         }
     }
 
@@ -259,6 +327,182 @@ impl Live {
         }
         std::thread::sleep(Duration::from_secs(1));
         true
+    }
+}
+
+impl Live {
+    /// Sends a `guest` message to the device to; whether it went.
+    pub(super) fn send_guest(&self, to: &DeviceId, g: &cbb_core::join::guest::Guest) -> bool {
+        match cbb_core::format::cbor::decode(&g.encode()) {
+            Ok(v) => self.mesh.send(to, cbb_core::format::frame::write(&v)),
+            Err(_) => false,
+        }
+    }
+
+    /// A `guest` message came from peer: on the hub, from the admin whose
+    /// invitation it is about (or one that opens it); on that admin, from
+    /// the hub it opened the invitation through.
+    pub(super) fn guest_from(self: &Arc<Self>, peer: &DeviceId, msg: &[u8]) {
+        use cbb_core::join::guest::{Guest, Op};
+        let g = match Guest::read(msg) {
+            Ok(g) => g,
+            Err(e) => {
+                self.logf(&format!("cbb: ignored message guest from {}: {e}", super::id_text4(peer)));
+                return;
+            }
+        };
+        if self.through_from(peer, &g) {
+            return;
+        }
+        let addr = hub::guest_addr(&g.key);
+        let owned = || self.guests.lock().unwrap().get(&addr).is_some_and(|x| x.owner.as_ref() == Some(peer));
+        match g.op {
+            Op::Open { psk, expires_ms, .. } => {
+                let op = match self.open_for(peer, g.key, psk, expires_ms) {
+                    Ok(offer) => Op::Opened { offer },
+                    Err(e) => {
+                        self.logf(&format!(
+                            "cbb: refused an invitation of {} through this hub: {}",
+                            super::id_text4(peer),
+                            e.for_log()
+                        ));
+                        Op::Refused { reason: e.for_user() }
+                    }
+                };
+                self.send_guest(peer, &Guest { key: g.key, op });
+            }
+            Op::Admitted { device } if owned() => {
+                let d = DeviceId(device);
+                self.logf(&format!(
+                    "cbb: {} admitted {} with an invitation through this hub",
+                    super::id_text4(peer),
+                    super::id_text4(&d)
+                ));
+                self.guest_ended(&g.key, Some(d));
+            }
+            Op::Close if owned() => self.guest_ended(&g.key, None),
+            Op::Data { conn, ref data } if owned() => {
+                let c = self.guests.lock().unwrap().get(&addr).and_then(|x| x.conns.get(&conn)?.try_clone().ok());
+                if let Some(mut c) = c
+                    && std::io::Write::write_all(&mut c, data).is_err()
+                {
+                    let _ = c.shutdown(Shutdown::Write);
+                }
+            }
+            Op::End { conn } if owned() => {
+                if let Some(c) = self.guests.lock().unwrap().get(&addr).and_then(|x| x.conns.get(&conn)) {
+                    let _ = c.shutdown(Shutdown::Write);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Lets the guest of an invitation the admin from makes through this
+    /// hub in, until expires_ms, and gives the hub's side of it as an
+    /// offer: its key, its addresses and the group's obfuscation settings.
+    fn open_for(self: &Arc<Self>, from: &DeviceId, key: [u8; 32], psk: [u8; 32], expires_ms: u64) -> Result<Vec<u8>> {
+        use cbb_core::format::cbor::Value;
+        if !cbb_core::join::waiting::holder_may_send(&self.mesh.state(), from) {
+            return Err(Error::msg("only the group's root or an admin that admits devices makes invitations"));
+        }
+        let now = crate::uptime::wall_ms().max(0) as u64;
+        let most = now.saturating_add(crate::inviter::MAX_LIFETIME.as_millis() as u64 + 60_000);
+        if expires_ms <= now || expires_ms > most {
+            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
+        }
+        let (hub_key, endpoints, obfuscation) = self.let_in(key, psk, None, Some(*from))?;
+        // The guest goes at its expiry unless its device was admitted.
+        let (w, addr) = (Arc::downgrade(self), hub::guest_addr(&key));
+        let left = Duration::from_millis(expires_ms - now);
+        std::thread::spawn(move || {
+            // On the clock that counts sleep: a hub that slept does not
+            // keep the guest past the invitation.
+            let until = crate::uptime::now() + left;
+            while crate::uptime::now() < until {
+                std::thread::sleep(Duration::from_secs(1));
+                let Some(l) = w.upgrade() else { return };
+                if l.guests.lock().unwrap().get(&addr).is_none_or(|g| g.admitted.is_some()) {
+                    return;
+                }
+            }
+            if let Some(l) = w.upgrade()
+                && l.guests.lock().unwrap().get(&addr).is_some_and(|g| g.admitted.is_none())
+            {
+                l.drop_guest(&addr);
+            }
+        });
+        self.logf(&format!(
+            "cbb: an invitation of {} is open through this hub for {} minutes",
+            super::id_text4(from),
+            left.as_secs() / 60
+        ));
+        let hk = cbb_core::format::Key::new(cbb_core::format::Alg::X25519, &hub_key);
+        let mut m = vec![(1, hk.to_value()), (2, Value::Array(endpoints.iter().map(|e| Value::Text(e)).collect()))];
+        let obf = match &obfuscation {
+            Some(o) => Some(
+                cbb_core::format::cbor::decode(o.encoding())
+                    .map_err(|_| Error::msg("the obfuscation settings do not decode"))?,
+            ),
+            None => None,
+        };
+        if let Some(o) = obf {
+            m.push((3, o));
+        }
+        let v = Value::Map(m);
+        cbb_core::msg::read_map(&cbb_core::msg::tables::OFFER, &v)
+            .map_err(|r| Error::msg(format!("the hub's offer breaks {r}")))?;
+        Ok(v.encode())
+    }
+
+    /// Passes a pairing connection that came through the guest of the
+    /// admin owner's invitation to that admin, and what it answers back,
+    /// until either side ends it.
+    fn pass_to_owner(&self, sock: TcpStream, from: Ipv6Addr, owner: DeviceId) {
+        use cbb_core::join::guest::{Guest, MAX_DATA, Op};
+        if !self.mesh.connected().contains(&owner) {
+            self.logf(&format!(
+                "cbb: a device used an invitation of {}, which is not connected to this hub now; it can try again later",
+                super::id_text4(&owner)
+            ));
+            let _ = sock.shutdown(Shutdown::Both);
+            return;
+        }
+        let (key, conn) = {
+            let mut gs = self.guests.lock().unwrap();
+            let Some(g) = gs.get_mut(&from) else { return };
+            let Ok(c) = sock.try_clone() else { return };
+            if g.conns.len() >= MAX_CONNS {
+                let _ = sock.shutdown(Shutdown::Both);
+                return;
+            }
+            g.next_conn = g.next_conn.wrapping_add(1).max(1);
+            g.conns.insert(g.next_conn, c);
+            (g.peer.key, g.next_conn)
+        };
+        let _ = sock.set_read_timeout(Some(PASS_IDLE));
+        let mut buf = vec![0u8; MAX_DATA];
+        let mut total = 0usize;
+        loop {
+            let n = match std::io::Read::read(&mut &sock, &mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => n,
+            };
+            total = total.saturating_add(n);
+            if total > MAX_PASSED {
+                self.logf("cbb: a pairing connection through a guest tunnel passed too much; closed");
+                break;
+            }
+            let data = buf.get(..n).unwrap_or_default().to_vec();
+            if !self.send_guest(&owner, &Guest { key, op: Op::Data { conn, data } }) {
+                break;
+            }
+        }
+        self.send_guest(&owner, &Guest { key, op: Op::End { conn } });
+        if let Some(g) = self.guests.lock().unwrap().get_mut(&from) {
+            g.conns.remove(&conn);
+        }
+        let _ = sock.shutdown(Shutdown::Both);
     }
 }
 

@@ -111,6 +111,9 @@ made with 0.5 is set up again once. The details follow.
   the tunnel, where it pairs; the admin confirms the device by its name and key fingerprint
   before its record is written. `cbb pair -invite` joins by it, and the new member reaches the
   hub through the guest tunnel until the hub's offer comes, then with its own key.
+  An admin that is not the hub makes the invitation through a hub of the group (`-hub`, or
+  the first of the hub order connected): the hub lets the guest in and passes its pairing to
+  the admin's window in `guest` messages.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

@@ -144,6 +144,8 @@ pub struct Live {
     meeting: Mutex<Option<relay::Meeting>>,
     /// The guests of the invitations this hub keeps open.
     guests: invite::Guests,
+    /// The invitations this admin makes through hubs.
+    through: through::Throughs,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -193,6 +195,7 @@ impl Live {
             ladder: Mutex::new(away::Ladder::default()),
             meeting: Mutex::new(None),
             guests: Default::default(),
+            through: Default::default(),
             log,
         });
         live.settle(&live.mesh.state());
@@ -562,9 +565,15 @@ impl Peers for Live {
     }
 }
 
+/// The first four bytes of a device ID in hex, as the log names a device.
+fn id_text4(id: &DeviceId) -> String {
+    certs::hex(&id.0[..4])
+}
+
 mod away;
 pub mod invite;
 mod relay;
+mod through;
 
 #[cfg(test)]
 mod tests;

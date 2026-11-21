@@ -371,8 +371,10 @@ fn a_computer_joins_from_afar_with_an_invitation() {
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("a: {l}"));
     let a = Service::new(&config(&da, Vec::new()), log, false);
     let la = a.start_live(&config(&da, Vec::new())).unwrap();
-    // Not a hub yet: refused, and nothing opens.
+    // No hub yet, this device included: refused, and nothing opens.
     let e = invite_now(&a, &la, |_| {}).unwrap_err();
+    assert!(e.message().contains("no hub of the group is connected"), "{}", e.message());
+    let e = invite_now(&a, &la, |h| h.device = "desk".into()).unwrap_err();
     assert!(e.message().contains("this device is none"), "{}", e.message());
     // The root is the hub, with an address away from home.
     let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -386,10 +388,10 @@ fn a_computer_joins_from_afar_with_an_invitation() {
     };
     la.away().unwrap().make_hub(&h).unwrap();
     ask(&a, "hubs", |h| h.hubs = vec!["desk".into()]).unwrap();
-    // An invitation through another hub has not moved yet; one for a
-    // watch is no invitation.
+    // Through a device the group does not have: refused; one for a watch
+    // is no invitation.
     let e = invite_now(&a, &la, |h| h.device = "00112233445566778899aabbccddeeff".into()).unwrap_err();
-    assert!(e.find::<NotYet>().is_some(), "{}", e.for_log());
+    assert!(e.message().contains("no device"), "{}", e.for_log());
     let e = invite_now(&a, &la, |h| h.kind = "watch".into()).unwrap_err();
     assert!(e.message().contains("a computer or a phone"), "{}", e.message());
     assert!(invite_now(&a, &la, |h| h.expires = 25 * 3600).is_err(), "a day at most");
@@ -484,5 +486,150 @@ fn a_computer_joins_from_afar_with_an_invitation() {
         std::thread::sleep(Duration::from_millis(100));
     }
     lc.close();
+    la.close();
+}
+
+/// Pairs a computer named name with the home window of a: it joins the
+/// group into dir, with caps, and starts there, dialing a. Gives its
+/// service and its member.
+fn pair_at_home(a: &Arc<Service>, la: &Arc<Live>, dir: &Path, name: &str, caps: &[&str]) -> (Arc<Service>, Arc<Live>) {
+    let port = a.port.lock().unwrap().unwrap();
+    let (a_cli, a_srv) = UnixStream::pair().unwrap();
+    let opened = {
+        let mut r = control::Reader::new(a_cli.try_clone().unwrap());
+        let (a2, la2) = (a.clone(), la.clone());
+        std::thread::spawn(move || {
+            let mut out = a_srv.try_clone().unwrap();
+            let _ = a2.live_pair_window(&la2, control::Reader::new(a_srv), &mut out);
+        });
+        r.read().unwrap().unwrap()
+    };
+    let at_a = client(a_cli);
+    let link = cbb_core::join::invitation::WindowLink {
+        addrs: vec![format!("127.0.0.1:{port}")],
+        fp: la.mesh.own().hash(),
+        id: cbb_core::join::invitation::hex_bytes(&crate::discovery::Peers::window_id(&**la)).unwrap(),
+        digits: opened.header.code.clone(),
+    };
+    let who = name.to_string();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |l| eprintln!("{who}: {l}"));
+    let c = Service::new(&config(dir, Vec::new()), log, false);
+    let (c_cli, c_srv) = UnixStream::pair().unwrap();
+    let h = Header {
+        op: "join".into(),
+        code: link.text(),
+        name: name.into(),
+        caps: Some(caps.iter().map(ToString::to_string).collect()),
+        ..Default::default()
+    };
+    let mut out = c_srv.try_clone().unwrap();
+    c.live_join(&Message::new(h, Vec::new()), control::Reader::new(c_srv), &mut out).unwrap();
+    drop(c_cli);
+    assert_eq!(at_a.join().unwrap().1.header.name, name);
+    let lc = c.start_live(&config(dir, vec![SocketAddr::from((Ipv4Addr::LOCALHOST, port))])).unwrap();
+    until("the new device's connection", || la.mesh.connected().contains(&lc.mesh.device()));
+    (c, lc)
+}
+
+/// A remote invitation of 0.6 through a hub (docs/protocol.md, section 12,
+/// "Through the hub"): the root, which is no hub, invites through the
+/// group's hub; the hub lets the guest in and passes its pairing to the
+/// root, which confirms and admits the device. The new member then reaches
+/// the hub through the guest tunnel, and with its own key from then on.
+#[test]
+fn a_computer_joins_from_afar_through_the_hub() {
+    let base = std::env::temp_dir().join(format!("cbb-svc-through-{}", std::process::id()));
+    let (da, db, dc) = (base.join("a"), base.join("b"), base.join("c"));
+    let _ = std::fs::remove_dir_all(&base);
+    for d in [&da, &db, &dc] {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let me = crate::founding::Me { name: "desk", os: 1, caps: cbb_core::records::body::CAP_ADMIN };
+    crate::founding::found_with(&da, &me, uptime::wall_ms() as u64, &|| None).unwrap();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("a: {l}"));
+    let a = Service::new(&config(&da, Vec::new()), log, false);
+    let la = a.start_live(&config(&da, Vec::new())).unwrap();
+    // No hub yet: nothing to invite through.
+    let e = invite_now(&a, &la, |_| {}).unwrap_err();
+    assert!(e.message().contains("no hub of the group is connected"), "{}", e.message());
+    // b, paired at home, is the group's hub.
+    let (_b, lb) = pair_at_home(&a, &la, &db, "box", &["hub"]);
+    ask(&a, "hubs", |h| h.hubs = vec!["box".into()]).unwrap();
+    until("b knows it may be the hub", || lb.mesh.hub_order() == vec![lb.mesh.device()]);
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let hub_port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let h = Header {
+        addrs: vec![format!("127.0.0.1:{hub_port}")],
+        port: i64::from(hub_port),
+        consent: true,
+        ..Default::default()
+    };
+    lb.away().unwrap().make_hub(&h).unwrap();
+
+    let (a_cli, a_srv) = UnixStream::pair().unwrap();
+    let inviting = {
+        let (a2, la2) = (a.clone(), la.clone());
+        std::thread::spawn(move || {
+            let h = Header { op: "invite".into(), expires: 600, ..Default::default() };
+            let mut out = a_srv.try_clone().unwrap();
+            a2.live_invite(&la2, &Message::new(h, Vec::new()), control::Reader::new(a_srv), &mut out)
+        })
+    };
+    let mut r = control::Reader::new(a_cli.try_clone().unwrap());
+    let opened = r.read().unwrap().unwrap();
+    assert!(opened.header.error.is_empty(), "{}", opened.header.error);
+    let text = opened.header.invite.clone();
+    let inv = cbb_core::join::invitation::Invitation::parse(&text).unwrap();
+    let path = crate::live::invite::guest_path(&inv).unwrap();
+    assert_eq!(path.endpoints, vec![format!("127.0.0.1:{hub_port}")], "the hub's address");
+    let admin = {
+        let mut w = a_cli;
+        std::thread::spawn(move || {
+            loop {
+                let m = r.read().unwrap().unwrap();
+                assert!(m.header.error.is_empty(), "{}", m.header.error);
+                if m.header.done {
+                    return m.header.name;
+                }
+                if m.header.joining.is_some() {
+                    let answer = Header { op: "answer".into(), consent: true, ..Default::default() };
+                    control::write(&mut w, &Message::new(answer, Vec::new())).unwrap();
+                }
+            }
+        })
+    };
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("c: {l}"));
+    let c = Service::new(&config(&dc, Vec::new()), log, false);
+    let (c_cli, c_srv) = UnixStream::pair().unwrap();
+    let h = Header { op: "join".into(), invite: text.clone(), consent: true, name: "far".into(), ..Default::default() };
+    let mut out = c_srv.try_clone().unwrap();
+    c.live_join(&Message::new(h, Vec::new()), control::Reader::new(c_srv), &mut out).unwrap();
+    drop(c_cli);
+    assert_eq!(admin.join().unwrap(), "far");
+    inviting.join().unwrap().unwrap();
+    assert!(in_group(&dc));
+    until("the record", || la.mesh.state().devices.iter().any(|d| d.name == "far"));
+
+    // The new member reaches the hub through the guest tunnel, then with
+    // its own key.
+    let lc = c.start_live(&config(&dc, Vec::new())).unwrap();
+    let away = lc.away().unwrap().clone();
+    let end = Instant::now() + Duration::from_secs(60);
+    while dc.join(crate::live::invite::GUEST_FILE).exists()
+        || !lc.mesh.connected().contains(&lb.mesh.device())
+        || !away.live_status().is_some_and(|s| s.through && s.hub_device == id_text(&lb.mesh.device()))
+    {
+        assert!(
+            Instant::now() < end,
+            "never reached the hub with its own key: {:?}; the hub knows the device: {}, connected to the root: {}",
+            away.live_status(),
+            lb.mesh.state().devices.iter().any(|d| d.name == "far"),
+            lb.mesh.connected().contains(&la.mesh.device())
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    lc.close();
+    lb.close();
     la.close();
 }

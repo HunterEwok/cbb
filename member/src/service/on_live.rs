@@ -1022,10 +1022,16 @@ impl Service {
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
             return Err(Error::msg(NOT_ADMITTER));
         }
-        let me = id_text(&live.mesh.device());
-        if !h.device.is_empty() && h.device != me {
-            return Err(not_yet("an invitation through another hub"));
-        }
+        // On this hub, unless another is named or this device serves as
+        // none: then through a hub (docs/protocol.md, section 12).
+        let named = match h.device.as_str() {
+            "" => None,
+            d => Some(writers::find(&live.mesh.state(), d)?.id),
+        };
+        let here = match named {
+            Some(d) => d == live.mesh.device(),
+            None => live.away().is_some_and(|a| a.is_hub_now()),
+        };
         let lifetime = match h.expires {
             n if n <= 0 => crate::inviter::DEFAULT_LIFETIME,
             n => Duration::from_secs(n as u64),
@@ -1038,8 +1044,6 @@ impl Service {
             "phone" => ROLE_PHONE,
             k => return Err(Error::msg(format!("an invitation is for a computer or a phone, not {k:?}"))),
         };
-        let keys = crate::inviter::GuestKeys::new()?;
-        let opened = live.open_guest(keys.key, keys.public, keys.psk)?;
         let profile = Profile {
             role,
             rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
@@ -1047,11 +1051,22 @@ impl Service {
             guarded: false,
         };
         let now = || crate::uptime::wall_ms().max(0) as u64;
+        let expires_ms = now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX));
+        let mut invitation = Invitation::new(Vec::new(), profile);
+        let keys = crate::inviter::GuestKeys::new()?;
+        let (opened, through) = if here {
+            (live.open_guest(keys.key, keys.public, keys.psk)?, None)
+        } else {
+            let (o, hub) = live.open_through(named, (keys.key, keys.public, keys.psk), expires_ms, invitation.id)?;
+            (self.log)(&format!("cbb: the invitation goes through the hub {}", id_text(&hub)));
+            (o, Some(hub))
+        };
+        invitation.paths = vec![opened.path];
         let mut open = Open {
-            invitation: Invitation::new(vec![opened.path], profile),
+            invitation,
             name: String::new(),
             created_ms: now(),
-            expires_ms: now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX)),
+            expires_ms,
             used: false,
             failures: 0,
             allowed_key: None,
@@ -1061,7 +1076,10 @@ impl Service {
         // However it ends, the guest goes, unless a device was admitted.
         let mut admitted = None;
         let res = self.run_invite(&mut open, &opened.pairs, lifetime, r, out, live, &mut admitted);
-        live.guest_ended(&keys.public, admitted);
+        match through {
+            None => live.guest_ended(&keys.public, admitted),
+            Some(_) => live.through_ended(&keys.public, admitted),
+        }
         res
     }
 

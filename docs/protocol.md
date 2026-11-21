@@ -3547,7 +3547,7 @@ and joins only once the user accepts; declining sends nothing.
 
 A group of 0.6 makes the invitation of the format's table `invite` (`cbb://join#...`,
 W.3 of the format), on a hub that serves (`member/src/live/invite.rs`, the control operation
-`invite` in `member/src/service/on_live.rs`); through another hub is not yet built. It
+`invite` in `member/src/service/on_live.rs`), or through a hub (below). It
 carries no group and no hub, only one-time values and one guest path: the hub's addresses
 away from home (its forwarder's after its own, at most eight), the key it serves under, the
 guest's one-time WireGuard key and pre-shared key, and the group's obfuscation settings.
@@ -3574,6 +3574,23 @@ guest's one-time WireGuard key and pre-shared key, and the group's obfuscation s
   the hub through the guest tunnel; its `tunnel` (t 15) there gets the hub's offer, and the
   hub drops the guest once that connection ends, or a day after the admission. The device
   then forgets the invitation and reaches the hub with its own key.
+- An admin that is not the hub makes it through a hub (`member/src/live/through.rs`, the
+  hub's side in `member/src/live/invite.rs`): the one `cbb invite -hub` names, or the first of
+  the group's hub order connected now that takes it (one that answers that it serves as none
+  is skipped). The two talk in their member connection with message `guest` (t 17, table
+  `guest`): field 2 the op, 3 the guest's WireGuard key (which names the invitation), and by
+  op 1 `open` 4 the pre-shared key, 5 the expiry (Unix ms, at most 24 hours and a minute
+  away) and 11 the invitation's ID; 2 `opened` 6 the hub's offer (table `offer`: 1 its key,
+  2 its addresses, 3 the obfuscation settings), from which the admin makes the guest path;
+  3 `refused` 7 a sentence for the user; 4 `data` 8 the connection (numbered by the hub from
+  1) and 9 at most 16 KiB of its bytes; 5 `end` 8; 6 `admitted` 10 the device ID; 7 `close`.
+  The hub takes `open` only from a member its records let admit devices, and every later
+  message about the guest only from that admin. It keeps at most 4 such invitations of one
+  admin and 16 in all, passes at most two pairing connections of a guest at once, each at
+  most 1 MiB and silent at most 6 minutes, and closes one that comes while the admin is not
+  connected. The admin's window takes each passed connection as its own; once it admitted a
+  device, the device's member connection through the guest tunnel reaches the hub's member
+  listener, as on the hub's own invitation.
 
 ### Through the hub
 
