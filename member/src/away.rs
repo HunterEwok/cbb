@@ -8,6 +8,22 @@
 //! through the tunnel, the first hub in the group's order that answers
 //! ("Several hubs"). It fails closed: without the tunnel, it syncs at home
 //! only, and cbb global says why.
+//!
+//! Kept for ffi until the phones move to Live (D-122). `cbb` runs sync away
+//! from home only in a group of 0.6 (`crate::live`, live/away.rs); this module
+//! and its users stay for the phones' apps alone, which still run a
+//! `phone::Member` on the Node:
+//! - `Away` (new, key, offered, retry, run, set_credentials, hello,
+//!   guest_message, hubs_shared, prune, make_hub, serve_if_first, stop_hub,
+//!   meet_at, turn_on, turn_off, status), from phone.rs: ffi member.rs
+//!   commands `away`, `away_status`, `hub`, `hub_off`, `relay`,
+//!   `joined_by_invite`, `why`, and `cbb_member_servers` (serve_servers);
+//! - `GuestTunnel` and `keep_guest`: ffi join.rs (`cbb_join_*` from an
+//!   invitation), tunnel.rs (the guest tunnel's link) and `joined_by_invite`;
+//! - `crate::inviter` (`Invite`, `open_where`, `GuestKeys`): ffi invite.rs;
+//! - the Node's hooks on_tunnel, on_guest, on_hello and set_tunnel_key.
+//!
+//! Remove them with the phones' move, not before.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
