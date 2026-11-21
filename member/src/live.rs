@@ -320,7 +320,7 @@ impl Live {
     /// A hub, or a device that only passes the copies on, fetches the blob
     /// of a copy it does not write within its limit away from home, so
     /// that its clients away from home can get it (docs/protocol.md,
-    /// section 4, "Images and files"); a copy it writes the service fetches.
+    /// section 4, "Content"); a copy it writes the service fetches.
     fn fetch_for_clients(self: &Arc<Self>, a: &Arrived) {
         let Some(b) = a.blob else { return };
         let forward_only =
