@@ -47,6 +47,28 @@ func adminOn(t *testing.T, cli string, root *testService, name string) {
 	}
 }
 
+// keptHubEndpoints gives the endpoints of the offer of hub id that s keeps
+// in its tunnel.json, read as it is: a device of 0.6 derives its keys
+// toward each hub, which Go's tunnel.State does not read.
+func keptHubEndpoints(s *testService, id string) []string {
+	var st struct {
+		Hubs []struct {
+			Device    string   `json:"device"`
+			Endpoints []string `json:"endpoints"`
+		} `json:"hubs"`
+	}
+	raw, err := os.ReadFile(filepath.Join(s.dir, "tunnel.json"))
+	if err != nil || json.Unmarshal(raw, &st) != nil {
+		return nil
+	}
+	for _, h := range st.Hubs {
+		if h.Device == id {
+			return h.Endpoints
+		}
+	}
+	return nil
+}
+
 // forwardHub names the device name the group's hub (cbb hubs) and makes it
 // a hub at its own UDP port, then has the root order it to the forwarder at
 // addr with the key of pin (cbb global hub -on): the root signs the
@@ -666,8 +688,7 @@ func TestAloneHubForwarder(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 30*time.Second, "the laptop keeps the Rust hub's offer at the forwarder", func() bool {
-		hl := tunnelState(t, laptop).Hub(rustID)
-		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
+		return slices.Equal(keptHubEndpoints(laptop, rustID), []string{f.Addr().String()})
 	})
 
 	laptopID := laptop.status(t).Device
@@ -745,8 +766,7 @@ func TestAloneHubCredential(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 30*time.Second, "the laptop keeps the Rust hub's offer at the forwarder", func() bool {
-		hl := tunnelState(t, laptop).Hub(rustID)
-		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
+		return slices.Equal(keptHubEndpoints(laptop, rustID), []string{f.Addr().String()})
 	})
 
 	laptopID := laptop.status(t).Device
