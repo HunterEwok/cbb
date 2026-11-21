@@ -169,6 +169,9 @@ type Header struct {
 	// Below names, in the answer to key-level, the admins and hubs whose
 	// keys the new level would not let in: they stay until removed.
 	Below []string `json:"below,omitempty"`
+	// Leave, in recover, names the devices that do not stay in the group,
+	// by name or device ID, such as a lost root.
+	Leave []string `json:"leave,omitempty"`
 
 	// Keyboard, in keyboard on, are the Bluetooth keyboard's settings.
 	Keyboard *Keyboard `json:"keyboard,omitempty"`

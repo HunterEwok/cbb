@@ -140,12 +140,13 @@ impl Mesh {
         }
         let state = self.state();
         let now = crate::uptime::wall_ms().max(0) as u64;
+        let made_time = self.clock.now();
         let made = sealed::make_with(
             &*self.own.member,
             &state,
             &self.statements.lock().unwrap(),
             &content,
-            self.clock.now(),
+            made_time,
             Some(now),
             blob,
         )?;
@@ -153,6 +154,9 @@ impl Mesh {
         self.see(&kept.made.id);
         out.id = Some(kept.made.id);
         self.kept.lock().unwrap().insert(kept.made.id, kept);
+        if !content.is_secret() {
+            self.set_current(made_time, &frame);
+        }
         self.broadcast(&frame, None);
         out.sent = true;
         Ok(out)

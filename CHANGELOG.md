@@ -2854,6 +2854,12 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a copy made while no other member was connected, or before a new device
+  knew any reader's keys, reaches the others once they meet, as on 0.5: each member sends its
+  current copy as a connection opens. The new root thaws a device that a change of root carried
+  over frozen. The Go tests of the takeover now take the group over with the recovery key
+  (`cbb recovery`), and check that a takeover, a handover or a removal of the root without it is
+  refused.
 - On the records of 0.6 a pairing window closes when its `cbb pair` ends and counts its five
   minutes in the computer's running time, and `cbb pair` prints the QR code's text, which a
   computer that cannot find the window by mDNS types instead of the six digits; a device that

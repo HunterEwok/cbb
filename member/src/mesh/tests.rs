@@ -195,6 +195,59 @@ fn a_copy_reaches_the_other_member() {
     b.close();
 }
 
+// A copy made while the member holds no other reader's keys, as just
+// after it joined, goes out once a reader's statement arrives, with the
+// time it was copied.
+#[test]
+fn a_copy_made_before_a_reader_was_known_goes_out_later() {
+    let (a, b) = two("unsent");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send((c.content.clone(), c.origin));
+    }));
+    let content = Content::text("before a reader", false);
+    assert!(!b.copy(&content).unwrap(), "no reader yet");
+    connect(&a, &b);
+    let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!((got, origin), (content, b.device()));
+    assert!(b.unsent.lock().unwrap().is_none());
+    a.close();
+    b.close();
+}
+
+// A copy made while no peer was connected reaches a reader once they meet
+// again: each side sends its current copy as the connection opens.
+#[test]
+fn the_current_copy_reaches_a_peer_that_connects_later() {
+    let (a, b) = two("current");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send(c.content.clone());
+    }));
+    connect(&a, &b);
+    until("the statements", || {
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    let content = Content::text("while apart", false);
+    assert!(b.copy(&content).unwrap(), "sealed to a, which is not connected");
+    assert!(rx.try_recv().is_err());
+    connect(&a, &b);
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), content);
+    // Once seen, the same copy is not taken again on the next connection.
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    connect(&a, &b);
+    until("connected again", || !a.connected().is_empty());
+    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
+    a.close();
+    b.close();
+}
+
 #[test]
 fn a_copy_with_images_brings_its_blob_and_it_opens() {
     use cbb_core::content::TYPE_MEDIA;

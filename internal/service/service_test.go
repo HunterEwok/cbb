@@ -792,6 +792,9 @@ func TestJoinFindsTheWindow(t *testing.T) {
 	c := startService(t, &h, "gamma")
 	pairWith(t, a, c)
 	b := startService(t, &h, "beta")
+	// No window anywhere once alpha's announcement no longer says so.
+	aID := a.status(t).Device
+	waitFor(t, "alpha's window gone from mDNS", func() bool { txt := h.txtOf(aID); return txt != nil && !slices.Contains(txt, "p=1") })
 	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: "123456"}, ""); err == nil || !strings.Contains(err.Error(), "no member with an open pairing window") {
 		t.Errorf("join with no window anywhere: %v", err)
 	}
@@ -1146,74 +1149,42 @@ func TestOnlyTheRootRemovesAnAdmin(t *testing.T) {
 }
 
 // TestTakeover checks that an admin takes a group over from its lost root
-// computer: it becomes the root, the devices that the root and the admin
-// admitted stay and keep syncing, the new root admits a computer and makes admins, and the old root is refused when it
-// comes back.
+// computer: on the records of 0.6 only with the group's recovery key (cbb
+// recovery, D-117), and a takeover without it, by a member or an admin, is
+// refused with that way, as is removing the root. The new root leaves the
+// lost root out; the devices that the root and the admin admitted stay and
+// keep syncing; the new root admits a computer and makes it an admin; and
+// the old root is refused when it comes back.
 func TestTakeover(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	b := startService(t, &h, "b")
 	c := startService(t, &h, "c")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
 	pairWith(t, a, c)
-	old, _ := group.Load(pi.dir)
-	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err == nil {
-		t.Error("a member that is no admin took the group over")
+	old := pi.status(t).Device
+	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
+		t.Errorf("a member that is no admin took the group over: %v", err)
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "b"}, ""); err == nil {
-		t.Error("an admin took the group over from a device that is not its root")
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "b"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
+		t.Errorf("an admin took the group over from a device that is not its root: %v", err)
 	}
-	noClaimWait(t, pi, a, b, c)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb takeover") {
+	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
+		t.Errorf("an admin took the group over without the recovery key: %v", err)
+	}
+	if _, err := a.do(t, control.Header{Op: control.OpRemove, Device: "pi"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
 		t.Errorf("revoking the root: %v", err)
 	}
-	if m, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err != nil || m.Name != "pi" {
-		t.Fatalf("takeover: %+v, %v", m, err)
-	}
-	// The claim takes effect as soon as a evaluates it, and a then makes
-	// itself the root, just after the command returned.
-	var id *group.Identity
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		id, _ = group.Load(a.dir)
-		if id != nil && id.IsRoot() && len(id.Roots) == 1 && id.AdminCA == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			if id == nil {
-				t.Fatal("after the takeover a has no identity")
-			}
-			t.Fatalf("after the takeover a is root %v, with %d roots, an admin CA %v", id.IsRoot(), len(id.Roots), id.AdminCA != nil)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	a = recoverOn(t, &h, a, sheet, "pi")
+	waitFor(t, "a is the root", rootIs(t, a, "a"))
 	for _, s := range []*testService{b, c} {
-		waitFor(t, s.name+" follows the new root", func() bool {
-			id, err := group.Load(s.dir)
-			return err == nil && len(id.Roots) == 1
-		})
+		waitFor(t, s.name+" follows the new root", rootIs(t, s, "a"))
 	}
-	// The servers' view follows: the new root starts a period of its own,
-	// whose hubs' credential lists a's server key.
-	aKey := group.KeyHashOf(id.Cert)
-	waitFor(t, "b keeps the new root's period", func() bool {
-		bid, err := group.Load(b.dir)
-		if err != nil || len(bid.Roots) != 1 {
-			return false
-		}
-		creds, err := group.LoadCredentials(b.dir, bid.GroupCA.Cert, bid.Roots[0], func(group.KeyHash) bool { return true })
-		if err != nil {
-			return false
-		}
-		_, _, ok := creds.Period(bid.Roots[0])
-		sk, known := creds.Server(aKey)
-		_, hb, listed := creds.Hubs()
-		return ok && known && listed && slices.Contains(hb.Hubs, sk)
-	})
 	waitFor(t, "a lists itself as the root and the pi no more", func() bool {
 		root := false
 		for _, d := range a.devices(t) {
@@ -1228,60 +1199,50 @@ func TestTakeover(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "c has it", func() bool { return c.paste(t) == "after the takeover" })
-	// The new root admits a new computer by code: its own certificate
-	// comes from the new root, as the Welcome says.
+	// The new root admits a new computer by code, which offers it its admin
+	// key, and makes it an admin.
 	d := startService(t, &h, "d")
 	pairWith(t, a, d)
 	if _, err := d.do(t, control.Header{Op: control.OpCopy}, "from the newcomer"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "c has the newcomer's copy", func() bool { return c.paste(t) == "from the newcomer" })
-	makeAdmin(t, a, b)
+	makeAdmin(t, a, d)
 
+	// The old root, left out, is refused: no member keeps a connection
+	// to it, and it learns no more of the group.
 	restartService(t, &h, pi)
-	time.Sleep(500 * time.Millisecond)
-	for _, s := range []*testService{a, b, c} {
+	time.Sleep(3 * time.Second)
+	for _, s := range []*testService{a, b, c, d} {
 		for _, p := range s.status(t).Peers {
-			if p.ID == string(old.ID) {
+			if p.ID == old {
 				t.Errorf("%s is connected to the old root", s.name)
 			}
 		}
 	}
 }
 
-// TestSecondTakeover checks that an admin the first root made takes the
-// group over from the second, lost too: the second root gave it a new
-// admin CA for the same key, so its new root follows the second, and what
-// the second root signed, as a name, counts on.
+// TestSecondTakeover checks that the group is taken over again when the
+// second root is lost too: on the records of 0.6 again with the group's
+// recovery key (cbb recovery), which outlives the first change of root,
+// and what the second root signed, as a name, counts on.
 func TestSecondTakeover(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	b := startService(t, &h, "b")
 	c := startService(t, &h, "c")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	pairWith(t, pi, c)
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
-	noClaimWait(t, pi, a, b, c)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err != nil {
-		t.Fatal(err)
+	a = recoverOn(t, &h, a, sheet, "pi")
+	for _, s := range []*testService{b, c} {
+		waitFor(t, s.name+" follows a's root", rootIs(t, s, "a"))
 	}
-	ra, _ := group.Load(a.dir)
-	waitFor(t, "b gets an admin CA from a's root", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && len(id.Roots) == 1 && id.AdminCA != nil && id.AdminCA.CheckSignatureFrom(ra.Root()) == nil
-	})
-	// c takes the claim from a or b once it connects to one of them, which
-	// it may not have done yet.
-	waitFor(t, "c follows a's root", func() bool {
-		cid, err := group.Load(c.dir)
-		return err == nil && len(cid.Roots) == 1
-	})
-	// The new root sets its own delay; the old root's counts no more.
-	noClaimWait(t, a, b, c)
 	if _, err := a.do(t, control.Header{Op: control.OpRename, Device: "c", Name: "named by a"}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1295,19 +1256,14 @@ func TestSecondTakeover(t *testing.T) {
 	}
 	waitFor(t, "b has c's new name", func() bool { return named(b) })
 	a.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Device: "a"}, ""); err != nil {
-		t.Fatal(err)
+	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Device: "a"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
+		t.Errorf("a takeover of the second root without the recovery key: %v", err)
 	}
-	id, _ := group.Load(b.dir)
-	if !id.IsRoot() || len(id.Roots) != 2 || !id.Roots[0].Equal(ra.Root()) {
-		t.Fatalf("after the second takeover b is root %v with %d roots, the first of them a's: %v", id.IsRoot(), len(id.Roots), len(id.Roots) > 0 && id.Roots[0].Equal(ra.Root()))
-	}
-	waitFor(t, "c follows the second root", func() bool {
-		cid, err := group.Load(c.dir)
-		return err == nil && len(cid.Roots) == 2
-	})
+	b = recoverOn(t, &h, b, sheet, "a")
+	waitFor(t, "b is the root", rootIs(t, b, "b"))
+	waitFor(t, "c follows the second root", rootIs(t, c, "b"))
 	if !named(b) || !named(c) {
-		t.Error("the name a's root gave c is gone after b's takeover")
+		t.Error("the name a's root gave c is gone after b's recovery")
 	}
 	if _, err := c.do(t, control.Header{Op: control.OpCopy}, "after the second takeover"); err != nil {
 		t.Fatal(err)
@@ -1351,75 +1307,85 @@ func holdsNoWait(dir string) bool {
 }
 
 func TestUnfrozenAfterTakeover(t *testing.T) {
-	// The lost root froze b, and its freeze stays after a takes over; a
-	// unfreezes b, which gets an admin CA from a's root and can take the
-	// group over from a in turn.
+	// The lost root froze its admin b, which the others then refuse (a
+	// frozen device need not learn why, as a removed one). On the records
+	// of 0.6 a takes the group over with the recovery key: the freeze stays
+	// (docs/protocol.md, section 10, "Re-issue") until the new root thaws
+	// b, which then syncs again, an admin no more, and can take the group
+	// over from a in turn with the same key.
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	b := startService(t, &h, "b")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
 	makeAdmin(t, pi, b)
-	if _, err := pi.do(t, control.Header{Op: control.OpFreeze, Device: "b"}, ""); err != nil {
-		t.Fatal(err)
+	bID := b.status(t).Device
+	connectedTo := func(s *testService, id string) bool {
+		for _, p := range s.status(t).Peers {
+			if p.ID == id {
+				return true
+			}
+		}
+		return false
 	}
-	waitFor(t, "a knows b is frozen", func() bool {
-		for _, d := range a.devices(t) {
+	frozenOn := func(s *testService) bool {
+		for _, d := range s.devices(t) {
 			if d.Name == "b" && d.Frozen {
 				return true
 			}
 		}
 		return false
-	})
-	waitFor(t, "b says it is frozen, not removed", func() bool {
-		st := b.status(t)
-		return st.Frozen && !st.Removed
-	})
-	noClaimWait(t, pi, a) // b, frozen, is refused
-	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err != nil {
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpFreeze, Device: "b"}, ""); err != nil {
 		t.Fatal(err)
+	}
+	waitFor(t, "a knows b is frozen", func() bool { return frozenOn(a) })
+	waitFor(t, "the pi and a refuse b", func() bool { return !connectedTo(pi, bID) && !connectedTo(a, bID) })
+	pi.stop()
+	a = recoverOn(t, &h, a, sheet, "pi")
+	waitFor(t, "a is the root", rootIs(t, a, "a"))
+	waitFor(t, "b stays frozen under the new root", func() bool { return frozenOn(a) })
+	if connectedTo(a, bID) {
+		t.Error("the new root is connected to the frozen b")
 	}
 	if _, err := a.do(t, control.Header{Op: control.OpThaw, Device: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	ra, _ := group.Load(a.dir)
-	waitFor(t, "b gets an admin CA from a's root", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && id.AdminCA != nil && id.AdminCA.CheckSignatureFrom(ra.Root()) == nil
+	waitFor(t, "b follows a's root", rootIs(t, b, "a"))
+	waitFor(t, "b is frozen no more and stays, an admin no more", func() bool {
+		st := b.status(t)
+		return !st.Frozen && !st.Removed && !b.isAdmin(t)
 	})
-	noClaimWait(t, a, b)
-	a.stop()
-	if _, err := b.do(t, control.Header{Op: control.OpTakeOver, Device: "a"}, ""); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpCopy}, "from b"); err != nil {
 		t.Fatal(err)
 	}
+	waitFor(t, "a has b's copy", func() bool { return a.paste(t) == "from b" })
+	a.stop()
+	b = recoverOn(t, &h, b, sheet, "a")
+	waitFor(t, "b is the root", rootIs(t, b, "b"))
 }
 
 func TestAwayDuringTakeover(t *testing.T) {
-	// A member that was away during the takeover knows only the old root,
-	// and meets only the new one: the new root presents its member
-	// certificate from before the takeover, which the member verifies, and
-	// the member takes the root record from it.
+	// A member that was away during the change of root knows only the old
+	// root, and meets only the new one, which took the group over with the
+	// recovery key (cbb recovery): the member takes the new root's records
+	// from it and syncs on.
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	c := startService(t, &h, "c")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
 	pairWith(t, pi, c)
 	makeAdmin(t, pi, a)
-	noClaimWait(t, pi, a, c)
 	c.stop()
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err != nil {
-		t.Fatal(err)
-	}
+	a = recoverOn(t, &h, a, sheet, "pi")
 	c = restartService(t, &h, c)
-	waitFor(t, "c follows the new root", func() bool {
-		id, err := group.Load(c.dir)
-		return err == nil && len(id.Roots) == 1
-	})
+	waitFor(t, "c follows the new root", rootIs(t, c, "a"))
 	if _, err := c.do(t, control.Header{Op: control.OpCopy}, "after the takeover"); err != nil {
 		t.Fatal(err)
 	}
@@ -1427,60 +1393,40 @@ func TestAwayDuringTakeover(t *testing.T) {
 }
 
 func TestTakeoverUndone(t *testing.T) {
-	// The old root comes back after an admin took the group over: the
-	// others take its records only, it learns of the takeover, keeps its
-	// root key and removes the admin, which undoes the takeover.
+	// The old root comes back after an admin took the group over. On the
+	// records of 0.6 the change of root by the recovery key is not undone:
+	// the old root, which the new root kept in the group, learns that it is
+	// a plain device now, its root key revoked, and its removal of the new
+	// root is refused; the others stay with the new root, and the old root
+	// syncs with them as a member.
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
 	b := startService(t, &h, "b")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
-	noClaimWait(t, pi, a, b)
-	old, _ := group.Load(pi.dir)
 	pi.stop()
-	if _, err := a.do(t, control.Header{Op: control.OpTakeOver, Device: "pi"}, ""); err != nil {
+	a = recoverOn(t, &h, a, sheet)
+	waitFor(t, "b follows the new root", rootIs(t, b, "a"))
+	pi = restartService(t, &h, pi)
+	waitFor(t, "the old root learns of the change", rootIs(t, pi, "a"))
+	if st := pi.status(t); st.Removed {
+		t.Error("the new root left the old one out, though it stays")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "a"}, ""); err == nil {
+		t.Error("the old root removed the new one")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "from the old root"); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "b follows the new root", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && len(id.Roots) == 1
-	})
-	restartService(t, &h, pi)
-	waitFor(t, "the old root learns of the takeover", func() bool { return pi.status(t).TakenOverBy == "a" })
-	if id, err := group.Load(pi.dir); err != nil || !id.IsRoot() {
-		t.Fatalf("the old root gave up its root key: %v", err)
-	}
+	waitFor(t, "b has the old root's copy", func() bool { return b.paste(t) == "from the old root" })
 	for _, s := range []*testService{a, b} {
-		for _, p := range s.status(t).Peers {
-			if p.ID == string(old.ID) {
-				t.Errorf("%s is connected to the old root as a member", s.name)
-			}
+		if !rootIs(t, s, "a")() {
+			t.Errorf("%s left the new root", s.name)
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "a"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "b is back under the old root", func() bool {
-		id, err := group.Load(b.dir)
-		return err == nil && len(id.Roots) == 0
-	})
-	waitUpTo(t, 45*time.Second, "b connects to the old root again", func() bool {
-		for _, p := range b.status(t).Peers {
-			if p.ID == string(old.ID) {
-				return true
-			}
-		}
-		return false
-	})
-	if st := pi.status(t); st.TakenOverBy != "" || st.Removed {
-		t.Errorf("the old root's status after the undo: %+v", st)
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "after the undo"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "b has it", func() bool { return b.paste(t) == "after the undo" })
 }
 
 // TestFreezeAnAdmin checks that an admin computer freezes another one,

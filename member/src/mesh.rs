@@ -118,6 +118,16 @@ pub struct Mesh {
     book: Mutex<Book>,
     marks: Mutex<Marks>,
     kept: Mutex<HashMap<[u8; 16], copies::Kept>>,
+    /// The last text this device copied while it held no other reader's
+    /// keys (alone, or just joined), with when it was copied: it goes out
+    /// once a reader's statement arrives, as the hello of 0.5 carried the
+    /// current copy to the members that came later.
+    unsent: Mutex<Option<(Content, Timestamp)>>,
+    /// The frame of the newest copy, not a secret, that this device made or
+    /// took, by the time it was signed: sent to each peer as its
+    /// connection opens, so that a pair that meets later converges, as the
+    /// hello's current copy (docs/protocol.md, section 4, "The member protocol in 0.6").
+    current: Mutex<Option<(Timestamp, Vec<u8>)>>,
     seen: Mutex<Seen>,
     /// The sealed blobs this member made or fetched, which it serves.
     content: Arc<Store>,
@@ -321,6 +331,8 @@ impl Mesh {
                 local,
                 set: Arc::new(Mutex::new(set)),
                 kept: Mutex::new(HashMap::new()),
+                unsent: Mutex::new(None),
+                current: Mutex::new(None),
                 seen: Mutex::new((HashSet::new(), VecDeque::new())),
                 content: Arc::new(Store::open(dir)),
                 fetches: Mutex::new(HashMap::new()),
@@ -377,6 +389,7 @@ impl Mesh {
         for f in msgs {
             self.broadcast(&f, None);
         }
+        self.send_unsent();
         Ok(())
     }
 
@@ -869,19 +882,52 @@ impl Mesh {
     /// Seals content to the group's readers and sends it to every peer.
     /// False when the group has no reader for it.
     pub fn copy(&self, content: &Content) -> Result<bool> {
+        let time = self.clock.now();
+        let sent = self.copy_at(content, time)?;
+        // Kept until a reader's statement comes; a later copy replaces it.
+        *self.unsent.lock().unwrap() = (!sent).then(|| (content.clone(), time));
+        Ok(sent)
+    }
+
+    /// Sends the copy this device made while it held no reader's keys, at
+    /// the time it was copied, now that a statement came: the readers
+    /// judge it by that time, as any copy.
+    fn send_unsent(&self) {
+        let Some((content, time)) = self.unsent.lock().unwrap().clone() else { return };
+        match self.copy_at(&content, time) {
+            Ok(true) => {
+                let mut u = self.unsent.lock().unwrap();
+                // Unless a newer copy took its place meanwhile.
+                if u.as_ref().is_some_and(|(_, t)| *t == time) {
+                    *u = None;
+                }
+            }
+            Ok(false) => {}
+            Err(e) => self.logf(&format!("cbb: sending the copy made before a reader was known: {}", e.details())),
+        }
+    }
+
+    /// Keeps frame as the current copy when it was signed after the one
+    /// kept.
+    pub(crate) fn set_current(&self, time: Timestamp, frame: &[u8]) {
+        let mut c = self.current.lock().unwrap();
+        if c.as_ref().is_none_or(|(t, _)| time > *t) {
+            *c = Some((time, frame.to_vec()));
+        }
+    }
+
+    /// Seals content, copied at time, to the group's readers and sends it:
+    /// false when the group has no reader for it.
+    fn copy_at(&self, content: &Content, time: Timestamp) -> Result<bool> {
         let state = self.state();
         let now = crate::uptime::wall_ms().max(0) as u64;
-        let made = sealed::make(
-            &*self.own.member,
-            &state,
-            &self.statements.lock().unwrap(),
-            content,
-            self.clock.now(),
-            Some(now),
-        )?;
+        let made = sealed::make(&*self.own.member, &state, &self.statements.lock().unwrap(), content, time, Some(now))?;
         let Some((frame, kept)) = made else { return Ok(false) };
         self.see(&kept.made.id);
         self.kept.lock().unwrap().insert(kept.made.id, kept);
+        if !content.is_secret() {
+            self.set_current(time, &frame);
+        }
         self.broadcast(&frame, None);
         if let Ok(msg) = frame::read(&frame, frame::LIMIT_MEMBER) {
             self.push_copy(&msg.map, push::Role::Origin);
@@ -1134,6 +1180,11 @@ impl Mesh {
         for f in self.statements.lock().unwrap().messages() {
             let _ = conn.tx.try_send(f);
         }
+        // The current copy, after the statements, which a peer that reads
+        // it may need first; one it has seen it drops.
+        if let Some((_, f)) = self.current.lock().unwrap().clone() {
+            let _ = conn.tx.try_send(f);
+        }
         for f in self.faces.all_messages() {
             let _ = conn.tx.try_send(f);
         }
@@ -1289,6 +1340,7 @@ impl Mesh {
             // Passed on to the others, as every member does.
             let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
             self.broadcast(&f, Some(&conn.peer));
+            self.send_unsent();
         }
         Ok(())
     }
@@ -1309,14 +1361,17 @@ impl Mesh {
             }
         };
         // The copy checked: passed on once to every other peer.
+        let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
         if let Some(id) = copy_id(msg)
             && self.see(&id)
         {
-            let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
             self.broadcast(&f, Some(&conn.peer));
         }
         match taken {
             Taken::New { id, content, origin, signed, age_ms, blob } => {
+                if !content.is_secret() {
+                    self.set_current(signed, &f);
+                }
                 if let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) {
                     self.push_copy(&v, self.push_role_received());
                 }

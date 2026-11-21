@@ -571,6 +571,12 @@ one asks for it). 0.5's `admin_key`, `group_ca`, `seal`, `tunnel_key` and `tunne
 from the hello: the admin key travels in the joiner's Info and the root's record, the seal key in
 the keys statement, and the tunnel's keys in message `tunnel`, to hubs only.
 
+Until the core reads the hello, a member carries its current copy (the newest it made or took
+that is not a secret, as sealed) as message `copy` right after its statements when a connection
+opens, and a peer that saw it drops it; a copy a member made while it held no other reader's
+statement (alone, or just joined) goes out with the time it was copied once one arrives. So a
+pair that meets after a copy converges, as 0.5's hello did.
+
 ### Until the switch to the core (wave 5)
 
 What follows is 0.5's member protocol, which `member/node.rs` and the phones' `member/phone.rs`

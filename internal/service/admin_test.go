@@ -214,11 +214,19 @@ func TestKeyLevelSetting(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil || !strings.Contains(err.Error(), "the group's root, keeps its keys in a file") {
 		t.Errorf("a level above the root's own key: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpDelay, Value: "24h"}, ""); err != nil {
+	// On the records of 0.6 a claim has no delay to set (cbb recovery
+	// changes the root); another setting the root signs keeps the level.
+	if _, err := pi.do(t, control.Header{Op: control.OpDelay, Value: "24h"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
+		t.Errorf("a takeover delay on the records of 0.6: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpIncoming, Value: "2m"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if l := pi.status(t).KeyLevel; l != "files" {
-		t.Errorf("the level after a new takeover delay: %q", l)
+	waitFor(t, "deck takes the new setting", func() bool { return deck.status(t).IncomingMS == 120_000 })
+	for _, s := range []*testService{pi, deck} {
+		if l := s.status(t).KeyLevel; l != "files" {
+			t.Errorf("the level on %s after a new setting: %q", s.name, l)
+		}
 	}
 }
 

@@ -524,18 +524,21 @@ impl Service {
                     return Some(Err(Error::msg("a device cannot freeze or unfreeze itself")));
                 }
                 // A computer freezes only admins: an ordinary device is
-                // removed.
+                // removed. A device a change of root carried over frozen,
+                // an admin no more, the new root thaws (docs/protocol.md,
+                // section 10, "Re-issue").
                 let st = live.mesh.state();
+                let on = h.op == "freeze";
                 if let Ok(d) = writers::find(&st, &h.device)
                     && d.admin.is_none()
                     && Some(d.id) != st.root_device
+                    && (on || !d.frozen)
                 {
                     return Some(Err(Error::msg(format!(
                         "{} is no admin computer; only those are frozen, and an ordinary device is removed with cbb remove",
                         d.name
                     ))));
                 }
-                let on = h.op == "freeze";
                 self.live_write(live, |set, k, now| writers::freeze(set, k, &h.device, on, now))
             }
             "resolve" => {
