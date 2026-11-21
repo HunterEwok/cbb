@@ -128,9 +128,13 @@ impl Away {
             return error.map(|(e, d)| crate::control::Away { error: e, detail: d, ..Default::default() });
         };
         let allow = st.destinations().iter().map(ToString::to_string).collect();
-        let mut a = crate::control::Away { keys_in_file: true, allow, ..Default::default() };
+        let mut a = crate::control::Away { keys_in_file: true, allow, hub: st.is_hub, ..Default::default() };
+        if st.is_hub {
+            a.endpoints = st.hub_endpoints().iter().map(ToString::to_string).collect();
+            a.clients = i64::try_from(st.held.len()).unwrap_or(i64::MAX);
+        }
         let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
-        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()) {
+        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()).filter(|_| !st.is_hub) {
             a.through = self.through.load(std::sync::atomic::Ordering::SeqCst) && using.is_some();
             a.hub_device = h.device.clone();
             a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();

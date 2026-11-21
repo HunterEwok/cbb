@@ -136,7 +136,7 @@ pub struct Live {
     /// Sync away from home, once the service gave it (`with_away`).
     away: std::sync::OnceLock<Arc<crate::away::Away>>,
     /// The hub's tunnel, while this device serves as a hub of 0.6.
-    hub: Mutex<Option<Arc<crate::hub::Hub>>>,
+    hub: Mutex<Option<away::HubRun>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 

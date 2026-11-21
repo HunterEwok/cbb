@@ -725,7 +725,7 @@ fn vless_for(f: &mut Forwarder, vless: bool, old: Option<&Forwarder>) {
 }
 
 /// A forwarder's pin: SHA-256 of its key, 44 characters of base64.
-fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
+pub(super) fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
     use base64::Engine as _;
     let e = base64::engine::general_purpose::STANDARD;
     e.decode(pin).ok().filter(|b| e.encode(b) == pin).and_then(|b| <[u8; 32]>::try_from(b).ok()).ok_or_else(|| {

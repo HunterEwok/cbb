@@ -105,7 +105,8 @@ impl Live {
 
     /// Gives the hub's tunnel, while it runs, the clients and keys held.
     fn give_hub_peers(&self) {
-        let (Some(away), Some(hub)) = (self.away.get(), self.hub.lock().unwrap().clone()) else { return };
+        let hub = self.hub.lock().unwrap().as_ref().map(|r| r.hub.clone());
+        let (Some(away), Some(hub)) = (self.away.get(), hub) else { return };
         let st = self.mesh.state();
         let peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
         if let Err(e) = hub.set_peers_at(peers, self.own_tunnel_addr()) {
@@ -272,20 +273,30 @@ fn serve_hub(w: &Weak<Live>) {
         }
         let Some(away) = l.away.get().cloned() else { return };
         let settings = away.hub_settings();
-        let running = l.hub.lock().unwrap().clone();
+        let running = l.hub.lock().unwrap().as_ref().map(|r| (r.hub.clone(), r.report.clone()));
         match (settings, running) {
             (None, Some(_)) => {
                 l.hub.lock().unwrap().take();
                 l.logf("cbb: the hub stopped");
             }
             (Some(s), None) => match l.start_hub(&away, s) {
-                Ok(h) => *l.hub.lock().unwrap() = Some(h),
+                Ok(r) => *l.hub.lock().unwrap() = Some(r),
                 Err(e) => away.failed(Some(&e)),
             },
-            (Some(_), Some(h)) => {
+            (Some(_), Some((h, report))) => {
                 for (key, psk) in h.take_handshakes() {
                     if let Err(e) = away.hub_handshaked(&key, &psk) {
                         l.logf(&format!("cbb: {}", e.for_log()));
+                    }
+                }
+                // The forwarder's VLESS settings change the offer: the
+                // clients connected connect again, and take it with their
+                // next `tunnel`.
+                let r = report.and_then(|r| r.lock().ok().map(|r| r.clone()));
+                if r.is_some_and(|r| away.hub_learned(&r)) {
+                    let connected = l.mesh.connected();
+                    for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
+                        l.mesh.disconnect(d);
                     }
                 }
             }
@@ -296,14 +307,23 @@ fn serve_hub(w: &Weak<Live>) {
     }
 }
 
+/// The hub of 0.6 while it serves: its registration with its forwarder,
+/// dropped first, and its tunnel.
+pub(super) struct HubRun {
+    _registration: Option<crate::forward::Registration>,
+    report: Option<Arc<std::sync::Mutex<crate::forward::Report>>>,
+    hub: Arc<crate::hub::Hub>,
+}
+
 impl Live {
     /// Starts the hub's tunnel with settings, its connections going to a
-    /// loopback port where this member takes them.
+    /// loopback port where this member takes them, and its registration with
+    /// its forwarder under the hubs' credential of the forwarder's face.
     fn start_hub(
         self: &Arc<Self>,
         away: &Arc<Away>,
         (key, obfuscation, port): ([u8; 32], Option<serde_json::Value>, u16),
-    ) -> crate::error::Result<Arc<crate::hub::Hub>> {
+    ) -> crate::error::Result<HubRun> {
         use crate::error::Context as _;
         let port = if port == 0 { crate::tunnel::MEMBER_PORT } else { port };
         let ln = std::net::TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
@@ -338,7 +358,15 @@ impl Live {
             }
         });
         self.logf(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));
-        Ok(hub)
+        let pins = away.hub_forwarder_pins().unwrap_or_default();
+        let w = Arc::downgrade(self);
+        let credential: crate::forward::CredentialFn =
+            Arc::new(move || w.upgrade().and_then(|l| pins.iter().find_map(|p| l.mesh.hub_credential(p))));
+        let (registration, report) = match away.hub_registration(hub.sender(), credential).transpose()? {
+            Some((r, report)) => (Some(r), Some(report)),
+            None => (None, None),
+        };
+        Ok(HubRun { _registration: registration, report, hub })
     }
 }
 

@@ -333,6 +333,23 @@ impl Kept {
     }
 }
 
+impl Kept {
+    /// What a hub shows its forwarder of 0.6 (`cbb-forward/3`): its server
+    /// key for the period and the hubs' credential, which must list that
+    /// key; None until the period counts, has not expired and lists it.
+    pub fn for_hub(&self, secret: &[u8; 32], now_ms: u64) -> Option<(ServerKey, Vec<u8>)> {
+        let (period, hubs) = (self.period.as_ref()?, self.hubs.as_ref()?);
+        if !period.c.live(now_ms) || !hubs.c.live(now_ms) {
+            return None;
+        }
+        let (scalar, point) = alias::server_key(secret, &period.c.tag?);
+        if !hubs.c.hubs.contains(&hash_of(&point).0) {
+            return None;
+        }
+        Some((ServerKey::from_scalar(&scalar).ok()?, hubs.env.clone()))
+    }
+}
+
 fn b64(b: &[u8]) -> String {
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
 }
@@ -498,6 +515,17 @@ impl Faces {
             let shown = f.kept.for_relay(state, &hash_of(member), &self.secret, now_ms)?;
             Some((Server { pin: *pin, address: f.address.clone() }, shown))
         })
+    }
+
+    /// What this device, as a hub, shows the forwarder whose key has the
+    /// pin `pin` at now_ms: the hubs' credential of that face and the
+    /// server key it lists, with the key's certificate; None while that
+    /// face's credentials do not list this device as a hub.
+    pub fn for_hub(&self, pin: &[u8; 32], now_ms: u64) -> Option<crate::forward::HubCredential> {
+        let faces = self.faces.lock().unwrap();
+        let (key, env) = faces.get(pin)?.kept.for_hub(&self.secret, now_ms)?;
+        let cert = key.cert().ok()?;
+        Some(crate::forward::HubCredential { credentials: vec![env], cert, key: Arc::new(key) })
     }
 
     fn save(&self, faces: &BTreeMap<[u8; 32], Face>) {

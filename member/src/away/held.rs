@@ -110,6 +110,91 @@ impl Away {
         Some((st.serving_key().ok()?, st.obfuscation.clone(), st.listen_port))
     }
 
+    /// The pins the hub's forwarder's key may have, while this device is a
+    /// hub with a forwarder: the project's, or the one it was given.
+    pub fn hub_forwarder_pins(&self) -> Option<Vec<[u8; 32]>> {
+        let cur = self.st.lock().unwrap();
+        let f = cur.as_ref().filter(|s| s.is_hub)?.forwarder.as_ref()?;
+        let pins: Result<Vec<[u8; 32]>> = if f.project {
+            super::serve::PROJECT_PINS.iter().map(|p| super::serve::pin_bytes(p)).collect()
+        } else {
+            super::serve::pin_bytes(&f.pin).map(|p| vec![p])
+        };
+        pins.ok()
+    }
+
+    /// Starts the hub's registration with its forwarder on the records of
+    /// 0.6, its datagrams going out by send and the hubs' credential of the
+    /// forwarder's face asked of credential; None without a forwarder.
+    pub fn hub_registration(
+        &self,
+        send: crate::forward::SendFn,
+        credential: crate::forward::CredentialFn,
+    ) -> Option<Result<(crate::forward::Registration, std::sync::Arc<std::sync::Mutex<crate::forward::Report>>)>> {
+        let pins = self.hub_forwarder_pins()?;
+        let cur = self.st.lock().unwrap();
+        let st = cur.as_ref()?;
+        let f = st.forwarder.as_ref()?;
+        let wg_key = match st.serving_key() {
+            Ok(k) => k,
+            Err(e) => return Some(Err(e)),
+        };
+        let cfg = crate::forward::Config {
+            endpoint: f.endpoint,
+            pins: pins.clone(),
+            wg_key,
+            obfuscation: st.obfuscation.clone(),
+            vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
+            send,
+            credential: Some(credential),
+            ways: Default::default(),
+            learned: Default::default(),
+        };
+        drop(cur);
+        let report = std::sync::Arc::new(std::sync::Mutex::new(crate::forward::Report::default()));
+        let r = crate::forward::Registration::start(cfg, report.clone(), self.log.clone());
+        Some(Ok((r, report)))
+    }
+
+    /// Keeps the VLESS settings the forwarder's answer gave (report), or
+    /// forgets the VLESS user ID of a forwarder that registered the hub
+    /// without VLESS. Whether the offer changed, so the clients take it
+    /// again.
+    pub fn hub_learned(&self, report: &crate::forward::Report) -> bool {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return false };
+        let Some(f) = st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty()) else { return false };
+        let vless = match (&report.vless, report.registered) {
+            (Some(v), _) if f.vless.as_ref() != Some(v) => Some(v.clone()),
+            (None, true) => None,
+            _ => return false,
+        };
+        let mut next = st.clone();
+        if let Some(f) = next.forwarder.as_mut() {
+            match &vless {
+                Some(v) => f.vless = Some(v.clone()),
+                None => (f.vless_id, f.vless) = (String::new(), None),
+            }
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return false;
+        }
+        *st = next;
+        (self.log)(&match vless {
+            Some(_) => "cbb: sync away from home: the hub's clients come over VLESS to its forwarder".to_string(),
+            None => "cbb: sync away from home: the forwarder has no VLESS, so the hub's clients come over UDP alone"
+                .to_string(),
+        });
+        true
+    }
+
+    /// The devices the hub holds keys of, by their IDs.
+    pub fn held_devices(&self) -> Vec<DeviceId> {
+        let cur = self.st.lock().unwrap();
+        cur.as_ref().map(|st| st.held.keys().filter_map(|n| crate::live::id_of_hex(n)).collect()).unwrap_or_default()
+    }
+
     /// The hub's offer as the format's table `offer` encodes it, confirming
     /// the tag confirm; None while this device is no hub or its offer waits
     /// for the forwarder's VLESS settings. The forwarder's endpoint comes

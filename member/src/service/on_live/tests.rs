@@ -80,10 +80,13 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     assert!(e.message().contains("only an admin can change the devices list"), "{}", e.message());
 
     // What has not moved yet answers so, with its cause.
-    for (op, name) in [("away", "hub"), ("away", "move"), ("invite", "")] {
+    for (op, name) in [("away", "hub-off"), ("away", "move"), ("invite", "")] {
         let e = ask(&a, op, |h| h.name = name.into()).unwrap_err();
         assert!(e.find::<NotYet>().is_some(), "{op} {name}: {}", e.for_log());
     }
+    // A device the records do not make a hub is refused as one.
+    let e = ask(&a, "away", |h| (h.name, h.consent) = ("hub".into(), true)).unwrap_err();
+    assert!(e.message().contains("do not make this device a hub"), "{}", e.message());
     // Sync away from home turns on, with consent to keys in files, and
     // off; cbb global shows it.
     assert!(ask(&a, "away", |_| {}).unwrap().header.status.unwrap().away.is_none(), "off");

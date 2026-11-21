@@ -394,6 +394,12 @@ impl Mesh {
         self.send_to(to, frame)
     }
 
+    /// What this device, as a hub, shows the forwarder of pin `pin` now
+    /// (`Faces::for_hub`).
+    pub fn hub_credential(&self, pin: &[u8; 32]) -> Option<crate::forward::HubCredential> {
+        self.faces.for_hub(pin, crate::uptime::wall_ms().max(0) as u64)
+    }
+
     /// Whether a device may be a hub of this one: a device of the group,
     /// not frozen, that holds an admin key or that the root's hubs record
     /// names.
@@ -1178,6 +1184,14 @@ impl Mesh {
         self.closed.store(true, Ordering::SeqCst);
         self.push.stop();
         self.close_connections();
+    }
+
+    /// Ends the connection with the device peer, if there is one; it may
+    /// connect again.
+    pub fn disconnect(&self, peer: &DeviceId) {
+        if let Some(c) = self.conns.lock().unwrap().get(peer) {
+            c.close();
+        }
     }
 
     /// Ends every connection with a goodbye; new ones are still taken.

@@ -481,7 +481,7 @@ impl Service {
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             "away" if h.name == "relay" => self.live_relay(live, h),
-            "away" if matches!(h.name.as_str(), "" | "on" | "off") && (h.name != "off" || h.device.is_empty()) => {
+            "away" if matches!(h.name.as_str(), "" | "on" | "off" | "hub") && h.device.is_empty() => {
                 self.live_away(live, h)
             }
             op if !MOVING.contains(&op) => return None,
@@ -506,6 +506,16 @@ impl Service {
                 live.tunnel_to_hubs();
             }
             "off" => away.turn_off()?,
+            // The records must make this device a hub: an admin key, or the
+            // root's hubs record (cbb hubs).
+            "hub" if !live.mesh.may_be_hub(&live.mesh.device()) => {
+                return Err(Error::msg(
+                    "the group's records do not make this device a hub; the root names its hubs with cbb hubs",
+                ));
+            }
+            "hub" => {
+                away.make_hub(h)?;
+            }
             _ => {}
         }
         let status = Status { away: away.live_status(), ..Default::default() };
