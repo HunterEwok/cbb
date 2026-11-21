@@ -138,7 +138,7 @@
     <string name="error_no_answer">电脑没有响应。它可能已离线，或运行的是旧版 CBB。</string>
     <string name="error_no_biometric">请先在这部手机上添加指纹或面容：在 Android 10 上，群组的密钥需要它。</string>
     <string name="error_no_network">把这部手机连到家里的 Wi-Fi，然后重试。</string>
-    <string name="error_no_nfc">这部手机没有 YubiKey 所需的 NFC。</string>
+    <string name="error_no_nfc">这部手机既没有 NFC，也没有可连接 YubiKey 的 USB 接口。</string>
     <string name="error_no_screen_lock">请先为这部手机设置屏幕锁定：群组的密钥需要它。</string>
     <string name="error_no_window">没有电脑在等待手机。在创建群组的电脑上运行 cbb pair -admin，然后重试。</string>
     <string name="error_not_admin">只有管理员手机可以执行此操作。</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">此 YubiKey 已保存了一个恢复密钥。请使用另一个 YubiKey。</string>
     <string name="error_yubikey_management_key">应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。</string>
     <string name="error_yubikey_no_key">此 YubiKey 中没有恢复密钥。</string>
-    <string name="error_yubikey_none">没有 YubiKey 贴近手机。</string>
+    <string name="error_yubikey_none">没有 YubiKey 贴近手机，也没有插入。</string>
     <string name="error_yubikey_old">此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。</string>
     <string name="error_yubikey_taken">此 YubiKey 在存放恢复密钥的位置保存了其他内容。请使用另一个 YubiKey。</string>
+    <string name="error_yubikey_usb_denied">未允许手机通过 USB 使用 YubiKey。请重新插入并允许。</string>
     <string name="error_yubikey_wrong_pin">PIN 错误。连续三次错误后 YubiKey 会锁定其 PIN。</string>
     <string name="event_added">%1$s 已加入群组。</string>
     <string name="event_frozen">%1$s 已被冻结：在管理员解冻它之前，其他设备会拒绝它。</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">设备已加入群组。</string>
     <string name="window_waiting">正在等待新设备…</string>
     <string name="yubikey_go">继续</string>
-    <string name="yubikey_hold">将 YubiKey 贴在手机背面，直到此消息消失。</string>
+    <string name="yubikey_hold">将 YubiKey 贴在手机背面，或插入 USB-C 接口，直到此消息消失。</string>
     <string name="yubikey_open">改用 YubiKey</string>
-    <string name="yubikey_open_body">输入 YubiKey 的 PIN，然后把 YubiKey 贴近手机，直到完成。</string>
+    <string name="yubikey_open_body">输入 YubiKey 的 PIN，然后把 YubiKey 贴近手机或插入 USB-C 接口，直到完成。</string>
     <string name="yubikey_open_title">使用存有恢复密钥的 YubiKey</string>
     <string name="yubikey_opened">YubiKey 已打开恢复密钥。</string>
     <string name="yubikey_pin">YubiKey 的 PIN</string>
     <string name="yubikey_put">存入 YubiKey</string>
-    <string name="yubikey_put_body">YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。输入它的 PIN，然后把它贴近手机。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。</string>
+    <string name="yubikey_put_body">YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。输入它的 PIN，然后把它贴近手机或插入 USB-C 接口。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。</string>
     <string name="yubikey_put_title">将恢复密钥存入 YubiKey</string>
     <string name="yubikey_seal_keep">保留其密钥，然后贴近</string>
     <string name="yubikey_seal_replace">替换其出厂密钥，然后贴近</string>
     <string name="yubikey_sealed">恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。</string>
     <string name="yubikey_sealed_default_key">恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。</string>
+    <string name="yubikey_touch_usb">YubiKey 闪烁时请触摸它，并保持插入，直到此消息消失。</string>
 </resources>

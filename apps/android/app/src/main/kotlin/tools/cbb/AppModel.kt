@@ -1119,7 +1119,7 @@ class AppModel(private val app: Context) {
      */
     suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean): Note = try {
         cardPrompt = R.string.yubikey_hold
-        val sealed = group.sealOnCard(sheet, pin, replaceDefault)
+        val sealed = group.sealOnCard(sheet, pin, replaceDefault) { cardPrompt = R.string.yubikey_touch_usb }
         Log.i(TAG, "yubikey: sealed, factory key ${sealed.defaultKey}, replaced ${sealed.replaced}")
         Note(if (sealed.defaultKey) R.string.yubikey_sealed_default_key else R.string.yubikey_sealed)
     } catch (e: CancellationException) {
@@ -1136,7 +1136,7 @@ class AppModel(private val app: Context) {
      */
     suspend fun openCard(pin: String): ByteArray? = try {
         cardPrompt = R.string.yubikey_hold
-        group.openCard(pin).also { message = Note(R.string.yubikey_opened) }
+        group.openCard(pin) { cardPrompt = R.string.yubikey_touch_usb }.also { message = Note(R.string.yubikey_opened) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -1320,7 +1320,9 @@ class AppModel(private val app: Context) {
                 RecoveryCard.Kind.CARD -> R.string.error_yubikey
             }
             is YubiKeyNfc.Unavailable -> if (e.off) R.string.error_nfc_off else R.string.error_no_nfc
-            is YubiKeyNfc.NoCard -> R.string.error_yubikey_none
+            is YubiKeys.Unavailable -> R.string.error_no_nfc
+            is YubiKeys.NoCard -> R.string.error_yubikey_none
+            is YubiKeyUsb.Denied -> R.string.error_yubikey_usb_denied
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Content.Unread -> R.string.error_copy_unread

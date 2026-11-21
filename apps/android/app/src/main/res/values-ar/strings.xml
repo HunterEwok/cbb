@@ -138,7 +138,7 @@
     <string name="error_no_answer">لم يُجب الحاسوب. قد يكون غير متصل، أو يشغّل إصدارًا أقدم من CBB.</string>
     <string name="error_no_biometric">أضف بصمة أو وجهًا على هذا الهاتف أولًا: على Android 10 تحتاج مفاتيح المجموعة إلى ذلك.</string>
     <string name="error_no_network">صِل هذا الهاتف بشبكة Wi-Fi المنزلية، ثم حاول مجددًا.</string>
-    <string name="error_no_nfc">لا يحتوي هذا الهاتف على NFC، الذي يحتاجه YubiKey.</string>
+    <string name="error_no_nfc">لا يحتوي هذا الهاتف على NFC ولا على منفذ USB يقبل YubiKey.</string>
     <string name="error_no_screen_lock">اضبط قفل الشاشة على هذا الهاتف أولًا: تحتاجه مفاتيح المجموعة.</string>
     <string name="error_no_window">لا يوجد حاسوب ينتظر هاتفًا. شغّل cbb pair -admin على الحاسوب الذي أنشأ المجموعة، ثم حاول مرة أخرى.</string>
     <string name="error_not_admin">هاتف المشرف وحده يمكنه فعل هذا.</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">يحمل هذا الـ YubiKey مفتاح استرداد بالفعل. استخدم YubiKey آخر.</string>
     <string name="error_yubikey_management_key">لا يستطيع التطبيق استخدام مفتاح الإدارة لهذا الـ YubiKey. استخدم الورقة المطبوعة بدلًا منه.</string>
     <string name="error_yubikey_no_key">لا يحمل هذا الـ YubiKey أي مفتاح استرداد.</string>
-    <string name="error_yubikey_none">لم يُقرَّب أي YubiKey من الهاتف.</string>
+    <string name="error_yubikey_none">لم يُقرَّب أي YubiKey من الهاتف ولم يُوصَل به.</string>
     <string name="error_yubikey_old">إصدار البرنامج الثابت لهذا الـ YubiKey أقدم من 5.3 الذي يحتاجه مفتاح الاسترداد. استخدم الورقة المطبوعة بدلًا منه.</string>
     <string name="error_yubikey_taken">يحمل هذا الـ YubiKey شيئًا آخر في المكان المخصص لمفتاح الاسترداد. استخدم YubiKey آخر.</string>
+    <string name="error_yubikey_usb_denied">لم يُسمح للهاتف باستخدام YubiKey عبر USB. أعد توصيله واسمح بذلك.</string>
     <string name="error_yubikey_wrong_pin">رقم سري خاطئ. بعد ثلاث محاولات خاطئة يحظر YubiKey رقمه السري.</string>
     <string name="event_added">انضم %1$s إلى المجموعة.</string>
     <string name="event_frozen">جُمّد %1$s: يرفضه الآخرون حتى يلغي مشرف تجميده.</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">انضم الجهاز إلى المجموعة.</string>
     <string name="window_waiting">في انتظار الجهاز الجديد…</string>
     <string name="yubikey_go">متابعة</string>
-    <string name="yubikey_hold">أبقِ YubiKey على ظهر الهاتف حتى تختفي هذه الرسالة.</string>
+    <string name="yubikey_hold">أبقِ YubiKey على ظهر الهاتف، أو أدخله في منفذ USB-C، حتى تختفي هذه الرسالة.</string>
     <string name="yubikey_open">استخدام YubiKey بدلًا من ذلك</string>
-    <string name="yubikey_open_body">اكتب رمز PIN لـ YubiKey، ثم أبقِ YubiKey قريبًا من الهاتف حتى ينتهي.</string>
+    <string name="yubikey_open_body">اكتب رمز PIN لـ YubiKey، ثم أبقِ YubiKey قريبًا من الهاتف أو موصولًا بمنفذ USB-C حتى ينتهي.</string>
     <string name="yubikey_open_title">استخدم YubiKey الذي يحمل مفتاح الاسترداد</string>
     <string name="yubikey_opened">فتح YubiKey مفتاح الاسترداد.</string>
     <string name="yubikey_pin">الرقم السري لـ YubiKey</string>
     <string name="yubikey_put">وضعه على YubiKey</string>
-    <string name="yubikey_put_body">يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. اكتب رمز PIN ثم قرّبه من الهاتف. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN.</string>
+    <string name="yubikey_put_body">يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. اكتب رمز PIN ثم قرّبه من الهاتف أو أدخله في منفذ USB-C. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN.</string>
     <string name="yubikey_put_title">وضع مفتاح الاسترداد على YubiKey</string>
     <string name="yubikey_seal_keep">احتفظ بمفتاحه ثم قرّبه</string>
     <string name="yubikey_seal_replace">استبدل مفتاح المصنع ثم قرّبه</string>
     <string name="yubikey_sealed">مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين.</string>
     <string name="yubikey_sealed_default_key">مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا.</string>
+    <string name="yubikey_touch_usb">المس YubiKey عندما يومض، وأبقِه موصولًا حتى تختفي هذه الرسالة.</string>
 </resources>

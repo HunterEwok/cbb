@@ -138,7 +138,7 @@
     <string name="error_no_answer">Kompyuta haikujibu. Huenda iko nje ya mtandao, au inaendesha toleo la zamani la CBB.</string>
     <string name="error_no_biometric">Kwanza ongeza alama ya kidole au uso kwenye simu hii: kwenye Android 10 funguo za kikundi zinahitaji hilo.</string>
     <string name="error_no_network">Unganisha simu hii na Wi-Fi ya nyumbani, kisha ujaribu tena.</string>
-    <string name="error_no_nfc">Simu hii haina NFC, ambayo YubiKey inahitaji.</string>
+    <string name="error_no_nfc">Simu hii haina NFC wala mlango wa USB unaopokea YubiKey.</string>
     <string name="error_no_screen_lock">Weka kufuli ya skrini kwenye simu hii kwanza: funguo za kikundi zinaihitaji.</string>
     <string name="error_no_window">Hakuna kompyuta inayosubiri simu. Endesha cbb pair -admin kwenye kompyuta iliyounda kikundi, kisha ujaribu tena.</string>
     <string name="error_not_admin">Simu ya msimamizi pekee inaweza kufanya hivi.</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">YubiKey hii tayari ina ufunguo wa urejeshaji. Tumia YubiKey nyingine.</string>
     <string name="error_yubikey_management_key">Programu haiwezi kutumia ufunguo wa usimamizi wa YubiKey hii. Tumia karatasi iliyochapishwa badala yake.</string>
     <string name="error_yubikey_no_key">YubiKey hii haina ufunguo wa urejeshaji.</string>
-    <string name="error_yubikey_none">Hakuna YubiKey iliyoshikiliwa kwenye simu.</string>
+    <string name="error_yubikey_none">Hakuna YubiKey iliyoshikiliwa kwenye simu wala kuchomekwa.</string>
     <string name="error_yubikey_old">YubiKey hii ina programu dhibiti ya zamani kuliko 5.3, ambayo ufunguo wa urejeshaji unahitaji. Tumia karatasi iliyochapishwa badala yake.</string>
     <string name="error_yubikey_taken">YubiKey hii ina kitu kingine mahali ufunguo wa urejeshaji unapokaa. Tumia YubiKey nyingine.</string>
+    <string name="error_yubikey_usb_denied">Simu haikuruhusiwa kutumia YubiKey kupitia USB. Ichomeke tena na uruhusu.</string>
     <string name="error_yubikey_wrong_pin">PIN si sahihi. Baada ya majaribio matatu yasiyo sahihi YubiKey huzuia PIN yake.</string>
     <string name="event_added">%1$s kimejiunga na kikundi.</string>
     <string name="event_frozen">%1$s kimegandishwa: vingine vinakikataa hadi msimamizi akifungue.</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">Kifaa kimejiunga na kikundi.</string>
     <string name="window_waiting">Inasubiri kifaa kipya…</string>
     <string name="yubikey_go">Endelea</string>
-    <string name="yubikey_hold">Shikilia YubiKey nyuma ya simu hadi ujumbe huu uondoke.</string>
+    <string name="yubikey_hold">Shikilia YubiKey nyuma ya simu, au ichomeke kwenye mlango wa USB-C, hadi ujumbe huu uondoke.</string>
     <string name="yubikey_open">Tumia YubiKey badala yake</string>
-    <string name="yubikey_open_body">Andika PIN ya YubiKey, kisha ushikilie YubiKey kwenye simu hadi imalizike.</string>
+    <string name="yubikey_open_body">Andika PIN ya YubiKey, kisha ushikilie YubiKey kwenye simu au uichomeke kwenye mlango wa USB-C hadi imalizike.</string>
     <string name="yubikey_open_title">Tumia YubiKey yenye ufunguo wa urejeshaji</string>
     <string name="yubikey_opened">YubiKey imefungua ufunguo wa urejeshaji.</string>
     <string name="yubikey_pin">PIN ya YubiKey</string>
     <string name="yubikey_put">Uweke kwenye YubiKey</string>
-    <string name="yubikey_put_body">YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Andika PIN yake, kisha uishikilie kwenye simu. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN.</string>
+    <string name="yubikey_put_body">YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Andika PIN yake, kisha uishikilie kwenye simu au uichomeke kwenye mlango wa USB-C. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN.</string>
     <string name="yubikey_put_title">Weka ufunguo wa urejeshaji kwenye YubiKey</string>
     <string name="yubikey_seal_keep">Acha ufunguo wake, kisha ushikilie</string>
     <string name="yubikey_seal_replace">Badilisha ufunguo wake wa kiwandani, kisha ushikilie</string>
     <string name="yubikey_sealed">Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti.</string>
     <string name="yubikey_sealed_default_key">Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia.</string>
+    <string name="yubikey_touch_usb">Gusa YubiKey inapomweka, na uiache imechomekwa hadi ujumbe huu uondoke.</string>
 </resources>

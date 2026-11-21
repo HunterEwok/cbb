@@ -138,7 +138,7 @@
     <string name="error_no_answer">Компьютер не ответил. Возможно, он не в сети или на нём старая версия CBB.</string>
     <string name="error_no_biometric">Сначала добавьте на телефоне отпечаток или лицо: на Android 10 они нужны ключам группы.</string>
     <string name="error_no_network">Подключите телефон к домашнему Wi-Fi и попробуйте снова.</string>
-    <string name="error_no_nfc">В этом телефоне нет NFC, а он нужен для YubiKey.</string>
+    <string name="error_no_nfc">В этом телефоне нет ни NFC, ни порта USB, к которому можно подключить YubiKey.</string>
     <string name="error_no_screen_lock">Сначала включите блокировку экрана на телефоне: она нужна ключам группы.</string>
     <string name="error_no_window">Ни один компьютер не ждёт телефон. Выполните cbb pair -admin на компьютере, который создал группу, и попробуйте снова.</string>
     <string name="error_not_admin">Это может только телефон-админ.</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">На этом YubiKey уже есть ключ восстановления. Используйте другой YubiKey.</string>
     <string name="error_yubikey_management_key">Приложение не может использовать ключ управления этого YubiKey. Используйте распечатанный лист.</string>
     <string name="error_yubikey_no_key">На этом YubiKey нет ключа восстановления.</string>
-    <string name="error_yubikey_none">YubiKey не приложили к телефону.</string>
+    <string name="error_yubikey_none">YubiKey не приложили к телефону и не вставили.</string>
     <string name="error_yubikey_old">Прошивка этого YubiKey старше 5.3, а ключу восстановления нужна 5.3. Используйте распечатанный лист.</string>
     <string name="error_yubikey_taken">На этом YubiKey в месте для ключа восстановления хранится что-то другое. Используйте другой YubiKey.</string>
+    <string name="error_yubikey_usb_denied">Телефону не разрешили пользоваться YubiKey по USB. Вставьте его снова и разрешите.</string>
     <string name="error_yubikey_wrong_pin">Неверный PIN. После трёх неверных попыток YubiKey блокирует PIN.</string>
     <string name="event_added">%1$s теперь в группе.</string>
     <string name="event_frozen">%1$s заморожен: остальные его не принимают, пока админ его не разморозит.</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">Устройство присоединилось к группе.</string>
     <string name="window_waiting">Ожидание нового устройства…</string>
     <string name="yubikey_go">Продолжить</string>
-    <string name="yubikey_hold">Приложите YubiKey к задней стороне телефона и держите, пока это сообщение не исчезнет.</string>
+    <string name="yubikey_hold">Приложите YubiKey к задней стороне телефона или вставьте его в порт USB-C и не убирайте, пока это сообщение не исчезнет.</string>
     <string name="yubikey_open">Использовать YubiKey</string>
-    <string name="yubikey_open_body">Введите PIN-код YubiKey, затем приложите YubiKey к телефону и держите, пока всё не закончится.</string>
+    <string name="yubikey_open_body">Введите PIN-код YubiKey, затем приложите YubiKey к телефону или вставьте его в порт USB-C и держите, пока всё не закончится.</string>
     <string name="yubikey_open_title">Использовать YubiKey с ключом восстановления</string>
     <string name="yubikey_opened">YubiKey открыл ключ восстановления.</string>
     <string name="yubikey_pin">PIN YubiKey</string>
     <string name="yubikey_put">Записать на YubiKey</string>
-    <string name="yubikey_put_body">YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Введите его PIN-код и приложите YubiKey к телефону. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код.</string>
+    <string name="yubikey_put_body">YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Введите его PIN-код и приложите YubiKey к телефону или вставьте его в порт USB-C. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код.</string>
     <string name="yubikey_put_title">Записать ключ восстановления на YubiKey</string>
     <string name="yubikey_seal_keep">Оставить его ключ и приложить</string>
     <string name="yubikey_seal_replace">Заменить заводской ключ и приложить</string>
     <string name="yubikey_sealed">Ключ восстановления на YubiKey. YubiKey и лист хранят один и тот же ключ: храните оба, в разных местах.</string>
     <string name="yubikey_sealed_default_key">Ключ восстановления на YubiKey, но у него остался заводской ключ управления: тот, кто его держит, может стереть ключ без PIN-кода. Сохраните и лист.</string>
+    <string name="yubikey_touch_usb">Коснитесь YubiKey, когда он замигает, и не вынимайте его, пока это сообщение не исчезнет.</string>
 </resources>

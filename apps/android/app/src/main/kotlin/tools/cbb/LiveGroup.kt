@@ -1607,23 +1607,23 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * Seals the recovery key's secret, from sheet (the sheet's QR code or
-     * its text), onto a YubiKey held to the phone (NFC; docs/protocol.md,
+     * its text), onto a YubiKey held to the phone or plugged in (NFC or USB-C; docs/protocol.md,
      * "The recovery key on a YubiKey (0.6)"): the core speaks PIV, behind the
      * card's PIN and a touch. replaceDefault is the person's consent to
      * replace a factory management key by a random one the PIN protects.
      */
-    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean): RecoveryCard.Sealed {
+    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean, plugged: () -> Unit = {}): RecoveryCard.Sealed {
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        return YubiKeyNfc.withCard(ui) { card -> RecoveryCard.seal(card, pin, sheet, replaceDefault) }
+        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.seal(card, pin, sheet, replaceDefault) }
     }
 
     /**
      * Opens the recovery key's secret on a YubiKey held to the phone, after
      * its PIN and a touch, for [changeRoot]; the caller drops it after that.
      */
-    suspend fun openCard(pin: String): ByteArray {
+    suspend fun openCard(pin: String, plugged: () -> Unit = {}): ByteArray {
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        return YubiKeyNfc.withCard(ui) { card -> RecoveryCard.open(card, pin) }
+        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.open(card, pin) }
     }
 
     /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */

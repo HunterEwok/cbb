@@ -138,7 +138,7 @@
     <string name="error_no_answer">El ordenador no respondió. Puede estar desconectado o tener una versión antigua de CBB.</string>
     <string name="error_no_biometric">Primero añade una huella o una cara en este teléfono: en Android 10 las claves del grupo lo necesitan.</string>
     <string name="error_no_network">Conecta este teléfono al Wi-Fi de casa y vuelve a intentarlo.</string>
-    <string name="error_no_nfc">Este teléfono no tiene NFC, que la YubiKey necesita.</string>
+    <string name="error_no_nfc">Este teléfono no tiene NFC ni un puerto USB que admita una YubiKey.</string>
     <string name="error_no_screen_lock">Primero pon un bloqueo de pantalla en este teléfono: las claves del grupo lo necesitan.</string>
     <string name="error_no_window">Ningún ordenador espera un teléfono. Ejecuta cbb pair -admin en el ordenador que creó el grupo y vuelve a intentarlo.</string>
     <string name="error_not_admin">Solo un teléfono administrador puede hacer esto.</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">Esta YubiKey ya guarda una clave de recuperación. Usa otra YubiKey.</string>
     <string name="error_yubikey_management_key">La app no puede usar la clave de administración de esta YubiKey. Usa la hoja impresa.</string>
     <string name="error_yubikey_no_key">Esta YubiKey no contiene ninguna clave de recuperación.</string>
-    <string name="error_yubikey_none">No se acercó ninguna YubiKey al teléfono.</string>
+    <string name="error_yubikey_none">No se acercó ninguna YubiKey al teléfono ni se conectó ninguna.</string>
     <string name="error_yubikey_old">Esta YubiKey tiene un firmware anterior al 5.3, que la clave de recuperación necesita. Usa la hoja impresa.</string>
     <string name="error_yubikey_taken">Esta YubiKey guarda otra cosa en el lugar de la clave de recuperación. Usa otra YubiKey.</string>
+    <string name="error_yubikey_usb_denied">No se permitió al teléfono usar la YubiKey por USB. Vuelve a conectarla y permítelo.</string>
     <string name="error_yubikey_wrong_pin">PIN incorrecto. Tras tres intentos fallidos la YubiKey bloquea su PIN.</string>
     <string name="event_added">%1$s se unió al grupo.</string>
     <string name="event_frozen">%1$s fue congelado: los demás lo rechazan hasta que un administrador lo descongele.</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">El dispositivo se unió al grupo.</string>
     <string name="window_waiting">Esperando al dispositivo nuevo…</string>
     <string name="yubikey_go">Continuar</string>
-    <string name="yubikey_hold">Mantén la YubiKey en la parte trasera del teléfono hasta que desaparezca este mensaje.</string>
+    <string name="yubikey_hold">Mantén la YubiKey en la parte trasera del teléfono, o conéctala al puerto USB-C, hasta que desaparezca este mensaje.</string>
     <string name="yubikey_open">Usar una YubiKey en su lugar</string>
-    <string name="yubikey_open_body">Escribe el PIN de la YubiKey y mantenla junto al teléfono hasta que termine.</string>
+    <string name="yubikey_open_body">Escribe el PIN de la YubiKey y mantenla junto al teléfono o conéctala al puerto USB-C hasta que termine.</string>
     <string name="yubikey_open_title">Usar la YubiKey con la clave de recuperación</string>
     <string name="yubikey_opened">La YubiKey abrió la clave de recuperación.</string>
     <string name="yubikey_pin">El PIN de la YubiKey</string>
     <string name="yubikey_put">Guardarla en una YubiKey</string>
-    <string name="yubikey_put_body">La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Escribe su PIN y acércala al teléfono. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN.</string>
+    <string name="yubikey_put_body">La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Escribe su PIN y acércala al teléfono o conéctala al puerto USB-C. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN.</string>
     <string name="yubikey_put_title">Guardar la clave de recuperación en una YubiKey</string>
     <string name="yubikey_seal_keep">Mantener su clave y acercarla</string>
     <string name="yubikey_seal_replace">Reemplazar su clave de fábrica y acercarla</string>
     <string name="yubikey_sealed">La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos.</string>
     <string name="yubikey_sealed_default_key">La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja.</string>
+    <string name="yubikey_touch_usb">Toca la YubiKey cuando parpadee y mantenla conectada hasta que desaparezca este mensaje.</string>
 </resources>

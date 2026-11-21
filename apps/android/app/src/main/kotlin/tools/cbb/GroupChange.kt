@@ -200,7 +200,7 @@ private fun ChangeRootDialog(model: AppModel, close: () -> Unit) {
             val p = preview
             if (p == null) {
                 RecoveryKeyInput(model, enabled = !busy, read = ::start)
-                if (YubiKeyNfc.available(LocalContext.current)) {
+                if (YubiKeys.available(LocalContext.current)) {
                     var askingPin by remember { mutableStateOf(false) }
                     var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                     QuietButton(stringResource(R.string.yubikey_open), onClick = { askingPin = true }, enabled = !busy && onCard == null)

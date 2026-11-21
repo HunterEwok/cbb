@@ -140,7 +140,7 @@
     <string name="error_no_answer">The computer did not answer. It may be offline, or run an older version of CBB.</string>
     <string name="error_no_biometric">Add a fingerprint or face on this phone first: on Android 10 the group\'s keys need one.</string>
     <string name="error_no_network">Connect this phone to your home Wi-Fi, then try again.</string>
-    <string name="error_no_nfc">This phone has no NFC, which the YubiKey needs.</string>
+    <string name="error_no_nfc">This phone has neither NFC nor a USB port that takes a YubiKey.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
     <string name="error_no_window">No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.</string>
     <string name="error_not_admin">Only an admin phone can do this.</string>
@@ -163,9 +163,10 @@
     <string name="error_yubikey_holds_one">This YubiKey holds a recovery key already. Use another YubiKey.</string>
     <string name="error_yubikey_management_key">The app cannot use this YubiKey\'s management key. Use the printed sheet instead.</string>
     <string name="error_yubikey_no_key">This YubiKey holds no recovery key.</string>
-    <string name="error_yubikey_none">No YubiKey was held to the phone.</string>
+    <string name="error_yubikey_none">No YubiKey was held to the phone or plugged in.</string>
     <string name="error_yubikey_old">This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</string>
     <string name="error_yubikey_taken">This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</string>
+    <string name="error_yubikey_usb_denied">The phone was not allowed to use the YubiKey on USB. Plug it in again and allow it.</string>
     <string name="error_yubikey_wrong_pin">Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</string>
     <string name="event_added">%1$s joined the group.</string>
     <string name="event_frozen">%1$s was frozen: the others refuse it until an admin unfreezes it.</string>
@@ -685,17 +686,18 @@
     <string name="window_joined">The device joined the group.</string>
     <string name="window_waiting">Waiting for the new device…</string>
     <string name="yubikey_go">Continue</string>
-    <string name="yubikey_hold">Hold the YubiKey to the back of the phone until this message goes.</string>
+    <string name="yubikey_hold">Hold the YubiKey to the back of the phone, or plug it into the USB-C port, until this message goes.</string>
     <string name="yubikey_open">Use a YubiKey instead</string>
-    <string name="yubikey_open_body">Type the YubiKey\'s PIN, then hold the YubiKey to the phone until it is done.</string>
+    <string name="yubikey_open_body">Type the YubiKey\'s PIN, then hold the YubiKey to the phone or plug it into the USB-C port until it is done.</string>
     <string name="yubikey_open_title">Use the YubiKey with the recovery key</string>
     <string name="yubikey_opened">The YubiKey opened the recovery key.</string>
     <string name="yubikey_pin">The YubiKey\'s PIN</string>
     <string name="yubikey_put">Put it on a YubiKey</string>
-    <string name="yubikey_put_body">The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</string>
+    <string name="yubikey_put_body">The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone or plug it into the USB-C port. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</string>
     <string name="yubikey_put_title">Put the recovery key on a YubiKey</string>
     <string name="yubikey_seal_keep">Keep its key, then hold it</string>
     <string name="yubikey_seal_replace">Replace its factory key, then hold it</string>
     <string name="yubikey_sealed">The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</string>
     <string name="yubikey_sealed_default_key">The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</string>
+    <string name="yubikey_touch_usb">Touch the YubiKey when it blinks, and keep it plugged in until this message goes.</string>
 </resources>

@@ -138,7 +138,7 @@
     <string name="error_no_answer">कंप्यूटर ने जवाब नहीं दिया। वह ऑफ़लाइन हो सकता है, या CBB का पुराना संस्करण चला रहा हो सकता है।</string>
     <string name="error_no_biometric">पहले इस फ़ोन पर फ़िंगरप्रिंट या चेहरा जोड़ें: Android 10 पर समूह की कुंजियों को इसकी ज़रूरत है।</string>
     <string name="error_no_network">इस फ़ोन को अपने घर के Wi-Fi से जोड़ें, फिर दोबारा कोशिश करें।</string>
-    <string name="error_no_nfc">इस फ़ोन में NFC नहीं है, जिसकी YubiKey को ज़रूरत है।</string>
+    <string name="error_no_nfc">इस फ़ोन में न NFC है, न ऐसा USB पोर्ट जिसमें YubiKey लगे।</string>
     <string name="error_no_screen_lock">पहले इस फ़ोन पर स्क्रीन लॉक लगाएँ: समूह की कुंजियों को इसकी ज़रूरत है।</string>
     <string name="error_no_window">कोई कंप्यूटर फ़ोन का इंतज़ार नहीं कर रहा। जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ, फिर दोबारा कोशिश करें।</string>
     <string name="error_not_admin">केवल एडमिन फ़ोन ही यह कर सकता है।</string>
@@ -161,9 +161,10 @@
     <string name="error_yubikey_holds_one">इस YubiKey में पहले से एक रिकवरी कुंजी है। कोई दूसरा YubiKey उपयोग करें।</string>
     <string name="error_yubikey_management_key">ऐप इस YubiKey की प्रबंधन कुंजी का उपयोग नहीं कर सकता। इसके बजाय छपी हुई शीट का उपयोग करें।</string>
     <string name="error_yubikey_no_key">इस YubiKey में कोई रिकवरी कुंजी नहीं है।</string>
-    <string name="error_yubikey_none">फ़ोन से कोई YubiKey नहीं लगाई गई।</string>
+    <string name="error_yubikey_none">कोई YubiKey न फ़ोन से सटाई गई, न उसमें लगाई गई।</string>
     <string name="error_yubikey_old">इस YubiKey का फ़र्मवेयर 5.3 से पुराना है, जिसकी रिकवरी कुंजी को ज़रूरत है। इसके बजाय छपी हुई शीट का उपयोग करें।</string>
     <string name="error_yubikey_taken">इस YubiKey में रिकवरी कुंजी की जगह कुछ और रखा है। कोई दूसरा YubiKey उपयोग करें।</string>
+    <string name="error_yubikey_usb_denied">फ़ोन को USB पर YubiKey इस्तेमाल करने की अनुमति नहीं मिली। उसे फिर से लगाएँ और अनुमति दें।</string>
     <string name="error_yubikey_wrong_pin">ग़लत PIN। तीन ग़लत कोशिशों के बाद YubiKey अपना PIN ब्लॉक कर देती है।</string>
     <string name="event_added">%1$s समूह में शामिल हो गया।</string>
     <string name="event_frozen">%1$s फ़्रीज़ कर दिया गया: जब तक कोई एडमिन उसे अनफ़्रीज़ न करे, बाकी उसे ठुकराते हैं।</string>
@@ -681,17 +682,18 @@
     <string name="window_joined">डिवाइस समूह से जुड़ गया।</string>
     <string name="window_waiting">नए डिवाइस का इंतज़ार…</string>
     <string name="yubikey_go">जारी रखें</string>
-    <string name="yubikey_hold">जब तक यह संदेश न जाए, YubiKey को फ़ोन के पीछे लगाए रखें।</string>
+    <string name="yubikey_hold">जब तक यह संदेश न जाए, YubiKey को फ़ोन के पीछे लगाए रखें, या उसे USB-C पोर्ट में लगाएँ।</string>
     <string name="yubikey_open">इसकी जगह YubiKey इस्तेमाल करें</string>
-    <string name="yubikey_open_body">YubiKey का PIN लिखें, फिर काम पूरा होने तक YubiKey को फ़ोन से लगाए रखें।</string>
+    <string name="yubikey_open_body">YubiKey का PIN लिखें, फिर काम पूरा होने तक YubiKey को फ़ोन से सटाए रखें या USB-C पोर्ट में लगाए रखें।</string>
     <string name="yubikey_open_title">रिकवरी कुंजी वाला YubiKey उपयोग करें</string>
     <string name="yubikey_opened">YubiKey ने रिकवरी कुंजी खोल दी।</string>
     <string name="yubikey_pin">YubiKey का PIN</string>
     <string name="yubikey_put">इसे YubiKey पर रखें</string>
-    <string name="yubikey_put_body">YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। इसका PIN लिखें, फिर इसे फ़ोन से लगाएँ। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।</string>
+    <string name="yubikey_put_body">YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। इसका PIN लिखें, फिर इसे फ़ोन से लगाएँ या USB-C पोर्ट में लगाएँ। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।</string>
     <string name="yubikey_put_title">रिकवरी कुंजी YubiKey पर रखें</string>
     <string name="yubikey_seal_keep">इसकी कुंजी रखें, फिर पास लाएँ</string>
     <string name="yubikey_seal_replace">इसकी फ़ैक्टरी कुंजी बदलें, फिर पास लाएँ</string>
     <string name="yubikey_sealed">रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।</string>
     <string name="yubikey_sealed_default_key">रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।</string>
+    <string name="yubikey_touch_usb">YubiKey के चमकने पर उसे छुएँ, और यह संदेश जाने तक उसे लगाए रखें।</string>
 </resources>
