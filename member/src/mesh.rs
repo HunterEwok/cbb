@@ -177,6 +177,18 @@ struct Conn {
     lower_dialed: bool,
     /// The tunnel's pre-shared keys this connection gives (`crate::hubkey`).
     tunnel_psks: TunnelPsks,
+    /// The hub took it from its tunnel (`accept_tunneled`).
+    through_hub: bool,
+}
+
+impl Conn {
+    /// Whether the peer and this member meet through the group's tunnel:
+    /// a connection the hub took from its tunnel, or one with a tunnel
+    /// address, fd00:cbb::/32.
+    fn tunneled(&self) -> bool {
+        self.through_hub
+            || matches!(self.sock.peer_addr().map(|a| a.ip()), Ok(std::net::IpAddr::V6(a)) if a.octets()[..4] == [0xfd, 0x00, 0x0c, 0xbb])
+    }
 }
 
 /// The tunnel's pre-shared keys a member connection gives (A-22): one for
@@ -521,6 +533,18 @@ impl Mesh {
     /// The lifetimes copies are judged by.
     pub fn set_lifetimes(&self, l: Lifetimes) {
         *self.lifetimes.write().unwrap() = l;
+    }
+
+    /// Sets the largest blob this member serves through the group's
+    /// tunnel, and fetches as a hub for its clients (`cbb config
+    /// max-copy-away`).
+    pub fn set_away_limit(&self, n: u64) {
+        self.content.set_away_limit(n);
+    }
+
+    /// The largest blob served through the group's tunnel.
+    pub fn away_limit(&self) -> u64 {
+        self.content.away_limit()
     }
 
     /// The last hello of each device connected now.
@@ -902,7 +926,7 @@ impl Mesh {
         let (cfg, exporter) = bykey::exporting_client(self.client_config(expect)?);
         let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, true, Some(&exporter))
+        self.run(sock, s, true, false, Some(&exporter))
     }
 
     /// Takes a connection a member made and runs it until it ends: the
@@ -912,7 +936,17 @@ impl Mesh {
         let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
         let mut s = tls::Session::server(Arc::new(cfg))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, false, Some(&exporter))
+        self.run(sock, s, false, false, Some(&exporter))
+    }
+
+    /// As `accept`, for a connection this hub took from its tunnel: what it
+    /// serves there is capped by its limit away from home.
+    pub fn accept_tunneled(self: &Arc<Self>, sock: TcpStream) -> Result<DeviceId> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        self.run(sock, s, false, true, Some(&exporter))
     }
 
     /// As `accept`, with a check of the device the peer's certificate
@@ -929,7 +963,7 @@ impl Mesh {
             let _ = sock.shutdown(std::net::Shutdown::Both);
             return Err(Error::msg(format!("{} is not the caller this listener expects", hex(&peer.0[..4]))));
         }
-        self.run(sock, s, false, Some(&exporter))
+        self.run(sock, s, false, false, Some(&exporter))
     }
 
     /// The server's side of a pairing handshake (`cbb-pair/3` alone) on a
@@ -984,7 +1018,7 @@ impl Mesh {
         }
         let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
-        self.run(sock, s, false, Some(&exporter)).map(Some)
+        self.run(sock, s, false, false, Some(&exporter)).map(Some)
     }
 
     /// Runs a member connection until it ends; dialed says this device
@@ -997,6 +1031,7 @@ impl Mesh {
         sock: TcpStream,
         session: tls::Session,
         dialed: bool,
+        through_hub: bool,
         exporter: Option<&tls::Exporter>,
     ) -> Result<DeviceId> {
         let point = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
@@ -1018,6 +1053,7 @@ impl Mesh {
             closed: AtomicBool::new(false),
             lower_dialed,
             tunnel_psks: tunnel_psks.unwrap_or_default(),
+            through_hub,
         });
         {
             let mut conns = self.conns.lock().unwrap();

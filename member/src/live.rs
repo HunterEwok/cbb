@@ -40,6 +40,8 @@ use crate::uptime;
 const NEAR_GRACE: Duration = Duration::from_secs(30);
 /// The devices found at home that are remembered, as many as a group has.
 const MAX_HOME: usize = 256;
+/// How often a hub tries to fetch a copy's blob for its clients.
+const FETCH_TRIES: usize = 5;
 
 /// A copy from the group to write to this device's clipboard.
 #[derive(Clone, Debug)]
@@ -279,8 +281,12 @@ impl Live {
     }
 
     /// A copy a peer brought, which the core found new.
-    fn arrived(&self, a: &Arrived) {
-        match self.board.received(a) {
+    fn arrived(self: &Arc<Self>, a: &Arrived) {
+        let verdict = self.board.received(a);
+        if verdict != Verdict::Write {
+            self.fetch_for_clients(a);
+        }
+        match verdict {
             Verdict::Write => {}
             Verdict::Mode | Verdict::Held | Verdict::Unread => return,
             v => {
@@ -309,6 +315,32 @@ impl Live {
         if let Some(f) = &*self.on_write.read().unwrap() {
             f(w);
         }
+    }
+
+    /// A hub, or a device that only passes the copies on, fetches the blob
+    /// of a copy it does not write within its limit away from home, so
+    /// that its clients away from home can get it (docs/protocol.md,
+    /// section 4, "Images and files"); a copy it writes the service fetches.
+    fn fetch_for_clients(self: &Arc<Self>, a: &Arrived) {
+        let Some(b) = a.blob else { return };
+        let forward_only =
+            self.mesh.state().device(&self.me).is_some_and(|d| crate::writers::is_forward_only(d.rights));
+        if !(forward_only || self.away().is_some_and(|w| w.is_hub_now())) || b.size > self.mesh.away_limit() {
+            return;
+        }
+        let (w, from) = (Arc::downgrade(self), a.from);
+        std::thread::spawn(move || {
+            // Again after a pause while no member gives it yet.
+            for _ in 0..FETCH_TRIES {
+                let Some(l) = w.upgrade() else { return };
+                match l.mesh.fetch(&b, &from, l.mesh.away_limit()) {
+                    Ok(()) => return,
+                    Err(e) => l.logf(&format!("cbb: fetching a copy for the hub's clients: {}", e.details())),
+                }
+                drop(l);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        });
     }
 
     /// A clipboard watcher saw the clipboard change: it goes to the group

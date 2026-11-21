@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 images and files reach a device away from home through its hub
+  again: a hub serving fetches the blob of each copy it does not write itself within its limit
+  away from home (`cbb config max-copy-away`), and serves through its tunnel only blobs within
+  that limit.
 - On the records of 0.6 a hub fetches the release archives its group's devices update from
   again (control operation `release_want`), as with 0.5: a computer that `cbb update` updates
   names its archive in its hello's `device` map, and the hub's `cbb update` downloads the ones

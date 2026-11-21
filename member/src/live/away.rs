@@ -710,7 +710,7 @@ impl Live {
                 let mesh = l.mesh.clone();
                 drop(l);
                 std::thread::spawn(move || {
-                    let _ = mesh.accept(sock);
+                    let _ = mesh.accept_tunneled(sock);
                 });
             }
         });

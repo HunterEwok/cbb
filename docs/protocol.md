@@ -1025,7 +1025,10 @@ them, never needs to read it. The code is `member/src/content.rs`.
   25 MiB from a member reached through the group's tunnel (`cbb config max-copy` and
   `max-copy-away`, 1 MiB to 1 GiB). A copy over it is not fetched, and `cbb status` says so.
   A hub that only passes copies on (`forward_only`, section 10) fetches the blob of each new
-  copy within its limits as a reader would, so that its clients away from home can get it.
+  copy within its limits as a reader would, so that its clients away from home can get it; on
+  the records of 0.6 so does any hub serving, for a copy it does not write itself (its sync
+  off, or its mode keeping the copy out), within its limit away from home. A hub serves
+  through its tunnel only blobs within that limit, so its limit caps its whole star.
 
 Ages: a sender MUST add the time an event waited in its outgoing queue to `age_ms` (saturating at
 the largest int64). A receiver caps `age_ms` at 365 days and turns it into a local time:

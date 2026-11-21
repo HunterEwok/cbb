@@ -126,6 +126,7 @@ impl Service {
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         // The attestations of member keys (docs/protocol.md, section 17).
         live.with_attestations();
+        live.mesh.set_away_limit(u64::try_from(self.limits.lock().unwrap().away).unwrap_or(0));
         *self.live.write().unwrap() = Some(live.clone());
         let tag = live.tag();
         log(&format!(

@@ -310,6 +310,12 @@ impl Mesh {
         let now = crate::uptime::wall_ms();
         let releases = self.releases();
         let blob = self.content.held(&sum);
+        // Through the group's tunnel only a blob within this member's
+        // limit away from home: a hub's limit caps its whole star.
+        if blob.is_some() && conn.tunneled() && !self.content.serves_away(&sum) {
+            let _ = conn.tx.try_send(range(m::T_MISSING, &sum, offset, length));
+            return Ok(());
+        }
         let Some(size) = blob.or_else(|| releases.as_ref()?.held(&crate::releases::hex(&sum), now)) else {
             let _ = conn.tx.try_send(range(m::T_MISSING, &sum, offset, length));
             return Ok(());

@@ -97,6 +97,11 @@ impl Store {
         *self.away.lock().unwrap() = n;
     }
 
+    /// The largest blob served through the group's tunnel.
+    pub fn away_limit(&self) -> u64 {
+        *self.away.lock().unwrap()
+    }
+
     /// Whether the blob sum is served to a peer through the group's tunnel:
     /// only one held within the limit away from home.
     pub fn serves_away(&self, sum: &[u8]) -> bool {

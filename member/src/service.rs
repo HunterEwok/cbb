@@ -2432,7 +2432,9 @@ impl Service {
                 if !h.name.is_empty() {
                     let l = copies::Limits::set(&self.state_dir, &h.name, &h.value)?;
                     *self.limits.lock().unwrap() = l;
-                    if let Ok(node) = self.node() {
+                    if let Some(live) = self.live() {
+                        live.mesh.set_away_limit(u64::try_from(l.away).unwrap_or(0));
+                    } else if let Ok(node) = self.node() {
                         node.set_away_limit(u64::try_from(l.away).unwrap_or(0));
                     }
                     (self.log)(&format!(
