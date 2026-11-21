@@ -144,13 +144,12 @@ private fun LocalNetworkPermission(model: AppModel) {
 /**
  * No group yet (docs/apps.md, Start): settings and the language at the
  * top, the logo, "Create a group", "Join a group", "Join with an
- * invitation" and a small link to restore with the recovery key.
+ * invitation".
  */
 @Composable
 private fun StartScreen(model: AppModel) {
     val palette = LocalPalette.current
     var adding by rememberSaveable { mutableStateOf(false) }
-    var restoring by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var invited by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.prepare() }
@@ -162,11 +161,8 @@ private fun StartScreen(model: AppModel) {
         InvitationScreen(model) { invited = false }
         return
     }
-    if (adding || restoring) {
-        AddDeviceScreen(model, restore = restoring) {
-            adding = false
-            restoring = false
-        }
+    if (adding) {
+        AddDeviceScreen(model) { adding = false }
         return
     }
     if (settings) {
@@ -206,9 +202,6 @@ private fun StartScreen(model: AppModel) {
         MainKeyNote(model)
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
         QuietButton(stringResource(R.string.invitation_join), onClick = { invited = true })
-        TextButton(onClick = { restoring = true }) {
-            Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-        }
         model.message?.let { NoteText(it) }
     }
 }
@@ -485,111 +478,10 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
 
 // Adding
 
-/**
- * Add a device: the pairing window (Pairing06.kt). With restore, on a phone
- * without a group: the camera with a frame reads the recovery sheet's QR
- * code, or its text is typed when there is no camera or it is not allowed.
- */
+/** Add a device: the pairing window (Pairing06.kt). */
 @Composable
-internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
-    if (!restore) {
-        WindowScreen(model, close)
-        return
-    }
-    val palette = LocalPalette.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
-    var allowed by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    var asked by rememberSaveable { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        allowed = it
-        asked = true
-    }
-    LaunchedEffect(Unit) {
-        model.message = null
-        if (hasCamera && !allowed && !asked) launcher.launch(Manifest.permission.CAMERA)
-    }
-    // The device being admitted: one at a time; leaving the page cancels it.
-    var adding by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    // Why the camera did not start, if it did not.
-    var cameraError by remember { mutableStateOf<Exception?>(null) }
-    val add = { text: String ->
-        if (adding == null) {
-            adding = scope.launch {
-                try {
-                    if (model.restore(text.trim())) close()
-                } finally {
-                    adding = null
-                }
-            }
-        }
-    }
-    BackHandler { close() }
-    // The recovery key typed or pasted stays out of screenshots and the
-    // recent apps' preview.
-    SecureWindow()
-    Page(stringResource(R.string.restore_title), close) {
-        // Restoring makes this device the group's root, as making the group does.
-        MainKeyNote(model, hint = false)
-        if (hasCamera && allowed && cameraError == null) {
-            QrScanner(
-                onCode = { text -> scope.launch { if (!model.busy) add(text) } },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
-                onError = { cameraError = it },
-            )
-            Text(stringResource(R.string.restore_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        } else if (cameraError != null) {
-            // The camera did not start: the text of the QR code still works.
-            NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
-        } else {
-            Text(
-                stringResource(if (hasCamera) R.string.camera_denied else R.string.paste_hint),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        var typed by rememberSaveable { mutableStateOf("") }
-        OutlinedTextField(
-            value = typed,
-            onValueChange = { typed = it },
-            label = { Text(stringResource(R.string.qr_text)) },
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        AccentButton(stringResource(R.string.restore_go), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
-        var askingPin by remember { mutableStateOf(false) }
-        QuietButton(stringResource(R.string.yubikey_restore), onClick = { askingPin = true }, enabled = !model.busy)
-        if (askingPin) {
-            YubiKeyPinDialog(
-                stringResource(R.string.yubikey_restore_title),
-                stringResource(R.string.yubikey_restore_body),
-                dismiss = { askingPin = false },
-            ) { pin ->
-                if (adding == null) {
-                    adding = scope.launch {
-                        try {
-                            if (model.restoreWithCard(pin)) close()
-                        } finally {
-                            adding = null
-                        }
-                    }
-                }
-            }
-        }
-        YubiKeyPrompt(model) { adding?.cancel() }
-        if (model.busy) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-                CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
-                Text(stringResource(R.string.connecting))
-            }
-        } else {
-            model.message?.let { NoteText(it) }
-        }
-    }
+internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
+    WindowScreen(model, close)
 }
 
 // Settings

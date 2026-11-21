@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.ChangePreview
 import tools.cbb.kit.Notice
+import tools.cbb.kit.RecoveryCard
 import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Arrangement
 import tools.cbb.kit.BugReports
@@ -28,8 +29,6 @@ import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
 import tools.cbb.kit.Pairing
 import tools.cbb.kit.PhoneGroup
-import tools.cbb.kit.Piv
-import tools.cbb.kit.Restore
 import tools.cbb.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -281,40 +280,6 @@ class AppModel(private val app: Context) {
     fun choose(appearance: Appearance) {
         settings.appearance = appearance
         this.appearance = appearance
-    }
-
-    /**
-     * Restores the group with the recovery key from the sheet's QR code, on
-     * a phone without a group: the claim goes out, the app goes Home, and
-     * Home shows the time left until this phone becomes the root.
-     */
-    suspend fun restore(text: String): Boolean {
-        if (phase != Phase.START) {
-            message = Note(R.string.error_restore_has_group, error = true)
-            return false
-        }
-        busy = true
-        try {
-            val sheet = when (val r = withContext(Dispatchers.IO) { Core.readRecoverySheet(text) }) {
-                is Core.SheetReading.Key -> r.key
-                is Core.SheetReading.Refused -> {
-                    message = Note(R.string.error_sheet, if (settings.showsErrorDetails) r.message else null, error = true)
-                    return false
-                }
-            }
-            group.restore(sheet)
-            phase = Phase.HOME
-            message = Note(R.string.restore_started)
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            busy = false
-            update()
-        }
     }
 
     /** At the first launch: makes this phone's own key, once. */
@@ -1148,53 +1113,37 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Puts the group's recovery key on a YubiKey held to the phone; true
-     * when it is there, with recoveryNote saying so, or why not.
+     * Seals the recovery key of sheet (its QR code) onto a YubiKey held to
+     * the phone, after its PIN; replaceDefault is the person's consent to
+     * replace a factory management key. It returns what to tell the person.
      */
-    suspend fun makeRecoveryOnCard(pin: String): Boolean {
-        val ok = try {
-            cardPrompt = R.string.yubikey_hold
-            group.makeRecoveryOnCard(pin)
-            recoveryNote = Note(R.string.yubikey_made)
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            recoveryNote = describe(e)
-            false
-        } finally {
-            cardPrompt = null
-        }
-        update()
-        return ok
+    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean): Note = try {
+        cardPrompt = R.string.yubikey_hold
+        val sealed = group.sealOnCard(sheet, pin, replaceDefault)
+        Log.i(TAG, "yubikey: sealed, factory key ${sealed.defaultKey}, replaced ${sealed.replaced}")
+        Note(if (sealed.defaultKey) R.string.yubikey_sealed_default_key else R.string.yubikey_sealed)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        describe(e)
+    } finally {
+        cardPrompt = null
     }
 
     /**
-     * Restores the group with the recovery key on a YubiKey, on a phone
-     * without a group, as [restore] does with the sheet.
+     * Opens the recovery key on a YubiKey held to the phone, after its PIN,
+     * for a change of root; null after a failure, which [message] says.
      */
-    suspend fun restoreWithCard(pin: String): Boolean {
-        if (phase != Phase.START) {
-            message = Note(R.string.error_restore_has_group, error = true)
-            return false
-        }
-        busy = true
-        try {
-            cardPrompt = R.string.yubikey_hold
-            group.restoreWithCard(pin) { cardPrompt = R.string.yubikey_hold_again }
-            phase = Phase.HOME
-            message = Note(R.string.restore_started)
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            cardPrompt = null
-            busy = false
-            update()
-        }
+    suspend fun openCard(pin: String): ByteArray? = try {
+        cardPrompt = R.string.yubikey_hold
+        group.openCard(pin).also { message = Note(R.string.yubikey_opened) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        message = describe(e)
+        null
+    } finally {
+        cardPrompt = null
     }
 
     /** Removes the group's recovery key. */
@@ -1356,26 +1305,19 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
                 LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
-                LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
                 LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave
                 LiveGroup.Failure.Kind.ROOT_LEAVES -> R.string.error_root_leaves
                 LiveGroup.Failure.Kind.HUB_UNREACHABLE -> R.string.error_hub_unreachable
             }
-            is Restore.Failure -> when (e.kind) {
-                Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
-                Restore.Kind.OTHER_GROUP -> R.string.error_restore_other_group
-                Restore.Kind.NOT_THE_KEY -> R.string.error_restore_not_the_key
-                Restore.Kind.NOT_A_MEMBER -> R.string.error_restore_not_a_member
-            }
-            is Piv.Failure -> when (e.kind) {
-                Piv.Kind.NO_PIV -> R.string.error_yubikey_no_piv
-                Piv.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
-                Piv.Kind.BLOCKED -> R.string.error_yubikey_blocked
-                Piv.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
-                Piv.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
-                Piv.Kind.NO_FREE_SLOT -> R.string.error_yubikey_full
-                Piv.Kind.NO_KEY -> R.string.error_yubikey_no_key
-                Piv.Kind.CARD -> R.string.error_yubikey
+            is RecoveryCard.Failure -> when (e.kind) {
+                RecoveryCard.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
+                RecoveryCard.Kind.BLOCKED -> R.string.error_yubikey_blocked
+                RecoveryCard.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
+                RecoveryCard.Kind.NO_KEY -> R.string.error_yubikey_no_key
+                RecoveryCard.Kind.HOLDS_ONE -> R.string.error_yubikey_holds_one
+                RecoveryCard.Kind.TAKEN -> R.string.error_yubikey_taken
+                RecoveryCard.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
+                RecoveryCard.Kind.CARD -> R.string.error_yubikey
             }
             is YubiKeyNfc.Unavailable -> if (e.off) R.string.error_nfc_off else R.string.error_no_nfc
             is YubiKeyNfc.NoCard -> R.string.error_yubikey_none

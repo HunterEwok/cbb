@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -34,8 +35,8 @@ import java.io.IOException
 /**
  * A YubiKey held to the phone, over NFC: [withCard] turns on the reader
  * while the screen asks the user to hold the YubiKey to the back of the
- * phone, and runs the kit's PIV commands on it once it is there (the kit's
- * Piv). The card's own NFC tap is the touch its key asks for.
+ * phone, and runs the core's PIV steps on it once it is there (the kit's
+ * RecoveryCard). The card's own NFC tap is the touch its key asks for.
  */
 internal object YubiKeyNfc {
     class Unavailable(val off: Boolean) : Exception(if (off) "NFC is off" else "this phone has no NFC")
@@ -89,10 +90,19 @@ internal object YubiKeyNfc {
 
 /**
  * Asks for the YubiKey's PIN before the phone waits for the card: title and
- * body say what follows. The PIN stays in memory only until the card took it.
+ * body say what follows; goLabel names the button that goes on, and other,
+ * when given, a second way to go on. The PIN stays in memory only until the
+ * card took it.
  */
 @Composable
-internal fun YubiKeyPinDialog(title: String, body: String, dismiss: () -> Unit, go: (String) -> Unit) {
+internal fun YubiKeyPinDialog(
+    title: String,
+    body: String,
+    dismiss: () -> Unit,
+    goLabel: String = stringResource(R.string.yubikey_go),
+    other: Pair<String, (String) -> Unit>? = null,
+    go: (String) -> Unit,
+) {
     val palette = LocalPalette.current
     var pin by remember { mutableStateOf("") }
     AlertDialog(
@@ -113,10 +123,19 @@ internal fun YubiKeyPinDialog(title: String, body: String, dismiss: () -> Unit, 
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                dismiss()
-                go(pin)
-            }, enabled = pin.toByteArray().size in 6..8) { Text(stringResource(R.string.yubikey_go), color = palette.accent) }
+            val ok = pin.toByteArray().size in 6..8
+            Column(horizontalAlignment = Alignment.End) {
+                TextButton(onClick = {
+                    dismiss()
+                    go(pin)
+                }, enabled = ok) { Text(goLabel, color = palette.accent) }
+                other?.let { (label, act) ->
+                    TextButton(onClick = {
+                        dismiss()
+                        act(pin)
+                    }, enabled = ok) { Text(label, color = palette.accent) }
+                }
+            }
         },
         dismissButton = { TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) } },
         containerColor = palette.surface,

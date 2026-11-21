@@ -4,9 +4,6 @@
 package service
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,66 +13,7 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
 )
-
-// addRecovery gives the group of the stopped root its recovery key, as a
-// root phone makes one: an admin CA under the root for a new key and the
-// recovery record that names it, in the root's records. It returns the
-// sheet the key's QR code gives.
-func addRecovery(t *testing.T, root *testService) *recoverySheet {
-	t.Helper()
-	sheet := newRecoveryKey(t, root)
-	id, err := group.Load(root.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca := id.RootCA()
-	recs, err := group.LoadRecords(root.dir, id.GroupCA.Cert)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := recs.Sign(group.RecordBody{Type: group.RecordRecovery, TimeMS: time.Now().UnixMilli(), Admin: &sheet.Admin, Cert: sheet.Cert}, ca.Key, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := recs.Add(r); err != nil {
-		t.Fatal(err)
-	}
-	if err := recs.Save(root.dir); err != nil {
-		t.Fatal(err)
-	}
-	return sheet
-}
-
-// newRecoveryKey makes a recovery key for the group of root, which may
-// run, with its admin CA under the root, and names it in no record.
-func newRecoveryKey(t *testing.T, root *testService) *recoverySheet {
-	t.Helper()
-	id, err := group.Load(root.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert, err := id.RootCA().IssueAdmin(group.NewDeviceID(), &key.PublicKey, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &recoverySheet{Key: key, Admin: group.KeyHashOf(cert), Cert: cert.Raw, Group: group.Tag(id.GroupCA.Cert)}
-}
-
-// recoverySheet is what a recovery sheet gives (docs/protocol.md, section
-// 10, "The recovery sheet"): the recovery key, its key hash, its admin CA
-// and the group's tag.
-type recoverySheet struct {
-	Key   *ecdsa.PrivateKey
-	Admin group.KeyHash
-	Cert  []byte // DER
-	Group string
-}
 
 // newGroup makes s the root of a new group of 0.6 (cbb new) and returns
 // the text of the recovery sheet's QR code, which cbb new shows once.

@@ -227,8 +227,6 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case notForWatch
         /// The group has no recovery key to remove.
         case noRecovery
-        /// The group's recovery key now is not the one this phone holds.
-        case notTheRecoveryKey
         /// The key level is none of Records.keyLevels.
         case invalidKeyLevel
         /// The group's key level does not let the device's keys be an admin
@@ -323,16 +321,6 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public func checkHandedOver() throws {
         guard handedToMe else { throw Failure.notHandedOver }
         try checkClaim()
-    }
-
-    /// Checks that this new phone, which Restore made a member of the group
-    /// under the recovery key's admin CA, may claim the group with that key
-    /// (docs/protocol.md, section 10, "The recovery key"). The lost root's
-    /// device goes when the claim takes effect.
-    public func checkRecovery() throws {
-        guard let adminCA, !isRoot else { throw Failure.notAdmin }
-        guard claim == nil else { throw Failure.claimWaiting }
-        guard let k = try? Records.keyHash(cert: adminCA), records.recovery == k else { throw Failure.notTheRecoveryKey }
     }
 
     private func checkClaim() throws {

@@ -5,7 +5,7 @@ import CoreNFC
 import Foundation
 
 /// A YubiKey held to the iPhone, over Core NFC: withCard shows the system's
-/// NFC sheet with prompt, and runs the kit's PIV commands (Piv) on the card
+/// NFC sheet with prompt, and runs a step of the recovery key (RecoveryCard) on the card
 /// once it is there. The card's NFC tap is the touch its key asks for.
 /// Core NFC needs its entitlement, which the Apple developer account gives:
 /// a build signed ad hoc has no NFC.
@@ -53,7 +53,7 @@ final class YubiKeyNfc: NSObject, NFCTagReaderSessionDelegate, @unchecked Sendab
         } onCancel: {
             reader.session?.invalidate()
         }
-        guard let t = any as? T else { throw Piv.Failure(kind: .card, message: "the YubiKey's answer has the wrong type") }
+        guard let t = any as? T else { throw RecoveryCard.Failure(kind: .card, message: "the YubiKey's answer has the wrong type") }
         return t
     }
 
@@ -87,7 +87,7 @@ final class YubiKeyNfc: NSObject, NFCTagReaderSessionDelegate, @unchecked Sendab
         session.connect(to: first) { [self] error in
             if let error {
                 session.invalidate(errorMessage: String(localized: "The YubiKey left too soon.", bundle: .app))
-                end(.failure(Piv.Failure(kind: .card, message: String(describing: error))))
+                end(.failure(RecoveryCard.Failure(kind: .card, message: String(describing: error))))
                 return
             }
             work.async { [self] in
@@ -110,19 +110,19 @@ final class YubiKeyNfc: NSObject, NFCTagReaderSessionDelegate, @unchecked Sendab
         init(tag: NFCISO7816Tag) { self.tag = tag }
 
         func transmit(_ apdu: Data) throws -> Data {
-            guard let command = NFCISO7816APDU(data: apdu) else { throw Piv.Failure(kind: .card, message: "a command the reader does not take") }
+            guard let command = NFCISO7816APDU(data: apdu) else { throw RecoveryCard.Failure(kind: .card, message: "a command the reader does not take") }
             let wait = DispatchSemaphore(value: 0)
-            var out: Result<Data, Error> = .failure(Piv.Failure(kind: .card, message: "the YubiKey did not answer"))
+            var out: Result<Data, Error> = .failure(RecoveryCard.Failure(kind: .card, message: "the YubiKey did not answer"))
             tag.sendCommand(apdu: command) { data, sw1, sw2, error in
                 if let error {
-                    // The card left, most often: Piv's .card says to hold it still.
-                    out = .failure(Piv.Failure(kind: .card, message: String(describing: error)))
+                    // The card left, most often: RecoveryCard's .card says to hold it still.
+                    out = .failure(RecoveryCard.Failure(kind: .card, message: String(describing: error)))
                 } else {
                     out = .success(data + Data([sw1, sw2]))
                 }
                 wait.signal()
             }
-            guard wait.wait(timeout: .now() + 10) == .success else { throw Piv.Failure(kind: .card, message: "the YubiKey did not answer in time") }
+            guard wait.wait(timeout: .now() + 10) == .success else { throw RecoveryCard.Failure(kind: .card, message: "the YubiKey did not answer in time") }
             return try out.get()
         }
     }

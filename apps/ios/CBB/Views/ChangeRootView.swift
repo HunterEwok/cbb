@@ -6,7 +6,8 @@ import SwiftUI
 
 /// Moving the group's main device to this phone with the recovery key
 /// (docs/apps.md, "Changing the main device"): the key from the sheet's QR
-/// code or its typed text, then the list of who stays, which the core
+/// code, its typed text or a YubiKey that holds it, then the list of who
+/// stays, which the core
 /// writes and the person only unticks, then Face ID. Each unticked device
 /// is removed in the same act; the old main device starts unticked.
 struct ChangeRootView: View {
@@ -19,6 +20,8 @@ struct ChangeRootView: View {
     @State private var leaveOut: Set<String> = []
     @State private var overWaiting = false
     @State private var loading = false
+    @State private var askingCard = false
+    @State private var pin = ""
 
     var body: some View {
         NavigationStack {
@@ -36,6 +39,13 @@ struct ChangeRootView: View {
                 }
             }
             .disabled(loading || model.busy)
+            .alert(Text("Use the YubiKey with the recovery key"), isPresented: $askingCard) {
+                YubiKeyPinField(pin: $pin)
+                Button { openCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
+                Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
+            } message: {
+                Text("Type the YubiKey's PIN, then hold the YubiKey to the phone until it is done.")
+            }
         }
     }
 
@@ -54,6 +64,9 @@ struct ChangeRootView: View {
                 .font(.body.monospaced())
             Button { start(.text(typed)) } label: { Text("Next") }
                 .disabled(typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if YubiKeyNfc.available {
+                Button { askingCard = true } label: { Text("Use a YubiKey instead") }
+            }
         } footer: {
             Text("Scan the code on the group's recovery sheet, or type its text. The key stays on this phone only for this change.")
         }
@@ -120,6 +133,15 @@ struct ChangeRootView: View {
                 (recovery, leaveOut, preview) = (r, Set(old), p)
             }
             loading = false
+        }
+    }
+
+    /// Opens the recovery key on a YubiKey, then reads it as from the sheet.
+    private func openCard() {
+        let pin = pin
+        self.pin = ""
+        Task {
+            if let secret = await model.openCard(pin: pin) { start(.secret(secret)) }
         }
     }
 

@@ -148,7 +148,7 @@ internal fun ChangeRootSection(model: AppModel) {
 /**
  * Moving the group's main device to this phone with the recovery key
  * (docs/apps.md, "Changing the main device"): the key from the sheet's QR
- * code or its typed text, then the list of who stays, which the core
+ * code, its typed text or a YubiKey that holds it, then the list of who stays, which the core
  * writes and the person only unticks, then the fingerprint or the screen
  * lock. Each unticked device is removed in the same act; the old main
  * device starts unticked. The window keeps out of screenshots while the
@@ -200,6 +200,28 @@ private fun ChangeRootDialog(model: AppModel, close: () -> Unit) {
             val p = preview
             if (p == null) {
                 RecoveryKeyInput(model, enabled = !busy, read = ::start)
+                if (YubiKeyNfc.available(LocalContext.current)) {
+                    var askingPin by remember { mutableStateOf(false) }
+                    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                    QuietButton(stringResource(R.string.yubikey_open), onClick = { askingPin = true }, enabled = !busy && onCard == null)
+                    if (askingPin) {
+                        YubiKeyPinDialog(
+                            stringResource(R.string.yubikey_open_title),
+                            stringResource(R.string.yubikey_open_body),
+                            dismiss = { askingPin = false },
+                        ) { pin ->
+                            onCard = scope.launch {
+                                try {
+                                    // The secret goes to the core for this change only.
+                                    model.openCard(pin)?.let { start(RecoveryInput.Secret(it)) }
+                                } finally {
+                                    onCard = null
+                                }
+                            }
+                        }
+                    }
+                    YubiKeyPrompt(model) { onCard?.cancel() }
+                }
             } else {
                 Text(stringResource(R.string.change_root_who_stays), fontWeight = FontWeight.SemiBold, color = palette.text)
                 for (row in p.rows) {
@@ -210,8 +232,10 @@ private fun ChangeRootDialog(model: AppModel, close: () -> Unit) {
                         }
                     } else {
                         val stays = row.device !in leaveOut
+                        // This phone stays: it becomes the main device.
+                        val self = model.devices.any { it.isSelf && it.id == row.device }
                         Row(
-                            Modifier.fillMaxWidth().clickable(role = Role.Switch, enabled = !busy) { toggle(row.device, !stays) }
+                            Modifier.fillMaxWidth().clickable(role = Role.Switch, enabled = !busy && !self) { toggle(row.device, !stays) }
                                 .padding(vertical = Tokens.spacingSmall),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -219,7 +243,7 @@ private fun ChangeRootDialog(model: AppModel, close: () -> Unit) {
                                 Text(row.name, color = palette.text)
                                 Text(stringResource(outcome(row)), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
                             }
-                            Switch(checked = stays, onCheckedChange = null)
+                            Switch(checked = stays, onCheckedChange = null, enabled = !self)
                         }
                     }
                 }

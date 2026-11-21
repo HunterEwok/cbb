@@ -81,8 +81,6 @@ internal fun RecoverySection(model: AppModel) {
     var asking by remember { mutableStateOf<Int?>(null) }
     // The sheet just made, while it shows; nothing keeps it after.
     var sheet by remember { mutableStateOf<Pair<Core.RecoverySheet, Instant>?>(null) }
-    var askingPin by remember { mutableStateOf(false) }
-    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     fun make() {
         busy = true
         scope.launch {
@@ -96,14 +94,12 @@ internal fun RecoverySection(model: AppModel) {
             if (made != null) {
                 Text(stringResource(R.string.recovery_made, longDate(made)), fontWeight = FontWeight.SemiBold)
                 QuietButton(stringResource(R.string.recovery_make_new), onClick = { asking = R.string.recovery_replace_title }, enabled = !busy)
-                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
                 TextButton(onClick = { asking = R.string.recovery_remove_title }, enabled = !busy) {
                     Text(stringResource(R.string.recovery_remove), color = palette.danger)
                 }
             } else {
                 Text(stringResource(R.string.recovery_none), color = palette.textDim)
                 AccentButton(stringResource(R.string.recovery_make), onClick = ::make, enabled = !busy)
-                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
             }
             model.recoveryNote?.let { NoteText(it) }
             Tip(R.string.recovery_body)
@@ -131,39 +127,38 @@ internal fun RecoverySection(model: AppModel) {
             },
         )
     }
-    sheet?.let { (s, at) -> RecoverySheetDialog(s, at) { sheet = null } }
-    if (askingPin) {
-        YubiKeyPinDialog(
-            stringResource(R.string.yubikey_put_title),
-            stringResource(R.string.yubikey_put_body),
-            dismiss = { askingPin = false },
-        ) { pin ->
-            busy = true
-            onCard = scope.launch {
-                try {
-                    model.makeRecoveryOnCard(pin)
-                } finally {
-                    busy = false
-                    onCard = null
-                }
-            }
-        }
-    }
-    YubiKeyPrompt(model) { onCard?.cancel() }
+    sheet?.let { (s, at) -> RecoverySheetDialog(s, at, model) { sheet = null } }
 }
 
 /**
  * The recovery sheet, shown once and kept out of screenshots and the recent
  * apps: its QR code and text, printing it or saving it as a PDF through
- * Android's printing, and closing it, after which the phone has no copy.
- * Internal for the sheet of the dangerous screens (DangerousScreensTest).
+ * Android's printing, putting the same key on a YubiKey (with model; the
+ * core seals it, docs/protocol.md, "The recovery key on a YubiKey (0.6)"),
+ * and closing it, after which the phone has no copy. Internal for the
+ * sheet of the dangerous screens (DangerousScreensTest).
  */
 @Composable
-internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: () -> Unit) {
+internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model: AppModel? = null, done: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var askingDone by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<AppModel.Note?>(null) }
+    var askingPin by remember { mutableStateOf(false) }
+    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var sealed by remember { mutableStateOf<AppModel.Note?>(null) }
+    fun seal(pin: String, replaceDefault: Boolean) {
+        val m = model ?: return
+        if (onCard != null) return
+        onCard = scope.launch {
+            try {
+                sealed = m.sealOnCard(sheet.qr, pin, replaceDefault)
+            } finally {
+                onCard = null
+            }
+        }
+    }
     Dialog(
         onDismissRequest = { askingDone = true },
         properties = DialogProperties(
@@ -193,7 +188,29 @@ internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done:
                 }
             }, modifier = Modifier.fillMaxWidth())
             failure?.let { NoteText(it) }
+            if (model != null) {
+                QuietButton(
+                    stringResource(R.string.yubikey_put),
+                    onClick = { askingPin = true },
+                    enabled = onCard == null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                sealed?.let { NoteText(it) }
+            }
             QuietButton(stringResource(R.string.recovery_done), onClick = { askingDone = true }, modifier = Modifier.fillMaxWidth())
+        }
+        if (model != null) {
+            if (askingPin) {
+                // The person chooses here whether a factory management key is replaced.
+                YubiKeyPinDialog(
+                    stringResource(R.string.yubikey_put_title),
+                    stringResource(R.string.yubikey_put_body),
+                    dismiss = { askingPin = false },
+                    goLabel = stringResource(R.string.yubikey_seal_replace),
+                    other = stringResource(R.string.yubikey_seal_keep) to { pin -> seal(pin, false) },
+                ) { pin -> seal(pin, true) }
+            }
+            YubiKeyPrompt(model) { onCard?.cancel() }
         }
         if (askingDone) {
             AlertDialog(

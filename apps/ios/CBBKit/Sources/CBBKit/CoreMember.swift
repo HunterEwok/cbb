@@ -1063,18 +1063,6 @@ public final class CoreMember: @unchecked Sendable {
         return try manage(A(public: try Self.point(`public`)), sign: sign, as: Core.RecoverySheet.self)
     }
 
-    /// Makes the group's recovery key from a key a YubiKey made (spki, a
-    /// SubjectPublicKeyInfo; Piv.generate): it returns the key's admin CA,
-    /// which goes into the YubiKey's slot.
-    public func recoveryFor(_ spki: Data, public: Data, sign: @escaping (Data) throws -> Data) throws -> Data {
-        struct A: Encodable { var action = "recovery_for", key: Data, `public`: Data }
-        struct R: Decodable { var admin_ca: Data? }
-        guard let ca = try manage(A(key: spki, public: try Self.point(`public`)), sign: sign, as: R.self).admin_ca else {
-            throw Core.Mismatch(reason: "the member's recovery key has no admin CA")
-        }
-        return ca
-    }
-
     /// Removes the group's recovery key: the root revokes it, and a sheet
     /// printed for it no longer works.
     public func removeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws {

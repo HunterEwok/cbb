@@ -752,15 +752,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         )
     }
 
-    /**
-     * Makes the group's recovery key from a key a YubiKey made (spki, a
-     * SubjectPublicKeyInfo; [Piv.generate]): it returns the key's admin CA,
-     * which goes into the YubiKey's slot.
-     */
-    fun recoveryFor(spki: ByteArray, public: ByteArray, sign: (ByteArray) -> ByteArray): ByteArray =
-        root(Wire.obj("action" to Wire.str("recovery_for"), "key" to Wire.bytes(spki)), public, sign).optBytes("admin_ca")
-            ?: throw Core.Mismatch("the member's recovery key has no admin CA")
-
     /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
     fun removeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray) {
         root(Wire.obj("action" to Wire.str("remove_recovery")), public, sign)

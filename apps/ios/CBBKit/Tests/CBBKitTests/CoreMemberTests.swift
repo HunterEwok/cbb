@@ -229,12 +229,6 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(sheet.text.count, 69)
         _ = t.g.add(try m.records())
         XCTAssertEqual(t.g.records.recovery, sheet.admin, "the records name the sheet's key")
-        // A YubiKey's key replaces it; its admin CA goes into the card.
-        let card = SoftwareSigner()
-        let ca = try m.recoveryFor(card.publicKeyDER, public: pub, sign: root)
-        XCTAssertEqual(try CertificateInfo(der: ca).publicKey, card.publicKeyDER)
-        _ = t.g.add(try m.records())
-        XCTAssertEqual(t.g.records.recovery, try Records.keyHash(cert: ca))
         try m.removeRecovery(public: pub, sign: root)
         _ = t.g.add(try m.records())
         XCTAssertNil(t.g.records.recovery)

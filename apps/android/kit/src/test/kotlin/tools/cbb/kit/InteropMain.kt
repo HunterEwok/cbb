@@ -26,15 +26,6 @@
 // waits for "from go", then for Go's picture "go picture", which it
 // fetches, sends its bytes reversed as "phone picture", which Go fetches,
 // waits for "done", and prints "ok". Test use only.
-//
-//   restore-tls HOST PORT KEY CERT GROUP
-//
-// restores the group of the Go member at HOST:PORT on a new phone with the
-// group's recovery key: KEY (its 32 bytes) and CERT (its admin CA, DER),
-// both base64, and GROUP, the group's tag, make the sheet's QR code, which
-// the tool reads as the app does. It takes the records, checks them,
-// claims the group for a new root, sends the claim on a second connection,
-// and prints its device ID, then the new root in base64. Test use only.
 
 package tools.cbb.kit
 
@@ -173,39 +164,6 @@ private fun memberTLS(host: String, port: Int, peer: String) {
     dir.deleteRecursively()
 }
 
-private fun restoreTLS(host: String, port: Int, key: ByteArray, cert: ByteArray, tag: String) {
-    val qr = Core.recoverySheet(key, cert, tag).qr
-    val sheet = (Core.readRecoverySheet(qr) as? Core.SheetReading.Key)?.key ?: fail("the sheet's QR code does not read")
-    val memberKey = SoftwareSigner()
-    val now = Instant.now()
-    val r = Restore(sheet, memberKey.publicKeyDER, now)
-    // The handshake takes any certificate; Restore.group checks the computer's against the records.
-    fun dial() = TLSTransport.dial(host, port, Member.ALPN, memberKey.keyPair.private, r.chain) { true }
-    val g = r.group(Restore.exchange(dial(), "Android", "android", now), now)
-    // The core's member signs the claim, as in the app; it goes out on a records-only connection.
-    val dir = kotlin.io.path.createTempDirectory("cbb-restore").toFile()
-    val m = CoreMember.start(
-        CoreMember.Start(dir, "Android", "android", device = r.device, publicKey = memberKey.publicKeyDER, seal = CoreGroup.SEAL,
-            cert = r.memberCert, issuer = r.adminCA, groupCA = g.groupCA, roots = g.trusted),
-        memberKey::signDigest,
-    ) { }
-    val newRoot = try {
-        m.addRecords(g.records.records)
-        val newRootKey = SoftwareSigner()
-        val newRoot = m.rootCA(newRootKey.publicKeyDER, newRootKey::signDigest)
-        r.claim(g, m, newRoot)
-        val claim = g.claimRecord(m.records()) ?: fail("the member holds no claim")
-        Restore.exchange(dial(), "Android", "android", Instant.now(), send = listOf(claim))
-        newRoot
-    } finally {
-        m.close()
-        dir.deleteRecursively()
-    }
-    println(r.device)
-    println(Base64.getEncoder().encodeToString(newRoot))
-    System.out.flush()
-}
-
 fun main(args: Array<String>) {
     try {
         val port = args.getOrNull(2)?.toIntOrNull()
@@ -214,10 +172,8 @@ fun main(args: Array<String>) {
             args.size == 4 && args[0] == "admit" && port != null -> admit(args[1], port, args[3], null)
             args.size == 5 && args[0] == "admit-tls" && port != null -> admit(args[1], port, args[3], args[4])
             args.size == 4 && args[0] == "join-tls" && port != null -> joinTLS(args[1], port, args[3])
-            args.size == 6 && args[0] == "restore-tls" && port != null ->
-                restoreTLS(args[1], port, Base64.getDecoder().decode(args[3]), Base64.getDecoder().decode(args[4]), args[5])
             else -> {
-                System.err.println("usage: cbb-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | join-tls HOST PORT CODE | member-tls HOST PORT PEER | restore-tls HOST PORT KEY CERT GROUP")
+                System.err.println("usage: cbb-interop admit HOST PORT CODE | admit-tls HOST PORT CODE FINGERPRINT | join-tls HOST PORT CODE | member-tls HOST PORT PEER")
                 exitProcess(2)
             }
         }

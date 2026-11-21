@@ -14,25 +14,21 @@ struct RecoverySection: View {
     @State private var sheet: Core.RecoverySheet?
     @State private var askingReplace = false
     @State private var askingRemove = false
-    @State private var askingCard = false
-    @State private var pin = ""
 
     var body: some View {
         Section {
             if let made = model.recoveryMade {
                 Text("Made on \(made.formatted(date: .long, time: .omitted)).")
                 Button { askingReplace = true } label: { Text("Make a new recovery key") }
-                cardButton
                 Button(role: .destructive) { askingRemove = true } label: { Text("Remove the recovery key") }
             } else {
                 Text("None yet.").foregroundStyle(palette.textDim)
                 Button { make() } label: { Text("Make a recovery key") }
-                cardButton
             }
         } header: {
             Text("Recovery key")
         } footer: {
-            Text("A sheet to print and keep away from your phones. If every phone with this group is lost, a computer of the group or a new phone takes the group back with it, after the group's wait.")
+            Text("A sheet to print and keep away from your phones. If the group's main phone is lost, another device of the group takes the group over with it.")
         }
         .listRowBackground(palette.surface)
         .alert(Text("Make a new recovery key?"), isPresented: $askingReplace) {
@@ -47,29 +43,9 @@ struct RecoverySection: View {
         } message: {
             Text("The sheet printed for it stops working. Without a recovery key, losing every phone with this group loses the group.")
         }
-        .alert(Text("Put the recovery key on a YubiKey?"), isPresented: $askingCard) {
-            YubiKeyPinField(pin: $pin)
-            Button { putOnCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
-            Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
-        } message: {
-            Text("The YubiKey makes the key in a free slot, and it never leaves the YubiKey. Type the YubiKey's PIN, then hold the YubiKey to the top of the phone. It replaces the recovery key the group has.")
-        }
         .fullScreenCover(item: Binding(get: { sheet.map(Shown.init) }, set: { if $0 == nil { sheet = nil } })) { shown in
             RecoverySheetView(sheet: shown.sheet, made: Date()) { sheet = nil }
         }
-    }
-
-    /// Putting the key on a YubiKey, where the phone has NFC.
-    @ViewBuilder private var cardButton: some View {
-        if YubiKeyNfc.available {
-            Button { askingCard = true } label: { Text("Put it on a YubiKey") }
-        }
-    }
-
-    private func putOnCard() {
-        let pin = pin
-        self.pin = ""
-        Task { _ = await model.makeRecoveryOnCard(pin: pin) }
     }
 
     private func make() {
@@ -94,6 +70,10 @@ struct RecoverySheetView: View {
     @State private var pdf: URL?
     @State private var askingDone = false
     @State private var failure: String?
+    @State private var askingCard = false
+    @State private var pin = ""
+    @State private var onCard = false
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         NavigationStack {
@@ -111,6 +91,14 @@ struct RecoverySheetView: View {
                         ShareLink(item: pdf) { Label { Text("Save as PDF") } icon: { Image(systemName: "square.and.arrow.down") } }
                             .buttonStyle(GlassButtonStyle())
                     }
+                    if YubiKeyNfc.available, !onCard {
+                        Button { askingCard = true } label: { Label { Text("Put it on a YubiKey") } icon: { Image(systemName: "key") } }
+                            .buttonStyle(GlassButtonStyle())
+                            .disabled(model.busy)
+                    }
+                    if let m = model.message {
+                        Text(m).multilineTextAlignment(.center).foregroundStyle(palette.textDim)
+                    }
                     if let failure {
                         Text(failure).foregroundStyle(palette.danger).multilineTextAlignment(.center)
                     }
@@ -124,6 +112,14 @@ struct RecoverySheetView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button { askingDone = true } label: { Text("Done") }
                 }
+            }
+            .alert(Text("Put the recovery key on a YubiKey?"), isPresented: $askingCard) {
+                YubiKeyPinField(pin: $pin)
+                Button { seal(replaceDefault: true) } label: { Text("Replace its factory key, then hold it") }.disabled(!YubiKeyPinField.fits(pin))
+                Button { seal(replaceDefault: false) } label: { Text("Keep its key, then hold it") }.disabled(!YubiKeyPinField.fits(pin))
+                Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
+            } message: {
+                Text("The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.")
             }
             .alert(Text("Did you keep the sheet?"), isPresented: $askingDone) {
                 Button { close() } label: { Text("I kept it") }
@@ -170,6 +166,14 @@ struct RecoverySheetView: View {
         c.present(animated: true)
     }
 
+    /// Seals this sheet's key onto a YubiKey, with the person's answer
+    /// about its factory management key.
+    private func seal(replaceDefault: Bool) {
+        let pin = pin
+        self.pin = ""
+        Task { onCard = await model.sealOnCard(sheet: sheet.qr, pin: pin, replaceDefault: replaceDefault) }
+    }
+
     /// Forgets the key: the PDF goes, and the sheet with the view.
     private func close() {
         RecoveryPage.removePDF()
@@ -197,8 +201,8 @@ struct RecoveryPage: View {
                 Spacer()
             }
             Text(rows).font(.system(.body, design: .monospaced).weight(.semibold)).textSelection(.disabled)
-            Text("Keep this sheet somewhere safe, away from your phones. Anyone who has it can take your group over, after the group's wait, unless the root phone cancels it.")
-            Text("To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.")
+            Text("Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.")
+            Text("To move the group to another device of it: on a phone, choose Move the group to this phone in its settings and scan the code; on a computer, run cbb recovery and type the key.")
         }
         .foregroundStyle(.black)
         .padding(24)

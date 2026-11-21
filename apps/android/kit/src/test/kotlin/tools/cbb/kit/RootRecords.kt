@@ -88,17 +88,6 @@ fun PhoneGroup.makeRecovery(rootSigner: CertificateSigner, now: Instant): Recove
     return Recovery(key, ca, r, Core.recoverySheet(key, ca, tag))
 }
 
-/**
- * Makes the group's recovery key from a key a YubiKey made (publicKey, a
- * SubjectPublicKeyInfo; [Piv.generate]), as the root: its admin CA,
- * which goes into the YubiKey's slot, and the `recovery` record that
- * names it.
- */
-fun PhoneGroup.makeRecoveryOnCard(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
-    if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
-    return recoveryFor(publicKey, rootSigner, now)
-}
-
 private fun PhoneGroup.recoveryFor(publicKey: ByteArray, rootSigner: CertificateSigner, now: Instant): Pair<ByteArray, Member.Record> {
     val ca = GroupCertificates.adminCA(SyncEngine.newID(), publicKey, currentRoot, rootSigner)
     val b = Records.Body.of("recovery", rootSigner, now)

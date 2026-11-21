@@ -35,8 +35,8 @@ they look, so both apps are built to the same plan.
    invitation's QR code, or its text is pasted or its file opened; the invitation then
    waits on a screen of its own, with its group, its hub and when it expires, to be joined
    or declined, and declining sends nothing; joined, the phone shows the words the inviting
-   admin compares, docs/protocol.md, section 12), and, small on the iPhone and Android,
-   **Restore with the recovery key** (a group of 0.5's; on 0.6 it comes with 0.7, D-125). A phone always joins as a member; the root makes it an admin later from the
+   admin compares, docs/protocol.md, section 12); restoring the group on a phone in no group
+   comes with 0.7 (D-125). A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
    the pull-down menu, as in every Silica app.
@@ -1505,40 +1505,29 @@ the app on real devices.
   (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
 - On a group of 0.6 a phone still in the group changes the root to itself with the
-  recovery key, the sheet's QR code or text or the secret a YubiKey opens, after showing who
-  stays (the member's `change_preview` and `change_root`, docs/core-api.md); a new phone joins
-  afterwards through the new root's window, and restoring on a phone in no group comes with
-  0.7 (D-125). The Aurora and HarmonyOS apps have no restore screen; on the iPhone and
-  Android, in a group of 0.5, a new phone restores the group with the recovery key from its
-  Start screen ("Restore with the recovery key"; docs/protocol.md, section 10, "The recovery
-  key"). It scans the
-  sheet's QR code (the typed key carries no admin CA, so a new phone needs the QR code; a
-  computer of the group takes the typed key with `cbb recovery`), finds the group's computers
-  by their tag and lets the recovery key issue its member certificate (`Restore`). A computer
-  takes it on a connection that carries records only and sends the group's first root in its
-  hello; the app checks the records and the computer, makes a new root key behind Face ID or
-  BiometricPrompt, starts its member in the Rust core, which signs a claim with the recovery
-  key (the member's `recover`, `Restore.claim`), sends the claim on that connection too, and
-  forgets the key. Home
-  then shows the claim's time left, and once it takes effect the app finishes as after a lost
-  root: it signs its own device record and gets a member certificate from the new root.
-- The recovery key on a YubiKey, over NFC (docs/protocol.md, section 10, "On a hardware
-  key"; the kits' `Piv`). The root phone's Settings, "Recovery key", has "Put it on a
-  YubiKey": after the PIN, the YubiKey held to the phone makes a P-256 key in its first free
-  retired PIV slot, with the PIN and a touch before each signature, and the root's admin CA
-  for it goes into the slot. Today only the factory management key with AES works there, as a
-  YubiKey has from firmware 5.7; an older YubiKey, or one with its own key, takes a sheet
-  instead. 0.6's recovery key on a YubiKey (`cbb` on computers now, the phones with wave 5)
-  takes a PIN-protected or a typed management key too, and offers to replace a factory one,
-  which anyone could use to spoil the card without the PIN, by a random PIN-protected key; the
-  person decides (docs/protocol.md, section 9, "The recovery key on a YubiKey (0.6)"). The restore screen has "Use a YubiKey instead": the YubiKey held
-  once issues the phone's member certificate from each slot whose certificate is an admin
-  CA, the phone finds the group's computers (any group, since the YubiKey carries no tag) and
-  takes the one whose records name that key, and the YubiKey held again signs the claim. On
-  Android the reader is the activity's NFC reader mode (`YubiKeyNfc`); on the iPhone it is
-  Core NFC's sheet (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the Apple
-  developer account: a build signed ad hoc cannot read the YubiKey, and `device.sh` with
-  `CBB_NFC=1` asks the team's profile for it.
+  recovery key ("Move the group to this phone" in its settings; the member's `change_preview`
+  and `change_root`, docs/core-api.md, docs/protocol.md, section 10, rule 33). The screen
+  takes the sheet's QR code or its text, or, on the iPhone, Android and HarmonyOS, the
+  YubiKey that holds the key; it then shows who stays, lets the person leave devices out
+  (never this phone), and after Face ID or the system's biometrics signs the change with
+  the recovery key and the phone's new root key. A new phone joins afterwards through the
+  new root's window, and restoring on a phone in no group comes with 0.7 (D-125).
+- The recovery key on a YubiKey, over NFC (docs/protocol.md, section 9, "The recovery key on
+  a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the app only
+  carries each APDU to the card (the kits' `RecoveryCard`). The root phone's sheet page has
+  "Put it on a YubiKey": after the PIN, the app asks the card first (`inspect`), and when it
+  still has its factory management key, which anyone could use to erase the recovery key
+  without the PIN, says so and lets the person choose to replace it by a random key the PIN
+  protects or to keep it; then the card held to the phone seals the sheet's secret behind
+  the PIN and a touch (`seal`). A YubiKey older than firmware 5.3, or one whose management
+  key the app cannot use, takes the sheet only. The change-root screen's "Use a YubiKey
+  instead" opens the secret with the PIN and a touch (`open`) and hands it to `change_root`.
+  On Android the reader is the activity's NFC reader mode (`YubiKeyNfc`); on HarmonyOS the
+  NFC tag's IsoDep (`YubiKey.ets`); on the iPhone it is Core NFC's sheet
+  (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the Apple developer account:
+  a build signed ad hoc cannot read the YubiKey, and `device.sh` with `CBB_NFC=1` asks the
+  team's profile for it. The Aurora app has no NFC card path and takes the sheet only
+  (docs/parity.md).
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

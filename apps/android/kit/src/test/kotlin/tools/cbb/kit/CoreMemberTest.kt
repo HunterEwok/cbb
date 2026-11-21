@@ -258,12 +258,6 @@ class CoreMemberTest {
         assertEquals(69, sheet.text.length)
         g.add(m.records())
         assertTrue(g.records.recovery.contentEquals(sheet.admin), "the records name the sheet's key")
-        // A YubiKey's key replaces it; its admin CA goes into the card.
-        val card = SoftwareSigner()
-        val ca = m.recoveryFor(card.publicKeyDER, pub, root::signDigest)
-        assertTrue(CertificateInfo(ca).publicKey.contentEquals(card.publicKeyDER))
-        g.add(m.records())
-        assertTrue(g.records.recovery.contentEquals(Records.keyHashOfCert(ca)))
         m.removeRecovery(pub, root::signDigest)
         g.add(m.records())
         assertNull(g.records.recovery)

@@ -266,19 +266,6 @@ class PhoneGroup internal constructor(
         checkClaim()
     }
 
-    /**
-     * Checks that this new phone, which [Restore] made a member of the group
-     * under the recovery key's admin CA, may claim the group with that key
-     * (docs/protocol.md, section 10, "The recovery key"). The lost root's
-     * device goes when the claim takes effect.
-     */
-    fun checkRecovery() {
-        val ca = adminCA ?: throw Failure("this phone holds no recovery key")
-        if (isRoot) throw Failure("this phone is the group's root already")
-        if (claim != null) throw Failure(CLAIM_WAITING)
-        if (records.recovery?.contentEquals(Records.keyHashOfCert(ca)) != true) throw Failure(Restore.NOT_THE_KEY)
-    }
-
     private fun checkClaim() {
         if (claim != null) throw Failure(CLAIM_WAITING)
         val me = devices.firstOrNull { it.id == device }

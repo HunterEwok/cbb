@@ -1473,48 +1473,48 @@
         }
       }
     },
-    "A sheet to print and keep away from your phones. If every phone with this group is lost, a computer of the group or a new phone takes the group back with it, after the group's wait.": {
+    "A sheet to print and keep away from your phones. If the group's main phone is lost, another device of the group takes the group over with it.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ورقة تطبعها وتحفظها بعيدًا عن هواتفك. إذا فُقدت كل الهواتف التي فيها هذه المجموعة، يستعيد بها حاسوب من المجموعة أو هاتف جديد المجموعة، بعد مهلة المجموعة."
+            "value": "ورقة تطبعها وتحفظها بعيدًا عن هواتفك. إذا فُقد الهاتف الرئيسي للمجموعة، يتولى جهاز آخر من المجموعة أمرها بها."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierden todos los teléfonos con este grupo, un ordenador del grupo o un teléfono nuevo recupera el grupo con ella, tras la espera del grupo."
+            "value": "Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo toma el grupo con ella."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "דף להדפסה ולשמירה הרחק מהטלפונים שלכם. אם כל הטלפונים עם הקבוצה הזו אבדו, מחשב של הקבוצה או טלפון חדש לוקחים איתו את הקבוצה בחזרה, אחרי זמן ההמתנה של הקבוצה."
+            "value": "דף להדפסה ולשמירה הרחק מהטלפונים שלך. אם הטלפון הראשי של הקבוצה אבד, מכשיר אחר בקבוצה משתלט על הקבוצה בעזרתו."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "एक पन्ना जिसे छापकर अपने फ़ोनों से दूर रखें। अगर इस समूह वाले सभी फ़ोन खो जाएँ, तो समूह का कोई कंप्यूटर या नया फ़ोन इससे, समूह की प्रतीक्षा अवधि के बाद, समूह वापस ले लेता है।"
+            "value": "प्रिंट करके अपने फ़ोनों से दूर रखने के लिए एक शीट। अगर समूह का मुख्य फ़ोन खो जाए, तो समूह का कोई दूसरा डिवाइस इससे समूह को संभाल लेता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Лист, который печатают и хранят отдельно от телефонов. Если потеряны все телефоны этой группы, с ним компьютер группы или новый телефон вернёт группу после времени ожидания группы."
+            "value": "Лист, который нужно распечатать и хранить отдельно от телефонов. Если главный телефон группы потерян, другое устройство группы забирает группу с его помощью."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Karatasi ya kuchapisha na kuweka mbali na simu zako. Simu zote zenye kikundi hiki zikipotea, kompyuta ya kikundi au simu mpya huchukua kikundi tena kwa karatasi hii, baada ya muda wa kusubiri wa kikundi."
+            "value": "Karatasi ya kuchapisha na kuweka mbali na simu zako. Simu kuu ya kikundi ikipotea, kifaa kingine cha kikundi kinachukua kikundi kwa karatasi hii."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "一张打印出来、存放在远离手机之处的纸。如果此群组的所有手机都丢失，群组中的电脑或一部新手机可以凭它在群组的等待期后收回群组。"
+            "value": "一张要打印出来并与手机分开保管的纸。如果群组的主手机丢失，群组中的另一台设备可以用它接管群组。"
           }
         }
       }
@@ -7042,52 +7042,6 @@
         }
       }
     },
-    "Hold the YubiKey again to sign the claim.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قرّب YubiKey مرة أخرى لتوقيع المطالبة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acerca de nuevo la YubiKey para firmar la reclamación."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הצמידו שוב את ה-YubiKey כדי לחתום על התביעה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावे पर हस्ताक्षर के लिए YubiKey फिर लगाएँ।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Приложите YubiKey ещё раз, чтобы подписать заявку."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shikilia YubiKey tena ili kutia sahihi dai."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "再次贴近 YubiKey 以签署声明。"
-          }
-        }
-      }
-    },
     "Hold the YubiKey to the top of the phone.": {
       "localizations": {
         "ar": {
@@ -8744,6 +8698,52 @@
         }
       }
     },
+    "Keep its key, then hold it": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احتفظ بمفتاحه ثم قرّبه"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener su clave y acercarla"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להשאיר את המפתח שלו ואז להצמיד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसकी कुंजी रखें, फिर पास लाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставить его ключ и приложить"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acha ufunguo wake, kisha ushikilie"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留其密钥，然后贴近"
+          }
+        }
+      }
+    },
     "Keep this device on near the group's other devices until it arrives.": {
       "localizations": {
         "ar": {
@@ -8790,48 +8790,48 @@
         }
       }
     },
-    "Keep this sheet somewhere safe, away from your phones. Anyone who has it can take your group over, after the group's wait, unless the root phone cancels it.": {
+    "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "احفظ هذه الورقة في مكان آمن، بعيدًا عن هواتفك. يمكن لأي شخص يملكها أن يتولى مجموعتك، بعد مدة انتظار المجموعة، ما لم يلغِ الهاتف الجذر ذلك."
+            "value": "احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع الاستيلاء على مجموعتك."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Quien la tenga puede tomar tu grupo, tras la espera del grupo, salvo que el teléfono raíz lo cancele."
+            "value": "Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede tomar tu grupo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שמרו את הדף הזה במקום בטוח, הרחק מהטלפונים שלכם. כל מי שמחזיק בו יכול להשתלט על הקבוצה שלכם, אחרי ההמתנה של הקבוצה, אלא אם טלפון השורש מבטל זאת."
+            "value": "שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להשתלט על הקבוצה שלך."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "इस शीट को अपने फ़ोनों से दूर, किसी सुरक्षित जगह रखें। जिसके पास यह हो, वह समूह की प्रतीक्षा के बाद आपका समूह अपने हाथ में ले सकता है, जब तक रूट फ़ोन इसे रद्द न करे।"
+            "value": "इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपका समूह ले सकता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого он есть, может забрать вашу группу после времени ожидания группы, если корневой телефон это не отменит."
+            "value": "Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может забрать вашу группу."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo anaweza kuchukua kikundi chako, baada ya kusubiri kwa kikundi, isipokuwa simu ya mzizi ikighairi."
+            "value": "Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuchukua kikundi chako."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将此单据存放在安全的地方，远离你的手机。任何持有它的人都可以在群组等待期过后接管你的群组，除非根手机取消。"
+            "value": "请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能接管你的群组。"
           }
         }
       }
@@ -9522,52 +9522,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在查找电脑…"
-          }
-        }
-      }
-    },
-    "Looking for the group's computers…": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جارٍ البحث عن حواسيب المجموعة…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Buscando los ordenadores del grupo…"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מחפש את מחשבי הקבוצה…"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के कंप्यूटर खोजे जा रहे हैं…"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ищем компьютеры группы…"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inatafuta kompyuta za kikundi…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在查找群组的电脑…"
           }
         }
       }
@@ -11776,52 +11730,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有电脑在等待手机。在创建群组的电脑上运行 cbb pair -admin，然后重试。"
-          }
-        }
-      }
-    },
-    "No computer of the group was found on this network. Turn one on and keep this phone on its network, then try again.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يُعثر على أي حاسوب من المجموعة في هذه الشبكة. شغّل واحدًا وأبقِ هذا الهاتف على شبكته، ثم حاول مرة أخرى."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se encontró ningún ordenador del grupo en esta red. Enciende uno y mantén este teléfono en su red, y vuelve a intentarlo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לא נמצא מחשב של הקבוצה ברשת הזו. הדליקו אחד והשאירו את הטלפון הזה ברשת שלו, ונסו שוב."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इस नेटवर्क पर समूह का कोई कंप्यूटर नहीं मिला। कोई कंप्यूटर चालू करें और इस फ़ोन को उसके नेटवर्क पर रखें, फिर दोबारा कोशिश करें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "В этой сети не найден ни один компьютер группы. Включите его, держите телефон в его сети и попробуйте снова."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hakuna kompyuta ya kikundi iliyopatikana kwenye mtandao huu. Washa moja na uweke simu hii kwenye mtandao wake, kisha ujaribu tena."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在此网络中未找到群组的电脑。打开一台电脑并让这部手机连接到它的网络，然后重试。"
           }
         }
       }
@@ -14080,52 +13988,6 @@
         }
       }
     },
-    "Paste the text of the recovery sheet's QR code.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصق نص رمز QR الموجود في ورقة الاسترداد."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pega el texto del código QR de la hoja de recuperación."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הדביקו את הטקסט של קוד ה-QR בדף השחזור."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी शीट के QR कोड का टेक्स्ट पेस्ट करें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Вставьте текст QR-кода листа восстановления."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bandika maandishi ya msimbo wa QR wa karatasi ya urejeshaji."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "粘贴恢复单二维码的文本。"
-          }
-        }
-      }
-    },
     "Pasted.": {
       "localizations": {
         "ar": {
@@ -14306,52 +14168,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "将相机对准 cbb pair 的二维码，或你另一部手机显示的二维码。"
-          }
-        }
-      }
-    },
-    "Point the camera at the QR code on the recovery sheet. Keep this phone on the network of a computer of the group. This phone becomes the group's root when the group's waiting time ends, unless the old phone cancels it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وجّه الكاميرا إلى رمز QR في ورقة الاسترداد. أبقِ هذا الهاتف على شبكة حاسوب من المجموعة. يصبح هذا الهاتف جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الهاتف القديم ذلك."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apunta la cámara al código QR de la hoja de recuperación. Mantén este teléfono en la red de un ordenador del grupo. Este teléfono pasa a ser la raíz del grupo cuando termine el tiempo de espera del grupo, salvo que el teléfono antiguo lo cancele."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כוונו את המצלמה לקוד ה-QR בדף השחזור. השאירו את הטלפון הזה ברשת של מחשב מהקבוצה. הטלפון הזה הופך לשורש הקבוצה כשזמן ההמתנה של הקבוצה מסתיים, אלא אם הטלפון הישן מבטל זאת."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कैमरा रिकवरी शीट के QR कोड की ओर करें। इस फ़ोन को समूह के किसी कंप्यूटर के नेटवर्क पर रखें। समूह का प्रतीक्षा समय ख़त्म होने पर यह फ़ोन समूह का रूट बन जाता है, जब तक पुराना फ़ोन इसे रद्द न करे।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Наведите камеру на QR-код листа восстановления. Телефон должен быть в сети компьютера группы. Этот телефон станет корнем группы, когда истечёт время ожидания группы, если старый телефон не отменит заявку."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elekeza kamera kwenye msimbo wa QR wa karatasi ya urejeshaji. Weka simu hii kwenye mtandao wa kompyuta ya kikundi. Simu hii inakuwa mzizi wa kikundi muda wa kusubiri wa kikundi ukiisha, isipokuwa simu ya zamani ikighairi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将相机对准恢复单上的二维码。让这部手机连接到群组中某台电脑所在的网络。群组等待时间结束后，这部手机将成为群组的根设备，除非旧手机取消。"
           }
         }
       }
@@ -14678,52 +14494,6 @@
         }
       }
     },
-    "Put the recovery key on a YubiKey": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وضع مفتاح الاسترداد على YubiKey"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guardar la clave de recuperación en una YubiKey"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שמירת מפתח השחזור ב-YubiKey"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी कुंजी YubiKey पर रखें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Записать ключ восстановления на YubiKey"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weka ufunguo wa urejeshaji kwenye YubiKey"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将恢复密钥存入 YubiKey"
-          }
-        }
-      }
-    },
     "Put the recovery key on a YubiKey?": {
       "localizations": {
         "ar": {
@@ -14812,52 +14582,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "恢复密钥的二维码"
-          }
-        }
-      }
-    },
-    "QR code text": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نص رمز QR"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Texto del código QR"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "טקסט קוד ה-QR"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "QR कोड का टेक्स्ट"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Текст QR-кода"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maandishi ya msimbo wa QR"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "二维码文本"
           }
         }
       }
@@ -16334,6 +16058,52 @@
         }
       }
     },
+    "Replace its factory key, then hold it": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استبدل مفتاح المصنع ثم قرّبه"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reemplazar su clave de fábrica y acercarla"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להחליף את מפתח היצרן ואז להצמיד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसकी फ़ैक्टरी कुंजी बदलें, फिर पास लाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заменить заводской ключ и приложить"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Badilisha ufunguo wake wa kiwandani, kisha ushikilie"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换其出厂密钥，然后贴近"
+          }
+        }
+      }
+    },
     "Resolve a conflict in your group": {
       "localizations": {
         "ar": {
@@ -16422,236 +16192,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "重启 CBB"
-          }
-        }
-      }
-    },
-    "Restore": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استعادة"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurar"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שחזור"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "बहाल करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Восстановить"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejesha"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复"
-          }
-        }
-      }
-    },
-    "Restore the group": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استعادة المجموعة"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurar el grupo"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שחזור הקבוצה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह बहाल करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Восстановить группу"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejesha kikundi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复群组"
-          }
-        }
-      }
-    },
-    "Restore the group with its recovery key": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استعادة المجموعة بمفتاح استردادها"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurar el grupo con su clave de recuperación"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שחזור הקבוצה עם מפתח השחזור שלה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह को उसकी रिकवरी कुंजी से बहाल करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Восстановить группу ключом восстановления"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejesha kikundi kwa ufunguo wake wa urejeshaji"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用恢复密钥恢复群组"
-          }
-        }
-      }
-    },
-    "Restore with a YubiKey": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاستعادة باستخدام YubiKey"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurar con una YubiKey"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שחזור עם YubiKey"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YubiKey से बहाल करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Восстановить с YubiKey"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejesha kwa YubiKey"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用 YubiKey 恢复"
-          }
-        }
-      }
-    },
-    "Restore with the recovery key": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاستعادة بمفتاح الاسترداد"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restaurar con la clave de recuperación"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שחזור עם מפתח השחזור"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी कुंजी से बहाल करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Восстановить ключом восстановления"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rejesha kwa ufunguo wa urejeshaji"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用恢复密钥恢复"
           }
         }
       }
@@ -17204,52 +16744,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "扫描代码"
-          }
-        }
-      }
-    },
-    "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough. A computer of the group takes the typed key with cbb recovery.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "امسح رمز QR في ورقة الاسترداد: على هاتف جديد لا يكفي المفتاح المكتوب. يقبل حاسوب من المجموعة المفتاح المكتوب باستخدام cbb recovery."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Escanea el código QR de la hoja de recuperación: en un teléfono nuevo no basta con la clave escrita. Un ordenador del grupo acepta la clave escrita con cbb recovery."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "סרקו את קוד ה-QR בדף השחזור: בטלפון חדש המפתח המוקלד לא מספיק. מחשב של הקבוצה מקבל את המפתח המוקלד עם cbb recovery."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी शीट का QR कोड स्कैन करें: नए फ़ोन पर टाइप की गई कुंजी काफ़ी नहीं है। समूह का कोई कंप्यूटर cbb recovery से टाइप की गई कुंजी लेता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Отсканируйте QR-код листа восстановления: на новом телефоне введённого ключа недостаточно. Введённый ключ принимает компьютер группы через cbb recovery."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changanua msimbo wa QR wa karatasi ya urejeshaji: kwenye simu mpya ufunguo ulioandikwa hautoshi. Kompyuta ya kikundi hupokea ufunguo ulioandikwa kwa cbb recovery."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。群组中的电脑可以用 cbb recovery 接受输入的密钥。"
           }
         }
       }
@@ -20152,6 +19646,52 @@
         }
       }
     },
+    "The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. اكتب رمز PIN ثم قرّبه من الهاتف. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Escribe su PIN y acércala al teléfono. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ה-YubiKey שומר את אותו מפתח כמו הדף הזה, מאחורי קוד ה-PIN שלו ונגיעה. הקלד את קוד ה-PIN שלו ואז הצמד אותו לטלפון. אם עדיין יש לו מפתח ניהול של היצרן, כל אחד יכול לברר את המפתח הזה ולמחוק את מפתח השחזור בלי קוד ה-PIN; האפליקציה יכולה להחליף אותו במפתח שקוד ה-PIN מגן עליו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। इसका PIN लिखें, फिर इसे फ़ोन से लगाएँ। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Введите его PIN-код и приложите YubiKey к телефону. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Andika PIN yake, kisha uishikilie kwenye simu. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。输入它的 PIN，然后把它贴近手机。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。"
+          }
+        }
+      }
+    },
     "The YubiKey left too soon.": {
       "localizations": {
         "ar": {
@@ -20198,48 +19738,48 @@
         }
       }
     },
-    "The YubiKey makes the key in a free slot, and it never leaves the YubiKey. Type the YubiKey's PIN, then hold the YubiKey to the top of the phone. It replaces the recovery key the group has.": {
+    "The YubiKey opened the recovery key.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ينشئ YubiKey المفتاح في فتحة فارغة، ولا يغادر YubiKey أبدًا. اكتب الرقم السري لـ YubiKey، ثم قرّبه من أعلى الهاتف. يحل محل مفتاح الاسترداد الذي لدى المجموعة."
+            "value": "فتح YubiKey مفتاح الاسترداد."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La YubiKey crea la clave en una ranura libre, y nunca sale de la YubiKey. Escribe el PIN de la YubiKey y acércala a la parte superior del teléfono. Sustituye la clave de recuperación que tiene el grupo."
+            "value": "La YubiKey abrió la clave de recuperación."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-YubiKey יוצר את המפתח בחריץ פנוי, והוא לעולם לא יוצא מה-YubiKey. הקלידו את ה-PIN של ה-YubiKey, ואז הצמידו את ה-YubiKey לחלק העליון של הטלפון. הוא מחליף את מפתח השחזור שיש לקבוצה."
+            "value": "ה-YubiKey פתח את מפתח השחזור."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey किसी खाली स्लॉट में कुंजी बनाती है, और वह YubiKey से कभी बाहर नहीं जाती। YubiKey का PIN लिखें, फिर YubiKey को फ़ोन के ऊपरी हिस्से से लगाएँ। यह समूह की मौजूदा रिकवरी कुंजी की जगह लेती है।"
+            "value": "YubiKey ने रिकवरी कुंजी खोल दी।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey создаёт ключ в свободном слоте, и ключ никогда его не покидает. Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона. Он заменит ключ восстановления, который есть у группы."
+            "value": "YubiKey открыл ключ восстановления."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey hutengeneza ufunguo katika nafasi tupu, na hauondoki kwenye YubiKey kamwe. Andika PIN ya YubiKey, kisha ushikilie YubiKey juu ya simu. Huchukua nafasi ya ufunguo wa urejeshaji ambao kikundi kinao."
+            "value": "YubiKey imefungua ufunguo wa urejeshaji."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey 会在空闲槽位中生成密钥，密钥永远不会离开 YubiKey。输入 YubiKey 的 PIN，然后将 YubiKey 贴近手机顶部。它会替换群组现有的恢复密钥。"
+            "value": "YubiKey 已打开恢复密钥。"
           }
         }
       }
@@ -20286,6 +19826,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "YubiKey 的 PIN 已被锁定。请在 Yubico Authenticator 中用 PUK 解锁，然后重试。"
+          }
+        }
+      }
+    },
+    "The app cannot use this YubiKey's management key. Use the printed sheet instead.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يستطيع التطبيق استخدام مفتاح الإدارة لهذا الـ YubiKey. استخدم الورقة المطبوعة بدلًا منه."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La app no puede usar la clave de administración de esta YubiKey. Usa la hoja impresa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמש בדף המודפס במקום."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऐप इस YubiKey की प्रबंधन कुंजी का उपयोग नहीं कर सकता। इसके बजाय छपी हुई शीट का उपयोग करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Приложение не может использовать ключ управления этого YubiKey. Используйте распечатанный лист."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Programu haiwezi kutumia ufunguo wa usimamizi wa YubiKey hii. Tumia karatasi iliyochapishwa badala yake."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。"
           }
         }
       }
@@ -20516,98 +20102,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "声明已取消。其他设备连接后就会得知。"
-          }
-        }
-      }
-    },
-    "The claim is sent. This phone becomes the group's root when the waiting time ends; Home shows the time left.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُرسلت المطالبة. يصبح هذا الهاتف جذر المجموعة عند انتهاء مدة الانتظار؛ تعرض الرئيسية الوقت المتبقي."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La reclamación se envió. Este teléfono pasa a ser la raíz del grupo cuando termine la espera; Inicio muestra el tiempo que queda."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התביעה נשלחה. הטלפון הזה הופך לשורש הקבוצה כשזמן ההמתנה מסתיים; מסך הבית מציג את הזמן שנותר."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावा भेज दिया गया। प्रतीक्षा समय ख़त्म होने पर यह फ़ोन समूह का रूट बन जाता है; होम पर बचा हुआ समय दिखता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Заявка отправлена. Этот телефон станет корнем группы, когда истечёт время ожидания; на главном экране видно, сколько осталось."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai limetumwa. Simu hii inakuwa mzizi wa kikundi muda wa kusubiri ukiisha; Mwanzo huonyesha muda uliobaki."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "声明已发送。等待时间结束后，这部手机将成为群组的根设备；主页会显示剩余时间。"
-          }
-        }
-      }
-    },
-    "The claim is signed.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وُقّعت المطالبة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La reclamación está firmada."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התביעה נחתמה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावे पर हस्ताक्षर हो गए।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Заявка подписана."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai limetiwa sahihi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "声明已签署。"
           }
         }
       }
@@ -21164,52 +20658,6 @@
         }
       }
     },
-    "The computer's answer does not fit the group's records.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يتوافق رد الحاسوب مع سجلات المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La respuesta del ordenador no encaja con los registros del grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "התשובה של המחשב לא מתאימה לרשומות הקבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कंप्यूटर का जवाब समूह के रिकॉर्ड से मेल नहीं खाता।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ответ компьютера не сходится с записями группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jibu la kompyuta halilingani na rekodi za kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电脑的响应与群组记录不符。"
-          }
-        }
-      }
-    },
     "The computer's group could not be joined. Run cbb pair -admin on it again.": {
       "localizations": {
         "ar": {
@@ -21252,52 +20700,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法加入电脑的群组。请在它上面再次运行 cbb pair -admin。"
-          }
-        }
-      }
-    },
-    "The computers found on this network are of another group than the sheet.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الحواسيب التي عُثر عليها في هذه الشبكة تنتمي إلى مجموعة غير التي في الورقة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los ordenadores encontrados en esta red son de otro grupo que el de la hoja."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המחשבים שנמצאו ברשת הזו שייכים לקבוצה אחרת מזו של הדף."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इस नेटवर्क पर मिले कंप्यूटर शीट वाले समूह के नहीं, किसी दूसरे समूह के हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Компьютеры в этой сети принадлежат другой группе, не той, что на листе."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kompyuta zilizopatikana kwenye mtandao huu ni za kikundi kingine, si cha karatasi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在此网络中找到的电脑属于与恢复单不同的群组。"
           }
         }
       }
@@ -23740,6 +23142,52 @@
         }
       }
     },
+    "The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתח השחזור נמצא על ה-YubiKey, שנשאר עם מפתח הניהול של היצרן: מי שמחזיק בו יכול למחוק את המפתח בלי קוד ה-PIN. שמור גם את הדף."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления на YubiKey, но у него остался заводской ключ управления: тот, кто его держит, может стереть ключ без PIN-кода. Сохраните и лист."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。"
+          }
+        }
+      }
+    },
     "The recovery key is on the YubiKey.": {
       "localizations": {
         "ar": {
@@ -23786,48 +23234,48 @@
         }
       }
     },
-    "The recovery key is on the YubiKey. Keep it away from your phones; a sheet printed before no longer works.": {
+    "The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مفتاح الاسترداد على YubiKey. أبقِه بعيدًا عن هواتفك؛ لم تعد الورقة المطبوعة سابقًا تعمل."
+            "value": "مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La clave de recuperación está en la YubiKey. Mantenla lejos de tus teléfonos; una hoja impresa antes ya no funciona."
+            "value": "La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מפתח השחזור נמצא ב-YubiKey. שמרו אותו הרחק מהטלפונים שלכם; דף שהודפס קודם כבר לא עובד."
+            "value": "מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "रिकवरी कुंजी YubiKey पर है। इसे अपने फ़ोनों से दूर रखें; पहले प्रिंट की गई शीट अब काम नहीं करती।"
+            "value": "रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключ восстановления записан на YubiKey. Храните его вдали от телефонов; лист, напечатанный раньше, больше не действует."
+            "value": "Ключ восстановления на YubiKey. YubiKey и лист хранят один и тот же ключ: храните оба, в разных местах."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ufunguo wa urejeshaji uko kwenye YubiKey. Iweke mbali na simu zako; karatasi iliyochapishwa awali haifanyi kazi tena."
+            "value": "Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "恢复密钥在 YubiKey 上。请让它远离你的手机；之前打印的恢复单已不再有效。"
+            "value": "恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。"
           }
         }
       }
@@ -24384,48 +23832,48 @@
         }
       }
     },
-    "This YubiKey has no free slot for the key.": {
+    "This YubiKey holds a recovery key already. Use another YubiKey.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد في هذا الـ YubiKey فتحة فارغة للمفتاح."
+            "value": "يحمل هذا الـ YubiKey مفتاح استرداد بالفعل. استخدم YubiKey آخر."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta YubiKey no tiene ranura libre para la clave."
+            "value": "Esta YubiKey ya guarda una clave de recuperación. Usa otra YubiKey."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ב-YubiKey זה אין חריץ פנוי למפתח."
+            "value": "ה-YubiKey הזה כבר מחזיק מפתח שחזור. השתמש ב-YubiKey אחר."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "इस YubiKey में कुंजी के लिए कोई खाली स्लॉट नहीं है।"
+            "value": "इस YubiKey में पहले से एक रिकवरी कुंजी है। कोई दूसरा YubiKey उपयोग करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На этом YubiKey нет свободного слота для ключа."
+            "value": "На этом YubiKey уже есть ключ восстановления. Используйте другой YubiKey."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey hii haina nafasi tupu ya ufunguo."
+            "value": "YubiKey hii tayari ina ufunguo wa urejeshaji. Tumia YubiKey nyingine."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 YubiKey 没有空闲槽位存放密钥。"
+            "value": "此 YubiKey 已保存了一个恢复密钥。请使用另一个 YubiKey。"
           }
         }
       }
@@ -24476,94 +23924,94 @@
         }
       }
     },
-    "This YubiKey is older than firmware 5.7, which the app needs to put a key on it. Use the printed sheet instead.": {
+    "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الـ YubiKey أقدم من البرنامج الثابت 5.7، الذي يحتاجه التطبيق لوضع مفتاح عليه. استخدم الورقة المطبوعة بدلًا من ذلك."
+            "value": "يحمل هذا الـ YubiKey شيئًا آخر في المكان المخصص لمفتاح الاسترداد. استخدم YubiKey آخر."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta YubiKey es anterior al firmware 5.7, que la app necesita para guardar una clave en ella. Usa la hoja impresa en su lugar."
+            "value": "Esta YubiKey guarda otra cosa en el lugar de la clave de recuperación. Usa otra YubiKey."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-YubiKey הזה ישן מקושחה 5.7, שהיישום צריך כדי לשים בו מפתח. השתמשו במקום זאת בדף המודפס."
+            "value": "ה-YubiKey הזה מחזיק משהו אחר במקום שבו נשמר מפתח השחזור. השתמש ב-YubiKey אחר."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "यह YubiKey फ़र्मवेयर 5.7 से पुरानी है, जिसकी ऐप को उस पर कुंजी रखने के लिए ज़रूरत है। इसकी जगह प्रिंट की गई शीट इस्तेमाल करें।"
+            "value": "इस YubiKey में रिकवरी कुंजी की जगह कुछ और रखा है। कोई दूसरा YubiKey उपयोग करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Прошивка этого YubiKey старше 5.7, а приложению нужна 5.7 или новее, чтобы записать на него ключ. Используйте напечатанный лист."
+            "value": "На этом YubiKey в месте для ключа восстановления хранится что-то другое. Используйте другой YubiKey."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey hii ni ya zamani kuliko programu dhibiti 5.7, ambayo programu inaihitaji ili kuweka ufunguo humo. Tumia karatasi iliyochapishwa badala yake."
+            "value": "YubiKey hii ina kitu kingine mahali ufunguo wa urejeshaji unapokaa. Tumia YubiKey nyingine."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 YubiKey 的固件早于 5.7，而应用需要 5.7 才能在其中存放密钥。请改用打印的恢复单。"
+            "value": "此 YubiKey 在存放恢复密钥的位置保存了其他内容。请使用另一个 YubiKey。"
           }
         }
       }
     },
-    "This YubiKey's management key is not the factory one, so the app cannot put a key on it. Use the printed sheet instead.": {
+    "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مفتاح إدارة هذا الـ YubiKey ليس مفتاح المصنع، لذا لا يستطيع التطبيق وضع مفتاح عليه. استخدم الورقة المطبوعة بدلًا من ذلك."
+            "value": "إصدار البرنامج الثابت لهذا الـ YubiKey أقدم من 5.3 الذي يحتاجه مفتاح الاسترداد. استخدم الورقة المطبوعة بدلًا منه."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La clave de gestión de esta YubiKey no es la de fábrica, así que la app no puede guardar una clave en ella. Usa la hoja impresa en su lugar."
+            "value": "Esta YubiKey tiene un firmware anterior al 5.3, que la clave de recuperación necesita. Usa la hoja impresa."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מפתח הניהול של YubiKey זה אינו של היצרן, ולכן היישום לא יכול לשים בו מפתח. השתמשו במקום זאת בדף המודפס."
+            "value": "הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמש בדף המודפס במקום."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "इस YubiKey की प्रबंधन कुंजी फ़ैक्टरी वाली नहीं है, इसलिए ऐप उस पर कुंजी नहीं रख सकता। इसकी जगह प्रिंट की गई शीट इस्तेमाल करें।"
+            "value": "इस YubiKey का फ़र्मवेयर 5.3 से पुराना है, जिसकी रिकवरी कुंजी को ज़रूरत है। इसके बजाय छपी हुई शीट का उपयोग करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "У этого YubiKey не заводской ключ управления, поэтому приложение не может записать на него ключ. Используйте напечатанный лист."
+            "value": "Прошивка этого YubiKey старше 5.3, а ключу восстановления нужна 5.3. Используйте распечатанный лист."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ufunguo wa usimamizi wa YubiKey hii si wa kiwandani, kwa hivyo programu haiwezi kuweka ufunguo humo. Tumia karatasi iliyochapishwa badala yake."
+            "value": "YubiKey hii ina programu dhibiti ya zamani kuliko 5.3, ambayo ufunguo wa urejeshaji unahitaji. Tumia karatasi iliyochapishwa badala yake."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此 YubiKey 的管理密钥不是出厂密钥，因此应用无法在其中存放密钥。请改用打印的恢复单。"
+            "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。"
           }
         }
       }
@@ -25488,52 +24936,6 @@
         }
       }
     },
-    "This is not a YubiKey with PIV, or PIV is turned off on it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا ليس YubiKey يدعم PIV، أو أن PIV متوقف عليه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No es una YubiKey con PIV, o el PIV está desactivado en ella."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "זה לא YubiKey עם PIV, או ש-PIV כבוי בו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह PIV वाली YubiKey नहीं है, या उस पर PIV बंद है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это не YubiKey с PIV, или PIV на нём выключен."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hii si YubiKey yenye PIV, au PIV imezimwa humo."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这不是支持 PIV 的 YubiKey，或者其 PIV 已关闭。"
-          }
-        }
-      }
-    },
     "This is not a YubiKey. Hold the YubiKey to the phone.": {
       "localizations": {
         "ar": {
@@ -25576,98 +24978,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "这不是 YubiKey。请将 YubiKey 贴近手机。"
-          }
-        }
-      }
-    },
-    "This is not the QR code of a recovery sheet.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا ليس رمز QR لورقة استرداد."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No es el código QR de una hoja de recuperación."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "זה לא קוד ה-QR של דף שחזור."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह रिकवरी शीट का QR कोड नहीं है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это не QR-код листа восстановления."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Huu si msimbo wa QR wa karatasi ya urejeshaji."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这不是恢复单的二维码。"
-          }
-        }
-      }
-    },
-    "This is not the group's recovery key now: the root phone removed it or made a new one.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يعد هذا مفتاح استرداد المجموعة الآن: أزاله الهاتف الجذر أو أنشأ واحدًا جديدًا."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta ya no es la clave de recuperación del grupo: el teléfono raíz la quitó o creó una nueva."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "זה כבר לא מפתח השחזור של הקבוצה: טלפון השורש הסיר אותו או יצר חדש."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह अब समूह की रिकवरी कुंजी नहीं है: रूट फ़ोन ने इसे हटा दिया या नई बना ली।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это больше не ключ восстановления группы: корневой телефон удалил его или сделал новый."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Huu si ufunguo wa urejeshaji wa kikundi sasa: simu ya mzizi iliuondoa au iliunda mpya."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这已不是群组当前的恢复密钥：根手机已将其移除或生成了新密钥。"
           }
         }
       }
@@ -26174,98 +25484,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部手机持有群组的根：只有在群组没有其他设备时才能离开。"
-          }
-        }
-      }
-    },
-    "This phone is in a group already. A recovery key restores a group on a phone without one.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الهاتف في مجموعة بالفعل. يستعيد مفتاح الاسترداد مجموعة على هاتف ليس فيه مجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este teléfono ya está en un grupo. Una clave de recuperación restaura un grupo en un teléfono que no tenga ninguno."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון הזה כבר בקבוצה. מפתח שחזור משחזר קבוצה בטלפון שאין בו קבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन पहले से एक समूह में है। रिकवरी कुंजी बिना समूह वाले फ़ोन पर समूह बहाल करती है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот телефон уже в группе. Ключ восстановления восстанавливает группу на телефоне без группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu hii tayari iko kwenye kikundi. Ufunguo wa urejeshaji hurejesha kikundi kwenye simu isiyo na kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这部手机已在一个群组中。恢复密钥只能在没有群组的手机上恢复群组。"
-          }
-        }
-      }
-    },
-    "This phone is in a group already. A recovery sheet restores a group on a phone without one.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الهاتف في مجموعة بالفعل. تستعيد ورقة الاسترداد مجموعة على هاتف ليس فيه مجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este teléfono ya está en un grupo. Una hoja de recuperación restaura un grupo en un teléfono que no tenga ninguno."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הטלפון הזה כבר בקבוצה. דף שחזור משחזר קבוצה בטלפון שאין בו קבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन पहले से एक समूह में है। रिकवरी शीट बिना समूह वाले फ़ोन पर समूह बहाल करती है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот телефон уже в группе. Лист восстановления восстанавливает группу на телефоне без группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Simu hii tayari iko kwenye kikundi. Karatasi ya urejeshaji hurejesha kikundi kwenye simu isiyo na kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这部手机已在一个群组中。恢复单只能在没有群组的手机上恢复群组。"
           }
         }
       }
@@ -27098,48 +26316,48 @@
         }
       }
     },
-    "To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.": {
+    "To move the group to another device of it: on a phone, choose Move the group to this phone in its settings and scan the code; on a computer, run cbb recovery and type the key.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لاستعادة المجموعة: على هاتف جديد، اختر الاستعادة بمفتاح الاسترداد وامسح الرمز؛ أو على حاسوب من المجموعة، شغّل cbb recovery واكتب المفتاح."
+            "value": "لنقل المجموعة إلى جهاز آخر منها: على الهاتف، اختر «نقل المجموعة إلى هذا الهاتف» في إعداداته وامسح الرمز؛ وعلى الكمبيوتر، شغّل cbb recovery واكتب المفتاح."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para recuperar el grupo: en un teléfono nuevo, elige Restaurar con una clave de recuperación y escanea el código; o en un ordenador del grupo, ejecuta cbb recovery y escribe la clave."
+            "value": "Para mover el grupo a otro de sus dispositivos: en un teléfono, elige Mover el grupo a este teléfono en sus ajustes y escanea el código; en un ordenador, ejecuta cbb recovery y escribe la clave."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "כדי לקבל את הקבוצה בחזרה: בטלפון חדש, בחרו ״שחזור עם מפתח שחזור״ וסרקו את הקוד; או במחשב של הקבוצה, הריצו cbb recovery והקלידו את המפתח."
+            "value": "כדי להעביר את הקבוצה למכשיר אחר שלה: בטלפון, בחר בהגדרות שלו 'העבר את הקבוצה לטלפון הזה' וסרוק את הקוד; במחשב, הרץ cbb recovery והקלד את המפתח."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह वापस लेने के लिए: नए फ़ोन पर, रिकवरी कुंजी से बहाल करें चुनें और कोड स्कैन करें; या समूह के किसी कंप्यूटर पर cbb recovery चलाएँ और कुंजी लिखें।"
+            "value": "समूह को उसके किसी दूसरे डिवाइस पर ले जाने के लिए: फ़ोन पर, उसकी सेटिंग में 'समूह को इस फ़ोन पर ले जाएँ' चुनें और कोड स्कैन करें; कंप्यूटर पर, cbb recovery चलाएँ और कुंजी लिखें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Чтобы вернуть группу: на новом телефоне выберите «Восстановить ключом восстановления» и отсканируйте код; или на компьютере группы запустите cbb recovery и введите ключ."
+            "value": "Чтобы перенести группу на другое её устройство: на телефоне выберите в настройках «Перенести группу на этот телефон» и отсканируйте код; на компьютере запустите cbb recovery и введите ключ."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ili kurejesha kikundi: kwenye simu mpya, chagua Rejesha kwa ufunguo wa urejeshaji na uchanganue msimbo; au kwenye kompyuta ya kikundi, endesha cbb recovery na uandike ufunguo."
+            "value": "Kuhamisha kikundi kwenda kifaa kingine chake: kwenye simu, chagua Hamisha kikundi kwenda simu hii katika mipangilio yake na uchanganue msimbo; kwenye kompyuta, endesha cbb recovery na uandike ufunguo."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "要取回群组：在新手机上选择“用恢复密钥恢复”并扫描代码；或在群组的电脑上运行 cbb recovery 并输入密钥。"
+            "value": "要把群组移到群组中的另一台设备：在手机上，在设置中选择“把群组移到这部手机”并扫描二维码；在电脑上，运行 cbb recovery 并输入密钥。"
           }
         }
       }
@@ -27788,48 +27006,48 @@
         }
       }
     },
-    "Type the YubiKey's PIN, then hold the YubiKey to the top of the phone: once for this phone's certificate and, once a computer of the group answered, again for the claim. Keep this phone on the network of a computer of the group.": {
+    "Type the YubiKey's PIN, then hold the YubiKey to the phone until it is done.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب الرقم السري لـ YubiKey، ثم قرّبه من أعلى الهاتف: مرة لشهادة هذا الهاتف، ثم مرة أخرى للمطالبة بعد أن يُجيب حاسوب من المجموعة. أبقِ هذا الهاتف على شبكة حاسوب من المجموعة."
+            "value": "اكتب رمز PIN لـ YubiKey، ثم أبقِ YubiKey قريبًا من الهاتف حتى ينتهي."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribe el PIN de la YubiKey y acércala a la parte superior del teléfono: una vez para el certificado de este teléfono y, cuando responda un ordenador del grupo, otra para la reclamación. Mantén este teléfono en la red de un ordenador del grupo."
+            "value": "Escribe el PIN de la YubiKey y mantenla junto al teléfono hasta que termine."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקלידו את ה-PIN של ה-YubiKey, ואז הצמידו את ה-YubiKey לחלק העליון של הטלפון: פעם אחת לאישור של הטלפון הזה, ואחרי שמחשב של הקבוצה ענה, שוב לתביעה. השאירו את הטלפון הזה ברשת של מחשב מהקבוצה."
+            "value": "הקלד את קוד ה-PIN של ה-YubiKey, ואז החזק את ה-YubiKey צמוד לטלפון עד לסיום."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey का PIN लिखें, फिर YubiKey को फ़ोन के ऊपरी हिस्से से लगाएँ: एक बार इस फ़ोन के प्रमाणपत्र के लिए और, समूह के किसी कंप्यूटर के जवाब देने पर, फिर दावे के लिए। इस फ़ोन को समूह के किसी कंप्यूटर के नेटवर्क पर रखें।"
+            "value": "YubiKey का PIN लिखें, फिर काम पूरा होने तक YubiKey को फ़ोन से लगाए रखें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Введите PIN YubiKey, затем приложите YubiKey к верхней части телефона: один раз для сертификата этого телефона и, когда ответит компьютер группы, ещё раз для заявки. Держите телефон в сети компьютера группы."
+            "value": "Введите PIN-код YubiKey, затем приложите YubiKey к телефону и держите, пока всё не закончится."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Andika PIN ya YubiKey, kisha ushikilie YubiKey juu ya simu: mara moja kwa cheti cha simu hii na, kompyuta ya kikundi ikishajibu, tena kwa dai. Weka simu hii kwenye mtandao wa kompyuta ya kikundi."
+            "value": "Andika PIN ya YubiKey, kisha ushikilie YubiKey kwenye simu hadi imalizike."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入 YubiKey 的 PIN，然后将 YubiKey 贴近手机顶部：一次用于这部手机的证书，等群组的电脑响应后再一次用于声明。让这部手机连接到群组中某台电脑所在的网络。"
+            "value": "输入 YubiKey 的 PIN，然后把 YubiKey 贴近手机，直到完成。"
           }
         }
       }
@@ -28382,6 +27600,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "改用 YubiKey"
+          }
+        }
+      }
+    },
+    "Use the YubiKey with the recovery key": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدم YubiKey الذي يحمل مفتاح الاسترداد"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar la YubiKey con la clave de recuperación"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השתמש ב-YubiKey עם מפתח השחזור"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिकवरी कुंजी वाला YubiKey उपयोग करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Использовать YubiKey с ключом восстановления"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tumia YubiKey yenye ufunguo wa urejeshaji"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用存有恢复密钥的 YubiKey"
           }
         }
       }
