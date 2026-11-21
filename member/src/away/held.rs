@@ -54,6 +54,24 @@ impl Away {
         Ok(Some(tag))
     }
 
+    /// Forgets the keys of the clients that are no devices of the group any
+    /// more (`is_device` false), as a removal makes them: the hub serves
+    /// them no longer and keeps nothing of them. A frozen device's keys
+    /// stay, unserved, for when it is thawed.
+    pub fn drop_held_gone(&self, is_device: &dyn Fn(&DeviceId) -> bool) {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        let mut next = st.clone();
+        next.held.retain(|name, _| crate::live::id_of_hex(name).is_some_and(|id| is_device(&id)));
+        if next.held.len() == st.held.len() {
+            return;
+        }
+        match next.save(&self.dir) {
+            Ok(()) => *st = next,
+            Err(e) => (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log())),
+        }
+    }
+
     /// A handshake from the client whose key is key answered under psk: the
     /// hub keeps it among the last handshakes' keys.
     pub fn hub_handshaked(&self, key: &[u8; 32], psk: &[u8; 32]) -> Result<()> {
@@ -251,6 +269,31 @@ impl Away {
         true
     }
 
+    /// Takes a new VLESS user ID when the hub's forwarder holds this one
+    /// for another group, as the hub before 0.6 did: true when it did, so
+    /// that the hub registers again with it and its clients take the new
+    /// offer.
+    pub fn hub_vless_taken(&self, report: &crate::forward::Report) -> bool {
+        if !report.error.as_deref().is_some_and(|e| e.contains(crate::forward::VLESS_ID_TAKEN)) {
+            return false;
+        }
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return false };
+        let mut next = st.clone();
+        if !next.new_vless_id() {
+            return false;
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return false;
+        }
+        *st = next;
+        (self.log)(
+            "cbb: sync away from home: the forwarder holds the hub's VLESS user ID for another group; the hub takes a new one",
+        );
+        true
+    }
+
     /// The devices the hub holds keys of, by their IDs.
     pub fn held_devices(&self) -> Vec<DeviceId> {
         let cur = self.st.lock().unwrap();
@@ -355,6 +398,11 @@ impl Away {
     /// Whether this device is a hub now.
     pub fn is_hub_now(&self) -> bool {
         self.st.lock().unwrap().as_ref().is_some_and(|s| s.is_hub)
+    }
+
+    /// The hubs whose offers this device keeps, by device ID in hex.
+    pub fn held_hubs(&self) -> Vec<String> {
+        self.st.lock().unwrap().as_ref().map(|s| s.hubs.iter().map(|h| h.device.clone()).collect()).unwrap_or_default()
     }
 
     /// The hub a member connection goes through the tunnel to now, if any.

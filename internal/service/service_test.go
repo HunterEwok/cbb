@@ -4,8 +4,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
-	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -658,34 +659,51 @@ func TestRestartWithANewPort(t *testing.T) {
 }
 
 func TestRenewal(t *testing.T) {
-	// Eighteen months after pairing, the pi renews its own certificates
-	// when it starts and the deck's when the deck connects; both keep them.
+	// Eighteen months after pairing, the pi and the deck each move their
+	// sealing key to a new epoch when they start (on the records of 0.6
+	// the member key, the device's identity, stays and has nothing to
+	// renew); both keep the new statement, and they connect again.
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	before := map[string]*group.Identity{}
+	statements := func(s *testService) string { return filepath.Join(s.dir, "statements.json") } // src/sealed.rs in cbb
+	// Each keeps the other's statement as well as its own before they stop.
+	for _, s := range []*testService{pi, deck} {
+		waitFor(t, s.name+" keeps both statements", func() bool {
+			var f struct {
+				Statements []string `json:"statements"`
+			}
+			b, err := os.ReadFile(statements(s))
+			return err == nil && json.Unmarshal(b, &f) == nil && len(f.Statements) == 2
+		})
+	}
+	before := map[string][]byte{}
 	for _, s := range []*testService{pi, deck} {
 		s.stop()
-		id, err := group.Load(s.dir)
+		b, err := os.ReadFile(statements(s))
 		if err != nil {
 			t.Fatal(err)
 		}
-		before[s.name] = id
+		before[s.name] = b
 	}
 	clock := newTestClock(t, 548*24*time.Hour)
 	pi.env, deck.env = []string{clock.env()}, []string{clock.env()}
 	pi, deck = restartService(t, &h, pi), restartService(t, &h, deck)
 	for _, s := range []*testService{pi, deck} {
-		waitFor(t, s.name+" keeps a renewed certificate", func() bool {
-			id, err := group.Load(s.dir)
-			return err == nil && id.Cert.NotAfter.After(before[s.name].Cert.NotAfter.AddDate(1, 0, 0))
+		waitFor(t, s.name+" keeps a renewed statement", func() bool {
+			b, err := os.ReadFile(statements(s))
+			return err == nil && !bytes.Equal(b, before[s.name])
 		})
 	}
-	// The renewed certificates work: the members connect again.
+	// The renewed keys work: the members connect again, and a copy goes.
 	deck.stop()
 	deck = restartService(t, &h, deck)
-	waitFor(t, "connected with the renewed certificates", func() bool { return len(deck.status(t).Peers) == 1 })
+	waitFor(t, "connected with the renewed keys", func() bool { return len(deck.status(t).Peers) == 1 })
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "after the renewal"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "after the renewal" })
 }
 
 func TestWrongCode(t *testing.T) {
@@ -963,74 +981,24 @@ func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 	}
 }
 
-// listBox adds to the records in dir, of the stopped member whose identity
-// is admin, its record of the device dev with the member key key.
-func listBox(t *testing.T, dir string, admin *group.Identity, dev group.DeviceID, key group.KeyHash) {
-	t.Helper()
-	recs, err := group.LoadRecords(dir, admin.GroupCA.Cert)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, chain := admin.Signer()
-	var adminCA *x509.Certificate
-	if len(chain) > 0 {
-		adminCA = chain[0]
-	}
-	r, err := recs.Sign(group.RecordBody{Type: group.RecordDevice, TimeMS: time.Now().UnixMilli(), Device: string(dev), Name: "box",
-		Role: group.RoleMember, Caps: group.AllCaps, OS: group.OSLinux, Key: &key}, ca.Key, adminCA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := recs.Add(r); err != nil {
-		t.Fatal(err)
-	}
-	if err := recs.Save(dir); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestLinuxMemberWithoutCAKeys(t *testing.T) {
-	// A Linux member without the CA keys, as in a group whose root is the
-	// phone, connects and syncs, but admits nobody.
+	// A Linux member that holds neither the root key nor an admin key, as
+	// any computer of a group whose root is a phone, connects and syncs,
+	// but admits nobody.
 	var h hub
 	pi := startService(t, &h, "pi")
-	c, _ := openWindow(t, pi) // creates the group
-	c.Close()
-	admin, err := group.Load(pi.dir)
-	if err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	key, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	devID := group.DeviceID("00000000000000000000000000000001")
-	cert, err := admin.GroupCA.IssueMember(devID, &key.PublicKey, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir, err := os.MkdirTemp("", "cb")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	id := &group.Identity{ID: devID, Key: key, Cert: cert, GroupCA: group.CA{Cert: admin.GroupCA.Cert}}
-	if err := id.Save(dir); err != nil {
-		t.Fatal(err)
-	}
-	// In records v:2 a member is taken only when a device record names its
-	// key: the root records the box, as it does every device it admits.
-	pi.stop()
-	listBox(t, pi.dir, admin, devID, group.KeyHashOf(cert))
-	pi = restartService(t, &h, pi)
-	box := startIn(t, &h, &testService{name: "box", dir: dir, os: group.OSLinux})
+	box := startService(t, &h, "box")
+	pairWith(t, pi, box)
 	waitFor(t, "connected", func() bool { return len(box.status(t).Peers) == 1 })
 	if _, err := box.do(t, control.Header{Op: control.OpCopy}, "from the box"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the box" })
 	if _, err := box.do(t, control.Header{Op: control.OpPair}, ""); err == nil {
-		t.Error("a member without CA keys opened a pairing window")
+		t.Error("a member without the group's keys opened a pairing window")
 	}
 }
 
@@ -1590,9 +1558,10 @@ func TestBrokenIdentity(t *testing.T) {
 }
 
 // TestPairingAcrossARenewal checks that a pairing window keeps working when
-// the admin's certificates change while it is open, as when its root sends
-// an admin a new admin CA right after making it an admin: the window binds
-// the exchange to the certificate it opened with and presents that one.
+// the admin's keys change while it is open: on the records of 0.6 the root's
+// sealing key moves to a new epoch and a new statement goes out (as a jump
+// of the wall clock past the statements' age brings), while the window binds
+// the exchange to the member key, which stays.
 func TestPairingAcrossARenewal(t *testing.T) {
 	every := renewEvery
 	renewEvery = 200 * time.Millisecond
@@ -1603,17 +1572,21 @@ func TestPairingAcrossARenewal(t *testing.T) {
 	pi.env = []string{clock.env()}
 	pi.stop()
 	pi = restartService(t, &h, pi)
+	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+		t.Fatal(err)
+	}
 	b := startService(t, &h, "b")
 	c, code := openWindow(t, pi)
 	defer c.Close()
-	before, err := group.Load(pi.dir)
+	statements := filepath.Join(pi.dir, "statements.json") // src/sealed.rs in cbb
+	before, err := os.ReadFile(statements)
 	if err != nil {
 		t.Fatal(err)
 	}
 	clock.set(t, 548*24*time.Hour)
-	waitFor(t, "the pi renews its certificate", func() bool {
-		id, err := group.Load(pi.dir)
-		return err == nil && !id.Cert.Equal(before.Cert)
+	waitFor(t, "the pi renews its sealing key", func() bool {
+		now, err := os.ReadFile(statements)
+		return err == nil && !bytes.Equal(now, before)
 	})
 	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: code}, ""); err != nil {
 		t.Fatalf("join after the renewal: %v", err)

@@ -24,6 +24,14 @@ use p256::pkcs8::EncodePrivateKey as _;
 /// How often this device's sealing keys are checked for a new epoch.
 const ROTATE_EVERY: Duration = Duration::from_secs(3600);
 
+/// ROTATE_EVERY, or in a test build what CBB_TEST_RENEW_EVERY gives in
+/// milliseconds, as the Go service's tests shorten it.
+fn rotate_every() -> Duration {
+    crate::testbuild::env("CBB_TEST_RENEW_EVERY")
+        .and_then(|v| v.parse().ok())
+        .map_or(ROTATE_EVERY, Duration::from_millis)
+}
+
 mod orders;
 
 /// Whether the device's group is kept on the records of 0.6.
@@ -183,7 +191,7 @@ impl Service {
             let (l, log) = (live.clone(), log.clone());
             std::thread::spawn(move || {
                 while !l.is_closed() && !STOP.load(Ordering::SeqCst) {
-                    wait_unless_stopping(ROTATE_EVERY);
+                    wait_unless_stopping(rotate_every());
                     if let Err(e) = l.mesh.rotate() {
                         log(&format!("cbb: {}", e.for_log()));
                     }
@@ -384,12 +392,22 @@ impl Service {
             version: VERSION.into(),
             ..Default::default()
         };
-        roster::devices(
+        let mut list = roster::devices(
             &live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner),
             &me,
             &live.mesh.hellos(),
             uptime::wall_ms(),
-        )
+        );
+        // A hub as this device knows (`control::Device::hub`): with sync
+        // away from home on, itself while it serves or a hub whose offer it
+        // keeps; with it off, a device the root's hubs record names.
+        if let Some(a) = live.away().filter(|a| a.is_on()) {
+            let (serving, held) = (a.is_hub_now(), a.held_hubs());
+            for d in &mut list {
+                d.hub = if d.this { serving } else { held.contains(&d.id) };
+            }
+        }
+        list
     }
 
     /// Writes records with this device's root or admin key, and names the
@@ -1038,7 +1056,7 @@ impl Service {
         if let Some(n) = live.networks() {
             n.learn_all();
         }
-        let now = || crate::uptime::wall_ms().max(0) as u64;
+        let now = crate::admitting::home_window_ms;
         let (mut open, digits) = crate::admitting::home_window(now(), window::LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
@@ -1381,11 +1399,12 @@ fn relay_group(set: &cbb_core::records::RecordSet) -> String {
 /// on a hub, its forwarder.
 fn away_status(live: &Live) -> Option<control::Away> {
     let away = live.away()?;
-    let mut a = away.live_status()?;
+    let standby = away.is_hub_now() && live.is_standing_by();
+    let mut a = away.live_status_as(standby)?;
     let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
     a.forwarder = away.live_forwarder(entries_held);
     a.relay = live.relay_status();
-    a.standby = a.hub && live.is_standing_by();
+    a.standby = standby;
     Some(a)
 }
 

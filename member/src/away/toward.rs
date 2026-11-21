@@ -122,6 +122,12 @@ impl Away {
     /// 0.6: off, or on with the hubs whose offers are kept, the first of
     /// them shown, and what went wrong last.
     pub fn live_status(&self) -> Option<crate::control::Away> {
+        self.live_status_as(false)
+    }
+
+    /// live_status, for a hub that stands by (`standby`) as a client of the
+    /// hub above it, which it shows as the hub it uses.
+    pub fn live_status_as(&self, standby: bool) -> Option<crate::control::Away> {
         let st = self.st.lock().unwrap();
         let error = self.error.lock().unwrap().clone();
         let Some(st) = st.as_ref() else {
@@ -132,14 +138,20 @@ impl Away {
         if st.is_hub {
             a.endpoints = st.hub_endpoints().iter().map(ToString::to_string).collect();
             a.clients = i64::try_from(st.held.len()).unwrap_or(i64::MAX);
+            a.port = i64::from(if st.listen_port == 0 { crate::tunnel::MEMBER_PORT } else { st.listen_port });
+            a.obfuscated = st.obfuscation.is_some();
         }
         let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
-        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()).filter(|_| !st.is_hub) {
+        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()).filter(|_| !st.is_hub || standby)
+        {
             a.through = self.through.load(std::sync::atomic::Ordering::SeqCst) && using.is_some();
             a.hub_device = h.device.clone();
-            a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
-            a.obfuscated = h.obfuscation.is_some();
-            a.vless = h.vless.is_some();
+            // A hub that stands by keeps showing its own way in.
+            if !st.is_hub {
+                a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
+                a.obfuscated = h.obfuscation.is_some();
+                a.vless = h.vless.is_some();
+            }
         }
         if let Some((e, d)) = error {
             (a.error, a.detail) = (e, d);

@@ -545,6 +545,10 @@ type Device struct {
 	// the copies on: none is sealed to it (docs/protocol.md, section 11).
 	ForwardOnly bool `json:"forward_only,omitempty"`
 	Hub         bool `json:"hub,omitempty"` // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
+	// HubRank is its place in the group's order of hubs, from 1, which
+	// every member derives from the records alone (docs/protocol.md,
+	// section 11, "Several hubs"); 0 when it may not serve.
+	HubRank int `json:"hub_rank,omitempty"`
 }
 
 // Can reports whether d is a member with the capability c.

@@ -2854,6 +2854,18 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a hub's status gives its UDP port and whether it hides its tunnel, a
+  hub that stands by names the hub above it that it uses, `cbb devices` marks as hubs the
+  devices this one knows serve and gives each its place in the group's order of hubs
+  (`hub_rank`), a hub forgets the tunnel keys of a device the group removes, a hub whose
+  forwarder holds its VLESS user ID for another group takes a new one, and stopping a device
+  that is no hub says so rather than that it is the group's last hub. The Go tests of the hubs
+  name them with `cbb hubs` first and read the tunnel's keys of 0.6 (`toward`, `held`).
+- On the records of 0.6 a computer in a container offers no admin key when it pairs unless its
+  user set `CBB_KEYS_IN_FILE=yes`, `cbb devices` lists a frozen admin as no admin until the
+  freeze ends, as the core counts it, and a home pairing window counts its five minutes in the
+  device's running time from end to end, so a wall clock set while it is open no longer ends
+  it. A build for tests checks the sealing keys as often as `CBB_TEST_RENEW_EVERY` says.
 - On the records of 0.6 the copy a member sends as a connection opens is one it made sealed
   again to that peer by the records as they are then, and a member that takes records refusing
   a peer, removed or frozen, ends that connection before it sends anything more, so a refused

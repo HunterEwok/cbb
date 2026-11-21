@@ -251,6 +251,9 @@ impl Live {
             if let Some(l) = w.upgrade() {
                 let st = set.state();
                 l.settle(&st);
+                if let Some(a) = l.away() {
+                    a.drop_held_gone(&|id| st.device(id).is_some());
+                }
                 // The records may let in devices refused until now.
                 l.redial();
                 // A root's resolve may have voided both histories of this

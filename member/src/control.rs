@@ -651,6 +651,11 @@ pub struct Device {
     /// hub, or a hub whose offer it keeps.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hub: bool,
+    /// Its place in the group's order of hubs, from 1, which every member
+    /// derives from the records alone (docs/protocol.md, section 11,
+    /// "Several hubs"); 0 when it may not serve.
+    #[serde(default, skip_serializing_if = "is_zero_us")]
+    pub hub_rank: usize,
 }
 
 /// A header and its payload.

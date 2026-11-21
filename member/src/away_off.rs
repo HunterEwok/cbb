@@ -100,7 +100,21 @@ impl Away {
         false
     }
 
+    pub fn is_on(&self) -> bool {
+        false
+    }
+
+    pub fn held_hubs(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    pub fn drop_held_gone(&self, _is_device: &dyn Fn(&cbb_core::records::DeviceId) -> bool) {}
+
     pub fn live_status(&self) -> Option<control::Away> {
+        None
+    }
+
+    pub fn live_status_as(&self, _standby: bool) -> Option<control::Away> {
         None
     }
 

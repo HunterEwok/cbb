@@ -240,8 +240,24 @@ impl Service {
                 Ok(name)
             }
             "hub-off" => {
-                let hubs = live.mesh.hub_order();
-                if hubs.len() < 2 && !h.force {
+                // The hubs that serve, as this device knows: itself while
+                // it serves, and those whose offers it keeps. A device
+                // that serves not is told so, rather than that it is the
+                // last hub.
+                let (serving, held) = live.away().map_or((false, Vec::new()), |a| (a.is_hub_now(), a.held_hubs()));
+                if !other && !serving {
+                    return Err(Error::msg("this device is no hub of the group"));
+                }
+                let target_serves = !other || {
+                    let st = live.mesh.state();
+                    writers::find(&st, &h.device).is_ok_and(|d| held.contains(&crate::roster::id_text(&d.id)))
+                };
+                // Whether another serves: as this device knows when the
+                // target is one it knows serves, else by the records'
+                // order of hubs.
+                let others =
+                    if target_serves { usize::from(serving) + held.len() } else { live.mesh.hub_order().len() };
+                if others < 2 && !h.force {
                     return Err(Error::msg(crate::NO_OTHER_HUB));
                 }
                 if other {

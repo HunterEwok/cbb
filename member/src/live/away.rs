@@ -576,7 +576,14 @@ fn serve_hub(w: &Weak<Live>) {
                 // clients connected connect again, and take it with their
                 // next `tunnel`.
                 let r = report.and_then(|r| r.lock().ok().map(|r| r.clone()));
-                if r.is_some_and(|r| away.hub_learned(&r)) {
+                if r.as_ref().is_some_and(|r| away.hub_vless_taken(r)) {
+                    // Registered again with the new user ID.
+                    l.hub.lock().unwrap().take();
+                    let connected = l.mesh.connected();
+                    for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
+                        l.mesh.disconnect(d);
+                    }
+                } else if r.is_some_and(|r| away.hub_learned(&r)) {
                     let connected = l.mesh.connected();
                     for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
                         l.mesh.disconnect(d);

@@ -4,7 +4,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdh"
+	"crypto/hkdf"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +25,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
@@ -54,9 +58,41 @@ func turnTunnelOn(t *testing.T, s *testService) {
 	}
 }
 
+// nameHubs has root, the group's root, name the group's hubs (cbb hubs),
+// which on the records of 0.6 comes before a device serves as one.
+func nameHubs(t *testing.T, root *testService, names ...string) {
+	t.Helper()
+	if _, err := root.do(t, control.Header{Op: control.OpHubs, Hubs: names}, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// keyToward is the public WireGuard key st's device uses toward the hub
+// hubID on the records of 0.6: an X25519 key from HKDF-SHA256 of its
+// tunnel key with the info "cbb tunnel key v1" and the hub's device ID
+// (cbb_core::hubkey::key_for).
+func keyToward(t *testing.T, st *tunnel.State, hubID string) []byte {
+	t.Helper()
+	id, err := hex.DecodeString(hubID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, err := hkdf.Key(sha256.New, st.Key[:], nil, "cbb tunnel key v1"+string(id), 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	priv, err := ecdh.X25519().NewPrivateKey(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return priv.PublicKey().Bytes()
+}
+
 // TestTunnelKeys checks that the hub admits the tunnel key of each member
-// it meets, that each member keeps the hub's offer with the same preshared
-// key, and that the hub drops a member the group removes.
+// it meets, that each member and the hub agree on a preshared key toward it
+// (on the records of 0.6 each member's keys toward a hub, `toward`, and the
+// hub's of each member, `held`), and that the hub drops a member the group
+// removes.
 func TestTunnelKeys(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -67,54 +103,53 @@ func TestTunnelKeys(t *testing.T) {
 	}
 	pairWith(t, pi, deck)
 	pairWith(t, pi, laptop)
+	nameHubs(t, pi, "pi")
 
-	// Make the pi the hub, as cbb will when the user turns it on.
-	pi.stop()
+	// Make the pi the hub, as cbb global hub does.
+	port := freeUDP(t)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	st := tunnelState(t, pi)
 	if st.Group == "" {
 		t.Fatal("the tunnel state names no group")
 	}
-	st.IsHub = true
-	if err := st.Save(pi.dir); err != nil {
-		t.Fatal(err)
-	}
-	pi = restartService(t, &h, pi)
 	piID := pi.status(t).Device
 	hubKey := st.Key.Public()
 
 	for _, s := range []*testService{deck, laptop} {
-		// The members dial the restarted hub again with their backoff,
-		// which a loaded machine stretches past 10 s.
-		waitUpTo(t, 30*time.Second, s.name+" keeps the hub's offer", func() bool {
-			return tunnelState(t, s).Hub(piID) != nil
+		dev := s.status(t).Device
+		waitUpTo(t, 30*time.Second, s.name+" keeps the hub's offer and the hub its key", func() bool {
+			_, held := tunnelState(t, pi).Held[dev]
+			return tunnelState(t, s).Hub(piID) != nil && held
 		})
 		mine := tunnelState(t, s)
 		if got := mine.Hub(piID).PublicKey; got != hubKey {
 			t.Errorf("%s keeps hub key %x, want %x", s.name, got, hubKey)
 		}
-		dev := s.status(t).Device
-		var found bool
-		for _, m := range tunnelState(t, pi).Members {
-			if m.Device == dev {
-				found = true
-				if m.PublicKey != mine.Key.Public() || m.PresharedKey != mine.Hub(piID).PresharedKey || m.PresharedKey != mine.PSK {
-					t.Errorf("the hub keeps %s with other keys", s.name)
-				}
+		held := tunnelState(t, pi).Held[dev]
+		if pub := keyToward(t, mine, piID); !bytes.Equal(held.Key, pub) {
+			t.Errorf("the hub keeps %s with another key", s.name)
+		}
+		var shared bool
+		for _, sent := range mine.Toward[piID].Sent {
+			for _, got := range held.Received {
+				shared = shared || bytes.Equal(sent, got)
 			}
 		}
-		if !found {
-			t.Errorf("the hub does not keep %s", s.name)
+		if !shared {
+			t.Errorf("the hub and %s share no preshared key", s.name)
 		}
 	}
-	if n := len(tunnelState(t, pi).Members); n != 2 {
+	if n := len(tunnelState(t, pi).Held); n != 2 {
 		t.Errorf("the hub keeps %d members, want 2", n)
 	}
 	if len(tunnelState(t, pi).Hubs) != 0 {
 		t.Error("the hub keeps an offer of its own")
 	}
 
-	// A member that is no admin making itself a hub too gets nowhere: the
-	// laptop keeps the offer of the pi, the group's root.
+	// A member that is no hub of the records making itself a hub in its
+	// own state gets nowhere: the laptop keeps the offer of the pi alone.
 	laptopID := laptop.status(t).Device
 	deck.stop()
 	dst := tunnelState(t, deck)
@@ -123,16 +158,21 @@ func TestTunnelKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	deck = restartService(t, &h, deck)
-	waitUpTo(t, 30*time.Second, "the deck takes the laptop's key", func() bool {
-		for _, m := range tunnelState(t, deck).Members {
-			if m.Device == laptopID {
+	waitUpTo(t, 30*time.Second, "the deck meets the laptop again", func() bool {
+		for _, p := range deck.status(t).Peers {
+			if p.ID == laptopID {
 				return true
 			}
 		}
 		return false
 	})
+	// A copy from the deck comes after whatever the deck offered.
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "from the deck"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop has the deck's copy", func() bool { return laptop.paste(t) == "from the deck" })
 	if st := tunnelState(t, laptop); st.Hub(piID) == nil || len(st.Hubs) != 1 {
-		t.Errorf("the laptop took the offer of a member that is no admin")
+		t.Errorf("the laptop took the offer of a member that is no hub")
 	}
 
 	// Removing the laptop drops it from the hub.
@@ -140,12 +180,8 @@ func TestTunnelKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the hub drops the laptop", func() bool {
-		for _, m := range tunnelState(t, pi).Members {
-			if m.Device == laptopID {
-				return false
-			}
-		}
-		return true
+		_, held := tunnelState(t, pi).Held[laptopID]
+		return !held
 	})
 }
 
@@ -195,7 +231,7 @@ func TestTunnelOffByDefault(t *testing.T) {
 	pi = restartService(t, &h, pi)
 	waitFor(t, "the hub meets the deck", func() bool { return len(pi.status(t).Peers) > 0 })
 
-	if n := len(tunnelState(t, pi).Members); n != 0 {
+	if n := len(tunnelState(t, pi).Held); n != 0 {
 		t.Errorf("the hub keeps %d members, want none", n)
 	}
 	if _, err := os.Stat(filepath.Join(deck.dir, tunnel.StateFile)); !errors.Is(err, os.ErrNotExist) {
@@ -212,6 +248,7 @@ func TestAwayFromHome(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
+	nameHubs(t, pi, "pi")
 
 	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "on"}, ""); err == nil || !strings.Contains(err.Error(), "consent") {
 		t.Errorf("away on without consent: %v", err)
@@ -288,6 +325,7 @@ func TestHubKeyRotation(t *testing.T) {
 	pi := startEnv(t, &h, "pi", clock.env())
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
+	nameHubs(t, pi, "pi")
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -367,6 +405,7 @@ func TestAwayObfuscated(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
+	nameHubs(t, pi, "pi")
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -550,6 +589,7 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	pi := startEnv(t, &h, "pi", piEnv...)
 	deck := startEnv(t, &h, "deck", deckEnv...)
 	pairWith(t, pi, deck)
+	nameHubs(t, pi, "pi")
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -574,8 +614,10 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 		b, err := os.ReadFile(state)
 		return err == nil && json.Unmarshal(b, &kept) == nil && len(kept) == 1
 	})
+	// On the records of 0.6 the members keep the period's server
+	// credentials in server-credentials.cbor (src/faces.rs in cbb).
 	waitFor(t, "the deck keeps the credential", func() bool {
-		_, err := os.Stat(filepath.Join(deck.dir, group.CredentialsFileName))
+		_, err := os.Stat(filepath.Join(deck.dir, "server-credentials.cbor"))
 		return err == nil
 	})
 	piID := pi.status(t).Device
@@ -695,6 +737,7 @@ func TestHubVLESSIDTaken(t *testing.T) {
 		if _, err := s.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 			t.Fatal(err)
 		}
+		nameHubs(t, s, s.name)
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
 		}
@@ -1056,6 +1099,7 @@ func TestSeveralHubs(t *testing.T) {
 	pairWith(t, pi, mac)
 	pairWith(t, pi, deck)
 	makeAdmin(t, pi, mac)
+	nameHubs(t, pi, "pi", "mac")
 	for _, s := range []*testService{pi, mac, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
@@ -1073,7 +1117,7 @@ func TestSeveralHubs(t *testing.T) {
 	piID, macID, deckID := pi.status(t).Device, mac.status(t).Device, deck.status(t).Device
 	waitUpTo(t, 30*time.Second, "the deck keeps both hubs' offers", func() bool {
 		st := tunnelState(t, deck)
-		return st.Hub(piID) != nil && st.Hub(macID) != nil && st.PSK == st.Hub(macID).PresharedKey
+		return st.Hub(piID) != nil && st.Hub(macID) != nil
 	})
 	waitUpTo(t, 30*time.Second, "the Mac waits as the pi's client", func() bool {
 		a := mac.status(t).Away
@@ -1085,7 +1129,8 @@ func TestSeveralHubs(t *testing.T) {
 	// The pi shares the clients it admits with the Mac, so the deck may
 	// fail over to the Mac even if the two never met.
 	waitUpTo(t, 30*time.Second, "the Mac knows the deck", func() bool {
-		return slices.ContainsFunc(tunnelState(t, mac).Members, func(m tunnel.Member) bool { return m.Device == deckID })
+		_, ok := tunnelState(t, mac).Held[deckID]
+		return ok
 	})
 
 	deck.stop()
@@ -1127,8 +1172,9 @@ func TestSeveralHubs(t *testing.T) {
 
 // TestMakeHub has the pi, the group's root and not a hub, make the Mac, an
 // admin, a hub of the group: the Mac refuses while sync away from home is
-// off there, then becomes a hub and serves, and the pi keeps its offer. A
-// device that is no admin cannot be made one.
+// off there, then, once the root names it with cbb hubs, becomes a hub and
+// serves, and the pi keeps its offer. A device that is no admin cannot be
+// made one before the root names it.
 func TestMakeHub(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -1139,17 +1185,19 @@ func TestMakeHub(t *testing.T) {
 	makeAdmin(t, pi, mac)
 	macID := mac.status(t).Device
 
+	// On the records of 0.6 every computer with the hub right may be
+	// named one of the group's hubs.
 	for _, d := range pi.devices(t) {
-		if want := d.Name == "pi" || d.Name == "mac"; d.MayHub != want {
+		if !d.MayHub {
 			t.Errorf("%s: may_hub %v", d.Name, d.MayHub)
 		}
 	}
 	port := freeUDP(t)
 	addr := []string{fmt.Sprintf("127.0.0.1:%d", port)}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "turn it on there first") {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "sync away from home is off here") {
 		t.Errorf("a Mac without sync away from home became a hub: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "make it an admin first") {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
 		t.Errorf("a device that is no admin became a hub: %v", err)
 	}
 	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil {
@@ -1174,6 +1222,7 @@ func TestMakeHub(t *testing.T) {
 	waitUpTo(t, 30*time.Second, "the pi and the Mac meet again", func() bool {
 		return len(pi.status(t).Peers) == 2
 	})
+	nameHubs(t, pi, "mac")
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1183,16 +1232,16 @@ func TestMakeHub(t *testing.T) {
 	if a := pi.status(t).Away; a == nil || a.Hub {
 		t.Errorf("the pi became a hub itself: %+v", a)
 	}
-	if tunnelState(t, pi).Hub(macID) == nil {
-		t.Error("the pi did not keep the Mac's offer")
-	}
-	var pid string
-	for _, c := range tunnelState(t, mac).Members {
-		pid = c.Device
-	}
-	if pid != pi.status(t).Device {
-		t.Errorf("the Mac's clients: %+v", tunnelState(t, mac).Members)
-	}
+	// The Mac offers its tunnel to the pi as a member, which takes it.
+	piID := pi.status(t).Device
+	waitUpTo(t, 30*time.Second, "the pi keeps the Mac's offer and the Mac admits the pi", func() bool {
+		if tunnelState(t, pi).Hub(macID) == nil {
+			return false
+		}
+		held := tunnelState(t, mac).Held
+		_, ok := held[piID]
+		return len(held) == 1 && ok
+	})
 	// Both list the Mac as the group's hub, and only the Mac.
 	for _, s := range []*testService{pi, mac} {
 		for _, d := range s.devices(t) {
@@ -1218,7 +1267,7 @@ func TestForwardOnlyHub(t *testing.T) {
 	makeAdmin(t, pi, mac)
 	port := freeUDP(t)
 	addr := []string{fmt.Sprintf("127.0.0.1:%d", port)}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr, ForwardOnly: true}, ""); err == nil || !strings.Contains(err.Error(), "is an admin") {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr, ForwardOnly: true}, ""); err == nil || !strings.Contains(err.Error(), "neither an admin nor the root") {
 		t.Errorf("an admin was made a hub that only passes copies on: %v", err)
 	}
 	for _, s := range []*testService{pi, deck} {
@@ -1276,6 +1325,7 @@ func TestStopHub(t *testing.T) {
 	pairWith(t, pi, mac)
 	pairWith(t, pi, deck)
 	makeAdmin(t, pi, mac)
+	nameHubs(t, pi, "pi", "mac")
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)

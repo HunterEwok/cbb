@@ -82,9 +82,10 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     // Neither invites: an invitation comes from the root or an admin.
     let e = invite_now(&a, &la, |_| {}).unwrap_err();
     assert!(e.message().contains("only the group's root or an admin adds devices"), "{}", e.message());
-    // No hub to stop or move here.
+    // No hub to stop or move here: a device that serves not is told so,
+    // with or without -yes, rather than that it is the last hub.
     let e = ask(&a, "away", |h| h.name = "hub-off".into()).unwrap_err();
-    assert!(e.message().contains("no other hub"), "{}", e.message());
+    assert!(e.message().contains("no hub of the group"), "{}", e.message());
     let e = ask(&a, "away", |h| (h.name, h.force) = ("hub-off".into(), true)).unwrap_err();
     assert!(e.message().contains("no hub of the group"), "{}", e.message());
     let e = ask(&a, "away", |h| h.name = "move".into()).unwrap_err();

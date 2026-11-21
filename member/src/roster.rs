@@ -100,7 +100,8 @@ pub struct Me {
 fn from_record(d: &DeviceState, state: &State, is_admin: &dyn Fn(&KeyHash) -> bool) -> Device {
     // An admin key the records name that the set does not count as an
     // admin's (a root's, or the recovery key's) shows as none.
-    let admin = d.admin.is_some_and(|h| is_admin(&h));
+    // A frozen admin is no admin until the freeze ends (core group.rs).
+    let admin = !d.frozen && d.admin.is_some_and(|h| is_admin(&h));
     Device {
         id: id_text(&d.id),
         name: d.name.clone(),
@@ -157,11 +158,13 @@ fn devices_in(
     hellos: &HashMap<DeviceId, Hello>,
     now_ms: i64,
 ) -> Vec<Device> {
+    let order = state.hub_order();
     state
         .devices
         .iter()
         .map(|rec| {
             let mut d = from_record(rec, state, is_admin);
+            d.hub_rank = order.iter().position(|h| *h == rec.id).map_or(0, |i| i + 1);
             if rec.id == me.id {
                 d.this = true;
                 d.online = true;

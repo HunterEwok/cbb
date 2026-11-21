@@ -57,6 +57,14 @@ pub fn home_window(now_ms: u64, lifetime: std::time::Duration) -> (Open, String)
     (open, digits)
 }
 
+/// The clock of a home window (`home_window`, `Open::may_use`): this
+/// device's running time in milliseconds (`crate::uptime::now`), so that a
+/// wall clock set while the window is open neither ends it nor stretches
+/// it (docs/protocol.md, "Pairing in 0.6").
+pub fn home_window_ms() -> u64 {
+    u64::try_from(crate::uptime::now().as_millis()).unwrap_or(u64::MAX)
+}
+
 /// Runs the member's side of a pairing at home over its TLS session, by
 /// the home window `open`, which counts the attempt. Gives what the
 /// joiner said of itself once it is in the group.
@@ -127,9 +135,14 @@ pub fn admit(
     let mut stream = tls::Stream::new(session, sock);
     let joiner_key = Key::es256(joiner.to_vec());
     let now = || crate::uptime::wall_ms().max(0) as u64;
+    // A home window counts five minutes of this device's running time,
+    // which a wall clock set ahead does not move (`home_window_ms`); a
+    // remote invitation's end is a time of day the inviter wrote.
+    let home = way.network == Network::Home;
+    let window_now = move || if home { home_window_ms() } else { now() };
     let mut statement = None;
     let mut pop_holds = false;
-    let info = join::member(&mut stream, session_m, way, &now, &mut |info, s| {
+    let info = join::member(&mut stream, session_m, way, &window_now, &mut |info, s| {
         let asked = Asked {
             info,
             device: joiner_key.device_id(),

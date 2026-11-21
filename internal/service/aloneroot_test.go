@@ -25,7 +25,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -117,12 +116,67 @@ func runCLI(cli, socket, stdin string, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// cliPair has the root at socket open a pairing window with cbb pair and
+// joiner join it by the line of the QR code's text that cbb pair prints,
+// at address (the root has no mDNS here), then waits for cbb pair to say
+// that joiner joined.
+func cliPair(t *testing.T, cli, socket, address string, joiner *testService) {
+	t.Helper()
+	cmd := exec.Command(cli, "pair")
+	cmd.Env = append(os.Environ(), "CBB_SOCKET="+socket)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	lines := make(chan string, 64)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	var link string
+	timeout := time.After(20 * time.Second)
+	for link == "" {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				t.Fatalf("cbb pair ended without the QR code's text: %s", stderr.String())
+			}
+			if l = strings.TrimSpace(l); strings.HasPrefix(l, "cbb://pair?") {
+				link = l
+			}
+		case <-timeout:
+			t.Fatal("cbb pair showed no line of the QR code's text")
+		}
+	}
+	if _, err := joiner.do(t, control.Header{Op: control.OpJoin, Code: link, Address: address}, ""); err != nil {
+		t.Fatalf("the join: %v", err)
+	}
+	for l := range lines {
+		if strings.Contains(l, joiner.name+" joined the group") {
+			return
+		}
+	}
+	t.Fatalf("cbb pair did not say %s joined: %s", joiner.name, stderr.String())
+}
+
 // TestAloneRoot: the Rust service makes a group with cbb new and is its
-// root (docs/design.md, "The service and its helper"): it admits a Go
-// computer by the QR code that computer shows (cbb pair -qr), syncs with
-// it, renames it, makes it an admin, freezes and unfreezes it, sets the key
-// level and removes it, each through the Go command line, and the Go
-// computer takes each record. CBB_TEST_ALONE names the Rust member's binary.
+// root (docs/design.md, "The service and its helper"): it admits a computer
+// through its pairing window (cbb pair), syncs with it, renames it, makes
+// it an admin, freezes and unfreezes it, sets the key level and removes it,
+// each through the command line, and the computer takes each record; on
+// the records of 0.6 a handover and a takeover's delay are refused, the root
+// changing only with the recovery key, and the removed computer is refused
+// by the group rather than told. CBB_TEST_ALONE names the Rust member's
+// binary.
 func TestAloneRoot(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
@@ -133,7 +187,14 @@ func TestAloneRoot(t *testing.T) {
 	}
 	cli := cbbCLI(t)
 	dir := t.TempDir()
-	root := startAlone(t, bin, dir, "-no-mdns")
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := strconv.Itoa(free.Addr().(*net.TCPAddr).Port)
+	free.Close()
+	address := net.JoinHostPort("127.0.0.1", port)
+	root := startAlone(t, bin, dir, "-no-mdns", "-port", port)
 	cbb := func(stdin string, args ...string) (string, error) {
 		t.Helper()
 		return runCLI(cli, root.socket, stdin, args...)
@@ -148,12 +209,16 @@ func TestAloneRoot(t *testing.T) {
 	}
 
 	out := must("", "new")
-	if !strings.Contains(out, "Created the group") || !strings.Contains(out, "key level is files") {
+	if !strings.Contains(out, "this computer is its root") || !strings.Contains(out, "Its root key is a file here") {
 		t.Fatalf("cbb new:\n%s", out)
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
-	if err != nil || !strings.Contains(string(raw), `"group_ca_key"`) {
-		t.Fatalf("the identity file keeps no root key: %v", err)
+	// keys.json (src/own.rs) keeps the root key beside the member key.
+	var keys struct {
+		Root json.RawMessage `json:"root"`
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "keys.json"))
+	if err != nil || json.Unmarshal(raw, &keys) != nil || len(keys.Root) == 0 {
+		t.Fatalf("the keys file keeps no root key: %v", err)
 	}
 	if out, err := cbb("", "new"); err == nil || !strings.Contains(out, "already in a group") {
 		t.Errorf("a second cbb new: %v\n%s", err, out)
@@ -163,28 +228,11 @@ func TestAloneRoot(t *testing.T) {
 		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "member"
 	})
 
-	// A Go computer shows its QR code and waits; the Rust root admits it.
+	// A computer joins the Rust root's pairing window.
 	var h hub
 	laptop := startService(t, &h, "laptop")
-	jc := laptop.dial(t)
-	defer jc.Close()
-	code := newCode(t)
-	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
-	if err != nil || len(m.Addrs) == 0 {
-		t.Fatalf("the laptop's listening join: %v, %+v", err, m)
-	}
-	qr := phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
-	if out := must(qr+"\n", "pair", "-qr"); !strings.Contains(out, "laptop joined the group") {
-		t.Fatalf("cbb pair -qr:\n%s", out)
-	}
-	if m, err := jc.Receive(); err != nil || m.Error != "" {
-		t.Fatalf("the laptop's join ended with %+v, %v", m, err)
-	}
+	cliPair(t, cli, root.socket, address, laptop)
 	waitFor(t, "the laptop in the group", func() bool { return laptop.status(t).Group != "" })
-
-	// The root dials the laptop, which listens now.
-	root.stop()
-	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
 	waitFor(t, "the root and the laptop connected", func() bool {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
@@ -257,12 +305,25 @@ func TestAloneRoot(t *testing.T) {
 	waitFor(t, "the laptop an admin", func() bool { return listed("desk", true)() && laptop.isAdmin(t) })
 
 	must("", "freeze", "desk")
-	waitFor(t, "the laptop frozen", listed("desk", false))
+	// A frozen device is refused and learns nothing: the root lists it as
+	// no admin, and the connection ends.
+	waitFor(t, "the root lists the laptop frozen", func() bool {
+		m, err := root.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.Name == "desk" {
+				return d.Frozen && !d.Admin
+			}
+		}
+		return false
+	})
 	if out, err := cbb("", "freeze", "desk"); err == nil || !strings.Contains(out, "frozen already") {
 		t.Errorf("a second freeze: %v\n%s", err, out)
 	}
 	root.stop()
-	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
+	root = startAlone(t, bin, dir, "-no-mdns", "-port", port, "-peer", laptop.addr())
 	// The control socket answers while the service still loads its group.
 	waitFor(t, "the root back in its group", func() bool {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
@@ -287,21 +348,30 @@ func TestAloneRoot(t *testing.T) {
 	if out, err := cbb("", "remove", "nobody"); err == nil || !strings.Contains(out, `no device "nobody"`) {
 		t.Errorf("cbb remove of an unknown device: %v\n%s", err, out)
 	}
-	// The group's settings and a handover.
+	// The group's settings; the root changes only with the recovery key.
 	must("", "incoming", "2m")
 	waitFor(t, "the laptop takes the incoming time", func() bool { return laptop.status(t).IncomingMS == 120000 })
-	if out := must("", "takeover", "-delay", "0s"); !strings.Contains(out, "now waits 0s") {
-		t.Errorf("cbb takeover -delay:\n%s", out)
+	if out, err := cbb("", "takeover", "-delay", "0s"); err == nil || !strings.Contains(out, "cbb recovery") {
+		t.Errorf("cbb takeover -delay on the records of 0.6: %v\n%s", err, out)
 	}
-	if out, err := cbb("", "takeover", "-delay", "200h"); err == nil || !strings.Contains(out, "from 0s to 168h") {
-		t.Errorf("a takeover delay too long: %v\n%s", err, out)
-	}
-	if out := must("", "handover", "desk"); !strings.Contains(out, "Handed the group over to desk") {
-		t.Errorf("cbb handover:\n%s", out)
+	if out, err := cbb("", "handover", "desk"); err == nil || !strings.Contains(out, "cbb recovery") {
+		t.Errorf("cbb handover on the records of 0.6: %v\n%s", err, out)
 	}
 
 	must("", "remove", "desk")
-	waitFor(t, "the laptop removed", func() bool { return laptop.status(t).Removed })
+	waitFor(t, "the root no longer lists the laptop", func() bool {
+		m, err := root.do(t, control.Header{Op: control.OpDevices}, "")
+		if err != nil {
+			return false
+		}
+		for _, d := range m.Devices {
+			if d.Name == "desk" {
+				return false
+			}
+		}
+		return true
+	})
+	waitFor(t, "the laptop refused", func() bool { return len(laptop.status(t).Peers) == 0 })
 }
 
 // TestAloneRootWindow: the Rust root opens a pairing window with cbb pair,

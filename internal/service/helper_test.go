@@ -66,8 +66,8 @@ func running(path string) bool {
 }
 
 // TestAloneTPM: with cbb-helper beside it, the Rust member joins with its
-// device key in the TPM, swtpm here, as a Go member does: identity.json
-// keeps the TPM's blob and no key, and the member's handshakes and copies
+// member key in the TPM, swtpm here: keys.json keeps the TPM's blob and
+// no key, and the member's handshakes and copies
 // are signed through the helper.
 func TestAloneTPM(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
@@ -93,15 +93,17 @@ func TestAloneTPM(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	dir := joinAloneEnv(t, bin, pi, []string{sim})
 	var f struct {
-		Key    []byte          `json:"key"`
-		KeyTPM json.RawMessage `json:"key_tpm"`
+		Member struct {
+			PKCS8 string          `json:"pkcs8"`
+			TPM   json.RawMessage `json:"tpm"`
+		} `json:"member"`
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "keys.json")) // src/own.rs
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(raw, &f); err != nil || len(f.Key) != 0 || len(f.KeyTPM) == 0 {
-		t.Fatalf("identity.json keeps the key %d bytes, the TPM blob %q (%v)", len(f.Key), f.KeyTPM, err)
+	if err := json.Unmarshal(raw, &f); err != nil || f.Member.PKCS8 != "" || len(f.Member.TPM) == 0 {
+		t.Fatalf("keys.json keeps the key %d characters, the TPM blob %q (%v)", len(f.Member.PKCS8), f.Member.TPM, err)
 	}
 	small := startAloneEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the Rust member connected", func() bool {
@@ -113,8 +115,9 @@ func TestAloneTPM(t *testing.T) {
 	}
 	waitFor(t, "pi has the copy", func() bool { return pi.paste(t) == "signed in the TPM" })
 
-	// The secrets in files the TPM seals too, as Go keeps them: the key
-	// for sealed messages and the tunnel key, which a restart opens again.
+	// The secrets in files the TPM seals too: the local key, under which
+	// the sealing keys of each epoch are kept (src/set.rs, src/epochs.rs),
+	// and the tunnel key, which a restart opens again.
 	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatalf("cbb global on: %v", err)
 	}
@@ -126,7 +129,7 @@ func TestAloneTPM(t *testing.T) {
 			t.Errorf("%s keeps %q in the file or not %q in the TPM (%v):\n%s", name, plain, blob, err, raw)
 		}
 	}
-	sealed("seal.json", "secret", "tpm")
+	sealed("local.json", "secret", "tpm")
 	sealed("tunnel.json", "key", "key_tpm")
 	small.stop()
 	small = startAloneEnv(t, bin, dir, []string{sim}, "-no-mdns", "-peer", pi.addr())

@@ -4,12 +4,30 @@
 package service
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 )
+
+// offersAdminKey reports whether s keeps an admin key beside its member key
+// in keys.json (src/own.rs in cbb), which it offers the root as it pairs.
+func offersAdminKey(t *testing.T, s *testService) bool {
+	t.Helper()
+	var keys struct {
+		Member json.RawMessage `json:"member"`
+		Admin  json.RawMessage `json:"admin"`
+	}
+	raw, err := os.ReadFile(filepath.Join(s.dir, "keys.json"))
+	if err != nil || json.Unmarshal(raw, &keys) != nil || len(keys.Member) == 0 {
+		t.Fatalf("%s's keys.json: %v", s.name, err)
+	}
+	return len(keys.Admin) != 0
+}
 
 // TestContainerHoldsNoKeys checks a member in a container: it makes no
 // group, offers no admin key, so the root cannot make it an admin, and so
@@ -27,16 +45,16 @@ func TestContainerHoldsNoKeys(t *testing.T) {
 	}
 	pairWith(t, pi, nas)
 	waitFor(t, "pi and nas connected", func() bool { return len(pi.status(t).Peers) == 1 })
-	if id, err := group.Load(nas.dir); err != nil || id.AdminKey != nil {
-		t.Fatalf("the container made an admin key: %v", err)
+	if offersAdminKey(t, nas) {
+		t.Fatal("the container made an admin key")
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "nas"}, ""); err == nil || !strings.Contains(err.Error(), "offers no admin key") {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "nas"}, ""); err == nil || !strings.Contains(err.Error(), "offered this device no admin key") {
 		t.Fatalf("making the container an admin: %v", err)
 	}
 	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root or an admin") {
+	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
 		t.Fatalf("the container as the hub: %v", err)
 	}
 
@@ -63,8 +81,8 @@ func TestRootlessHoldsNoKeys(t *testing.T) {
 	}
 	pairWith(t, pi, box)
 	waitFor(t, "pi and box connected", func() bool { return len(pi.status(t).Peers) == 1 })
-	if id, err := group.Load(box.dir); err != nil || id.AdminKey != nil {
-		t.Fatalf("the rootless install made an admin key: %v", err)
+	if offersAdminKey(t, box) {
+		t.Fatal("the rootless install made an admin key")
 	}
 	waitFor(t, "box recorded as rootless", func() bool {
 		for _, d := range pi.devices(t) {
@@ -80,7 +98,7 @@ func TestRootlessHoldsNoKeys(t *testing.T) {
 	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root or an admin") {
+	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
 		t.Fatalf("the rootless install as the hub: %v", err)
 	}
 }

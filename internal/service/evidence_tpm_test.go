@@ -105,20 +105,22 @@ func tpmPair(t *testing.T, h *hub, roots []*x509.Certificate) (pi, deck *testSer
 	return pi, deck
 }
 
-// keyInTPM checks that identity.json keeps s's member key as the TPM's
-// blob, and no key.
+// keyInTPM checks that keys.json (src/own.rs in cbb) keeps s's member key
+// as the TPM's blob, and no key.
 func keyInTPM(t *testing.T, s *testService) {
 	t.Helper()
 	var f struct {
-		Key    []byte          `json:"key"`
-		KeyTPM json.RawMessage `json:"key_tpm"`
+		Member struct {
+			PKCS8 string          `json:"pkcs8"`
+			TPM   json.RawMessage `json:"tpm"`
+		} `json:"member"`
 	}
-	raw, err := os.ReadFile(filepath.Join(s.dir, "identity.json"))
+	raw, err := os.ReadFile(filepath.Join(s.dir, "keys.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(raw, &f); err != nil || len(f.Key) != 0 || len(f.KeyTPM) == 0 {
-		t.Fatalf("%s's member key is not in the TPM: identity.json keeps the key %d bytes, the TPM blob %q (%v)", s.name, len(f.Key), f.KeyTPM, err)
+	if err := json.Unmarshal(raw, &f); err != nil || f.Member.PKCS8 != "" || len(f.Member.TPM) == 0 {
+		t.Fatalf("%s's member key is not in the TPM: keys.json keeps the key %d characters, the TPM blob %q (%v)", s.name, len(f.Member.PKCS8), f.Member.TPM, err)
 	}
 }
 

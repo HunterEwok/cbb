@@ -149,8 +149,9 @@ pub fn over_with(
     info.caps = me.caps;
     // A computer that may be an admin offers its admin key with its proof
     // over this session: the root keeps it, and cbb admin there makes it
-    // an admin later. One installed without root never is (D-79).
-    if me.caps & cbb_core::records::body::CAP_ADMIN != 0 && !crate::rootless::is() {
+    // an admin later. One installed without root never is (D-79), nor one
+    // in a container without its user's CBB_KEYS_IN_FILE=yes.
+    if me.caps & cbb_core::records::body::CAP_ADMIN != 0 && crate::admin::keys_allowed().is_ok() {
         let admin = match own.admin.clone() {
             Some(k) => k,
             None => own.make(dir, crate::own::Which::Admin)?,
@@ -199,7 +200,8 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let tx = Mutex::new(tx);
         let d2 = desk.clone();
-        let (open, digits) = crate::admitting::home_window(crate::uptime::wall_ms() as u64, Duration::from_secs(300));
+        let (open, digits) =
+            crate::admitting::home_window(crate::admitting::home_window_ms(), Duration::from_secs(300));
         let id = open.invitation.id;
         let open = Mutex::new(open);
         desk.on_pair(Some(Box::new(move |sock, s, x| {
