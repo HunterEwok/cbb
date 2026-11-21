@@ -13,6 +13,7 @@ fn problems_in_short() {
     assert!(problem("its key is not the one given", false).contains("-key"));
     assert!(problem("reaching the relay: refused", false).contains("could not be reached"));
     assert!(problem("the relay's tunnel does not answer", false).contains("UDP port"));
+    assert!(problem("the group's credentials do not list this device yet", false).contains("credentials"));
     assert!(problem("other", false).contains("failed"));
 }
 

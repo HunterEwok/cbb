@@ -301,6 +301,37 @@ impl State {
         self.devices.binary_search_by(|d| d.id.cmp(id)).ok().and_then(|i| self.devices.get(i))
     }
 
+    /// Whether the device may be a hub: a device of the group, not frozen,
+    /// that holds an admin key or that the root's hubs record names.
+    pub fn may_be_hub(&self, id: &DeviceId) -> bool {
+        self.device(id).is_some_and(|d| !d.frozen && (d.admin.is_some() || self.hubs.contains(id)))
+    }
+
+    /// The devices that may be the group's hubs, in the order in which
+    /// they serve (docs/protocol.md, section 11, "Several hubs"): those of
+    /// the root's hubs record first, in its order, then the other devices
+    /// with an admin key: the computers, then the phones, in each part the
+    /// root's own device first, then by device ID. Frozen devices are left
+    /// out. Every member and the apps derive the same order from the
+    /// records alone.
+    pub fn hub_order(&self) -> Vec<DeviceId> {
+        let mut out: Vec<DeviceId> = Vec::new();
+        for id in &self.hubs {
+            if self.may_be_hub(id) && !out.contains(id) {
+                out.push(*id);
+            }
+        }
+        let mut rest: Vec<(bool, bool, DeviceId)> = self
+            .devices
+            .iter()
+            .filter(|d| !d.frozen && d.admin.is_some() && !out.contains(&d.id))
+            .map(|d| (d.role == super::body::ROLE_PHONE, self.root_device != Some(d.id), d.id))
+            .collect();
+        rest.sort();
+        out.extend(rest.into_iter().map(|(_, _, id)| id));
+        out
+    }
+
     /// Reports whether a root's key signs: its records count whatever the
     /// stop (rule 8).
     pub fn is_root(&self, k: &KeyHash) -> bool {

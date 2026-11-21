@@ -2575,7 +2575,7 @@ jobs:
           # Each Go package runs as a test binary built with -cover, with
           # GOCOVERDIR for it and the helpers it starts.
           mkdir -p target/go-tests
-          for p in service connector relay tunnel; do
+          for p in service connector tunnel; do
             go test -c -cover -coverpkg="$COVERPKG" -o "target/go-tests/$p.test" "./internal/$p"
           done
       - name: the Rust build into this pull request's cache
@@ -2680,16 +2680,12 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
-      # The relay and the phones' tunnel, which the rust job checks from
-      # outside, count here too: their Go tests run the same instrumented
-      # build.
-      - name: the relay and the phones' tunnel, from Go's side, for the coverage
+      # The phones' tunnel, which the rust job checks from outside, counts
+      # here too: its Go tests run the same instrumented build.
+      - name: the phones' tunnel, from Go's side, for the coverage
         if: matrix.part == 'others'
         run: |
-          (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
-            "$GITHUB_WORKSPACE/target/go-tests/relay.test" -test.timeout 10m -test.v)
           (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
-            CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
             "$GITHUB_WORKSPACE/target/go-tests/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         if: matrix.part == 'others'
@@ -3026,10 +3022,8 @@ jobs:
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
         run: |
           cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-          CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" \
+          CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" \
             go test -race ./internal/tunnel -run TestRustPhone -v
-      - name: the relay in Rust, checked from outside by a device's side in Go
-        run: CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v
   esp32:
     name: the core on the ESP32
     needs: changes

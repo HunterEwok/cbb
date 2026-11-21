@@ -17,6 +17,7 @@
 
 pub mod approve;
 pub mod decide;
+pub mod guest;
 pub mod info;
 pub mod intro;
 pub mod invitation;

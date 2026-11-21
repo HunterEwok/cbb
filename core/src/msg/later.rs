@@ -99,6 +99,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::OFFER, 7, Refuse, "the hub's next key"),
     o(&t::OFFER, 8, Refuse, "the confirmation tag"),
     o(&t::OFFER, 9, Refuse, "endpoint keys: absent would fall back to the offer's key"),
+    o(&t::OFFER, 10, Refuse, "the settings that go with the next key"),
+    o(&t::OFFER, 11, Refuse, "the way over VLESS that goes with the next key"),
     o(&t::HUBS, 2, Refuse, "stopped: a mode"),
     o(&t::HUBS, 3, Refuse, "serving: a mode"),
     o(&t::GUEST, 4, Refuse, "the guest's pre-shared key"),
@@ -110,6 +112,7 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::GUEST, 10, Refuse, "the device"),
     o(&t::GUEST, 11, Refuse, "an invitation's ID"),
     o(&t::CREDENTIALS, 3, Unusable, "settings for a later version: never applied by 0.6"),
+    o(&t::CREDENTIALS, 5, Refuse, "the server's address"),
     // Requests that wait.
     o(&t::REQUEST, 5, Absent, "how long it waited: the request is shown without it"),
     o(&t::INFO, 2, Refuse, "the system: a registry number, any in range kept"),
@@ -165,6 +168,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&m::REACH, 2, Refuse, "absent reaches nobody"),
     o(&m::WANT, 2, Refuse, "absent asks for no record"),
     o(&m::WANT, 3, Refuse, "absent asks for no list"),
+    o(&m::EVIDENCE_ANDROID_DATA, 1, Refuse, "absent is a key made outside a group, which the root takes"),
+    o(&m::EVIDENCE_TPM_DATA, 1, Refuse, "absent is a key made outside a group, which the root takes"),
 ];
 
 /// What a value out of range of field n of the table reads as: its row, or

@@ -1157,7 +1157,8 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let tx = Mutex::new(tx);
         let d2 = desk.clone();
-        let (open, digits) = crate::admitting::home_window(crate::uptime::wall_ms() as u64, Duration::from_secs(300));
+        let (open, digits) =
+            crate::admitting::home_window(crate::admitting::home_window_ms(), Duration::from_secs(300));
         let id = open.invitation.id;
         let open = Mutex::new(open);
         desk.on_pair(Some(Box::new(move |sock, s, x| {

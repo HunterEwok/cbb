@@ -169,6 +169,9 @@ type Header struct {
 	// Below names, in the answer to key-level, the admins and hubs whose
 	// keys the new level would not let in: they stay until removed.
 	Below []string `json:"below,omitempty"`
+	// Leave, in recover, names the devices that do not stay in the group,
+	// by name or device ID, such as a lost root.
+	Leave []string `json:"leave,omitempty"`
 
 	// Keyboard, in keyboard on, are the Bluetooth keyboard's settings.
 	Keyboard *Keyboard `json:"keyboard,omitempty"`
@@ -188,6 +191,7 @@ type Header struct {
 	ForwarderKey string   `json:"forwarder_key,omitempty"`
 	Relay        string   `json:"relay,omitempty"` // away relay: the relay's address, with its key in RelayKey
 	RelayKey     string   `json:"relay_key,omitempty"`
+	Relays       []string `json:"relays,omitempty"`        // away relay: the relays after the first, each "address pin", which only the root of a group of 0.6 takes
 	ObfuscateOff bool     `json:"obfuscate_off,omitempty"` // away hub: plain WireGuard, without the AmneziaWG a hub offers by default
 	VLESSOff     bool     `json:"vless_off,omitempty"`     // away hub: no VLESS at the forwarder, which a hub with one asks for by default
 	Keep         bool     `json:"keep,omitempty"`          // away hub: keep the hub's addresses, port and forwarder where the message gives none
@@ -289,6 +293,10 @@ type WhyReason struct {
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
+	// RelayGroup is the group as a blind relay of the owner's lists it:
+	// its root key and the two halves of its recovery key in hex,
+	// separated by colons (cbb relay -group, cbb status -relay).
+	RelayGroup string `json:"relay_group,omitempty"`
 	// LeftOldGroup says that the device left a group made before 0.6 when
 	// the service started, since 0.6 does not read its records: the group
 	// is set up again.
@@ -537,6 +545,10 @@ type Device struct {
 	// the copies on: none is sealed to it (docs/protocol.md, section 11).
 	ForwardOnly bool `json:"forward_only,omitempty"`
 	Hub         bool `json:"hub,omitempty"` // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
+	// HubRank is its place in the group's order of hubs, from 1, which
+	// every member derives from the records alone (docs/protocol.md,
+	// section 11, "Several hubs"); 0 when it may not serve.
+	HubRank int `json:"hub_rank,omitempty"`
 }
 
 // Can reports whether d is a member with the capability c.

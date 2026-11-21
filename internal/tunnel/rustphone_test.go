@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/tls"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -19,16 +19,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/HunterEwok/cbb/internal/blind"
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/invite"
-	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -392,20 +390,15 @@ func TestRustPhoneHubInvite(t *testing.T) {
 	}
 }
 
-// TestRustPhoneHubForwarder registers the Rust hub with a Go forwarder, as a
-// root phone does with its member key and its device record, and a Go
-// client reaches the hub's member port through the forwarder; a hub whose
-// records do not make it the root is refused.
-func TestRustPhoneHubForwarder(t *testing.T) {
-	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
-	}
+// startForwarder serves a Go forwarder on the loopback until the test ends.
+func startForwarder(t *testing.T, cfg forward.Config) (*forward.Forwarder, []byte) {
+	t.Helper()
 	fcert, err := forward.NewCert()
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: fcert, Logf: t.Logf})
+	cfg.Listen, cfg.Cert, cfg.Logf = "127.0.0.1:0", fcert, t.Logf
+	f, err := forward.Listen(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,103 +408,86 @@ func TestRustPhoneHubForwarder(t *testing.T) {
 		defer close(served)
 		f.Serve(ctx)
 	}()
-	defer func() {
+	t.Cleanup(func() {
 		cancel()
 		<-served
-	}()
-
-	h := startRustRootHub(t, startRustPhone(t, bin))
+	})
 	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
+	return f, pin
+}
 
-	// Without its device record the phone is a plain member.
-	h.register(f.Addr().String(), pin, nil, "")
-	h.waitFor("a hub that is no admin", func(r map[string]any) bool {
+// TestRustPhoneHubForwarder registers the Rust hub with a Go forwarder by
+// cbb-forward/3, as a phone that is its group's hub does, and a Go client
+// reaches the hub's member port through the forwarder: until the period's
+// hubs' credential lists its server key the hub waits and dials nothing,
+// and a credential that another key signed for the period's tag after the
+// forwarder saw the first one is refused.
+func TestRustPhoneHubForwarder(t *testing.T) {
+	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
+	}
+	f, pin := startForwarder(t, forward.Config{})
+	h := startRustRootHub(t, startRustPhone(t, bin))
+
+	h.register(f.Addr().String(), pin, "")
+	h.waitFor("a hub without its credential", func(r map[string]any) bool {
 		e, _ := r["error"].(string)
-		return strings.Contains(e, "neither")
+		return strings.Contains(e, "do not list this hub yet")
 	})
 
-	h.register(f.Addr().String(), pin, []group.Record{h.own}, "")
+	h.listed(1)
 	h.waitFor("the forwarder never saw the hub", func(r map[string]any) bool {
 		seen, _ := r["seen"].(string)
 		ap, err := netip.ParseAddrPort(seen)
 		return err == nil && ap.Port() == h.udpPort
 	})
 	h.echoThrough(f.Addr(), "through the forwarder")
+
+	// Another period key for the same tag.
+	h.period, _ = group.NewKey()
+	h.listed(2)
+	h.register(f.Addr().String(), pin, "")
+	h.waitFor("a credential of another period key", func(r map[string]any) bool {
+		e, _ := r["error"].(string)
+		return strings.Contains(e, "first")
+	})
 	h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
 }
 
-// TestRustPhoneHubCredentials: the phone's hub registers with a Go
-// forwarder by the period's hubs' credential that lists its server key, in
-// place of its member certificate and the records (docs/protocol.md,
-// section 18), as a computer's hub does: the forwarder then knows neither
-// the device nor the group. A credential that does not list the key is
-// refused, and a client gets through the forwarder.
+// TestRustPhoneHubCredentials: the phone's hub takes only the period's
+// hubs' credential alone that lists its server key (docs/protocol.md,
+// section 13): a credential that lists another key, or the period
+// credential beside it, is refused before anything is dialled; with its
+// own the hub registers, the forwarder then knows neither the device nor
+// the group, and a client gets through the forwarder.
 func TestRustPhoneHubCredentials(t *testing.T) {
 	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
 	}
-	fcert, err := forward.NewCert()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: fcert, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		f.Serve(ctx)
-	}()
-	defer func() {
-		cancel()
-		<-served
-	}()
-
+	f, pin := startForwarder(t, forward.Config{})
 	h := startRustRootHub(t, startRustPhone(t, bin))
-	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
-	// Without records the member certificate does not make it a hub.
-	h.register(f.Addr().String(), pin, nil, "")
-	h.waitFor("a hub that is no admin", func(r map[string]any) bool {
-		e, _ := r["error"].(string)
-		return strings.Contains(e, "neither")
-	})
-
-	now := time.Now()
-	tag, _ := group.NewPeriodTag()
-	periodKey, _ := group.NewKey()
-	period, err := group.SignPeriod(group.Tag(h.root.Cert), tag, &periodKey.PublicKey, 1, now, h.root.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pb, _ := period.Open()
-	server, _ := group.NewKey()
 	other, _ := group.NewKey()
-	hubs, err := group.SignHubs(pb, []group.KeyHash{group.PublicKeyHash(&server.PublicKey)}, nil, 1, periodKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	notListed, err := group.SignHubs(pb, []group.KeyHash{group.PublicKeyHash(&other.PublicKey)}, nil, 2, periodKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pkcs8, err := x509.MarshalPKCS8PrivateKey(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-	point, err := server.PublicKey.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	creds := func(c group.Credential) map[string]any {
-		return map[string]any{"op": "hub_credentials", "id": h.id, "public": point, "test_key": pkcs8, "credentials": []group.Credential{c}}
-	}
-	if _, err := h.p.try(t, creds(notListed)); err == nil {
+	notListed := h.hubsCredential(1, other)
+	if _, err := h.p.try(t, h.credentialsRequest(notListed)); err == nil {
 		t.Error("a hubs' credential that does not list the hub's server key")
 	}
-	h.p.call(t, creds(hubs))
+	root, _ := group.NewKey()
+	var gid [16]byte
+	rand.Read(gid[:])
+	period, err := blind.SignCredential(blind.Credential{Kind: blind.TypePeriod, Group: gid, Version: 1,
+		ExpiresMs: uint64(time.Now().Add(time.Hour).UnixMilli()), Tag: &h.tag, Key: blind.Point(&h.period.PublicKey)}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := h.credentialsRequest(h.hubsCredential(1, h.server))
+	req["credentials"] = [][]byte{period, h.hubsCredential(1, h.server)}
+	if _, err := h.p.try(t, req); err == nil {
+		t.Error("the period credential beside the hubs'")
+	}
+	h.listed(1)
+	h.register(f.Addr().String(), pin, "")
 	h.waitFor("the forwarder never saw the hub registered by its credential", func(r map[string]any) bool {
 		seen, _ := r["seen"].(string)
 		ap, err := netip.ParseAddrPort(seen)
@@ -538,34 +514,17 @@ func TestRustPhoneHubOverXHTTP(t *testing.T) {
 	vl := freeAddr(t)
 	web, ca := vlesstest.WebServerCA(t, path, func() string { return vl.String() })
 	vless.TrustForTests(ca)
-	fcert, err := forward.NewCert()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: fcert, Logf: t.Logf,
+	f, pin := startForwarder(t, forward.Config{
 		VLESS: &forward.VLESSConfig{Listen: vl.String(), XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
-	go func() {
-		defer close(served)
-		f.Serve(ctx)
-	}()
-	defer func() {
-		cancel()
-		<-served
-	}()
 	caFile := filepath.Join(t.TempDir(), "ca.pem")
 	if err := os.WriteFile(caFile, ca, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := startRustRootHub(t, startRustPhone(t, bin, "SSL_CERT_FILE="+caFile))
-	pin, _ := base64.StdEncoding.DecodeString(forward.Pin(fcert.Leaf))
 	id, _ := tunnel.NewVLESSID()
 
-	h.register(f.Addr().String(), pin, []group.Record{h.own}, id)
+	h.listed(1)
+	h.register(f.Addr().String(), pin, id)
 	var learned map[string]any
 	h.waitFor("the hub never learned its way over VLESS", func(r map[string]any) bool {
 		learned, _ = r["vless"].(map[string]any)
@@ -574,7 +533,7 @@ func TestRustPhoneHubOverXHTTP(t *testing.T) {
 	})
 
 	// The forwarder's TCP port no longer answers.
-	h.register(freeAddr(t).String(), pin, []group.Record{h.own}, id)
+	h.register(freeAddr(t).String(), pin, id)
 	h.waitFor("the forwarder never saw the hub over VLESS", func(r map[string]any) bool {
 		seen, _ := r["seen"].(string)
 		ap, err := netip.ParseAddrPort(seen)
@@ -607,24 +566,22 @@ func freeAddr(t *testing.T) netip.AddrPort {
 	return l.Addr().(*net.TCPAddr).AddrPort()
 }
 
-// rustRootHub is the root phone's hub in Rust, its member listener an echo
-// server, with one Go client.
+// rustRootHub is the phone's hub in Rust, its member listener an echo
+// server, with one Go client, and its group as the forwarder sees it: the
+// period's tag and period key, and the hub's server key.
 type rustRootHub struct {
 	t                 *testing.T
 	p                 *rustPhone
 	id                any
 	udpPort           uint16
 	dev               group.DeviceID
-	leaf              *x509.Certificate
-	root              *group.CA
-	pkcs8, public     []byte
-	own               group.Record
+	tag               [16]byte
+	period, server    *ecdsa.PrivateKey
 	hubKey, clientKey tunnel.Key
 	psk               tunnel.Key
 }
 
-// startRustRootHub makes the root phone (its member certificate and the
-// device record its root key signed) and starts its hub in p.
+// startRustRootHub starts the phone's hub in p.
 func startRustRootHub(t *testing.T, p *rustPhone) *rustRootHub {
 	t.Helper()
 	return startRustRootHubAt(t, p, "127.0.0.1:0")
@@ -634,28 +591,15 @@ func startRustRootHub(t *testing.T, p *rustPhone) *rustRootHub {
 // listen.
 func startRustRootHubAt(t *testing.T, p *rustPhone, listen string) *rustRootHub {
 	t.Helper()
-	now := time.Now()
-	root, err := group.NewRootCA(now)
-	if err != nil {
+	h := &rustRootHub{t: t, p: p, dev: group.NewDeviceID()}
+	rand.Read(h.tag[:])
+	var err error
+	if h.period, err = group.NewKey(); err != nil {
 		t.Fatal(err)
 	}
-	memberKey, err := group.NewKey()
-	if err != nil {
+	if h.server, err = group.NewKey(); err != nil {
 		t.Fatal(err)
 	}
-	h := &rustRootHub{t: t, p: p, dev: group.NewDeviceID(), root: root}
-	if h.leaf, err = root.IssueMember(h.dev, &memberKey.PublicKey, now); err != nil {
-		t.Fatal(err)
-	}
-	if h.pkcs8, err = x509.MarshalPKCS8PrivateKey(memberKey); err != nil {
-		t.Fatal(err)
-	}
-	if h.public, err = memberKey.PublicKey.Bytes(); err != nil {
-		t.Fatal(err)
-	}
-	kh := group.KeyHashOf(h.leaf)
-	h.own = grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: group.Tag(root.Cert), TimeMS: now.UnixMilli(),
-		Device: string(h.dev), Name: "phone", Role: group.RolePhone, Key: &kh, HoldsRoot: true}, root.Key)
 	h.hubKey, _ = tunnel.NewPrivateKey()
 	h.clientKey, _ = tunnel.NewPrivateKey()
 	h.psk, _ = tunnel.NewPresharedKey()
@@ -667,11 +611,48 @@ func startRustRootHubAt(t *testing.T, p *rustPhone, listen string) *rustRootHub 
 	return h
 }
 
+// hubsCredential is the period's hubs' credential at version v, listing
+// the server keys hubs, signed by the period key.
+func (h *rustRootHub) hubsCredential(v uint64, hubs ...*ecdsa.PrivateKey) []byte {
+	h.t.Helper()
+	c := blind.Credential{Kind: blind.TypeHubs, Group: h.tag, Version: v, ExpiresMs: uint64(time.Now().Add(time.Hour).UnixMilli())}
+	for _, k := range hubs {
+		c.Hubs = append(c.Hubs, blind.KeyHash(blind.AlgES256, blind.Point(&k.PublicKey)))
+	}
+	env, err := blind.SignCredential(c, h.period)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return env
+}
+
+// credentialsRequest gives the hub env as its credentials, with its
+// server key, which the example signs with as the app would.
+func (h *rustRootHub) credentialsRequest(env []byte) map[string]any {
+	h.t.Helper()
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(h.server)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return map[string]any{"op": "hub_credentials", "id": h.id, "public": blind.Point(&h.server.PublicKey),
+		"test_key": pkcs8, "credentials": [][]byte{env}}
+}
+
+// listed gives the hub the hubs' credential at version v that lists its
+// server key.
+func (h *rustRootHub) listed(v uint64) {
+	h.t.Helper()
+	h.p.call(h.t, h.credentialsRequest(h.hubsCredential(v, h.server)))
+}
+
 // register registers the hub with the forwarder at endpoint, with the
 // group's VLESS user ID or "".
-func (h *rustRootHub) register(endpoint string, pin []byte, records []group.Record, vlessID string) {
-	req := map[string]any{"op": "hub_register", "id": h.id, "endpoint": endpoint, "pins": [][]byte{pin},
-		"chain": [][]byte{h.leaf.Raw, h.root.Cert.Raw}, "public": h.public, "records": records, "test_key": h.pkcs8}
+func (h *rustRootHub) register(endpoint string, pin []byte, vlessID string) {
+	pkcs8, err := x509.MarshalPKCS8PrivateKey(h.server)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	req := map[string]any{"op": "hub_register", "id": h.id, "endpoint": endpoint, "pins": [][]byte{pin}, "test_key": pkcs8}
 	if vlessID != "" {
 		req["vless_id"] = vlessID
 	}
@@ -757,349 +738,6 @@ func echoThrough(cl *tunnel.Client, msg string) error {
 	return nil
 }
 
-// TestRustPhoneRelay links the Rust phone to a Go blind relay with two Go
-// members of its group: the one with the lower ID dials the phone, whose
-// connection reaches the app's member listener with a "calling" event,
-// and the phone dials the other, through the port of its "dial" event.
-func TestRustPhoneRelay(t *testing.T) {
-	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
-	}
-	now := time.Now()
-	ca, err := group.NewGroupCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, keys := startRelay(t, group.Tag(ca.Cert))
-	ctx, cancel := context.WithCancel(context.Background())
-	var done []chan struct{}
-	defer func() {
-		cancel()
-		for _, d := range done {
-			<-d
-		}
-	}()
-	link := r.Link
-
-	type device struct {
-		id   string
-		key  *ecdsa.PrivateKey
-		leaf *x509.Certificate
-	}
-	var ds []device
-	for range 3 {
-		k, err := group.NewKey()
-		if err != nil {
-			t.Fatal(err)
-		}
-		id := group.NewDeviceID()
-		leaf, err := ca.IssueMember(id, &k.PublicKey, now)
-		if err != nil {
-			t.Fatal(err)
-		}
-		ds = append(ds, device{string(id), k, leaf})
-	}
-	slices.SortFunc(ds, func(a, b device) int { return strings.Compare(a.id, b.id) })
-	low, phone, high := ds[0], ds[1], ds[2]
-
-	// The Go members: low dials the phone (and high), high answers it.
-	dialed, called := make(chan error, 4), make(chan error, 4)
-	for _, d := range []device{low, high} {
-		wg, _ := tunnel.NewPrivateKey()
-		cert := tls.Certificate{Certificate: [][]byte{d.leaf.Raw, ca.Cert.Raw}, PrivateKey: d.key, Leaf: d.leaf}
-		cfg := relay.MemberConfig{Link: link, Self: d.id, Key: wg,
-			Cert: func() tls.Certificate { return cert },
-			Want: func(string) bool { return true },
-			Dialed: func(ctx context.Context, peer string, c net.Conn) error {
-				msg := "hello from " + d.id + "\n"
-				_, err := c.Write([]byte(msg))
-				if err == nil {
-					var got string
-					if got, err = bufio.NewReader(c).ReadString('\n'); err == nil && got != msg {
-						err = fmt.Errorf("a wrong echo %q", got)
-					}
-				}
-				if peer == phone.id {
-					dialed <- err
-				}
-				<-ctx.Done()
-				return err
-			},
-			Called: func(ctx context.Context, peer string, c net.Conn) error {
-				got, err := bufio.NewReader(c).ReadString('\n')
-				if err == nil && got != "hello from "+peer+"\n" {
-					err = fmt.Errorf("a call from %s: %q", peer, got)
-				}
-				if err == nil {
-					_, err = c.Write([]byte(got))
-				}
-				if peer == phone.id {
-					called <- err
-				}
-				<-ctx.Done()
-				return err
-			},
-			Logf: t.Logf}
-		d := make(chan struct{})
-		done = append(done, d)
-		go func() {
-			defer close(d)
-			relay.Join(ctx, cfg)
-		}()
-	}
-
-	pkcs8, err := x509.MarshalPKCS8PrivateKey(phone.key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	public, err := phone.key.PublicKey.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	pin, _ := base64.StdEncoding.DecodeString(keys.Pin())
-	wg, _ := tunnel.NewPrivateKey()
-	p := startRustPhone(t, bin)
-	started := p.call(t, map[string]any{"op": "relay_start", "key": wg[:], "device": phone.id, "endpoint": link.Endpoint.String(),
-		"pins": [][]byte{pin}, "chain": [][]byte{phone.leaf.Raw, ca.Cert.Raw}, "public": public,
-		"member_port": echoServer(t), "test_key": pkcs8})
-	id := started["id"]
-
-	var calling, dialedPhone, online bool
-	var last []any
-	deadline := time.Now().Add(30 * time.Second)
-	for !(calling && dialedPhone && online) {
-		if time.Now().After(deadline) {
-			t.Fatalf("calling %v, the phone dialed %v, both online %v; events %v", calling, dialedPhone, online, last)
-		}
-		evs, _ := p.call(t, map[string]any{"op": "test_events"})["events"].([]any)
-		for _, e := range evs {
-			e := e.(map[string]any)
-			last = append(last, e)
-			if len(last) > 20 {
-				last = last[1:]
-			}
-			switch e["type"] {
-			case "calling":
-				if e["peer"] != low.id {
-					t.Fatalf("a call from %v", e["peer"])
-				}
-				calling = true
-			case "dial":
-				if e["peer"] != high.id {
-					t.Fatalf("a dial to %v", e["peer"])
-				}
-				c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(e["port"])))
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer c.Close()
-				msg := "hello from " + phone.id + "\n"
-				c.SetDeadline(time.Now().Add(15 * time.Second))
-				if _, err := c.Write([]byte(msg)); err != nil {
-					t.Fatal(err)
-				}
-				if got, err := bufio.NewReader(c).ReadString('\n'); err != nil || got != msg {
-					t.Fatalf("the phone's dial: %q, %v", got, err)
-				}
-				dialedPhone = true
-			case "changed":
-				if on, _ := e["online"].([]any); e["connected"] == true && len(on) == 2 {
-					online = true
-				}
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	for _, ch := range []chan error{dialed, called} {
-		select {
-		case err := <-ch:
-			if err != nil {
-				t.Fatal(err)
-			}
-		case <-time.After(15 * time.Second):
-			t.Fatal("a Go member did not finish its connection with the phone")
-		}
-	}
-	p.call(t, map[string]any{"op": "relay_stop", "id": id})
-}
-
-// TestRustPhoneRelayCredentials: the phone's link starts with its member
-// certificate, then registers again with the group's server credentials
-// (docs/protocol.md, section 18) at a relay that serves a fixed list of
-// groups, so that it shows the period credential and the group's root; a
-// Go member registers the same way, the relay knows both by pseudonyms,
-// and the phone's events still name the Go member by its device ID.
-func TestRustPhoneRelayCredentials(t *testing.T) {
-	bin := os.Getenv("CBB_TUNNEL_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_TUNNEL_ON_LINUX is not set")
-	}
-	now := time.Now()
-	ca, err := group.NewGroupCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, keys := startRelay(t, group.Tag(ca.Cert))
-	ctx, cancel := context.WithCancel(context.Background())
-	link := r.Link
-
-	// The period, the two server keys and the lists.
-	tag, _ := group.NewPeriodTag()
-	periodKey, _ := group.NewKey()
-	period, err := group.SignPeriod(group.Tag(ca.Cert), tag, &periodKey.PublicKey, 1, now, ca.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pb, _ := period.Open()
-	phoneServer, _ := group.NewKey()
-	pcServer, _ := group.NewKey()
-	phoneHash, pcHash := group.PublicKeyHash(&phoneServer.PublicKey), group.PublicKeyHash(&pcServer.PublicKey)
-	hubs, err := group.SignHubs(pb, []group.KeyHash{pcHash}, nil, 1, periodKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	members, err := group.SignMembers(pb, []group.KeyHash{phoneHash, pcHash}, 1, periodKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	others, err := group.SignMembers(pb, []group.KeyHash{pcHash}, 2, periodKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pcID := string(group.NewDeviceID())
-	pcCert, err := group.ServerCertificate(pcServer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wgPC, _ := tunnel.NewPrivateKey()
-	pcDone := make(chan struct{})
-	echoed := make(chan error, 4)
-	go func() {
-		defer close(pcDone)
-		relay.Join(ctx, relay.MemberConfig{
-			Link: link, Self: pcID, Key: wgPC,
-			Cert: func() tls.Certificate { return tls.Certificate{} },
-			Credentialed: func() (relay.Credentialed, bool) {
-				return relay.Credentialed{Cert: pcCert, Self: group.Pseudonym(pcHash), Creds: []group.Credential{hubs, members},
-					Period: period, Roots: [][]byte{ca.Cert.Raw}}, true
-			},
-			Want: func(string) bool { return true },
-			Dialed: func(ctx context.Context, _ string, c net.Conn) error {
-				// The phone's member listener echoes.
-				msg := "hello from the computer\n"
-				_, err := c.Write([]byte(msg))
-				if err == nil {
-					var got string
-					if got, err = bufio.NewReader(c).ReadString('\n'); err == nil && got != msg {
-						err = fmt.Errorf("a wrong echo %q", got)
-					}
-				}
-				echoed <- err
-				<-ctx.Done()
-				return err
-			},
-			Called: func(ctx context.Context, _ string, c net.Conn) error {
-				line, err := bufio.NewReader(c).ReadString('\n')
-				if err == nil {
-					_, err = c.Write([]byte(line))
-				}
-				<-ctx.Done()
-				return err
-			},
-			Logf: t.Logf,
-		})
-	}()
-	defer func() {
-		cancel()
-		<-pcDone
-	}()
-
-	phone := string(group.NewDeviceID())
-	memberKey, _ := group.NewKey()
-	leaf, err := ca.IssueMember(group.DeviceID(phone), &memberKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pkcs8 := func(k *ecdsa.PrivateKey) []byte {
-		b, err := x509.MarshalPKCS8PrivateKey(k)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
-	point := func(k *ecdsa.PrivateKey) []byte {
-		b, err := k.PublicKey.Bytes()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
-	pin, _ := base64.StdEncoding.DecodeString(keys.Pin())
-	wg, _ := tunnel.NewPrivateKey()
-	p := startRustPhone(t, bin)
-	id := p.call(t, map[string]any{"op": "relay_start", "key": wg[:], "device": phone, "endpoint": link.Endpoint.String(),
-		"pins": [][]byte{pin}, "chain": [][]byte{leaf.Raw, ca.Cert.Raw}, "public": point(memberKey),
-		"member_port": echoServer(t), "test_key": pkcs8(memberKey)})["id"]
-	defer p.call(t, map[string]any{"op": "relay_stop", "id": id})
-
-	creds := func(cs ...group.Credential) map[string]any {
-		return map[string]any{"op": "relay_credentials", "id": id, "public": point(phoneServer), "test_key": pkcs8(phoneServer),
-			"credentials": cs, "roots": [][]byte{ca.Cert.Raw}, "names": map[string]string{group.Pseudonym(pcHash): pcID}}
-	}
-	if _, err := p.try(t, creds(hubs, others, period)); err == nil {
-		t.Error("credentials whose members' list leaves the phone out")
-	}
-	p.call(t, creds(hubs, members, period))
-
-	var through, online bool
-	var last []any
-	deadline := time.Now().Add(30 * time.Second)
-	for !(through && online) {
-		if time.Now().After(deadline) {
-			t.Fatalf("through %v, online %v; events %v", through, online, last)
-		}
-		evs, _ := p.call(t, map[string]any{"op": "test_events"})["events"].([]any)
-		for _, e := range evs {
-			e := e.(map[string]any)
-			last = append(last, e)
-			if len(last) > 20 {
-				last = last[1:]
-			}
-			switch e["type"] {
-			case "calling":
-				if e["peer"] != pcID {
-					t.Fatalf("a call from %v, want the computer by its ID", e["peer"])
-				}
-				select {
-				case err := <-echoed:
-					if err != nil {
-						t.Fatal(err)
-					}
-				case <-time.After(15 * time.Second):
-					t.Fatal("the computer's call did not come through")
-				}
-				through = true
-			case "dial":
-				if e["peer"] != pcID {
-					t.Fatalf("a dial to %v, want the computer by its ID", e["peer"])
-				}
-				echoThroughPort(t, e["port"])
-				through = true
-			case "changed":
-				if on, _ := e["online"].([]any); e["connected"] == true && len(on) == 1 {
-					if on[0] != pcID {
-						t.Fatalf("online %v, want the computer by its ID", on)
-					}
-					online = true
-				}
-			}
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
 // echoThroughPort dials the loopback port a dial event named and checks
 // that the other end echoes a line.
 func echoThroughPort(t *testing.T, port any) {
@@ -1117,21 +755,4 @@ func echoThroughPort(t *testing.T, port any) {
 	if got, err := bufio.NewReader(c).ReadString('\n'); err != nil || got != msg {
 		t.Fatalf("the phone's dial: %q, %v", got, err)
 	}
-}
-
-// startRelay runs the blind relay, the Rust cbb-relay, for the group of
-// tag until the test ends. The tests that run tunnel-on-linux need one
-// beside it (relay.Binary), as CI gives them.
-func startRelay(t *testing.T, tag string) (*relay.Process, relay.Keys) {
-	t.Helper()
-	bin := relay.Binary()
-	if bin == "" {
-		t.Fatal("no cbb-relay: set CBB_TEST_RUST_RELAY with CBB_TUNNEL_ON_LINUX")
-	}
-	r, err := relay.Start(bin, relay.Config{Groups: []string{tag}, Logf: t.Logf})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(r.Close)
-	return r, r.Keys
 }

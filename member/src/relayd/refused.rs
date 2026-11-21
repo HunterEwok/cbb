@@ -9,10 +9,10 @@
 //! the relay.
 //!
 //! The file has one group tag a line, 16 hex characters as cbb status shows
-//! them; a line may also name a period's tag as "period <tag>", for a group
-//! that registers with credentials. Blank lines and lines that begin with #
-//! are skipped, and so is anything after a tag on its line, such as the
-//! date of the report.
+//! them; a line may also name a period's tag as "period <tag>", 32 hex
+//! characters, for a group that registers with credentials. Blank lines and
+//! lines that begin with # are skipped, and so is anything after a tag on its
+//! line, such as the date of the report.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -143,10 +143,10 @@ pub fn parse(b: &[u8]) -> std::result::Result<HashSet<String>, String> {
         }
         let tag = if first == "period" {
             match f.next() {
-                Some(t) if is_tag(t) => format!("period {t}"),
-                _ => return Err(format!("line {n}: \"period\" without a tag of 16 hex characters")),
+                Some(t) if is_hex(t, 32) => format!("period {t}"),
+                _ => return Err(format!("line {n}: \"period\" without a period's tag of 32 hex characters")),
             }
-        } else if is_tag(first) {
+        } else if is_hex(first, 16) {
             first.to_string()
         } else {
             return Err(format!("line {n}: {first:?} is not a group tag of 16 hex characters"));
@@ -156,8 +156,9 @@ pub fn parse(b: &[u8]) -> std::result::Result<HashSet<String>, String> {
     Ok(tags)
 }
 
-fn is_tag(s: &str) -> bool {
-    s.len() == 16 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+/// Whether s is n lower-case hex characters.
+fn is_hex(s: &str, n: usize) -> bool {
+    s.len() == n && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
 #[cfg(test)]
@@ -166,6 +167,8 @@ mod tests {
 
     const A: &str = "0123456789abcdef";
     const B: &str = "fedcba9876543210";
+    /// A period's tag, 16 bytes as the format's credentials carry it.
+    const C: &str = "00112233445566778899aabbccddeeff";
 
     fn dir() -> PathBuf {
         let d = std::env::temp_dir().join(format!("cbb-refused-{}", cbb_core::certs::random_id()));
@@ -184,15 +187,16 @@ mod tests {
     /// The lines as Go's TestParse reads them.
     #[test]
     fn parses_as_go() {
-        let tags = parse(format!("# reports\n\n{A} 2026-11-09 abuse@ report\nperiod {B}\n  {B}\n").as_bytes()).unwrap();
+        let tags = parse(format!("# reports\n\n{A} 2026-11-09 abuse@ report\nperiod {C}\n  {B}\n").as_bytes()).unwrap();
         assert_eq!(tags.len(), 3);
-        assert!(tags.contains(A) && tags.contains(B) && tags.contains(&format!("period {B}")));
+        assert!(tags.contains(A) && tags.contains(B) && tags.contains(&format!("period {C}")));
         for bad in [
             "0123456789ABCDEF\n",
             "0123456789abcde\n",
             "0123456789abcdef0\n",
             "period\n",
             "period xyz\n",
+            &format!("period {A}\n"),
             &format!("group {A}\n"),
         ] {
             assert!(parse(bad.as_bytes()).is_err(), "parse took {bad:?}");

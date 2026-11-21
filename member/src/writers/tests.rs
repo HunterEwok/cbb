@@ -129,3 +129,101 @@ fn the_root_lets_an_admitted_member_with_the_cap_hub_be_a_hub() {
     assert_ne!(find(&st, "pi").unwrap().rights & RIGHT_HUB, 0);
     assert!(st.hubs.contains(&id), "{:?}", st.hubs);
 }
+
+#[test]
+fn the_root_makes_a_hub_that_only_passes_copies_on() {
+    let (o, mut set) = group("forward-only");
+    let root = o.root.clone().unwrap();
+    let k = SigningKey::from_slice(&[9; 32]).unwrap();
+    let mut pi = Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), "pi", ROLE_MEMBER);
+    pi.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+    pi.caps = body::CAP_HUB;
+    let st = set.state();
+    set.write_record(&st, &*root, Kind::device(pi), T + 2).unwrap();
+    set_hubs(&mut set, &*root, &["laptop".to_string()], T + 3).unwrap();
+    assert!(set_forward_only(&mut set, &*root, "desk", T + 4).is_err(), "the root's own device");
+    assert!(set_forward_only(&mut set, &*root, "old laptop", T + 4).is_err(), "no cap hub");
+
+    set_forward_only(&mut set, &*root, "pi", T + 5).unwrap();
+    let st = set.state();
+    let pi = find(&st, "pi").unwrap();
+    assert!(is_forward_only(pi.rights) && pi.rights & body::RIGHT_SECRETS == 0, "{:b}", pi.rights);
+    let laptop = find(&st, "laptop").unwrap().id;
+    assert_eq!(st.hubs, vec![laptop, pi.id], "after the hubs named already");
+    // Again: nothing more to write.
+    assert!(set_forward_only(&mut set, &*root, "pi", T + 6).unwrap().is_empty());
+    assert!(!is_forward_only(find(&st, "laptop").unwrap().rights));
+}
+
+/// The root records where a member's keys live as its hello says: `file`
+/// moves to `hardware`, and `rootless` takes the admin key away; nothing
+/// else signs, nor does an admin.
+#[test]
+fn the_root_records_the_store_a_hello_says() {
+    use body::{STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
+    let (o, mut set) = group("store");
+    let root = o.root.clone().unwrap();
+    let dir = temp("store-admin");
+    let admin = own(&dir).make(&dir, Which::Admin).unwrap();
+    make_admin(&mut set, &*root, "laptop", &admin.public(), T + 2).unwrap();
+    let st = set.state();
+    let (laptop, old, desk) =
+        (find(&st, "laptop").unwrap().id, find(&st, "old laptop").unwrap().id, find(&st, "desk").unwrap().id);
+
+    assert!(store_from_hello(&mut set, &*admin, &old, STORE_HARDWARE, T + 3).unwrap().is_none(), "an admin");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_FILE, T + 3).unwrap().is_none(), "the same");
+    assert!(store_from_hello(&mut set, &*root, &desk, STORE_ROOTLESS, T + 3).unwrap().is_none(), "the root's own");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_HARDWARE, T + 4).unwrap().is_some());
+    assert_eq!(set.state().device(&old).unwrap().store, STORE_HARDWARE);
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_HARDWARE, T + 5).unwrap().is_none(), "said already");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_FILE, T + 5).unwrap().is_none(), "never back to a file");
+
+    assert!(store_from_hello(&mut set, &*root, &laptop, STORE_ROOTLESS, T + 6).unwrap().is_some());
+    let d = set.state().device(&laptop).unwrap().clone();
+    assert_eq!((d.store, d.admin, d.powers, d.commands), (STORE_ROOTLESS, None, 0, 0));
+    assert_eq!(d.name, "laptop", "the rest stays");
+}
+
+/// An admin key that signed two histories (a computer brought back from a
+/// backup): the root voids both, the key signs again below the fork, and
+/// an admin cannot resolve, nor can anyone when no key forked.
+#[test]
+fn the_root_voids_both_histories_of_an_admin_key() {
+    let (o, mut set) = group("resolve");
+    let root = o.root.clone().unwrap();
+    let dir = temp("resolve-admin");
+    let admin = own(&dir).make(&dir, Which::Admin).unwrap();
+    make_admin(&mut set, &*root, "laptop", &admin.public(), T + 2).unwrap();
+    assert!(resolve(&mut set, &*root, T + 3).unwrap_err().message().contains("no key"));
+    // The admin admits attic; brought back from a backup, it signs another
+    // record with the same seq.
+    let device = |name: &str, seed: u8| {
+        let k = SigningKey::from_slice(&[seed; 32]).unwrap();
+        let mut d =
+            Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), name, ROLE_MEMBER);
+        d.rights = body::RIGHT_READ | body::RIGHT_SEND;
+        d
+    };
+    let st = set.state();
+    let first = set.write_record(&st, &*admin, Kind::device(device("attic", 20)), T + 4).unwrap();
+    let b = first[0].body().clone();
+    let twin = Record::sign(
+        cbb_core::records::Body { kind: Kind::device(device("cellar", 21)), time_ms: T + 5, ..b },
+        &*admin,
+    )
+    .unwrap();
+    set.insert_all([twin]);
+    let st = set.state();
+    assert_eq!(two_histories(&st), vec!["laptop".to_string()]);
+
+    let e = resolve(&mut set, &*admin, T + 6).unwrap_err();
+    assert!(e.message().contains("only the group's root"), "{e:?}");
+    let (who, recs) = resolve(&mut set, &*root, T + 6).unwrap();
+    assert_eq!((who, recs.len()), (vec!["laptop".to_string()], 1));
+    let st = set.state();
+    assert!(two_histories(&st).is_empty(), "{:?}", st.conflicts);
+    assert!(find(&st, "attic").is_err() && find(&st, "cellar").is_err(), "both sides are void");
+    let st = set.state();
+    set.write_record(&st, &*admin, Kind::device(device("shed", 22)), T + 7).unwrap();
+    assert!(find(&set.state(), "shed").is_ok(), "the admin goes on below the fork");
+}

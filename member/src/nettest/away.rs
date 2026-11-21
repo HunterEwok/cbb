@@ -133,7 +133,9 @@ fn a_member_reaches_its_hub_through_the_tunnel() {
     let _ = runner.join();
 }
 
-fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
+/// A relay of a list of groups of 0.6, which g is not on: a group on the
+/// records of 0.5 has no credentials to show it.
+fn relay_server(_g: &Group) -> (crate::relayd::server::Relay, String) {
     use base64::Engine;
     let keys = crate::relayd::keys::Keys::new().unwrap();
     let pin =
@@ -141,7 +143,7 @@ fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
     let s = crate::relayd::server::Relay::start(crate::relayd::server::Config {
         listen: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
         keys,
-        groups: vec![certs::tag(&g.root)],
+        groups: vec![crate::nettest::blind::Blind::new(1).listed()],
         open: false,
         limits: Default::default(),
         log: Arc::new(|_| {}),
@@ -156,50 +158,46 @@ fn relay_header(addr: &str, key: &str, consent: bool) -> Header {
     Header { op: "relay".into(), relay: addr.into(), relay_key: key.into(), consent, ..Header::default() }
 }
 
-/// Two devices meet their group at a relay: each registers, sees the
-/// other online, and one connects to the other through the relay; both
-/// say so in their status. Turning sync away from home off ends it.
+/// A device of a group on the records of 0.5 asks to meet its group at a
+/// relay: the request must give a relay that answers, its key and the
+/// person's consent. A relay of 0.6 takes a device by the period's server
+/// credentials alone, which such a group does not have, so the link waits
+/// and the status says why. Two devices meeting through the relay are
+/// tried on the records of 0.6 (relay::net_tests). Turning sync away from
+/// home off ends it.
 #[test]
-fn two_devices_meet_at_a_relay() {
+fn a_group_of_0_5_waits_at_a_relay() {
     let g = Group::new(2);
     let (s, pin) = relay_server(&g);
-    let (a, b) = (g.node(0), g.node(1));
-    let (away_a, away_b) = (away_of(&g, &a, 0), away_of(&g, &b, 1));
+    let a = g.node(0);
+    let away_a = away_of(&g, &a, 0);
     let addr = s.addr().to_string();
     // What the request must give.
     assert!(away_a.meet_at(&a.node, &relay_header("nowhere", &pin, true)).is_err());
     assert!(away_a.meet_at(&a.node, &relay_header(&addr, "bad", true)).is_err());
     let e = away_a.meet_at(&a.node, &relay_header(&addr, &pin, false)).unwrap_err();
     assert!(e.to_string().contains("a relay learns"), "{e}");
-    for (away, n) in [(&away_a, &a), (&away_b, &b)] {
-        let keys = away.meet_at(&n.node, &relay_header(&addr, &pin, true)).unwrap();
-        n.node.set_tunnel_key(Some(keys));
-    }
+    let keys = away_a.meet_at(&a.node, &relay_header(&addr, &pin, true)).unwrap();
+    a.node.set_tunnel_key(Some(keys));
     let st = away_a.status(&a.node).unwrap();
     assert!(st.relay.is_some_and(|r| !r.connected && r.error.contains("not running")));
-    let runners: Vec<_> = [(away_a.clone(), a.node.clone()), (away_b.clone(), b.node.clone())]
-        .into_iter()
-        .map(|(aw, n)| std::thread::spawn(move || aw.run(n)))
-        .collect();
+    let runner = {
+        let (aw, n) = (away_a.clone(), a.node.clone());
+        std::thread::spawn(move || aw.run(n))
+    };
     assert!(
-        wait_for(Duration::from_secs(40), || a.node.connected(&g.devs[1].id) && b.node.connected(&g.devs[0].id)),
-        "{:?}\n{:?}",
-        a.logs.lock().unwrap(),
-        b.logs.lock().unwrap()
+        wait_for(Duration::from_secs(20), || away_a
+            .status(&a.node)
+            .and_then(|s| s.relay)
+            .is_some_and(|r| !r.connected && r.error.contains("do not list this device"))),
+        "{:?}",
+        away_a.status(&a.node)
     );
-    let st = away_a.status(&a.node).unwrap();
-    let r = st.relay.unwrap();
-    assert!(r.connected && r.online == vec![g.id(1)], "{r:?}");
-    assert!(wait_for(Duration::from_secs(5), || away_a.status(&a.node).unwrap().through
-        || away_b.status(&b.node).unwrap().through));
-    assert!(a.logged("connected to the relay at"));
+    assert_eq!(s.stats().1, 0, "nothing registered");
     away_a.turn_off().unwrap();
     assert!(away_a.status(&a.node).is_none());
     a.node.close();
-    b.node.close();
-    for r in runners {
-        let _ = r.join();
-    }
+    let _ = runner.join();
 }
 
 /// The relay refuses a group it does not serve; the status says why in
@@ -307,167 +305,6 @@ fn shares_ignored() {
     // A stopped share of a hub it never kept changes nothing.
     away_b.hubs_shared(&b.node, &g.devs[0].id, &chain, &serde_json::json!({"stopped": true}));
     assert!(!b.logged("forgotten"));
-}
-
-/// Wires the node's hub commands as the service carries them out
-/// (service.rs hub_command): checked against the records, then a stop
-/// order stops the hub after the result went back, and any other makes
-/// this device the hub.
-fn take_hub_commands(n: &NodeAt, away: &Arc<Away>) {
-    let (a, w) = (away.clone(), Arc::downgrade(&n.node));
-    n.node.on_command(Arc::new(move |_peer, c| {
-        let node = w.upgrade().unwrap();
-        let me = node.identity().id.to_string();
-        let body = node.records().lock().unwrap().verify_command(c, &me, crate::uptime::wall_ms());
-        let mut res = crate::wire::CommandResult { status: "done".into(), ..Default::default() };
-        let body = match body {
-            Ok(b) => b,
-            Err(e) => {
-                (res.status, res.reason) = ("refused".into(), e.message().to_string());
-                return res;
-            }
-        };
-        res.id = body.id.clone();
-        let order = body.hub.clone().unwrap_or_default();
-        if super::is_stop(&order) {
-            let (a, node) = (a.clone(), node.clone());
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
-                a.stop_hub(&node, true).unwrap();
-            });
-            return res;
-        }
-        match a.take_hub(&node, &body.by, &order) {
-            Ok(o) => res.tunnel = serde_json::to_value(&o).ok(),
-            Err(e) => (res.status, res.reason) = ("refused".into(), e.message().to_string()),
-        }
-        res
-    }));
-}
-
-/// The root makes another computer a hub that only passes copies on, with
-/// a hub command, and keeps its offer; then stops it; then moves the hub
-/// there, becoming that hub's client. What a hub command may not name is
-/// refused before it goes.
-#[test]
-fn the_root_makes_stops_and_moves_hubs() {
-    let mut g = Group::new(1);
-    let bi = g.add_with(|b| b.caps = vec![cbb_core::authority::CAP_HUB.into()]);
-    let ci = g.add();
-    let (a, b) = (g.node(0), g.node(bi));
-    let (away_a, away_b) = (away_of(&g, &a, 0), away_of(&g, &b, bi));
-    take_hub_commands(&b, &away_b);
-    let admin = crate::admin::Admin { node: &a.node, dir: &a.dir.0 };
-    let addrs = |p: u16| vec![format!("127.0.0.1:{p}")];
-    // Refused before any command: this device, a device that cannot be a
-    // hub, no address.
-    assert!(away_a.make_hub_on(&admin, &g.id(0), &addrs(1), ("", ""), true).is_err());
-    let e = away_a.make_hub_on(&admin, &g.id(ci), &addrs(1), ("", ""), true).unwrap_err();
-    assert!(e.to_string().contains("cannot be a hub"), "{e}");
-    assert!(away_a.make_hub_on(&admin, &g.id(bi), &addrs(1), ("", ""), false).is_err(), "no admin");
-    assert!(away_a.make_hub_on(&admin, &g.id(bi), &[], ("", ""), true).is_err());
-    assert!(away_a.move_hub(&admin, &g.id(bi), &addrs(1), ("", "")).is_err(), "not the hub");
-    assert!(away_a.stop_hub_on(&admin, &g.id(bi), false).is_err(), "no hub known");
-
-    let keys = away_a.make_hub(&hub_header(free_udp_port())).unwrap();
-    a.node.set_tunnel_key(Some(keys));
-    away_a.serve_if_first(&a.node);
-    b.node.set_tunnel_key(Some(away_b.turn_on().unwrap()));
-    let home = meet_at_home(&b, &a, &g.devs[0].id);
-    assert!(wait_for(Duration::from_secs(20), || away_a.st.lock().unwrap().as_ref().unwrap().members.len() == 1));
-
-    // B becomes a hub that passes copies on.
-    away_a.make_hub_on(&admin, &g.id(bi), &addrs(free_udp_port()), ("", ""), true).unwrap();
-    assert!(away_b.is_hub());
-    assert!(b.logged("in place of"), "{:?}", b.logs.lock().unwrap());
-    let order = a.node.hub_order();
-    let known = away_a.known_hubs(&order);
-    assert!(known.contains(&g.id(bi)) && known.contains(&g.id(0)), "{known:?} {order:?}");
-
-    // And stops: A forgets its offer.
-    away_a.stop_hub_on(&admin, &g.id(bi), false).unwrap();
-    assert!(wait_for(Duration::from_secs(10), || !away_b.is_hub()));
-    assert!(!away_a.known_hubs(&a.node.hub_order()).contains(&g.id(bi)));
-
-    // The hub moves to B: A becomes its client.
-    away_a.move_hub(&admin, &g.id(bi), &addrs(free_udp_port()), ("", "")).unwrap();
-    assert!(away_b.is_hub());
-    assert!(!away_a.is_hub());
-    assert!(away_a.st.lock().unwrap().as_ref().unwrap().hubs.iter().any(|h| h.device == g.id(bi)));
-    for n in [&a, &b] {
-        n.node.close();
-    }
-    let _ = home.join();
-}
-
-/// A hub with a forwarder and VLESS registers there while it serves:
-/// its status shows the forwarder registered and where it saw the hub,
-/// it keeps the VLESS settings the forwarder gave and its update way names
-/// them; a forwarder that refuses shows why in short.
-#[test]
-fn a_hub_registers_with_its_forwarder() {
-    use base64::Engine;
-    let g = Group::new(1);
-    let f =
-        crate::nettest::forwarder::Forwarder::start(crate::nettest::forwarder::welcome(), Some("203.0.113.9:51820"));
-    let a = g.node(0);
-    let away = away_of(&g, &a, 0);
-    let pin = base64::engine::general_purpose::STANDARD.encode(f.pin);
-    let h = Header {
-        forwarder: f.addr.to_string(),
-        forwarder_key: pin.clone(),
-        port: i64::from(free_udp_port()),
-        ..hub_header(0)
-    };
-    let h = Header { addrs: Vec::new(), ..h };
-    let keys = away.make_hub(&h).unwrap();
-    a.node.set_tunnel_key(Some(keys));
-    away.serve_if_first(&a.node);
-    assert!(
-        wait_for(Duration::from_secs(20), || away
-            .status(&a.node)
-            .and_then(|s| s.forwarder)
-            .is_some_and(|fw| fw.registered && fw.seen == "203.0.113.9:51820")),
-        "{:?} {:?}",
-        away.status(&a.node),
-        a.logs.lock().unwrap()
-    );
-    let claim = &f.claims()[0];
-    assert!(claim["vless"].is_string() && claim["obfuscation"].is_object(), "VLESS comes with AmneziaWG");
-    away.vless_learned(&a.node);
-    assert!(a.logged("come over VLESS to the forwarder"), "{:?}", a.logs.lock().unwrap());
-    let way = away.update_way(&a.node).unwrap();
-    assert_eq!(way["id"], claim["vless"]);
-    // Set again keeping its settings: the same VLESS user ID.
-    let again = Header { keep: true, forwarder: String::new(), forwarder_key: String::new(), port: 0, ..h.clone() };
-    away.make_hub(&again).unwrap();
-    let st = away.st.lock().unwrap().clone().unwrap();
-    assert_eq!(st.forwarder.as_ref().unwrap().vless_id, claim["vless"].as_str().unwrap());
-    drop(st);
-    away.stop_serving();
-
-    // A forwarder that refuses.
-    let no = crate::nettest::forwarder::Forwarder::start(
-        Arc::new(|_: &serde_json::Value| serde_json::json!({"error": "full"})),
-        None,
-    );
-    let h = Header {
-        forwarder: no.addr.to_string(),
-        forwarder_key: base64::engine::general_purpose::STANDARD.encode(no.pin),
-        vless_off: true,
-        ..h
-    };
-    away.make_hub(&h).unwrap();
-    away.serve_if_first(&a.node);
-    assert!(
-        wait_for(Duration::from_secs(20), || away
-            .status(&a.node)
-            .and_then(|s| s.forwarder)
-            .is_some_and(|fw| fw.error.contains("refused the registration: full"))),
-        "{:?}",
-        away.status(&a.node)
-    );
-    a.node.close();
 }
 
 /// What a hub request must give, and turning on and off.

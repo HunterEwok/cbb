@@ -73,6 +73,10 @@ through a connection you already control:
   or an admin, then `sudo cbb pair -code ITS-VPN-ADDRESS:8764` here. On Linux, run the
   installer again after setting up the VPN, so its firewall rules allow the VPN's network.
 
+Either way, type the line that `cbb pair` prints under the code (`cbb://pair?...`) instead of
+the six digits: the digits alone name no window where mDNS does not reach, and the line names
+it, with the same code inside.
+
 The codes never travel: each computer works out its own from the pairing, which runs inside
 SSH or your VPN, and inside TLS. The new computer syncs through that path until its service restarts; to keep syncing
 afterwards, turn on [sync away from home](away-from-home.md) on both before you close the

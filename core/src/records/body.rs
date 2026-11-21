@@ -345,16 +345,22 @@ pub struct Settings {
     pub servers: Vec<Server>,
 }
 
-/// A server of the group's list.
+/// A server of the group's list, which the root signs (D-61, D-121): its
+/// kind, its address and the pin of its TLS key (SHA-256 of the key's
+/// SubjectPublicKeyInfo), each kind and address once.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Server {
     pub kind: u64,
     pub endpoint: String,
-    pub key: Key,
+    pub pin: [u8; 32],
 }
 
+/// The kinds of a server. 0.6 writes relays alone: the forwarders come
+/// in the hub order (D-121), and the push service is reserved (format
+/// 20.4). A reader keeps a kind it does not know and passes over it.
 pub const SERVER_FORWARDER: u64 = 1;
 pub const SERVER_RELAY: u64 = 2;
+pub const SERVER_PUSH: u64 = 3;
 
 impl Kind {
     /// A device record's kind.
@@ -864,8 +870,8 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
         (_, n) => n,
     };
     let servers = r.opt_list(15, f("servers"), |v| match v.as_array() {
-        Some([Value::Uint(kind), Value::Text(endpoint), key]) => {
-            Some(Server { kind: *kind, endpoint: String::from(*endpoint), key: Key::read(key).ok()? })
+        Some([Value::Uint(kind), Value::Text(endpoint), Value::Bytes(pin)]) => {
+            Some(Server { kind: *kind, endpoint: String::from(*endpoint), pin: (*pin).try_into().ok()? })
         }
         _ => None,
     })?;
@@ -971,12 +977,13 @@ fn check_settings(s: &Settings) -> Result<bool, Rule> {
         return Err(field(t, "min_rules"));
     }
     if s.servers.len() > MAX_SERVERS
-        || s.servers.iter().any(|v| {
-            !(SERVER_FORWARDER..=SERVER_RELAY).contains(&v.kind)
+        || s.servers.iter().enumerate().any(|(i, v)| {
+            v.kind == 0
+                || v.kind > MAX_INT
                 || v.endpoint.is_empty()
                 || v.endpoint.len() > 255
                 || !plain_text(&v.endpoint)
-                || !matches!(v.key.check(), Ok(KeyCheck::Good))
+                || s.servers.iter().take(i).any(|o| o.kind == v.kind && o.endpoint == v.endpoint)
         })
     {
         return Err(field(t, "servers"));
@@ -998,7 +1005,7 @@ fn encode_settings<'a>(m: &mut Vec<(u16, Value<'a>)>, s: &'a Settings) {
         let servers = s
             .servers
             .iter()
-            .map(|v| Value::Array(vec![Value::Uint(v.kind), Value::Text(&v.endpoint), v.key.to_value()]));
+            .map(|v| Value::Array(vec![Value::Uint(v.kind), Value::Text(&v.endpoint), Value::Bytes(&v.pin)]));
         m.push((15, Value::Array(servers.collect())));
     }
 }

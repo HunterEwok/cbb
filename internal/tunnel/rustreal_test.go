@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/forward"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 )
 
@@ -55,7 +54,8 @@ func TestRustPhoneThroughRealForwarder(t *testing.T) {
 	h := startRustRootHubAt(t, startRustPhone(t, bin), "0.0.0.0:0")
 	defer h.p.call(t, map[string]any{"op": "hub_stop", "id": h.id})
 	id, _ := tunnel.NewVLESSID()
-	h.register(endpoint, pin, []group.Record{h.own}, id)
+	h.listed(1)
+	h.register(endpoint, pin, id)
 	var link map[string]any
 	h.waitFor("the forwarder did not take the hub", func(r map[string]any) bool {
 		link, _ = r["vless"].(map[string]any)
@@ -66,7 +66,7 @@ func TestRustPhoneThroughRealForwarder(t *testing.T) {
 		// the hub registers inside VLESS instead, as it does when the
 		// forwarder's TCP port does not answer, and its packets go there.
 		t.Logf("the hub's hellos over UDP did not reach the forwarder; registering inside VLESS")
-		h.register(net.JoinHostPort(ips[0].String(), "9"), pin, []group.Record{h.own}, id)
+		h.register(net.JoinHostPort(ips[0].String(), "9"), pin, id)
 		h.waitFor("the forwarder never saw the hub over VLESS", func(r map[string]any) bool {
 			seen, _ := r["seen"].(string)
 			if l, _ := r["vless"].(map[string]any); l != nil {

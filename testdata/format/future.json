@@ -188,6 +188,16 @@
    "later": "refuse"
   },
   {
+   "table": "offer",
+   "n": 10,
+   "later": "refuse"
+  },
+  {
+   "table": "offer",
+   "n": 11,
+   "later": "refuse"
+  },
+  {
    "table": "hubs",
    "n": 2,
    "later": "refuse"
@@ -291,6 +301,11 @@
    "table": "member-credentials",
    "n": 3,
    "later": "unusable"
+  },
+  {
+   "table": "member-credentials",
+   "n": 5,
+   "later": "refuse"
   },
   {
    "table": "nonce",
@@ -460,6 +475,16 @@
   {
    "table": "reach",
    "n": 2,
+   "later": "refuse"
+  },
+  {
+   "table": "evidence/android",
+   "n": 1,
+   "later": "refuse"
+  },
+  {
+   "table": "evidence/tpm",
+   "n": 1,
    "later": "refuse"
   }
  ],
@@ -665,8 +690,8 @@
   {
    "name": "credentials, settings for later out of range: unusable",
    "table": "member-credentials",
-   "value": "a3000b02818243a101015840077104396c62f3730f78c3a06c3d5ffdb7d296513c8acf2ea20e6a62a13e534b5886bfb25c8fed7e48c5d51961396571018ee47b14e734b2e910daac2d4bfb9403a5010402185003184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa0191004",
-   "read": "a3000b02818243a101015840077104396c62f3730f78c3a06c3d5ffdb7d296513c8acf2ea20e6a62a13e534b5886bfb25c8fed7e48c5d51961396571018ee47b14e734b2e910daac2d4bfb9403a0"
+   "value": "a4000b02818243a101015840077104396c62f3730f78c3a06c3d5ffdb7d296513c8acf2ea20e6a62a13e534b5886bfb25c8fed7e48c5d51961396571018ee47b14e734b2e910daac2d4bfb9403a5010402185003184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa01910040458200bbce4041367505122c56dd65a268d076c2bad9bd0cf3cc959f5bd283bf2b349",
+   "read": "a4000b02818243a101015840077104396c62f3730f78c3a06c3d5ffdb7d296513c8acf2ea20e6a62a13e534b5886bfb25c8fed7e48c5d51961396571018ee47b14e734b2e910daac2d4bfb9403a00458200bbce4041367505122c56dd65a268d076c2bad9bd0cf3cc959f5bd283bf2b349"
   },
   {
    "name": "a key of the wrong length: refused",

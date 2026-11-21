@@ -4,6 +4,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -276,9 +278,11 @@ func TestPasteLineBreaks(t *testing.T) {
 	}
 }
 
-// TestCommandSignedBeforeStart: the replay cache starts empty, so a device
-// refuses a command signed before it started, which it may have carried
-// out before.
+// TestCommandSignedBeforeStart: on the records of 0.6 a device keeps the
+// last counter of each commander across restarts (commands.cbor; format
+// section 6), so a command signed before it started is taken once, and a
+// replay of one it took before its restart is refused
+// (member/src/commands/tests.rs, the_root_commands_a_member_once).
 func TestCommandSignedBeforeStart(t *testing.T) {
 	clock := newTestClock(t, time.Minute) // deck starts a minute "later"
 	var h hub
@@ -287,7 +291,10 @@ func TestCommandSignedBeforeStart(t *testing.T) {
 	clock.set(t, 0)
 	pairWith(t, pi, deck)
 	waitFor(t, "connected", func() bool { return len(pi.status(t).Peers) == 1 })
-	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "deck"}, ""); err == nil || !strings.Contains(err.Error(), "started after the command was signed") {
-		t.Errorf("a command signed before the device started: %v", err)
+	if _, err := pi.do(t, control.Header{Op: control.OpReceive, Name: "off", Device: "deck"}, ""); err != nil {
+		t.Fatalf("a command signed before the device started: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(deck.dir, "commands.cbor")); err != nil {
+		t.Errorf("the deck keeps no counters of the commands it took: %v", err)
 	}
 }

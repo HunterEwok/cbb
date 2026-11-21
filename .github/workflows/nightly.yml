@@ -57,8 +57,9 @@ jobs:
         include:
           - { package: ./internal/group, target: FuzzRecordBody }
           - { package: ./internal/group, target: FuzzCommand }
-          - { package: ./internal/relay, target: FuzzRelayWire }
           - { package: ./internal/forward, target: FuzzForwardWire }
+          - { package: ./internal/forward, target: FuzzRegister }
+          - { package: ./internal/blind, target: FuzzCredential }
           - { package: ./internal/pasteboard, target: FuzzDecodeDIB }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzUnpack }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzDecodePlist }
@@ -151,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [control, next_frames]
+        target: [control, next_frames, relay_wire]
     defaults:
       run:
         working-directory: member/

@@ -5,8 +5,9 @@
 //! those this device's root or admin key sends to another device (mute,
 //! sync, remote paste, quick actions and turning them off), and those it
 //! takes and carries out, with the same checks of its user's switches as
-//! on the old records. A hub, away-off or a small device's own command
-//! answers that it is not on the records of 0.6 yet.
+//! on the old records. Away-off turns sync away from home off here, and a
+//! hub command makes this device a hub or stops it being one; a small
+//! device's own command is refused, since this device has none.
 
 use super::*;
 
@@ -128,15 +129,170 @@ impl Service {
                 outcome(&res.status, &res.reason)
             }
             Order::AwayOff => {
-                // The member of 0.6 syncs only at home: sync away from home
-                // is off here unless an old one still runs.
-                if let Some(a) = self.away.read().unwrap().clone() {
-                    a.turn_off()?;
-                }
+                live.away_off(Duration::from_millis(500))?;
                 (self.log)(&format!("cbb: {who} turned sync away from home off here"));
                 Ok(())
             }
-            Order::Hub(_) | Order::Device { .. } => Err(not_yet(&format!("carrying out a {} command", order.name()))),
+            Order::Hub(h) => self.live_take_hub(live, &who, &h),
+            // A computer or a Pi defines no commands of its own: the
+            // small devices that do (the leaves) come with 0.7.
+            Order::Device { name, .. } => {
+                (self.log)(&format!("cbb: {who} sent the command {name:?}, which this device does not have"));
+                Err(refuse(format!("this device has no command {name}")))
+            }
+        }
+    }
+
+    /// Carries out a hub command: stop being a hub, or become one at the
+    /// address away from home and with the first forwarder it names, when
+    /// it names this device as the hub (field 10, the address and the hash
+    /// of the hub's member key).
+    fn live_take_hub(&self, live: &Live, who: &str, h: &crate::orders::Hub) -> Result<()> {
+        use base64::Engine as _;
+        let away = live.away().ok_or_else(|| refuse("sync away from home did not start on this device"))?;
+        if h.stop {
+            if !away.is_hub_now() {
+                return Err(refuse("this device is no hub of the group"));
+            }
+            live.stop_being_hub()?;
+            (self.log)(&format!("cbb: {who} stopped this device being a hub of the group"));
+            return Ok(());
+        }
+        if let Some((_, k)) = &h.hub
+            && *k != live.mesh.own().hash().0
+        {
+            return Err(refuse("the hub command names another device as the hub"));
+        }
+        if !live.mesh.may_be_hub(&live.mesh.device()) {
+            return Err(refuse(format!("{NOT_A_HUB_YET}; the root names its hubs with cbb global hubs")));
+        }
+        let (fwd, key) = h
+            .forwarders
+            .first()
+            .map(|(a, pin)| (a.clone(), base64::engine::general_purpose::STANDARD.encode(pin)))
+            .unwrap_or_default();
+        // A hub set again keeps the UDP port it listens on; a new one
+        // listens on the port of the address it is reached at, which the
+        // router away from home forwards.
+        let given = h.hub.as_ref().and_then(|(e, _)| e.parse::<std::net::SocketAddr>().ok()).map_or(0, |a| a.port());
+        let port = away.hub_settings().map_or(i64::from(given), |(_, _, port)| i64::from(port));
+        let hdr = Header {
+            addrs: h.hub.iter().map(|(e, _)| e.clone()).collect(),
+            port,
+            forwarder: fwd,
+            forwarder_key: key,
+            ..Default::default()
+        };
+        away.make_hub(&hdr).map_err(|e| refuse(e.message().to_string()))?;
+        (self.log)(&format!("cbb: {who} made this device one of the group's hubs"));
+        Ok(())
+    }
+
+    /// The hub command that makes the device target a hub at the address
+    /// addrs gives, with the forwarder fwd names (else this hub's own).
+    fn hub_order_for(&self, live: &Live, target: &str, addrs: &[String], fwd: (&str, &str)) -> Result<Order> {
+        let st = live.mesh.state();
+        let d = writers::find(&st, target)?;
+        if !st.may_be_hub(&d.id) {
+            return Err(Error::msg(format!(
+                "the group's records do not make {} a hub; the root names its hubs with cbb global hubs",
+                d.name
+            )));
+        }
+        if addrs.len() > 1 {
+            return Err(Error::msg("a hub command of 0.6 gives the new hub one address away from home"));
+        }
+        let forwarder = match crate::away::forwarder_named(fwd.0, fwd.1)? {
+            Some(f) => Some(f),
+            None => live.away().and_then(|a| a.own_forwarder()),
+        };
+        if addrs.is_empty() && forwarder.is_none() {
+            return Err(Error::msg("the hub needs an address away from home or a forwarder"));
+        }
+        Ok(Order::Hub(crate::orders::Hub {
+            hub: addrs.first().map(|a| (a.clone(), d.key.hash().0)),
+            forwarders: forwarder.into_iter().collect(),
+            stop: false,
+        }))
+    }
+
+    /// cbb global hub -on DEVICE, cbb global hub off [-on DEVICE] and cbb
+    /// global move DEVICE on the records of 0.6.
+    fn live_hubs_op(&self, live: &Live, h: &Header, other: bool) -> Result<String> {
+        match h.name.as_str() {
+            "hub" if !other => Err(Error::msg("-on names this device; cbb global hub makes it a hub here")),
+            "hub" => {
+                if h.forward_only {
+                    // The device's record and the hubs record, which the
+                    // root alone gives (an admin grants base rights only).
+                    if !live.mesh.is_root() {
+                        return Err(not_yet(
+                            "an admin making a hub that only passes copies on; the group's root does it",
+                        ));
+                    }
+                    let now = crate::uptime::wall_ms().max(0) as u64;
+                    live.mesh.write(|set, k| writers::set_forward_only(set, k, &h.device, now))?;
+                }
+                let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
+                let name = self.live_order_after_records(live, &h.device, &o)?;
+                note_forwarders(live, &h.device, &o)?;
+                (self.log)(&format!("cbb: {name} is one of the group's hubs now"));
+                Ok(name)
+            }
+            "hub-off" => {
+                // The hubs that serve, as this device knows: itself while
+                // it serves, and those whose offers it keeps. A device
+                // that serves not is told so, rather than that it is the
+                // last hub.
+                let (serving, held) = live.away().map_or((false, Vec::new()), |a| (a.is_hub_now(), a.held_hubs()));
+                if !other && !serving {
+                    return Err(Error::msg("this device is no hub of the group"));
+                }
+                let target_serves = !other || {
+                    let st = live.mesh.state();
+                    writers::find(&st, &h.device).is_ok_and(|d| held.contains(&crate::roster::id_text(&d.id)))
+                };
+                // Whether another serves: as this device knows when the
+                // target is one it knows serves, else by the records'
+                // order of hubs.
+                let others =
+                    if target_serves { usize::from(serving) + held.len() } else { live.mesh.hub_order().len() };
+                if others < 2 && !h.force {
+                    return Err(Error::msg(crate::NO_OTHER_HUB));
+                }
+                if other {
+                    let o = Order::Hub(crate::orders::Hub { stop: true, ..Default::default() });
+                    let name = self.live_order(live, &h.device, &o)?;
+                    note_forwarders(live, &h.device, &o)?;
+                    (self.log)(&format!("cbb: {name} is no hub of the group any more"));
+                    Ok(name)
+                } else {
+                    live.stop_being_hub()?;
+                    Ok(String::new())
+                }
+            }
+            _ => {
+                if h.device.is_empty() {
+                    return Err(Error::msg("cbb global move names the device to move the hub to"));
+                }
+                if !other {
+                    return Err(Error::msg("-on names this device, which is the hub already"));
+                }
+                if !live.away().is_some_and(|a| a.is_hub_now()) {
+                    return Err(Error::msg("this device is no hub of the group, so it has no hub to move"));
+                }
+                let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
+                let name = self.live_order(live, &h.device, &o)?;
+                note_forwarders(live, &h.device, &o)?;
+                // The clients away move once the new hub serves (D-122).
+                let to = writers::find(&live.mesh.state(), &h.device)?.id;
+                // The handover outlives this command: it holds the member.
+                let arc =
+                    self.live().filter(|a| std::ptr::eq(&**a, live)).ok_or_else(|| Error::msg("the group stopped"))?;
+                arc.hand_hub_to(to)?;
+                (self.log)(&format!("cbb: the hub moves to {name} once it serves"));
+                Ok(name)
+            }
         }
     }
 
@@ -224,6 +380,22 @@ impl Service {
         }
     }
 
+    /// As live_order, for an order that records just written allow: the
+    /// target refuses it until those records reach it, which a command may
+    /// overtake, so a refusal for want of them is asked again until the
+    /// target has them, for a while.
+    fn live_order_after_records(&self, live: &Live, target: &str, o: &Order) -> Result<String> {
+        let until = Instant::now() + RECORDS_REACH;
+        loop {
+            match self.live_order(live, target, o) {
+                Err(e) if e.message().contains(NOT_A_HUB_YET) && Instant::now() < until => {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                res => return res,
+            }
+        }
+    }
+
     /// The operations that send a command, on the records of 0.6; None
     /// for one that is this device's own matter, which the service answers
     /// as ever.
@@ -255,6 +427,10 @@ impl Service {
                     (self.log)(&format!("cbb: turned sync {} on {name}", if on { "on" } else { "off" }));
                     control::reply(Header { name, done: true, ..Default::default() }, Vec::new())
                 })
+            }
+            "away" if matches!(h.name.as_str(), "hub-off" | "move") || (h.name == "hub" && !h.device.is_empty()) => {
+                self.live_hubs_op(live, h, other)
+                    .map(|name| control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
             "away" if h.name == "off" && !h.device.is_empty() => {
                 if !other {
@@ -297,14 +473,7 @@ impl Service {
             "type" => Way::Type,
             m => return Err(Error::msg(format!("a paste is pasted or typed, not {m:?}"))),
         };
-        let text = || {
-            let t = remotepaste::clean(&String::from_utf8_lossy(payload));
-            if t.is_empty() {
-                Err(Error::msg("nothing to paste: the text is empty or only control characters"))
-            } else {
-                Ok(t)
-            }
-        };
+        let text = || remotepaste::to_paste(&String::from_utf8_lossy(payload));
         let what = match h.kind.as_str() {
             "" | "text" => What::Text(text()?),
             "secret" => What::Secret(text()?),
@@ -360,3 +529,25 @@ impl Service {
         Ok(())
     }
 }
+
+/// On the root, the forwarders a hub command it sent named become the
+/// hub's (`Mesh::set_hub_forwarders`), each with a face of its own; a stop
+/// forgets them. An admin's names none: the root alone makes faces.
+fn note_forwarders(live: &Live, target: &str, o: &Order) -> Result<()> {
+    let Order::Hub(h) = o else { return Ok(()) };
+    if !live.mesh.is_root() {
+        return Ok(());
+    }
+    let hub = writers::find(&live.mesh.state(), target)?.id;
+    let servers =
+        h.forwarders.iter().map(|(address, pin)| crate::faces::Server { pin: *pin, address: address.clone() });
+    live.mesh.set_hub_forwarders(hub, servers.collect())
+}
+
+/// Why a device refuses a hub command while its records do not make it a
+/// hub.
+const NOT_A_HUB_YET: &str = "the group's records do not make this device a hub";
+
+/// How long a hub command waits for the records that allow it to reach its
+/// target.
+const RECORDS_REACH: Duration = Duration::from_secs(15);

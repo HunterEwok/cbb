@@ -99,56 +99,38 @@ fn accept(j: &Joiner, sock: TcpStream, code: &str, save: &SaveRef<'_>, proven: &
         None => tls::pair_server(&j.cert, &j.key, &tls::clock())?,
     };
     let session = tls::Session::server(Arc::new(cfg))?;
-    run(j, tls::Stream::new(session, sock), &exporter, Password::Code(code), true, save, proven)
+    run(j, tls::Stream::new(session, sock), &exporter, code, true, save, proven)
 }
 
 /// Runs the joining side over a connection to a member's open pairing
 /// window, with the code the user typed.
 pub fn join(j: &Joiner, sock: TcpStream, code: &str, save: &SaveRef<'_>) -> Result<Identity> {
-    dial(j, sock, Password::Code(code), save)
-}
-
-/// Runs the joining side over a connection to the pairing window of a
-/// remote invitation, with its secret, as Go's JoinSecret: the window's
-/// admin confirms the device, which may take up to CONFIRM_WAIT. group is
-/// the invitation's group tag; a member of another group is refused.
-pub fn join_secret(j: &Joiner, sock: TcpStream, secret: &[u8], group: &str, save: &SaveRef<'_>) -> Result<Identity> {
-    dial(j, sock, Password::Secret(secret, group), save)
+    dial(j, sock, code, save)
 }
 
 /// How long a remote invitation's admin may take to confirm the device, as
 /// Go's confirmWait.
 pub const CONFIRM_WAIT: Duration = Duration::from_secs(300);
 
-/// What proves the joiner may join: the code the user typed, or a remote
-/// invitation's secret.
-#[derive(Clone, Copy)]
-enum Password<'a> {
-    Code(&'a str),
-    Secret(&'a [u8], &'a str),
-}
-
-fn dial(j: &Joiner, sock: TcpStream, password: Password, save: &SaveRef<'_>) -> Result<Identity> {
+fn dial(j: &Joiner, sock: TcpStream, code: &str, save: &SaveRef<'_>) -> Result<Identity> {
     let (cfg, exporter) = match j.external_key() {
         Some(k) => tls::pair_client_external(&j.cert, k.clone(), &tls::clock())?,
         None => tls::pair_client(&j.cert, &j.key, &tls::clock())?,
     };
     let session = tls::Session::client(Arc::new(cfg), tls::server_name(None))?;
-    run(j, tls::Stream::new(session, sock), &exporter, password, false, save, &|| {})
+    run(j, tls::Stream::new(session, sock), &exporter, code, false, save, &|| {})
 }
 
 fn run(
     j: &Joiner,
     mut tc: tls::Stream,
     exporter: &tls::Exporter,
-    password: Password,
+    code: &str,
     member_first: bool,
     save: &SaveRef<'_>,
     proven: &dyn Fn(),
 ) -> Result<Identity> {
-    if let Password::Code(code) = password {
-        normalize_code(code)?;
-    }
+    normalize_code(code)?;
     tc.sock.set_read_timeout(Some(ATTEMPT_TIMEOUT)).context("the connection broke")?;
     tc.sock.set_write_timeout(Some(ATTEMPT_TIMEOUT)).context("the connection broke")?;
     tls::handshake(&mut tc.session, &tc.sock, "the TLS handshake failed")?;
@@ -163,7 +145,7 @@ fn run(
         .ok_or_else(|| Error::msg("the device does not offer pairing"))?;
     let mut sid = [0u8; 32];
     exporter.export(EXPORTER_LABEL, &[], &mut sid).wrap("cannot bind the pairing to TLS")?;
-    let id = exchange(j, &mut tc, password, &member_der, &sid, member_first, save, proven)?;
+    let id = exchange(j, &mut tc, code, &member_der, &sid, member_first, save, proven)?;
     tc.close();
     // The last frame reaches the member before this returns: through a
     // tunnel whose link stops right after, it would be lost on the way. The
@@ -182,7 +164,7 @@ fn run(
 fn exchange(
     j: &Joiner,
     tc: &mut tls::Stream,
-    password: Password,
+    code: &str,
     member_der: &[u8],
     sid: &[u8],
     member_first: bool,
@@ -193,10 +175,7 @@ fn exchange(
         rw.write_all(f).context("the connection broke")?;
         rw.flush().context("the connection broke")
     };
-    let (mut ex, first) = match password {
-        Password::Code(code) => j.start(code, member_der, sid, member_first)?,
-        Password::Secret(secret, group) => j.start_secret(secret, group, member_der, sid)?,
-    };
+    let (mut ex, first) = j.start(code, member_der, sid, member_first)?;
     send(tc, &first)?;
     let confirm = match ex.reply(&wire::read_frame(tc, MAX_FRAME)?) {
         Ok(f) => f,
@@ -209,10 +188,6 @@ fn exchange(
     };
     proven();
     send(tc, &confirm)?;
-    if let Password::Secret(..) = password {
-        // The admin is asked now.
-        tc.sock.set_read_timeout(Some(ATTEMPT_TIMEOUT + CONFIRM_WAIT)).context("the connection broke")?;
-    }
     let rw = tc;
     let res = ex
         .welcome(&wire::read_frame(rw, MAX_FRAME)?, crate::uptime::wall_ms())

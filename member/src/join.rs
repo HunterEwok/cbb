@@ -106,7 +106,10 @@ pub fn member(
     let frames = match admit(&info, &mut s) {
         Ok(f) => f,
         Err(e) => {
-            let _ = send(conn, &error_frame(PairError::Refused));
+            s.refuse(open, now_ms());
+            let why =
+                if e.find::<crate::admitting::Declined>().is_some() { PairError::Declined } else { PairError::Refused };
+            let _ = send(conn, &error_frame(why));
             return Err(e);
         }
     };
@@ -127,6 +130,7 @@ fn joiner_why(e: PairError, other: &'static str) -> &'static str {
         PairError::Closed => "the window is closed: open a new one with cbb pair",
         PairError::Expired => "the window's time is over: open a new one with cbb pair",
         PairError::Busy => "another device is pairing with that window: try again in a moment",
+        PairError::Declined => "whoever invited this device did not admit it",
         _ => other,
     }
 }

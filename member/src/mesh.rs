@@ -80,9 +80,13 @@ pub type OnCopy = Box<dyn Fn(&Arrived) + Send + Sync>;
 /// answered as failed.
 pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
 /// A message the member connection passes to the service: credentials,
-/// tunnel, hubs, guest, reach, evidence, waiting and dismiss (its type and
-/// body), from the peer named.
+/// tunnel, hubs, guest, reach, waiting and dismiss, or evidence on its own
+/// hook (its type and body), from the peer named.
 pub type OnOther = Box<dyn Fn(&DeviceId, u64, &[u8]) + Send + Sync>;
+
+/// What runs when a member connection with a device is up, after the
+/// hello went: the service sends `tunnel` to a hub then.
+pub type OnConnected = Box<dyn Fn(&DeviceId) + Send + Sync>;
 /// A pairing a device opened on the member port (ALPN `cbb-pair/3`): its
 /// socket, the TLS session and the session's pairing exporter, for the
 /// pairing window (`join::member`).
@@ -104,12 +108,27 @@ pub struct Mesh {
     own: Own,
     dir: PathBuf,
     local: [u8; 32],
+    /// Lock order: set before statements. Whoever needs both takes set
+    /// first (state() takes set: compute it before locking statements).
     set: Arc<Mutex<RecordSet>>,
+    /// Lock order: statements after set, never set while statements is
+    /// held (state() takes set).
     statements: Mutex<Statements>,
     store: Mutex<FileStore>,
     book: Mutex<Book>,
     marks: Mutex<Marks>,
     kept: Mutex<HashMap<[u8; 16], copies::Kept>>,
+    /// The last text this device copied while it held no other reader's
+    /// keys (alone, or just joined), with when it was copied: it goes out
+    /// once a reader's statement arrives, as the hello of 0.5 carried the
+    /// current copy to the members that came later.
+    unsent: Mutex<Option<(Content, Timestamp)>>,
+    /// The newest copy, not a secret, that this device made or took, by
+    /// the time it was signed, with its ID and frame: sent to each peer as
+    /// its connection opens, so that a pair that meets later converges, as
+    /// the hello's current copy (docs/protocol.md, section 4, "The member
+    /// protocol in 0.6").
+    current: Mutex<Option<Current>>,
     seen: Mutex<Seen>,
     /// The sealed blobs this member made or fetched, which it serves.
     content: Arc<Store>,
@@ -118,6 +137,10 @@ pub struct Mesh {
     conns: Mutex<HashMap<DeviceId, Arc<Conn>>>,
     /// The last hello of each device connected now, for the views.
     hellos: Mutex<HashMap<DeviceId, Hello>>,
+    /// The release archive each device seen since the service started
+    /// updates from, as its hello names it: a hub fetches those for the
+    /// group (`archives`).
+    archives: Mutex<HashMap<DeviceId, String>>,
     clock: Clock,
     hello: RwLock<Hello>,
     lifetimes: RwLock<Lifetimes>,
@@ -125,6 +148,9 @@ pub struct Mesh {
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
     on_other: RwLock<Option<OnOther>>,
+    on_connected: RwLock<Vec<OnConnected>>,
+    on_evidence: RwLock<Option<OnOther>>,
+    on_peer_hello: RwLock<Option<OnConnected>>,
     on_pair: RwLock<Option<OnPair>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
     /// The signed release and entry points this member holds and passes on.
@@ -133,6 +159,18 @@ pub struct Mesh {
     /// The group's server credentials, which this member keeps, brings up
     /// to date and passes on (`crate::faces`).
     faces: Faces,
+    /// The forwarders of the group's hubs, as this device knows them as
+    /// the root (`faces::HubForwarders`).
+    hub_forwarders: crate::faces::HubForwarders,
+    /// The push sender (`crate::pusher`), and where it keeps the phones'
+    /// registrations (`mesh/push.rs`).
+    push: push::Sender,
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    push_saved: Arc<push::PushSaved>,
+    push_faces: Arc<push::PushFaces>,
+    /// What was applied when the phones' events were last looked for.
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+    applied: Mutex<push::Applied>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
 }
@@ -148,6 +186,46 @@ struct Conn {
     closed: AtomicBool,
     /// The device with the lower ID dialed it.
     lower_dialed: bool,
+    /// The tunnel's pre-shared keys this connection gives (`crate::hubkey`).
+    tunnel_psks: TunnelPsks,
+    /// The hub took it from its tunnel (`accept_tunneled`).
+    through_hub: bool,
+    /// The peer's member key, as TLS showed it.
+    point: [u8; 65],
+}
+
+impl Conn {
+    /// Whether the peer and this member meet through the group's tunnel:
+    /// a connection the hub took from its tunnel, or one with a tunnel
+    /// address, fd00:cbb::/32.
+    fn tunneled(&self) -> bool {
+        self.through_hub
+            || matches!(self.sock.peer_addr().map(|a| a.ip()), Ok(std::net::IpAddr::V6(a)) if a.octets()[..4] == [0xfd, 0x00, 0x0c, 0xbb])
+    }
+}
+
+/// The tunnel's pre-shared keys a member connection gives (A-22): one for
+/// this device as the hub and the peer as its client, one for the peer as
+/// the hub. None from a connection whose key exchange was not the hybrid
+/// one, or whose secret could not be exported.
+#[derive(Clone, Copy, Default)]
+struct TunnelPsks {
+    as_hub: Option<cbb_core::hubkey::Psk>,
+    to_hub: Option<cbb_core::hubkey::Psk>,
+}
+
+impl TunnelPsks {
+    fn of(x: &tls::Exporter, session: &tls::Session, me: &DeviceId, peer: &DeviceId) -> TunnelPsks {
+        use cbb_core::hubkey;
+        let hybrid = hubkey::hybrid(session.kx_group());
+        let one = |hub: &DeviceId, device: &DeviceId| {
+            let mut out = cbb_core::secret::Zeroizing::new([0u8; 32]);
+            let (h, d) = (cbb_core::format::DeviceId(hub.0), cbb_core::format::DeviceId(device.0));
+            x.export(hubkey::EXPORTER_LABEL, &hubkey::context(&h, &d), &mut out[..]).ok()?;
+            hubkey::psk(&out, hybrid)
+        };
+        TunnelPsks { as_hub: one(me, peer), to_hub: one(peer, me) }
+    }
 }
 
 impl Conn {
@@ -235,37 +313,53 @@ impl Mesh {
         };
         let clock = Clock::new(Box::new(crate::uptime::wall_ms), Timestamp::default(), None);
         let faces = Faces::open(dir, &set.state(), log.clone())?;
-        let mesh = Mesh {
-            statements: Mutex::new(Statements::load(dir)?),
-            book: Mutex::new(Book::load(dir)?),
-            store: Mutex::new(store),
-            marks: Mutex::new(marks),
-            own,
-            dir: dir.to_path_buf(),
-            local,
-            set: Arc::new(Mutex::new(set)),
-            kept: Mutex::new(HashMap::new()),
-            seen: Mutex::new((HashSet::new(), VecDeque::new())),
-            content: Arc::new(Store::open(dir)),
-            fetches: Mutex::new(HashMap::new()),
-            conns: Mutex::new(HashMap::new()),
-            hellos: Mutex::new(HashMap::new()),
-            clock,
-            hello: RwLock::new(Hello::default()),
-            lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
-            on_copy: RwLock::new(None),
-            on_command: RwLock::new(None),
-            on_set: RwLock::new(None),
-            on_other: RwLock::new(None),
-            on_pair: RwLock::new(None),
-            waiting: Mutex::new(HashMap::new()),
-            releases: RwLock::new(None),
-            entries: RwLock::new(None),
-            faces,
-            log,
-            closed: AtomicBool::new(false),
-        };
-        Ok(Arc::new(mesh))
+        let (saved, loaded) = push::PushSaved::open(dir, set.state().group, log.clone());
+        let push_saved = Arc::new(saved);
+        let (statements, book) = (Statements::load(dir)?, Book::load(dir)?);
+        Ok(Arc::new_cyclic(|me| {
+            let push_faces = Arc::new(push::PushFaces::new(me.clone()));
+            Mesh {
+                push: push::Sender::start(push_faces.clone(), push_saved.clone(), loaded, log.clone()),
+                push_faces,
+                push_saved,
+                applied: Mutex::new(push::Applied::of(&set.state())),
+                statements: Mutex::new(statements),
+                book: Mutex::new(book),
+                store: Mutex::new(store),
+                marks: Mutex::new(marks),
+                own,
+                dir: dir.to_path_buf(),
+                local,
+                set: Arc::new(Mutex::new(set)),
+                kept: Mutex::new(HashMap::new()),
+                unsent: Mutex::new(None),
+                current: Mutex::new(None),
+                seen: Mutex::new((HashSet::new(), VecDeque::new())),
+                content: Arc::new(Store::open(dir)),
+                fetches: Mutex::new(HashMap::new()),
+                conns: Mutex::new(HashMap::new()),
+                hellos: Mutex::new(HashMap::new()),
+                archives: Mutex::new(HashMap::new()),
+                clock,
+                hello: RwLock::new(Hello::default()),
+                lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
+                on_copy: RwLock::new(None),
+                on_command: RwLock::new(None),
+                on_set: RwLock::new(None),
+                on_other: RwLock::new(None),
+                on_connected: RwLock::new(Vec::new()),
+                on_evidence: RwLock::new(None),
+                on_peer_hello: RwLock::new(None),
+                on_pair: RwLock::new(None),
+                waiting: Mutex::new(HashMap::new()),
+                releases: RwLock::new(None),
+                entries: RwLock::new(None),
+                faces,
+                hub_forwarders: crate::faces::HubForwarders::open(dir),
+                log,
+                closed: AtomicBool::new(false),
+            }
+        }))
     }
 
     fn logf(&self, s: &str) {
@@ -296,6 +390,7 @@ impl Mesh {
         for f in msgs {
             self.broadcast(&f, None);
         }
+        self.send_unsent();
         Ok(())
     }
 
@@ -330,6 +425,25 @@ impl Mesh {
         *self.on_other.write().unwrap() = Some(f);
     }
 
+    /// Adds what runs when a member connection is up: sync away from home
+    /// and the attestations each add one.
+    pub fn on_connected(&self, f: OnConnected) {
+        self.on_connected.write().unwrap().push(f);
+    }
+
+    /// Where an `evidence` message (t 19) goes, apart from the other
+    /// messages the service takes, since attestations run without sync
+    /// away from home.
+    pub fn on_evidence(&self, f: OnOther) {
+        *self.on_evidence.write().unwrap() = Some(f);
+    }
+
+    /// Called with the peer each time a hello from it arrives, once
+    /// `hellos` holds it.
+    pub fn on_peer_hello(&self, f: OnConnected) {
+        *self.on_peer_hello.write().unwrap() = Some(f);
+    }
+
     /// Where a pairing on the member port goes while a window is open;
     /// None closes such connections.
     pub fn on_pair(&self, f: Option<OnPair>) {
@@ -342,17 +456,51 @@ impl Mesh {
         self.send_to(to, frame)
     }
 
+    /// What this device shows a relay of 0.6 whose key has one of pins, at
+    /// now_ms (`Faces::for_relay`).
+    pub fn relay_credentials(
+        &self,
+        state: &State,
+        member: &[u8],
+        pins: &[[u8; 32]],
+        now_ms: u64,
+    ) -> Option<(crate::faces::Server, crate::faces::ForRelay)> {
+        self.faces.for_relay(state, member, pins, now_ms)
+    }
+
+    /// What this device, as a hub, shows the forwarder of pin `pin` now
+    /// (`Faces::for_hub`).
+    #[cfg(feature = "tunnel")]
+    pub fn hub_credential(&self, pin: &[u8; 32]) -> Option<crate::forward::HubCredential> {
+        self.faces.for_hub(pin, crate::uptime::wall_ms().max(0) as u64)
+    }
+
     /// Whether a device may be a hub of this one: a device of the group,
     /// not frozen, that holds an admin key or that the root's hubs record
     /// names.
     pub fn may_be_hub(&self, id: &DeviceId) -> bool {
-        let st = self.state();
-        st.device(id).is_some_and(|d| !d.frozen && (d.admin.is_some() || st.hubs.contains(id)))
+        self.state().may_be_hub(id)
     }
 
-    /// What this device's hellos say of it beyond the exchange's fields.
+    /// The group's hubs in the order in which they serve (`State::hub_order`).
+    pub fn hub_order(&self) -> Vec<DeviceId> {
+        self.state().hub_order()
+    }
+
+    /// What this device's hellos say of it beyond the exchange's fields;
+    /// a change goes to the peers connected in a new hello at once, as a
+    /// mute or a quick action turned on must.
     pub fn set_hello(&self, h: Hello) {
-        *self.hello.write().unwrap() = h;
+        let changed = {
+            let mut cur = self.hello.write().unwrap();
+            let changed = *cur != h;
+            *cur = h;
+            changed
+        };
+        if changed {
+            let hello = self.hello_frame(&self.set.lock().unwrap());
+            self.broadcast(&hello, None);
+        }
     }
 
     /// The signed release and entry points this member holds, which its
@@ -386,6 +534,7 @@ impl Mesh {
             }
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            self.offer_signed(None);
         }
         Ok(newer)
     }
@@ -400,6 +549,10 @@ impl Mesh {
         if newer {
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            self.offer_signed(None);
+            // A project's server with a new key gets its face now, not at
+            // the next period's beat.
+            self.refresh_faces(&self.state());
         }
         Ok(newer)
     }
@@ -409,9 +562,45 @@ impl Mesh {
         *self.lifetimes.write().unwrap() = l;
     }
 
+    /// Sets the largest blob this member serves through the group's
+    /// tunnel, and fetches as a hub for its clients (`cbb config
+    /// max-copy-away`).
+    pub fn set_away_limit(&self, n: u64) {
+        self.content.set_away_limit(n);
+    }
+
+    /// The largest blob served through the group's tunnel.
+    pub fn away_limit(&self) -> u64 {
+        self.content.away_limit()
+    }
+
     /// The last hello of each device connected now.
     pub fn hellos(&self) -> HashMap<DeviceId, Hello> {
         self.hellos.lock().unwrap().clone()
+    }
+
+    /// The release archives the devices seen since the service started
+    /// update from, each once, in order: only names as
+    /// packaging/archive.sh makes them (`cbb_core::wire::archive_name_valid`).
+    pub fn archives(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.archives.lock().unwrap().values().cloned().collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// The tunnel's pre-shared key the connection with `peer` gives
+    /// (`crate::hubkey`): with this device as the hub (`as_hub`), or with
+    /// the peer as the hub; None while not connected, or from a connection
+    /// whose key exchange was not the hybrid one.
+    pub fn tunnel_psk(&self, peer: &DeviceId, as_hub: bool) -> Option<cbb_core::hubkey::Psk> {
+        let c = self.conns.lock().unwrap().get(peer)?.tunnel_psks;
+        if as_hub { c.as_hub } else { c.to_hub }
+    }
+
+    /// The address the connection with peer comes from, while connected.
+    pub fn peer_addr(&self, peer: &DeviceId) -> Option<std::net::SocketAddr> {
+        self.conns.lock().unwrap().get(peer)?.sock.peer_addr().ok()
     }
 
     /// The devices connected now.
@@ -449,29 +638,56 @@ impl Mesh {
     }
 
     /// Brings the server credentials up to date as far as this device can
-    /// (`Faces::refresh`) and sends what it signed to every peer.
+    /// (`Faces::refresh`), a face for each of the group's servers (the
+    /// project's, the group's own relays and its hubs' forwarders,
+    /// `faces::group_servers`), and sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
+        // A removed or frozen device's push registration goes with it,
+        // and the push service's previous face is kept for those under it.
+        self.prune_push(state);
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
-        match self.faces.refresh(state, &s) {
+        let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
+        // Only the root makes faces, so only its hubs' forwarders count.
+        let forwarders = if root.is_some() { self.hub_forwarders.servers(state) } else { Vec::new() };
+        let servers = crate::faces::group_servers(state, project, forwarders);
+        match self.faces.refresh(state, &s, &servers) {
             Ok(signed) => {
-                for f in Faces::messages(&signed) {
-                    self.broadcast(&f, None);
+                for (server, envs) in signed {
+                    for f in Faces::messages(&server, &envs) {
+                        self.broadcast(&f, None);
+                    }
                 }
             }
             Err(e) => self.logf(&format!("cbb: the server credentials: {}", e.for_log())),
         }
+        self.push_faces.look(self, state);
+    }
+
+    /// Whether this device holds the group's current root key.
+    pub fn is_root(&self) -> bool {
+        self.own.root.as_deref().is_some_and(|r| self.state().is_root(&Key::es256(r.public()).hash()))
+    }
+
+    /// Notes the forwarders of the hub `hub` (none forgets them), as the
+    /// root's hub command names them or its own hub serves with: each gets
+    /// a face of its own.
+    pub fn set_hub_forwarders(&self, hub: DeviceId, servers: Vec<crate::faces::Server>) -> Result<()> {
+        if self.hub_forwarders.set(hub, servers)? {
+            self.refresh_faces(&self.state());
+        }
+        Ok(())
     }
 
     /// Takes message `member-credentials` from a peer: the new ones go on
     /// to the other peers, and may want this device's server key or new
     /// lists.
     fn take_credentials(&self, conn: &Conn, msg: &[u8]) -> Result<()> {
-        let envs = Faces::read_message(msg)?;
+        let (server, envs) = Faces::read_message(msg)?;
         let state = self.state();
-        let fresh = self.faces.add(&state, &hex(&conn.peer.0[..4]), &envs);
+        let fresh = self.faces.add(&state, &hex(&conn.peer.0[..4]), &server, &envs);
         if !fresh.is_empty() {
-            for f in Faces::messages(&fresh) {
+            for f in Faces::messages(&server, &fresh) {
                 self.broadcast(&f, Some(&conn.peer));
             }
             self.refresh_faces(&state);
@@ -491,9 +707,24 @@ impl Mesh {
             let st = set.state();
             let signer = crate::writers::signer(&self.own, &st)
                 .ok_or_else(|| Error::msg("this device holds neither the group's root key nor an admin key"))?;
-            f(&mut set, signer)?
+            self.noting(&mut set, signer, f)?
         };
         self.changed()?;
+        Ok(out)
+    }
+
+    /// f on the set, with the records signer wrote in it added to the log
+    /// of what this device signed (`signed`).
+    fn noting<T>(
+        &self,
+        set: &mut RecordSet,
+        signer: &dyn cbb_core::identity::ExternalKey,
+        f: impl FnOnce(&mut RecordSet, &dyn cbb_core::identity::ExternalKey) -> Result<T>,
+    ) -> Result<T> {
+        let h = Key::es256(signer.public()).hash();
+        let before = signed::ids_of(set, &h);
+        let out = f(set, signer)?;
+        signed::note(&self.dir, set, &h, &before, &|s| self.logf(s));
         Ok(out)
     }
 
@@ -506,7 +737,7 @@ impl Mesh {
     ) -> Result<T> {
         let out = {
             let mut set = self.set.lock().unwrap();
-            f(&mut set, signer)?
+            self.noting(&mut set, signer, f)?
         };
         self.changed()?;
         Ok(out)
@@ -521,10 +752,28 @@ impl Mesh {
             f(&set);
         }
         self.refresh_faces(&set.state());
+        self.push_events(&set);
         let hello = self.hello_frame(&set);
         drop(set);
+        // The peers the records refuse now go first: they get nothing more,
+        // not even the hello that would draw the new records.
+        self.drop_refused();
         self.broadcast(&hello, None);
         Ok(())
+    }
+
+    /// Ends the connections with peers the records refuse now, such as a
+    /// device just removed or frozen: the group keeps no connection with
+    /// it, and it need not learn why (docs/protocol.md, section 10).
+    fn drop_refused(&self) {
+        let state = self.state();
+        let own = self.own.hash();
+        for c in self.conns.lock().unwrap().values() {
+            if let Standing::Refused(why) = standing(&state, &own, &c.point) {
+                self.logf(&format!("ended the connection with {}: {why}", hex(&c.peer.0[..4])));
+                c.close();
+            }
+        }
     }
 
     fn hello_frame(&self, set: &RecordSet) -> Vec<u8> {
@@ -544,6 +793,32 @@ impl Mesh {
     /// when the peer's are older.
     fn on_hello(&self, conn: &Conn, h: &Hello) {
         self.hellos.lock().unwrap().insert(conn.peer, h.clone());
+        if cbb_core::wire::archive_name_valid(&h.device.archive) {
+            self.archives.lock().unwrap().insert(conn.peer, h.device.archive.clone());
+        }
+        if let Some(f) = &*self.on_peer_hello.read().unwrap() {
+            f(&conn.peer);
+        }
+        self.offer_newer(conn, h);
+    }
+
+    /// The release and entry points this member holds, to the peers
+    /// connected whose last hello names older ones (all but `except`, which
+    /// sent them): once this member took newer ones, as a peer's hello
+    /// that comes later gets them.
+    fn offer_signed(&self, except: Option<&DeviceId>) {
+        let hellos = self.hellos();
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        for c in conns.iter().filter(|c| Some(&c.peer) != except) {
+            if let Some(h) = hellos.get(&c.peer) {
+                self.offer_newer(c, h);
+            }
+        }
+    }
+
+    /// Sends the peer of conn the release and entry points this member
+    /// holds when its hello h names older ones.
+    fn offer_newer(&self, conn: &Conn, h: &Hello) {
         let now = crate::uptime::wall_ms();
         if let Some(r) = &*self.releases.read().unwrap()
             && crate::releases::newer(r.order(now), (h.release_keys_seq, h.release_seq))
@@ -571,9 +846,17 @@ impl Mesh {
         };
         match taken {
             Some(Ok(true)) => {
+                if t == m::T_ENTRIES {
+                    self.logf(&format!("cbb: took newer entry points from {}", hex(&conn.peer.0)));
+                }
                 // Newer here: passed on to the others with a new hello.
                 let hello = self.hello_frame(&self.set.lock().unwrap());
                 self.broadcast(&hello, Some(&conn.peer));
+                self.offer_signed(Some(&conn.peer));
+                if t == m::T_ENTRIES {
+                    // As put_entries: the project's servers' faces follow.
+                    self.refresh_faces(&self.state());
+                }
             }
             Some(Err(e)) => {
                 self.logf(&format!("the {what} from {} were not taken: {}", hex(&conn.peer.0[..4]), e.details()))
@@ -602,20 +885,73 @@ impl Mesh {
     /// Seals content to the group's readers and sends it to every peer.
     /// False when the group has no reader for it.
     pub fn copy(&self, content: &Content) -> Result<bool> {
+        let time = self.clock.now();
+        let sent = self.copy_at(content, time)?;
+        // Kept until a reader's statement comes; a later copy replaces it.
+        *self.unsent.lock().unwrap() = (!sent).then(|| (content.clone(), time));
+        Ok(sent)
+    }
+
+    /// Sends the copy this device made while it held no reader's keys, at
+    /// the time it was copied, now that a statement came: the readers
+    /// judge it by that time, as any copy.
+    fn send_unsent(&self) {
+        let Some((content, time)) = self.unsent.lock().unwrap().clone() else { return };
+        match self.copy_at(&content, time) {
+            Ok(true) => {
+                let mut u = self.unsent.lock().unwrap();
+                // Unless a newer copy took its place meanwhile.
+                if u.as_ref().is_some_and(|(_, t)| *t == time) {
+                    *u = None;
+                }
+            }
+            Ok(false) => {}
+            Err(e) => self.logf(&format!("cbb: sending the copy made before a reader was known: {}", e.details())),
+        }
+    }
+
+    /// Keeps the copy id, in frame, as the current copy when it was signed
+    /// after the one kept.
+    pub(crate) fn set_current(&self, time: Timestamp, id: [u8; 16], frame: &[u8]) {
+        let mut c = self.current.lock().unwrap();
+        if c.as_ref().is_none_or(|(t, _, _)| time > *t) {
+            *c = Some((time, id, frame.to_vec()));
+        }
+    }
+
+    /// The current copy for a peer whose connection just opened. One this
+    /// device made is sealed again to the peer alone, by the records and
+    /// statements as they are now: nothing when the peer reads it no more
+    /// (`resealed`). One taken from another member goes as its maker
+    /// sealed it, to its readers then; a peer not among them cannot open
+    /// it and asks the maker, which seals it again as here. A peer the
+    /// records refuse, removed or frozen, never gets this far: the TLS
+    /// handshake refuses it (`judge`), and `drop_refused` ends a
+    /// connection open when the records come to refuse it. The peer judges
+    /// the copy as any other (`copies::fresh`): one older than a copy it
+    /// holds, or one it has seen, it drops.
+    fn current_for(&self, peer: &DeviceId) -> Option<Vec<u8>> {
+        let (_, id, f) = self.current.lock().unwrap().clone()?;
+        if self.kept.lock().unwrap().contains_key(&id) { self.resealed(&id, peer) } else { Some(f) }
+    }
+
+    /// Seals content, copied at time, to the group's readers and sends it:
+    /// false when the group has no reader for it.
+    fn copy_at(&self, content: &Content, time: Timestamp) -> Result<bool> {
         let state = self.state();
         let now = crate::uptime::wall_ms().max(0) as u64;
-        let made = sealed::make(
-            &*self.own.member,
-            &state,
-            &self.statements.lock().unwrap(),
-            content,
-            self.clock.now(),
-            Some(now),
-        )?;
+        let made = sealed::make(&*self.own.member, &state, &self.statements.lock().unwrap(), content, time, Some(now))?;
         let Some((frame, kept)) = made else { return Ok(false) };
-        self.see(&kept.made.id);
-        self.kept.lock().unwrap().insert(kept.made.id, kept);
+        let kept_id = kept.made.id;
+        self.see(&kept_id);
+        self.kept.lock().unwrap().insert(kept_id, kept);
+        if !content.is_secret() {
+            self.set_current(time, kept_id, &frame);
+        }
         self.broadcast(&frame, None);
+        if let Ok(msg) = frame::read(&frame, frame::LIMIT_MEMBER) {
+            self.push_copy(&msg.map, push::Role::Origin);
+        }
         Ok(true)
     }
 
@@ -684,18 +1020,64 @@ impl Mesh {
         let sock = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
             .map_err(|e| Error::with(format!("cannot reach {addr}"), e))?;
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
-        let mut s = tls::Session::client(Arc::new(self.client_config(expect)?), bykey::unsent_name())?;
+        let (cfg, exporter) = bykey::exporting_client(self.client_config(expect)?);
+        let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, true)
+        self.run(sock, s, true, false, Some(&exporter))
     }
 
     /// Takes a connection a member made and runs it until it ends: the
     /// device it was with.
     pub fn accept(self: &Arc<Self>, sock: TcpStream) -> Result<DeviceId> {
         sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
-        let mut s = tls::Session::server(Arc::new(self.server_config()?))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
         tls::handshake(&mut s, &sock, "the handshake failed")?;
-        self.run(sock, s, false)
+        self.run(sock, s, false, false, Some(&exporter))
+    }
+
+    /// As `accept`, for a connection this hub took from its tunnel: what it
+    /// serves there is capped by its limit away from home.
+    pub fn accept_tunneled(self: &Arc<Self>, sock: TcpStream) -> Result<DeviceId> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        self.run(sock, s, false, true, Some(&exporter))
+    }
+
+    /// As `accept`, with a check of the device the peer's certificate
+    /// names before the connection is served: a blind relay's call only from
+    /// the device the relay said calls.
+    pub fn accept_checked(self: &Arc<Self>, sock: TcpStream, check: &dyn Fn(&DeviceId) -> bool) -> Result<DeviceId> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let (cfg, exporter) = bykey::exporting_server(self.server_config()?);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
+        let peer = Key::es256(point.to_vec()).device_id();
+        if !check(&peer) {
+            let _ = sock.shutdown(std::net::Shutdown::Both);
+            return Err(Error::msg(format!("{} is not the caller this listener expects", hex(&peer.0[..4]))));
+        }
+        self.run(sock, s, false, false, Some(&exporter))
+    }
+
+    /// The server's side of a pairing handshake (`cbb-pair/3` alone) on a
+    /// connection that may only pair: a guest's through the hub's tunnel
+    /// (docs/protocol.md, section 12). Gives the connection, its session
+    /// and the pairing exporter.
+    pub fn pair_handshake(&self, sock: TcpStream) -> Result<(TcpStream, tls::Session, cbb_core::join::PairExporter)> {
+        sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+        let cfg = bykey::server(&self.own.tls_key()?, bykey::any_key(), cbb_core::alpn::PAIR, &tls::clock())?;
+        let (cfg, exporter) = bykey::exporting_server(cfg);
+        let mut s = tls::Session::server(Arc::new(cfg))?;
+        tls::handshake(&mut s, &sock, "the handshake failed")?;
+        if !cbb_core::alpn::is_pair(s.alpn_protocol()) {
+            return Err(Error::msg("the device did not ask to pair"));
+        }
+        let x = bykey::pairing_exporter(&s, &exporter)?;
+        Ok((sock, s, x))
     }
 
     /// Takes a connection on the member port, where members connect
@@ -733,7 +1115,7 @@ impl Mesh {
         }
         let point = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         (self.judge())(&point).map_err(|why| Error::msg(format!("the peer was refused: {why}")))?;
-        self.run(sock, s, false).map(Some)
+        self.run(sock, s, false, false, Some(&exporter)).map(Some)
     }
 
     /// Runs a member connection until it ends; dialed says this device
@@ -741,10 +1123,18 @@ impl Mesh {
     /// reconnect does, unless the old one was dialed by the device with the
     /// lower ID and this one was not: when both dial at once, the two keep
     /// the same connection, and neither is left without one.
-    fn run(self: &Arc<Self>, sock: TcpStream, session: tls::Session, dialed: bool) -> Result<DeviceId> {
+    fn run(
+        self: &Arc<Self>,
+        sock: TcpStream,
+        session: tls::Session,
+        dialed: bool,
+        through_hub: bool,
+        exporter: Option<&tls::Exporter>,
+    ) -> Result<DeviceId> {
         let point = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the peer showed no key"))?;
         let peer_key = Key::es256(point.to_vec());
         let peer = peer_key.device_id();
+        let tunnel_psks = exporter.map(|x| TunnelPsks::of(x, &session, &self.device(), &peer));
         let lower_dialed = dialed == (self.device().0 < peer.0);
         sock.set_read_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
         // A peer that stops reading ends the connection rather than holding
@@ -759,6 +1149,9 @@ impl Mesh {
             tx,
             closed: AtomicBool::new(false),
             lower_dialed,
+            tunnel_psks: tunnel_psks.unwrap_or_default(),
+            through_hub,
+            point,
         });
         {
             let mut conns = self.conns.lock().unwrap();
@@ -773,6 +1166,10 @@ impl Mesh {
             if let Some(old) = conns.insert(peer, conn.clone()) {
                 old.close();
             }
+        }
+        // Each connection with the address it went to or came from.
+        if let Ok(addr) = sock.peer_addr() {
+            self.logf(&format!("connected to {} at {addr}", hex(&peer.0)));
         }
         let writer = {
             let conn = conn.clone();
@@ -803,8 +1200,20 @@ impl Mesh {
         for f in self.statements.lock().unwrap().messages() {
             let _ = conn.tx.try_send(f);
         }
-        for f in Faces::messages(&self.faces.kept().envelopes()) {
+        // The current copy, after the statements, which a peer that reads
+        // it may need first; one it has seen it drops.
+        if let Some(f) = self.current_for(&peer) {
             let _ = conn.tx.try_send(f);
+        }
+        for f in self.faces.all_messages() {
+            let _ = conn.tx.try_send(f);
+        }
+        self.push.connected(&peer);
+        for (_, f) in self.push.renewals(&peer) {
+            let _ = conn.tx.try_send(f);
+        }
+        for f in self.on_connected.read().unwrap().iter() {
+            f(&peer);
         }
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
@@ -829,6 +1238,7 @@ impl Mesh {
             }
         }
         conn.close();
+        self.push.left(&peer);
         drop(conn);
         let _ = writer.join();
         self.logf(&format!("the connection with {} ended: {}", hex(&peer.0[..4]), end.details()));
@@ -846,6 +1256,7 @@ impl Mesh {
                     f(&set);
                 }
                 self.refresh_faces(&set.state());
+                self.push_events(&set);
             }
             out
         };
@@ -856,8 +1267,16 @@ impl Mesh {
                 hex(&ours)
             ));
         }
-        for f in out.send {
-            let _ = conn.tx.try_send(f);
+        // The peers that the new records refuse, this one among them, go
+        // first: they get nothing more, neither records nor the hello that
+        // would draw them.
+        if out.changed {
+            self.drop_refused();
+        }
+        if !conn.closed.load(Ordering::SeqCst) {
+            for f in out.send {
+                let _ = conn.tx.try_send(f);
+            }
         }
         if out.changed {
             let hello = self.hello_frame(&self.set.lock().unwrap());
@@ -872,13 +1291,17 @@ impl Mesh {
             }
             Some(m::T_PING) => Ok(()),
             Some(cbb_core::msg::tables::T_CREDENTIALS) => self.take_credentials(conn, msg),
+            Some(cbb_core::push::T_PUSH) => {
+                self.take_push(&conn.peer, msg);
+                Ok(())
+            }
             Some(t @ (m::T_RELEASE | m::T_ENTRIES)) => self.take_signed(conn, t, msg),
             Some(m::T_BYE) => Err(Error::msg("the peer said goodbye")),
             Some(cbb_core::msg::wave4::T_KEYS) => self.take_keys(conn, msg),
             Some(copies::T_COPY) => self.take_copy(conn, msg),
             Some(cbb_core::commands::T_COMMAND) => self.take_command(conn, msg),
             Some(cbb_core::msg::tables::T_RESULT) => {
-                self.take_result(msg);
+                self.take_result(conn, msg);
                 Ok(())
             }
             Some(copies::T_RESEAL) => self.take_reseal(conn, msg),
@@ -887,11 +1310,20 @@ impl Mesh {
                 self.take_missing(msg);
                 Ok(())
             }
-            // A tunnel offer or a hub share only from a device that may be
-            // a hub, by the records, not by what its hello claims.
-            Some(t @ (cbb_core::msg::tables::T_TUNNEL | cbb_core::msg::tables::T_HUBS))
-                if !self.may_be_hub(&conn.peer) =>
+            // A device's key toward a hub from any current member of the
+            // group (in the records, not frozen); what a hub tells the
+            // other hubs only from a device that may be a hub, by the
+            // records, not by what its hello claims.
+            Some(t @ cbb_core::msg::tables::T_TUNNEL)
+                if !self.state().device(&conn.peer).is_some_and(|d| !d.frozen) =>
             {
+                self.logf(&format!(
+                    "ignored message {t} from {}: it is no current member of the group",
+                    hex(&conn.peer.0[..4])
+                ));
+                Ok(())
+            }
+            Some(t @ cbb_core::msg::tables::T_HUBS) if !self.may_be_hub(&conn.peer) => {
                 self.logf(&format!(
                     "ignored message {t} from {}: it may not be a hub of the group",
                     hex(&conn.peer.0[..4])
@@ -903,12 +1335,17 @@ impl Mesh {
                 | cbb_core::msg::tables::T_HUBS
                 | cbb_core::msg::tables::T_GUEST
                 | m::T_REACH
-                | m::T_EVIDENCE
                 | cbb_core::msg::tables::T_WAITING
                 | cbb_core::msg::tables::T_DISMISS),
             ) => {
                 if let Some(f) = &*self.on_other.read().unwrap() {
                     f(&conn.peer, t, msg);
+                }
+                Ok(())
+            }
+            Some(m::T_EVIDENCE) => {
+                if let Some(f) = &*self.on_evidence.read().unwrap() {
+                    f(&conn.peer, m::T_EVIDENCE, msg);
                 }
                 Ok(())
             }
@@ -930,6 +1367,7 @@ impl Mesh {
             // Passed on to the others, as every member does.
             let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
             self.broadcast(&f, Some(&conn.peer));
+            self.send_unsent();
         }
         Ok(())
     }
@@ -950,14 +1388,20 @@ impl Mesh {
             }
         };
         // The copy checked: passed on once to every other peer.
+        let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
         if let Some(id) = copy_id(msg)
             && self.see(&id)
         {
-            let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
             self.broadcast(&f, Some(&conn.peer));
         }
         match taken {
             Taken::New { id, content, origin, signed, age_ms, blob } => {
+                if !content.is_secret() {
+                    self.set_current(signed, id, &f);
+                }
+                if let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) {
+                    self.push_copy(&v, self.push_role_received());
+                }
                 {
                     let mut marks = self.marks.lock().unwrap();
                     marks.wrote(&origin, signed);
@@ -980,22 +1424,36 @@ impl Mesh {
         let Some(id) = v.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()) else {
             return Ok(());
         };
-        let Some(kept) = self.kept.lock().unwrap().get(&id).cloned() else { return Ok(()) };
-        // Sealed again to the asker's current statement only, when it was
-        // a reader and still reads.
+        if let Some(f) = self.resealed(&id, &conn.peer) {
+            let _ = conn.tx.try_send(f);
+        }
+        Ok(())
+    }
+
+    /// The copy id this device made and keeps, sealed again to the peer's
+    /// current statement only, when the peer was a reader and still reads:
+    /// nothing otherwise.
+    fn resealed(&self, id: &[u8; 16], peer: &DeviceId) -> Option<Vec<u8>> {
+        let kept = self.kept.lock().unwrap().get(id).cloned()?;
         let state = self.state();
         let sealing = self.statements.lock().unwrap().sealing(&state);
         let readers = copies::readers(&state, &sealing, &kept.content, &self.device(), &[], None);
-        let Some(r) = readers.into_iter().find(|r| r.id == conn.peer) else { return Ok(()) };
+        let r = readers.into_iter().find(|r| r.id == *peer)?;
         // A copy with a blob keeps its copy key, so that its blob opens.
         let copy = match &kept.k {
             Some(k) => copies::seal_keyed(&*self.own.member, &[r], &kept.made, &kept.content, k),
             None => copies::seal(&*self.own.member, &[r], &kept.made, &kept.content),
+        };
+        let made = copy
+            .map_err(|e| e.context("cannot seal the copy again"))
+            .and_then(|c| copies::message(&c).map_err(|r| Error::msg(format!("the copy breaks {r}"))));
+        match made {
+            Ok(f) => Some(f),
+            Err(e) => {
+                self.logf(&format!("cbb: {}", e.details()));
+                None
+            }
         }
-        .map_err(|e| e.context("cannot seal the copy again"))?;
-        let f = copies::message(&copy).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
-        let _ = conn.tx.try_send(f);
-        Ok(())
     }
 
     fn take_command(&self, conn: &Conn, msg: &[u8]) -> Result<()> {
@@ -1036,8 +1494,16 @@ impl Mesh {
         Ok(())
     }
 
-    fn take_result(&self, msg: &[u8]) {
+    /// A command's result, to the command waiting for it; one with a hub's
+    /// offer (field 6), the answer to `tunnel`, goes to the service.
+    fn take_result(&self, conn: &Conn, msg: &[u8]) {
         let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) else { return };
+        if v.get(6).is_some() {
+            if let Some(f) = &*self.on_other.read().unwrap() {
+                f(&conn.peer, cbb_core::msg::tables::T_RESULT, msg);
+            }
+            return;
+        }
         let Some(id) = v.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()) else { return };
         let by = v.get(3).and_then(Value::as_bytes).and_then(DeviceId::from_slice).unwrap_or_default();
         let r = CommandResult {
@@ -1058,7 +1524,16 @@ impl Mesh {
     /// Closes every connection, and takes no more.
     pub fn close(&self) {
         self.closed.store(true, Ordering::SeqCst);
+        self.push.stop();
         self.close_connections();
+    }
+
+    /// Ends the connection with the device peer, if there is one; it may
+    /// connect again.
+    pub fn disconnect(&self, peer: &DeviceId) {
+        if let Some(c) = self.conns.lock().unwrap().get(peer) {
+            c.close();
+        }
     }
 
     /// Ends every connection with a goodbye; new ones are still taken.
@@ -1117,6 +1592,9 @@ fn command_id(f: &[u8]) -> Option<[u8; 16]> {
 }
 
 /// A copy's ID from message `copy` (its body), as its header names it.
+/// A current copy: when it was signed, its ID and its frame.
+type Current = (Timestamp, [u8; 16], Vec<u8>);
+
 fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
     let (_, v, _) = cbb_core::msg::read_noted(msg).ok()?;
     let c = cbb_core::format::copy::Copy::from_value(v.get(2)?).ok()?;
@@ -1125,6 +1603,24 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 
 mod media;
 pub use media::SentMedia;
+mod signed;
+pub use signed::FILE_NAME as SIGNED_FILE;
+/// The file the phones' push registrations are kept in.
+pub const PUSH_FILE: &str = "push.cbor";
+/// The file the push service's previous face is kept in while it serves,
+/// so that a restart does not lose it: the group, the service's pin and
+/// address, the credentials, the period's tag and when they expire. The
+/// server key is not kept: it comes again from the server secret and the
+/// tag.
+pub const PUSH_PREVIOUS_FILE: &str = "push-previous.cbor";
+#[cfg(feature = "tunnel")]
+mod push;
+#[cfg(not(feature = "tunnel"))]
+#[path = "mesh/push_off.rs"]
+mod push;
 
+#[cfg(all(test, feature = "tunnel"))]
+#[path = "mesh/push_e2e.rs"]
+mod push_e2e;
 #[cfg(test)]
 pub(crate) mod tests;

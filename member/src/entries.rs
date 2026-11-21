@@ -135,6 +135,12 @@ impl Entries {
         self.keys_of("push", name, now_ms)
     }
 
+    /// The keys keys.json names for the project's server `name` of use
+    /// `usage` (`relay`, `forwarder`, `push`), as [`Entries::relay_keys`].
+    pub fn keys_for(&self, usage: &str, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
+        self.keys_of(usage, name, now_ms)
+    }
+
     fn keys_of(&self, usage: &str, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
         let Ok(set) = decode(&set) else { return Vec::new() };

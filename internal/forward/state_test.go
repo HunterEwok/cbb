@@ -33,16 +33,18 @@ func testVersions(t *testing.T, file string) *versions {
 	return v
 }
 
-func periodOf(tag string, version uint64, expires time.Time) *group.Presented {
-	var s group.KeyHash
-	rand.Read(s[:])
-	return &group.Presented{Tag: tag, Signer: s, Hubs: &group.CredentialBody{Version: version, ExpiresMS: expires.UnixMilli()}}
+// periodOf is what the forwarder keeps of a hubs' credential of the
+// period's tag at version, expiring at expires, signed by a new key.
+func periodOf(tag string, version uint64, expires time.Time) *shown {
+	p := &shown{tag: tag, version: version, expiresMs: expires.UnixMilli()}
+	rand.Read(p.signer[:])
+	return p
 }
 
 // withVersion is p's period, with another version of the credential.
-func withVersion(p *group.Presented, version uint64) *group.Presented {
+func withVersion(p *shown, version uint64) *shown {
 	q := *p
-	q.Hubs = &group.CredentialBody{Version: version, ExpiresMS: p.Hubs.ExpiresMS}
+	q.version = version
 	return &q
 }
 
@@ -135,7 +137,7 @@ func TestVersionsKeepsTheLongestExpiry(t *testing.T) {
 	if err := v.keep(p, a); err != nil {
 		t.Fatal(err)
 	}
-	if err := v.keep(withVersion(&group.Presented{Tag: "p", Signer: p.Signer, Hubs: &group.CredentialBody{ExpiresMS: now.Add(time.Hour).UnixMilli()}}, 2), a); err != nil {
+	if err := v.keep(withVersion(&shown{tag: "p", signer: p.signer, expiresMs: now.Add(time.Hour).UnixMilli()}, 2), a); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(24 * time.Hour)

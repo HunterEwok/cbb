@@ -40,6 +40,8 @@ use crate::uptime;
 const NEAR_GRACE: Duration = Duration::from_secs(30);
 /// The devices found at home that are remembered, as many as a group has.
 const MAX_HOME: usize = 256;
+/// How often a hub tries to fetch a copy's blob for its clients.
+const FETCH_TRIES: usize = 5;
 
 /// A copy from the group to write to this device's clipboard.
 #[derive(Clone, Debug)]
@@ -98,6 +100,11 @@ fn shown(id: &DeviceId) -> certs::DeviceId {
     certs::DeviceId::parse(&id_text(id)).unwrap_or_else(|_| certs::DeviceId::random())
 }
 
+/// A device ID in hex, as `tunnel.json` keeps it.
+pub(crate) fn id_of_hex(s: &str) -> Option<DeviceId> {
+    of(&certs::DeviceId::parse(s).ok()?)
+}
+
 /// A device ID discovery names.
 fn of(id: &certs::DeviceId) -> Option<DeviceId> {
     let s = id.as_str();
@@ -128,6 +135,41 @@ pub struct Live {
     /// The images or files this member copied last, which a paste opens,
     /// and when, on the wall clock.
     own_media: Mutex<Option<(SentMedia, i64)>>,
+    /// Sync away from home, once the service gave it (`with_away`).
+    #[cfg(feature = "tunnel")]
+    away: std::sync::OnceLock<Arc<crate::away::Away>>,
+    /// The hub's tunnel, while this device serves as a hub of 0.6.
+    #[cfg(feature = "tunnel")]
+    hub: Mutex<Option<away::HubRun>>,
+    /// The hubs above this one that said they serve, while it is a hub.
+    #[cfg(feature = "tunnel")]
+    ladder: Mutex<away::Ladder>,
+    /// When this member last sent `tunnel` to each device connected that
+    /// may be a hub.
+    #[cfg(feature = "tunnel")]
+    toward: Mutex<HashMap<DeviceId, std::time::Instant>>,
+    /// Whether this hub stands by, a hub above it serving.
+    #[cfg(feature = "tunnel")]
+    standing_by: std::sync::atomic::AtomicBool,
+    /// The hub this one moves to, while it still serves its clients away
+    /// from home (`Live::hand_hub_to`).
+    #[cfg(feature = "tunnel")]
+    handoff: Mutex<Option<DeviceId>>,
+    /// A thread signs again what a resolve voided (`resign_soon`).
+    resigning: std::sync::atomic::AtomicBool,
+    /// The attestations of member keys, once the service started them
+    /// (`with_attestations`).
+    attest: std::sync::OnceLock<evidence::Attest>,
+    /// The link to the group's blind relay, while the device meets the
+    /// group there.
+    #[cfg(feature = "tunnel")]
+    meeting: Mutex<Option<relay::Meeting>>,
+    /// The guests of the invitations this hub keeps open.
+    #[cfg(feature = "tunnel")]
+    guests: invite::Guests,
+    /// The invitations this admin makes through hubs.
+    #[cfg(feature = "tunnel")]
+    through: through::Throughs,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -172,6 +214,26 @@ impl Live {
             home: Mutex::new(HashMap::new()),
             networks: RwLock::new(None),
             own_media: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
+            away: std::sync::OnceLock::new(),
+            #[cfg(feature = "tunnel")]
+            hub: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
+            ladder: Mutex::new(away::Ladder::default()),
+            #[cfg(feature = "tunnel")]
+            toward: Mutex::new(HashMap::new()),
+            #[cfg(feature = "tunnel")]
+            standing_by: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tunnel")]
+            handoff: Mutex::new(None),
+            resigning: std::sync::atomic::AtomicBool::new(false),
+            attest: std::sync::OnceLock::new(),
+            #[cfg(feature = "tunnel")]
+            meeting: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
+            guests: Default::default(),
+            #[cfg(feature = "tunnel")]
+            through: Default::default(),
             log,
         });
         live.settle(&live.mesh.state());
@@ -187,9 +249,19 @@ impl Live {
         let w: Weak<Live> = Arc::downgrade(&live);
         live.mesh.on_set(Box::new(move |set| {
             if let Some(l) = w.upgrade() {
-                l.settle(&set.state());
+                let st = set.state();
+                l.settle(&st);
+                if let Some(a) = l.away() {
+                    a.drop_held_gone(&|id| st.device(id).is_some());
+                }
                 // The records may let in devices refused until now.
                 l.redial();
+                // A root's resolve may have voided both histories of this
+                // device's admin key: what it signed, it signs again, off
+                // the set's lock.
+                if l.mesh.own().admin.is_some() {
+                    l.resign_soon();
+                }
             }
         }));
         Ok(live)
@@ -209,11 +281,27 @@ impl Live {
     fn settle(&self, state: &State) {
         let (_, secret_ms) = self.board.lifetimes();
         self.board.set_lifetimes(state.incoming_ms.unwrap_or(LIVE_WINDOW_MS), secret_ms);
+        // The group's last copy, made on a device removed since, no longer
+        // counts here and is never written later (docs/protocol.md,
+        // section 10, "The copies setting").
+        if let Some(c) = self.board.current()
+            && state.device(&c.origin).is_none()
+            && self.board.forget(&c.id)
+        {
+            self.logf(&format!(
+                "cbb: the group's last copy no longer counts and is dropped: {} is no device of the group",
+                id_text(&c.origin)
+            ));
+        }
     }
 
     /// A copy a peer brought, which the core found new.
-    fn arrived(&self, a: &Arrived) {
-        match self.board.received(a) {
+    fn arrived(self: &Arc<Self>, a: &Arrived) {
+        let verdict = self.board.received(a);
+        if verdict != Verdict::Write {
+            self.fetch_for_clients(a);
+        }
+        match verdict {
             Verdict::Write => {}
             Verdict::Mode | Verdict::Held | Verdict::Unread => return,
             v => {
@@ -244,6 +332,32 @@ impl Live {
         }
     }
 
+    /// A hub, or a device that only passes the copies on, fetches the blob
+    /// of a copy it does not write within its limit away from home, so
+    /// that its clients away from home can get it (docs/protocol.md,
+    /// section 4, "Content"); a copy it writes the service fetches.
+    fn fetch_for_clients(self: &Arc<Self>, a: &Arrived) {
+        let Some(b) = a.blob else { return };
+        let forward_only =
+            self.mesh.state().device(&self.me).is_some_and(|d| crate::writers::is_forward_only(d.rights));
+        if !(forward_only || self.away().is_some_and(|w| w.is_hub_now())) || b.size > self.mesh.away_limit() {
+            return;
+        }
+        let (w, from) = (Arc::downgrade(self), a.from);
+        std::thread::spawn(move || {
+            // Again after a pause while no member gives it yet.
+            for _ in 0..FETCH_TRIES {
+                let Some(l) = w.upgrade() else { return };
+                match l.mesh.fetch(&b, &from, l.mesh.away_limit()) {
+                    Ok(()) => return,
+                    Err(e) => l.logf(&format!("cbb: fetching a copy for the hub's clients: {}", e.details())),
+                }
+                drop(l);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        });
+    }
+
     /// A clipboard watcher saw the clipboard change: it goes to the group
     /// unless the board keeps it here.
     pub fn copied(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
@@ -254,11 +368,38 @@ impl Live {
     }
 
     /// A deliberate send (cbb copy): to the group, unless muted.
+    /// A hub that only passes the copies on makes, reads and pastes none
+    /// (`writers::is_forward_only`).
+    pub fn refuse_forward_only(&self) -> Result<()> {
+        let st = self.mesh.state();
+        if st.device(&self.me).is_some_and(|d| crate::writers::is_forward_only(d.rights)) {
+            return Err(crate::error::Error::msg(crate::node::FORWARD_ONLY));
+        }
+        Ok(())
+    }
+
     pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
-        let c = self.board.send(text, kind, via)?;
+        self.refuse_forward_only()?;
+        let (c, write) = self.board.send(text, kind, via)?;
         // A group with no other reader yet (this device alone) keeps the
         // copy here, as the board did; nothing goes out.
         self.mesh.copy(&c)?;
+        if write {
+            let (_, secret_ms) = self.board.lifetimes();
+            let w = Write {
+                // A text names no copy: only a paste of images or files does.
+                id: [0; 16],
+                text: text.to_string(),
+                kind,
+                media: None,
+                blob: None,
+                from: self.me,
+                ttl: (kind == Kind::Secret).then(|| Duration::from_millis(secret_ms)),
+            };
+            if let Some(f) = &*self.on_write.read().unwrap() {
+                f(w);
+            }
+        }
         Ok(())
     }
 
@@ -267,6 +408,7 @@ impl Live {
     /// and kept to serve, the clipboard's content here, and sent to the
     /// group as Board::sends_media says.
     pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via, deliberate: bool) -> Result<()> {
+        self.refuse_forward_only()?;
         let send = self.board.sends_media(deliberate)?;
         let files = parts.iter().any(|(p, _)| !p.path.is_empty() || p.dir);
         let c = Content {
@@ -281,7 +423,22 @@ impl Live {
         };
         let m = self.mesh.copy_media(&c, parts, send)?;
         self.board.copied_media(&m.manifest, text);
+        let w = deliberate.then(|| Write {
+            id: m.id.unwrap_or_default(),
+            text: text.to_string(),
+            kind: Kind::Media,
+            media: Some(m.manifest.clone()),
+            // Kept here: nothing to fetch.
+            blob: None,
+            from: self.me,
+            ttl: None,
+        });
         *self.own_media.lock().unwrap() = Some((m, uptime::wall_ms()));
+        // cbb copy FILE puts them in this device's own clipboard too, as a
+        // text cbb copy does (Live::send); a paste opens its own copy.
+        if let (Some(w), Some(f)) = (w, &*self.on_write.read().unwrap()) {
+            f(w);
+        }
         Ok(())
     }
 
@@ -345,6 +502,18 @@ impl Live {
 
     /// The known networks, where the member port takes connections and
     /// mDNS publishes this device.
+    /// On a hub, the archives of the release held that the devices seen
+    /// update from and this device does not hold whole, at most
+    /// `releases::MAX_WANTED`, for its cbb update to download; elsewhere none
+    /// (docs/protocol.md, section 16, "In the group").
+    pub fn wanted_release_files(&self) -> Option<Vec<String>> {
+        if !self.away().is_some_and(|a| a.is_hub_now()) {
+            return None;
+        }
+        let r = self.mesh.releases()?;
+        Some(r.wanted(&self.mesh.archives(), crate::uptime::wall_ms())).filter(|w| !w.is_empty())
+    }
+
     pub fn set_networks(&self, n: Arc<Networks>) {
         *self.networks.write().unwrap() = Some(n);
     }
@@ -369,6 +538,20 @@ impl Live {
     }
 
     /// Makes the dial loops try at once.
+    /// Signs again, on a thread of its own and one at a time, what the
+    /// root's resolve voided of this device's records (`Mesh::resign_voided`).
+    fn resign_soon(self: &Arc<Self>) {
+        if self.resigning.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let w = Arc::downgrade(self);
+        std::thread::spawn(move || {
+            let Some(l) = w.upgrade() else { return };
+            l.mesh.resign_voided();
+            l.resigning.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
+
     pub fn redial(&self) {
         self.redials.fetch_add(1, Ordering::SeqCst);
         self.kick();
@@ -377,6 +560,12 @@ impl Live {
     /// Whether discovery found the device at home within NEAR_GRACE.
     pub fn at_home(&self, id: &DeviceId) -> bool {
         self.home.lock().unwrap().get(id).is_some_and(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
+    }
+
+    /// Whether discovery found any device of the group at home within
+    /// NEAR_GRACE.
+    pub fn any_at_home(&self) -> bool {
+        self.home.lock().unwrap().values().any(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
     }
 
     /// The members connected only because this one dialed them back.
@@ -470,7 +659,7 @@ impl Peers for Live {
     fn accept_checked(
         &self,
         sock: TcpStream,
-        _addr: SocketAddr,
+        addr: SocketAddr,
         handshaken: &mut dyn FnMut(),
         admit: Option<&Admit>,
     ) -> Result<()> {
@@ -480,8 +669,16 @@ impl Peers for Live {
         if self.is_paused() {
             return Err(Error::msg("the member is paused"));
         }
-        if admit.is_some() {
-            return Err(not_yet("a listener that checks its callers (a relay's)"));
+        if let Some(admit) = admit {
+            // A blind relay's call: a member connection from the device the
+            // relay said calls from that port, and nothing else.
+            handshaken();
+            return self
+                .mesh
+                .accept_checked(sock, &|id| {
+                    crate::certs::DeviceId::parse(&id_text(id)).is_ok_and(|d| admit(addr.port(), &d))
+                })
+                .map(|_| ());
         }
         self.mesh.accept_port_with(sock, handshaken).map(|_| ())
     }
@@ -532,6 +729,23 @@ impl Peers for Live {
         out
     }
 }
+
+/// The first four bytes of a device ID in hex, as the log names a device.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
+fn id_text4(id: &DeviceId) -> String {
+    certs::hex(&id.0[..4])
+}
+
+#[cfg(feature = "tunnel")]
+mod away;
+mod evidence;
+pub mod invite;
+#[cfg(not(feature = "tunnel"))]
+mod off;
+#[cfg(feature = "tunnel")]
+mod relay;
+#[cfg(feature = "tunnel")]
+mod through;
 
 #[cfg(test)]
 mod tests;

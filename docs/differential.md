@@ -62,8 +62,11 @@ kits), so a reader that fails in another way also shows as a difference.
   it on Linux.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
-  (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
-  (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
+  (`internal/group`), `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
+  registration and the forwarder's answers of `cbb-forward/3`, seeded from
+  `testdata/format/messages3.json`), `FuzzCredential` (`internal/blind`, the forwarder's
+  reader of the format's profile, frames and credentials, seeded from
+  `testdata/format/credentials.json` and `frames.json`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
   `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
   which no bytes may pass), `sheet` (the recovery sheet's text and QR code, each one taken
@@ -79,7 +82,10 @@ kits), so a reader that fails in another way also shows as a difference.
   checks that the packets do not depend on how the bytes came. The service's targets in
   `member/fuzz` read the control socket's messages, which cbb-helper's channel uses too
   (`control`: each read message written again reads back the same), and the ZX Spectrum
-  Next's frames on the Pi's UART with its character set (`next_frames`).
+  Next's frames on the Pi's UART with its character set (`next_frames`), and the relay's
+  messages of `cbb-relay/3` as both ends read them (`relay_wire`: a registration or a note
+  written again reads back the same, on the format's grid), which took the place of Go's
+  `FuzzRelayWire` with the Go relay client.
 
 Manifests are read by the rules of signed bodies in their canonical form ([roadmap](roadmap.md),
 item 42), so they fail the run as the other kinds do; `compare -report-only KIND` still prints

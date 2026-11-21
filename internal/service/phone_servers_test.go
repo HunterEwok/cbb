@@ -78,7 +78,7 @@ func TestFFIPhoneServersRelay(t *testing.T) {
 		return err == nil && json.Unmarshal(raw, &all) == nil && len(all) == 5
 	})
 
-	r, keys := startRelay(t, laptop.status(t).Group)
+	r, keys := startRelay(t, laptop.status(t).RelayGroup)
 	call("relay", map[string]any{"relay": r.Addr().String(), "key": keys.Pin()})
 	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
 		t.Fatalf("cbb global relay on the laptop: %v", err)

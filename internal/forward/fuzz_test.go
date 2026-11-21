@@ -4,9 +4,13 @@
 package forward
 
 import (
+	"bytes"
+	"encoding/hex"
 	"net/netip"
 	"testing"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/blind"
 )
 
 // FuzzForwardWire routes the packets anyone may send to the forwarder's
@@ -41,6 +45,78 @@ func FuzzForwardWire(f *testing.F) {
 			if ok && to != hubA && to != hubB && to != client {
 				t.Fatalf("a packet from %v went to %v", from, to)
 			}
+		}
+	})
+}
+
+// FuzzRegister reads any frame as the forwarder reads a hub's
+// registration and as a hub reads the forwarder's answers, seeded with the
+// format's messages of cbb-forward/3 (testdata/format/messages3.json):
+// nothing panics, a registration taken is written again by the hub's
+// writer as one that reads back the same, and an answer taken is written
+// again as the same message.
+func FuzzRegister(f *testing.F) {
+	take, refuse := forwarderRows(f)
+	for _, r := range append(take, refuse...) {
+		b, err := hex.DecodeString(r.Message)
+		if err != nil {
+			f.Fatal(err)
+		}
+		v, err := blind.Decode(b)
+		if err != nil {
+			continue
+		}
+		f.Add(blind.WriteFrame(v.Map...)[4:])
+	}
+	f.Fuzz(func(t *testing.T, b []byte) {
+		ty, m, err := blind.Message(b)
+		if err != nil {
+			return
+		}
+		if r, err := readRegister(ty, m); err == nil {
+			again, err := msgRegister(*r)
+			if err != nil {
+				t.Fatalf("a registration taken is not written again: %v", err)
+			}
+			ty2, m2, err := blind.Message(again[4:])
+			if err != nil {
+				t.Fatalf("written again as a frame that breaks the format: %v", err)
+			}
+			r2, err := readRegister(ty2, m2)
+			if err != nil || r2.Key != r.Key || r2.Proof != r.Proof || r2.VLESS != r.VLESS ||
+				r2.BadObfuscation != r.BadObfuscation || len(r2.Credentials) != len(r.Credentials) {
+				t.Fatalf("written again, reads as %+v, %v; was %+v", r2, err, r)
+			}
+			for i := range r.Credentials {
+				if !bytes.Equal(r.Credentials[i], r2.Credentials[i]) {
+					t.Fatalf("credential %d written again differs", i)
+				}
+			}
+		}
+		a, err := readAnswer(ty, m)
+		if err != nil {
+			return
+		}
+		var again []byte
+		switch ty {
+		case tError:
+			again = msgError(a.Error)
+		case tSeen:
+			again = msgSeen(netip.MustParseAddrPort(a.Seen))
+		default:
+			return
+		}
+		_, m2, err := blind.Message(again[4:])
+		if err != nil {
+			t.Fatalf("an answer written again breaks the format: %v", err)
+		}
+		a2, err := readAnswer(ty, m2)
+		if a.Error == "" || len(a.Error) > maxReason {
+			// The forwarder writes no empty reason, nor a longer one.
+			a.Error = a2.Error
+		}
+		if err != nil || a2.Error != a.Error || a2.Seen != a.Seen {
+			t.Fatalf("an answer written again reads as %+v, %v; was %+v", a2, err, a)
 		}
 	})
 }

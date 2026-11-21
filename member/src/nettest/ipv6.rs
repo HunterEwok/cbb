@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::races::{echo, hub_and_link_at, round_trip};
-use crate::nettest::{Group, wait_for};
+use crate::nettest::wait_for;
 
 /// Whether the IPv6 loopback takes TCP and UDP; without it a test that
 /// CBB_TEST_IPV6=1 does not ask for is skipped, and says so.
@@ -72,10 +72,7 @@ fn the_relay_over_ipv6() {
     if !ipv6("the_relay_over_ipv6") {
         return;
     }
-    let mut g = Group::new(2);
-    if g.id(0) > g.id(1) {
-        g.devs.swap(0, 1);
-    }
+    let g = crate::nettest::blind::Blind::new(2);
     let keys = Keys::new().unwrap();
     let pin = cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash();
     let s = Server::start(server::Config {
@@ -94,13 +91,8 @@ fn the_relay_over_ipv6() {
     let config = |i: usize, member_port: u16| Config {
         endpoint: s.addr(),
         pins: vec![pin],
-        chain: g.chain(i),
-        key: g.key(i),
-        device: g.id(i),
-        wg_key: crate::tunnel::new_key().unwrap().try_into().unwrap(),
-        records: Arc::new(Mutex::new(g.records_json())),
         member_port,
-        credentials: Arc::new(Mutex::new(None)),
+        credentials: Arc::new(Mutex::new(Some(g.credentialed(i, 1)))),
     };
     let (a, b) = (Arc::new(Seen::default()), Arc::new(Seen::default()));
     let _ra = Relay::start(config(0, 1), a.clone());

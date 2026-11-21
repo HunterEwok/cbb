@@ -4062,7 +4062,7 @@ impl RecordSet {
                 return Ok(r);
             }
         }
-        let own = self.heads_where(|k| *k == h).into_iter().next();
+        let own = self.own_head(state, &h);
         let (seq, prev) = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
         let body = Body { group: self.group, signer: h, seq, prev, time_ms, kind, held: false };
         if body.encode().len() > super::MAX_BODY {
@@ -4204,6 +4204,77 @@ impl RecordSet {
     }
 
     /// The heads of the keys want takes, but the recovery key's.
+    /// The record a key's next record follows: its newest that is on no
+    /// branch a counting `resolve` voided (docs/protocol.md, section 10,
+    /// "Going on after two histories"). So after the root voided both
+    /// histories the key writes seq k again, after the record of seq k - 1.
+    fn own_head(&self, state: &State, h: &KeyHash) -> Option<super::body::Seen> {
+        let (mine, dead) = self.branches_of(state, h);
+        mine.values()
+            .filter(|r| !dead.contains(&r.id()))
+            .map(|r| super::body::Seen { key: *h, seq: r.body().seq, id: r.id() })
+            .max_by_key(|s| (s.seq, core::cmp::Reverse(s.id)))
+    }
+
+    /// The records of key h on a branch a counting `resolve` voided, in the
+    /// order of their seq: what a device signs again once the root voided
+    /// both histories of its key, of those it signed itself.
+    pub fn voided_of(&self, state: &State, h: &KeyHash) -> Vec<Record> {
+        let (mine, dead) = self.branches_of(state, h);
+        let mut out: Vec<Record> = mine.values().filter(|r| dead.contains(&r.id())).map(|r| (*r).clone()).collect();
+        out.sort_by_key(|r| (r.body().seq, r.id()));
+        out
+    }
+
+    /// The records key h signed that the set holds, and of them those on a
+    /// voided branch: a voided record with a sibling (a record of the key
+    /// with the same seq) takes the records above it on its `prev` chain
+    /// with it; one without a sibling goes alone, and the chain goes on
+    /// through it.
+    fn branches_of(&self, state: &State, h: &KeyHash) -> (BTreeMap<RecordId, &Record>, BTreeSet<RecordId>) {
+        let voided: BTreeSet<RecordId> = state
+            .counting
+            .iter()
+            .filter_map(|id| self.get(id))
+            .filter_map(|r| match &r.body().kind {
+                Kind::Resolve(ids) => Some(ids.iter().copied()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mine: BTreeMap<RecordId, &Record> = self
+            .records
+            .values()
+            .filter(|e| e.role != Role::Recovery && !e.held && e.record.body().signer == *h)
+            .map(|e| (e.record.id(), &e.record))
+            .collect();
+        let mut at_seq: BTreeMap<u64, usize> = BTreeMap::new();
+        for r in mine.values() {
+            let n = at_seq.entry(r.body().seq).or_default();
+            *n = n.saturating_add(1);
+        }
+        let cuts: BTreeSet<RecordId> = mine
+            .iter()
+            .filter(|(id, r)| voided.contains(id) && at_seq.get(&r.body().seq).is_some_and(|n| *n > 1))
+            .map(|(id, _)| *id)
+            .collect();
+        let mut dead = BTreeSet::new();
+        if cuts.is_empty() {
+            return (mine, dead);
+        }
+        for r in mine.values() {
+            let mut cur = Some(*r);
+            while let Some(c) = cur {
+                if cuts.contains(&c.id()) {
+                    dead.insert(r.id());
+                    break;
+                }
+                cur = c.body().prev.and_then(|p| mine.get(&p).copied());
+            }
+        }
+        (mine, dead)
+    }
+
     fn heads_where(&self, want: impl Fn(&KeyHash) -> bool) -> Vec<super::body::Seen> {
         let mut out: BTreeMap<KeyHash, super::body::Seen> = BTreeMap::new();
         for e in self.records.values().filter(|e| e.role != Role::Recovery && !e.held && want(&e.record.body().signer))

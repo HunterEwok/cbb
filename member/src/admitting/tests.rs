@@ -56,7 +56,7 @@ fn a_phone_pairs_at_home_on_the_member_port() {
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
     let d2 = desk.clone();
-    let (window, digits) = home_window(crate::uptime::wall_ms() as u64, Duration::from_secs(300));
+    let (window, digits) = home_window(crate::admitting::home_window_ms(), Duration::from_secs(300));
     let typed = Invitation::typed(window.invitation.id, &digits).unwrap();
     let window = Mutex::new(window);
     desk.on_pair(Some(Box::new(move |sock, s, x| {

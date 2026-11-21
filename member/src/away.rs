@@ -8,6 +8,22 @@
 //! through the tunnel, the first hub in the group's order that answers
 //! ("Several hubs"). It fails closed: without the tunnel, it syncs at home
 //! only, and cbb global says why.
+//!
+//! Kept for ffi until the phones move to Live (D-122). `cbb` runs sync away
+//! from home only in a group of 0.6 (`crate::live`, live/away.rs); this module
+//! and its users stay for the phones' apps alone, which still run a
+//! `phone::Member` on the Node:
+//! - `Away` (new, key, offered, retry, run, set_credentials, hello,
+//!   guest_message, hubs_shared, prune, make_hub, serve_if_first, stop_hub,
+//!   meet_at, turn_on, turn_off, status), from phone.rs: ffi member.rs
+//!   commands `away`, `away_status`, `hub`, `hub_off`, `relay`,
+//!   `joined_by_invite`, `why`, and `cbb_member_servers` (serve_servers);
+//! - `GuestTunnel` and `keep_guest`: ffi join.rs (`cbb_join_*` from an
+//!   invitation), tunnel.rs (the guest tunnel's link) and `joined_by_invite`;
+//! - `crate::inviter` (`Invite`, `open_where`, `GuestKeys`): ffi invite.rs;
+//! - the Node's hooks on_tunnel, on_guest, on_hello and set_tunnel_key.
+//!
+//! Remove them with the phones' move, not before.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -23,14 +39,20 @@ use crate::tunnel::{self, Link, State};
 use crate::uptime;
 use crate::wire::TunnelOffer;
 
+mod held;
 mod hubs;
 mod invite;
-mod meet;
-mod movehub;
+pub(crate) mod meet;
+mod offer;
 mod serve;
+mod toward;
 
-pub use invite::{GuestTunnel, join_invite, keep_guest};
-pub use movehub::is_stop;
+pub use held::{forwarder_named, offer_result};
+#[cfg_attr(test, allow(unused_imports))]
+pub(crate) use hubs::standby_grace;
+pub use invite::{GuestTunnel, keep_guest};
+
+pub(crate) use crate::NO_OTHER_HUB;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The longest wait between tries of a hub that is a phone, there only
@@ -99,6 +121,8 @@ pub struct Away {
     moving: AtomicBool,
     /// The guest tunnels of the open invitations, on the hub.
     guests: invite::Guests,
+    /// The hub of 0.6's registration with its forwarder, while it serves.
+    hub_report: Mutex<Option<Arc<Mutex<crate::forward::Report>>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -155,6 +179,7 @@ impl Away {
             giving_way: AtomicBool::new(false),
             moving: AtomicBool::new(false),
             guests: Default::default(),
+            hub_report: Mutex::new(None),
             log,
         }
     }
@@ -303,7 +328,13 @@ impl Away {
     /// the group's VLESS user ID, or the hub's this member uses or tries
     /// first; None without VLESS.
     pub fn update_way(&self, node: &Node) -> Option<serde_json::Value> {
-        let order = node.hub_order();
+        self.update_way_in(&node.hub_order())
+    }
+
+    /// The way of [`Away::update_way`] in the group's order of hubs
+    /// `order` (device IDs in hex): the member on the records of 0.6 gives
+    /// its own order (`Live::update_way`).
+    pub fn update_way_in(&self, order: &[String]) -> Option<serde_json::Value> {
         let cur = self.st.lock().unwrap();
         let st = cur.as_ref()?;
         if st.is_hub {
@@ -313,7 +344,7 @@ impl Away {
             return Some(v);
         }
         let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
-        let hub = using.and_then(|d| st.hub(&d).cloned()).or_else(|| st.hubs_to_try(&order).into_iter().next());
+        let hub = using.and_then(|d| st.hub(&d).cloned()).or_else(|| st.hubs_to_try(order).into_iter().next());
         hub?.vless
     }
 

@@ -20,7 +20,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 	"github.com/HunterEwok/cbb/internal/budget"
-	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // stateLabel names the key that hashes what the state table keeps.
@@ -45,6 +44,14 @@ const (
 // tagCaps are the caps of the entries by the source that added them; the
 // table's own bound is rememberedGroups.
 var tagCaps = budget.Caps{Network: networkTags, Wide: wideTags, Provider: providerTags}
+
+// periodLifetime is how long a period lasts: a credential that claims to
+// last longer, which no group makes, holds its entry no longer than that.
+const periodLifetime = 35 * 24 * time.Hour
+
+// rememberedGroups bounds the periods whose credential versions the
+// forwarder keeps.
+const rememberedGroups = 100_000
 
 // errTableFull is what a registration with a new tag is refused with when
 // the table, or its network's share of it, is full.
@@ -136,16 +143,16 @@ func (v *versions) hash(parts ...[]byte) string {
 // first period key the forwarder sees for a tag is the group's) while the
 // table has room for it; else the same period key must have signed it, at the
 // version kept or later.
-func (v *versions) check(p *group.Presented, from netip.Addr) error {
+func (v *versions) check(p *shown, from netip.Addr) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	e, ok := v.entries[v.hash([]byte(p.Tag))]
+	e, ok := v.entries[v.hash([]byte(p.tag))]
 	switch {
 	case !ok:
 		return v.roomLocked(from)
-	case v.hash([]byte(p.Tag), p.Signer[:]) != e.Key:
+	case v.hash([]byte(p.tag), p.signer[:]) != e.Key:
 		return errors.New("another key registered this group's period first")
-	case p.Hubs.Version < e.Version:
+	case p.version < e.Version:
 		return errors.New("the group's hubs' credential is older than one this forwarder saw")
 	}
 	return nil
@@ -197,16 +204,16 @@ func (v *versions) pruneLocked() {
 // as the group's newest, and has the table written when it changed. It
 // returns errTableFull, keeping nothing, when the tag is new and there is no
 // room for it.
-func (v *versions) keep(p *group.Presented, from netip.Addr) error {
+func (v *versions) keep(p *shown, from netip.Addr) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	t := v.hash([]byte(p.Tag))
-	key := v.hash([]byte(p.Tag), p.Signer[:])
+	t := v.hash([]byte(p.tag))
+	key := v.hash([]byte(p.tag), p.signer[:])
 	// A period lasts PeriodLifetime: a credential that claims to last
 	// longer, which no group makes, holds its entry no longer than that.
-	expires := min(p.Hubs.ExpiresMS, v.now().Add(group.PeriodLifetime).UnixMilli())
+	expires := min(p.expiresMs, v.now().Add(periodLifetime).UnixMilli())
 	e, ok := v.entries[t]
-	if ok && e.Version == p.Hubs.Version && e.Key == key && e.Expires >= expires {
+	if ok && e.Version == p.version && e.Key == key && e.Expires >= expires {
 		return nil
 	}
 	if !ok {
@@ -222,7 +229,7 @@ func (v *versions) keep(p *group.Presented, from netip.Addr) error {
 		}
 	}
 	v.seq++
-	e.Version, e.Key, e.Seq = p.Hubs.Version, key, v.seq
+	e.Version, e.Key, e.Seq = p.version, key, v.seq
 	// An older credential may outlast the newest; the entry stays until the
 	// last one the group could still present has expired.
 	e.Expires = max(e.Expires, expires)

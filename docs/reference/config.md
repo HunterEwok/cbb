@@ -47,6 +47,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_SOCKET` | `cbb`, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | `cbb` | Another state directory. |
+| `CBB_TEST_MOVE_LINGER` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that moves keeps serving its clients after the new hub serves, in place of 300. Never set by hand. |
 | `CBB_TEST_STANDBY_GRACE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
 | `CBB_TEST_UP_CHECK` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
 | `CBB_TEST_HUB_KEY_AHEAD` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
@@ -60,7 +61,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` and the bounds table of `docs/protocol.md` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when they no longer match it. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys, and the Firebase project's service account `fcm.json` for `-fcm-account`, come from systemd's credentials), and `-new-state` on the very first start only (a missing state file stops any other start). |
-| `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
+| `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group GROUP` (from `cbb status -relay`) or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
 | `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |
 
@@ -119,13 +120,13 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
-| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
+| `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
 | `CBB_PUSH_LIVE_ADDR` | the push service's tests, by hand | The address of a running cbb-push that the ignored test `live_push_to_a_phone` sends a body to a real phone through. |
 | `CBB_PUSH_LIVE_KIND` | the same test | `event` (the default) or `waits`: which body it seals. |
 | `CBB_PUSH_LIVE_PIN` | the same test | The pin of that cbb-push's key, base64, as it logs it. |
 | `CBB_PUSH_LIVE_ROOTS` | the push service's tests, by hand | The CA certificates the ignored test that reaches Apple's sandbox checks it with. |
 | `CBB_PUSH_LIVE_REG` | the same test | The phone's push registration, base64, as the app's test row copies it (launch argument `-PushTestTools YES`). |
-| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
+| `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`); tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
 | `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
@@ -141,6 +142,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testhooks`, `fuzzing`) then does not compile (docs/maintainers/maintaining.md, "Releases"). |
 | `CBB_TEST_RENEW_EVERY` | `cbb`, in the Go end-to-end tests (`internal/service`) | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
 | `CBB_TEST_ATTEST_ROOTS` | `cbb-helper` built with the tag `testhooks` and the Rust service built with the feature `testhooks`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. A release's build does not read it. Never set by hand. |
+| `CBB_TEST_OWN_EVIDENCE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`, `TestEvidence`) | A JSON array of the helper's evidence the member sends as its own on every connection, as a phone sends its Android chain; read once when the service starts. The root checks it as any evidence. A release's build does not read it. Never set by hand. |
 | `CBB_TEST_TPM_ROOTS` | `cbb-helper` built with the tag `testhooks`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
 | `CBB_TEST_STATUS_URL` | `cbb-helper`, in the service's tests | Where the attestation status list and its keys are fetched from, in place of `https://cbb.tools/attest/`. Never set by hand. |
 | `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |

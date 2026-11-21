@@ -423,6 +423,12 @@ fn test_fallback() -> Option<Duration> {
     static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
     *AFTER.get_or_init(|| crate::testbuild::env("CBB_TEST_FALLBACK")?.parse().ok().map(Duration::from_millis))
 }
+/// How long a member waits for another to dial it before it dials that
+/// one itself: FALLBACK, or the fallback test's wait.
+pub fn fallback() -> Duration {
+    test_fallback().unwrap_or(FALLBACK)
+}
+
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
 /// At most this many of them from one source (crate::pair::source), other

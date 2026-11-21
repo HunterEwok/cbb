@@ -755,7 +755,25 @@
    "name": "hub to use with a forwarder",
    "type": 2,
    "verdict": "take",
-   "orders": "a20a82713230332e302e3131332e353a35313832305820a0993fe4682347d2cdb9cb9c75a36049fb86fe550018a036fa92a762f28212320b816e6362622e746f6f6c733a38373634"
+   "orders": "a20a82713230332e302e3131332e353a35313832305820a0993fe4682347d2cdb9cb9c75a36049fb86fe550018a036fa92a762f28212320b81826e6362622e746f6f6c733a383736345820b6240eb8a2db73f5a63ee4f133ce9bc3b84819e4ad0fa7f08aeef26e429f127d"
+  },
+  {
+   "name": "hub with two forwarders",
+   "type": 2,
+   "verdict": "take",
+   "orders": "a10b82826e6362622e746f6f6c733a383736345820b6240eb8a2db73f5a63ee4f133ce9bc3b84819e4ad0fa7f08aeef26e429f127d82725b323030313a6462383a3a375d3a3837363458206e8d322c8be631cb0a45dd41e65ce1b751eb5ed5c2323f0923179d4fd388edd1"
+  },
+  {
+   "name": "hub forwarder without its pin",
+   "type": 2,
+   "verdict": "orders/hub",
+   "orders": "a10b816e6362622e746f6f6c733a38373634"
+  },
+  {
+   "name": "hub forwarder with a short pin",
+   "type": 2,
+   "verdict": "orders/hub",
+   "orders": "a10b81826e6362622e746f6f6c733a38373634581fb6240eb8a2db73f5a63ee4f133ce9bc3b84819e4ad0fa7f08aeef26e429f12"
   },
   {
    "name": "hub off",
@@ -764,9 +782,9 @@
    "orders": "a10d01"
   },
   {
-   "name": "hub with its clients",
+   "name": "hub with its clients, field 12 retired",
    "type": 2,
-   "verdict": "take",
+   "verdict": "orders/hub",
    "orders": "a10c8283506f71ceabce49c7d50934bf03b80c09e858205fd72bc6cd8a218afd2428fb50c6a88fb6b02fba980ceccf22845dbf5905770658208c8b053da881dd3f3bf6fa5553f068f9c69d05836589666032915787e39c6b008350b330b4f419e47392ebf8036ae1dc2178582077f3291950967a7cc0150ffed2f37cadd09115cf6421f8f1b93eccdfb2c93e515820673c6dd9b33338824ec4cc30b11853e6cec8c1c8889be1c69ad7084906f1a55b"
   },
   {
@@ -791,10 +809,10 @@
    "name": "hub forwarder twice",
    "type": 2,
    "verdict": "orders/hub",
-   "orders": "a10b826e6362622e746f6f6c733a383736346e6362622e746f6f6c733a38373634"
+   "orders": "a10b82826e6362622e746f6f6c733a383736345820b6240eb8a2db73f5a63ee4f133ce9bc3b84819e4ad0fa7f08aeef26e429f127d826e6362622e746f6f6c733a3837363458206e8d322c8be631cb0a45dd41e65ce1b751eb5ed5c2323f0923179d4fd388edd1"
   },
   {
-   "name": "hub clients out of order",
+   "name": "hub clients out of order, field 12 retired",
    "type": 2,
    "verdict": "orders/hub",
    "orders": "a10c828350b330b4f419e47392ebf8036ae1dc2178582077f3291950967a7cc0150ffed2f37cadd09115cf6421f8f1b93eccdfb2c93e515820673c6dd9b33338824ec4cc30b11853e6cec8c1c8889be1c69ad7084906f1a55b83506f71ceabce49c7d50934bf03b80c09e858205fd72bc6cd8a218afd2428fb50c6a88fb6b02fba980ceccf22845dbf5905770658208c8b053da881dd3f3bf6fa5553f068f9c69d05836589666032915787e39c6b00"

@@ -2077,6 +2077,12 @@ fn global_commands() {
                 ..Case::default()
             },
             Case {
+                name: "relay off",
+                args: &["global", "relay", "off"],
+                sent: Some(("away", Some(|s| s.s("relay") == "off" && !s.b("consent")))),
+                ..Case::default()
+            },
+            Case {
                 name: "the project's relay takes no key",
                 args: &["global", "relay", "default", "-key", "K"],
                 code: 2,

@@ -20,11 +20,12 @@
 //!   they list other keys than the records say; on an admin that the hubs'
 //!   credential lists, the members' credential, signed by its server key.
 //!
-//! The period starts as one face (`blind::alias::new_face`: a random tag,
-//! versions from a random start, an expiry of its own); a face for each
-//! server (A-55) comes with the server's pin in the message. The server
-//! secret and the root's period key are files beside the set, readable by
-//! the service alone.
+//! Each server gets a face of its own (A-55, `blind::alias::new_face`: a
+//! random tag, a period key, versions from a random start, an expiry of its
+//! own), kept by the server's pin, which every message names; the root
+//! makes one for each server the group uses ([`project_servers`] for now).
+//! The server secret and the root's period keys are files beside the set,
+//! readable by the service alone.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -279,6 +280,80 @@ impl Kept {
     }
 }
 
+/// What a device shows a relay of 0.6: its server key for the period, the
+/// hubs' and the members' credentials, the period credential and the
+/// root's key that signed it (for a relay with a list of groups), and the
+/// device ID each pseudonym of the group's other devices stands for (the
+/// pseudonym in standard base64, the ID in hex).
+pub struct ForRelay {
+    pub key: ServerKey,
+    pub credentials: Vec<Vec<u8>>,
+    pub period: Vec<u8>,
+    pub root: Vec<u8>,
+    pub names: std::collections::HashMap<String, String>,
+    /// The period's tag, and when the first of its credentials expires
+    /// (Unix milliseconds).
+    pub tag: [u8; 16],
+    pub expires_ms: u64,
+}
+
+impl Kept {
+    /// What the device of member key `me` shows a relay: None until the
+    /// period counts, has not expired and its members' credential lists
+    /// the device's server key.
+    pub fn for_relay(&self, state: &State, me: &KeyHash, secret: &[u8; 32], now_ms: u64) -> Option<ForRelay> {
+        let (period, hubs, members) = (self.period.as_ref()?, self.hubs.as_ref()?, self.members.as_ref()?);
+        if [period, hubs, members].iter().any(|h| !h.c.live(now_ms)) {
+            return None;
+        }
+        let tag = period.c.tag?;
+        let (scalar, point) = alias::server_key(secret, &tag);
+        if !members.c.members.contains(&hash_of(&point).0) || member_of(state, me).is_none() {
+            return None;
+        }
+        let names = self
+            .servers
+            .iter()
+            .filter(|(k, _)| *k != me)
+            .filter_map(|(k, h)| {
+                let d = member_of(state, k)?;
+                let name = hash_of(h.c.key.as_deref()?).0;
+                members.c.members.contains(&name).then(|| (b64(&name), cbb_core::certs::hex(&d.id.0)))
+            })
+            .collect();
+        Some(ForRelay {
+            key: ServerKey::from_scalar(&scalar).ok()?,
+            credentials: vec![hubs.env.clone(), members.env.clone()],
+            period: period.env.clone(),
+            root: period.c.signer.clone(),
+            names,
+            tag,
+            expires_ms: [period, hubs, members].iter().map(|h| h.c.expires_ms).min().unwrap_or(0),
+        })
+    }
+}
+
+impl Kept {
+    /// What a hub shows its forwarder of 0.6 (`cbb-forward/3`): its server
+    /// key for the period and the hubs' credential, which must list that
+    /// key; None until the period counts, has not expired and lists it.
+    pub fn for_hub(&self, secret: &[u8; 32], now_ms: u64) -> Option<(ServerKey, Vec<u8>)> {
+        let (period, hubs) = (self.period.as_ref()?, self.hubs.as_ref()?);
+        if !period.c.live(now_ms) || !hubs.c.live(now_ms) {
+            return None;
+        }
+        let (scalar, point) = alias::server_key(secret, &period.c.tag?);
+        if !hubs.c.hubs.contains(&hash_of(&point).0) {
+            return None;
+        }
+        Some((ServerKey::from_scalar(&scalar).ok()?, hubs.env.clone()))
+    }
+}
+
+fn b64(b: &[u8]) -> String {
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
+}
+
 /// What signs on this device: its member key, the root's key when it holds
 /// the current root, and its server secret.
 pub struct Signers<'a> {
@@ -287,19 +362,41 @@ pub struct Signers<'a> {
     pub secret: &'a [u8; 32],
 }
 
-/// The root's period key for a tag, kept in a file.
+/// A server the group shows a face of its own (A-55): its pin, the hash
+/// of its key, and its address (host:port), which message
+/// `member-credentials` carries in its fields 4 and 5.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Server {
+    pub pin: [u8; 32],
+    pub address: String,
+}
+
+/// The most faces a member keeps: the servers a group meets, with room
+/// for a key that changes.
+pub const MAX_FACES: usize = 16;
+/// The longest address of a server, as field 5 takes it.
+const MAX_ADDRESS: usize = 261;
+
+/// The root's period key for a face's tag, kept in a file.
 #[derive(Clone)]
 struct PeriodKey {
     tag: [u8; 16],
     scalar: [u8; 32],
 }
 
-/// The group's server credentials on this member.
+/// One server's face: its address and its period's credentials.
+#[derive(Clone, Default)]
+struct Face {
+    address: String,
+    kept: Kept,
+}
+
+/// The group's server credentials on this member, a face for each server.
 pub struct Faces {
     dir: PathBuf,
     secret: [u8; 32],
-    kept: Mutex<Kept>,
-    period_key: Mutex<Option<PeriodKey>>,
+    faces: Mutex<BTreeMap<[u8; 32], Face>>,
+    period_keys: Mutex<BTreeMap<[u8; 32], PeriodKey>>,
     changes: AtomicUsize,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
@@ -312,11 +409,16 @@ fn read_or_none(path: &Path) -> Result<Option<Vec<u8>>> {
     }
 }
 
+/// An address field 5 takes: 1 to 261 bytes, no control character.
+fn plain_address(a: &str) -> bool {
+    (1..=MAX_ADDRESS).contains(&a.len()) && !a.chars().any(char::is_control)
+}
+
 impl Faces {
     /// Opens the credentials kept in dir against the state; the server
     /// secret is made on first use. Credentials that cannot be read leave
-    /// the set empty, since the peers give them again; a period key that
-    /// cannot be read means a new period.
+    /// a face empty, since the peers give them again; a period key that
+    /// cannot be read means a new period for its face.
     pub fn open(dir: &Path, state: &State, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<Faces> {
         let secret_path = dir.join(SECRET_FILE);
         let secret: [u8; 32] = match read_or_none(&secret_path)? {
@@ -327,34 +429,48 @@ impl Faces {
                 s
             }
         };
-        let mut kept = Kept::default();
+        let mut faces = BTreeMap::new();
         let now = crate::uptime::wall_ms().max(0) as u64;
         if let Some(b) = read_or_none(&dir.join(FILE)).unwrap_or_else(|e| {
             log(&format!("cbb: the server credentials: {}", e.for_log()));
             None
         }) {
             match cbor::decode(&b) {
+                // Each face as [pin, address, [envelope...]].
                 Ok(v) => {
-                    for e in v.as_array().unwrap_or(&[]) {
-                        if let Some(env) = e.as_bytes() {
+                    for f in v.as_array().unwrap_or(&[]).iter().take(MAX_FACES) {
+                        let Some([Value::Bytes(pin), Value::Text(address), Value::Array(envs)]) = f.as_array() else {
+                            continue;
+                        };
+                        let Ok(pin) = <[u8; 32]>::try_from(*pin) else { continue };
+                        let mut face = Face { address: address.to_string(), kept: Kept::default() };
+                        for env in envs.iter().filter_map(Value::as_bytes) {
                             // One that no longer checks out is dropped.
-                            let _ = kept.add(state, env, now);
+                            let _ = face.kept.add(state, env, now);
                         }
+                        faces.insert(pin, face);
                     }
                 }
                 Err(r) => log(&format!("cbb: the server credentials: {FILE} breaks {r}")),
             }
         }
-        let period_key = read_or_none(&dir.join(PERIOD_KEY_FILE)).ok().flatten().and_then(|b| {
-            let tag: [u8; 16] = b.get(..16)?.try_into().ok()?;
-            let scalar: [u8; 32] = b.get(16..48)?.try_into().ok()?;
-            Some(PeriodKey { tag, scalar })
-        });
+        // The root's period keys, each the face's pin, tag and scalar.
+        let mut period_keys = BTreeMap::new();
+        if let Some(b) = read_or_none(&dir.join(PERIOD_KEY_FILE)).ok().flatten() {
+            for r in b.as_chunks::<80>().0 {
+                let (Ok(pin), Ok(tag), Ok(scalar)) =
+                    (<[u8; 32]>::try_from(&r[..32]), <[u8; 16]>::try_from(&r[32..48]), <[u8; 32]>::try_from(&r[48..]))
+                else {
+                    continue;
+                };
+                period_keys.insert(pin, PeriodKey { tag, scalar });
+            }
+        }
         Ok(Faces {
             dir: dir.to_path_buf(),
             secret,
-            kept: Mutex::new(kept),
-            period_key: Mutex::new(period_key),
+            faces: Mutex::new(faces),
+            period_keys: Mutex::new(period_keys),
             changes: AtomicUsize::new(0),
             log,
         })
@@ -366,9 +482,15 @@ impl Faces {
         self.changes.load(Ordering::SeqCst)
     }
 
-    /// The credentials kept now.
-    pub fn kept(&self) -> Kept {
-        self.kept.lock().unwrap().clone()
+    /// The servers this member keeps a face of, by pin.
+    pub fn servers(&self) -> Vec<Server> {
+        self.faces.lock().unwrap().iter().map(|(pin, f)| Server { pin: *pin, address: f.address.clone() }).collect()
+    }
+
+    /// The credentials kept now for the server of pin; empty for a server
+    /// without a face.
+    pub fn kept(&self, pin: &[u8; 32]) -> Kept {
+        self.faces.lock().unwrap().get(pin).map(|f| f.kept.clone()).unwrap_or_default()
     }
 
     /// This device's server secret.
@@ -376,56 +498,128 @@ impl Faces {
         &self.secret
     }
 
-    fn save(&self, kept: &Kept) {
-        let envs = kept.envelopes();
-        let b = Value::Array(envs.iter().map(|e| Value::Bytes(e)).collect()).encode();
+    /// What this device, of member key `member`, shows a relay of 0.6
+    /// (`cbb-relay/3`) whose key has one of `pins`, at now_ms: the face of
+    /// the first pin whose members' credential lists its server key; None
+    /// while no face of those pins does.
+    pub fn for_relay(
+        &self,
+        state: &State,
+        member: &[u8],
+        pins: &[[u8; 32]],
+        now_ms: u64,
+    ) -> Option<(Server, ForRelay)> {
+        let faces = self.faces.lock().unwrap();
+        pins.iter().find_map(|pin| {
+            let f = faces.get(pin)?;
+            let shown = f.kept.for_relay(state, &hash_of(member), &self.secret, now_ms)?;
+            Some((Server { pin: *pin, address: f.address.clone() }, shown))
+        })
+    }
+
+    /// What this device, as a hub, shows the forwarder whose key has the
+    /// pin `pin` at now_ms: the hubs' credential of that face and the
+    /// server key it lists, with the key's certificate; None while that
+    /// face's credentials do not list this device as a hub.
+    #[cfg(feature = "tunnel")]
+    pub fn for_hub(&self, pin: &[u8; 32], now_ms: u64) -> Option<crate::forward::HubCredential> {
+        let faces = self.faces.lock().unwrap();
+        let (key, env) = faces.get(pin)?.kept.for_hub(&self.secret, now_ms)?;
+        let cert = key.cert().ok()?;
+        Some(crate::forward::HubCredential { credentials: vec![env], cert, key: Arc::new(key) })
+    }
+
+    fn save(&self, faces: &BTreeMap<[u8; 32], Face>) {
+        let all: Vec<(Vec<u8>, Vec<Vec<u8>>)> =
+            faces.iter().map(|(pin, f)| (pin.to_vec(), f.kept.envelopes())).collect();
+        let b = Value::Array(
+            all.iter()
+                .zip(faces.values())
+                .map(|((pin, envs), f)| {
+                    Value::Array(vec![
+                        Value::Bytes(pin),
+                        Value::Text(&f.address),
+                        Value::Array(envs.iter().map(|e| Value::Bytes(e)).collect()),
+                    ])
+                })
+                .collect(),
+        )
+        .encode();
         if let Err(e) = files::write_atomic(&self.dir.join(FILE), &b, 0o600) {
             (self.log)(&format!("cbb: saving the server credentials: {}", e.for_log()));
         }
     }
 
-    /// Takes envelopes (from a peer, or signed here), saves the kept set
-    /// and gives those that were new.
-    pub fn add(&self, state: &State, from: &str, envs: &[Vec<u8>]) -> Vec<Vec<u8>> {
+    /// Takes envelopes for the server's face (from a peer, or signed
+    /// here), saves the faces and gives those that were new. A face is
+    /// made for a server not seen before, up to [`MAX_FACES`]; its address
+    /// follows the newest message that brought something new.
+    pub fn add(&self, state: &State, from: &str, server: &Server, envs: &[Vec<u8>]) -> Vec<Vec<u8>> {
         let now = crate::uptime::wall_ms().max(0) as u64;
-        let mut kept = self.kept.lock().unwrap();
+        let mut faces = self.faces.lock().unwrap();
+        if !faces.contains_key(&server.pin) && faces.len() >= MAX_FACES {
+            (self.log)(&format!("cbb: dropped the server credentials of another server from {from}: {MAX_FACES} kept"));
+            return Vec::new();
+        }
+        let face = faces.entry(server.pin).or_default();
         let mut fresh = Vec::new();
         for env in envs.iter().take(MAX_CREDENTIALS) {
-            match kept.add(state, env, now) {
+            match face.kept.add(state, env, now) {
                 Ok(true) => fresh.push(env.clone()),
                 Ok(false) => {}
                 Err(e) => (self.log)(&format!("cbb: dropped a server credential from {from}: {}", e.for_log())),
             }
         }
+        if !fresh.is_empty() && plain_address(&server.address) {
+            face.address.clone_from(&server.address);
+        }
+        if face.kept.period.is_none() {
+            faces.remove(&server.pin);
+        }
         if !fresh.is_empty() {
-            self.save(&kept);
+            self.save(&faces);
             self.changes.fetch_add(1, Ordering::SeqCst);
         }
         fresh
     }
 
-    /// Message `member-credentials` (t 11), its body: the envelopes in it,
-    /// or an error when it is not that message.
-    pub fn read_message(msg: &[u8]) -> Result<Vec<Vec<u8>>> {
+    /// Message `member-credentials` (t 11), its body: the server it names
+    /// and the envelopes in it, or an error when it is not that message.
+    pub fn read_message(msg: &[u8]) -> Result<(Server, Vec<Vec<u8>>)> {
         let (t, v, _) =
             cbb_core::msg::read_noted(msg).map_err(|r| Error::msg(format!("message member-credentials breaks {r}")))?;
         if t != T_CREDENTIALS {
             return Err(Error::msg("not message member-credentials"));
         }
+        let pin = v
+            .get(4)
+            .and_then(Value::as_bytes)
+            .and_then(|b| <[u8; 32]>::try_from(b).ok())
+            .ok_or_else(|| Error::msg("message member-credentials names no server"))?;
+        let address = v.get(5).and_then(Value::as_text).unwrap_or_default().to_string();
         // Each credential rides as its envelope's value.
-        Ok(v.get(2).and_then(Value::as_array).unwrap_or(&[]).iter().map(Value::encode).collect())
+        let envs = v.get(2).and_then(Value::as_array).unwrap_or(&[]).iter().map(Value::encode).collect();
+        Ok((Server { pin, address }, envs))
     }
 
-    /// The frames of message `member-credentials` carrying envs, as many as
-    /// they need, each in the order a receiver takes them.
-    pub fn messages(envs: &[Vec<u8>]) -> Vec<Vec<u8>> {
+    /// The frames of message `member-credentials` carrying envs for the
+    /// server's face, as many as they need, each in the order a receiver
+    /// takes them.
+    pub fn messages(server: &Server, envs: &[Vec<u8>]) -> Vec<Vec<u8>> {
         let mut out = Vec::new();
         let mut cur: Vec<Value<'_>> = Vec::new();
         let mut used = 0usize;
         let flush = |cur: &mut Vec<Value<'_>>, out: &mut Vec<Vec<u8>>| {
             if !cur.is_empty() {
-                let list = Value::Array(core::mem::take(cur));
-                out.push(frame::write(&Value::Map(vec![(frame::FIELD_T, Value::Uint(T_CREDENTIALS)), (2, list)])));
+                let mut m = vec![
+                    (frame::FIELD_T, Value::Uint(T_CREDENTIALS)),
+                    (2, Value::Array(core::mem::take(cur))),
+                    (4, Value::Bytes(&server.pin)),
+                ];
+                if plain_address(&server.address) {
+                    m.push((5, Value::Text(&server.address)));
+                }
+                out.push(frame::write(&Value::Map(m)));
             }
         };
         for e in envs {
@@ -442,17 +636,81 @@ impl Faces {
         out
     }
 
+    /// Every face's credentials as its messages, for a peer that just
+    /// connected.
+    pub fn all_messages(&self) -> Vec<Vec<u8>> {
+        let faces = self.faces.lock().unwrap();
+        faces
+            .iter()
+            .flat_map(|(pin, f)| {
+                Faces::messages(&Server { pin: *pin, address: f.address.clone() }, &f.kept.envelopes())
+            })
+            .collect()
+    }
+
+    fn save_period_keys(&self, keys: &BTreeMap<[u8; 32], PeriodKey>) -> Result<()> {
+        let mut b = Vec::with_capacity(keys.len() * 80);
+        for (pin, k) in keys {
+            b.extend_from_slice(pin);
+            b.extend_from_slice(&k.tag);
+            b.extend_from_slice(&k.scalar);
+        }
+        files::write_atomic(&self.dir.join(PERIOD_KEY_FILE), &b, 0o600)
+    }
+
     /// Brings the credentials up to date as far as this device can (the
-    /// module's comment) and gives what it signed, to send to the peers.
-    pub fn refresh(&self, state: &State, s: &Signers<'_>) -> Result<Vec<Vec<u8>>> {
+    /// module's comment), a face for each server: on the root, a face for
+    /// each of `servers` it has none of or whose period is due; on every
+    /// member, its server key and the lists of each face it keeps. A face
+    /// whose period expired goes. Gives what it signed, by face, to send to
+    /// the peers.
+    pub fn refresh(&self, state: &State, s: &Signers<'_>, servers: &[Server]) -> Result<Vec<(Server, Vec<Vec<u8>>)>> {
         let now = crate::uptime::wall_ms().max(0) as u64;
+        {
+            let mut faces = self.faces.lock().unwrap();
+            for f in faces.values_mut() {
+                f.kept.prune(state);
+            }
+            faces.retain(|_, f| f.kept.period.as_ref().is_some_and(|p| p.c.live(now)));
+            let mut keys = self.period_keys.lock().unwrap();
+            let n = keys.len();
+            keys.retain(|pin, _| faces.contains_key(pin) || servers.iter().any(|s| &s.pin == pin));
+            if keys.len() != n {
+                self.save_period_keys(&keys)?;
+            }
+        }
+        let mut all: Vec<Server> = servers.iter().take(MAX_FACES).cloned().collect();
+        for kept in self.servers() {
+            if !all.iter().any(|s| s.pin == kept.pin) {
+                all.push(kept);
+            }
+        }
+        let mut out = Vec::new();
+        for server in all {
+            let listed = servers.iter().any(|s| s.pin == server.pin);
+            let signed = self.refresh_face(state, s, &server, listed, now)?;
+            if !signed.is_empty() {
+                out.push((server, signed));
+            }
+        }
+        Ok(out)
+    }
+
+    fn refresh_face(
+        &self,
+        state: &State,
+        s: &Signers<'_>,
+        server: &Server,
+        listed: bool,
+        now: u64,
+    ) -> Result<Vec<Vec<u8>>> {
         let mut signed = Vec::new();
         let mut sign = |c: Credential, by: &dyn ExternalKey, what: &str| -> Result<()> {
             let env = c.sign(by).map_err(|e| e.context(format!("signing {what}")))?;
-            signed.extend(self.add(state, "this device", &[env]));
+            signed.extend(self.add(state, "this device", server, &[env]));
             Ok(())
         };
-        self.kept.lock().unwrap().prune(state);
+        let kept = || self.kept(&server.pin);
         let blank = |kind: u64, group: [u8; 16], version: u64, expires_ms: u64| Credential {
             kind,
             group,
@@ -467,9 +725,8 @@ impl Faces {
             id: [0; 32],
         };
 
-        // The period, on the root.
-        let due = self.kept.lock().unwrap().period_due(state, now);
-        if let (Some(root), true) = (s.root, due) {
+        // The period, on the root, for a server it lists.
+        if let (Some(root), true) = (s.root, listed && kept().period_due(state, now)) {
             let scalar: [u8; 32] = loop {
                 let d = cbb_core::certs::random_bytes();
                 if SigningKey::from_slice(&d).is_ok() {
@@ -479,75 +736,132 @@ impl Faces {
             let pk = ServerKey::from_scalar(&scalar)?;
             let ends = now.saturating_add(cbb_core::benchtime::d(PERIOD_LIFETIME_MS) as u64);
             let face = alias::new_face(pk.public(), &self.secret, now, ends);
-            let mut b = Vec::with_capacity(48);
-            b.extend_from_slice(&face.tag);
-            b.extend_from_slice(&scalar);
-            files::write_atomic(&self.dir.join(PERIOD_KEY_FILE), &b, 0o600)?;
-            *self.period_key.lock().unwrap() = Some(PeriodKey { tag: face.tag, scalar });
+            {
+                let mut keys = self.period_keys.lock().unwrap();
+                keys.insert(server.pin, PeriodKey { tag: face.tag, scalar });
+                self.save_period_keys(&keys)?;
+            }
             // The next period counts above the one it follows, by a
             // random step; the first starts where its face does.
             let step = u64::from(u16::from_be_bytes(cbb_core::certs::random_bytes::<2>())).saturating_add(1);
-            let prev = self.kept.lock().unwrap().period.as_ref().map(|p| p.c.version);
+            let prev = kept().period.as_ref().map(|p| p.c.version);
             let version = prev.map_or(face.version, |v| v.saturating_add(step));
             let mut c = blank(TYPE_PERIOD, state.group.0, version, face.expires_ms);
             c.tag = Some(face.tag);
             c.key = Some(face.period_key);
             sign(c, root, "the period")?;
         }
-        let Some(period) = self.kept.lock().unwrap().period.clone() else { return Ok(signed) };
+        let Some(period) = kept().period.clone() else { return Ok(signed) };
         let tag = period.c.tag.unwrap_or_default();
         let next = |v: Option<u64>| v.map_or(period.c.version, |v| v.saturating_add(1));
 
-        // This device's server key for the period.
+        // This device's server key for the face.
         let me = hash_of(&s.member.public());
         let (scalar, point) = alias::server_key(&self.secret, &tag);
-        let mine = self.kept.lock().unwrap().servers.get(&me).map(|h| (h.c.key.clone(), h.c.version));
+        let mine = kept().servers.get(&me).map(|h| (h.c.key.clone(), h.c.version));
         if mine.as_ref().is_none_or(|(k, _)| k.as_deref() != Some(point.as_slice())) {
             let mut c = blank(TYPE_SERVER, state.group.0, next(mine.map(|(_, v)| v)), period.c.expires_ms);
             c.tag = Some(tag);
             c.key = Some(point.clone());
             sign(c, s.member, "the server key")?;
         }
-        let server = ServerKey::from_scalar(&scalar)?;
+        let own = ServerKey::from_scalar(&scalar)?;
 
         // The hubs' and the members' credentials.
-        let kept = self.kept.lock().unwrap().clone();
-        let [hubs, admins, members] = kept.lists(state);
+        let k = kept();
+        let [hubs, admins, members] = k.lists(state);
         let period_key = self
-            .period_key
+            .period_keys
             .lock()
             .unwrap()
-            .clone()
-            .filter(|k| k.tag == tag && s.root.is_some())
-            .map(|k| ServerKey::from_scalar(&k.scalar))
+            .get(&server.pin)
+            .cloned()
+            .filter(|pk| pk.tag == tag && s.root.is_some())
+            .map(|pk| ServerKey::from_scalar(&pk.scalar))
             .transpose()?
-            .filter(|k| period.c.key.as_deref() == Some(k.public().as_slice()));
+            .filter(|pk| period.c.key.as_deref() == Some(pk.public().as_slice()));
         let signer: &dyn ExternalKey = if let Some(pk) = &period_key {
-            if kept
-                .hubs
-                .as_ref()
-                .is_none_or(|h| kept.stale(&h.c.hubs, &hubs, true) || kept.stale(&h.c.admins, &admins, false))
-            {
-                let mut c = blank(TYPE_HUBS, tag, next(kept.hubs.as_ref().map(|h| h.c.version)), period.c.expires_ms);
+            if k.hubs.as_ref().is_none_or(|h| k.stale(&h.c.hubs, &hubs, true) || k.stale(&h.c.admins, &admins, false)) {
+                let mut c = blank(TYPE_HUBS, tag, next(k.hubs.as_ref().map(|h| h.c.version)), period.c.expires_ms);
                 c.hubs = hubs;
                 c.admins = admins;
                 sign(c, pk, "the hubs' credential")?;
             }
             pk
-        } else if kept.hubs.as_ref().is_some_and(|h| h.c.admins.contains(&hash_of(&point).0)) {
-            &server
+        } else if k.hubs.as_ref().is_some_and(|h| h.c.admins.contains(&hash_of(&point).0)) {
+            &own
         } else {
             return Ok(signed);
         };
-        let kept = self.kept.lock().unwrap().clone();
-        if kept.members.as_ref().is_none_or(|m| kept.stale(&m.c.members, &members, false)) {
-            let mut c = blank(TYPE_MEMBERS, tag, next(kept.members.as_ref().map(|m| m.c.version)), period.c.expires_ms);
+        let k = kept();
+        if k.members.as_ref().is_none_or(|m| k.stale(&m.c.members, &members, false)) {
+            let mut c = blank(TYPE_MEMBERS, tag, next(k.members.as_ref().map(|m| m.c.version)), period.c.expires_ms);
             c.members = members;
             sign(c, signer, "the members' credential")?;
         }
         Ok(signed)
     }
 }
+
+/// The project's relay, forwarder and push service by name, and the pins
+/// built in for the relay's and the forwarder's keys (the newest keys.json
+/// held lists others).
+pub(crate) const PROJECT_RELAY: &str = "cbb.tools:8765";
+pub(crate) const PROJECT_RELAY_PINS: &[&str] = &["hnHvkm6ZrTMmfPEP4Bo0s38nlnNKeyXEdhQNKYt2Pzw="];
+pub(crate) const PROJECT_FORWARDER: &str = "cbb.tools:8764";
+pub(crate) const PROJECT_FORWARDER_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
+pub(crate) const PROJECT_PUSH: &str = "cbb.tools:8767";
+
+/// The project's servers a group of 0.6 shows a face to (A-55), by the
+/// newest keys.json held, else the pins built in: the relay, the forwarder
+/// and the push service at cbb.tools (push has no pin built in: it is
+/// reached only by the keys.json that names it). A server whose key changes
+/// has a face for each key listed while both are.
+pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -> Vec<Server> {
+    use base64::Engine as _;
+    let b64pin =
+        |p: &str| base64::engine::general_purpose::STANDARD.decode(p).ok().and_then(|b| <[u8; 32]>::try_from(b).ok());
+    let mut out = Vec::new();
+    for (usage, name, built_in) in [
+        ("relay", PROJECT_RELAY, PROJECT_RELAY_PINS),
+        ("forwarder", PROJECT_FORWARDER, PROJECT_FORWARDER_PINS),
+        ("push", PROJECT_PUSH, &[]),
+    ] {
+        let listed = entries.map(|e| e.keys_for(usage, name, now_ms)).unwrap_or_default();
+        let pins: Vec<[u8; 32]> = if listed.is_empty() {
+            built_in.iter().filter_map(|p| b64pin(p)).collect()
+        } else {
+            listed.iter().map(|spki| cbb_core::certs::sha256(spki)).collect()
+        };
+        out.extend(pins.into_iter().map(|pin| Server { pin, address: name.to_string() }));
+    }
+    out
+}
+
+/// The servers a group of 0.6 shows a face to: the project's
+/// (`project_servers`), then the relays of its own that the root set in the
+/// group's settings (format 4.5, field 15; D-121), then the forwarders of
+/// its hubs that the root named (`HubForwarders`), each pin and address
+/// pin once. The project's come first: a member keeps at most [`MAX_FACES`],
+/// and a hub registers with the project's forwarder.
+pub fn group_servers(state: &State, project: Vec<Server>, forwarders: Vec<Server>) -> Vec<Server> {
+    if cfg!(not(feature = "tunnel")) {
+        // Without sync away from home a group meets no server.
+        return Vec::new();
+    }
+    let mut out = project;
+    let relays = state.settings.servers.iter().filter(|s| s.kind == cbb_core::records::body::SERVER_RELAY);
+    for server in relays.map(|s| Server { pin: s.pin, address: s.endpoint.clone() }).chain(forwarders) {
+        // A face is kept by its server's pin: one for each.
+        if !out.iter().any(|s| s.pin == server.pin) {
+            out.push(server);
+        }
+    }
+    out
+}
+
+mod forwarders;
+pub use forwarders::{FILE as FORWARDERS_FILE, HubForwarders};
 
 #[cfg(test)]
 mod tests;

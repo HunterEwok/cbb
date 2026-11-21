@@ -84,7 +84,7 @@ on every platform of the class, on the roadmap).
 | Sync the clipboard | yes | not yet | yes, through the Pi | the firmware's sync is the next step of roadmap item 15 |
 | Listen for phones and Macs | yes | not yet | through the Pi | |
 | Secrets (`copy -secret`) | yes | not yet | yes (`.cbb text -s`, `.cbb copy -s`) | |
-| Sync away from home | yes (`TestAloneMemberAway`) | planned | through the Pi | not on MIPS routers yet: `cbb` for MIPS is built without the tunnel |
+| Sync away from home | yes, in a group of 0.6 (`member/tests/away_live.rs`) | planned | through the Pi | not on MIPS routers yet: `cbb` for MIPS is built without the tunnel |
 | Update itself | yes (`cbb update`, Linux and OpenWrt) | planned (OTA, roadmap item 29) | through the Pi | |
 | Error details switch | yes (`-debug`, `CBB_DEBUG=1`) | not yet | yes (`.cbb -d`) | |
 

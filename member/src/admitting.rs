@@ -57,6 +57,14 @@ pub fn home_window(now_ms: u64, lifetime: std::time::Duration) -> (Open, String)
     (open, digits)
 }
 
+/// The clock of a home window (`home_window`, `Open::may_use`): this
+/// device's running time in milliseconds (`crate::uptime::now`), so that a
+/// wall clock set while the window is open neither ends it nor stretches
+/// it (docs/protocol.md, "Pairing in 0.6").
+pub fn home_window_ms() -> u64 {
+    u64::try_from(crate::uptime::now().as_millis()).unwrap_or(u64::MAX)
+}
+
 /// Runs the member's side of a pairing at home over its TLS session, by
 /// the home window `open`, which counts the attempt. Gives what the
 /// joiner said of itself once it is in the group.
@@ -66,6 +74,45 @@ pub fn at_home(
     session: tls::Session,
     exporter: PairExporter,
     open: &mut Open,
+) -> Result<Info> {
+    admit(mesh, sock, session, exporter, Way { open, network: Network::Home }, &mut |_| true)
+}
+
+/// What the admin is asked about a device that proved a remote
+/// invitation's secret, before anything is written: what it says of
+/// itself, its device ID and its key's fingerprint, which the device shows
+/// too (docs/protocol.md, section 12).
+pub struct Asked<'a> {
+    pub info: &'a Info,
+    pub device: cbb_core::records::DeviceId,
+    pub fingerprint: String,
+}
+
+/// The admin did not admit the device: the joiner hears `declined`.
+#[derive(Debug)]
+pub struct Declined;
+
+impl std::fmt::Display for Declined {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the admin did not admit the device")
+    }
+}
+
+impl std::error::Error for Declined {}
+
+/// Runs the member's side of a pairing by the invitation `way` keeps open,
+/// from the network it names: once the joiner proved the secret, confirm
+/// is asked (a remote invitation asks the admin; a home window, where the
+/// typed digits are the check, says yes), and only a yes writes the
+/// joiner's record. Gives what the joiner said of itself once it is in the
+/// group.
+pub fn admit(
+    mesh: &Mesh,
+    sock: TcpStream,
+    session: tls::Session,
+    exporter: PairExporter,
+    way: Way<'_>,
+    confirm: &mut dyn FnMut(&Asked<'_>) -> bool,
 ) -> Result<Info> {
     let joiner = bykey::peer_key(session.peer_certificates()).ok_or_else(|| Error::msg("the device showed no key"))?;
     let own: [u8; 65] = mesh
@@ -88,10 +135,22 @@ pub fn at_home(
     let mut stream = tls::Stream::new(session, sock);
     let joiner_key = Key::es256(joiner.to_vec());
     let now = || crate::uptime::wall_ms().max(0) as u64;
+    // A home window counts five minutes of this device's running time,
+    // which a wall clock set ahead does not move (`home_window_ms`); a
+    // remote invitation's end is a time of day the inviter wrote.
+    let home = way.network == Network::Home;
+    let window_now = move || if home { home_window_ms() } else { now() };
     let mut statement = None;
     let mut pop_holds = false;
-    let way = Way { open, network: Network::Home };
-    let info = join::member(&mut stream, session_m, way, &now, &mut |info, s| {
+    let info = join::member(&mut stream, session_m, way, &window_now, &mut |info, s| {
+        let asked = Asked {
+            info,
+            device: joiner_key.device_id(),
+            fingerprint: base64::Engine::encode(&base64::engine::general_purpose::STANDARD, joiner_key.hash().0),
+        };
+        if !confirm(&asked) {
+            return Err(Error::with("the device was not admitted", Declined));
+        }
         statement.clone_from(&info.keys);
         pop_holds = s.admin_pop_holds();
         mesh.write(|set, signer| {

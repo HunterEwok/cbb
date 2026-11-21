@@ -49,8 +49,6 @@
 //!   port `port` is one the hub made for that guest. The window takes only
 //!   those: another app on the phone can reach its loopback port too, and
 //!   its attempts would count against the invitation;
-//! - `hub_set_records` with `id` and `records`: the group's authority
-//!   records the next registration with the forwarder carries;
 //! - `hub_set_project_ways` with `id` and `ways`: the hub's forwarder is
 //!   the project's, and `ways` (`[{"transport", "server_name", "port",
 //!   "path"}]`, at most 8) are the ways in over VLESS that the newest
@@ -61,48 +59,48 @@
 //!   effect at the next registration.
 //!
 //! `cbb_tunnel_register` registers a hub with the group's forwarder
-//! (docs/protocol.md, section 13), signing its TLS with the app's member
-//! key through a callback: `{"id", "endpoint", "pins", "chain", "public",
-//! "records", "vless_id"}`, where `chain` is the member certificate, its
-//! admin CA if any and the group's roots, and `public` the member key's
-//! public point. The registration holds until the hub stops or registers
-//! again; `hub_status` then carries `forwarder`: `{"registered", "seen",
-//! "vless", "error"}`, with `seen` where the forwarder reaches the hub and
-//! `vless` the VLESS settings for the hub's offers.
+//! (docs/protocol.md, section 13; `cbb-forward/3`): `{"id", "endpoint",
+//! "pins", "vless_id"}`. It signs with nothing of its own: the hub shows
+//! the certificate of its server key for the forwarder's face, which
+//! `cbb_tunnel_hub_credentials` gives, and waits until it has one (its
+//! status says so). Its callback is not called; it stays for the ABI. The
+//! registration holds until the hub stops or registers again;
+//! `hub_status` then carries `forwarder`: `{"registered", "seen", "vless",
+//! "error"}`, with `seen` where the forwarder reaches the hub and `vless`
+//! the VLESS settings for the hub's offers.
 //!
 //! `cbb_tunnel_relay` links the phone to the group's blind relay
-//! (docs/protocol.md, section 14), signing its TLS with the member key
-//! through a callback and telling the app its events through another:
-//! `{"key", "device", "endpoint", "pins", "chain", "public", "records",
-//! "member_port"}` gives `{"id"}`; the events are `dial` (`peer`, `port`:
-//! the app dials the port and runs the member protocol as the client),
-//! `calling` (`peer`, `port`: the connection from that port to the member
-//! listener is peer's), `changed` (`connected`, `online`, `through`,
-//! `error`) and `log` (`line`). `relay_set_connected` with `id` and
-//! `devices` names the devices connected another way, which the link does
-//! not dial; `relay_set_records` with `id` and `records`; `relay_stop` with
-//! `id`.
+//! (docs/protocol.md, section 14; `cbb-relay/3`) and tells the app its
+//! events through a callback: `{"endpoint", "pins", "member_port"}` gives
+//! `{"id"}`; the events are `dial` (`peer`, `port`: the app dials the port
+//! and runs the member protocol as the client), `calling` (`peer`, `port`:
+//! the connection from that port to the member listener is peer's),
+//! `changed` (`connected`, `online`, `through`, `error`) and `log`
+//! (`line`). `relay_set_connected` with `id` and `devices` names the
+//! devices connected another way, which the link does not dial;
+//! `relay_stop` with `id`.
 //!
-//! `cbb_tunnel_relay_credentials` makes the link register with the group's
-//! server credentials (docs/protocol.md, section 18) in place of the
-//! member certificate and the records, and register again at once,
-//! signing with the period's server key through a callback: `{"id",
-//! "public", "credentials", "roots", "names"}`, where `public` is the
-//! server key's public point, `credentials` the period's hubs' and
-//! members' credentials, which must list the key, with the period
-//! credential if the app has it, `roots` the group's roots, the group CA
-//! first, and `names` the device ID each pseudonym of the group's other
-//! devices stands for; the events then name the devices by those IDs. An
-//! empty `credentials` goes back to the member certificate.
+//! `cbb_tunnel_relay_credentials` gives the link what it registers with,
+//! the period's server credentials (`cbb_core::blind::credential`), and
+//! makes it register again at once, signing its TLS with the period's
+//! server key through a callback: `{"id", "public", "credentials",
+//! "period", "root", "names"}`, where `public` is the server key's public
+//! point, `credentials` the period's hubs' and members' credentials
+//! (envelopes), which must list the key, `period` the period credential,
+//! `root` the root's key that signed it, and `names` the device ID each
+//! pseudonym of the group's other devices stands for; the events then name
+//! the devices by those IDs. Until it has them, and after an empty
+//! `credentials`, the link waits and its `changed` event says why.
 //!
-//! `cbb_tunnel_hub_credentials` makes a hub's registration with the
-//! forwarder show the period's hubs' credential in place of the member
-//! certificate and the records (docs/protocol.md, section 18), as a
-//! computer's hub does, and register again at once, signing with the
-//! period's server key through a callback: `{"id", "public",
-//! "credentials"}`, where `public` is the server key's public point and
-//! `credentials` the hubs' credential, which must list the key. An empty
-//! `credentials` goes back to the member certificate.
+//! `cbb_tunnel_hub_credentials` gives a hub's registration with the
+//! forwarder what it shows (docs/protocol.md, section 18), as a
+//! computer's hub does, and makes it register again at once, signing with
+//! the server key of the forwarder's face through a callback: `{"id",
+//! "public", "credentials"}`, where `public` is the server key's public
+//! point and `credentials` the face's hubs' credential alone (an envelope
+//! in a list), listing the key; the forwarder never sees the period
+//! credential, which names the group and its root. An empty
+//! `credentials` makes the hub wait again.
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
@@ -113,7 +111,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use cbb_core::certs::{self, DeviceId};
-use cbb_core::credential::Credential;
 use cbb_core::error::{Error, Result};
 use cbb_core::invite;
 use cbb_member::forward::{self, Registration, Report};
@@ -206,10 +203,6 @@ enum Request {
         /// The port on the loopback address the connection came from.
         port: u16,
     },
-    HubSetRecords {
-        id: u64,
-        records: Vec<Value>,
-    },
     HubSetProjectWays {
         id: u64,
         #[serde(default)]
@@ -222,10 +215,6 @@ enum Request {
         id: u64,
         devices: Vec<String>,
     },
-    RelaySetRecords {
-        id: u64,
-        records: Vec<Value>,
-    },
     RelayStop {
         id: u64,
     },
@@ -234,24 +223,14 @@ enum Request {
 /// A link to the relay (`cbb_tunnel_relay`).
 #[derive(Deserialize)]
 struct RelayStart {
-    #[serde(with = "certs::b64")]
-    key: Vec<u8>,
-    device: String,
     endpoint: String,
     #[serde(with = "certs::b64::list")]
     pins: Vec<Vec<u8>>,
-    #[serde(with = "certs::b64::list")]
-    chain: Vec<Vec<u8>>,
-    #[serde(with = "certs::b64")]
-    public: Vec<u8>,
-    #[serde(default)]
-    records: Option<Vec<Value>>,
     member_port: u16,
 }
 
 struct RunningRelay {
     _relay: Relay,
-    records: Arc<Mutex<Vec<Value>>>,
     connected: Arc<Mutex<HashSet<String>>>,
     credentials: Arc<Mutex<Option<Arc<relay::Credentialed>>>>,
 }
@@ -304,11 +283,13 @@ fn relays<T>(f: impl FnOnce(&mut HashMap<u64, RunningRelay>) -> Result<T>) -> Re
 }
 
 /// Links the phone to the relay (the module's comment).
-pub fn relay_start(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Vec<u8> {
-    answer(start_relay(request, sign, events, ctx))
+/// The link signs only with the server key `relay_credentials` gives, so
+/// `_sign` is not called.
+pub fn relay_start(request: &[u8], _sign: SignFn, events: EventFn, ctx: usize) -> Vec<u8> {
+    answer(start_relay(request, events, ctx))
 }
 
-fn start_relay(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Result<Value> {
+fn start_relay(request: &[u8], events: EventFn, ctx: usize) -> Result<Value> {
     let req: RelayStart =
         serde_json::from_slice(request).map_err(|e| Error::msg(format!("the relay request does not decode: {e}")))?;
     let endpoint: SocketAddr = req.endpoint.parse().map_err(|_| Error::msg("the relay's address is not ip:port"))?;
@@ -320,34 +301,17 @@ fn start_relay(request: &[u8], sign: SignFn, events: EventFn, ctx: usize) -> Res
     if pins.is_empty() {
         return Err(Error::msg("the relay has no pin"));
     }
-    if req.chain.is_empty() {
-        return Err(Error::msg("the device has no member certificate"));
-    }
     if req.member_port == 0 {
         return Err(Error::msg("the member port is 0"));
     }
-    DeviceId::parse(&req.device)?;
-    State::with_key(&req.key)?;
-    let wg_key = key32(&req.key)?;
-    let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
     let connected = Arc::new(Mutex::new(HashSet::new()));
     let credentials = Arc::new(Mutex::new(None));
-    let cfg = relay::Config {
-        endpoint,
-        pins,
-        chain: req.chain,
-        key: Arc::new(AppKey { public: req.public, sign, ctx }),
-        device: req.device,
-        wg_key,
-        records: records.clone(),
-        member_port: req.member_port,
-        credentials: credentials.clone(),
-    };
+    let cfg = relay::Config { endpoint, pins, member_port: req.member_port, credentials: credentials.clone() };
     let ev = Arc::new(AppEvents { f: events, ctx, connected: connected.clone() });
     let r = Relay::start(cfg, ev);
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     relays(|t| {
-        t.insert(id, RunningRelay { _relay: r, records, connected, credentials });
+        t.insert(id, RunningRelay { _relay: r, connected, credentials });
         Ok(())
     })?;
     Ok(json!({ "id": id }))
@@ -360,10 +324,12 @@ struct RelayCredentials {
     id: u64,
     #[serde(with = "certs::b64", default)]
     public: Vec<u8>,
-    #[serde(default)]
-    credentials: Vec<Credential>,
     #[serde(with = "certs::b64::list", default)]
-    roots: Vec<Vec<u8>>,
+    credentials: Vec<Vec<u8>>,
+    #[serde(with = "certs::b64", default)]
+    period: Vec<u8>,
+    #[serde(with = "certs::b64", default)]
+    root: Vec<u8>,
     #[serde(default)]
     names: HashMap<String, String>,
 }
@@ -380,7 +346,8 @@ fn set_relay_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Result<Val
         None
     } else {
         let key = Arc::new(AppKey { public: req.public, sign, ctx });
-        Some(Arc::new(relay::Credentialed::new(key, req.credentials, req.roots, req.names, now_ms())?))
+        let now = u64::try_from(now_ms()).unwrap_or(0);
+        Some(Arc::new(relay::Credentialed::new(key, req.credentials, req.period, req.root, req.names, now)?))
     };
     relays(|t| {
         let r = t.get(&req.id).ok_or_else(|| Error::msg(format!("there is no relay link {}", req.id)))?;
@@ -400,12 +367,6 @@ struct Register {
     endpoint: String,
     #[serde(with = "certs::b64::list")]
     pins: Vec<Vec<u8>>,
-    #[serde(with = "certs::b64::list")]
-    chain: Vec<Vec<u8>>,
-    #[serde(with = "certs::b64")]
-    public: Vec<u8>,
-    #[serde(default)]
-    records: Option<Vec<Value>>,
     #[serde(default)]
     vless_id: Option<String>,
 }
@@ -414,7 +375,6 @@ struct Register {
 struct Forwarding {
     _registration: Registration,
     report: Arc<Mutex<Report>>,
-    records: Arc<Mutex<Vec<Value>>>,
 }
 
 /// One of the hub's clients: its device ID, its tunnel key and the
@@ -529,6 +489,7 @@ impl RunningHub {
         let peer = Peer {
             key: public,
             psk: guest_psk,
+            older_psks: Vec::new(),
             addr: hub::guest_addr(&public),
             until: Instant::now().checked_add(Duration::from_secs(lifetime)),
             source: None,
@@ -640,12 +601,6 @@ fn handle(request: &[u8]) -> Result<Value> {
             let forwarder = r.forwarding.as_ref().map(|f| f.report.lock().map(|r| r.clone()).unwrap_or_default());
             Ok(json!({ "udp_port": r.hub.udp_port(), "log": log, "forwarder": forwarder }))
         }),
-        Request::HubSetRecords { id, records } => hubs(|t| {
-            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
-            let f = r.forwarding.as_ref().ok_or_else(|| Error::msg(format!("the hub {id} is not registered")))?;
-            *f.records.lock().map_err(|_| Error::msg("the hub's records are broken"))? = records;
-            Ok(json!({}))
-        }),
         Request::HubSetProjectWays { id, ways } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
             if ways.len() > forward::MAX_WAYS {
@@ -663,11 +618,6 @@ fn handle(request: &[u8]) -> Result<Value> {
         Request::RelaySetConnected { id, devices } => relays(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no relay link {id}")))?;
             *r.connected.lock().map_err(|_| Error::msg("the relay link is broken"))? = devices.into_iter().collect();
-            Ok(json!({}))
-        }),
-        Request::RelaySetRecords { id, records } => relays(|t| {
-            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no relay link {id}")))?;
-            *r.records.lock().map_err(|_| Error::msg("the relay link is broken"))? = records;
             Ok(json!({}))
         }),
         Request::RelayStop { id } => {
@@ -768,13 +718,13 @@ fn hub_start(
     Ok(json!({ "id": id, "udp_port": port }))
 }
 
-/// Registers the hub with the forwarder (the module's comment), signing
-/// with the app's member key through sign.
-pub fn register(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
-    answer(register_hub(request, sign, ctx))
+/// Registers the hub with the forwarder (the module's comment); the hub
+/// signs with the server key `hub_credentials` gives, not through sign.
+pub fn register(request: &[u8], _sign: SignFn, _ctx: usize) -> Vec<u8> {
+    answer(register_hub(request))
 }
 
-fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
+fn register_hub(request: &[u8]) -> Result<Value> {
     let req: Register = serde_json::from_slice(request)
         .map_err(|e| Error::msg(format!("the registration request does not decode: {e}")))?;
     let endpoint: SocketAddr =
@@ -787,13 +737,9 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
     if pins.is_empty() {
         return Err(Error::msg("the forwarder has no pin"));
     }
-    if req.chain.is_empty() {
-        return Err(Error::msg("the hub has no member certificate"));
-    }
     if let Some(id) = &req.vless_id {
         cbb_core::vless::parse_id(id).map_err(|_| Error::msg("the hub's VLESS user ID is not a UUID"))?;
     }
-    let records = Arc::new(Mutex::new(req.records.unwrap_or_default()));
     let report = Arc::new(Mutex::new(Report::default()));
     // The old registration, if any, stops outside the table's lock: it may
     // take a moment.
@@ -802,12 +748,9 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
         let cfg = forward::Config {
             endpoint,
             pins,
-            chain: req.chain,
-            key: Arc::new(AppKey { public: req.public, sign, ctx }),
             wg_key: r.key,
             obfuscation: r.obfuscation.clone(),
             vless_id: req.vless_id,
-            records: records.clone(),
             send: r.hub.sender(),
             credential: Some({
                 let c = r.credential.clone();
@@ -818,7 +761,7 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             learned: r.learned.clone(),
         };
         let registration = Registration::start(cfg, report.clone(), logger(r.log.clone()));
-        Ok(r.forwarding.replace(Forwarding { _registration: registration, report, records }))
+        Ok(r.forwarding.replace(Forwarding { _registration: registration, report }))
     })?;
     drop(old);
     Ok(json!({}))
@@ -831,8 +774,8 @@ struct HubCredentials {
     id: u64,
     #[serde(with = "certs::b64", default)]
     public: Vec<u8>,
-    #[serde(default)]
-    credentials: Vec<Credential>,
+    #[serde(with = "certs::b64::list", default)]
+    credentials: Vec<Vec<u8>>,
 }
 
 /// Sets what a hub registers with (the module's comment).
@@ -846,19 +789,22 @@ fn set_hub_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value
     let cred = if req.credentials.is_empty() {
         None
     } else {
-        let spki = certs::p256_spki_of(&req.public);
-        if certs::p256_spki(&spki).is_none() {
+        if certs::p256_spki(&certs::p256_spki_of(&req.public)).is_none() {
             return Err(Error::msg("the hub's server key is not a P-256 point"));
         }
         // The forwarder takes the hubs' credential only when it lists the
-        // key the hub shows; one that does not is refused here.
-        let hash = certs::sha256(&spki);
-        let lists = req
+        // key the hub shows, by its hash; one that does not is refused here.
+        use cbb_core::blind::credential::{Credential, TYPE_HUBS};
+        let hash = cbb_core::records::key::Key::es256(req.public.clone()).hash().0;
+        let read: Vec<Credential> = req
             .credentials
             .iter()
-            .any(|c| c.open().is_ok_and(|b| b.kind == cbb_core::credential::HUBS && b.hubs.contains(&hash)));
-        if !lists {
-            return Err(Error::msg("the hubs' credential does not list the hub's server key"));
+            .map(|e| Credential::read(e))
+            .collect::<std::result::Result<_, _>>()
+            .map_err(|r| Error::msg(format!("a credential of the hub's breaks {r}")))?;
+        let lists = read.iter().any(|c| c.kind == TYPE_HUBS && c.hubs.contains(&hash));
+        if read.len() != 1 || !lists {
+            return Err(Error::msg("the credentials are not a hubs' credential alone that lists the hub's server key"));
         }
         let key: Arc<dyn cbb_member::identity::ExternalKey> = Arc::new(AppKey { public: req.public, sign, ctx });
         let cert = certs::server_cert_by(&key.public(), &mut |tbs| cbb_member::identity::sign_external(&*key, tbs))?;
@@ -879,7 +825,7 @@ fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
             let psk =
                 c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
             let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
-            Ok(Peer { key, psk, addr, until: None, source: None })
+            Ok(Peer { key, psk, older_psks: Vec::new(), addr, until: None, source: None })
         })
         .collect()
 }
@@ -917,6 +863,9 @@ fn b64(b: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(b)
 }
+
+#[cfg(test)]
+mod relay_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1045,42 +994,58 @@ mod tests {
         }
 
         let id = ok(hub_start(&key, &device, 1, json!([])))["id"].as_u64().unwrap();
-        assert!(!refused(json!({"op": "hub_set_records", "id": id, "records": "{"})).is_empty());
         assert!(!refused(json!({"op": "hub_set_project_ways", "id": id, "ways": "{"})).is_empty());
-        let reg = |endpoint: &str, pins: Value, chain: Value, vless: Option<&str>| {
-            let mut r = json!({"id": id, "endpoint": endpoint, "pins": pins, "chain": chain, "public": b64(&[4; 65])});
+        let reg = |endpoint: &str, pins: Value, vless: Option<&str>| {
+            let mut r = json!({"id": id, "endpoint": endpoint, "pins": pins});
             if let Some(v) = vless {
                 r["vless_id"] = json!(v);
             }
             serde_json::to_vec(&r).unwrap()
         };
         let pin = json!([b64(&[3; 32])]);
-        let chain = json!([b64(&[5; 40])]);
         for (name, req) in [
-            ("a name for an endpoint", reg("cbb.tools:8764", pin.clone(), chain.clone(), None)),
-            ("a bad pin", reg("127.0.0.1:1", json!([b64(b"pin")]), chain.clone(), None)),
-            ("no pin", reg("127.0.0.1:1", json!([]), chain.clone(), None)),
-            ("no chain", reg("127.0.0.1:1", pin.clone(), json!([]), None)),
-            ("a bad VLESS ID", reg("127.0.0.1:1", pin.clone(), chain.clone(), Some("x"))),
+            ("a name for an endpoint", reg("cbb.tools:8764", pin.clone(), None)),
+            ("a bad pin", reg("127.0.0.1:1", json!([b64(b"pin")]), None)),
+            ("no pin", reg("127.0.0.1:1", json!([]), None)),
+            ("a bad VLESS ID", reg("127.0.0.1:1", pin.clone(), Some("x"))),
         ] {
             assert!(refused_with(register(&req, no_sign, 0)), "{name}");
         }
+        // Credentials that do not verify are refused; none makes the hub
+        // wait again.
+        let creds = serde_json::to_vec(
+            &json!({"id": id, "public": b64(&[4; 65]), "credentials": [b64(&[1; 40]), b64(&[2; 40])]}),
+        )
+        .unwrap();
+        assert!(refused_with(hub_credentials(&creds, no_sign, 0)));
+        assert!(!refused_with(hub_credentials(&serde_json::to_vec(&json!({"id": id})).unwrap(), no_sign, 0)));
         ok(json!({"op": "hub_stop", "id": id}));
 
-        let relay = |key: &Value, device: &str, endpoint: &str, pins: Value, port: u16| {
-            serde_json::to_vec(&json!({"key": key, "device": device, "endpoint": endpoint, "pins": pins,
-                "chain": [b64(&[5; 40])], "public": b64(&[4; 65]), "member_port": port}))
-            .unwrap()
+        let relay = |endpoint: &str, pins: Value, port: u16| {
+            serde_json::to_vec(&json!({"endpoint": endpoint, "pins": pins, "member_port": port})).unwrap()
         };
         for (name, req) in [
-            ("a short key", relay(&json!(b64(&[1])), &device, "127.0.0.1:8764", pin.clone(), 1)),
-            ("no port", relay(&key, &device, "127.0.0.1", pin.clone(), 1)),
-            ("a bad pin", relay(&key, &device, "127.0.0.1:8764", json!([b64(b"nope")]), 1)),
-            ("a bad device", relay(&key, "phone", "127.0.0.1:8764", pin.clone(), 1)),
-            ("no member port", relay(&key, &device, "127.0.0.1:8764", pin.clone(), 0)),
+            ("no port", relay("127.0.0.1", pin.clone(), 1)),
+            ("a bad pin", relay("127.0.0.1:8764", json!([b64(b"nope")]), 1)),
+            ("no pin", relay("127.0.0.1:8764", json!([]), 1)),
+            ("no member port", relay("127.0.0.1:8764", pin.clone(), 0)),
         ] {
             assert!(refused_with(relay_start(&req, no_sign, no_event, 0)), "{name}");
         }
+        // A link waits for its credentials; ones that do not verify are
+        // refused, and the link stays as it was.
+        let started: Value =
+            serde_json::from_slice(&relay_start(&relay("127.0.0.1:1", pin.clone(), 1), no_sign, no_event, 0)).unwrap();
+        let link = started["ok"]["id"].as_u64().unwrap();
+        let creds = serde_json::to_vec(
+            &json!({"id": link, "public": b64(&[4; 65]), "credentials": [b64(&[1; 40]), b64(&[2; 40])],
+            "period": b64(&[3; 40]), "root": b64(&[4; 65])}),
+        )
+        .unwrap();
+        assert!(refused_with(relay_credentials(&creds, no_sign, 0)));
+        let none = serde_json::to_vec(&json!({"id": link})).unwrap();
+        assert!(!refused_with(relay_credentials(&none, no_sign, 0)));
+        ok(json!({"op": "relay_stop", "id": link}));
     }
 
     /// The pairing window learns which connections the hub made for its

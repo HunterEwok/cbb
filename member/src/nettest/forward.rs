@@ -1,34 +1,41 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A hub's registration against a forwarder in the same process
-//! (nettest::forwarder): the claim, the hellos it sends, where the
-//! forwarder saw it, the refusals, and the ways over VLESS when the
-//! forwarder's port does not answer.
+//! A hub's registration of 0.6 (`cbb-forward/3`) against a forwarder in
+//! the same process (nettest::forwarder), with the credentials of a group
+//! of 0.6 made in memory (nettest::blind): the registration, the hellos it
+//! sends, where the forwarder saw it, the refusals, and the ways over
+//! VLESS when the forwarder's port does not answer.
 
 use std::net::{Ipv4Addr, TcpListener};
 
 use super::*;
-use crate::nettest::forwarder::{self as fake, Forwarder, MASK};
-use crate::nettest::{Group, wait_for};
+use crate::nettest::blind::Blind;
+use crate::nettest::forwarder::{self as fake, Answer, Forwarder, MASK};
+use crate::nettest::wait_for;
+use v3::Register;
 
 type Sent = Arc<Mutex<Vec<(SocketAddr, Vec<u8>)>>>;
 type Logs = Arc<Mutex<Vec<String>>>;
 
-fn config(g: &Group, endpoint: SocketAddr, pins: Vec<certs::KeyHash>) -> (Config, Sent) {
+/// The hub's credential, fixed.
+fn fixed(c: HubCredential) -> Option<CredentialFn> {
+    Some(Arc::new(move || Some(c.clone())))
+}
+
+/// A hub of a group of one device, listed in its hubs' credential.
+fn config(endpoint: SocketAddr, pins: Vec<certs::KeyHash>) -> (Config, Sent) {
+    let g = Blind::new(1);
     let sent: Sent = Arc::new(Mutex::new(Vec::new()));
     let s = sent.clone();
     let cfg = Config {
         endpoint,
         pins,
-        chain: g.chain(0),
-        key: g.key(0),
         wg_key: crate::tunnel::new_key().unwrap().try_into().unwrap(),
         obfuscation: None,
         vless_id: None,
-        records: Arc::new(Mutex::new(g.records_json())),
         send: Arc::new(move |to, b| s.lock().unwrap().push((to, b.to_vec()))),
-        credential: None,
+        credential: fixed(g.hub_credential(0, 1, &[0])),
         ways: Arc::new(Mutex::new(Ways::default())),
         learned: Arc::new(Mutex::new(None)),
     };
@@ -56,14 +63,15 @@ fn open_hello(p: &[u8], key: &[u8; 32]) -> (u64, u64) {
     (u64::from_be_bytes(h[4..12].try_into().unwrap()), u64::from_be_bytes(h[12..20].try_into().unwrap()))
 }
 
-/// The hub registers with its member certificate and the records, proves
-/// its WireGuard key, sends hellos for its registration that the
-/// forwarder opens, and reports where the forwarder saw it.
+/// The hub registers with the certificate of its server key alone and
+/// the face's period and hubs' credentials, proves its WireGuard key,
+/// sends hellos for its registration that the forwarder opens, and
+/// reports where the forwarder saw it.
 #[test]
 fn registers_and_says_hello() {
-    let g = Group::new(1);
     let f = Forwarder::start(fake::welcome(), Some("203.0.113.9:51820"));
-    let (cfg, sent) = config(&g, f.addr, vec![f.pin]);
+    let (cfg, sent) = config(f.addr, vec![f.pin]);
+    let shown = cfg.credential.as_ref().unwrap()().unwrap();
     let wg_public = *PublicKey::from(&StaticSecret::from(cfg.wg_key)).as_bytes();
     let report = Arc::new(Mutex::new(Report::default()));
     let (logs, log) = logger();
@@ -76,10 +84,10 @@ fn registers_and_says_hello() {
     );
     assert!(report.lock().unwrap().registered);
     let claim = &f.claims()[0];
-    use base64::Engine;
-    assert_eq!(claim["key"], base64::engine::general_purpose::STANDARD.encode(wg_public));
-    assert_eq!(claim["records"].as_array().unwrap().len(), g.records.all().len());
-    assert!(claim.get("vless").is_none() && claim.get("credentials").is_none());
+    assert_eq!(claim.certs, vec![shown.cert.clone()], "the server key's certificate alone");
+    assert_eq!(claim.register.key, wg_public);
+    assert_eq!(claim.register.credentials, shown.credentials);
+    assert!(claim.register.vless.is_none() && claim.register.obfuscation.is_none());
     assert!(wait_for(Duration::from_secs(5), || !sent.lock().unwrap().is_empty()));
     let key = f.hello_keys.lock().unwrap()[0];
     let (to, p) = sent.lock().unwrap()[0].clone();
@@ -88,24 +96,33 @@ fn registers_and_says_hello() {
     assert_eq!(id, 7);
     assert!(counter > 0);
     drop(r);
-    assert!(logs.lock().unwrap().is_empty(), "{:?}", logs.lock().unwrap());
+    let logs = logs.lock().unwrap();
+    assert!(logs.iter().all(|l| l.contains("registered with the forwarder")), "{logs:?}");
 }
 
-/// A forwarder's answers that end the registration: a refusal, no mask;
-/// and a forwarder of another key. Each is reported and logged. A
+/// A registration that ends: the forwarder refuses it, answers without a
+/// mask, or has another key; the hub's server key is not on the hubs'
+/// credential it shows; the hub has no credential for the forwarder's face
+/// yet, and waits without dialing. Each is reported and logged. A
 /// forwarder without VLESS registers a hub that asked for UDP alone.
 #[test]
 fn refusals() {
-    use base64::Engine;
-    let mask = base64::engine::general_purpose::STANDARD.encode(MASK);
-    let cases: Vec<(fake::AnswerFn, &str)> = vec![
-        (Arc::new(|_: &Value| serde_json::json!({"error": "not today"})), "refused the registration: not today"),
-        (Arc::new(|_: &Value| serde_json::json!({"id": 1})), "no key for the hellos' mask"),
+    use cbb_core::format::cbor::Value as V;
+    let no_mask = cbb_core::format::frame::write(&V::Map(vec![
+        (cbb_core::format::frame::FIELD_T, V::Uint(cbb_core::msg::tables::T_FWD_REGISTERED)),
+        (2, V::Uint(1)),
+    ]));
+    let cases: Vec<(fake::AnswerFn, bool, &str)> = vec![
+        (Arc::new(|_: &Register| Answer::Refused("not today".into())), true, "refused the registration: not today"),
+        (Arc::new(move |_: &Register| Answer::Raw(no_mask.clone())), true, "the forwarder's message breaks"),
+        (fake::welcome(), false, "does not list this hub"),
     ];
-    for (answer, want) in cases {
-        let g = Group::new(1);
+    for (answer, listed, want) in cases {
         let f = Forwarder::start(answer, None);
-        let (cfg, _) = config(&g, f.addr, vec![f.pin]);
+        let (mut cfg, _) = config(f.addr, vec![f.pin]);
+        if !listed {
+            cfg.credential = fixed(Blind::new(2).hub_credential(0, 1, &[1]));
+        }
         let report = Arc::new(Mutex::new(Report { seen: Some("kept".into()), ..Report::default() }));
         let (logs, log) = logger();
         let r = Registration::start(cfg, report.clone(), log);
@@ -123,9 +140,21 @@ fn refusals() {
         assert!(logs.lock().unwrap().iter().any(|l| l.contains(want)));
         drop(r);
     }
-    let g = Group::new(1);
-    let f = Forwarder::start(Arc::new(move |_: &Value| serde_json::json!({"id": 1, "mask": mask})), None);
-    let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);
+    let f = Forwarder::start(fake::welcome(), None);
+    let (mut cfg, _) = config(f.addr, vec![f.pin]);
+    cfg.credential = None;
+    let report = Arc::new(Mutex::new(Report::default()));
+    let r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
+    assert!(wait_for(Duration::from_secs(20), || report
+        .lock()
+        .unwrap()
+        .error
+        .as_deref()
+        .is_some_and(|e| e.contains(NOT_LISTED))));
+    assert!(f.claims().is_empty() && f.hello_keys.lock().unwrap().is_empty(), "no credential, no dial");
+    drop(r);
+    let f = Forwarder::start(Arc::new(|_: &Register| Answer::Registered(fake_registered(None))), None);
+    let (mut cfg, _) = config(f.addr, vec![f.pin]);
     cfg.vless_id = Some("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into());
     let report = Arc::new(Mutex::new(Report::default()));
     let r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
@@ -133,21 +162,23 @@ fn refusals() {
     let rep = report.lock().unwrap().clone();
     assert!(rep.vless.is_none() && rep.error.is_none(), "UDP alone: {rep:?}");
     drop(r);
-    let g = Group::new(1);
     let f = Forwarder::start(fake::welcome(), None);
-    let (cfg, _) = config(&g, f.addr, vec![[1; 32]]);
+    let (cfg, _) = config(f.addr, vec![[1; 32]]);
     let report = Arc::new(Mutex::new(Report::default()));
     let _r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
     assert!(wait_for(Duration::from_secs(20), || report.lock().unwrap().error.is_some()));
+}
+
+fn fake_registered(vless: Option<v3::Way>) -> v3::Registered {
+    v3::Registered { id: 1, mask: MASK, vless }
 }
 
 /// A hub with a VLESS user ID claims it and learns the forwarder's VLESS
 /// settings, which its report carries as an offer does.
 #[test]
 fn learns_the_vless_settings() {
-    let g = Group::new(1);
     let f = Forwarder::start(fake::welcome(), Some("203.0.113.9:51820"));
-    let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);
+    let (mut cfg, _) = config(f.addr, vec![f.pin]);
     let id = "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d";
     cfg.vless_id = Some(id.into());
     cfg.obfuscation = Some(crate::awg::Obfuscation::random().unwrap().to_value());
@@ -161,8 +192,8 @@ fn learns_the_vless_settings() {
     assert_eq!(v["transport"], "xhttp");
     assert_eq!(learned.lock().unwrap().as_ref(), Some(&v));
     let claim = &f.claims()[0];
-    assert_eq!(claim["vless"], id);
-    assert!(claim["obfuscation"].is_object());
+    assert_eq!(claim.register.vless, Some(cbb_core::vless::parse_id(id).unwrap()));
+    assert!(claim.register.obfuscation.is_some());
 }
 
 /// The forwarder's port does not answer: without a VLESS user ID or a way
@@ -170,11 +201,10 @@ fn learns_the_vless_settings() {
 /// errors of all are said.
 #[test]
 fn the_ways_over_vless_when_the_port_is_closed() {
-    let g = Group::new(1);
     let ln = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let closed = ln.local_addr().unwrap();
     drop(ln);
-    let (cfg, _) = config(&g, closed, vec![[0; 32]]);
+    let (cfg, _) = config(closed, vec![[0; 32]]);
     let report = Arc::new(Mutex::new(Report::default()));
     let r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
     assert!(wait_for(Duration::from_secs(10), || report
@@ -185,14 +215,14 @@ fn the_ways_over_vless_when_the_port_is_closed() {
         .is_some_and(|e| e.contains("reaching the forwarder"))));
     drop(r);
 
-    let (mut cfg, _) = config(&g, closed, vec![[0; 32]]);
+    let (mut cfg, _) = config(closed, vec![[0; 32]]);
     cfg.vless_id = Some("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into());
     let r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
     std::thread::sleep(Duration::from_millis(300));
     drop(r);
 
     let site = crate::nettest::xhttp::Site::start(crate::nettest::xhttp::Knobs::default());
-    let (mut cfg, _) = config(&g, closed, vec![[0; 32]]);
+    let (mut cfg, _) = config(closed, vec![[0; 32]]);
     cfg.vless_id = Some("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into());
     *cfg.learned.lock().unwrap() = Some(site.offer("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"));
     let report = Arc::new(Mutex::new(Report::default()));
@@ -209,59 +239,43 @@ fn the_ways_over_vless_when_the_port_is_closed() {
     );
 }
 
-/// The offer from a forwarder's VLESS answer: the endpoint at the answer's
-/// port, the server name and the ID, with the transport and the path only
-/// when the answer gives them.
+/// The offer from a forwarder's VLESS answer: XHTTP at the forwarder's
+/// address on the answer's port (443 when it names none), the server name
+/// and the ID, with the path only when the answer gives one.
 #[test]
 fn offers_from_answers() {
     let at: SocketAddr = "192.0.2.7:4242".parse().unwrap();
-    let v = vless_offer(
-        at,
-        "id",
-        VlessAnswer { transport: String::new(), port: 443, server_name: "s".into(), path: String::new() },
-    );
+    let v = vless_offer(at, "id", v3::Way { user: [0; 16], port: None, host: "s".into(), path: String::new() });
     assert_eq!(v["endpoint"], "192.0.2.7:443");
     assert_eq!(v["server_name"], "s");
     assert_eq!(v["id"], "id");
-    assert!(v.get("transport").is_none() && v.get("path").is_none());
-    let v = vless_offer(
-        at,
-        "id",
-        VlessAnswer { transport: "xhttp".into(), port: 443, server_name: "s".into(), path: "/p".into() },
-    );
     assert_eq!(v["transport"], "xhttp");
+    assert!(v.get("path").is_none());
+    let v = vless_offer(at, "id", v3::Way { user: [0; 16], port: Some(8443), host: "s".into(), path: "/p".into() });
+    assert_eq!(v["endpoint"], "192.0.2.7:8443");
     assert_eq!(v["path"], "/p");
     assert!(prove(&[1; 32], &[0; 32], &[0; 32]).is_none(), "a low-order point");
     assert!(prove(&[1; 32], &[0; 3], &[0; 32]).is_none());
 }
 
-/// A hub with the period's hubs' credential registers with it and the
-/// certificate of its server key, without its member certificate or the
-/// records, and registers again when a newer credential comes.
+/// A hub registers with the credential it has at each registration, and
+/// registers again when a newer hubs' credential comes.
 #[test]
 fn registers_with_a_credential() {
-    let g = Group::new(1);
-    let server = crate::nettest::new_key();
-    let cert = certs::server_cert_by(&crate::identity::ExternalKey::public(&*server), &mut |tbs| {
-        crate::identity::sign_external(&*server, tbs)
-    })
-    .unwrap();
-    let first = g.period(std::slice::from_ref(&server), 1);
-    let now: Arc<Mutex<Vec<cbb_core::credential::Credential>>> = Arc::new(Mutex::new(vec![first[1].clone()]));
+    let g = Blind::new(1);
+    let now = Arc::new(Mutex::new(g.hub_credential(0, 1, &[0])));
     let f = Forwarder::start(fake::welcome(), None);
-    let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);
-    let (n, key) = (now.clone(), server.clone());
-    cfg.credential = Some(Arc::new(move || {
-        Some(HubCredential { credentials: n.lock().unwrap().clone(), cert: cert.clone(), key: key.clone() })
-    }));
+    let (mut cfg, _) = config(f.addr, vec![f.pin]);
+    let n = now.clone();
+    cfg.credential = Some(Arc::new(move || Some(n.lock().unwrap().clone())));
     let report = Arc::new(Mutex::new(Report::default()));
     let (logs, log) = logger();
     let _r = Registration::start(cfg, report.clone(), log);
     assert!(wait_for(Duration::from_secs(20), || report.lock().unwrap().registered), "{:?}", report.lock().unwrap());
-    let claim = &f.claims()[0];
-    assert!(claim.get("records").is_none());
-    assert_eq!(claim["credentials"].as_array().unwrap().len(), 1);
+    assert_eq!(f.claims()[0].register.credentials, now.lock().unwrap().credentials);
     assert!(logs.lock().unwrap().iter().any(|l| l.contains("hubs' credential")));
-    *now.lock().unwrap() = vec![g.period(&[server], 2)[1].clone()];
+    let second = g.hub_credential(0, 2, &[0]);
+    *now.lock().unwrap() = second.clone();
     assert!(wait_for(Duration::from_secs(20), || f.claims().len() >= 2), "no second registration");
+    assert_eq!(f.claims()[1].register.credentials, second.credentials);
 }

@@ -168,10 +168,16 @@ impl Board {
         self.inner.lock().unwrap().mute = None;
     }
 
-    /// While muted: when the mute ends, 0 for until it is lifted.
+    /// Whether this member is muted, and for how many milliseconds more: 0
+    /// for until it is lifted, at least 1 otherwise, as `Engine::mute_left`
+    /// (the status, the hello's `muted_for_ms` and mute.json take it so).
     pub fn mute_left(&self) -> Option<i64> {
         let mut st = self.inner.lock().unwrap();
-        if self.muted(&mut st) { st.mute } else { None }
+        let now = (self.wall)();
+        match self.muted(&mut st) {
+            false => None,
+            true => Some(st.mute.filter(|u| *u != 0).map_or(0, |u| u.saturating_sub(now).max(1))),
+        }
     }
 
     /// The group's window for incoming copies and lifetime of secrets;
@@ -197,6 +203,17 @@ impl Board {
         self.inner.lock().unwrap().current.clone()
     }
 
+    /// Drops the group's current copy when it is the copy `id`: one that no
+    /// longer counts. Whether it was.
+    pub fn forget(&self, id: &[u8; 16]) -> bool {
+        let mut st = self.inner.lock().unwrap();
+        if st.current.as_ref().is_some_and(|c| &c.id == id) {
+            st.current = None;
+            return true;
+        }
+        false
+    }
+
     /// A watcher reported the clipboard changed: the content to send to
     /// the group, or None when it did not change for the group (this
     /// member's own write coming back, the same text again, sync off or a
@@ -218,16 +235,27 @@ impl Board {
     }
 
     /// A deliberate send (cbb send, a phone's paste): always content,
-    /// unless this member is muted.
-    pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<Content> {
+    /// unless this member is muted, and whether it goes to this device's
+    /// own clipboard too: unless the clipboard holds it already, as a copy
+    /// from tmux reaches the desktop's clipboard, whatever the mode.
+    pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<(Content, bool)> {
         let c = content(text, kind, via)?;
         let mut st = self.inner.lock().unwrap();
         if self.muted(&mut st) {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
         let now = (self.wall)();
+        let s = sum(text);
+        let write = !st.local.as_ref().is_some_and(|l| l.sum == s && l.media.is_none());
         st.local = Some(local(text, kind, now));
-        Ok(c)
+        if write {
+            // The watcher reports the write back: no copy of its own.
+            st.written.push_back((s, now));
+            while st.written.len() > WRITTEN {
+                st.written.pop_front();
+            }
+        }
+        Ok((c, write))
     }
 
     /// Whether images or files this member copied go to the group: a
@@ -360,6 +388,18 @@ mod tests {
     }
 
     #[test]
+    fn a_send_goes_to_the_own_clipboard_unless_it_holds_it() {
+        let (b, _) = board();
+        b.set_sync(false, 1_000_500);
+        let (_, write) = b.send("from tmux", Kind::Text, Via::Copy).unwrap();
+        assert!(write, "a deliberate send is written here, whatever the mode");
+        // The watcher reports the write back: no copy of its own.
+        assert!(b.copied("from tmux", Kind::Text, Via::Copy).unwrap().is_none());
+        let (_, write) = b.send("from tmux", Kind::Text, Via::Copy).unwrap();
+        assert!(!write, "the clipboard holds it already");
+    }
+
+    #[test]
     fn sync_off_and_a_mute_keep_copies_home() {
         let (b, t) = board();
         b.set_sync(false, 1_000_500);
@@ -367,7 +407,12 @@ mod tests {
         assert_eq!(b.received(&arrived(Content::text("x", false), DeviceId([1; 16]), 0)), Verdict::Mode);
         t.store(1_000_600, Ordering::SeqCst);
         assert_eq!(b.sync(), (true, 0), "sync comes back on by itself");
+        assert_eq!(b.mute_left(), None);
+        // A mute until a moment says the time left, as the engine's does.
+        b.set_mute(1_000_600 + 3_600_000);
+        assert_eq!(b.mute_left(), Some(3_600_000));
         b.set_mute(0);
+        assert_eq!(b.mute_left(), Some(0), "until it is lifted");
         assert!(b.copied("b", Kind::Text, Via::Copy).unwrap().is_none());
         assert!(b.send("c", Kind::Text, Via::Copy).is_err());
         b.unmute();

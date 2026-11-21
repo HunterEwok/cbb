@@ -163,6 +163,11 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away relay: the relays after the first, each its address and its
+    /// key's pin with a space between, which only the root of a group of
+    /// 0.6 takes (cbb global relay with several).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
     /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
     /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -331,6 +336,11 @@ pub struct Status {
     pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
+    /// The group as a blind relay of the owner's lists it: its root key and
+    /// the two halves of its recovery key in hex, separated by colons, the
+    /// value of `cbb relay -group` (cbb status -relay); empty in no group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_group: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
@@ -641,6 +651,11 @@ pub struct Device {
     /// hub, or a hub whose offer it keeps.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hub: bool,
+    /// Its place in the group's order of hubs, from 1, which every member
+    /// derives from the records alone (docs/protocol.md, section 11,
+    /// "Several hubs"); 0 when it may not serve.
+    #[serde(default, skip_serializing_if = "is_zero_us")]
+    pub hub_rank: usize,
 }
 
 /// A header and its payload.

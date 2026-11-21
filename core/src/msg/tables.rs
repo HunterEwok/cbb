@@ -193,6 +193,8 @@ pub static OFFER: Table = Table {
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
         f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
+        f(10, "offer/next-obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(11, "offer/next-vless", Ty::Map(&VLESS), false),
     ],
 };
 
@@ -238,7 +240,7 @@ pub static GUEST: Table = Table {
         f(6, "guest/offer", Ty::Map(&OFFER), false),
         f(7, "guest/reason", REASON, false),
         f(8, "guest/conn", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
-        f(9, "guest/data", Ty::BytesUpTo(16384), false),
+        f(9, "guest/data", Ty::BytesUpTo(crate::join::guest::MAX_DATA), false),
         f(10, "guest/device", ID16, false),
         f(11, "guest/invite", INVITE_ID, false),
     ],
@@ -248,12 +250,17 @@ pub static GUEST: Table = Table {
 /// and in field 3 room for the group's AmneziaWG settings to change with
 /// the period in a later version. Only members get this message, so a
 /// server never sees the settings. No 0.6 writer sets field 3; a 0.6
-/// reader checks its shape and does not apply it.
+/// reader checks its shape and does not apply it. Fields 4 and 5 name the
+/// server these credentials are for (A-55, a face for each server): its
+/// pin, the hash of its key, always, and its address. There is no face
+/// for all servers, so that no two servers see the same one.
 pub static CREDENTIALS: Table = Table {
     shape: "member-credentials/shape",
     fields: &[
         f(2, "member-credentials/list", Ty::Array { of: &ENV, max: 259 }, true),
         f(3, "member-credentials/obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(4, "member-credentials/server", B32, true),
+        f(5, "member-credentials/address", Ty::Text(261), false),
     ],
 };
 

@@ -280,7 +280,64 @@ fn commands_reach_a_member() {
     has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "no such!"})), "not an action's name");
     has(&root.err(true, json!({"op": "action_on", "device": "root", "name": "lock"})), "runs on another device");
     has(&root.err(true, json!({"op": "away", "name": "off", "device": "root"})), "-on names this device");
+    // Sync away from home on at desk, and the root turns it off there.
+    desk.ok(true, json!({"op": "away", "name": "on", "consent": true}));
+    desk.wait("sync away from home is on at desk", |st| st["away"].is_object());
     root.ok(true, json!({"op": "away", "name": "off", "device": "desk"}));
+    desk.wait("sync away from home is off at desk", |st| st["away"].is_null());
+}
+
+/// The root makes a member a hub with a hub command, stops it being one,
+/// and moves its own hub to it; each comes back with the member's result.
+#[test]
+fn hub_commands_reach_a_member() {
+    let g = group(&["root", "desk"]);
+    let (root, desk) = (&g[0], &g[1]);
+    let port = || std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    // A device the records do not make a hub is refused before anything goes.
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": ["127.0.0.1:9"]})),
+        "do not make desk a hub",
+    );
+    root.ok(true, json!({"op": "hubs", "hubs": ["root", "desk"]}));
+    // Desk has sync away from home off: it refuses, with why, once it took
+    // the hubs record.
+    let off = json!({"op": "away", "name": "hub", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]});
+    wait_for(
+        "desk refuses for sync away from home",
+        || root.err(true, off.clone()).contains("sync away from home is off").then_some(()),
+        || desk.log(),
+    );
+    desk.ok(true, json!({"op": "away", "name": "on", "consent": true}));
+    has(
+        &root
+            .err(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": ["127.0.0.1:1", "127.0.0.1:2"]})),
+        "one address",
+    );
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub", "device": "desk"})),
+        "an address away from home or a forwarder",
+    );
+    let m = root
+        .ok(true, json!({"op": "away", "name": "hub", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]}));
+    assert_eq!(m.s("name"), "desk");
+    desk.wait("desk is a hub", |st| st["away"]["hub"] == true);
+    // It stops being one: refused while the group would have no other
+    // hub, unless forced.
+    root.ok(true, json!({"op": "away", "name": "hub-off", "device": "desk", "force": true}));
+    desk.wait("desk is no hub", |st| st["away"]["hub"] != true);
+    has(
+        &root.err(true, json!({"op": "away", "name": "hub-off", "device": "desk", "force": true})),
+        "no hub of the group",
+    );
+    // The root's own hub moves to desk.
+    has(&root.err(true, json!({"op": "away", "name": "move", "device": "desk"})), "no hub of the group");
+    root.ok(true, json!({"op": "away", "name": "hub", "consent": true, "addrs": [format!("127.0.0.1:{}", port())], "port": port()}));
+    root.wait("root is a hub", |st| st["away"]["hub"] == true);
+    has(&root.err(true, json!({"op": "away", "name": "move"})), "names the device");
+    root.ok(true, json!({"op": "away", "name": "move", "device": "desk", "addrs": [format!("127.0.0.1:{}", port())]}));
+    desk.wait("desk is the hub", |st| st["away"]["hub"] == true);
+    root.wait("root is no hub", |st| st["away"]["hub"] != true);
 }
 
 /// One pairing at a time, a join only outside a group; a home window
@@ -417,6 +474,9 @@ fn recovers_the_group_with_its_sheet() {
     assert!(!desk.err_with(true, json!({"op": "recover"}), &broken).is_empty());
 
     desk.ok_with(true, json!({"op": "recover"}), sheet.as_bytes());
+    // Until it restarts with the new root key the records name it the
+    // root already: a second claim would make another root.
+    has(&desk.err_with(true, json!({"op": "recover"}), sheet.as_bytes()), "root already");
     // It restarts by itself to sign with the new key; as systemd would,
     // the test starts it again.
     desk.wait_exit(Duration::from_secs(30));
@@ -493,7 +553,9 @@ fn leaves_the_group() {
 
 /// A device that joins by another window's link is refused before any
 /// code: the member's key is not the one the link names; it pairs once
-/// this member's window is open. (A closed window: pairing_one_at_a_time.)
+/// this member's window is open. Such a connection tried nothing, so the
+/// window hears of no try, also when it reaches a window opened since.
+/// (A closed window: pairing_one_at_a_time.)
 #[test]
 fn a_closed_window_refuses_the_joiner() {
     let root = Svc::start("root", &[], &[]);
@@ -505,7 +567,15 @@ fn a_closed_window_refuses_the_joiner() {
     let (_wconn, _r, _, link) = elsewhere.window(false);
     let mut l = cbb_core::join::invitation::WindowLink::parse(&link).unwrap();
     l.addrs = vec![root.addr()];
-    let link = l.text();
-    has(&other.err(true, json!({"op": "join", "code": link})), "is not the window's member");
-    assert_eq!(root.admit(&other, false), "other");
+    let wrong = l.text();
+    has(&other.err(true, json!({"op": "join", "code": wrong})), "is not the window's member");
+    // The same while this root's window is open: the window's next word
+    // is the device that paired, not a try.
+    let (_rconn, mut r, _, link) = root.window(false);
+    has(&other.err(true, json!({"op": "join", "code": wrong})), "is not the window's member");
+    wait_for("the window drops the connection", || root.log().contains("tried nothing").then_some(()), || root.log());
+    other.ok(true, json!({"op": "join", "code": link}));
+    let closed = read(&mut r).unwrap_or_else(|| panic!("the window did not close:\n{}", root.log()));
+    assert!(closed.error().is_empty() && closed.done(), "the window said {:?}\n{}", closed.h, root.log());
+    assert_eq!(closed.s("name"), "other");
 }

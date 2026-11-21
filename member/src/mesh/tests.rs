@@ -16,7 +16,7 @@ use super::*;
 use crate::content::Source;
 use cbb_core::media::Part;
 
-struct K(SigningKey);
+pub(crate) struct K(SigningKey);
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
@@ -28,7 +28,7 @@ impl ExternalKey for K {
     }
 }
 
-fn root() -> K {
+pub(crate) fn root() -> K {
     K(SigningKey::from_slice(&[1; 32]).unwrap())
 }
 
@@ -58,6 +58,22 @@ fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
 
 /// The state directories of `two`'s devices, a's and b's.
 pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, &[])
+}
+
+/// two_dirs, with b one of the group's hubs by the root's hubs record.
+#[cfg(feature = "tunnel")]
+pub(crate) fn two_dirs_b_hub(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, &["b"])
+}
+
+/// Two members that are both hubs, b above a in the hubs record.
+#[cfg(feature = "tunnel")]
+pub(crate) fn two_dirs_both_hubs(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, &["b", "a"])
+}
+
+fn dirs(name: &str, hubs: &[&str]) -> (PathBuf, PathBuf) {
     let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
     let (oa, ob) = (own(&da), own(&db));
     let root = root();
@@ -71,8 +87,15 @@ pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
     for (o, name) in [(&oa, "a"), (&ob, "b")] {
         let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
         d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+        if hubs.contains(&name) {
+            d.rights |= body::RIGHT_HUB;
+        }
         let st = set.state();
         set.write_record(&st, &root, Kind::device(d), now - 1000).unwrap();
+    }
+    if !hubs.is_empty() {
+        let hubs: Vec<String> = hubs.iter().map(ToString::to_string).collect();
+        crate::writers::set_hubs(&mut set, &root, &hubs, now - 900).unwrap();
     }
     let b_set = set.clone();
     let mut d = Device::new(Key::es256(K(SigningKey::from_slice(&[7; 32]).unwrap()).public()), "c", body::ROLE_MEMBER);
@@ -118,13 +141,34 @@ fn two_members_sync_their_records_and_statements() {
     // Each has the other's statement: each can seal to the other.
     until("the statements", || {
         let st = b.state();
-        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
-            && a.statements.lock().unwrap().sealing(&a.state()).contains_key(&b.device())
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device()) && {
+            let sa = a.state();
+            a.statements.lock().unwrap().sealing(&sa).contains_key(&b.device())
+        }
     });
     // b kept what it learned.
     let local = crate::set::local_key(&b.dir).unwrap();
     assert_eq!(crate::set::load(&b.dir, &local).unwrap().unwrap().digest(), a.set().lock().unwrap().digest());
     a.close();
+    b.close();
+}
+
+// Each member keeps the release archive a peer's hello names, for the
+// hub's cbb update, after the connection ends too; a name not made as
+// packaging/archive.sh makes them is not kept.
+#[test]
+fn a_member_keeps_the_archives_its_peers_update_from() {
+    let (a, b) = two("archives");
+    let device = |archive: &str| crate::hello::Device { archive: archive.into(), ..Default::default() };
+    a.set_hello(crate::hello::Hello { device: device("cbb-linux-arm64.tar.gz"), ..Default::default() });
+    b.set_hello(crate::hello::Hello { device: device("cbb-linux-arm64.tar.gz/.."), ..Default::default() });
+    connect(&a, &b);
+    until("the hellos", || b.hellos().contains_key(&a.device()) && a.hellos().contains_key(&b.device()));
+    assert_eq!(b.archives(), vec!["cbb-linux-arm64.tar.gz".to_string()]);
+    assert!(a.archives().is_empty(), "a name packaging/archive.sh does not make");
+    a.close();
+    until("the connection gone", || b.connected().is_empty());
+    assert_eq!(b.archives(), vec!["cbb-linux-arm64.tar.gz".to_string()]);
     b.close();
 }
 
@@ -137,12 +181,100 @@ fn a_copy_reaches_the_other_member() {
         let _ = tx.lock().unwrap().send((c.content.clone(), c.origin));
     }));
     connect(&a, &b);
-    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    until("the statements", || {
+        // The state first: holding the statements while taking the set would invert mesh's lock order.
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
     let content = Content::text("from b", false);
     assert!(b.copy(&content).unwrap());
     let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(got, content);
     assert_eq!(origin, b.device());
+    a.close();
+    b.close();
+}
+
+// A copy made while the member holds no other reader's keys, as just
+// after it joined, goes out once a reader's statement arrives, with the
+// time it was copied.
+#[test]
+fn a_copy_made_before_a_reader_was_known_goes_out_later() {
+    let (a, b) = two("unsent");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send((c.content.clone(), c.origin));
+    }));
+    let content = Content::text("before a reader", false);
+    assert!(!b.copy(&content).unwrap(), "no reader yet");
+    connect(&a, &b);
+    let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!((got, origin), (content, b.device()));
+    assert!(b.unsent.lock().unwrap().is_none());
+    a.close();
+    b.close();
+}
+
+// A copy made while no peer was connected reaches a reader once they meet
+// again: each side sends its current copy as the connection opens.
+#[test]
+fn the_current_copy_reaches_a_peer_that_connects_later() {
+    let (a, b) = two("current");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send(c.content.clone());
+    }));
+    connect(&a, &b);
+    until("the statements", || {
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    let content = Content::text("while apart", false);
+    assert!(b.copy(&content).unwrap(), "sealed to a, which is not connected");
+    assert!(rx.try_recv().is_err());
+    connect(&a, &b);
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), content);
+    // Once seen, the same copy is not taken again on the next connection.
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    connect(&a, &b);
+    until("connected again", || !a.connected().is_empty());
+    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
+    a.close();
+    b.close();
+}
+
+#[test]
+fn a_current_copy_older_than_one_the_peer_holds_is_dropped() {
+    let (a, b) = two("current-old");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send(c.content.clone());
+    }));
+    let earlier = b.clock.now();
+    connect(&a, &b);
+    until("the statements", || {
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
+    let newer = Content::text("newer", false);
+    assert!(b.copy(&newer).unwrap());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), newer);
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    // b's current copy becomes one signed before the copy a holds, as
+    // after a restart that lost the newer one: a has not seen it, and
+    // drops it as older.
+    *b.current.lock().unwrap() = None;
+    assert!(b.copy_at(&Content::text("older", false), earlier).unwrap());
+    connect(&a, &b);
+    until("connected again", || !a.connected().is_empty());
+    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err(), "the older copy was taken");
     a.close();
     b.close();
 }
@@ -157,7 +289,11 @@ fn a_copy_with_images_brings_its_blob_and_it_opens() {
         let _ = tx.lock().unwrap().send(c.clone());
     }));
     connect(&a, &b);
-    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    until("the statements", || {
+        // The state first: holding the statements while taking the set would invert mesh's lock order.
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
     // Over a megabyte: more than one get, several chunks and segments.
     let png: Vec<u8> = (0..(1 << 20) + 70_000).map(|i| (i % 253) as u8).collect();
     let content = Content { kind: TYPE_MEDIA, text: Some("a picture".into()), ..Content::default() };
@@ -215,7 +351,7 @@ fn the_signed_files_travel_as_published() {
 }
 
 #[test]
-fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
+fn other_messages_go_to_the_service_and_hub_shares_only_from_hubs() {
     let (a, b) = two("other");
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
@@ -228,8 +364,14 @@ fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
         (frame::FIELD_T, Value::Uint(m::T_REACH)),
         (2, Value::Array(vec![Value::Bytes(&[3; 16])])),
     ]));
-    // b holds no admin key and no hubs record names it: its tunnel offer is
-    // dropped, its reach goes on.
+    // b holds no admin key and no hubs record names it: what it would
+    // tell the hubs is dropped; its key toward a as a hub, as a member of
+    // the group, and its reach go on.
+    let hubs = frame::write(&Value::Map(vec![
+        (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_HUBS)),
+        (3, Value::Uint(1)),
+    ]));
+    assert_eq!(cbb_core::msg::check(&hubs[4..]), Ok(cbb_core::msg::tables::T_HUBS));
     let tunnel = frame::write(&Value::Map(vec![
         (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_TUNNEL)),
         (2, cbb_core::format::Key::new(cbb_core::format::Alg::X25519, &[4; 32]).to_value()),
@@ -237,8 +379,10 @@ fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
     ]));
     assert_eq!(cbb_core::msg::check(&tunnel[4..]), Ok(cbb_core::msg::tables::T_TUNNEL));
     assert!(!a.may_be_hub(&b.device()));
+    assert!(b.send(&a.device(), hubs));
     assert!(b.send(&a.device(), tunnel));
     assert!(b.send(&a.device(), reach));
+    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), cbb_core::msg::tables::T_TUNNEL));
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), m::T_REACH));
     assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     a.close();
@@ -392,17 +536,86 @@ fn server_credentials_go_round_the_group() {
     let a = Mesh::open(&da, oa, log.clone()).unwrap();
     let b = Mesh::open(&db, own(&db), log).unwrap();
     a.refresh_faces(&a.state());
-    let tag = a.faces().kept().tag();
+    // A face for each of the project's servers, by the pins built in.
+    let mut servers = crate::faces::project_servers(None, 0);
+    servers.sort();
+    assert_eq!(servers.len(), 2, "the relay and the forwarder; push has no pin built in");
+    assert_eq!(a.faces().servers(), servers);
+    let pin = servers[0].pin;
+    let tag = a.faces().kept(&pin).tag();
     assert!(tag.is_some(), "the root started a period");
-    assert!(b.faces().kept().tag().is_none());
+    assert_ne!(a.faces().kept(&servers[1].pin).tag(), tag, "another face for the other server");
+    assert!(b.faces().kept(&pin).tag().is_none());
     connect(&a, &b);
-    until("b takes the period", || b.faces().kept().tag() == tag);
+    until("b takes the period", || b.faces().kept(&pin).tag() == tag);
     let bk = b.own().hash();
-    until("the root lists b", || {
-        let k = a.faces().kept();
-        k.envelopes().len() == 5 && k.lists_member(&bk)
+    until("the root lists b on both faces", || {
+        servers.iter().all(|s| {
+            let k = a.faces().kept(&s.pin);
+            k.envelopes().len() == 5 && k.lists_member(&bk)
+        })
     });
-    until("b holds the new members' credential", || b.faces().kept().lists_member(&bk));
+    until("b holds the new members' credentials", || servers.iter().all(|s| b.faces().kept(&s.pin).lists_member(&bk)));
+    a.close();
+    b.close();
+}
+
+/// Message `push` from a peer over its own connection is its registration:
+/// the member keeps it, in push.cbor, and takes it again after a restart.
+#[test]
+#[cfg(feature = "tunnel")]
+fn a_peer_registers_for_push_and_the_member_keeps_it() {
+    let (da, db) = two_dirs("push");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log.clone()).unwrap();
+    connect(&a, &b);
+    until("the connection", || b.connected().contains(&a.device()));
+    let token = vec![5; 32];
+    let send_key = Key::es256(K(SigningKey::from_slice(&[9; 32]).unwrap()).public());
+    let reg = cbb_core::push::Registration {
+        seq: 1,
+        kinds: cbb_core::push::KIND_COPIES,
+        on: Some(cbb_core::push::On {
+            token,
+            env: cbb_core::push::ENV_APNS,
+            key: cbb_core::secret::Zeroizing::new([8; 32]),
+            send_key,
+            send_sig: vec![1; 64],
+            slot: [3; 16],
+            face: [4; 16],
+            challenge: None,
+        }),
+    };
+    assert!(b.send(&a.device(), reg.write().unwrap()));
+    until("the registration", || a.push.held() == 1);
+    assert!(da.join(super::push::FILE).exists());
+    // A copy a makes while b is connected goes to b directly, not by push.
+    a.copy(&Content::text("near", false)).unwrap();
+    assert_eq!(a.push.waiting(), 0);
+    a.close();
+    b.close();
+    let a = Mesh::open(&da, own(&da), log).unwrap();
+    assert_eq!(a.push.held(), 1, "kept across a restart");
+    a.close();
+}
+
+/// A member connection gives the tunnel's pre-shared keys (A-22): the
+/// hub's and its client's ends export the same key and tag, the two
+/// directions differ, and a new connection gives a new key.
+#[test]
+fn a_connection_gives_both_ends_the_tunnels_key() {
+    let (da, db) = two_dirs("tunnel-psk");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    connect(&a, &b);
+    until("the connection", || a.connected().contains(&b.device()) && b.connected().contains(&a.device()));
+    let a_hub = a.tunnel_psk(&b.device(), true).expect("the hybrid exchange gives a key");
+    assert_eq!(b.tunnel_psk(&a.device(), false), Some(a_hub), "the hub's and the client's ends agree");
+    let b_hub = b.tunnel_psk(&a.device(), true).unwrap();
+    assert_eq!(a.tunnel_psk(&b.device(), false), Some(b_hub));
+    assert_ne!(a_hub, b_hub, "each direction its own");
     a.close();
     b.close();
 }

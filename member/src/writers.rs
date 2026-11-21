@@ -86,6 +86,16 @@ pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     keys
 }
 
+/// The powers of the admin key signer as the records give them, or None
+/// when it is the group's current root, which has every power.
+fn admin_powers(st: &State, signer: &dyn ExternalKey) -> Option<u64> {
+    let h = Key::es256(signer.public()).hash();
+    if st.roots.last() == Some(&h) {
+        return None;
+    }
+    Some(st.devices.iter().find(|d| d.admin == Some(h)).map_or(0, |d| d.powers))
+}
+
 /// Removes a device from the group: its keys count no more.
 pub fn remove(
     set: &mut RecordSet,
@@ -98,6 +108,14 @@ pub fn remove(
     if Some(d.id) == st.root_device {
         return Err(Error::msg(format!(
             "{} holds the group's root, which is not removed: the root changes only with its recovery key (cbb recovery)",
+            d.name
+        )));
+    }
+    if d.admin.is_some()
+        && admin_powers(&st, signer).is_some_and(|p| p & cbb_core::records::body::POWER_REMOVE_ADMINS == 0)
+    {
+        return Err(Error::msg(format!(
+            "{} is an admin, and only the group's root removes an admin: run cbb remove on the root computer",
             d.name
         )));
     }
@@ -115,6 +133,42 @@ pub fn remove(
 /// the group has no fork to resolve.
 pub fn two_histories(state: &State) -> Vec<String> {
     state.devices.iter().filter(|d| keys_of(d).iter().any(|k| state.two_histories(k))).map(|d| d.name.clone()).collect()
+}
+
+/// Voids both histories of every key that signed two (docs/protocol.md,
+/// section 10, "Going on after two histories"): the root's `resolve`
+/// naming the records of each key at the seq where it forked, so that the
+/// key goes on from the record before them. Gives whose keys they were, by
+/// device name (the first bytes of the key in hex when no device has it),
+/// and what was written. Only the group's root resolves.
+pub fn resolve(set: &mut RecordSet, signer: &dyn ExternalKey, now_ms: u64) -> Result<(Vec<String>, Vec<Record>)> {
+    use cbb_core::records::eval::ConflictKind;
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Err(Error::msg(
+            "only the group's root resolves two histories: run cbb resolve on the root computer, or resolve them on the root phone",
+        ));
+    }
+    let (mut ids, mut who) = (Vec::new(), Vec::new());
+    for c in st.conflicts.iter().filter(|c| c.kind == ConflictKind::TwoHistories) {
+        ids.extend(c.records.iter().copied());
+        for k in &c.signers {
+            let d =
+                st.devices.iter().find(|d| d.key.hash() == *k || d.admin == Some(*k)).or_else(|| {
+                    (st.roots.last() == Some(k)).then(|| st.root_device.and_then(|r| st.device(&r))).flatten()
+                });
+            who.push(d.map_or_else(|| hex(&k.0[..4]), |d| d.name.clone()));
+        }
+    }
+    if ids.is_empty() {
+        return Err(Error::msg("no key of the group signed two histories"));
+    }
+    ids.sort();
+    ids.dedup();
+    let out = set
+        .write_record(&st, signer, Kind::Resolve(ids), now_ms)
+        .map_err(|e| Error::msg(format!("cannot void the two histories: {e}")))?;
+    Ok((who, out))
 }
 
 /// Freezes a device (its keys sign nothing and it gets no copies until it
@@ -137,7 +191,29 @@ pub fn freeze(
     if !on && !d.frozen {
         return Err(Error::msg(format!("{} is not frozen", d.name)));
     }
-    let keys = keys_of(&d);
+    // An admin freezes admin keys alone, and only the root (or an admin
+    // with the power to remove admins) thaws (docs/protocol.md, section 10).
+    let by_admin = admin_powers(&st, signer);
+    let keys = match (by_admin, d.admin) {
+        (Some(_), Some(a)) if on => vec![a],
+        (Some(_), None) if on => {
+            return Err(Error::msg(format!(
+                "{} is no admin, and an admin freezes only admins: remove it, or freeze it on the root computer",
+                d.name
+            )));
+        }
+        (Some(p), _)
+            if !on
+                && p & (cbb_core::records::body::POWER_THAW | cbb_core::records::body::POWER_REMOVE_ADMINS)
+                    != (cbb_core::records::body::POWER_THAW | cbb_core::records::body::POWER_REMOVE_ADMINS) =>
+        {
+            return Err(Error::msg(format!(
+                "only the group's root unfreezes {}: run cbb thaw on the root computer",
+                d.name
+            )));
+        }
+        _ => keys_of(&d),
+    };
     let kind = if on {
         Kind::Freeze(Removal { keys, seen: Vec::new() })
     } else {
@@ -237,6 +313,94 @@ pub fn make_admin(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
+/// On the group's root, records where a member's keys live as its hello
+/// says (docs/protocol.md, section 17): a record that says `file` while the
+/// hello says hardware gets `hardware`, and a hello that says rootless
+/// gets `rootless`, without an admin key, powers or commands (D-79).
+/// Anything else, a phone's record, a record that already says it, or a
+/// signer that is not the root, signs nothing and gives None.
+pub fn store_from_hello(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    device: &DeviceId,
+    hello_store: u64,
+    now_ms: u64,
+) -> Result<Option<DeviceState>> {
+    use cbb_core::records::body::{STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Ok(None);
+    }
+    let Some(d) = st.devices.iter().find(|d| d.id == *device).cloned() else { return Ok(None) };
+    if d.role != ROLE_MEMBER || st.root_device == Some(d.id) {
+        return Ok(None);
+    }
+    let rootless = hello_store == STORE_ROOTLESS && d.store != STORE_ROOTLESS;
+    let hardware = hello_store == STORE_HARDWARE && d.store == STORE_FILE;
+    if !rootless && !hardware {
+        return Ok(None);
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    rec.store = hello_store;
+    if rootless {
+        (rec.admin, rec.powers, rec.commands, rec.proof) = (None, 0, 0, 0);
+    }
+    rec.seen = Vec::new();
+    set.write_record(&st, signer, Kind::device(rec), now_ms)
+        .map_err(|e| Error::msg(format!("cannot record where {}'s keys live: {e}", d.name)))?;
+    Ok(Some(d))
+}
+
+/// What an attestation showed of a device's keys, for its record
+/// (docs/protocol.md, section 17): the store, and the kind of hardware
+/// when proven (`proof` 1 android-tee, 2 android-strongbox, 3 tpm).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shown {
+    /// The store and proof the attestation proves.
+    Store { store: u64, proof: u64 },
+    /// Proven no more (a revoked certificate): only a record that says
+    /// proven changes, to hardware.
+    NotProven,
+}
+
+/// Records, on the group's root (signer holds the current root key), what
+/// device's attestation of its member key `key` shows, when its record
+/// says otherwise; None when nothing changes: the key is not the record's
+/// (it sends the evidence again when it next connects), the record says
+/// it already, or the device's keys are rootless, which nothing proves.
+pub fn record_proven(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    device: &DeviceId,
+    key: &cbb_core::records::KeyHash,
+    shown: Shown,
+    now_ms: u64,
+) -> Result<Option<(DeviceState, u64, u64)>> {
+    use cbb_core::records::body::{STORE_HARDWARE, STORE_PROVEN, STORE_ROOTLESS};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Ok(None);
+    }
+    let Some(d) = st.devices.iter().find(|d| d.id == *device).cloned() else { return Ok(None) };
+    if d.key.hash() != *key || d.store == STORE_ROOTLESS || st.root_device == Some(d.id) {
+        return Ok(None);
+    }
+    let (store, proof) = match shown {
+        Shown::NotProven if d.store == STORE_PROVEN => (STORE_HARDWARE, 0),
+        Shown::NotProven => return Ok(None),
+        Shown::Store { store, proof } => (store, if store == STORE_PROVEN { proof } else { 0 }),
+    };
+    if (d.store, d.proof) == (store, proof) {
+        return Ok(None);
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    (rec.store, rec.proof) = (store, proof);
+    rec.seen = Vec::new();
+    set.write_record(&st, signer, Kind::device(rec), now_ms)
+        .map_err(|e| Error::msg(format!("cannot record what {}'s attestation proves: {e}", d.name)))?;
+    Ok(Some((d, store, proof)))
+}
+
 /// Makes this device (me) the group's root with the group's recovery key
 /// (rule 33): the change of root, signed by both halves of the recovery
 /// key, naming new_root, with this device's record again as the root's
@@ -315,13 +479,65 @@ pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String
                 .map_err(|e| Error::msg(format!("cannot let the device be a hub: {e}")))?,
         );
     }
-    hubs.sort();
-    hubs.dedup();
+    // In the user's order, which is the order the hubs serve in (format
+    // 4.8): not sorted.
     let st = set.state();
     out.extend(
         set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
             .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))?,
     );
+    Ok(out)
+}
+
+/// Whether a device's rights make it a hub that only passes copies on: the
+/// right to be a hub, and neither to read nor to send.
+pub fn is_forward_only(rights: u64) -> bool {
+    use cbb_core::records::body::{RIGHT_READ, RIGHT_SEND};
+    rights & RIGHT_HUB != 0 && rights & (RIGHT_READ | RIGHT_SEND) == 0
+}
+
+/// Makes the device target one of the group's hubs that only passes the
+/// copies on, as the root alone may: its record keeps the right to be a hub
+/// and loses those to read, send and paste secrets, and the hubs record
+/// names it after the hubs it names already. A device that is no member
+/// computer with the cap hub, or that is an admin or the root, is refused.
+pub fn set_forward_only(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    target: &str,
+    now_ms: u64,
+) -> Result<Vec<Record>> {
+    use cbb_core::records::body::{MAX_HUBS, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+    let st = set.state();
+    let d = find(&st, target)?.clone();
+    if d.role != ROLE_MEMBER || d.caps & CAP_HUB == 0 || d.admin.is_some() || st.root_device == Some(d.id) {
+        return Err(Error::msg(format!(
+            "{} may not be a hub that only passes copies on: that takes a computer that is neither an admin nor the root",
+            d.name
+        )));
+    }
+    let mut out = Vec::new();
+    if !is_forward_only(d.rights) {
+        let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+        rec.rights = (rec.rights | RIGHT_HUB) & !(RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS);
+        rec.seen = Vec::new();
+        out.extend(
+            set.write_record(&st, signer, Kind::device(rec), now_ms)
+                .map_err(|e| Error::msg(format!("cannot make {} a hub that only passes copies on: {e}", d.name)))?,
+        );
+    }
+    let st = set.state();
+    if !st.hubs.contains(&d.id) {
+        let mut hubs = st.hubs.clone();
+        if hubs.len() >= MAX_HUBS {
+            return Err(Error::msg(format!("the group names {MAX_HUBS} hubs already")));
+        }
+        hubs.push(d.id);
+        out.extend(
+            set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
+                .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))?,
+        );
+    }
     Ok(out)
 }
 

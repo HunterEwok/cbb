@@ -235,7 +235,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
-  `key_level`, `takeover_delay`, `incoming`, `hand_over`, `mute` and `unmute` of another
+  `key_level`, `incoming`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
@@ -246,57 +246,45 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   protocols, `cbb/4` and `cbb-pair/3`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestAloneRootWindow`). With the capability `admin`, it is a computer's service
-  before its own device record arrives: its hellos offer an admin key (in the hardware where
-  cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
-  admin with a member certificate from that CA. On such an admin `take_over` keeps the new
-  root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
-  two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
-  the root (`root_key`) and signs a new root's first records; as root the same loop gives
-  each connected admin whose admin CA is from an earlier root a new one for the same key, as
-  Go's `renewAdminCAs` (`TestAloneTakeover`). Any
-  member claims the group the same way with the recovery key (`recover`): the sheet's key,
-  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
-  claim under the recovery key's admin CA from the records or the sheet (`TestAloneRecovery`).
-- **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
-  group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
-  (`is_hub`, `endpoints`, `listen_port`, obfuscation kept or made), and its hellos offer the
-  hub's tunnel key. A member's hello with a tunnel key is admitted by Go's `Admit` rules
-  (`members`, at most 256) and answered with the hub's offer and the offers of the hubs
-  after it in the group's order. The hub serves while no hub above it has an offer: GotaTun
-  through `hub.rs` on the UDP port (8764 when none is set), each tunneled TCP connection to
-  the member port passed to a loopback listener of its own, where the node takes it only
-  from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
-  loop drops members the records refuse or no longer list. `hub off` passes the next hub's
-  offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
-  state as `retired` (`TestAloneHub`). With several hubs (`away/hubs.rs`, Go's `hubs.go`) it
-  sends each peer that may be a hub its `hubs` share after the hello, and again when it
-  starts or stops serving or admits a client; it takes the clients and the offer another hub
-  shares, and a device that stopped being a hub tells the computers and the possible hubs
-  so. The run loop serves only while no hub above answers: starting, it tries them once;
-  having lost the hub above, for a minute (`CBB_TEST_STANDBY_GRACE` in tests); while it serves,
-  every 15 minutes, and when a hub above shares that it serves, after passing that hub's
-  offer on to its clients and waiting for those in its tunnel to leave (`TestAloneHubs`). Hub
-  commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
-  `manage::Order::Hub`, signed by the admin and sealed to the receiver: `move` hands over the
-  clients and this device, passes the new hub's offer on as `moved` and keeps it as a
-  client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
-  Received, a hub command makes this device a hub at the order's addresses, serving at once
-  and answering with its offer in the result's `tunnel`, or with a stop order stops it after
-  the result went back (`TestAloneHubCommands`). A hub with a forwarder (`tunnel.json`'s
-  `forwarder`, from a request or a hub command; `default` stands for the project's, by the
-  pins this release knows) registers while it serves through the phones' `forward.rs`: its
-  member certificate with the roots, the group's records as the proof that it is the root or
-  an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestAloneHubForwarder`). Unless `-no-vless` turned it off it registers the group's VLESS user ID
-  (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
-  registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
-  connect again for the offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
-  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
-  DEVICE -forward-only` on an admin that admitted the device signs its record with
-  `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
-  without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
-  refuses paste and action commands (`TestAloneForwardOnly`).
+  (`Admission::accept`, `TestAloneRootWindow`). On the records of 0.6 a computer becomes an admin
+  only with the admin key it offered, with its proof over the pairing session, when it
+  paired with the root: the root keeps that key by device (`offered.json`) and `make_admin`
+  writes it into the device's record, so no admin CA travels (D-118). The root changes only
+  with the group's recovery key (rule 33, D-117): `take_over`, `takeover_delay` and
+  `hand_over` answer an error that points to `cbb recovery`, and an admin keeps its rights
+  (`TestAloneTakeover`). `recover` takes the sheet's text or its QR code's
+  (`cbb_core::sheet`), checks it against the group's recovery keys, leaves out the devices
+  `-leave` names, makes a new root key and writes the change of root with both halves of the
+  recovery key, then restarts to sign with the new key; a device the records name the root
+  already is refused, and the other members follow the new root (`TestAloneRecovery`). A
+  recovery key on a YubiKey is not done yet on 0.6.
+- **The hub.** On the records of 0.6 (`member/src/live/away.rs`; docs/protocol.md, section
+  11) a device the records allow a hub (named in the root's hubs record, or an admin) becomes
+  one with `cbb global hub` or a `hub` command: the state in `tunnel.json` becomes a hub's,
+  with its port, addresses, obfuscation and forwarder. A device with sync away from home on
+  sends each possible hub `tunnel` (t 15) with its key toward that hub and the tag of the
+  connection's exported pre-shared key, at home or at the group's relay alike; the hub keeps
+  the key (`away/held.rs`) and answers with its offer, which no hub passes on to another
+  (A-22). The hub serves while no hub above it in the records' order said it serves (`hubs`,
+  t 16), and again a minute after it lost the last such hub (`CBB_TEST_STANDBY_GRACE` in
+  tests): GotaTun through `hub.rs` on the UDP port (8764 when none is set), one tunnel per
+  pre-shared key it accepts of each client, each tunneled TCP connection to the member port
+  passed to a loopback listener of its own, where the node takes it only from the device
+  whose tunnel address it came from. Its key changes with the period of its forwarder's face,
+  the next key offered ahead (`Away::rotate_live`). Hub commands go through the core's
+  `Order::Hub`, signed and sealed to the receiver: field 10 names the hub by its address and
+  member key, field 11 the forwarders with the pins the root signs (D-121); `hub off -on`
+  sends a stop order, after which the hub sends its clients `moved`. `move` makes the new
+  hub one and keeps serving its clients until the new hub serves and then up to five minutes,
+  while they meet the new hub at home or at the relay (option C of D-122, `TestMoveHub`;
+  `CBB_TEST_MOVE_LINGER` in tests). A hub with a forwarder registers with the hubs'
+  credential of the forwarder's face (`TestAloneHubCredential`), keeps the forwarder's VLESS
+  settings once the registration returns them and has the members connect again for the
+  offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). The root signs the `hubs`
+  record and sends `away-off` (`Order::AwayOff`) to another device. `hub -on DEVICE
+  -forward-only` on the root signs the device's record with `forward_only` first; an
+  admin's is refused as not done yet (D-122). Such a member takes the hub command, seals no
+  copies and refuses paste and action commands (`TestAloneForwardOnly`).
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
@@ -316,7 +304,31 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   (`blind::alias::server_key`), so it needs no key store, and the root keeps its period key
   in `period-key`. Peers get them in message `member-credentials` (t 11) when a connection
   opens, and the mesh brings them up to date when the set changes and on the sealing key's
-  beat. A period starts as one face; a face for each server (A-55) follows.
+  beat. Each server gets a face of its own (A-55): the root makes a period for each server's
+  pin (the project's relay, forwarder and push service, the group's own relays, and the
+  forwarders of its hubs, which the root keeps in `hub-forwarders.json` from its `hub`
+  commands and its own hub; D-121), and every message `credentials` names the server it is
+  for. A hub of 0.6 serves with a key of its own for each period of its forwarder's face
+  (protocol section 11, "The hub's key"; `Away::rotate_live`).
+- **Push.** On the records of 0.6 the mesh drives the push sender (`pusher.rs`) through its
+  seam (`mesh/push.rs`): message `push` (t 28) from a phone or a computer over its own
+  connection is its registration, kept in `push.cbor` (each device's message as it came) and
+  taken again after a restart; a connection that opens gets its `push-renew` messages (t 29)
+  and marks the device connected; a removed or frozen device's registration goes when the
+  set changes; a copy made here (the origin) or received by a device with the `hub` right is
+  offered to the sender with `push::copy_body`. The push service's face is the group's face
+  toward the service's pin in the newest `keys.json` (use `push`): the current period's
+  server key and its hubs' and members' credentials, and the previous period's face, kept
+  until it expires for the registrations made under it and never for a new one. The phones'
+  events (rule 33: a device joined or was removed, the root changed, a device's own record
+  changed, the group stopped) come from the records
+  applied, each with the first 16 bytes of its record's ID as its ID, sent by a hub, else
+  the root's or an admin's device ([core API](core-api.md), "Push"). `mesh::push_e2e` runs it
+  end to end: three members, a push service with a fake platform that `keys.json` names, a
+  device that registers and goes away, one body for a copy (from the origin or the hub) and
+  one for a removal, none while it is connected, each opened under its registration, and a
+  send under a replaced registration answered `stale`; the same with the phones' app follows
+  when the phones run on the records of 0.6 (D-122).
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
@@ -733,8 +745,10 @@ sync away from home, the admins, and remote paste.
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
   settings stay. The group's root leaves only alone; otherwise it hands the group over
-  first. A removed device (`cbb status` says so) and one whose group file is damaged leave
-  the same way. `cbb leave` does it through the service, or by
+  first. A removed device and one whose group file is damaged leave the same way; a removed
+  device need not learn that it was removed, since the group refuses it and gives it no
+  records (protocol section 10, "Exchange in the member protocol").
+  `cbb leave` does it through the service, or by
   itself when the service does not run. The phones, the tray app and the Mac app have a
   "Leave the group" button (docs/apps.md), and a phone's watch forgets its admin key with
   it. The group keeps the device's entry until an admin removes it.
@@ -1331,14 +1345,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   group.
 - **Keys.** The hub's WireGuard key lives in the phone's keychain or Keystore for this device
   only (Curve25519 does not fit the Secure Enclave), and the clients hand their keys to it in
-  their hellos at home, as with any hub. The phone's root or admin key signs only after
-  Face ID, so the hub registers with the forwarder by its member key instead, which signs
-  without the user: the group's records show the forwarder that this member key is the
-  root's or an admin's (docs/protocol.md, section 13). Asking for Face ID on every
-  registration (each time the app opens or the network changes) would make the phone hub
-  useless. Stealing the member key would let someone displace the registration, which a
-  root or admin computer's key in a file allows too, and nothing more: the clients take
-  only the hub key of the offer they met at home. A device far away joins with a remote invitation
+  their hellos at home, as with any hub. The hub registers with the forwarder by its server
+  key of the period, which signs without the user, and the period's hubs' credential that
+  lists it (docs/protocol.md, section 13); asking for Face ID on every registration (each
+  time the app opens or the network changes) would make the phone hub useless. Stealing the
+  server key would let someone displace the registration until the period ends, and
+  nothing more: the clients take only the hub key of the offer they met at home. A device far away joins with a remote invitation
   made on the phone, which is then both the admin who confirms the device and the hub that
   serves the guest tunnel, so no invitation has to be handed over.
 - **Android** may keep the hub running in its foreground service while the app is in the
@@ -1356,7 +1368,11 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   TV in another city) move without coming home; then it becomes the new hub's client. The
   new hub admits each key only for a device the group's records list. A computer that is
   the hub moves the role the same way (`cbb global move`). Built in 0.5 (docs/protocol.md,
-  section 11, "Moving the hub").
+  section 11, "Moving the hub"). On the records of 0.6 no hub passes on another's offer or
+  clients: the old hub keeps serving its clients until the new one serves, they meet the new
+  hub at home or at the group's relay and take its offer there, and then the old hub tells
+  them it moved; a client away with neither home nor a relay loses the hub until it meets
+  the new one (D-122).
 - **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
   takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
   its offer because the records no longer make the lost phone an admin. Clients at home learn
@@ -1506,10 +1522,9 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
   restart. The files of earlier versions, one per group with its roots and removals, are
-  deleted. Built in Go, in the Rust hub and in both phone kits, whose hub registers by the
-  credential once it lists the phone's server key; hubs from before the credentials still
-  register with their member certificate, a signature by the root or an admin CA, and the group's authority records,
-  which the forwarder keeps in memory only.
+  deleted. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
+  and in the Rust hub, which the phones run too; a hub registers once the credential lists
+  its server key, and shows that credential alone (`cbb-forward/3`, D-106).
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
   memory. A group that reaches a limit is slowed down alone. Limits per source: registrations
   per address, per network (/24, /64), per wide network (/16, /48) and per IPv6 provider
@@ -1617,6 +1632,11 @@ devices alike.
     admin signs its certificate as for any other device. In a phone group whose hub holds
     no CA keys the request goes to the admin phone through the hub, inside member TLS, at
     home or through the phone's own tunnel.
+  - On the records of 0.6 the invitation (`cbb://join#...`) names no hub and no group: its
+    guest path holds the hub's key and addresses, the guest key pair and the obfuscation
+    settings, and the guest dials the hub at the hub's guest address `fd00:cbc::1`, which
+    only guests reach. Once the device proved the secret the admin confirms it, and only
+    then is its record written; it is invited as a computer or as a phone.
   - With its certificate the device offers its own tunnel key in its first hello through
     the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
     with its own key as an ordinary client. The guest stays for a day after the admission
@@ -1653,7 +1673,8 @@ and asks, and the phone apps say it before their switch. The relay keeps nothing
 the devices in its logs, but a user who would rather nobody saw even that runs their own
 relay, or a hub.
 
-- `cbb relay -group TAG` runs a relay for the groups whose tags it is given and no other;
+- `cbb relay -group GROUP` runs a relay for the groups it is given (each by its root key and
+  recovery key, as `cbb status -relay` prints them) and no other;
   `cbb relay -open` serves every group that registers, as the project's relay does, within
   limits that keep groups nobody vouches for from filling it (finding 3 of the security
   audit): 4096 groups, 16 registrations from one address, 64 from one network (an IPv4
@@ -1663,28 +1684,27 @@ relay, or a hub.
   ([the servers' budget](relay-budget.md)). An open relay forgets a group once its last
   device leaves.
 - Each device turns it on with `cbb global relay ADDRESS -key KEY`, in place of a hub, after
-  the user agrees; the key is the pin of the relay's own key, as with the forwarder.
-- A device registers with its member certificate and proves it holds its WireGuard key, as
-  a hub does with the forwarder. The relay then gives it a tunnel, a preshared key and a
-  tunnel address of the relay's choosing, and drops it when the registration ends.
+  the user agrees; the key is the pin of the relay's own key, as with the forwarder. In a
+  group of 0.6 the root runs it once and signs the relay in the group's settings (field 15,
+  D-121), and every device takes it from the records and shows the relay a face of its own.
+- A device registers with the certificate of its server key for the period and the period's
+  credentials (D-67, D-75, protocol.md, section 18), and proves it holds a fresh WireGuard
+  key. The relay then gives it a tunnel, a preshared key and a tunnel address of the relay's
+  choosing, and drops it when the registration ends.
 - Inside the tunnels the relay listens on one port. Each device keeps a connection there
   for notes: which of its group's devices are on the relay, and calls. The device with the
-  lower ID dials the other through the relay; the relay calls the other, joins the two
+  lower pseudonym dials the other through the relay; the relay calls the other, joins the two
   connections once it answers, and copies the bytes. Member TLS then runs end to end
   between the two devices, and the answering device checks that the certificate is the
   caller's, so the relay cannot pose as a device.
 - The relay sees which devices of a group are online, which of them talk, when and how
-  much; it cannot read the clipboard or pose as a device. A device still revoked by the
-  group's records can register, since the relay does not read the records, but the other
-  devices' member TLS refuses it, so it learns only who is online.
-- A device whose group's credentials list it registers with them instead (D-67, D-75,
-  protocol.md, section 18): the relay then sees a certificate of the device's server key and
-  the period's hubs' and members' credentials, knows the device only by a pseudonym, the hash
-  of that key, under the period's tag, and gets a fresh WireGuard key at each registration;
-  all of it changes each month, and it holds no device ID, root or record. It refuses a
+  much; it cannot read the clipboard or pose as a device. It knows a device only by a
+  pseudonym, the hash of its server key, under the period's tag; all of it changes each
+  month, and it holds no device ID or record. It refuses a
   device the members' credential does not list, and drops one a newer credential leaves out.
   A relay that serves a fixed list of groups also sees the period credential and the group's
-  roots, since it knows its groups by them; an open relay never does.
+  root key, since it knows its groups by them; an open relay never does. It speaks only
+  `cbb-relay/3`: there is no registration of 0.5.
 - The wire format is in docs/protocol.md, section 14.
 
 #### Blocked networks
@@ -1901,8 +1921,9 @@ with their names, systems and dates:
   the new one; never for a registration of a device the records show removed (that
   registration is dropped at the removal); nothing else of an ended period is kept. The
   sender decides which faces it still needs (`member/src/pusher.rs`, `Sender::needs_face`);
-  keeping and dropping the previous face's key in the member's credentials comes with the
-  member's switch to the core (wave 5), until which the sender is given only current faces.
+  the member keeps the previous face in `push-previous.cbor` while it serves and makes its
+  server key again from the server secret and the period's tag, so a restart keeps it too
+  (`member/src/mesh/push.rs`).
 
 #### What is left to hide
 
@@ -2096,7 +2117,8 @@ fingerprint. So the question is what an admin computer may do to another admin.
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
 another admin, and hands the group over only from a lost root computer (below). Instead, **any admin freezes another admin
 computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
-counts beyond the records it signed before, its connections are refused, and it cannot
+counts beyond the records it signed before, its connections are refused, it gets no records
+and so learns nothing of the group until it is unfrozen and connects again, and it cannot
 paste. The root or an admin phone then decides: Unfreeze in the apps (`cbb unfreeze` on a
 root computer) makes it an admin again, Remove takes it out for good. Nobody freezes the
 root or an admin phone. How the records say it is in protocol section 10, "Removals and freezes keep what the author saw".

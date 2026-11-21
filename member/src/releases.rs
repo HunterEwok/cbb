@@ -26,6 +26,8 @@ pub const FILES_DIR: &str = "release-files";
 /// The largest release taken: its three files, each at most as large as
 /// any reader takes a release file, and the JSON around them.
 const MAX: usize = 3 * release::MAX_FILE + 64;
+/// The most archives a hub asks cbb update for at a time.
+pub const MAX_WANTED: usize = 16;
 
 #[derive(Deserialize)]
 struct Set {
@@ -130,6 +132,19 @@ impl Releases {
             .filter(|h| now_ms < h.expires_ms)
             .map(|h| h.files.clone())
             .unwrap_or_default()
+    }
+
+    /// The archives of the release held that are named in `names` (the
+    /// ones the group's devices update from) and not held whole here, at
+    /// most `MAX_WANTED`, in the release's order: what a hub's cbb update
+    /// downloads for the group.
+    pub fn wanted(&self, names: &[String], now_ms: i64) -> Vec<String> {
+        self.files(now_ms)
+            .into_iter()
+            .filter(|a| names.contains(&a.name) && self.held(&a.sha256, now_ms).is_none())
+            .map(|a| a.name)
+            .take(MAX_WANTED)
+            .collect()
     }
 
     /// Where the archive with the SHA-256 sha is kept once held whole.
@@ -246,6 +261,51 @@ mod tests {
     // Go vectors is taken as signed, and the same files with release.json
     // in an envelope no reader takes, or a set not in the strict form, are
     // refused.
+    /// The valid release of the Go vectors, held by a new `Releases` in
+    /// dir, with the moment it is current at.
+    fn held_vector(dir: &Path) -> (Releases, i64) {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-release.json");
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
+        let now = v["now_ms"].as_i64().unwrap();
+        let roots: Vec<cbb_core::release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
+        let c = &v["vectors"][0];
+        assert_eq!(c["name"], "valid");
+        let file = |n: &str| v["files"][c[n].as_u64().unwrap() as usize].to_string();
+        let set = crate::entries::set_of(&[
+            ("keys", file("keys").as_bytes()),
+            ("channel", file("channel").as_bytes()),
+            ("release", file("release").as_bytes()),
+        ])
+        .unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+        std::fs::create_dir_all(dir).unwrap();
+        let r = Releases::open(dir, roots, now, &|_| {});
+        assert!(r.take(&set, now).unwrap());
+        (r, now)
+    }
+
+    // A hub wants the archives of the release held that its devices update
+    // from, until it holds each whole; never a file no device names, and
+    // nothing once the release expired.
+    #[test]
+    fn a_hub_wants_the_archives_its_devices_update_from() {
+        let dir = std::env::temp_dir().join(format!("cbb-releases-wanted-{}", std::process::id()));
+        let (r, now) = held_vector(&dir);
+        let archive = "cbb_0.6.0_linux_amd64.tar.gz".to_string();
+        assert!(r.wanted(&[], now).is_empty(), "no device names an archive");
+        let names = vec![archive.clone(), "SHA256SUM".into(), "cbb-windows-arm64.zip".into()];
+        assert_eq!(r.wanted(&names, now), vec![archive.clone()]);
+        assert!(r.wanted(&names, i64::MAX).is_empty(), "an expired release");
+        let a = r.files(now).into_iter().find(|a| a.name == archive).unwrap();
+        // Part of it is not held: still wanted.
+        std::fs::create_dir_all(dir.join(FILES_DIR)).unwrap();
+        std::fs::write(r.path_of(&a.sha256), vec![0u8; 10]).unwrap();
+        assert_eq!(r.wanted(&names, now), vec![archive]);
+        std::fs::write(r.path_of(&a.sha256), vec![0u8; usize::try_from(a.size).unwrap()]).unwrap();
+        assert!(r.wanted(&names, now).is_empty(), "held whole");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn takes_only_the_canonical_envelope() {
         let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-release.json");

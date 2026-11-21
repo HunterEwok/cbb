@@ -33,15 +33,15 @@ pub enum What {
     Media([u8; 16]),
 }
 
-/// A hub's orders: where it forwards and whom it serves, or stop.
+/// A hub's orders (field 10, 11 or 13): the hub to use, the forwarders it
+/// registers with, or stop.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Hub {
-    /// The forwarder it registers with: its endpoint and key.
-    pub forwarder: Option<(String, [u8; 32])>,
-    /// Up to eight endpoints it is reached at.
-    pub endpoints: Vec<String>,
-    /// The clients it serves: device ID, key and pre-shared key.
-    pub clients: Vec<([u8; 16], [u8; 32], [u8; 32])>,
+    /// The hub to use: its endpoint and key.
+    pub hub: Option<(String, [u8; 32])>,
+    /// Up to eight forwarders, each its address and its pin, which the
+    /// root signs here so that nobody takes a forwarder's key on first use.
+    pub forwarders: Vec<(String, [u8; 32])>,
     /// Stop being a hub (alone).
     pub stop: bool,
 }
@@ -125,20 +125,13 @@ impl Order {
                 if h.stop {
                     f.push((13, Value::Uint(1)));
                 } else {
-                    if let Some((e, k)) = &h.forwarder {
+                    if let Some((e, k)) = &h.hub {
                         f.push((10, Value::Array(vec![Value::Text(e), Value::Bytes(k)])));
                     }
-                    if !h.endpoints.is_empty() {
-                        f.push((11, Value::Array(h.endpoints.iter().map(|e| Value::Text(e)).collect())));
-                    }
-                    if !h.clients.is_empty() {
-                        let mut clients: Vec<Value<'_>> = h
-                            .clients
-                            .iter()
-                            .map(|(id, k, p)| Value::Array(vec![Value::Bytes(id), Value::Bytes(k), Value::Bytes(p)]))
-                            .collect();
-                        clients.sort_by_key(Value::encode);
-                        f.push((12, Value::Array(clients)));
+                    if !h.forwarders.is_empty() {
+                        let each =
+                            h.forwarders.iter().map(|(a, pin)| Value::Array(vec![Value::Text(a), Value::Bytes(pin)]));
+                        f.push((11, Value::Array(each.collect())));
                     }
                 }
             }
@@ -186,27 +179,17 @@ impl Order {
             COMMAND_MODE => Order::Mode(if uint(need()?, 10) == Some(2) { Mode::Own } else { Mode::Shared }),
             COMMAND_HUB => {
                 let m = need()?;
-                let forwarder = match m.get(10).and_then(Value::as_array) {
-                    Some([Value::Text(e), k]) => Some((e.to_string(), fixed(k).ok_or_else(bad)?)),
-                    _ => None,
+                let pair = |v: &Value<'_>| match v.as_array() {
+                    Some([Value::Text(e), k]) => fixed(k).map(|k| (e.to_string(), k)).ok_or_else(bad),
+                    _ => Err(bad()),
                 };
-                let endpoints = m
-                    .get(11)
-                    .and_then(Value::as_array)
-                    .map(|a| a.iter().filter_map(|e| e.as_text().map(str::to_string)).collect())
-                    .unwrap_or_default();
-                let mut clients = Vec::new();
-                for c in m.get(12).and_then(Value::as_array).unwrap_or_default() {
-                    match c.as_array() {
-                        Some([id, k, p]) => clients.push((
-                            fixed(id).ok_or_else(bad)?,
-                            fixed(k).ok_or_else(bad)?,
-                            fixed(p).ok_or_else(bad)?,
-                        )),
-                        _ => return Err(bad()),
-                    }
-                }
-                Order::Hub(Hub { forwarder, endpoints, clients, stop: uint(m, 13) == Some(1) })
+                let hub = m.get(10).map(pair).transpose()?;
+                let forwarders = match m.get(11).map(Value::as_array) {
+                    None => Vec::new(),
+                    Some(Some(a)) => a.iter().map(pair).collect::<Result<_>>()?,
+                    Some(None) => return Err(bad()),
+                };
+                Order::Hub(Hub { hub, forwarders, stop: uint(m, 13) == Some(1) })
             }
             COMMAND_PASTE => {
                 let m = need()?;
@@ -251,9 +234,8 @@ mod tests {
             Order::Mode(Mode::Shared),
             Order::Hub(Hub { stop: true, ..Hub::default() }),
             Order::Hub(Hub {
-                forwarder: Some(("fwd.example:443".into(), [3; 32])),
-                endpoints: vec!["10.0.0.2:7600".into()],
-                clients: vec![([2; 16], [4; 32], [5; 32]), ([1; 16], [6; 32], [7; 32])],
+                hub: Some(("10.0.0.2:7600".into(), [3; 32])),
+                forwarders: vec![("fwd.example:443".into(), [4; 32]), ("[2001:db8::7]:8764".into(), [5; 32])],
                 stop: false,
             }),
             Order::Paste { way: Way::Type, enter: true, what: What::Text("ls".into()) },
@@ -270,14 +252,7 @@ mod tests {
         ];
         for o in all {
             let b = o.orders().unwrap();
-            let mut back = Order::read(o.kind(), b.as_deref()).unwrap();
-            if let (Order::Hub(h), Order::Hub(w)) = (&mut back, &o) {
-                // Clients go sorted.
-                let mut want = w.clients.clone();
-                want.sort();
-                assert_eq!(h.clients, want);
-                h.clients = w.clients.clone();
-            }
+            let back = Order::read(o.kind(), b.as_deref()).unwrap();
             assert_eq!(back, o);
         }
     }

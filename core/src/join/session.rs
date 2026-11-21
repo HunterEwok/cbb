@@ -383,6 +383,17 @@ impl MemberSession {
         Ok(())
     }
 
+    /// The member refuses the joiner after it proved the secret (its admin
+    /// declined it, or its record could not be written): the session ends,
+    /// and so does its attempt, counted as failed ([`Open::begin`]), so
+    /// that the invitation takes the next attempt at once.
+    pub fn refuse(&mut self, open: &mut Open, now_ms: u64) {
+        if let Some(n) = self.attempt.take() {
+            open.end(n, false, now_ms);
+        }
+        self.step = MemberStep::Over;
+    }
+
     /// Whether message 67 may go: the session is approved.
     pub fn approved(&self) -> bool {
         matches!(&self.step, MemberStep::Approve { .. })

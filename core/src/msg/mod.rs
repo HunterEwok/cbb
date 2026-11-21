@@ -274,6 +274,17 @@ fn between(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             seen.push(e);
         }
     }
+    // The settings and the way for the next key go with that key, and
+    // each with its present one: a next of its own would be a way the
+    // offer does not give now.
+    if core::ptr::eq(table, &tables::OFFER) {
+        if v.get(10).is_some() && (v.get(7).is_none() || v.get(3).is_none()) {
+            return Err(Rule::field("offer/next-obfuscation"));
+        }
+        if v.get(11).is_some() && (v.get(7).is_none() || v.get(4).is_none()) {
+            return Err(Rule::field("offer/next-vless"));
+        }
+    }
     // A want asks for something.
     if core::ptr::eq(table, &member::WANT) && v.get(2).is_none() && v.get(3).is_none() {
         return Err(Rule::field("want/empty"));

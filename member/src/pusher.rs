@@ -35,15 +35,17 @@
 //! - [`Saved`]: where the registrations are kept across a restart, in the
 //!   group's section of the member's state.
 //!
-//! **Required test when wave 5 wires the seam** (an e2e test of
-//! internal/service with `phone-on-linux`, never skipped): a phone
-//! registers over its member connection; it disconnects; a computer of the
-//! group makes a copy and applies a removal; a cbb-push with a fake platform
-//! receives one body per event, from the origin or a hub, and none while the
-//! phone is connected; the body opens with `push_open` under the phone's
-//! registration; after the phone registers again with a higher seq, a send
-//! under the old one is answered `stale`. Until then, the phone side is
-//! tried on a real iPhone with the test tool in src/pushd/tests.rs
+//! **The test of the wired seam** (`mesh::push_e2e`, never skipped): real
+//! members of a group of 0.6 and a push service (src/pushd) with a fake
+//! platform; a device registers over its member connection and goes away;
+//! a copy and a removal each bring it one body, from the origin or a hub,
+//! and none while it is connected; each body opens under its
+//! registration; after it registers again with a higher seq, a send under
+//! the old one is answered `stale` and the sender asks it to register
+//! again. The same test with the phones' app (an e2e test of
+//! internal/service with `phone-on-linux`) follows once the phones run on
+//! the records of 0.6 (D-122); until then the phone side is tried on a
+//! real iPhone with the test tool in src/pushd/tests.rs
 //! (`live_push_to_a_phone`).
 //!
 //! Who sends: the copy's origin, once while it runs, and every device with
@@ -115,7 +117,7 @@ pub enum Role {
 
 /// The project's push service, as keys.json names its key (use `push`,
 /// [`crate::entries::Entries::push_keys`]) and where it is reached.
-pub const SERVICE: &str = "cbb.tools:8767";
+pub const SERVICE: &str = crate::faces::PROJECT_PUSH;
 
 /// How long a sender waits after a copy before it pushes.
 pub const WAIT: Duration = Duration::from_secs(2);
@@ -337,13 +339,16 @@ impl Sender {
         }
     }
 
-    /// A record was applied that the group's phones hear of. `sends` says
-    /// whether this device sends events: a hub, else the root's or an
-    /// admin's device when the group has no hub. `record_ms` is the
-    /// record's own time, so that every sender makes the same body.
+    /// A record was applied that the group's phones hear of: every phone,
+    /// or the phone `to` alone (its own record). `sends` says whether this
+    /// device sends events: a hub, else the root's or an admin's device
+    /// when the group has no hub. `record_ms` is the record's own time, so
+    /// that every sender makes the same body.
+    #[allow(clippy::too_many_arguments)]
     pub fn event(
         &self,
         group: &GroupId,
+        to: Option<&DeviceId>,
         id: &[u8; 16],
         event: u64,
         device: Option<DeviceId>,
@@ -354,7 +359,8 @@ impl Sender {
             return;
         }
         let body = Body::Event { id: *id, event, device: device.map(|d| d.0), time_ms: record_ms };
-        let phones: Vec<DeviceId> = self.lock().regs.keys().filter(|(g, _)| g == group).map(|(_, d)| *d).collect();
+        let phones: Vec<DeviceId> =
+            self.lock().regs.keys().filter(|(g, d)| g == group && to.is_none_or(|t| t == d)).map(|(_, d)| *d).collect();
         for p in phones {
             self.queue(group, &p, push::KIND_EVENTS, &body, Some(4));
         }

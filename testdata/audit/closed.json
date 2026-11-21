@@ -19,6 +19,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -76,6 +81,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -139,6 +149,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -196,6 +211,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -280,7 +300,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -345,7 +365,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -430,7 +450,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -495,7 +515,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -558,9 +578,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -613,9 +633,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -668,9 +688,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -723,9 +743,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -778,9 +798,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -811,6 +831,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -874,6 +899,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -931,6 +961,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -994,6 +1029,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -1054,6 +1094,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -1111,6 +1156,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -1209,28 +1259,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1255,22 +1290,12 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheWideNetwork"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestVersionsWideNetworkLeavesRoom"
    },
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
     "name": "TestRefusedRegistrationLeavesForwarder"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsGroupsThatAreAway"
    }
   ]
  },
@@ -1279,28 +1304,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1329,28 +1339,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1438,9 +1433,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1523,9 +1518,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1608,9 +1603,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1693,9 +1688,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1778,9 +1773,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1863,9 +1858,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1948,9 +1943,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2033,9 +2028,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2143,9 +2138,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2228,9 +2223,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2313,9 +2308,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2443,9 +2438,9 @@
   "id": "cbb-audit-69",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2530,12 +2525,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2595,12 +2585,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2653,9 +2638,9 @@
   "id": "cbb-audit-72",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2708,9 +2693,9 @@
   "id": "cbb-audit-73",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2763,9 +2748,9 @@
   "id": "cbb-audit-74",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2878,9 +2863,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2904,28 +2889,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -2990,12 +2960,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -3018,9 +2983,14 @@
   "id": "cbb-audit-80",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/relay_test.go",
-    "name": "TestRemovedAdmin"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_device_left_out_goes"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "credentials_it_refuses"
    }
   ]
  },
@@ -3150,7 +3120,7 @@
    {
     "lang": "go",
     "file": "internal/service/evidence_tpm_test.go",
-    "name": "TestRootInTPMCountsAsFiles"
+    "name": "TestRootKeyLevelFollowsItsStore"
    },
    {
     "lang": "rust",

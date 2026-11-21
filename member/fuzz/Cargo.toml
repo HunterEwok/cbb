@@ -3,7 +3,7 @@
 
 # The cargo fuzz targets of the Rust service: its readers of what reaches it
 # from outside its own code (the control socket and cbb-helper's channel, the
-# ZX Spectrum Next's frames). Nightly CI runs them
+# ZX Spectrum Next's frames, the relay's messages). Nightly CI runs them
 # (.github/workflows/nightly.yml):
 #   cargo +nightly fuzz run control -- -max_total_time=60
 [package]
@@ -18,7 +18,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-cbb-member = { path = "..", default-features = false, features = ["fuzzing"] }
+cbb-member = { path = "..", default-features = false, features = ["fuzzing", "tunnel"] }
 
 # Not a member of the top workspace.
 [workspace]
@@ -34,6 +34,13 @@ bench = false
 [[bin]]
 name = "next_frames"
 path = "fuzz_targets/next_frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "relay_wire"
+path = "fuzz_targets/relay_wire.rs"
 test = false
 doc = false
 bench = false

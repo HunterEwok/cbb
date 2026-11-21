@@ -813,6 +813,25 @@ func TestRelayEntries(t *testing.T) {
 	}
 }
 
+// The push service's key in keys.json is a pin, as a relay's: two under
+// one name while it changes, each the members accept, and it signs nothing.
+func TestPushPins(t *testing.T) {
+	root, rel, push1, push2 := newSigner(t), newSigner(t), newSigner(t), newSigner(t)
+	kb := keysBody(1, nowMS-1000, 90*24*time.Hour, rel)
+	kb.Keys = append(kb.Keys, Key{Alg: AlgES256, Key: push1.spki, Name: "cbb.tools:8767", Use: UsePush},
+		Key{Alg: AlgES256, Key: push2.spki, Name: "cbb.tools:8767", Use: UsePush})
+	k, err := VerifyKeys(sign(t, kb, root), roots(root), time.UnixMilli(nowMS), Seen{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := k.Pushes("cbb.tools:8767"); len(got) != 2 || !bytes.Equal(got[0], push1.spki) || !bytes.Equal(got[1], push2.spki) {
+		t.Errorf("Pushes = %x", got)
+	}
+	if !IsPin(UsePush) || IsPin(UseChannel) {
+		t.Error("IsPin")
+	}
+}
+
 func entriesBody(seq uint64, at int64, life time.Duration) Entries {
 	return Entries{V: 1, Type: TypeEntries, Seq: seq, TimeMS: at, ExpiresMS: at + life.Milliseconds(),
 		Forwarders: []EntryForwarder{{Name: "cbb.tools:8764",

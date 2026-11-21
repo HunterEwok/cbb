@@ -92,6 +92,7 @@ pub mod push;
 pub mod records;
 pub mod recovery;
 pub mod release;
+pub mod remotepaste;
 pub mod root;
 pub mod rule;
 pub mod seal;

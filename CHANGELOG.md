@@ -62,6 +62,114 @@ made with 0.5 is set up again once. The details follow.
   mDNS, and "Join a group" takes the six digits the window shows and finds that window on the home
   network (or dials a window's code, pasted on Aurora, scanned on HarmonyOS); nobody is asked. The 0.6
   recovery sheet's answer carries its QR code's modules for the apps to draw.
+- `release-sign -push ADDRESS=KEY.pem` lists the project's push service's key in `keys.json`
+  (use `push`), as `-relay` and `-forwarder` list theirs: the members show the service a face
+  only once a `keys.json` names it, since no pin of it is built in. Two such pins may stand
+  under one name while the key changes.
+- The member's push sender is tested end to end on the records of 0.6: members of a group, a
+  push service with a fake platform, and a device that registers, goes away and gets one
+  body for a copy and one for a removal, each opened under its registration.
+- `cbb status -relay` prints the group as a blind relay of your own lists it, for
+  `cbb relay -group`: its root key and the two halves of its recovery key in hex (public keys
+  only); the status's `relay_group` carries the same line.
+- The relay takes devices of 0.6 by their own protocol, `cbb-relay/3`, on the same port: a
+  certificate of the server key alone, the format's messages and the period's server
+  credentials only, so it sees no record and no device ID; `-group` names a group of 0.6 by its
+  root and recovery keys. It speaks `cbb-relay/3` alone: the registration of 0.5
+  (`cbb-relay/2`), with its JSON claim, member certificates and the records it kept, is gone,
+  and so is the Go relay client (`internal/relay` keeps only the settings of a link); the
+  nightly fuzz target `relay_wire` (`member/fuzz`) reads the relay's new messages in place of
+  Go's `FuzzRelayWire`.
+- A device's link to the relay (`member/src/relay.rs`, and the phones' `cbb_tunnel_relay`)
+  registers by `cbb-relay/3` only, with its server key for the period and the period's server
+  credentials (`faces::ForRelay` on a computer), a fresh WireGuard key each time; until the
+  members' credential lists the device it waits and says why. `relay_start` no longer takes a
+  member certificate, device ID, tunnel key or records, `relay_set_records` is gone, and
+  `cbb_tunnel_relay_credentials` takes the period's server credentials of 0.6.
+- A hub registers with its forwarder by `cbb-forward/3` only (`member/src/forward.rs`, and the
+  phones' `cbb_tunnel_register`): a certificate of its server key for the forwarder's face, the
+  face's hubs' credential alone and the format's messages (t 80 to 84), so the forwarder sees
+  no record, no device ID and no period credential. A hub without such a credential does not
+  dial and its status says it waits for it; a hub of a group of 0.5 stays so. The JSON claim,
+  member certificates and records are gone, `hub_set_records` with them, and
+  `cbb_tunnel_hub_credentials` takes the face's hubs' credential (an envelope).
+- The forwarder (`cbb forward`) serves hubs of 0.6 alone, by `cbb-forward/3`: it takes the
+  certificate of a hub's server key alone and its group's hubs' credential alone, checks it as
+  before (live, listing the key, the first period key for the tag, no older version) and keeps
+  nothing else of a group. Registering with member certificates, an admin's signature and the
+  group's records is gone, with the records it kept in memory; `TestRegistrationKeepsNoRecords`
+  and the tests of the credentials take the place of their tests. It reads the format with a
+  package of its own, `internal/blind` (the CBOR profile, frames, ES256 envelopes and server
+  credentials), held to the Rust core by `testdata/format` (D-106); the nightly run fuzzes it
+  (`FuzzCredential`) and the registration (`FuzzRegister`). A hub refuses a `forward/seen` not
+  in the address's one written form.
+- The list of refused groups (`refused-groups` of `cbb forward` and `cbb relay`) names a
+  period of 0.6 by its tag of 32 hex characters (`period TAG`).
+- Draft format: field 15 of a `settings` record, the group's servers, is now at most 16
+  `[kind, endpoint, pin]` (the pin of the server's TLS key in place of the key), each kind and
+  endpoint once; a kind not known is kept and passed over. The user's own relay becomes this
+  group setting, which the root signs (D-121). The core, gen.py's vectors (with refusals of a
+  server twice, a key in place of a pin, a short pin, kind 0 and an empty endpoint) and the Go
+  check agree; FROZEN (draft) is written again.
+- In a group of 0.6, `cbb global relay` on the root signs the group's relay in its settings,
+  in place of the relays named before (`default` leaves the project's alone), and every member
+  shows the group's relays a face after the project's servers. A device that is not the root
+  is refused; an admin asking the root, and meeting at the relay, are still moving to 0.6. A
+  settings record the core API writes keeps the group's servers. `cbb global relay` takes
+  several `address -key KEY`, up to 16, which only the root of a group of 0.6 takes.
+- A member of 0.6 sends push: it keeps the phones' registrations (message `push`, in
+  `push.cbor`, across a restart), asks a phone to register again when the service found its
+  registration stale, forgets a removed or frozen device's, and wakes a phone that is not
+  connected for a copy it made or, with the `hub` right, received, under the group's face
+  toward the push service, the previous period's face kept until it expires for the
+  registrations under it. A hub (else the root's or an admin's device) wakes the phones for a
+  device that joined or was removed and a change of root, with the first 16 bytes of the
+  record's ID as the event's ID, so that every sender gives the same.
+- Sync away from home starts moving to 0.6, the device's side first: `cbb global`, `cbb
+  global on` and `cbb global off` work in a group of 0.6. On each member connection with a
+  device the records make a hub, a device where it is on sends `tunnel` with its own key toward
+  that hub and the tag of the pre-shared key exported from that connection, and keeps the hub's
+  offer that comes back in `result` (hub key, endpoints with each forwarder face's key, next
+  key, obfuscation, VLESS) in `tunnel.json` with the keys it sent. Obfuscation without its key
+  protects no headers, and the member takes every obfuscation the format takes (up to 128 junk
+  packets of up to 1280 bytes, paddings up to 1280). The `result` with a hub's offer is numbered by
+  `hubkey::offer_id`, a hash of the tag, never the tag itself. A member takes `tunnel` from any current member of the group, and the
+  hubs' own message only from a device that may be a hub. Away from home the device dials the
+  hubs it met through the tunnel, under its own key toward each hub, trying the pre-shared
+  keys of its connections with it one at a time (the confirmed one first) over every way of
+  the hub at once: its own key, each forwarder face's key, and its next key. A hub's tunnel
+  holds several pre-shared keys of a client (up to 6) and answers a handshake under each, the
+  client's data then showing which one fits. A hub of 0.6 keeps each client's key toward it
+  and the pre-shared keys it confirmed (`held` in `tunnel.json`), answers with its offer, and
+  serves its tunnel to them, keeping a client's tunnel up as its keys change; the key a
+  handshake took is noted at both ends. `cbb global hub` works on a device the records make a
+  hub, and the hub registers with its forwarder under the hubs' credential of the forwarder's
+  face, taking the forwarder's VLESS settings into its offer. `cbb status` and `cbb global`
+  on a group of 0.6 show sync away from home, and on a hub its forwarder: where it is, whether
+  it registered there, and why not.
+  An `away-off` command turns sync away from home off on a member of 0.6.
+  The hubs of 0.6 serve in one order from the records (`State::hub_order` in the core), the
+  root's hubs record in the user's order first; a hub stands by while a hub above it serves
+  and says so in `hubs` (t 16), and serves again a minute after losing it. The hubs record
+  keeps the user's order instead of sorting it.
+  `cbb global hub -on DEVICE`, `cbb global hub off [-on DEVICE]` and `cbb global move DEVICE`
+  work on 0.6 by a `hub` command; a hub that stops tells its clients connected that it moved,
+  and they take the next hub in the order.
+  `cbb global relay default` on the root of a group of 0.6 writes the project's relay into
+  the group's settings, by name with its key's pin, and `cbb global relay off` removes every
+  relay: a group meets at a relay only once the root chose one.
+  A member of 0.6 with sync away from home on meets the group at the root's relay under the
+  period's credentials of its face, and the relay joins it to the devices it reaches no other
+  way; `cbb global` shows the relay.
+  `cbb invite` works on a hub of a group of 0.6: the invitation (`cbb://join#...`) carries a
+  guest path with the hub's key, its addresses and a one-time guest key, for a computer, or a
+  phone with `-phone`. The guest reaches only the hub's guest address `fd00:cbc::1` inside
+  the tunnel, where it pairs; the admin confirms the device by its name and key fingerprint
+  before its record is written. `cbb pair -invite` joins by it, and the new member reaches the
+  hub through the guest tunnel until the hub's offer comes, then with its own key.
+  An admin that is not the hub makes the invitation through a hub of the group (`-hub`, or
+  the first of the hub order connected): the hub lets the guest in and passes its pairing to
+  the admin's window in `guest` messages.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and
@@ -1971,8 +2079,35 @@ made with 0.5 is set up again once. The details follow.
   OPNsense's ruleset and lists the service under System > Diagnostics > Services. pfSense,
   unsupported: the installer prints the rules to add and starts the service through
   `cbb.sh`.
+- In a group of 0.6 a hub registers with a forwarder of the group's own: the root gives each
+  forwarder its hub commands name, and its own hub's, a face of its own, whose hubs'
+  credential lists the hubs of its `hubs` record; and a hub serves with a key of its own for
+  each period of its forwarder's face, as in 0.5.
+- In a group of 0.6 the root makes a computer a hub that only passes the copies on (`cbb
+  global hub -on DEVICE -forward-only`): its record keeps the right to be a hub and loses
+  those to read, send and paste secrets, and the hubs record names it; such a hub refuses to
+  copy or paste.
 
 ### Changed
+- The protocol's tunnel keys (section 11) and the design's hub describe sync away from home
+  on the records of 0.6: the `tunnel` and `hubs` messages, the offer's table, the hubs'
+  order, stopping a hub, the hub's key per period, obfuscation and VLESS as 0.6 carries them;
+  the messages of 0.5 stay described only for the phones' member until it moves.
+- On the records of 0.6 a hub that moves (`cbb global move`) keeps serving its clients away
+  from home until the new hub serves and then for up to 5 minutes, while they meet the new
+  hub at home or at the group's relay and take its offer there; only then does it tell them
+  it moved. A client away with neither home nor a relay loses the hub until it meets the new
+  one. The new hub listens on the port of the address it is given.
+- The cleaning of a remote paste's text and its refusal of nothing but control characters are
+  in the core (`cbb_core::remotepaste`), so that `cbb` and the phones' apps share them.
+- The 0.6 format's `hub` command no longer carries its clients (field 12, retired and refused):
+  a client gives each hub its key by message `tunnel`, and the pre-shared key is never sent.
+- The 0.6 format's `hub` command lists each forwarder as its address with its pin (field 11), so
+  the root signs which key a hub takes there and no hub trusts a forwarder on first use; message
+  `credentials` (t 11) always names the server its credentials are for by pin and address
+  (fields 4 and 5; without field 4 it is refused): the group shows each server a face of its own
+  (A-55, D-121), made by the root for the project's relay, forwarder and push service. The vectors are written
+  again (draft).
 - The rule of the group's key level and its messages are in the core
   (`cbb_core::keylevel`), so that `cbb` and the phones' apps share one.
 - On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
@@ -2709,6 +2844,13 @@ made with 0.5 is set up again once. The details follow.
   scanned it and dialed in) and their old "Add a device" screen that scanned such a code: every
   phone app joins and adds at home through the pairing window ([phone apps](docs/apps.md),
   "Screens"). A remote invitation and a restore keep their screens.
+- Sync away from home in a group made before 0.6: `cbb` refuses `away`, `hub`, `invite` from
+  afar and an invitation of such a group, and says to start a group of 0.6 (D-122). In a
+  group of 0.6 a hub that serves with new settings (a new forwarder) starts again with them,
+  a member that turns away on while connected gets the hub's offer within 15 s, `away -off
+  -on` drops the connection through the tunnel, `-tunnel-via` is followed, and `status`
+  shows a hub standing by. Its tests are the 0.6 ones in `member/tests/away_live.rs` and
+  `away_hubs.rs`.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;
@@ -2762,6 +2904,116 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a hub's status gives its UDP port and whether it hides its tunnel, a
+  hub that stands by names the hub above it that it uses, `cbb devices` marks as hubs the
+  devices this one knows serve and gives each its place in the group's order of hubs
+  (`hub_rank`), a hub forgets the tunnel keys of a device the group removes, a hub whose
+  forwarder holds its VLESS user ID for another group takes a new one, and stopping a device
+  that is no hub says so rather than that it is the group's last hub. The Go tests of the hubs
+  name them with `cbb global hubs` first and read the tunnel's keys of 0.6 (`toward`, `held`).
+- On the records of 0.6 a computer in a container offers no admin key when it pairs unless its
+  user set `CBB_KEYS_IN_FILE=yes`, `cbb devices` lists a frozen admin as no admin until the
+  freeze ends, as the core counts it, and a home pairing window counts its five minutes in the
+  device's running time from end to end, so a wall clock set while it is open no longer ends
+  it. A build for tests checks the sealing keys as often as `CBB_TEST_RENEW_EVERY` says.
+- On the records of 0.6 a device away from home names as its hub, in `cbb global` and `cbb
+  status`, the one its tunnel uses, else the first hub in the group's order it is connected to
+  by any way, rather than the first offer it took.
+- On the records of 0.6 a hub's offer carries the AmneziaWG settings and the VLESS way that go
+  with its next key (offer fields 10 `next-obfuscation` and 11 `next-vless`, docs/protocol.md
+  section 11), so a client that was away across the hub's change of period reaches it with the
+  new settings and user ID, as before 0.6; a forwarder's endpoint that the hub serves under its
+  own key moves to the next key with it. The format's vectors and the Go reader carry them.
+- On the records of 0.6 an admin computer that removes another admin, or unfreezes one, hears
+  that only the group's root does it, and its freeze of an admin names that admin's key alone,
+  as the core counts an admin's freeze, rather than a record that would not count.
+- On the records of 0.6 the copy a member sends as a connection opens is one it made sealed
+  again to that peer by the records as they are then, and a member that takes records refusing
+  a peer, removed or frozen, ends that connection before it sends anything more, so a refused
+  device gets no records at all.
+- On the records of 0.6 a copy made while no other member was connected, or before a new device
+  knew any reader's keys, reaches the others once they meet, as on 0.5: each member sends its
+  current copy as a connection opens. The new root thaws a device that a change of root carried
+  over frozen. The Go tests of the takeover now take the group over with the recovery key
+  (`cbb recovery`), and check that a takeover, a handover or a removal of the root without it is
+  refused.
+- On the records of 0.6 a pairing window closes when its `cbb pair` ends and counts its five
+  minutes in the computer's running time, and `cbb pair` prints the QR code's text, which a
+  computer that cannot find the window by mDNS types instead of the six digits; a device that
+  joined at an address dials it at once when discovery finds none of the group.
+- On the records of 0.6 `cbb copy`, of a text or of files, reaches this device's own clipboard
+  again, as well as the group, unless the clipboard holds that text already.
+- On the records of 0.6 a device that joins dials the member it joined through only when no
+  connection came by the time the fallback dial would come, so that two members keep one
+  connection between them; each member logs the address it is connected at and when it takes
+  newer entry points from a peer.
+- On the records of 0.6: a device's hello goes to the members connected again when it changes
+  (a mute, sync off, a quick action), and the mute in it says the time left, not its end;
+  only an admin ends a mute an admin set, and on the control socket only an admin mutes
+  itself; the members end their connections with a device the records refuse now, such as
+  one just removed, which need not learn why; the group's last copy, made on a device removed
+  since, is dropped.
+- On the records of 0.6 images and files reach a device away from home through its hub
+  again: a hub serving fetches the blob of each copy it does not write itself within its limit
+  away from home (`cbb config max-copy-away`), and serves through its tunnel only blobs within
+  that limit.
+- On the records of 0.6 a hub fetches the release archives its group's devices update from
+  again (control operation `release_want`), as with 0.5: a computer that `cbb update` updates
+  names its archive in its hello's `device` map, and the hub's `cbb update` downloads the ones
+  it does not hold whole and serves them to the group. On the records of 0.6 a member that
+  takes a newer signed release or entry points passes them to the members connected at once,
+  not only to one that connects later; `cbb status` shows the release held and the update it
+  offers; and `cbb update` fetches an archive from a member that holds it (`get`, t 13) instead
+  of saying it is not done yet.
+- Proven keys work on the records of 0.6 as with 0.5: a computer with a TPM sends its
+  evidence (t 19, the data of docs/protocol.md, section 17, "Evidence on the records of
+  0.6") and answers the root's credential; the root checks an Android chain or a TPM's
+  evidence through its helper, records the device as `store` 4 (`proven`) with its `proof`,
+  and as `hardware` again when the revocation list names a certificate of its chain. Only
+  the root records; a rootless device is never recorded as proven.
+- On the records of 0.6 `cbb global relay` on an admin says that only the group's root sets
+  the group's relay, instead of "not done yet"; `cbb leave` sees a group of 0.6 and deletes
+  its push registrations, server faces and secret as well; the root's leave with other
+  devices says to remove them first.
+- On the records of 0.6 `cbb update` reaches the mirror away from home through the hub's
+  VLESS settings again (control operation `update_way`), as with 0.5: a hub's own
+  forwarder's with the group's VLESS user ID, else the hub the member goes through or tries
+  first.
+- The member of 0.6 sends the phones the push events `own_record` (to the phone whose record
+  changed) and `stopped` (once, when the group's records stop it), and keeps the push
+  service's previous face across a restart, so a phone registered in the period before still
+  gets its pushes until that face expires.
+- `cbb resolve` works on the records of 0.6: the root voids both histories of every key that
+  signed two, and the admin computer whose key it was signs again by itself what its log
+  (`signed-records.json`) says it signed; the core's writer then goes on below the fork
+  instead of after a voided record, and `cbb status` lists the conflicts again.
+- On the records of 0.6 a small device's own command (`device`) sent to a computer or a Pi is
+  refused with "this device has no command NAME" instead of an error that it is not done yet.
+- A pairing window on 0.6 no longer reports a failed try for a connection that ended before
+  it tried a code, such as one that dialed before the window opened and found another
+  window's key; the window's next word is then the device that pairs.
+- On the records of 0.6 a member's hello says where its keys live again, and the group's root
+  records it: a member whose record says `file` while its key is in a TPM or the Secure
+  Enclave gets `hardware`, and a rootless install gets `rootless` without an admin key, so a
+  member with its key in the hardware becomes an admin without the warning about keys in
+  files.
+- A hub moved before its own tunnel served no longer says it serves once that tunnel starts,
+  and a hub that says it stopped leaves no minute of grace behind: the new hub of `cbb global
+  move` serves at once instead of standing by.
+- `cbb recovery` refuses a second claim on the device that just became the root, in the
+  moment before it restarts with its new root key, instead of making another root.
+- The Rust member's takeover and recovery tests run on the records of 0.6: an admin is made
+  with the key it offered the root, a takeover, a claim's delay and a handover are refused
+  with the way to `cbb recovery`, and recovery takes the sheet that `cbb new` showed.
+- On the records of 0.6 a join with an invitation whose hub does not answer through the
+  guest tunnel (an invitation used up, a hub that is off) ends within about 20 seconds with
+  why, instead of waiting minutes for an admin that cannot be reached.
+- On the records of 0.6 the project's relay is met where the newest signed entry points put
+  it and with the keys the newest keys.json names, so that a move or a new key there needs no
+  new settings from the root; a link that keeps failing fetches the signed lists again from
+  the relay's server, and newer entry points or keys give the group's devices their faces at
+  once rather than at the next period.
+- A member of 0.6 no longer holds up its status while the link to a relay it leaves ends.
 - The ZX Spectrum Next's `.cbb pair CODE` joins a group of 0.6: it passes the home window's
   ID and member key from mDNS to the Pi's `cbb next link` (`-window`, `-fp`), which joins
   with the six digits through the Next's ESP.

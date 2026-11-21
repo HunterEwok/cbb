@@ -582,7 +582,13 @@ fn write(a: WriteArgs) -> core::result::Result<Vec<u8>, Refusal> {
             Ok(alloc::vec![r])
         }),
         kind => {
-            let kind = kind.kind()?;
+            let mut kind = kind.kind()?;
+            // The call names no servers: a new settings record keeps the
+            // group's (format 4.5, field 15), which only `cbb global relay`
+            // on the root changes.
+            if let Kind::Settings(s) = &mut kind {
+                s.servers = st.settings.servers.clone();
+            }
             set.write_record(&st, &key, kind, a.time_ms)
         }
     };
@@ -1012,6 +1018,30 @@ mod tests {
             d.extend(e.clone());
         }
         d
+    }
+
+    /// A settings record the call writes keeps the group's servers, which
+    /// the call does not name.
+    #[test]
+    fn settings_keep_the_groups_servers() {
+        use crate::records::body::{Kind, SERVER_RELAY, Server, Settings};
+        let g = group(None);
+        let root = key(1);
+        let mut set = crate::setfile::load(&dec(&g["set"]), None).unwrap();
+        let st = set.state();
+        let servers = alloc::vec![Server { kind: SERVER_RELAY, endpoint: "203.0.113.9:8764".into(), pin: [5; 32] }];
+        let s = Settings { servers: servers.clone(), ..Settings::default() };
+        set.write_record(&st, &super::Held(root.clone()), Kind::settings(s), 1).unwrap();
+        let file = enc(&crate::setfile::save(&set, None));
+        let (w, _) = signed(
+            "set_write",
+            json!({"set": file, "signer": public(&root), "record": {"type": "settings", "shared": true}, "time_ms": 2}),
+            &[&root],
+        );
+        let set = crate::setfile::load(&dec(&w["set"]), None).unwrap();
+        let st = set.state();
+        assert!(st.settings.shared, "the new record counts");
+        assert_eq!(st.settings.servers, servers);
     }
 
     #[test]

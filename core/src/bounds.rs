@@ -1070,6 +1070,47 @@ pub const BOUNDS: &[Bound] = &[
         &["the_member_messages_hold_at_their_bounds"],
     ),
     b(
+        "msg::member::MAX_EVIDENCE_CERT",
+        crate::msg::member::MAX_EVIDENCE_CERT as u64,
+        Frozen,
+        "a certificate of an attestation's chain: Android's with Remote Key Provisioning, a TPM maker's",
+        "evidence/android/chain",
+        &[
+            "vec:messages5.json:android-key evidence, a certificate of 8192 bytes",
+            "vec:messages5.json:android-key evidence, a certificate of 8193 bytes",
+        ],
+    ),
+    b(
+        "msg::member::MAX_EVIDENCE_CHAIN",
+        crate::msg::member::MAX_EVIDENCE_CHAIN as u64,
+        Frozen,
+        "an attestation's chain, leaf or endorsement key's certificate first",
+        "evidence/android/chain",
+        &[
+            "vec:messages5.json:android-key evidence, 10 certificates",
+            "vec:messages5.json:android-key evidence, 11 certificates",
+        ],
+    ),
+    b(
+        "msg::member::MAX_TPM_STRUCTURE",
+        crate::msg::member::MAX_TPM_STRUCTURE as u64,
+        Frozen,
+        "a TPM structure: an RSA endorsement key's TPM2B_PUBLIC, an encrypted seed",
+        "evidence/tpm/ek",
+        &[
+            "vec:messages5.json:TPM evidence, a structure of 2048 bytes",
+            "vec:messages5.json:TPM evidence, a structure of 2049 bytes",
+        ],
+    ),
+    b(
+        "join::guest::MAX_DATA",
+        crate::join::guest::MAX_DATA as u64,
+        Frozen,
+        "bytes of a guest's connection in one guest message",
+        "guest/data",
+        &["a_guest_data_holds_at_its_bound"],
+    ),
+    b(
         "sheet::MAX_INPUT",
         crate::sheet::MAX_INPUT as u64,
         Reader,
@@ -1133,6 +1174,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("records::pq::VERIFY_STACK", "a measured stack size, not a format number"),
     ("blind::alias::DAY_MS", "a day"),
     ("join::invitation::SECRET", "a secret's length, fixed by its label"),
+    ("msg::member::EVIDENCE_", "an evidence format, an enumeration"),
 ];
 
 #[cfg(test)]

@@ -51,7 +51,7 @@ pub mod files;
 #[cfg(feature = "tunnel")]
 pub mod forward;
 pub mod founding;
-#[cfg(feature = "fuzzing")]
+#[cfg(any(feature = "fuzzing", test))]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 mod global_cli;
@@ -472,9 +472,15 @@ fn member_port() -> u16 {
     settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
+/// Why the only hub of a group does not stop without the user's word.
+pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
+
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
 /// cbb pair's usage in no group.
+/// Why an invitation of a group made before 0.6 joins nothing.
+pub(crate) const OLD_INVITATION: &str = "this invitation comes from a group made before 0.6, which a device joins only at home with cbb pair; ask for an invitation of a group of 0.6";
+
 const PAIR_USE: &str =
     "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
 
@@ -584,28 +590,27 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
+    if let Some((path, text)) =
+        invite.as_ref().filter(|(_, t)| t.trim_start().starts_with(cbb_core::join::invitation::PREFIX))
+    {
+        join_invited(g, &name, &caps, given_name, given_caps, text)?;
+        // It is used up, and was a secret; nothing needs it any more.
+        if !path.is_empty() {
+            let _ = std::fs::remove_file(path);
+        }
+        println!("{}", tr!("Joined the group."));
+        wait_for_hub(g);
+        return Ok(());
+    }
+    if invite.is_some() {
+        // An invitation of a group made before 0.6, which joins only at home.
+        return Err(Error::msg(OLD_INVITATION));
+    }
     let (joiner, save) = joiner(&g.state, &name)?;
     let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
-    let invited = invite.is_some();
-    let id = match invite {
-        Some((path, text)) => {
-            let shown = |fp: &str| {
-                println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
-                println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
-                println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
-                std::io::stdout().flush().ok();
-            };
-            let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
-            let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
-            // It is used up, and was a secret; nothing needs it any more.
-            if !path.is_empty() {
-                let _ = std::fs::remove_file(&path);
-            }
-            id
-        }
-        None if code_addr.is_some() => {
-            let a = code_addr.unwrap_or_default();
+    let id = match code_addr {
+        Some(a) => {
             print!("{}", tr!("Pairing code: "));
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -681,9 +686,55 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     } else {
         println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
     }
-    if invited {
-        wait_for_hub(g);
+    Ok(())
+}
+
+/// Joins a group of 0.6 by a remote invitation (cbb pair -invite): through
+/// the running service, with its own -name and -caps unless cbb pair gives
+/// them, or with no service running, into the state folder, before the
+/// service starts. Shows this device's key fingerprint, which the admin
+/// compares before admitting it.
+fn join_invited(
+    g: &Global,
+    name: &str,
+    caps: &[String],
+    given_name: Option<String>,
+    given_caps: Option<Vec<String>>,
+    text: &str,
+) -> Result<()> {
+    let shown = |fp: &str| {
+        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+        println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
+        println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
+        std::io::stdout().flush().ok();
+    };
+    if service_answers(g) {
+        let h = control::Header {
+            op: "join".into(),
+            invite: text.trim().to_string(),
+            consent: true,
+            name: given_name.unwrap_or_default(),
+            caps: given_caps,
+            ..Default::default()
+        };
+        let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        loop {
+            if !m.header.fingerprint.is_empty() {
+                shown(&m.header.fingerprint);
+            }
+            if m.header.done {
+                return Ok(());
+            }
+            m = check(admit_cli::next(&mut r)?)?;
+        }
     }
+    let me =
+        joining::Me { name, os: cbb_core::format::print::os_number(admin::os_name()), caps: roster::caps_number(caps) };
+    std::fs::create_dir_all(&g.state).context(format!("cannot create {}", g.state.display()))?;
+    let fp = own::Own::load(&g.state)?.hash();
+    shown(&base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0));
+    let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
+    live::invite::join(&g.state, &me, text, log)?;
     Ok(())
 }
 
@@ -802,16 +853,26 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
         (String::new(), line.trim().to_string())
-    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX)
+        || path.trim_start().starts_with(cbb_core::join::invitation::PREFIX)
+    {
         return Err(Error::msg(tr!(
             "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
         )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
-    let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
-    if inv.expired(uptime::wall_ms() / 1000) {
-        return Err(Error::msg("the invitation has expired; ask for a new one"));
+    if text.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
+        // An invitation of 0.6 carries no expiry: the hub refuses it once
+        // its time is over.
+        let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
+            .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+        live::invite::guest_path(&inv)?;
+    } else {
+        let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
+        if inv.expired(uptime::wall_ms() / 1000) {
+            return Err(Error::msg("the invitation has expired; ask for a new one"));
+        }
     }
     println!(
         "{}",
@@ -1241,13 +1302,24 @@ fn terminal_text(text: &str, all: bool) -> (String, usize) {
 }
 
 fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
-    if !args.is_empty() {
-        return Err(cli::usage("status takes no arguments"));
-    }
+    let relay = match args {
+        [] => false,
+        [a] if flag(a) == Some("relay") => true,
+        _ => return Err(cli::usage("cbb status [-relay]")),
+    };
     let ask = |op: &str| {
         request(g, &control::Message::new(control::Header { op: op.into(), ..Default::default() }, Vec::new()))
     };
     let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
+    if relay {
+        // The group as a blind relay of the owner's lists it, alone, for
+        // `cbb relay -group` on the server.
+        if s.relay_group.is_empty() {
+            return Err(Error::msg(tr!("this device is in no group")));
+        }
+        println!("{}", s.relay_group);
+        return Ok(());
+    }
     let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
     let limit = awaynet::limit_note(&awaynet::Net::system(), s.away.as_ref());
     print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms(), &limit));
@@ -1272,7 +1344,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
     };
     // In no group there is nothing to ask about; a state this user cannot
     // read gets the question, and the service says what it can do.
-    if matches!(identity::Identity::load(&g.state), Ok(None)) && !g.state.join(records::FILE_NAME).exists() {
+    if !leave::in_group(&g.state) {
         return Err(Error::msg(leave::NOTHING_TO_LEAVE));
     }
     if !yes {
@@ -1296,7 +1368,9 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
         println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
-        if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
+        if identity::Identity::load(&g.state).ok().flatten().is_none()
+            && ![records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| g.state.join(f).exists())
+        {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
