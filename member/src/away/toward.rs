@@ -65,6 +65,59 @@ impl Away {
 }
 
 impl Away {
+    /// The hubs whose offers are kept, in the order kept; none while sync
+    /// away from home is off.
+    pub fn hubs_kept(&self) -> Vec<crate::tunnel::Hub> {
+        self.st.lock().unwrap().as_ref().map(|st| st.hubs.clone()).unwrap_or_default()
+    }
+
+    /// This device's private key toward the hub (`hubkey::key_for`).
+    pub fn secret_toward(&self, hub: &DeviceId) -> Option<[u8; 32]> {
+        let cur = self.st.lock().unwrap();
+        let secret = cur.as_ref()?.private_key().ok()?;
+        Some(hubkey::key_for(&secret, &cbb_core::format::DeviceId(hub.0)).0)
+    }
+
+    /// A tunnel handshake with the hub answered under the pre-shared key
+    /// psk, which is tried right after the confirmed one from now on.
+    pub fn handshaked(&self, hub: &DeviceId, psk: &[u8; 32]) -> Result<()> {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return Ok(()) };
+        let name = cbb_core::certs::hex(&hub.0);
+        let mut side = st.toward.get(&name).map(crate::tunnel::Toward::side).unwrap_or_default();
+        side.handshake(psk);
+        let mut next = st.clone();
+        next.toward.insert(name, crate::tunnel::Toward::of(&side));
+        if next.toward == st.toward {
+            return Ok(());
+        }
+        next.save(&self.dir)?;
+        *st = next;
+        Ok(())
+    }
+
+    /// Where the tunnel sends its packets in place of the hubs' addresses
+    /// (tests), if anywhere.
+    pub fn tunnel_via(&self) -> Option<std::net::SocketAddr> {
+        self.via
+    }
+
+    /// The member connection through the tunnel to the hub is being made
+    /// or is up (Some), or ended (None), for cbb global.
+    pub fn set_through(&self, hub: Option<&str>) {
+        self.through.store(hub.is_some(), std::sync::atomic::Ordering::SeqCst);
+        *self.using.lock().unwrap() = hub.map(|h| (h.to_string(), 0));
+    }
+
+    /// What went wrong reaching a hub, for cbb global and the log; None
+    /// clears it.
+    pub fn failed(&self, e: Option<&Error>) {
+        match e {
+            Some(e) => self.fail(e),
+            None => *self.error.lock().unwrap() = None,
+        }
+    }
+
     /// What cbb global shows of sync away from home on the records of
     /// 0.6: off, or on with the hubs whose offers are kept, the first of
     /// them shown, and what went wrong last.
@@ -76,7 +129,9 @@ impl Away {
         };
         let allow = st.destinations().iter().map(ToString::to_string).collect();
         let mut a = crate::control::Away { keys_in_file: true, allow, ..Default::default() };
-        if let Some(h) = st.hubs.first() {
+        let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
+        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()) {
+            a.through = self.through.load(std::sync::atomic::Ordering::SeqCst) && using.is_some();
             a.hub_device = h.device.clone();
             a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
             a.obfuscated = h.obfuscation.is_some();

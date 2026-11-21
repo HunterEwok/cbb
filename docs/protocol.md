@@ -3032,6 +3032,13 @@ that hub's, the tag it carries in field 8 confirming the key (`member/src/away/o
 - with `next-key` the obfuscation and VLESS stay the same;
 - an offer with `moved` makes the device forget that hub.
 
+Away from home, when no hub is connected or at home, the device dials a hub it holds an offer
+of through the tunnel (`member/src/live/away.rs`): under its key toward that hub, with one
+pre-shared key at a time in the order above, over every way of the hub at once (one per key
+the hub serves under: its own on the endpoints no face names, each face's on its endpoint, the
+way over VLESS with its forwarder's face, and the same with `next-key`). The key whose
+handshake the hub answers is noted, and the member connection runs through that link.
+
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
   by writing `tunnel.json` next to the identity

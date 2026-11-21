@@ -395,6 +395,44 @@ impl Hub {
         !self.endpoints.is_empty() || self.vless.is_some()
     }
 
+    /// The ways to the hub on the records of 0.6, one per key it serves
+    /// under: its own key on the endpoints no face names, and each
+    /// forwarder face's key on that face's endpoints; the way over VLESS
+    /// goes with the face of its forwarder, the first face (else `key`).
+    /// Each way has its key in `key` and no faces.
+    pub fn ways(&self) -> Vec<Hub> {
+        let vless_key = self.faces.first().map_or(&self.key, |f| &f.key).clone();
+        let mut ways: Vec<Hub> = Vec::new();
+        let way = |ways: &mut Vec<Hub>, key: &[u8]| -> usize {
+            if let Some(i) = ways.iter().position(|w| w.key == key) {
+                return i;
+            }
+            ways.push(Hub {
+                key: key.to_vec(),
+                endpoints: Vec::new(),
+                vless: None,
+                next_vless: None,
+                faces: Vec::new(),
+                ..self.clone()
+            });
+            ways.len() - 1
+        };
+        for e in &self.endpoints {
+            let i = way(&mut ways, self.key_at(e));
+            if let Some(w) = ways.get_mut(i) {
+                w.endpoints.push(*e);
+            }
+        }
+        if self.vless.is_some() {
+            let i = way(&mut ways, &vless_key);
+            if let Some(w) = ways.get_mut(i) {
+                w.vless = self.vless.clone();
+                w.next_vless = self.next_vless.clone();
+            }
+        }
+        ways
+    }
+
     /// The hub's key on the endpoint at: its key for that forwarder's face,
     /// or `key`.
     pub fn key_at(&self, at: &SocketAddr) -> &[u8] {
@@ -1096,6 +1134,38 @@ impl Link {
         peer: Ipv6Addr,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Link> {
+        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
+        let psk: [u8; 32] = hub.psk.as_slice().try_into().context("the tunnel's preshared key is not 32 bytes")?;
+        Link::start_with(st.secret(), hub_key, psk, hub, own, peer, log)
+    }
+
+    /// Starts a link of this device (me) to the hub on the records of 0.6,
+    /// with this device's own key toward that hub (`hubkey::key_for`) and
+    /// one of the pre-shared keys of its connections with it. `hub` is one
+    /// way of `Hub::ways`: the endpoints under one key of the hub's.
+    pub fn start_toward(
+        secret: [u8; 32],
+        psk: [u8; 32],
+        hub: &Hub,
+        me: &cbb_core::records::DeviceId,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Link> {
+        let own = crate::tunnel_addr(&cbb_core::certs::hex(&me.0))
+            .ok_or_else(|| Error::msg("this device's ID gives no tunnel address"))?;
+        let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
+        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
+        Link::start_with(StaticSecret::from(secret), hub_key, psk, hub, own, peer, log)
+    }
+
+    fn start_with(
+        secret: StaticSecret,
+        hub_key: [u8; 32],
+        psk: [u8; 32],
+        hub: &Hub,
+        own: Ipv6Addr,
+        peer: Ipv6Addr,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Link> {
         if !hub.reachable() {
             return Err(Error::msg("the group's hub has no address away from home yet"));
         }
@@ -1126,10 +1196,7 @@ impl Link {
         ln.set_nonblocking(true).context("cannot open the tunnel's local port")?;
         let port = ln.local_addr().context("cannot open the tunnel's local port")?.port();
 
-        let secret = st.secret();
         let public = PublicKey::from(&secret);
-        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
-        let psk: [u8; 32] = hub.psk.as_slice().try_into().context("the tunnel's preshared key is not 32 bytes")?;
         let awg = match &hub.obfuscation {
             Some(v) => Some(crate::awg::Awg::new(crate::awg::Obfuscation::from_offer(v)?, &hub_key, public.as_bytes())),
             None => None,

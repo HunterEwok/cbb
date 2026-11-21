@@ -76,8 +76,11 @@ made with 0.5 is set up again once. The details follow.
   offer that comes back in `result` (hub key, endpoints with each forwarder face's key, next
   key, obfuscation, VLESS) in `tunnel.json` with the keys it sent. Obfuscation without its key
   protects no headers. A member takes `tunnel` from any current member of the group, and the
-  hubs' own message only from a device that may be a hub. The hub's side and the tunnel
-  through it are still moving.
+  hubs' own message only from a device that may be a hub. Away from home the device dials the
+  hubs it met through the tunnel, under its own key toward each hub, trying the pre-shared
+  keys of its connections with it one at a time (the confirmed one first) over every way of
+  the hub at once: its own key, each forwarder face's key, and its next key. The hub's side
+  is still moving.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and
