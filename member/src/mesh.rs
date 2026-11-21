@@ -398,6 +398,18 @@ impl Mesh {
         self.send_to(to, frame)
     }
 
+    /// What this device shows a relay of 0.6 whose key has one of pins, at
+    /// now_ms (`Faces::for_relay`).
+    pub fn relay_credentials(
+        &self,
+        state: &State,
+        member: &[u8],
+        pins: &[[u8; 32]],
+        now_ms: u64,
+    ) -> Option<(crate::faces::Server, crate::faces::ForRelay)> {
+        self.faces.for_relay(state, member, pins, now_ms)
+    }
+
     /// What this device, as a hub, shows the forwarder of pin `pin` now
     /// (`Faces::for_hub`).
     pub fn hub_credential(&self, pin: &[u8; 32]) -> Option<crate::forward::HubCredential> {

@@ -26,7 +26,7 @@ use crate::wire::TunnelOffer;
 mod held;
 mod hubs;
 mod invite;
-mod meet;
+pub(crate) mod meet;
 mod movehub;
 mod offer;
 mod serve;

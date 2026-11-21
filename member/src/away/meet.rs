@@ -134,7 +134,7 @@ impl relay::Events for Events {
 
 /// The check of the relay's port: the call is served only when its
 /// certificate names the device the relay said calls from that port.
-fn caller_check(calls: Arc<Mutex<VecDeque<(u16, String)>>>) -> Admit {
+pub(crate) fn caller_check(calls: Arc<Mutex<VecDeque<(u16, String)>>>) -> Admit {
     Arc::new(move |port: u16, id: &DeviceId| {
         // The relay names the caller right after it connects, which can be
         // after the handshake on a busy machine.
@@ -440,7 +440,7 @@ fn pin_of(pin: &str) -> Result<[u8; 32]> {
 
 /// A short message for status of why the device is not connected to its
 /// relay, as Go's relayProblem; the whole error goes to the detail.
-fn problem(msg: &str, project: bool) -> String {
+pub(crate) fn problem(msg: &str, project: bool) -> String {
     if msg.contains("refused the registration") || msg.contains("do not list this device") {
         msg.to_string()
     } else if project && msg.contains("not the one given") {

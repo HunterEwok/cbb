@@ -16,7 +16,7 @@ use super::*;
 use crate::content::Source;
 use cbb_core::media::Part;
 
-struct K(SigningKey);
+pub(crate) struct K(SigningKey);
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
@@ -28,7 +28,7 @@ impl ExternalKey for K {
     }
 }
 
-fn root() -> K {
+pub(crate) fn root() -> K {
     K(SigningKey::from_slice(&[1; 32]).unwrap())
 }
 

@@ -315,6 +315,11 @@ impl Away {
         Some((f.endpoint.to_string(), super::serve::pin_bytes(&f.pin).ok()?))
     }
 
+    /// Whether sync away from home is on here.
+    pub fn is_on(&self) -> bool {
+        self.st.lock().unwrap().is_some()
+    }
+
     /// Whether this device is a hub now.
     pub fn is_hub_now(&self) -> bool {
         self.st.lock().unwrap().as_ref().is_some_and(|s| s.is_hub)

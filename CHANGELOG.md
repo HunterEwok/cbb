@@ -102,6 +102,9 @@ made with 0.5 is set up again once. The details follow.
   `cbb global relay default` on the root of a group of 0.6 writes the project's relay into
   the group's settings, by name with its key's pin, and `cbb global relay off` removes every
   relay: a group meets at a relay only once the root chose one.
+  A member of 0.6 with sync away from home on meets the group at the root's relay under the
+  period's credentials of its face, and the relay joins it to the devices it reaches no other
+  way; `cbb global` shows the relay.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

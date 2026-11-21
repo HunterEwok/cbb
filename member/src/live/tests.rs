@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use super::*;
-use crate::mesh::tests::{own, two_dirs, two_dirs_b_hub, two_dirs_both_hubs};
+use crate::mesh::tests::{own, root, two_dirs, two_dirs_b_hub, two_dirs_both_hubs};
 
 fn until(what: &str, f: impl Fn() -> bool) {
     let end = Instant::now() + Duration::from_secs(10);
@@ -279,6 +279,89 @@ fn a_hub_stands_by_while_the_hub_above_serves() {
     b_away.turn_off().unwrap();
     until("b stops", || b.hub.lock().unwrap().is_none());
     until("a serves", || a.hub.lock().unwrap().is_some());
+    a.close();
+    b.close();
+}
+
+/// Once the root chose a relay in the group's settings, two members with
+/// sync away from home on and no other way to each other meet there: each
+/// registers under the period's credentials of the relay's face, one dials
+/// the other through the relay, and the call is served as a member
+/// connection; status shows the relay. With the settings naming no relay
+/// the link stops.
+#[test]
+fn members_of_0_6_meet_at_the_groups_relay() {
+    use crate::relayd::server;
+    let (da, db) = two_dirs("relay-meet");
+    let mut oa = own(&da);
+    oa.root = Some(Arc::new(root()));
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Live::open(&da, oa, log.clone()).unwrap();
+    let b = open(&db);
+    let keys = crate::relayd::keys::Keys::new().unwrap();
+    let pin = cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash();
+    let relay = server::Relay::start(server::Config {
+        listen: SocketAddr::from(([127, 0, 0, 1], 0)),
+        keys,
+        groups: Vec::new(),
+        open: true,
+        limits: crate::relayd::limits::Limits::default(),
+        log: Arc::new(|_| {}),
+        verbose: false,
+        refused: None,
+    })
+    .unwrap();
+    let endpoint = relay.addr().to_string();
+    let now = crate::uptime::wall_ms() as u64;
+    a.mesh
+        .write(|set, k| {
+            crate::writers::set_settings(
+                set,
+                k,
+                |s| {
+                    s.servers.push(cbb_core::records::body::Server {
+                        kind: cbb_core::records::body::SERVER_RELAY,
+                        endpoint: endpoint.clone(),
+                        pin,
+                    });
+                },
+                now,
+            )
+        })
+        .unwrap();
+    // At home first: b takes the settings and the period, and the root
+    // lists b's server key on the relay's face.
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    let dialer = a.clone();
+    std::thread::spawn(move || dialer.mesh.dial(SocketAddr::from(([127, 0, 0, 1], member_port)), None));
+    let has_face = |l: &Arc<Live>| {
+        let member = l.mesh.own().member.public();
+        l.mesh.relay_credentials(&l.mesh.state(), &member, &[pin], crate::uptime::wall_ms() as u64).is_some()
+    };
+    until("both hold the relay's credentials", || has_face(&a) && has_face(&b));
+    until("b takes the settings", || !b.mesh.state().settings.servers.is_empty());
+    b.close();
+    // Away from home: b again, with no way to a but the relay.
+    let b = open(&db);
+    assert!(!a.mesh.connected().contains(&b.mesh.device()));
+    let away_of = |l: &Arc<Live>, dir: &Path| {
+        let me = crate::certs::DeviceId::parse(&id_text(&l.mesh.device())).unwrap();
+        let away = Arc::new(crate::away::Away::new(dir.to_path_buf(), l.tag(), me, Arc::new(|_| {})));
+        away.turn_on().unwrap();
+        l.with_away(away.clone());
+        away
+    };
+    let a_away = away_of(&a, &da);
+    let _b_away = away_of(&b, &db);
+    until("a and b meet through the relay", || {
+        a.mesh.connected().contains(&b.mesh.device()) && b.mesh.connected().contains(&a.mesh.device())
+    });
+    let st = a.relay_status().unwrap();
+    assert!(st.connected, "{st:?}");
+    assert_eq!(st.endpoint, endpoint);
+    // Off: the link stops.
+    a_away.turn_off().unwrap();
+    until("the link stops", || a.relay_status().is_none());
     a.close();
     b.close();
 }

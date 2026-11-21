@@ -139,6 +139,9 @@ pub struct Live {
     hub: Mutex<Option<away::HubRun>>,
     /// The hubs above this one that said they serve, while it is a hub.
     ladder: Mutex<away::Ladder>,
+    /// The link to the group's blind relay, while the device meets the
+    /// group there.
+    meeting: Mutex<Option<relay::Meeting>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -186,6 +189,7 @@ impl Live {
             away: std::sync::OnceLock::new(),
             hub: Mutex::new(None),
             ladder: Mutex::new(away::Ladder::default()),
+            meeting: Mutex::new(None),
             log,
         });
         live.settle(&live.mesh.state());
@@ -556,6 +560,7 @@ impl Peers for Live {
 }
 
 mod away;
+mod relay;
 
 #[cfg(test)]
 mod tests;

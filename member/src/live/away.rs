@@ -47,6 +47,8 @@ impl Live {
         std::thread::spawn(move || reach_hubs(&w));
         let w: Weak<Live> = Arc::downgrade(self);
         std::thread::spawn(move || serve_hub(&w));
+        let w: Weak<Live> = Arc::downgrade(self);
+        std::thread::spawn(move || super::relay::meet(&w));
     }
 
     /// Sync away from home, once with_away gave it.

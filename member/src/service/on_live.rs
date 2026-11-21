@@ -1053,6 +1053,7 @@ fn away_status(live: &Live) -> Option<control::Away> {
     let mut a = away.live_status()?;
     let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
     a.forwarder = away.live_forwarder(entries_held);
+    a.relay = live.relay_status();
     Some(a)
 }
 

@@ -3923,8 +3923,15 @@ with `relay_key` and then each of `relays` (`address pin`, as `cbb global relay`
 so that the root's consent is in the group's settings. With `relay` `off` (`cbb global relay
 off`, no consent asked) it removes every relay. Its answer names their addresses in `relays`.
 A group meets at a relay only when its settings name one: no relay entries mean no relay,
-never the project's by default. A device not on the records of 0.6 refuses `relays`: it meets
-at one relay. A device that is not the root is refused; an admin's
+never the project's by default. A member of 0.6 with sync away from home on meets the group at
+the first relay the settings name (`member/src/live/relay.rs`), and at the next when one keeps
+failing for a minute: it registers under the period's server credentials of that relay's face
+(`faces::Faces::for_relay`), waiting until they list its server key, and the relay joins it to
+each device of the group it neither reaches at home nor is connected to (through a hub, say),
+the device with the lower pseudonym dialing. A call the relay brings comes to a loopback port of
+its own, served as a member connection only when the caller's certificate names the device the
+relay said calls (`Mesh::accept_checked`). Hubs and a relay serve side by side on 0.6. A device
+not on the records of 0.6 refuses `relays`: it meets at one relay. A device that is not the root is refused; an admin's
 request to the root has not moved yet (`NotYet`). Every device makes a face for each relay
 the settings name (`faces::group_servers`), after the project's servers.
 
