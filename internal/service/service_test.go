@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/authority"
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
@@ -1237,41 +1236,6 @@ func TestSecondTakeover(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "b has it", func() bool { return b.paste(t) == "after the second takeover" })
-}
-
-// noClaimWait has root, the group's current root, set the takeover delay
-// to 0, and waits for members to hold that record, so a claim takes effect
-// at once (docs/protocol.md, section 10, "Handing the group over").
-func noClaimWait(t *testing.T, root *testService, members ...*testService) {
-	t.Helper()
-	if _, err := root.do(t, control.Header{Op: control.OpDelay, Value: "0s"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range members {
-		waitFor(t, m.name+" holds the takeover delay", func() bool { return holdsNoWait(m.dir) })
-	}
-}
-
-// holdsNoWait reports whether the records in dir hold a settings record
-// of the group's current root with a takeover delay of 0: an earlier
-// root's says nothing of the current root's delay.
-func holdsNoWait(dir string) bool {
-	id, err := group.Load(dir)
-	if err != nil {
-		return false
-	}
-	recs, err := group.LoadRecords(dir, id.GroupCA.Cert)
-	if err != nil {
-		return false
-	}
-	roots := recs.State().Roots
-	cur := roots[len(roots)-1]
-	for _, r := range recs.All() {
-		if b, err := authority.ParseBody(r.Body); err == nil && b.Type == group.RecordSettings && b.Signer == cur && b.TakeoverDelayMS != nil && *b.TakeoverDelayMS == 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func TestUnfrozenAfterTakeover(t *testing.T) {

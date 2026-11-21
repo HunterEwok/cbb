@@ -79,7 +79,7 @@ fn device_record(set: &RecordSet, state: &State, id: &DeviceId) -> Option<Device
 
 /// The keys of a device that a removal or a freeze names: its member key,
 /// and its admin key when it holds one.
-pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
+pub fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     let mut keys = vec![d.key.hash()];
     keys.extend(d.admin);
     keys.sort();
@@ -482,6 +482,48 @@ pub fn recover(
     leave_out: &[cbb_core::records::KeyHash],
     now_ms: u64,
 ) -> Result<cbb_core::records::set::Written> {
+    recover_with(set, recovery, recovery2, new_root, me, leave_out, Change::default(), now_ms)
+}
+
+/// Both halves of the group's recovery key from its secret (the sheet's,
+/// or what a YubiKey opened), the first as a key that signs: for the call
+/// that changes the root, and dropped after it.
+pub fn recovery_keys(secret: &[u8; 32]) -> Result<(cbb_core::identity::FileKey, cbb_core::records::pq::PqKey)> {
+    use p256::pkcs8::EncodePrivateKey as _;
+    let (k1, k2) = cbb_core::records::pq::recovery_keys(secret)
+        .map_err(|e| e.context("cannot make the recovery key from the sheet"))?;
+    let pkcs8 = cbb_core::secret::Zeroizing::new(
+        p256::ecdsa::SigningKey::from(k1)
+            .to_pkcs8_der()
+            .map_err(|_| Error::msg("cannot encode the recovery key"))?
+            .as_bytes()
+            .to_vec(),
+    );
+    Ok((cbb_core::identity::FileKey::new(&pkcs8)?, k2))
+}
+
+/// How a change of root goes besides who stays: drop_hubs leaves the
+/// group's hubs record behind; over_waiting writes over a change the set
+/// holds whose records never came (`RecordSet::write_change_over_waiting`),
+/// which a person chooses only after a sync failed.
+#[derive(Clone, Copy, Default)]
+pub struct Change {
+    pub drop_hubs: bool,
+    pub over_waiting: bool,
+}
+
+/// recover, with how the change goes.
+#[allow(clippy::too_many_arguments, reason = "the parts of one act")]
+pub fn recover_with(
+    set: &mut RecordSet,
+    recovery: &dyn ExternalKey,
+    recovery2: &cbb_core::records::pq::PqKey,
+    new_root: &dyn ExternalKey,
+    me: &DeviceId,
+    leave_out: &[cbb_core::records::KeyHash],
+    how: Change,
+    now_ms: u64,
+) -> Result<cbb_core::records::set::Written> {
     use cbb_core::records::body::{RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
     let st = set.state();
     let mut rec = device_record(set, &st, me).ok_or_else(|| Error::msg("this device's record is not here"))?;
@@ -491,8 +533,12 @@ pub fn recover(
     rec.commands = 0;
     rec.rights |= RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
     rec.seen = Vec::new();
-    set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, false, now_ms)
-        .map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
+    let written = if how.over_waiting {
+        set.write_change_over_waiting(&st, recovery, recovery2, new_root, rec, leave_out, how.drop_hubs, now_ms)
+    } else {
+        set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, how.drop_hubs, now_ms)
+    };
+    written.map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
 }
 
 /// Sets how long a copy from another device stays live on each member.

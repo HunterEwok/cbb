@@ -4,121 +4,90 @@
 package service
 
 import (
-	"crypto/ecdsa"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/HunterEwok/cbb/internal/group"
 )
 
-// TestFFIPhoneYubiKey: a root phone whose app has no PIV of its own puts
-// the group's recovery key on a YubiKey through the core (cbb_piv: a key
-// made in a retired slot, its admin CA stored there), and a new phone
-// restores the group with that card alone and claims it, the card signing
-// the claim (docs/protocol.md, section 10, "On a hardware key").
+// TestFFIPhoneYubiKey: on a group of 0.6 a phone whose app has no PIV of its
+// own seals the recovery sheet's secret onto a YubiKey through the core
+// (cbb_piv's inspect and seal), as the root phone does when the group is
+// made; once the root is lost, the phone opens the card with its PIN
+// (cbb_piv's open) and changes the root with the secret it gave
+// (docs/protocol.md, "The recovery key on a YubiKey (0.6)").
 func TestFFIPhoneYubiKey(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	var h hub
+	pi := startService(t, &h, "pi")
+	a := startService(t, &h, "a")
+	sheet := newGroup(t, pi)
+	pairWith(t, pi, a)
 	card := filepath.Join(t.TempDir(), "card.json")
-	next, in, _, laptop, _, _ := rootPhoneWithLaptopArgs(t, &h, "-card", card)
-	piv := func(req map[string]any) map[string]any {
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "aurora", "-dir", t.TempDir(), "-peer", a.addr(), "-card", card)
+	waitFor(t, "a lists the phone", func() bool { return strings.Contains(listed(a.devices(t)), "aurora") })
+	piv := func(req map[string]any) string {
 		t.Helper()
-		data, _ := json.Marshal(req)
-		fmt.Fprintln(in, "PIV "+string(data))
-		var m struct {
-			OK    map[string]any `json:"ok"`
-			Error map[string]any `json:"error"`
-		}
-		got := next("PIV ")
-		if err := json.Unmarshal([]byte(got), &m); err != nil || m.OK == nil {
-			t.Fatalf("PIV %v: %s", req["op"], got)
-		}
-		return m.OK
-	}
-	manage := func(req string) map[string]any {
-		t.Helper()
-		fmt.Fprintln(in, "MANAGE "+req)
-		got := next("MANAGED ")
-		var m struct {
-			OK map[string]any `json:"ok"`
-		}
-		if err := json.Unmarshal([]byte(got), &m); err != nil || m.OK == nil {
-			t.Fatalf("MANAGE %s: %s", req, got)
-		}
-		return m.OK
-	}
-
-	// A wrong PIN makes nothing.
-	fmt.Fprintln(in, `PIV {"op":"make","pin":"000000"}`)
-	if got := next("PIV "); !strings.Contains(got, "error") {
-		t.Fatalf("a wrong PIN made a key: %s", got)
-	}
-	made := piv(map[string]any{"op": "make", "pin": "123456"})
-	slot, _ := made["slot"].(float64)
-	if slot < 0x82 || slot > 0x95 {
-		t.Fatalf("the key is not in a retired slot: %v", made)
-	}
-	ca := manage(`{"action":"recovery_for","key":"` + made["key"].(string) + `"}`)["admin_ca"].(string)
-	piv(map[string]any{"op": "put", "slot": slot, "cert": ca})
-	manage(`{"action":"takeover_delay","delay_ms":0}`)
-	waitFor(t, "the laptop holds the recovery key's record and no delay", func() bool {
-		id, err := group.Load(laptop.dir)
+		b, err := json.Marshal(req)
 		if err != nil {
-			return false
+			t.Fatal(err)
 		}
-		recs, err := group.LoadRecords(laptop.dir, id.GroupCA.Cert)
-		return err == nil && recs.State().Recovery != nil && holdsNoWait(laptop.dir)
-	})
+		fmt.Fprintln(in, "PIV "+string(b))
+		return next("PIV ")
+	}
+	qr := map[string]any{"qr": sheet}
 
-	// The root phone is lost; a new phone has only the YubiKey.
-	in.(io.Closer).Close()
-	der, _ := base64.StdEncoding.DecodeString(ca)
-	adminCA, err := x509.ParseCertificate(der)
-	if err != nil {
-		t.Fatal(err)
+	if got := piv(map[string]any{"op": "inspect", "pin": "000000"}); !strings.Contains(got, "PIN") {
+		t.Fatalf("a wrong PIN: %s", got)
 	}
-	pub, err := adminCA.PublicKey.(*ecdsa.PublicKey).ECDH()
-	if err != nil {
-		t.Fatal(err)
+	if got := piv(map[string]any{"op": "inspect", "pin": "123456"}); !strings.Contains(got, `"default_key":true`) {
+		t.Fatalf("a card with its factory key: %s", got)
 	}
-	if got, _ := phoneOnLinux(t, bin, "-keys", "1", "-card", card, "-restore-card", "000000", "-peer", laptop.addr()); !strings.Contains(got("RESTORE FAILED "), "PIN") {
-		t.Error("restored with a wrong PIN")
+	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": map[string]any{"text": "a typo"}}); !strings.Contains(got, "error") {
+		t.Fatalf("sealing what is no sheet: %s", got)
 	}
-	next, in = phoneOnLinux(t, bin, "-keys", "1", "-name", "new phone", "-card", card, "-restore-card", "123456",
-		"-dir", t.TempDir(), "-peer", laptop.addr())
-	next("Restored ")
-	root, _ := manage(`{"action":"root_ca"}`)["root_ca"].(string)
-	if root == "" {
-		t.Fatal("no root CA")
+	if got := piv(map[string]any{"op": "open", "pin": "123456"}); !strings.Contains(got, "error") {
+		t.Fatalf("opening a card that holds nothing: %s", got)
 	}
-	wrong, _ := json.Marshal(map[string]any{"action": "recover", "root_ca": root, "admin_ca": ca, "slot": slot,
-		"pin": "000000", "public": base64.StdEncoding.EncodeToString(pub.Bytes())})
-	fmt.Fprintln(in, "MANAGE_CARD "+string(wrong))
-	if got := next("MANAGED "); !strings.Contains(got, "PIN") {
-		t.Fatalf("a claim with a wrong PIN: %s", got)
+	got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr, "replace_default": true})
+	if !strings.Contains(got, `"replaced":true`) || !strings.Contains(got, `"warning":null`) {
+		t.Fatalf("sealing: %s", got)
 	}
-	claim, _ := json.Marshal(map[string]any{"action": "recover", "root_ca": root, "admin_ca": ca, "slot": slot,
-		"pin": "123456", "public": base64.StdEncoding.EncodeToString(pub.Bytes())})
-	fmt.Fprintln(in, "MANAGE_CARD "+string(claim))
-	if got := next("MANAGED "); got != `{"ok":{}}` {
-		t.Fatalf("the claim signed by the card: %s", got)
+	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr}); !strings.Contains(got, "error") {
+		t.Fatalf("sealing a card that holds one already: %s", got)
 	}
-	waitFor(t, "the claim takes effect", func() bool {
-		return manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"new phone","os":"aurora"}`)["state"] == "effective"
-	})
-	waitFor(t, "the laptop lists the new phone as the root", func() bool {
-		for _, d := range laptop.devices(t) {
-			if d.Name == "new phone" {
-				return d.Root && d.Role == group.RolePhone
-			}
+
+	pi.stop()
+	if got := piv(map[string]any{"op": "open", "pin": "000000"}); !strings.Contains(got, "PIN") {
+		t.Fatalf("opening with a wrong PIN: %s", got)
+	}
+	var opened struct {
+		OK struct {
+			Secret string `json:"secret"`
+		} `json:"ok"`
+	}
+	got = piv(map[string]any{"op": "open", "pin": "123456"})
+	if err := json.Unmarshal([]byte(got), &opened); err != nil || opened.OK.Secret == "" {
+		t.Fatalf("opening: %s", got)
+	}
+	newRoot := func(req map[string]any) string {
+		t.Helper()
+		b, err := json.Marshal(req)
+		if err != nil {
+			t.Fatal(err)
 		}
-		return false
-	})
+		fmt.Fprintln(in, "NEWROOT "+string(b))
+		return next("NEWROOTED ")
+	}
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": map[string]any{"secret": "AAAA"}}); !strings.Contains(got, "32 bytes") {
+		t.Errorf("a secret of the wrong length: %s", got)
+	}
+	secret := map[string]any{"secret": opened.OK.Secret}
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": secret, "leave_out": []string{"pi"}}); !strings.Contains(got, `"seq"`) {
+		t.Fatalf("changing the root with the card's secret: %s", got)
+	}
+	waitFor(t, "a follows the new root", rootIs(t, a, "aurora"))
+	waitFor(t, "pi is out of the group", func() bool { return !strings.Contains(listed(a.devices(t)), "pi") })
 }

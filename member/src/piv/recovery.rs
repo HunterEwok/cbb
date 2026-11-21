@@ -27,9 +27,8 @@
 //! key", "PIV PIN-only mode" (docs.yubico.com, YubiKey SDK user's manual)
 //! and "Yubico extensions" (developers.yubico.com/PIV), read 2026-11-14.
 
-// The recovery opens a card (`open_one`); a computer seals none in 0.6,
-// the root phone does, so `inspect` and `seal` serve the tests here.
-#![cfg_attr(not(test), allow(dead_code))]
+// The recovery opens a card (`open_one`); a computer seals none in 0.6:
+// the root phone does, through the phones' core (ffi's `cbb_piv`).
 
 use cbb_core::secret::Zeroizing;
 use cbb_core::sheet::yubikey::{self as yk, Reason};

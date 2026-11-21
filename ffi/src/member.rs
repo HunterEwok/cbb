@@ -34,7 +34,7 @@ use serde_json::{Value, json};
 
 use crate::join::{AppKey, SignFn, answer};
 
-mod live;
+pub(crate) mod live;
 
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;

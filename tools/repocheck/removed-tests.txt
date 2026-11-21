@@ -534,3 +534,5 @@ internal/tunnel/rustreal_test.go TestRustPhoneThroughRealForwarder D-123: tunnel
 apps/android/app/src/test/kotlin/tools/cbb/HubOnPhoneTest.kt stateRoundTrips D-123: the app's own hub state is gone; AwayOn06Test.settingsRoundTrip keeps what the user chose for the Live hub
 apps/ios/CBBKit/Tests/CBBKitTests/HubOnPhoneTests.swift testStateRoundTrips D-123: the app's own hub state is gone; AwayOn06Tests.testSettingsRoundTrip keeps what the user chose for the Live hub
 apps/android/app/src/test/kotlin/tools/cbb/HubOnPhoneTest.kt sharesWithTheOtherHubs D-123: the phones share no hubs now; mesh::tests::other_messages_go_to_the_service_and_hub_shares_only_from_hubs keeps the member's rule
+internal/service/alone_test.go TestFFIPhoneTakeover D-117: an admin no longer takes the group over on 0.6; TestFFIPhoneChangeRoot changes the root from a phone with the recovery key
+internal/service/recovery_test.go TestFFIPhoneRestore D-125: restoring on a phone in no group comes with 0.7; TestFFIPhoneChangeRoot changes the root from a phone in the group, TestFFIPhoneYubiKey with the secret a YubiKey opens

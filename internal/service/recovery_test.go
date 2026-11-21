@@ -7,7 +7,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,19 +75,6 @@ type recoverySheet struct {
 	Admin group.KeyHash
 	Cert  []byte // DER
 	Group string
-}
-
-// qr is the text of the sheet's QR code (docs/protocol.md, section 10,
-// "The recovery sheet"; testdata/interop/recovery-sheet.json), which the
-// Rust service reads with the core.
-func (s *recoverySheet) qr(t *testing.T) string {
-	t.Helper()
-	scalar, err := s.Key.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	k := base64.RawURLEncoding.EncodeToString(scalar)
-	return "cbb://recover?g=" + s.Group + "&k=" + k + "&c=" + base64.RawURLEncoding.EncodeToString(s.Cert)
 }
 
 // newGroup makes s the root of a new group of 0.6 (cbb new) and returns
@@ -194,90 +180,81 @@ func TestRecovery(t *testing.T) {
 	waitFor(t, "b is still the root on a", rootIs(t, a, "b"))
 }
 
-// TestFFIPhoneRestore: a new Aurora phone restores a computer's group with
-// the recovery sheet once the root is lost (cbb_restore): it takes and
-// checks the records from a member on a connection that carries records
-// only, starts its member with the certificate the recovery key issued it,
-// claims the group with the sheet (recover_with_sheet), and becomes the root
-// once the claim takes effect.
-func TestFFIPhoneRestore(t *testing.T) {
+// TestFFIPhoneChangeRoot: the Aurora app, a member of a computer root's
+// group of 0.6, becomes the group's root with the recovery sheet once the
+// root is lost (change_preview and change_root; docs/protocol.md, section
+// 10, rule 33): it shows who stays first, signs the change with the
+// recovery key and its new root key, the computer follows it, and it then
+// signs as the root. On 0.6 the root changes only so (D-117, D-125): a
+// takeover is refused with the way that is left, and a new phone joins
+// afterwards through the new root's window.
+func TestFFIPhoneChangeRoot(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_PHONE_ON_LINUX is not set")
-	}
 	var h hub
 	pi := startService(t, &h, "pi")
 	a := startService(t, &h, "a")
+	sheet := newGroup(t, pi)
 	pairWith(t, pi, a)
-	noClaimWait(t, pi, a)
-	pi.stop()
-	sheet := addRecovery(t, pi)
-	pi = restartService(t, &h, pi)
-	waitFor(t, "a holds the recovery key's record", func() bool {
-		id, err := group.Load(a.dir)
+	other := startService(t, &h, "other")
+	otherSheet := newGroup(t, other)
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "aurora", "-dir", t.TempDir(), "-peer", a.addr())
+	waitFor(t, "a lists the phone", func() bool { return strings.Contains(listed(a.devices(t)), "aurora") })
+	newRoot := func(req map[string]any) string {
+		t.Helper()
+		b, err := json.Marshal(req)
 		if err != nil {
-			return false
+			t.Fatal(err)
 		}
-		recs, err := group.LoadRecords(a.dir, id.GroupCA.Cert)
-		return err == nil && recs.State().Recovery != nil
-	})
-	pi.stop()
-	id, err := group.Load(a.dir)
-	if err != nil {
-		t.Fatal(err)
+		fmt.Fprintln(in, "NEWROOT "+string(b))
+		return next("NEWROOTED ")
 	}
-
-	// The typed key is not enough, and a sheet of another group finds none.
-	next, _ := phoneOnLinux(t, bin, "-name", "typo", "-restore", "a typo", "-peer", a.addr())
-	if got := next("RESTORE FAILED "); !strings.Contains(got, "not a cbb recovery sheet") {
-		t.Errorf("a typed text: %s", got)
+	text := func(s string) map[string]any { return map[string]any{"text": s} }
+	if got := newRoot(map[string]any{"action": "take_over", "device": "pi"}); !strings.Contains(got, "recovery key") {
+		t.Errorf("a takeover on 0.6: %s", got)
 	}
-	other := *sheet
-	other.Group = "0123456789abcdef"
-	next, _ = phoneOnLinux(t, bin, "-name", "other", "-restore", other.qr(t), "-peer", a.addr())
-	if got := next("RESTORE FAILED "); !strings.Contains(got, "another group") {
+	if got := newRoot(map[string]any{"action": "change_preview", "recovery": text("a typo")}); !strings.Contains(got, "needs a newer cbb") {
+		t.Errorf("a typo: %s", got)
+	}
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": text(otherSheet)}); !strings.Contains(got, "another group") {
 		t.Errorf("a sheet of another group: %s", got)
 	}
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": text(sheet), "leave_out": []string{"aurora"}}); !strings.Contains(got, "stays in the group") {
+		t.Errorf("a change that leaves out the phone itself: %s", got)
+	}
 
-	next, in := phoneOnLinux(t, bin, "-name", "new phone", "-restore", sheet.qr(t), "-dir", t.TempDir(), "-peer", a.addr())
-	restored := strings.Fields(next("Restored "))
-	if len(restored) != 2 || restored[1] != group.Tag(id.GroupCA.Cert) {
-		t.Fatalf("the restored group: %q, not %s", restored, group.Tag(id.GroupCA.Cert))
+	pi.stop()
+	var preview struct {
+		OK struct {
+			Rows []struct {
+				Name    string `json:"name"`
+				Outcome string `json:"outcome"`
+			} `json:"rows"`
+			Waiting bool `json:"waiting"`
+		} `json:"ok"`
 	}
-	manage := func(req string) map[string]any {
-		fmt.Fprintln(in, "MANAGE "+req)
-		var m map[string]any
-		got := next("MANAGED ")
-		if err := json.Unmarshal([]byte(got), &m); err != nil {
-			t.Fatalf("the answer %q: %v", got, err)
-		}
-		return m
+	got := newRoot(map[string]any{"action": "change_preview", "recovery": map[string]any{"qr": sheet}, "leave_out": []string{"pi"}})
+	if err := json.Unmarshal([]byte(got), &preview); err != nil || preview.OK.Waiting {
+		t.Fatalf("who stays: %s", got)
 	}
-	ok := func(m map[string]any) map[string]any {
-		t.Helper()
-		o, ok := m["ok"].(map[string]any)
-		if !ok {
-			t.Fatalf("refused: %v", m)
-		}
-		return o
+	outcomes := map[string]string{}
+	for _, r := range preview.OK.Rows {
+		outcomes[r.Name] = r.Outcome
 	}
-	root, _ := ok(manage(`{"action":"root_ca"}`))["root_ca"].(string)
-	if root == "" {
-		t.Fatal("no root CA")
+	if len(outcomes) != 2 || outcomes["pi"] != "out" || outcomes["a"] != "stays" {
+		t.Fatalf("who stays: %s", got)
 	}
-	if m := manage(`{"action":"recover_with_sheet","sheet":"a typo","root_ca":"` + root + `"}`); m["error"] == nil {
-		t.Fatalf("claimed with a typed text: %v", m)
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": text(sheet), "leave_out": []string{"pi"}}); !strings.Contains(got, `"seq"`) {
+		t.Fatalf("changing the root: %s", got)
 	}
-	ok(manage(`{"action":"recover_with_sheet","sheet":"` + sheet.qr(t) + `","root_ca":"` + root + `"}`))
-	waitFor(t, "the claim takes effect", func() bool {
-		return ok(manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"new phone","os":"aurora"}`))["state"] == "effective"
-	})
-	waitFor(t, "the computer lists the new phone as the root", func() bool {
-		for _, d := range a.devices(t) {
-			if d.Name == "new phone" {
-				return d.Root && d.Role == group.RolePhone
-			}
-		}
-		return false
-	})
+	waitFor(t, "a follows the new root", rootIs(t, a, "aurora"))
+	waitFor(t, "pi is out of the group", func() bool { return !strings.Contains(listed(a.devices(t)), "pi") })
+	if got := newRoot(map[string]any{"action": "change_root", "recovery": text(sheet)}); !strings.Contains(got, "root already") {
+		t.Errorf("the new root changed the root again: %s", got)
+	}
+	// It signs as the root now.
+	fmt.Fprintln(in, `MANAGE {"action":"rename","device":"a","name":"desk"}`)
+	if got := next("MANAGED "); !strings.HasPrefix(got, `{"ok":`) {
+		t.Fatalf("renaming as the new root: %s", got)
+	}
+	waitFor(t, "a takes the new root's name for it", func() bool { return strings.Contains(listed(a.devices(t)), "desk") })
 }

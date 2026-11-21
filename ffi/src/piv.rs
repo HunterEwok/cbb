@@ -9,7 +9,8 @@
 
 use cbb_core::certs::{self, Cert, DeviceId};
 use cbb_core::error::{Error, Result};
-use cbb_member::piv::{self, Card};
+use cbb_core::secret::Zeroizing;
+use cbb_member::piv::{self, Card, recovery};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -71,6 +72,17 @@ struct Args {
     public: Vec<u8>,
     #[serde(with = "certs::b64", default)]
     digest: Vec<u8>,
+    /// With seal: the recovery key, as `change_root` takes it.
+    #[serde(default)]
+    recovery: Value,
+    /// With seal: the person agreed that cbb replaces the card's factory
+    /// management key by a PIN-protected one.
+    #[serde(default)]
+    replace_default: bool,
+    /// With seal: the card's management key, when it is not the
+    /// factory one and not PIN-protected.
+    #[serde(with = "certs::b64", default)]
+    management: Vec<u8>,
 }
 
 /// A member certificate a slot's key issued this phone.
@@ -110,7 +122,21 @@ fn pin_check(card: &mut dyn Card, pin: &str) -> Result<()> {
 ///   `{"keys":[{slot, admin_ca, device, cert, public}]}`, which
 ///   `cbb_restore`'s `card` takes, public the slot's key point;
 /// - `sign` signs `digest` with `slot`'s key, whose point is `public`:
-///   `{"sig"}`, DER.
+///   `{"sig"}`, DER;
+///
+/// and on a group of 0.6 (docs/protocol.md, "The recovery key on a YubiKey
+/// (0.6)"), where the card holds the recovery secret itself:
+///
+/// - `inspect` checks that the card can take the secret, with nothing
+///   written: `{"default_key"}`, true when the card still has its factory
+///   management key, which the app tells the person before `seal`;
+/// - `seal` seals the `recovery` key's secret (the sheet's QR code or text,
+///   as `change_root` takes it) onto the card, replacing a factory
+///   management key only when `replace_default`:
+///   `{"default_key","replaced","warning"}`, warning null or the text the
+///   app shows;
+/// - `open` opens it after the PIN and a touch: `{"secret"}`, base64, which
+///   the app hands to `change_root` as `recovery` `{"secret"}` and drops.
 pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
     answer((|| -> Result<Value> {
         let a: Args = serde_json::from_slice(request)
@@ -155,6 +181,29 @@ pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
                 pin_check(&mut card, &a.pin)?;
                 let sig = piv::sign(&mut card, a.slot, &a.public, &digest)?;
                 Ok(json!({ "sig": b64(&sig) }))
+            }
+            "inspect" => {
+                let i = recovery::inspect(&mut card, &a.pin)?;
+                Ok(json!({ "default_key": i.default_key }))
+            }
+            "seal" => {
+                let read = crate::member::live::recovery_read(&a.recovery)?;
+                let typed = Zeroizing::new(a.management.clone());
+                let mut asked = false;
+                let mut ask = |_alg: u8| {
+                    // The key the app was given, once: a wrong one is not
+                    // tried again.
+                    if typed.is_empty() || std::mem::replace(&mut asked, true) {
+                        return None;
+                    }
+                    Some(Zeroizing::new(typed.to_vec()))
+                };
+                let s = recovery::seal(&mut card, &a.pin, &read.secret, &mut ask, a.replace_default)?;
+                Ok(json!({ "default_key": s.default_key, "replaced": s.replaced, "warning": s.warning }))
+            }
+            "open" => {
+                let secret = recovery::open(&mut card, &a.pin)?;
+                Ok(json!({ "secret": b64(secret.as_ref()) }))
             }
             other => Err(Error::msg(format!("there is no YubiKey step {other:?}"))),
         }

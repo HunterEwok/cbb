@@ -126,6 +126,18 @@ struct ManageArgs {
     forwarder: String,
     #[serde(default)]
     key: String,
+    /// With change_preview and change_root: the group's recovery key, as
+    /// `{qr}` or `{text}` from the sheet or `{secret}` (base64, 32 bytes)
+    /// a YubiKey opened; the devices that do not stay, by name or ID; and
+    /// how the change goes (`writers::Change`).
+    #[serde(default)]
+    recovery: Value,
+    #[serde(default)]
+    leave_out: Vec<String>,
+    #[serde(default)]
+    drop_hubs: bool,
+    #[serde(default)]
+    over_waiting: bool,
     /// With add_watch: the watch's system (watchos, wearos or harmonyos);
     /// its admin key is `key`, a SubjectPublicKeyInfo in base64.
     #[serde(default)]
@@ -175,6 +187,9 @@ impl Me {
     }
 }
 
+/// Why a takeover, a handover or a claim's delay is refused on 0.6 (D-117).
+const ROOT_BY_RECOVERY: &str = "the group's root changes only with its recovery key on the records of 0.6 (change the root with the recovery sheet or YubiKey); a takeover, a handover and a claim's delay are gone";
+
 /// Why a watch does nothing to a group of 0.6 from the wrist.
 const WATCH_SIGNS_NOTHING: &str =
     "on a group of 0.6 the watch shows the group and signs nothing: its emergency actions come with cbb 0.7";
@@ -192,6 +207,25 @@ pub struct Phone {
     panics: u64,
     /// What the phone itself sent or took last, for the one button's rule.
     own: cbb_member::button::Own,
+}
+
+/// The recovery key the app gives: `{"qr"}` or `{"text"}` of the sheet, or
+/// `{"secret"}`, the 32 bytes in base64 that a YubiKey opened
+/// (`cbb_piv`'s `open`).
+pub(crate) fn recovery_read(r: &Value) -> Result<cbb_core::sheet::Read> {
+    Ok(if let Some(t) = r.get("qr").or_else(|| r.get("text")).and_then(Value::as_str) {
+        cbb_core::sheet::read(t).map_err(|e| Error::msg(e.message()))?
+    } else if let Some(s) = r.get("secret") {
+        #[derive(serde::Deserialize)]
+        struct Der(#[serde(with = "certs::b64")] Vec<u8>);
+        let Der(b) = serde_json::from_value(s.clone()).map_err(|_| Error::msg("the recovery secret is not base64"))?;
+        let b = cbb_core::secret::Zeroizing::new(b);
+        let secret: [u8; 32] =
+            b.as_slice().try_into().map_err(|_| Error::msg("the recovery secret is not 32 bytes"))?;
+        cbb_core::sheet::Read { secret: cbb_core::secret::Zeroizing::new(secret), group: None }
+    } else {
+        return Err(Error::msg("give the recovery key: the sheet's QR code or text, or the secret a YubiKey opened"));
+    })
 }
 
 fn addrs(list: &[String]) -> Result<Vec<std::net::SocketAddr>> {
@@ -780,6 +814,12 @@ impl Phone {
                 "make_admin" => self.make_admin(&a, &key, now)?,
                 "key_level" => return self.key_level(&a, &key, now),
                 "add_watch" => return self.add_watch(&a, &key, now),
+                "change_preview" => return self.change_preview(&a),
+                "change_root" => return self.change_root(&a, &key, now),
+                // On 0.6 the root changes only with the recovery key (D-117).
+                "take_over" | "take_handed_over" | "recover" | "hand_over" | "takeover_delay" | "finish_takeover" => {
+                    return Err(Error::msg(ROOT_BY_RECOVERY));
+                }
                 // On 0.6 a watch signs nothing from the wrist (D-124): it
                 // shows the group and may do nothing to a device.
                 "watch_actions" => return Ok(json!({ "actions": [] })),
@@ -992,6 +1032,95 @@ impl Phone {
     /// comes with 0.7).
     pub fn manage_watch(&self) -> Vec<u8> {
         answer::<()>(Err(Error::msg(WATCH_SIGNS_NOTHING)))
+    }
+
+    /// The recovery key the request gives, checked against the group's:
+    /// both its halves, which live only for the call.
+    fn recovery_keys(&self, a: &ManageArgs) -> Result<(cbb_core::identity::FileKey, cbb_core::records::pq::PqKey)> {
+        let read = recovery_read(&a.recovery)?;
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        let recovery = lock(&mesh.set()).recovery().clone();
+        cbb_core::sheet::check(&read, &st.group, &recovery).map_err(|e| Error::msg(e.message()))?;
+        writers::recovery_keys(&read.secret)
+    }
+
+    /// The keys of the devices the person left out of a change of root,
+    /// by name or ID; never this phone, which becomes the root.
+    fn left_out(&self, a: &ManageArgs) -> Result<Vec<cbb_core::records::KeyHash>> {
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        let mut out = Vec::new();
+        for name in &a.leave_out {
+            let d = writers::find(&st, name)?;
+            if d.id == mesh.device() {
+                return Err(Error::msg("this phone becomes the root: it stays in the group"));
+            }
+            out.extend(writers::keys_of(d));
+        }
+        Ok(out)
+    }
+
+    /// Fails when this phone is the group's root already.
+    fn not_root_yet(&self) -> Result<()> {
+        if self.live.mesh.state().root_device == Some(self.live.mesh.device()) {
+            return Err(Error::msg("this phone is the group's root already"));
+        }
+        Ok(())
+    }
+
+    /// Who stays after a change of root with the recovery key, before
+    /// anything is signed (`RecordSet::change_preview`): each other device
+    /// with what the change does to it, and whether a change already waits
+    /// for its records.
+    fn change_preview(&self, a: &ManageArgs) -> Result<Value> {
+        self.not_root_yet()?;
+        drop(self.recovery_keys(a)?);
+        let out = self.left_out(a)?;
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        let me = mesh.device();
+        let devices = self.devices();
+        let rows: Vec<Value> = lock(&mesh.set())
+            .change_preview(&st, &out)
+            .into_iter()
+            .filter(|p| p.device != me)
+            .map(|p| {
+                use cbb_core::records::set::Outcome;
+                let id = id_text(&p.device);
+                let d = devices.iter().find(|d| d.id == id);
+                let outcome = match p.outcome {
+                    Outcome::Stays => "stays",
+                    Outcome::Out => "out",
+                    Outcome::AdminKeptWithSpare => "admin_kept",
+                    Outcome::AdminRightsLost => "admin_lost",
+                    Outcome::Frozen => "frozen",
+                };
+                json!({
+                    "device": id,
+                    "name": d.map(|d| d.name.clone()).unwrap_or_default(),
+                    "os": d.map(|d| d.os.clone()).unwrap_or_default(),
+                    "outcome": outcome,
+                    "frozen": p.frozen,
+                })
+            })
+            .collect();
+        Ok(json!({ "rows": rows, "waiting": st.first_missing.is_some() || st.list_missing.is_some() }))
+    }
+
+    /// Makes this phone the group's root with the recovery key (rule 33):
+    /// both halves of the key sign the change, the app's new root key
+    /// (`key`) its first records, and the devices left out go in the same
+    /// act. Answers the change's step.
+    fn change_root(&self, a: &ManageArgs, key: &AppKey, now: u64) -> Result<Value> {
+        self.not_root_yet()?;
+        let (k1, k2) = self.recovery_keys(a)?;
+        let out = self.left_out(a)?;
+        let me = self.live.mesh.device();
+        let how = writers::Change { drop_hubs: a.drop_hubs, over_waiting: a.over_waiting };
+        let w = self.live.mesh.write_by(key, |set, k| writers::recover_with(set, &k1, &k2, k, &me, &out, how, now))?;
+        (self.log)("cbb: this phone is the group's root now, by the group's recovery key");
+        Ok(json!({ "seq": w.record.body().seq }))
     }
 
     /// The root makes the watch a device of the group whose admin key is
@@ -1331,7 +1460,8 @@ mod tests {
         assert!(error(&manage("remove", "tablet", "")).contains("cannot remove itself"));
         // A command names another device; this phone's own switches are its own.
         assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
-        assert!(error(&manage("hand_over", "tablet", "")).contains("does not work in this build yet"));
+        // The root changes only with the recovery key (D-117).
+        assert!(error(&manage("hand_over", "tablet", "")).contains("only with its recovery key"));
         // The root sets the group's relays, and none again.
         let pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
         let relay = json!({ "action": "relay", "relays": [format!("203.0.113.9:8764 {pin}")], "public": b64(&root.0.public()) });

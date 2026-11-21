@@ -300,7 +300,8 @@ pub unsafe extern "C" fn cbb_restore(
 }
 
 /// Runs one step with the group's recovery key on a YubiKey (src/piv.rs):
-/// `request` is `{"op", ...}` (make, put, issue or sign) and `transmit`
+/// `request` is `{"op", ...}` (make, put, issue or sign; inspect, seal or
+/// open on a group of 0.6) and `transmit`
 /// with `ctx` carries each APDU to the card during this call only. Returns
 /// the answer, `{"ok"}` or `{"error"}`, with its length in `answer_len`.
 ///

@@ -168,7 +168,12 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
  * {"pin","public"} has each recovery key on the card issue a member
  * certificate for public, {"keys":[{"slot","admin_ca","device","cert","public"}]}
  * (public the slot's key point);
- * "sign" {"pin","slot","public","digest"} answers {"sig"}, DER.
+ * "sign" {"pin","slot","public","digest"} answers {"sig"}, DER. On a group
+ * of 0.6 the card holds the recovery secret: "inspect" {"pin"} answers
+ * {"default_key"}; "seal" {"pin","recovery","replace_default","management"}
+ * seals the sheet's secret (recovery as manage's change_root takes it) and
+ * answers {"default_key","replaced","warning"}; "open" {"pin"} answers
+ * {"secret"}, base64, for change_root's recovery.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
 

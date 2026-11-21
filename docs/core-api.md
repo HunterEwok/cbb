@@ -132,7 +132,17 @@ fetched, `attest` answers how many wait, and manage's `attest` records them with
 protocol.md section 17). It adds a watch with manage's `add_watch` (`key`, the watch's admin
 key as a SubjectPublicKeyInfo; `name`, `os`), whose member key nobody keeps (D-124),
 answered `{device, name}`; a watch signs nothing in 0.6, so `watch_actions` answers none and
-`cbb_member_manage_watch` refuses, saying its actions come with 0.7. Everything else, and
+`cbb_member_manage_watch` refuses, saying its actions come with 0.7. A phone in the group
+changes the group's root to itself with the recovery key (D-117, D-125): `recovery` is the
+sheet's `{qr}` or `{text}`, or `{secret}`, the 32 bytes in base64 that `cbb_piv`'s `open` gave
+from a YubiKey, checked against the group's recovery key; `change_preview` (`recovery`,
+`leave_out`: names or device IDs) answers `{rows: [{device, name, os, outcome}], waiting}`
+without signing, each other device's outcome `stays`, `out`, `admin_kept`, `admin_lost`,
+`frozen` or `removed_earlier`, and `change_root` (the same, and `drop_hubs`, `over_waiting`)
+signs the new start with the app's new root key and answers `{seq}`, as `cbb recovery` does on
+a computer (`writers::recover`); `take_over`, `take_handed_over`, `recover`, `hand_over`,
+`takeover_delay` and `finish_takeover` answer that the root changes only with the recovery key.
+`TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else, and
 `cbb_member_servers`, answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest
@@ -355,7 +365,7 @@ answering its admin CA as `{"admin_ca"}` for the card's slot; and `remove_recove
 of its key. The member's
 `root_view` op answers what the records set: `{"delay_ms", "key_level", "recovery",
 "handed_to"}`. `TestFFIPhoneRoot` renames and removes a computer through it and sets the root's
-records, and `TestFFIPhoneTakeover` takes a computer's group over.
+records; that is a group of 0.5's.
 
 A new phone restores a group with its recovery key (docs/protocol.md, section 10, "The recovery
 key") through `cbb_restore` (`ffi/src/restore.rs`, `cbb_lite::restore`): with the sheet's QR
@@ -366,7 +376,7 @@ records only and checks them before anything is signed, and answers `{"device", 
 "group_ca", "roots", "records", "addr"}`, what the app starts its member with. The member's
 manage then claims the group with `recover_with_sheet` (`sheet`, `root_ca`): the sheet's key signs
 the claim in the core and is not kept, and `finish_takeover` goes on as for any claim.
-`TestFFIPhoneRestore` restores a computer's group whose root was lost.
+On a group of 0.6 a phone in no group restores nothing yet: that comes with 0.7 (D-125).
 
 An app without a PIV of its own (the HarmonyOS app) keeps the recovery key on a YubiKey through
 the core (`ffi/src/piv.rs`, `cbb_member::piv`): `cbb_piv` runs one step of PIV and the app's
@@ -380,8 +390,17 @@ member certificate for the phone's member key, `{"keys": [{"slot", "admin_ca", "
 for any group; `sign` (`pin`, `slot`, `public`, `digest`) signs a digest. The claim
 (`recover`) is then signed by the card with `cbb_member_manage_card`: manage's request with the
 key's `pin`, `slot`, `admin_ca` and its point as `public`, the card's error answered when it
-refused. `TestFFIPhoneYubiKey` puts the key on a fake card in `phone-on-linux` and restores and
-claims a phone's group with it.
+refused; those are a group of 0.5's. On a group of 0.6 the card holds the recovery secret
+itself (protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`):
+`inspect` (`pin`) checks that the card can take it, with nothing written, and answers
+`{"default_key"}`, true while the card has its factory management key, which the app tells the
+person; `seal` (`pin`; `recovery`, the sheet's `{qr}` or `{text}`; `replace_default`, the
+person's consent to replace a factory key by a PIN-protected one; `management`, a changed
+key in base64) makes the card's key in slot 95 and writes the sealed secret in `5FC121`,
+answering `{"default_key", "replaced", "warning"}`; `open` (`pin`, then a touch) answers
+`{"secret"}`, base64, which the app hands to manage's `change_root` as `recovery` and drops.
+`TestFFIPhoneYubiKey` seals a group's sheet on a fake YubiKey in `phone-on-linux`, opens it
+after the root is lost and changes the root with it.
 
 A root phone makes its watch an admin with manage's `add_watch` (`key`, the watch's admin key
 as a SubjectPublicKeyInfo; `name`, `os`): the core issues the watch's admin CA and adds its

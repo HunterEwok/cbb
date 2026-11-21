@@ -231,8 +231,9 @@ test plays, every choice drawn from one seed, so that a failure replays from its
 
 What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
 lost and the group taken back with the recovery key, then handed to an admin
-(`TestRecovery`); a new phone restoring the group with the recovery sheet (`TestFFIPhoneRestore`,
-the phone's member on Linux); a device restored from yesterday's backup that gets back in while
+(`TestRecovery`); a phone in the group changing the root with the recovery sheet
+(`TestFFIPhoneChangeRoot`) or with the secret a YubiKey opens (`TestFFIPhoneYubiKey`), the
+phone's member on Linux; a device restored from yesterday's backup that gets back in while
 the group went on (`TestDrillRestoreFromYesterday`); a removed device restored from a backup made
 before its removal that stays out (`TestDrillRemovedStaysOut`). What a real iPhone's Secure
 Enclave and Face ID add is a hand checklist in the bench's test plan, run once before a release.
