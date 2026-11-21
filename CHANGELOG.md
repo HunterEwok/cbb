@@ -16,6 +16,9 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- The member's push sender is tested end to end on the records of 0.6: members of a group, a
+  push service with a fake platform, and a device that registers, goes away and gets one
+  body for a copy and one for a removal, each opened under its registration.
 - `cbb status -relay` prints the group as a blind relay of your own lists it, for
   `cbb relay -group`: its root key and the two halves of its recovery key in hex (public keys
   only); the status's `relay_group` carries the same line.

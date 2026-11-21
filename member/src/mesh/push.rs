@@ -149,7 +149,25 @@ impl pusher::Faces for PushFaces {
 }
 
 fn resolve(address: &str) -> Option<SocketAddr> {
+    #[cfg(test)]
+    if let Some(at) = *TEST_SERVICE.lock().unwrap() {
+        return Some(at);
+    }
     address.to_socket_addrs().ok()?.next()
+}
+
+/// Where the tests' push service listens, in place of the address its name
+/// resolves to (`push_e2e`).
+#[cfg(test)]
+pub(super) static TEST_SERVICE: Mutex<Option<SocketAddr>> = Mutex::new(None);
+
+/// The number of the registration of `device` kept in dir's file, for the
+/// tests.
+#[cfg(test)]
+pub(super) fn saved_seq(dir: &Path, device: &DeviceId) -> Option<u64> {
+    let all = read_file(&std::fs::read(dir.join(FILE)).ok()?)?;
+    let (_, f) = all.into_iter().find(|(d, _)| d == device)?;
+    Registration::read(&frame::read(&f, frame::LIMIT_MEMBER).ok()?.map).ok().map(|r| r.seq)
 }
 
 /// Where the registrations are kept: each device's message `push`, its

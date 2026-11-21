@@ -322,7 +322,12 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   until it expires for the registrations made under it and never for a new one. The phones'
   events (rule 33: a device joined or was removed, the root changed) come from the records
   applied, each with the first 16 bytes of its record's ID as its ID, sent by a hub, else
-  the root's or an admin's device ([core API](core-api.md), "Push").
+  the root's or an admin's device ([core API](core-api.md), "Push"). `mesh::push_e2e` runs it
+  end to end: three members, a push service with a fake platform that `keys.json` names, a
+  device that registers and goes away, one body for a copy (from the origin or the hub) and
+  one for a removal, none while it is connected, each opened under its registration, and a
+  send under a replaced registration answered `stale`; the same with the phones' app follows
+  when the phones run on the records of 0.6 (D-122).
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in

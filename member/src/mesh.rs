@@ -1354,5 +1354,8 @@ mod push;
 #[path = "mesh/push_off.rs"]
 mod push;
 
+#[cfg(all(test, feature = "tunnel"))]
+#[path = "mesh/push_e2e.rs"]
+mod push_e2e;
 #[cfg(test)]
 pub(crate) mod tests;
