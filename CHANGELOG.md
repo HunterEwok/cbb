@@ -2036,6 +2036,11 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- On the records of 0.6 a hub that moves (`cbb global move`) keeps serving its clients away
+  from home until the new hub serves and then for up to 5 minutes, while they meet the new
+  hub at home or at the group's relay and take its offer there; only then does it tell them
+  it moved. A client away with neither home nor a relay loses the hub until it meets the new
+  one. The new hub listens on the port of the address it is given.
 - The cleaning of a remote paste's text and its refusal of nothing but control characters are
   in the core (`cbb_core::remotepaste`), so that `cbb` and the phones' apps share them.
 - The 0.6 format's `hub` command no longer carries its clients (field 12, retired and refused):

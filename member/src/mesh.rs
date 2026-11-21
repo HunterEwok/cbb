@@ -511,6 +511,11 @@ impl Mesh {
         if as_hub { c.as_hub } else { c.to_hub }
     }
 
+    /// The address the connection with peer comes from, while connected.
+    pub fn peer_addr(&self, peer: &DeviceId) -> Option<std::net::SocketAddr> {
+        self.conns.lock().unwrap().get(peer)?.sock.peer_addr().ok()
+    }
+
     /// The devices connected now.
     pub fn connected(&self) -> Vec<DeviceId> {
         self.conns.lock().unwrap().keys().copied().collect()

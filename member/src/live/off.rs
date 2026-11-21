@@ -40,6 +40,10 @@ impl Live {
         Err(Error::msg("this device is no hub of the group"))
     }
 
+    pub fn hand_hub_to(self: &Arc<Self>, _to: DeviceId) -> Result<()> {
+        Err(Error::msg("this device is no hub of the group"))
+    }
+
     pub(crate) fn relay_status(&self) -> Option<crate::control::Relay> {
         None
     }

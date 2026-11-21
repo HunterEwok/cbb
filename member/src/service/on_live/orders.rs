@@ -166,8 +166,11 @@ impl Service {
             .first()
             .map(|(a, pin)| (a.clone(), base64::engine::general_purpose::STANDARD.encode(pin)))
             .unwrap_or_default();
-        // A hub set again keeps the UDP port it listens on.
-        let port = away.hub_settings().map_or(0, |(_, _, port)| i64::from(port));
+        // A hub set again keeps the UDP port it listens on; a new one
+        // listens on the port of the address it is reached at, which the
+        // router away from home forwards.
+        let given = h.hub.as_ref().and_then(|(e, _)| e.parse::<std::net::SocketAddr>().ok()).map_or(0, |a| a.port());
+        let port = away.hub_settings().map_or(i64::from(given), |(_, _, port)| i64::from(port));
         let hdr = Header {
             addrs: h.hub.iter().map(|(e, _)| e.clone()).collect(),
             port,
@@ -260,8 +263,13 @@ impl Service {
                 let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
                 let name = self.live_order(live, &h.device, &o)?;
                 note_forwarders(live, &h.device, &o)?;
-                live.stop_being_hub()?;
-                (self.log)(&format!("cbb: the hub moved to {name}"));
+                // The clients away move once the new hub serves (D-122).
+                let to = writers::find(&live.mesh.state(), &h.device)?.id;
+                // The handover outlives this command: it holds the member.
+                let arc =
+                    self.live().filter(|a| std::ptr::eq(&**a, live)).ok_or_else(|| Error::msg("the group stopped"))?;
+                arc.hand_hub_to(to)?;
+                (self.log)(&format!("cbb: the hub moves to {name} once it serves"));
                 Ok(name)
             }
         }

@@ -28,7 +28,7 @@ impl Live {
         self.mesh.on_connected(Box::new(move |peer| {
             if let Some(l) = w.upgrade() {
                 l.tunnel_toward(peer);
-                if l.hub.lock().unwrap().is_some() {
+                if l.hub.lock().unwrap().is_some() && l.handoff.lock().unwrap().is_none() {
                     l.hubs_say(Some(peer), cbb_core::hubkey::HubSays::Serving);
                 }
             }
@@ -220,6 +220,78 @@ impl Live {
             }
         }
         away.unhub()
+    }
+
+    /// This hub moves to the hub `to`, which the order made one (option C
+    /// of the move, D-122): it tells the other hubs it stopped, so that the
+    /// new hub serves even below it in the order, and keeps serving the
+    /// clients that came through its tunnel meanwhile, which meet the new
+    /// hub at home or at the group's relay and take its offer there. Once
+    /// the new hub said it serves, it sends them `moved` and stops when
+    /// none comes through its tunnel any more, or after [`move_linger`];
+    /// it stops after that time too when the new hub never said it serves.
+    /// A client away with neither home nor a relay holds no offer of the
+    /// new hub, and loses the hub until it meets it.
+    pub fn hand_hub_to(self: &Arc<Self>, to: DeviceId) -> crate::error::Result<()> {
+        let away = self.away.get().ok_or_else(|| crate::error::Error::msg("this device is no hub of the group"))?;
+        if !away.is_hub_now() {
+            return Err(crate::error::Error::msg("this device is no hub of the group"));
+        }
+        if self.handoff.lock().unwrap().replace(to).is_some() {
+            return Ok(());
+        }
+        self.hubs_say(None, cbb_core::hubkey::HubSays::Stopped);
+        let w = Arc::downgrade(self);
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            let mut serving: Option<Instant> = None;
+            loop {
+                std::thread::sleep(Duration::from_millis(500));
+                let Some(l) = w.upgrade() else { return };
+                if l.is_closed() || !l.away.get().is_some_and(|a| a.is_hub_now()) {
+                    l.handoff.lock().unwrap().take();
+                    return;
+                }
+                // Moved again meanwhile: the last order counts.
+                let Some(to) = *l.handoff.lock().unwrap() else { return };
+                if serving.is_none()
+                    && l.mesh.connected().contains(&to)
+                    && l.ladder.lock().unwrap().serving.contains(&to)
+                {
+                    l.logf(&format!("cbb: {} serves now; this hub hands its clients over", id_text4(&to)));
+                    serving = Some(Instant::now());
+                }
+                let done = match serving {
+                    Some(t) => l.tunnel_clients() == 0 || t.elapsed() >= move_linger(),
+                    None => started.elapsed() >= move_linger(),
+                };
+                if !done {
+                    continue;
+                }
+                if serving.is_none() {
+                    l.logf(&format!("cbb: {} did not say it serves; this hub stops all the same", id_text4(&to)));
+                }
+                l.handoff.lock().unwrap().take();
+                match l.stop_being_hub() {
+                    Ok(()) => l.logf(&format!("cbb: the hub moved to {}", id_text4(&to))),
+                    Err(e) => l.logf(&format!("cbb: the hub's move: {}", e.for_log())),
+                }
+                return;
+            }
+        });
+        Ok(())
+    }
+
+    /// The clients held whose connection with this hub comes through its
+    /// tunnel: from the loopback port the tunnel dialed from.
+    fn tunnel_clients(&self) -> usize {
+        let Some(hub) = self.hub.lock().unwrap().as_ref().map(|r| r.hub.clone()) else { return 0 };
+        let Some(away) = self.away.get() else { return 0 };
+        away.held_devices()
+            .iter()
+            .filter_map(|d| self.mesh.peer_addr(d))
+            .filter(|a| a.ip().is_loopback() && hub.tunnel_addr(a.port()).is_some())
+            .count()
     }
 
     /// Gives the hub's tunnel, while it runs, the clients and keys held.
@@ -423,7 +495,9 @@ fn serve_hub(w: &Weak<Live>) {
         let settings = away.hub_settings();
         // A hub stands by while a hub above it serves: its clients go to
         // that one.
-        let standby = settings.is_some() && l.stands_by();
+        // A hub that moves keeps serving its clients until it hands them
+        // over, whatever the hubs above it say.
+        let standby = settings.is_some() && l.handoff.lock().unwrap().is_none() && l.stands_by();
         l.standing_by.store(standby, std::sync::atomic::Ordering::SeqCst);
         let is_hub = settings.is_some();
         let settings = settings.filter(|_| !standby);
@@ -506,6 +580,15 @@ fn started(away: &Away) -> Started {
         away.live_forwarder(false).map(|f| f.endpoint),
         away.hub_forwarder_pins(),
     )
+}
+
+/// How long a hub that moves keeps serving its clients after the new hub
+/// serves: five minutes, or CBB_TEST_MOVE_LINGER seconds in a build for
+/// tests.
+fn move_linger() -> Duration {
+    crate::testbuild::env("CBB_TEST_MOVE_LINGER")
+        .and_then(|v| v.parse().ok())
+        .map_or(Duration::from_secs(300), Duration::from_secs)
 }
 
 /// How long a hub that lost the hub above it waits before it serves again:

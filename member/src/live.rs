@@ -149,6 +149,10 @@ pub struct Live {
     /// Whether this hub stands by, a hub above it serving.
     #[cfg(feature = "tunnel")]
     standing_by: std::sync::atomic::AtomicBool,
+    /// The hub this one moves to, while it still serves its clients away
+    /// from home (`Live::hand_hub_to`).
+    #[cfg(feature = "tunnel")]
+    handoff: Mutex<Option<DeviceId>>,
     /// The link to the group's blind relay, while the device meets the
     /// group there.
     #[cfg(feature = "tunnel")]
@@ -213,6 +217,8 @@ impl Live {
             toward: Mutex::new(HashMap::new()),
             #[cfg(feature = "tunnel")]
             standing_by: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tunnel")]
+            handoff: Mutex::new(None),
             #[cfg(feature = "tunnel")]
             meeting: Mutex::new(None),
             #[cfg(feature = "tunnel")]

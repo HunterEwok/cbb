@@ -3144,28 +3144,32 @@ hub's offer only from its own `tunnel` to that hub.
 
 ### Moving the hub
 
-The hub, a computer or a phone, hands its role to an admin computer ([design.md](design.md),
+The hub, a computer or a phone, hands its role to another of the group's hubs ([design.md](design.md),
 "The phone as the hub"): `cbb global move DEVICE [-forwarder ADDR -forwarder-key KEY]
-[address:port...]` on a computer, "Move the hub to a computer" in both apps. Implemented in
-Go (`internal/service/movehub.go`), both kits (`Commands.hub`, `PhoneHub.movedOffer`) and
-both apps; `TestMoveHub` moves a hub with a client away from home.
+[address:port...]` on a computer, "Move the hub to a computer" in the apps. On the records
+of 0.6 no hub passes on another's offer or clients, and no wire is added for a move (D-122);
+`TestMoveHub` moves a hub with a client away from home that has the group's relay.
 
 1. The old hub sends the new one a `hub` command (section 15) with the new hub's forwarder
-   and addresses, by default its own forwarder, and every client it keeps: device ID, public
-   key and preshared key. It includes itself, with its own keys as a client.
-2. The new hub must be an admin or a device with `forward_only`, with sync away from home on
-   and without a relay; it refuses otherwise. It becomes the hub with that forwarder and those addresses, takes each client
-   whose device its records list, with the keys it was given and no certificate chain yet,
-   and answers `done` with its offer (`tunnel` in the result, without `psk`). A client
-   without a chain stays while the records list its device; its chain is filled in on its
-   first hello.
-3. The old hub sends each client connected to it the new hub's offer with that client's own
-   preshared key, `hub`, the new hub's device ID, and `moved`. After 2 s it stops being the
-   hub and becomes the new hub's client with its own keys.
+   and addresses, by default its own forwarder. The new hub must be one the records make a
+   hub (the root's hubs record, or an admin); it becomes the hub with that forwarder and
+   those addresses, listening on the port of the first address unless it was a hub already,
+   and answers `done`.
+2. The old hub sends the other hubs `hubs` with `stopped`, so that the new hub serves even
+   below it in the order (after the grace a hub keeps when the hub above it goes), and
+   keeps serving the clients that came through its tunnel; while it hands over it does not
+   stand by for a hub above it.
+3. A client away meets the new hub at home or at the group's relay, sends it `tunnel` there
+   (t 15) as on any connection (the start of this section) and takes its offer from the
+   answer.
+4. Once the new hub said it serves (`hubs` with `serving`), the old hub sends each client
+   connected to it an offer that says it `moved`, and stops being a hub when no client comes
+   through its tunnel any more, or 5 minutes after the new hub serves; it stops after 5
+   minutes too when the new hub never says it serves. A client that gets `moved` ends the
+   connection through the old hub and takes the next hub in the order whose offer it holds.
 
-A client keeps the new hub's offer by the rules above and forgets the old hub's. A client
-that was away from home and not connected at the move gets the new hub's offer on its next
-connection to it, or to any other hub that passes it on.
+A client away with neither home nor a relay holds no offer of the new hub at the move: it
+loses the hub until it meets the new hub, at home or at a relay, and takes its offer there.
 
 When an admin phone takes the group over from a lost root phone that was the hub, it turns
 its own hub on; the clients keep its offer as any hub's.

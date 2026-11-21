@@ -1372,7 +1372,11 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   TV in another city) move without coming home; then it becomes the new hub's client. The
   new hub admits each key only for a device the group's records list. A computer that is
   the hub moves the role the same way (`cbb global move`). Built in 0.5 (docs/protocol.md,
-  section 11, "Moving the hub").
+  section 11, "Moving the hub"). On the records of 0.6 no hub passes on another's offer or
+  clients: the old hub keeps serving its clients until the new one serves, they meet the new
+  hub at home or at the group's relay and take its offer there, and then the old hub tells
+  them it moved; a client away with neither home nor a relay loses the hub until it meets
+  the new one (D-122).
 - **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
   takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
   its offer because the records no longer make the lost phone an admin. Clients at home learn

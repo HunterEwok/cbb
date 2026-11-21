@@ -47,6 +47,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_SOCKET` | `cbb`, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | `cbb` | Another state directory. |
+| `CBB_TEST_MOVE_LINGER` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that moves keeps serving its clients after the new hub serves, in place of 300. Never set by hand. |
 | `CBB_TEST_STANDBY_GRACE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
 | `CBB_TEST_UP_CHECK` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
 | `CBB_TEST_HUB_KEY_AHEAD` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
