@@ -494,11 +494,12 @@ export class AppModel {
     this.recoveryQr = '';
   }
 
-  // Seals the sheet's recovery key onto a YubiKey held to the phone, after
+  // Seals the sheet's recovery key onto a YubiKey held to the phone or plugged in, after
   // its PIN (cbb_piv seal; docs/protocol.md, "The recovery key on a YubiKey
   // (0.6)"); replaceDefault is the person's consent to replace a factory
   // management key. Answers what to tell the person, or shows the failure.
-  async sealOnCard(context: common.UIAbilityContext, pin: string, replaceDefault: boolean): Promise<string> {
+  async sealOnCard(context: common.UIAbilityContext, pin: string, replaceDefault: boolean,
+    plugged: () => void = () => {}): Promise<string> {
     if (this.recoveryQr.length === 0 || this.busy) {
       return '';
     }
@@ -507,7 +508,10 @@ export class AppModel {
       'op': 'seal', 'pin': pin, 'recovery': { 'qr': this.recoveryQr } as Record<string, Object>,
       'replace_default': replaceDefault
     };
-    const run = await withCard(context, () => cbb.piv(JSON.stringify(request)));
+    const run = await withCard(context, (transport: string) => {
+      request['transport'] = transport;
+      return cbb.piv(JSON.stringify(request));
+    }, plugged);
     this.busy = false;
     const failure = run.failure ?? read<Sealed>(run.answer, 'yubikey: seal').failure;
     if (failure !== undefined) {
@@ -523,13 +527,17 @@ export class AppModel {
   // Opens the recovery key on a YubiKey held to the phone, after its PIN
   // and a touch, for a change of root: the secret in base64, or undefined
   // with the failure shown. The caller drops it after that one change.
-  async openCard(context: common.UIAbilityContext, pin: string): Promise<string | undefined> {
+  async openCard(context: common.UIAbilityContext, pin: string,
+    plugged: () => void = () => {}): Promise<string | undefined> {
     if (this.busy) {
       return undefined;
     }
     this.busy = true;
     const request: Record<string, Object> = { 'op': 'open', 'pin': pin };
-    const run = await withCard(context, () => cbb.piv(JSON.stringify(request)));
+    const run = await withCard(context, (transport: string) => {
+      request['transport'] = transport;
+      return cbb.piv(JSON.stringify(request));
+    }, plugged);
     this.busy = false;
     if (run.failure !== undefined) {
       this.show(Errors.shown(run.failure));

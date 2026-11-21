@@ -149,6 +149,7 @@
     {"name": "error_yubikey_none", "value": "No se acercó ninguna YubiKey al teléfono ni se conectó ninguna."},
     {"name": "error_yubikey_old", "value": "Esta YubiKey tiene un firmware anterior al 5.3, que la clave de recuperación necesita. Usa la hoja impresa."},
     {"name": "error_yubikey_taken", "value": "Esta YubiKey guarda otra cosa en el lugar de la clave de recuperación. Usa otra YubiKey."},
+    {"name": "error_yubikey_usb_denied", "value": "No se permitió al teléfono usar la YubiKey por USB. Vuelve a conectarla y permítelo."},
     {"name": "error_yubikey_wrong_pin", "value": "PIN incorrecto. Tras tres intentos fallidos la YubiKey bloquea su PIN."},
     {"name": "event_admin", "value": "%s ahora es admin."},
     {"name": "event_frozen", "value": "%s fue congelado: los demás lo rechazan hasta que un admin lo descongele."},
@@ -479,6 +480,7 @@
     {"name": "yubikey_seal_keep", "value": "Mantener su clave y acercarla"},
     {"name": "yubikey_seal_replace", "value": "Reemplazar su clave de fábrica y acercarla"},
     {"name": "yubikey_sealed", "value": "La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos."},
-    {"name": "yubikey_sealed_default_key", "value": "La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja."}
+    {"name": "yubikey_sealed_default_key", "value": "La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja."},
+    {"name": "yubikey_touch_usb", "value": "Toca la YubiKey cuando parpadee y mantenla conectada hasta que desaparezca este mensaje."}
   ]
 }

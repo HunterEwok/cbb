@@ -371,11 +371,16 @@ std::vector<uint8_t> askAuth(const std::vector<uint8_t> &challenge, std::string 
     return askApp(authFn, challenge, "auth", authTimeout, why);
 }
 
-// ---- the YubiKey over NFC ----
+// ---- the YubiKey over NFC or USB ----
 
 // The app's function that sends an APDU to the YubiKey on its IsoDep tag
 // and answers a Promise of the card's answer, its status word last (setCard).
+// On USB (cardBulk) it moves the bytes of the YubiKey's CCID interface for
+// the core's transport ccid_bulk instead: bytes to write answer [0], an
+// empty buffer reads one bulk-in transfer and answers [0] and what came,
+// which may be nothing.
 napi_threadsafe_function cardFn = nullptr;
+bool cardBulk = false;
 
 // How long one APDU may take, a signature with the user's touch included.
 constexpr auto cardTimeout = std::chrono::seconds(30);
@@ -387,6 +392,15 @@ int32_t transmitCard(void *, const uint8_t *apdu, size_t len, uint8_t *out, size
         return 2;
     std::string why;
     const std::vector<uint8_t> a = askApp(cardFn, std::vector<uint8_t>(apdu, apdu + len), "card", cardTimeout, &why);
+    if (cardBulk) {
+        // The leading 0 tells an answer of nothing from a failure.
+        if (a.empty() || a[0] != 0 || a.size() - 1 > cap)
+            return 1;
+        if (a.size() > 1)
+            std::memcpy(out, a.data() + 1, a.size() - 1);
+        *outLen = a.size() - 1;
+        return 0;
+    }
     if (a.size() < 2 || a.size() > cap)
         return 1;
     std::memcpy(out, a.data(), a.size());
@@ -492,11 +506,16 @@ napi_value groupNew(napi_env env, napi_callback_info info)
     });
 }
 
-// setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>): void, the
-// YubiKey that piv speaks to.
+// setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>, bulk?: boolean):
+// void, the YubiKey that piv speaks to; bulk when fn moves the bytes of its
+// CCID interface on USB.
 napi_value setCard(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
+    bool bulk = false;
+    if (a.n > 1)
+        napi_get_value_bool(env, a.v[1], &bulk);
+    cardBulk = bulk;
     if (cardFn)
         napi_release_threadsafe_function(cardFn, napi_tsfn_release);
     napi_value name = str(env, "cbb-card");

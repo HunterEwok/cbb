@@ -33,7 +33,10 @@ export const groupNew: (request: string) => Promise<string>;
 // The YubiKey on the phone's NFC: the app's function sends an APDU to the
 // IsoDep tag and answers the card's answer, its status word last; piv runs a
 // step of cbb_piv on it (inspect, seal or open: the recovery secret of 0.6).
-export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>) => void;
+// With bulk, the YubiKey on USB-C: the function writes the bytes it is given
+// to the CCID interface and answers [0], or for an empty buffer reads one
+// transfer and answers [0] and what came (the request's transport ccid_bulk).
+export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>, bulk?: boolean) => void;
 // The watch that memberManageWatch has sign: it is shown the body and
 // answers its signature, DER.
 export const setWatch: (sign: (body: ArrayBuffer) => Promise<ArrayBuffer>) => void;

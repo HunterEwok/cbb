@@ -149,6 +149,7 @@
     {"name": "error_yubikey_none", "value": "कोई YubiKey न फ़ोन से सटाई गई, न उसमें लगाई गई।"},
     {"name": "error_yubikey_old", "value": "इस YubiKey का फ़र्मवेयर 5.3 से पुराना है, जिसकी रिकवरी कुंजी को ज़रूरत है। इसके बजाय छपी हुई शीट का उपयोग करें।"},
     {"name": "error_yubikey_taken", "value": "इस YubiKey में रिकवरी कुंजी की जगह कुछ और रखा है। कोई दूसरा YubiKey उपयोग करें।"},
+    {"name": "error_yubikey_usb_denied", "value": "फ़ोन को USB पर YubiKey इस्तेमाल करने की अनुमति नहीं मिली। उसे फिर से लगाएँ और अनुमति दें।"},
     {"name": "error_yubikey_wrong_pin", "value": "ग़लत PIN। तीन ग़लत कोशिशों के बाद YubiKey अपना PIN ब्लॉक कर देती है।"},
     {"name": "event_admin", "value": "%s अब एडमिन है।"},
     {"name": "event_frozen", "value": "%s को फ़्रीज़ कर दिया गया: जब तक कोई एडमिन इसे अनफ़्रीज़ न करे, बाकी इसे मना करेंगे।"},
@@ -479,6 +480,7 @@
     {"name": "yubikey_seal_keep", "value": "इसकी कुंजी रखें, फिर पास लाएँ"},
     {"name": "yubikey_seal_replace", "value": "इसकी फ़ैक्टरी कुंजी बदलें, फिर पास लाएँ"},
     {"name": "yubikey_sealed", "value": "रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।"},
-    {"name": "yubikey_sealed_default_key", "value": "रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।"}
+    {"name": "yubikey_sealed_default_key", "value": "रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।"},
+    {"name": "yubikey_touch_usb", "value": "YubiKey के चमकने पर उसे छुएँ, और यह संदेश जाने तक उसे लगाए रखें।"}
   ]
 }

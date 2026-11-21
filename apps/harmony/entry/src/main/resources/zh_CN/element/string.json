@@ -149,6 +149,7 @@
     {"name": "error_yubikey_none", "value": "没有 YubiKey 贴近手机，也没有插入。"},
     {"name": "error_yubikey_old", "value": "此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。"},
     {"name": "error_yubikey_taken", "value": "此 YubiKey 在存放恢复密钥的位置保存了其他内容。请使用另一个 YubiKey。"},
+    {"name": "error_yubikey_usb_denied", "value": "未允许手机通过 USB 使用 YubiKey。请重新插入并允许。"},
     {"name": "error_yubikey_wrong_pin", "value": "PIN 错误。连续三次错误后 YubiKey 会锁定其 PIN。"},
     {"name": "event_admin", "value": "%s 现在是管理员。"},
     {"name": "event_frozen", "value": "%s 已被冻结：在管理员解冻前，其他设备会拒绝它。"},
@@ -479,6 +480,7 @@
     {"name": "yubikey_seal_keep", "value": "保留其密钥，然后贴近"},
     {"name": "yubikey_seal_replace", "value": "替换其出厂密钥，然后贴近"},
     {"name": "yubikey_sealed", "value": "恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。"},
-    {"name": "yubikey_sealed_default_key", "value": "恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。"}
+    {"name": "yubikey_sealed_default_key", "value": "恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。"},
+    {"name": "yubikey_touch_usb", "value": "YubiKey 闪烁时请触摸它，并保持插入，直到此消息消失。"}
   ]
 }

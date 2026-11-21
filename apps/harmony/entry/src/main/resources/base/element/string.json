@@ -150,6 +150,7 @@
     {"name": "error_yubikey_none", "value": "No YubiKey was held to the phone or plugged in."},
     {"name": "error_yubikey_old", "value": "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead."},
     {"name": "error_yubikey_taken", "value": "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey."},
+    {"name": "error_yubikey_usb_denied", "value": "The phone was not allowed to use the YubiKey on USB. Plug it in again and allow it."},
     {"name": "error_yubikey_wrong_pin", "value": "Wrong PIN. After three wrong tries the YubiKey blocks its PIN."},
     {"name": "event_admin", "value": "%s is an admin now."},
     {"name": "event_frozen", "value": "%s was frozen: the others refuse it until an admin unfreezes it."},
@@ -481,6 +482,7 @@
     {"name": "yubikey_seal_keep", "value": "Keep its key, then hold it"},
     {"name": "yubikey_seal_replace", "value": "Replace its factory key, then hold it"},
     {"name": "yubikey_sealed", "value": "The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places."},
-    {"name": "yubikey_sealed_default_key", "value": "The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too."}
+    {"name": "yubikey_sealed_default_key", "value": "The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too."},
+    {"name": "yubikey_touch_usb", "value": "Touch the YubiKey when it blinks, and keep it plugged in until this message goes."}
   ]
 }

@@ -11,8 +11,8 @@
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
-import { nfcController } from '@kit.ConnectivityKit';
 import { t } from '../core/Text';
+import { canReachCard } from '../common/YubiKey';
 import { scanQr } from '../common/Scan';
 import { Errors } from '../core/Errors';
 import { app, ChangePreview, ChangeRow } from '../model/AppModel';
@@ -40,8 +40,8 @@ struct ChangeRoot {
     this.pin = '';
   }
 
-  hasNfc(): boolean {
-    return canIUse('SystemCapability.Communication.NFC.Core') && nfcController.isNfcAvailable();
+  hasCard(): boolean {
+    return canReachCard();
   }
 
   async start(r: Record<string, Object>): Promise<void> {
@@ -83,7 +83,10 @@ struct ChangeRoot {
     const pin = this.pin;
     this.pin = '';
     this.askingPin = false;
-    const secret = await app.openCard(getContext(this) as common.UIAbilityContext, pin);
+    const secret = await app.openCard(getContext(this) as common.UIAbilityContext, pin, () => {
+      this.note = t('yubikey_touch_usb');
+    });
+    this.note = '';
     if (secret !== undefined) {
       this.note = t('yubikey_opened');
       // The secret goes to the core for this change only.
@@ -133,6 +136,9 @@ struct ChangeRoot {
         PageTitle({ title: $r('app.string.change_root'), back: () => {
           router.back();
         } })
+        if (this.note.length > 0) {
+          Text(this.note).fontColor($r('app.color.secondary'))
+        }
         if (this.preview === undefined) {
           Text(t('change_root_tip')).fontColor($r('app.color.text'))
           Button($r('app.string.scan'), { type: ButtonType.Capsule }).width('100%').enabled(!app.busy).onClick(() => {
@@ -151,7 +157,7 @@ struct ChangeRoot {
               this.start({ 'text': this.typed } as Record<string, Object>);
             })
           Text(t('change_root_key_hint')).fontSize(14).fontColor($r('app.color.secondary'))
-          if (this.hasNfc()) {
+          if (this.hasCard()) {
             if (!this.askingPin) {
               Button(t('yubikey_open'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
                 .width('100%')
@@ -177,9 +183,6 @@ struct ChangeRoot {
             }
           }
         } else {
-          if (this.note.length > 0) {
-            Text(this.note).fontColor($r('app.color.secondary'))
-          }
           Text(t('change_root_who_stays')).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
           ForEach(this.preview.rows, (row: ChangeRow) => {
             Row({ space: 8 }) {

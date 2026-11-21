@@ -149,6 +149,7 @@
     {"name": "error_yubikey_none", "value": "لم يُقرَّب أي YubiKey من الهاتف ولم يُوصَل به."},
     {"name": "error_yubikey_old", "value": "إصدار البرنامج الثابت لهذا الـ YubiKey أقدم من 5.3 الذي يحتاجه مفتاح الاسترداد. استخدم الورقة المطبوعة بدلًا منه."},
     {"name": "error_yubikey_taken", "value": "يحمل هذا الـ YubiKey شيئًا آخر في المكان المخصص لمفتاح الاسترداد. استخدم YubiKey آخر."},
+    {"name": "error_yubikey_usb_denied", "value": "لم يُسمح للهاتف باستخدام YubiKey عبر USB. أعد توصيله واسمح بذلك."},
     {"name": "error_yubikey_wrong_pin", "value": "رقم سري خاطئ. بعد ثلاث محاولات خاطئة يحظر YubiKey رقمه السري."},
     {"name": "event_admin", "value": "أصبح %s مشرفًا الآن."},
     {"name": "event_frozen", "value": "جُمّد %s: يرفضه الآخرون حتى يُلغي مشرف تجميده."},
@@ -479,6 +480,7 @@
     {"name": "yubikey_seal_keep", "value": "احتفظ بمفتاحه ثم قرّبه"},
     {"name": "yubikey_seal_replace", "value": "استبدل مفتاح المصنع ثم قرّبه"},
     {"name": "yubikey_sealed", "value": "مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين."},
-    {"name": "yubikey_sealed_default_key", "value": "مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا."}
+    {"name": "yubikey_sealed_default_key", "value": "مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا."},
+    {"name": "yubikey_touch_usb", "value": "المس YubiKey عندما يومض، وأبقِه موصولًا حتى تختفي هذه الرسالة."}
   ]
 }

@@ -149,6 +149,7 @@
     {"name": "error_yubikey_none", "value": "Hakuna YubiKey iliyoshikiliwa kwenye simu wala kuchomekwa."},
     {"name": "error_yubikey_old", "value": "YubiKey hii ina programu dhibiti ya zamani kuliko 5.3, ambayo ufunguo wa urejeshaji unahitaji. Tumia karatasi iliyochapishwa badala yake."},
     {"name": "error_yubikey_taken", "value": "YubiKey hii ina kitu kingine mahali ufunguo wa urejeshaji unapokaa. Tumia YubiKey nyingine."},
+    {"name": "error_yubikey_usb_denied", "value": "Simu haikuruhusiwa kutumia YubiKey kupitia USB. Ichomeke tena na uruhusu."},
     {"name": "error_yubikey_wrong_pin", "value": "PIN si sahihi. Baada ya majaribio matatu yasiyo sahihi YubiKey huzuia PIN yake."},
     {"name": "event_admin", "value": "%s sasa ni msimamizi."},
     {"name": "event_frozen", "value": "%s imegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe."},
@@ -479,6 +480,7 @@
     {"name": "yubikey_seal_keep", "value": "Acha ufunguo wake, kisha ushikilie"},
     {"name": "yubikey_seal_replace", "value": "Badilisha ufunguo wake wa kiwandani, kisha ushikilie"},
     {"name": "yubikey_sealed", "value": "Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti."},
-    {"name": "yubikey_sealed_default_key", "value": "Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia."}
+    {"name": "yubikey_sealed_default_key", "value": "Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia."},
+    {"name": "yubikey_touch_usb", "value": "Gusa YubiKey inapomweka, na uiache imechomekwa hadi ujumbe huu uondoke."}
   ]
 }

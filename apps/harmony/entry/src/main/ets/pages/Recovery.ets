@@ -8,8 +8,8 @@
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
-import { nfcController } from '@kit.ConnectivityKit';
 import { t } from '../core/Text';
+import { canReachCard } from '../common/YubiKey';
 import { app } from '../model/AppModel';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
 import { QrView } from '../components/QrView';
@@ -26,8 +26,8 @@ struct Recovery {
     app.forgetRecovery();
   }
 
-  hasNfc(): boolean {
-    return canIUse('SystemCapability.Communication.NFC.Core') && nfcController.isNfcAvailable();
+  hasCard(): boolean {
+    return canReachCard();
   }
 
   // The person chose whether a factory management key is replaced.
@@ -35,7 +35,9 @@ struct Recovery {
     const pin = this.pin;
     this.pin = '';
     this.askingPin = false;
-    this.sealed = await app.sealOnCard(getContext(this) as common.UIAbilityContext, pin, replaceDefault);
+    this.sealed = await app.sealOnCard(getContext(this) as common.UIAbilityContext, pin, replaceDefault, () => {
+      this.sealed = t('yubikey_touch_usb');
+    });
   }
 
   confirm(message: string, button: string, yes: () => void): void {
@@ -72,7 +74,7 @@ struct Recovery {
             .fontColor($r('app.color.text'))
             .width('100%')
             .textAlign(TextAlign.Center)
-          if (this.hasNfc() && app.recoveryQr.length > 0) {
+          if (this.hasCard() && app.recoveryQr.length > 0) {
             if (!this.askingPin) {
               Button(t('yubikey_put'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
                 .width('100%')
