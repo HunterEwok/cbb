@@ -80,6 +80,8 @@ import java.security.Signature
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -282,6 +284,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Brings the credentials up to date, one refresh at a time, off the node's threads. */
     private val credentialWork = Executors.newSingleThreadExecutor { r -> Thread(r, "credentials").apply { isDaemon = true } }
+
+    /** Waits out the hub's grace in the background before it stops (updateHub06). */
+    private val hubGrace = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "hub grace").apply { isDaemon = true } }
 
     /** The hub's work, one change at a time, off the main thread. */
     private val hubWork = Executors.newSingleThreadExecutor { r -> Thread(r, "phone hub").apply { isDaemon = true } }
@@ -754,10 +759,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun updateHub06(throwing: Boolean) {
         val (n, g) = synchronized(lock) { (node ?: return) to (state ?: return) }
         val p = away06.hub
-        if (!g.isAdmin || !p.on || !(foreground || p.background)) {
+        if (!g.isAdmin || !p.on) {
+            cancelUnhub06()
             unhub06()
             return
         }
+        // The app went to the background on its own, with no leave to run
+        // there: the hub stops only once it stayed there a while, so that
+        // a short trip away hands no clients over; meanwhile the clients
+        // wait out the gap as they do for any hub that goes quiet.
+        if (!(foreground || p.background)) {
+            synchronized(lock) {
+                if (unhubLater == null) unhubLater = hubGrace.schedule({ hubWork.execute { unhubAfterGrace06() } }, HUB_GRACE_MS, TimeUnit.MILLISECONDS)
+            }
+            return
+        }
+        cancelUnhub06()
         try {
             away06.serve(n, homeAddrs())
         } catch (e: Exception) {
@@ -774,6 +791,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val pub = NsdPublisher.hub(context, g.device, g.tag, home)
         synchronized(lock) { publisher = pub }
         pub.start()
+    }
+
+    /** The pending stop of the hub while the app is in the background; guarded by lock. */
+    private var unhubLater: ScheduledFuture<*>? = null
+
+    /** Stops the hub after its grace in the background, unless the app came back meanwhile. */
+    private fun unhubAfterGrace06() {
+        synchronized(lock) { unhubLater = null }
+        val p = away06.hub
+        if (p.on && (foreground || p.background)) return
+        Log.i(TAG, "the app stayed in the background: the hub stops and hands its clients to the next hub")
+        unhub06()
+    }
+
+    private fun cancelUnhub06() {
+        synchronized(lock) { unhubLater.also { unhubLater = null } }?.cancel(false)
     }
 
     /** On a group of 0.6, stops the Live member serving as a hub, when it does. */
@@ -3371,6 +3404,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
         /** The member port the hub takes members on at home, as the computers'; another when it is taken. */
         const val MEMBER_PORT = 8764
+
+        /** How long the hub of 0.6 keeps serving after the app went to the background without leave to run there. */
+        const val HUB_GRACE_MS = 60_000L
 
         fun defaultFile(context: Context) = File(context.filesDir, "cbb/group.json")
 

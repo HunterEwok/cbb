@@ -247,10 +247,12 @@ they look, so both apps are built to the same plan.
    port and the addresses, and how its tunnel hides) and the link to the group's relay, and
    it keeps their keys and the hub's clients itself; the cards read where they stand from
    `away_status` (docs/core-api.md). The Android app's `AwayOn06` keeps only what the user
-   chose for the hub (on, forwarder, disguise, background, home networks), serves while the
-   app is in front or the background is allowed and stops the hub otherwise, which hands its
-   clients to the group's next hub; a hub without a forwarder is reached at the phone's
-   addresses on the home network. The relay is the group's setting: the root sets it with
+   chose for the hub (on, forwarder, disguise, background, home networks) and serves while
+   the app is in front or the background is allowed. Turning the switch off stops the hub at
+   once, which hands its clients to the group's next hub; the app going to the background on
+   its own, without leave to run there, stops it only after a minute there, so a short trip
+   away hands nobody over and the clients wait out the gap as for any hub that goes quiet.
+   A hub without a forwarder is reached at the phone's addresses on the home network. The relay is the group's setting: the root sets it with
    the fingerprint, the face or the screen lock (the manage action `relay`), and the other
    devices show where their link to it stands, with "The group's root sets the relay".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
