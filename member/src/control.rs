@@ -163,6 +163,11 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away relay: the relays after the first, each its address and its
+    /// key's pin with a space between, which only the root of a group of
+    /// 0.6 takes (cbb global relay with several).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
     /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
     /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -180,6 +185,10 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In recover: the devices that do not stay in the group, names or
+    /// device IDs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leave: Vec<String>,
     /// In an inject to a desktop session, the grant its desktop connector
     /// hands the uinput helper, which asks with keys whether it may press
     /// the paste's keys.
@@ -246,6 +255,7 @@ impl core::fmt::Debug for Header {
             .field("below", &self.below)
             .field("code", &cbb_core::secret::Redacted(self.code.len()))
             .field("addrs", &self.addrs)
+            .field("leave", &self.leave)
             .field("fingerprint", &self.fingerprint)
             .field("admins", &self.admins)
             .field("expires", &self.expires)
@@ -326,6 +336,11 @@ pub struct Status {
     pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
+    /// The group as a blind relay of the owner's lists it: its root key and
+    /// the two halves of its recovery key in hex, separated by colons, the
+    /// value of `cbb relay -group` (cbb status -relay); empty in no group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_group: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
@@ -636,6 +651,11 @@ pub struct Device {
     /// hub, or a hub whose offer it keeps.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hub: bool,
+    /// Its place in the group's order of hubs, from 1, which every member
+    /// derives from the records alone (docs/protocol.md, section 11,
+    /// "Several hubs"); 0 when it may not serve.
+    #[serde(default, skip_serializing_if = "is_zero_us")]
+    pub hub_rank: usize,
 }
 
 /// A header and its payload.
@@ -783,7 +803,6 @@ pub fn reply(header: Header, payload: Vec<u8>) -> Message {
 }
 
 /// An answer to a request that more answers follow: op reply, not done.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub fn partial(header: Header) -> Message {
     Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
 }

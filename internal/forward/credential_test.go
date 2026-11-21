@@ -7,9 +7,7 @@ import (
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -21,7 +19,7 @@ import (
 )
 
 // TestCredentialRegistration checks a hub that registers with its period's
-// hubs' credential (docs/protocol.md, section 18): its certificate names
+// hubs' credential (docs/protocol.md, section 13): its certificate names
 // neither a device nor a group; the forwarder takes only a hub the
 // credential lists, refuses an expired or older credential, and, once it
 // saw a period key for a tag, any other key for it, also after a restart;
@@ -34,96 +32,67 @@ func TestCredentialRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, pin := startForwarderWith(t, Config{Cert: fcert, StateFile: state})
-	root, err := group.NewRootCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	periodKey, _ := group.NewKey()
-	tag, _ := group.NewPeriodTag()
-	pc, err := group.SignPeriod(group.Tag(root.Cert), tag, &periodKey.PublicKey, 1, now, root.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	period, _ := pc.Open()
-	hubKey, _ := group.NewKey()
-	hub, err := group.ServerCertificate(hubKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := newTestGroup(t)
+	hub := g.cert
 	if strings.Contains(string(hub.Leaf.Raw), "cb-") || hub.Leaf.Subject.CommonName != group.ServerCertificateName {
 		t.Fatalf("the hub's certificate names a device: %v", hub.Leaf.Subject)
 	}
-	rogueKey, _ := group.NewKey()
-	keyHash := func(k *ecdsa.PrivateKey) group.KeyHash {
-		t.Helper()
-		spki, err := x509.MarshalPKIXPublicKey(&k.PublicKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return sha256.Sum256(spki)
+	rogueKey, rogueCert := newServerKey(t)
+	sign := func(by *ecdsa.PrivateKey, v uint64, expires time.Time) hubAuth {
+		return hubAuth{creds: [][]byte{g.signHubs(t, by, v, expires)}}
 	}
-	sign := func(p *group.CredentialBody, key *ecdsa.PrivateKey, v uint64) group.Credential {
-		t.Helper()
-		c, err := group.SignHubs(p, []group.KeyHash{keyHash(hubKey)}, nil, v, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return c
-	}
+	live := now.Add(periodLifetime)
 	wg, _ := ecdh.X25519().GenerateKey(rand.Reader)
 	register := func(f *Forwarder, pin string, cert tls.Certificate, auth hubAuth) answer {
 		t.Helper()
 		return rawRegister(t, f, pin, cert, wg.PublicKey().Bytes(), wg, auth)
 	}
-	creds := func(cs ...group.Credential) hubAuth { return hubAuth{creds: cs} }
 
-	if a := register(f, pin, hub, creds(sign(period, periodKey, 10))); a.Error != "" || a.ID == 0 {
+	if a := register(f, pin, hub, sign(g.period, 10, live)); a.Error != "" || a.ID == 0 {
 		t.Fatalf("the hub with its credential: %+v", a)
 	}
-	other, _ := group.ServerCertificate(rogueKey)
-	if a := register(f, pin, other, creds(sign(period, periodKey, 10))); !strings.Contains(a.Error, "does not list") {
+	if a := register(f, pin, rogueCert, sign(g.period, 10, live)); !strings.Contains(a.Error, "does not list") {
 		t.Errorf("a key the credential does not list: %+v", a)
 	}
-	old := *period
-	old.ExpiresMS = now.Add(-time.Hour).UnixMilli()
-	if a := register(f, pin, hub, creds(sign(&old, periodKey, 11))); !strings.Contains(a.Error, "expired") {
+	if a := register(f, pin, hub, sign(g.period, 11, now.Add(-time.Hour))); !strings.Contains(a.Error, "expired") {
 		t.Errorf("an expired credential: %+v", a)
 	}
-	if a := register(f, pin, hub, creds(sign(period, periodKey, 9))); !strings.Contains(a.Error, "older") {
+	if a := register(f, pin, hub, sign(g.period, 9, live)); !strings.Contains(a.Error, "older") {
 		t.Errorf("an older credential: %+v", a)
 	}
-	if a := register(f, pin, hub, creds(sign(period, rogueKey, 12))); !strings.Contains(a.Error, "first") {
+	if a := register(f, pin, hub, sign(rogueKey, 12, live)); !strings.Contains(a.Error, "first") {
 		t.Errorf("a credential another key signed for the tag: %+v", a)
 	}
-	if a := register(f, pin, hub, creds(sign(period, periodKey, 12), pc)); !strings.Contains(a.Error, "no hubs' credential") {
+	if a := register(f, pin, hub, hubAuth{creds: [][]byte{g.hubs(t, 12), g.periodCredential(t)}}); !strings.Contains(a.Error, "alone") {
 		t.Errorf("a period sent to the forwarder: %+v", a)
 	}
-	withCA := tls.Certificate{Certificate: [][]byte{hub.Certificate[0], root.Cert.Raw}, PrivateKey: hubKey, Leaf: hub.Leaf}
-	if a := register(f, pin, withCA, creds(sign(period, periodKey, 13))); a.Error == "" {
-		t.Errorf("a server certificate with a group CA: %+v", a)
+	other, _ := NewCert()
+	withCA := tls.Certificate{Certificate: [][]byte{hub.Certificate[0], other.Certificate[0]}, PrivateKey: g.hub, Leaf: hub.Leaf}
+	if a := register(f, pin, withCA, sign(g.period, 13, live)); a.Error == "" {
+		t.Errorf("a server certificate with another behind it: %+v", a)
 	}
 
 	// After a restart on the same state the older credential and the other
 	// key stay refused. The forwarder writes its state when it stops.
 	f.Close()
-	g, gpin := startForwarderWith(t, Config{Cert: fcert, StateFile: state})
-	if a := register(g, gpin, hub, creds(sign(period, periodKey, 9))); !strings.Contains(a.Error, "older") {
+	h, hpin := startForwarderWith(t, Config{Cert: fcert, StateFile: state})
+	if a := register(h, hpin, hub, sign(g.period, 9, live)); !strings.Contains(a.Error, "older") {
 		t.Errorf("an older credential after a restart: %+v", a)
 	}
-	if a := register(g, gpin, hub, creds(sign(period, rogueKey, 20))); !strings.Contains(a.Error, "first") {
+	if a := register(h, hpin, hub, sign(rogueKey, 20, live)); !strings.Contains(a.Error, "first") {
 		t.Errorf("another key after a restart: %+v", a)
 	}
-	if a := register(g, gpin, hub, creds(sign(period, periodKey, 20))); a.Error != "" {
+	if a := register(h, hpin, hub, sign(g.period, 20, live)); a.Error != "" {
 		t.Errorf("a newer credential after a restart: %+v", a)
 	}
 
-	// The state names neither the period's tag nor its key, nor the group.
+	// The state names neither the period's tag nor its key.
 	b, err := os.ReadFile(state)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pk := keyHash(periodKey)
-	for _, c := range []string{tag, hex.EncodeToString(pk[:]), group.Tag(root.Cert)} {
+	pk := serverKeyHash(g.period)
+	for _, c := range []string{hex.EncodeToString(g.tag[:]), hex.EncodeToString(pk[:])} {
 		if strings.Contains(string(b), c) {
 			t.Errorf("the state file holds %q: %s", c, b)
 		}

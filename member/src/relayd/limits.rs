@@ -2,8 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! What an open relay gives the groups and the sources they come from, and
-//! the work a source may start each second, with the numbers of Go's
-//! internal/relay (docs/relay-budget.md).
+//! the work a source may start each second (docs/relay-budget.md).
 
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,12 +31,6 @@ pub struct Limits {
     pub per_provider: usize,
     /// Bytes a second the relay copies for one group, both ways together.
     pub byte_rate: f64,
-    /// The bytes of authority records the relay keeps for one group, and
-    /// for all groups. The records a source brings are charged to it too: a
-    /// network may bring 4 groups' worth, a wide network 16 and an IPv6
-    /// provider 64.
-    pub group_record_bytes: usize,
-    pub record_bytes: usize,
     /// Connections through the relay's tunnel at once, of all devices
     /// together: half for the devices' watches, one each, so a device
     /// registers only while its watch has room; half for the calls they
@@ -88,8 +81,6 @@ pub const DEFAULT_OPEN: Limits = Limits {
     per_wide: 256,
     per_provider: 1024,
     byte_rate: (1 << 20) as f64,
-    group_record_bytes: 256 << 10,
-    record_bytes: 128 << 20,
     streams: 8192,
 };
 
@@ -104,8 +95,6 @@ impl Limits {
             per_wide: or(self.per_wide, d.per_wide),
             per_provider: or(self.per_provider, d.per_provider),
             byte_rate: if self.byte_rate > 0.0 { self.byte_rate } else { d.byte_rate },
-            group_record_bytes: or(self.group_record_bytes, d.group_record_bytes),
-            record_bytes: or(self.record_bytes, d.record_bytes),
             streams: or(self.streams, d.streams),
         }
     }
@@ -167,28 +156,14 @@ impl Limits {
             all: 0,
         }
     }
-
-    /// The caps of the records an open relay keeps, by the source that
-    /// brought them and in all.
-    pub fn record_caps(&self) -> Caps {
-        Caps {
-            address: 0,
-            network: 4 * self.group_record_bytes,
-            wide: 16 * self.group_record_bytes,
-            provider: 64 * self.group_record_bytes,
-            all: self.record_bytes,
-        }
-    }
 }
 
 /// The work a source may start each second, in units: a registration's
-/// setup costs SETUP_COST, each record the relay must verify one more. An
-/// address earns 64 units a second and may save up to 1536, a network 256
-/// and 4096, a wide network 1024 and 8192, an IPv6 provider 2048 and 16384;
-/// the burst lets one registration of a group with a full claim (1024
-/// records) through, and the rates keep the checks of a source that
-/// registers over and over to a small share of a processor (a record's
-/// check takes about 45 microseconds).
+/// setup costs SETUP_COST. An address earns 64 units a second and may save
+/// up to 1536, a network 256 and 4096, a wide network 1024 and 8192, an
+/// IPv6 provider 2048 and 16384; the rates keep the handshakes and the
+/// credentials' checks of a source that registers over and over to a small
+/// share of a processor.
 pub const SETUP_COST: f64 = 4.0;
 pub(super) const ADDRESS: Rate = Rate { per_second: 64.0, burst: 1536.0 };
 pub(super) const NETWORK: Rate = Rate { per_second: 256.0, burst: 4096.0 };
@@ -262,8 +237,8 @@ mod tests {
         assert_eq!(Limits::default().with_defaults(), DEFAULT_OPEN);
         let l = Limits { groups: 3, byte_rate: 10.0, ..Limits::default() }.with_defaults();
         assert_eq!((l.groups, l.byte_rate, l.per_address), (3, 10.0, DEFAULT_OPEN.per_address));
-        let c = DEFAULT_OPEN.record_caps();
-        assert_eq!((c.network, c.wide, c.provider, c.all), (1 << 20, 4 << 20, 16 << 20, 128 << 20));
+        let c = DEFAULT_OPEN.registration_caps();
+        assert_eq!((c.address, c.network, c.wide, c.provider, c.all), (16, 64, 256, 1024, 0));
     }
 
     /// The limits fit the open files the relay may have, and the default

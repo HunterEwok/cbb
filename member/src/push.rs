@@ -13,9 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cbb_core::format::frame;
-use cbb_core::identity::ExternalKey;
 use cbb_core::push;
-use p256::ecdsa::SigningKey;
 use rustls::{ClientConnection, StreamOwned};
 
 use crate::error::{Context, Error, Result};
@@ -31,36 +29,7 @@ pub const ANSWER_WITHIN: Duration = Duration::from_secs(3);
 const MAX_FRAME: usize = push::MAX_SERVICE_FRAME;
 
 /// A server key for a face, from its scalar (`blind::alias::server_key`).
-pub struct ServerKey(SigningKey);
-
-impl ServerKey {
-    pub fn from_scalar(d: &[u8; 32]) -> Result<ServerKey> {
-        SigningKey::from_slice(d).map(ServerKey).map_err(|_| Error::msg("not a P-256 scalar"))
-    }
-
-    /// Its self-signed certificate, which the service reads the key from.
-    pub fn cert(&self) -> Result<Vec<u8>> {
-        use p256::ecdsa::{Signature, signature::Signer};
-        let point = self.public();
-        cbb_core::certs::server_cert_by(&point, &mut |tbs| {
-            let sig: Signature = self.0.sign(tbs);
-            Ok(sig.to_der().as_bytes().to_vec())
-        })
-    }
-}
-
-impl ExternalKey for ServerKey {
-    fn public(&self) -> Vec<u8> {
-        self.0.verifying_key().to_sec1_point(false).as_bytes().to_vec()
-    }
-
-    fn sign_digest(&self, digest: &[u8; 32]) -> cbb_core::error::Result<Vec<u8>> {
-        use p256::ecdsa::signature::hazmat::PrehashSigner as _;
-        let sig: p256::ecdsa::Signature =
-            self.0.sign_prehash(digest).map_err(|_| cbb_core::error::Error::msg("cannot sign with the server key"))?;
-        Ok(sig.to_der().as_bytes().to_vec())
-    }
-}
+pub use crate::faces::ServerKey;
 
 /// The socket under the TLS, with a deadline: every read and write waits
 /// at most what is left of it (and at most [`TIMEOUT`]), and none starts

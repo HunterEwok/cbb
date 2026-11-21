@@ -311,37 +311,37 @@ void cbb_invite_free(cbb_invite *i);
 uint8_t *cbb_tunnel(const uint8_t *request, size_t len, size_t *answer_len);
 
 /*
- * Registers a hub of cbb_tunnel with the group's forwarder, its TLS signed
- * with the member key through sign and ctx, which stay valid until the hub
- * stops or registers again; the answer is as cbb_tunnel's.
+ * Registers a hub of cbb_tunnel with the group's forwarder (cbb-forward/3);
+ * the hub signs only with the server key that cbb_tunnel_hub_credentials
+ * gives, so sign is not called. The answer is as cbb_tunnel's.
  */
 uint8_t *cbb_tunnel_register(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
 /*
- * Links the phone to the group's blind relay, its TLS signed with the member
- * key through sign, its events (dial, calling, changed, log) given to event,
- * both with ctx, which stay valid until relay_stop returns; the answer is
+ * Links the phone to the group's blind relay, its events (dial, calling,
+ * changed, log) given to event with ctx, which stay valid until relay_stop
+ * returns; the link signs only with the server key that
+ * cbb_tunnel_relay_credentials gives, so sign is not called. The answer is
  * as cbb_tunnel's, with the link's "id".
  */
 uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
                           size_t *answer_len);
 
 /*
- * Makes a relay link of cbb_tunnel_relay register with the group's server
- * credentials, signed with the period's server key through sign and ctx,
- * which stay valid until the link stops or is given other credentials; an
- * empty "credentials" goes back to the member certificate. The answer is as
- * cbb_tunnel's.
+ * Gives a relay link of cbb_tunnel_relay the group's server credentials it
+ * registers with, signed with the period's server key through sign and ctx,
+ * which stay valid until the link stops or is given other credentials; with
+ * an empty "credentials" the link waits. The answer is as cbb_tunnel's.
  */
 uint8_t *cbb_tunnel_relay_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                                       size_t *answer_len);
 
 /*
- * Makes a hub of cbb_tunnel register with the forwarder with the period's
- * hubs' credential, signed with the period's server key through sign and
- * ctx, which stay valid until the hub stops or is given other credentials;
- * an empty "credentials" goes back to the member certificate. The answer is
- * as cbb_tunnel's.
+ * Gives a hub of cbb_tunnel what it registers with at the forwarder: the
+ * hubs' credential of the forwarder's face, signed with the
+ * face's server key through sign and ctx, which stay valid until the hub
+ * stops or is given other credentials; with an empty "credentials" the hub
+ * waits. The answer is as cbb_tunnel's.
  */
 uint8_t *cbb_tunnel_hub_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                                     size_t *answer_len);

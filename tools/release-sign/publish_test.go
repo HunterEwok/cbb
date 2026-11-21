@@ -4,9 +4,14 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"os"
 	"path/filepath"
@@ -570,5 +575,55 @@ func TestNewKeyUnderAHeldName(t *testing.T) {
 	}
 	if err := renew(append(keyFlags, "-drop", "cbb.tools", "-channel", "cbb.tools="+otherPub)); err != nil {
 		t.Errorf("the new key after the old one is dropped: %v", err)
+	}
+}
+
+// p256Pub writes a P-256 public key alone, as openssl pkey -pubout writes
+// a server's, and returns its file and the pin of it.
+func p256Pub(t *testing.T, dir, name string) (string, string) {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der := must(x509.MarshalPKIXPublicKey(&k.PublicKey))
+	sum := sha256.Sum256(der)
+	return write(t, filepath.Join(dir, name), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// TestPushPins: -push lists the project's push service by its pin, the
+// old and the new key side by side while it changes, and -drop takes one
+// out by its pin; a signer's key with two halves is no push service's.
+func TestPushPins(t *testing.T) {
+	g := newFakeGitHub(t)
+	k := testKeys(t)
+	keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+	dir := t.TempDir()
+	first, firstPin := p256Pub(t, dir, "push.pem")
+	second, _ := p256Pub(t, dir, "push-2.pem")
+	g.draft("v0.6.0")
+	if _, err := keyArg("cbb.tools:8767="+k.channelPub, release.UsePush); err == nil {
+		t.Error("took a key with two halves as the push service's pin")
+	}
+	if keys, err := keyArg("cbb.tools:8767="+first, release.UsePush); err != nil || len(keys) != 1 || keys[0].Use != release.UsePush {
+		t.Errorf("the push service's pin: %+v, %v", keys, err)
+	}
+	if err := publish(append(keyFlags, "-version", "0.6.0", "-push", "cbb.tools:8767="+first)); err != nil {
+		t.Fatal(err)
+	}
+	if err := renew(append(keyFlags, "-push", "cbb.tools:8767="+second)); err != nil {
+		t.Fatal(err)
+	}
+	var ks release.Keys
+	g.file(g.channel(), "keys.json", &ks)
+	if got := ks.Pushes("cbb.tools:8767"); len(got) != 2 {
+		t.Fatalf("keys.json lists %d push pins: %+v", len(got), ks)
+	}
+	if err := renew(append(keyFlags, "-drop", firstPin)); err != nil {
+		t.Fatal(err)
+	}
+	g.file(g.channel(), "keys.json", &ks)
+	if got := ks.Pushes("cbb.tools:8767"); len(got) != 1 {
+		t.Errorf("after -drop keys.json lists %d push pins", len(got))
 	}
 }

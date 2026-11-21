@@ -25,7 +25,8 @@ use crate::certs::{Cert, DeviceId, Usage};
 use cbb_core::copy::{self, Content, Sealed};
 
 use crate::clip::{Engine, Event, Hello, Kind, Outcome, SealFn, Via};
-use crate::content::{Source, Store};
+use crate::content::{BlobKey, Source, Store};
+pub use crate::discovery::{Admit, Dialed};
 use crate::entries::{self, Entries};
 use crate::error::{Context, Error, Result};
 use crate::identity::Identity;
@@ -341,18 +342,6 @@ pub fn command_id(r: &Record) -> String {
     CommandHead::of(r).map(|h| h.id).unwrap_or_default()
 }
 
-/// How a dial ended (Node::dial_ended).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Dialed {
-    /// The connection came up (or one to the peer stayed in its place).
-    pub up: bool,
-    /// This member ended it to connect again: dial at once.
-    pub again: bool,
-    /// The device the handshake found at the address, when it got that far:
-    /// a dial loop given only an address learns which member is there.
-    pub id: Option<DeviceId>,
-}
-
 /// A command a phone passed on: where it came from, when it expires, and
 /// whether its result went back already. It is passed on once until it
 /// expires, whatever its result.
@@ -361,11 +350,6 @@ struct Passed {
     expires_ms: i64,
     answered: bool,
 }
-
-/// Checks a connection a listener took, by the source port of its loopback
-/// connection and the device its certificate names, before it is served:
-/// a blind relay's calls only from the device the relay announced.
-pub type Admit = Arc<dyn Fn(u16, &DeviceId) -> bool + Send + Sync>;
 
 /// Gets a copy that became the group's current one.
 pub type OnChange = Box<dyn Fn(&Event) + Send + Sync>;
@@ -738,6 +722,11 @@ impl Node {
         &self.releases
     }
 
+    /// The release held, to keep beyond this borrow.
+    pub fn releases_arc(&self) -> Arc<Releases> {
+        self.releases.clone()
+    }
+
     /// The release archives the peers seen update from.
     pub fn archives(&self) -> Vec<String> {
         let mut out: Vec<String> = self.archives.lock().unwrap().values().cloned().collect();
@@ -1087,7 +1076,7 @@ impl Node {
     pub fn send_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Event> {
         let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
         let key = copy::new_key();
-        let (manifest, blob) = store.seal(parts, &key)?;
+        let (manifest, blob) = store.seal(parts, BlobKey::Copy(&key))?;
         let (ev, out) = self.engine.send_media(text, manifest, via, key, blob)?;
         self.forward(&ev, None);
         if out.write {
@@ -1101,7 +1090,7 @@ impl Node {
     pub fn copied_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Option<Event>> {
         let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
         let key = copy::new_key();
-        let (manifest, blob) = store.seal(parts, &key)?;
+        let (manifest, blob) = store.seal(parts, BlobKey::Copy(&key))?;
         let ev = self.engine.copied_media(text, manifest, via, key, blob)?;
         if let Some(ev) = &ev {
             self.forward(ev, None);
@@ -1281,7 +1270,7 @@ impl Node {
         let m = ev.media.as_ref().ok_or_else(|| Error::msg("the copy holds no images or files"))?;
         let key = ev.key.as_ref().ok_or_else(|| Error::msg("the copy is not sealed to this phone"))?;
         let sum = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map(|b| b.sha256.as_slice());
-        store.open_into(sum, m, key, out)
+        store.open_into(sum, m, BlobKey::Copy(key), out)
     }
 
     /// Queues a message for the group's hubs connected: the members
@@ -2921,6 +2910,69 @@ fn near(found: Option<Duration>, now: Duration) -> bool {
 /// zero when they set nothing (the engine's default, a minute).
 fn live_window(records: &Records) -> Duration {
     Duration::from_millis(records.state().incoming_ms.unwrap_or(0).max(0) as u64)
+}
+
+impl crate::discovery::Peers for Node {
+    fn me(&self) -> DeviceId {
+        self.identity().id.clone()
+    }
+    fn is_closed(&self) -> bool {
+        Node::is_closed(self)
+    }
+    fn is_paused(&self) -> bool {
+        Node::is_paused(self)
+    }
+    fn redials(&self) -> usize {
+        Node::redials(self)
+    }
+    fn nap(&self, d: Duration) -> bool {
+        Node::nap(self, d)
+    }
+    fn kick(&self) {
+        Node::kick(self)
+    }
+    fn connected(&self, id: &DeviceId) -> bool {
+        Node::connected(self, id)
+    }
+    fn connected_for(&self, id: &DeviceId, addr: &SocketAddr) -> bool {
+        Node::connected_for(self, id, addr)
+    }
+    fn set_unreached(&self, id: &DeviceId, unreached: bool) {
+        Node::set_unreached(self, id, unreached)
+    }
+    fn dial_ended(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<Dialed> {
+        Node::dial_ended(self, addr, peer)
+    }
+    fn accept_checked(
+        &self,
+        sock: TcpStream,
+        addr: SocketAddr,
+        handshaken: &mut dyn FnMut(),
+        admit: Option<&Admit>,
+    ) -> Result<()> {
+        Node::accept_checked(self, sock, addr, handshaken, admit)
+    }
+    fn takes_on(&self, local: SocketAddr, from: SocketAddr) -> bool {
+        Node::takes_on(self, local, from)
+    }
+    fn logf(&self, s: &str) {
+        Node::logf(self, s)
+    }
+    fn can_dial(&self) -> bool {
+        self.can(cbb_core::authority::CAP_DIALS)
+    }
+    fn networks(&self) -> Option<Arc<crate::networks::Networks>> {
+        Node::networks(self)
+    }
+    fn window_open(&self) -> bool {
+        Node::window_open(self)
+    }
+    fn found(&self, id: &DeviceId, here: bool) {
+        Node::found(self, id, here)
+    }
+    fn known(&self) -> Vec<String> {
+        self.records().lock().unwrap().known()
+    }
 }
 
 #[cfg(test)]

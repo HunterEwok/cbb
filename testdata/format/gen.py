@@ -514,8 +514,14 @@ def record_vectors():
     add("board admitted by an admin, base rights", ADMIN, 1,
         {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10},
         note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
+    # the group's servers: [kind, endpoint, pin of the TLS key], each kind
+    # and endpoint once; 0.6 writes relays (kind 2), and a reader keeps a
+    # kind it does not know and passes over it, here kind 9 on a relay's
+    # endpoint, which is another server (D-121)
     add("settings", ROOT, 7, {14: 1,
-                              15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
+                              15: [[2, "relay.example.org:8765", hashlib.sha256(b"relay pin").digest()],
+                                   [2, "relay2.example.org:443", hashlib.sha256(b"relay 2 pin").digest()],
+                                   [9, "relay.example.org:8765", hashlib.sha256(b"later").digest()]]})
     add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
     # hubs keep the user's order (not sorted), each once
     add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True), 11: seen_of(ADMIN)})
@@ -756,10 +762,16 @@ def record_vectors():
     for name, ms in [("copies incoming_ms one below its least", BOUND["records::body::MIN_INCOMING_MS"] - 1),
                      ("copies incoming_ms one past its most", BOUND["records::body::MAX_INCOMING_MS"] + 1)]:
         bad_body(name, "records/copies/incoming_ms", rec(ROOT, 90, 8, {10: ms, 11: [sa]}))
-    servers = [[1, f"fwd{i}.example.org:443", Signer(f"server {i}").key]
+    servers = [[2, f"relay{i}.example.org:443", hashlib.sha256(b"server %d" % i).digest()]
                for i in range(BOUND["records::body::MAX_SERVERS"] + 1)]
     bad_body("settings with one server past its most", "records/settings/servers",
              rec(ROOT, 90, 7, {15: servers}))
+    for name, srv in [("settings with one server twice", [servers[0], [2, servers[0][1], hashlib.sha256(b"other").digest()]]),
+                      ("settings with a server's key in place of its pin", [[2, "relay.example.org:8765", OPERATOR.key]]),
+                      ("settings with a pin of 31 bytes", [[2, "relay.example.org:8765", bytes(31)]]),
+                      ("settings with a server of kind 0", [[0, "relay.example.org:8765", hashlib.sha256(b"relay pin").digest()]]),
+                      ("settings with an empty endpoint", [[2, "", hashlib.sha256(b"relay pin").digest()]])]:
+        bad_body(name, "records/settings/servers", rec(ROOT, 90, 7, {15: srv}))
     # what rule 33 retired (format 0.6 freezes): the claim, the root's
     # recovery record and the handover; the takeover power; settings'
     # takeover delay
@@ -1673,16 +1685,13 @@ TABLES = {
     "pair/start": [
         (2, "pair/start/ya", "bytes 1..256", True),
         (3, "pair/start/ada", "bytes 1..16384", True),
-        (4, "pair/start/commitment", "bytes 32", True),
     ],
     "pair/reply": [
         (2, "pair/reply/yb", "bytes 1..256", True),
         (3, "pair/reply/adb", "bytes 1..1024", True),
-        (4, "pair/reply/nonce", "bytes 32", True),
     ],
     "pair/confirm": [
         (2, "pair/confirm/ta", "bytes 1..64", True),
-        (3, "pair/confirm/nonce", "bytes 32", True),
     ],
     "pair/welcome": [
         (2, "pair/welcome/tb", "bytes 1..64", True),
@@ -1772,6 +1781,8 @@ TABLES = {
         (7, "offer/next-key", "key 3", False),
         (8, "offer/confirm", "bytes 32", False),
         (9, "offer/endpoint-keys", "array 1..8 of map offer/endpoint-key", False),
+        (10, "offer/next-obfuscation", "map obfuscation", False),
+        (11, "offer/next-vless", "map vless", False),
     ],
     "offer/endpoint-key": [
         (1, "offer/endpoint-key/endpoint", "addr", True),
@@ -1875,6 +1886,8 @@ TABLES = {
     "member-credentials": [
         (2, "member-credentials/list", "array 1..259 of envelope", True),
         (3, "member-credentials/obfuscation", "map obfuscation", False),
+        (4, "member-credentials/server", "bytes 32", True),
+        (5, "member-credentials/address", "text 1..261", False),
     ],
 }
 
@@ -2033,6 +2046,8 @@ def ty_ok(ty, v):
         return all(ty_ok(inner, x) for x in v)
     if w[0] == "map":
         return check_map(w[1], v) is None
+    if w[0] == "copy":
+        return copy_shape_ok(v)
     raise ValueError(ty)
 
 
@@ -2058,9 +2073,21 @@ def between_rule(name, v):
         named = [k[1] for k in v[9]]
         if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
             return "offer/endpoint-keys"
+    # The next key's settings and way go with that key and with the present ones.
+    if name == "offer" and 10 in v and (7 not in v or 3 not in v):
+        return "offer/next-obfuscation"
+    if name == "offer" and 11 in v and (7 not in v or 4 not in v):
+        return "offer/next-vless"
+    # A want asks for something.
+    if name == "want" and 2 not in v and 3 not in v:
+        return "want/empty"
     # A root's fork is two records.
     if name == "roots" and 3 in v and len(v[3]) != 2:
         return "roots/fork"
+    # The short code's commitment and nonces of earlier drafts.
+    for table, n in [("pair/start", 4), ("pair/reply", 4), ("pair/confirm", 3)]:
+        if name == table and n in v:
+            return table + "/retired"
     # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
@@ -2091,6 +2118,13 @@ LATER = {
     ("member-credentials", 3): "unusable", ("pair/info", 3): "bits 7",
     ("forward/register", 4): "unusable", ("forward/registered", 4): "unusable",
     ("guest", 7): "absent", ("result", 5): "absent", ("waiting/request", 5): "absent",
+    ("hello", 2): "bits 7", ("hello", 4): "absent", ("hello", 5): "absent", ("hello", 8): "absent",
+    ("hello", 10): "absent", ("hello", 11): "absent", ("hello", 12): "absent", ("hello", 13): "absent",
+    ("hello", 14): "absent", ("hello", 15): "absent", ("hello", 16): "absent", ("hello", 17): "absent",
+    ("hello", 18): "absent", ("hello", 19): "absent", ("hello", 20): "bits 1", ("hello", 21): "absent",
+    ("hello/device", 1): "absent", ("hello/device", 2): "absent", ("hello/device", 3): "absent",
+    ("hello/device", 5): "absent",
+    ("evidence/android", 1): "refuse", ("evidence/tpm", 1): "refuse",
 }
 TRANSPORTS = ("obfuscation", "vless")
 
@@ -2183,7 +2217,29 @@ def read_ty(ty, later, rule, v):
             return read_map(w[1], v)
         except Refused:
             raise Refused(rule)
+    if w[0] == "copy":
+        shape(copy_shape_ok(v))
+        return v
     raise ValueError(ty)
+
+
+def copy_shape_ok(v):
+    """A copy's outer map and header as section 10.1 has them (the core's
+    format::copy reader is the full one; the vectors here stay within what
+    this checks)."""
+    if not isinstance(v, dict) or any(k < 256 and not 1 <= k <= 6 for k in v):
+        return False
+    if not isinstance(v.get(1), bytes) or not isinstance(v.get(6), bytes) or len(v[6]) != 64:
+        return False
+    try:
+        hdr = dec(v[1])
+    except Exception:
+        return False
+    if not isinstance(hdr, dict) or not isinstance(hdr.get(4), list):
+        return False
+    if not isinstance(v.get(3), list) or len(v[3]) != len(hdr[4]) or not all(isinstance(w, bytes) for w in v[3]):
+        return False
+    return (4 in v) != (5 in v)
 
 
 def read_map(name, v):
@@ -2243,6 +2299,11 @@ def future_vectors():
     case("a Welcome, 257 keys statements: none", "welcome", {**welcome, 4: [env] * 257})
     case("a Welcome, 260 credentials: none", "welcome", {**welcome, 7: [env] * 260})
     case("a Welcome, an empty list: refused", "welcome", {**welcome, 10: b""})
+    case("a hello, unknown capability bits ignored", "hello", {0: 1, 2: 8 | 2})
+    case("a hello, unknown feature bits only: none", "hello", {0: 1, 20: 2})
+    case("a hello, a name too long: none", "hello", {0: 1, 4: "n" * 129})
+    case("a hello, an action name too long left out", "hello", {0: 1, 15: ["lock", "a" * 33]})
+    case("a hello, a MAC address of 5 bytes: refused", "hello", {0: 1, 13: {4: b"\x02\x00\x00\x00\x01"}})
     case("an info, unknown capability bits ignored", "pair/info", {**info, 3: 8 | 4})
     case("an info, only unknown capability bits: none", "pair/info", {**info, 3: 8})
     case("an info, the zero invitation ID: refused", "pair/info", {**info, 9: bytes(16)})
@@ -2265,7 +2326,7 @@ def future_vectors():
     case("a guest, a later op: refused", "guest", {0: 17, 2: 8, 3: hub})
     case("a dismiss, the zero invitation ID: refused", "dismiss", {0: 27, 2: bytes(16)})
     case("credentials, settings for later out of range: unusable", "member-credentials",
-         {0: 11, 2: [env], 3: {**obf, 2: 80}})
+         {0: 11, 2: [env], 3: {**obf, 2: 80}, 4: fake("server pin", 32)})
     case("a key of the wrong length: refused", "tunnel", {0: 15, 2: [X25519, b"short"], 3: fake("c", 32)})
     return {"note": "a reader of this version, by each optional field's row; shape always refuses, and so does a "
                     "needed field; unusable reads as the empty map",
@@ -2561,14 +2622,22 @@ def wave3_vectors(records_take):
         maps.append(e)
 
     adb = {1: GROUP, 2: PHONE.id16, 3: "Ewok's phone"}
-    msg("credentials", {0: 11, 2: [dec(envs[0])]}, "the credential is a placeholder envelope")
-    msg("credentials with settings for later", {0: 11, 2: [dec(envs[0])], 3: obf},
+    srv = fake("server pin", 32)
+    msg("credentials", {0: 11, 2: [dec(envs[0])], 4: srv}, "the credential is a placeholder envelope; field 4 the pin of the server it is for")
+    bad("credentials that name no server", {0: 11, 2: [dec(envs[0])]}, "member-credentials/server")
+    msg("credentials with settings for later", {0: 11, 2: [dec(envs[0])], 3: obf, 4: srv},
         "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
-    bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
+    bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}, 4: srv},
         "member-credentials/obfuscation")
-    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)})
-    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)})
-    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)})
+    msg("credentials for one server", {0: 11, 2: [dec(envs[0])], 4: srv, 5: "cbb.tools:8765"},
+        "fields 4 and 5: the server these credentials are for (A-55), its pin, always, and its address")
+    bad("credentials for a server, a pin of 31 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 31)},
+        "member-credentials/server")
+    bad("credentials for a server, an address of 262 bytes", {0: 11, 2: [dec(envs[0])], 4: fake("server pin", 32), 5: "a" * 262},
+        "member-credentials/address")
+    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
+    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
+    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
     msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome, 4: fake("welcome tag", 64)},
         "records: the first two of records.json; field 4 is the Welcome's tag, welcome_parts has real ones")
     parts_welcome = {k: v for k, v in welcome.items() if k != 2}
@@ -2628,10 +2697,13 @@ def wave3_vectors(records_take):
     bad("hubs: flag 2", {0: 16, 2: 2}, "hubs/stopped")
     bad("guest op 8", {0: 17, 2: 8, 3: guest_key}, "guest/op")
     bad("pair error code 0", {0: 69, 2: 0}, "pair/error/code")
-    bad("pair start without the code's commitment", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)},
-        "pair/start/commitment")
-    bad("pair confirm with a short nonce", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 31)},
-        "pair/confirm/nonce")
+    bad("pair start without its Info", {0: 64, 2: fake("cpace ya", 32)}, "pair/start/ada")
+    bad("pair start with a code commitment (field 4, retired)",
+        {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)}, "pair/start/retired")
+    bad("pair reply with a nonce (field 4, retired)",
+        {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)}, "pair/reply/retired")
+    bad("pair confirm with a nonce (field 3, retired)",
+        {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)}, "pair/confirm/retired")
     bad("relay online: names out of order", {0: 97, 2: list(reversed(names))}, "relay/online/names")
     bad("relay online: a name twice", {0: 97, 2: [names[0], names[0]]}, "relay/online/names")
     bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
@@ -2669,6 +2741,22 @@ def wave3_vectors(records_take):
     mp("an offer: an endpoint with its own hub key", "offer", {**offer, 9: [{1: offer[2][0], 2: face_key}]})
     mp("an offer: a key for an endpoint it does not list", "offer",
        {**offer, 9: [{1: "198.51.100.99:443", 2: face_key}]}, "offer/endpoint-keys")
+    next_obf = {**obf, 4: [16, 21, 0, 0]}
+    next_vless = {1: fake("next vless user", 16)}
+    rotating = {**offer, 7: wg("hub next wg key"), 10: next_obf, 11: next_vless}
+    mp("an offer with its next key's settings and way", "offer", rotating)
+    mp("an offer: next settings without the next key", "offer", {**offer, 10: next_obf}, "offer/next-obfuscation")
+    mp("an offer: next settings without settings now", "offer",
+       {k: v for k, v in rotating.items() if k != 3}, "offer/next-obfuscation")
+    mp("an offer: next settings with a jmax above its bound", "offer",
+       {**rotating, 10: {**next_obf, 3: 2000}}, "offer/next-obfuscation")
+    mp("an offer: next settings with jmin above jmax", "offer",
+       {**rotating, 10: {**next_obf, 2: 80}}, "offer/next-obfuscation")
+    mp("an offer: a next way with a user ID of the wrong length", "offer",
+       {**rotating, 11: {1: fake("short", 8)}}, "offer/next-vless")
+    mp("an offer: a next way without the next key", "offer", {**offer, 11: next_vless}, "offer/next-vless")
+    mp("an offer: a next way without a way now", "offer",
+       {k: v for k, v in rotating.items() if k != 4}, "offer/next-vless")
     mp("an offer: two keys for one endpoint", "offer",
        {**offer, 9: [{1: offer[2][0], 2: face_key}] * 2}, "offer/endpoint-keys")
     mp("an offer: an endpoint key that is no addr", "offer",
@@ -2850,59 +2938,46 @@ def welcome_parts_vectors():
 
 
 def code_vectors():
-    """The short code (W.3) and CPace's channel identifier (11.1), both
-    with the invitation ID each end believes it is using; 16 zero bytes at
-    home without an invitation. Each pair of cases differs in one input."""
+    """A home window's secret from its six digits and CPace's channel
+    identifier (11.1), with the invitation ID each end believes it is
+    using. Each pair of cases differs in one input."""
     def h(label):
         return hashlib.sha256(label.encode()).digest()
-
-    def code(exporter, nj, nm, inv):
-        d = hashlib.sha256(b"cbb short code v3\x00" + exporter + nj + nm + inv).digest()
-        return "%06d" % (int.from_bytes(d[:4], "big") % 1000000)
 
     def ci(member, joiner, inv):
         return b"cbb pair channel v3\x00" + member + joiner + inv
 
-    exporter, nj, nm = h("vector exporter"), h("vector joiner nonce"), h("vector member nonce")
+    home = []
+    for name, digits in [
+        ("six digits", "042917"),
+        ("one digit apart", "042918"),
+        ("all zeros", "000000"),
+        ("all nines", "999999"),
+    ]:
+        home.append({"name": name, "digits": digits,
+                     "secret": hashlib.sha256(b"cbb pair home code v1\x00" + digits.encode()).digest().hex()})
+    for name, digits in [
+        ("five digits", "04291"),
+        ("seven digits", "0429170"),
+        ("a letter", "04291a"),
+        ("a space", "042 17"),
+        ("full-width digits", "\uff10\uff14\uff12\uff19\uff11\uff17"),
+        ("nothing", ""),
+    ]:
+        home.append({"name": name, "digits": digits, "error": "not six digits"})
     inv = h("vector invitation")[:16]
     other = bytes([inv[0] ^ 1]) + inv[1:]
-    home = bytes(16)
-    short = []
-    for name, e, a, b, i in [
-        ("an invitation", exporter, nj, nm, inv),
-        ("another invitation ID, one bit apart", exporter, nj, nm, other),
-        ("at home without an invitation", exporter, nj, nm, home),
-        ("the nonces swapped", exporter, nm, nj, inv),
-        ("another session", h("vector exporter 2"), nj, nm, inv),
-    ]:
-        short.append({"name": name, "exporter": e.hex(), "nj": a.hex(), "nm": b.hex(), "invitation": i.hex(),
-                      "code": code(e, a, b, i)})
     member, joiner = h("vector member key"), h("vector joiner key")
     channel = []
     for name, m, j, i in [
         ("an invitation", member, joiner, inv),
         ("another invitation ID, one bit apart", member, joiner, other),
-        ("at home without an invitation", member, joiner, home),
         ("the keys swapped", joiner, member, inv),
     ]:
         channel.append({"name": name, "member": m.hex(), "joiner": j.hex(), "invitation": i.hex(),
                         "ci": ci(m, j, i).hex()})
-    # CPace's password with the invitation ID: both zero at home without an
-    # invitation (a public password, which authenticates nothing), neither
-    # with one; one without the other is refused.
-    secret, zero = h("vector invitation secret"), bytes(32)
-    passwords = [
-        {"name": "at home without an invitation", "invitation": home.hex(), "password": zero.hex(),
-         "keyed": False},
-        {"name": "an invitation", "invitation": inv.hex(), "password": secret.hex(), "keyed": True},
-        {"name": "an invitation ID with the zero password", "invitation": inv.hex(), "password": zero.hex(),
-         "error": "refused"},
-        {"name": "a secret with the ID of none", "invitation": home.hex(), "password": secret.hex(),
-         "error": "refused"},
-    ]
-    return {"short_code_label": "cbb short code v3", "channel_prefix": "cbb pair channel v3",
-            "no_invitation": home.hex(), "no_secret": zero.hex(), "short_code": short, "channel_id": channel,
-            "passwords": passwords}
+    return {"home_code_label": "cbb pair home code v1", "channel_prefix": "cbb pair channel v3",
+            "home_secret": home, "channel_id": channel}
 
 
 def card_vectors():
@@ -2974,6 +3049,87 @@ TABLES4 = {
 }
 MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal", 24: "roots"}
 TABLES.update(TABLES4)
+
+# ---------------------------------------------------------------- wave 5
+
+# The member connection's own messages (sections 9.2 and 9.3), as
+# core/src/msg/member.rs has them. The copy (t 2) is read by the copy's
+# reader, also inside the hello; the intro (t 8) by the join's.
+MS_ = "uint 1..9223372036854775807"
+TABLES5 = {
+    "hello": [
+        (2, "hello/caps", "uint 1..7", False),
+        (3, "hello/os", "uint 1..4294967295", False),
+        (4, "hello/name", "text 1..128", False),
+        (5, "hello/wall_ms", MS_, False),
+        (6, "hello/current", "copy", False),
+        (7, "hello/records", "bytes 32", False),
+        (8, "hello/count", "uint 1..4294967295", False),
+        (10, "hello/mode", "uint 1..2", False),
+        (11, "hello/muted", "flag", False),
+        (12, "hello/muted_for_ms", "uint 1..2592000000", False),
+        (13, "hello/device", "map hello/device", False),
+        (14, "hello/key_store", "uint 1..4", False),
+        (15, "hello/actions", "array 1..64 of text 1..32", False),
+        (16, "hello/release_seq", MS_, False),
+        (17, "hello/release_keys_seq", MS_, False),
+        (18, "hello/entries_seq", MS_, False),
+        (19, "hello/entries_keys_seq", MS_, False),
+        (20, "hello/features", "uint 1..1", False),
+        (21, "hello/keys_epoch", MS_, False),
+    ],
+    "hello/device": [
+        (1, "hello/device/form", "uint 1..12", False),
+        (2, "hello/device/os_version", "text 1..32", False),
+        (3, "hello/device/version", "text 1..32", False),
+        (4, "hello/device/mac", "bytes 6", False),
+        (5, "hello/device/archive", "text 1..64", False),
+    ],
+    "ping": [],
+    "bye": [],
+    "have": [(2, "have/ids", "set 1..4096 of bytes 32", True)],
+    "want": [(2, "want/ids", "set 1..4096 of bytes 32", False), (3, "want/list", "bytes 32", False)],
+    "release": [
+        (2, "release/keys", "bytes 1..524288", True),
+        (3, "release/channel", "bytes 1..524288", True),
+        (4, "release/release", "bytes 1..524288", True),
+    ],
+    "entries": [(2, "entries/keys", "bytes 1..524288", True), (3, "entries/entries", "bytes 1..524288", True)],
+    "get": [(2, "get/sha256", "bytes 32", True), (3, "get/offset", MS_, False), (4, "get/length", MS_, False)],
+    "missing": [(2, "missing/sha256", "bytes 32", True), (3, "missing/offset", MS_, False),
+                (4, "missing/length", MS_, False)],
+    "reach": [(2, "reach/devices", "set 1..256 of bytes 16", False)],
+    "evidence": [
+        (2, "evidence/format", "uint 1..4", True),
+        (3, "evidence/key", "bytes 32", True),
+        (4, "evidence/data", "bytes 1..65536", True),
+    ],
+    # An evidence message's data, a map of the table of its format (1..4).
+    "evidence/android": [
+        (1, "evidence/android/group_tag", "bytes 8", False),
+        (2, "evidence/android/salt", "bytes 16", True),
+        (3, "evidence/android/chain", "array 1..10 of bytes 1..8192", True),
+    ],
+    "evidence/tpm": [
+        (1, "evidence/tpm/group_tag", "bytes 8", False),
+        (2, "evidence/tpm/salt", "bytes 16", True),
+        (3, "evidence/tpm/chain", "array 1..10 of bytes 1..8192", True),
+        (4, "evidence/tpm/ek", "bytes 1..2048", True),
+        (5, "evidence/tpm/ak", "bytes 1..2048", True),
+        (6, "evidence/tpm/key", "bytes 1..2048", True),
+        (7, "evidence/tpm/attest", "bytes 1..2048", True),
+        (8, "evidence/tpm/signature", "bytes 1..2048", True),
+    ],
+    "evidence/credential": [
+        (1, "evidence/credential/credential", "bytes 1..2048", True),
+        (2, "evidence/credential/secret", "bytes 1..2048", True),
+    ],
+    "evidence/activated": [(1, "evidence/activated/secret", "bytes 32", True)],
+}
+EVIDENCE_FORMATS = {1: "evidence/android", 2: "evidence/tpm", 3: "evidence/credential", 4: "evidence/activated"}
+MESSAGE_TYPES5 = {1: "hello", 3: "ping", 4: "bye", 6: "have", 12: "release", 13: "get", 14: "missing",
+                  18: "reach", 19: "evidence", 25: "entries", 30: "want"}
+TABLES.update(TABLES5)
 
 MEDIA_TYPES = 4
 
@@ -3375,8 +3531,9 @@ def _plain(x, most=255):
 
 def hub_rule(o):
     """`hub` orders: 13 off alone, or 10 [endpoint, key 32], 11 forwarders
-    (1 to 8 texts, each once), 12 clients (a set of 1 to 256 [ID 16, key
-    32, psk 32]); not empty."""
+    (1 to 8 [address, pin 32], each address once: the root signs each
+    forwarder's pin with its address); 12 (the clients) is retired and
+    refused; not empty."""
     bad = "orders/hub"
     if 13 in o:
         return "take" if o[13] == 1 and all(k >= 256 or k == 13 for k in o) else bad
@@ -3386,17 +3543,16 @@ def hub_rule(o):
             return bad
     if 11 in o:
         a = o[11]
-        if not (isinstance(a, list) and 1 <= len(a) <= 8 and all(_plain(x) for x in a) and len(set(a)) == len(a)):
+        if not (isinstance(a, list) and 1 <= len(a) <= 8):
+            return bad
+        if not all(isinstance(x, list) and len(x) == 2 and _plain(x[0]) and isinstance(x[1], bytes) and len(x[1]) == 32 for x in a):
+            return bad
+        if len({x[0] for x in a}) != len(a):
             return bad
     if 12 in o:
-        a = o[12]
-        if not (isinstance(a, list) and 1 <= len(a) <= 256):
-            return bad
-        keys = [enc(x[0] if isinstance(x, list) and x else x) for x in a]
-        if any(keys[i] >= keys[i + 1] for i in range(len(keys) - 1)):
-            return bad
-        if not all(isinstance(c, list) and len(c) == 3 and all(isinstance(v, bytes) and len(v) == n for v, n in zip(c, (16, 32, 32))) for c in a):
-            return bad
+        # retired: the clients and their pre-shared keys (a client sends its
+        # key by `tunnel`; the pre-shared key is never sent)
+        return bad
     if all(k >= 256 for k in o):
         return bad
     return "take"
@@ -3622,14 +3778,17 @@ def wave4_vectors():
         ("mute over 30 days", 8, {10: 2592000001}),
         ("device command with a hidden character", 10, {10: "he‮at"}),
         ("device command with arguments not one item", 10, {10: "heat", 11: b"\x82"}),
-        ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: ["cbb.tools:8764"]}),
+        ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: [["cbb.tools:8764", fake("forwarder pin", 32)]]}),
+        ("hub with two forwarders", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 32)], ["[2001:db8::7]:8764", fake("pin 2", 32)]]}),
+        ("hub forwarder without its pin", 2, {11: ["cbb.tools:8764"]}),
+        ("hub forwarder with a short pin", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 31)]]}),
         ("hub off", 2, {13: 1}),
-        ("hub with its clients", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
+        ("hub with its clients, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
         ("hub empty", 2, {}),
         ("hub off with an endpoint", 2, {13: 1, 10: ["203.0.113.5:51820", fake("hub key", 32)]}),
         ("hub endpoint with a hidden character", 2, {10: ["203.0.113.5\u202e:51820", fake("hub key", 32)]}),
-        ("hub forwarder twice", 2, {11: ["cbb.tools:8764", "cbb.tools:8764"]}),
-        ("hub clients out of order", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
+        ("hub forwarder twice", 2, {11: [["cbb.tools:8764", fake("forwarder pin", 32)], ["cbb.tools:8764", fake("pin 2", 32)]]}),
+        ("hub clients out of order, field 12 retired", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
         ("orders of a type without orders", 4, {10: 1}),
     ]:
         b = enc(o)
@@ -3732,6 +3891,134 @@ def wave4_vectors():
     return out
 
 
+def wave5_vectors():
+    """messages5.json: the member connection's own messages (sections 9.2
+    and 9.3)."""
+    out = {"tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
+                      for name, rows in TABLES5.items()},
+           "types": {str(t): name for t, name in MESSAGE_TYPES5.items()}}
+    cv = copy_vector()
+    current = dec(bytes.fromhex(cv["copy"]))
+    device = {1: 1, 2: "14.1", 3: "0.6.0", 4: bytes.fromhex("020000000001"), 5: "cbb-linux-arm64.tar.gz"}
+    hello = {0: 1, 2: 3, 3: 1, 4: "kitchen laptop", 5: T0, 6: current, 7: fake("set digest", 32), 8: 12,
+             10: 1, 13: device, 14: 2, 15: ["lock", "sleep"], 16: 3, 17: 1, 18: 2, 19: 1, 20: 1, 21: 4}
+    ids = sorted(fake("record id %d" % i, 32) for i in range(3))
+    devs = sorted([LAPTOP.id16, PHONE.id16, BOARD.id16])
+    release = {0: 12, 2: b'{"body":"","sig":"","key":""}', 3: b"{}", 4: b"{}"}
+    take, refuse = [], []
+
+    def msg(name, m, note=None):
+        rule = check_map(MESSAGE_TYPES5[m[0]], m)
+        assert rule is None, (name, rule)
+        e = {"name": name, "t": m[0], "message": enc(m).hex()}
+        if note:
+            e["note"] = note
+        take.append(e)
+
+    def bad(name, m, rule):
+        got = check_map(MESSAGE_TYPES5[m[0]], m)
+        assert got == rule, (name, got, rule)
+        refuse.append({"name": name, "rule": rule, "message": enc(m).hex()})
+
+    msg("hello", hello, "field 6 is copy.json's copy; the records say what the device may do")
+    msg("hello of a device that says little", {0: 1})
+    msg("hello, muted for a day", {0: 1, 11: 1, 12: 86_400_000})
+    msg("hello with 64 actions", {0: 1, 15: ["a%d" % i for i in range(64)]})
+    msg("hello with a field of a later version", {0: 1, 300: "later"})
+    bad("hello, muted for 31 days", {0: 1, 11: 1, 12: 2_592_000_001}, "hello/muted_for_ms")
+    bad("hello, 65 actions", {0: 1, 15: ["a%d" % i for i in range(65)]}, "hello/actions")
+    bad("hello, an action name of 33 bytes", {0: 1, 15: ["a" * 33]}, "hello/actions")
+    bad("hello, a name of 129 bytes", {0: 1, 4: "n" * 129}, "hello/name")
+    bad("hello, a digest of 31 bytes", {0: 1, 7: fake("set digest", 31)}, "hello/records")
+    bad("hello, a copy with an outer field the format does not name", {0: 1, 6: {**current, 7: 1}},
+        "hello/current")
+    bad("hello, a device form of a later version", {0: 1, 13: {**device, 1: 13}}, "hello/device")
+    bad("hello, a version of 33 bytes", {0: 1, 13: {**device, 3: "v" * 33}}, "hello/device")
+    bad("hello, an archive of 65 bytes", {0: 1, 13: {**device, 5: "a" * 65}}, "hello/device")
+    bad("hello, a MAC address of 5 bytes", {0: 1, 13: {**device, 4: b"\x02\x00\x00\x00\x01"}}, "hello/device")
+    bad("hello, muted 2", {0: 1, 11: 2}, "hello/muted")
+    msg("ping", {0: 3})
+    msg("bye", {0: 4})
+    msg("have", {0: 6, 2: ids})
+    bad("have, IDs out of order", {0: 6, 2: list(reversed(ids))}, "have/ids")
+    bad("have, no IDs", {0: 6}, "have/ids")
+    msg("want", {0: 30, 2: ids, 3: fake("list", 32)})
+    msg("want of records", {0: 30, 2: ids})
+    msg("want of a list", {0: 30, 3: fake("list", 32)})
+    bad("want of nothing", {0: 30}, "want/empty")
+    bad("want, IDs out of order", {0: 30, 2: list(reversed(ids))}, "want/ids")
+    bad("want, an ID twice", {0: 30, 2: [ids[0], ids[0]]}, "want/ids")
+    bad("want, a list hash of 31 bytes", {0: 30, 3: fake("list", 31)}, "want/list")
+    msg("release", release, "the files are placeholders; their own reader checks them")
+    bad("release without its channel file", {k: v for k, v in release.items() if k != 3}, "release/channel")
+    msg("entries", {0: 25, 2: b"{}", 3: b"{}"})
+    bad("entries without the keys file", {0: 25, 3: b"{}"}, "entries/keys")
+    msg("get", {0: 13, 2: fake("blob", 32), 3: 4_194_304, 4: 4_194_304})
+    msg("get from the start", {0: 13, 2: fake("blob", 32), 4: 4_194_304})
+    msg("get that cancels", {0: 13, 2: fake("blob", 32)}, "no length cancels")
+    bad("get with offset 0 written", {0: 13, 2: fake("blob", 32), 3: 0, 4: 1}, "get/offset")
+    bad("get, a hash of 16 bytes", {0: 13, 2: fake("blob", 16)}, "get/sha256")
+    msg("missing", {0: 14, 2: fake("blob", 32), 4: 1024})
+    bad("missing without its hash", {0: 14, 4: 1024}, "missing/sha256")
+    msg("reach", {0: 18, 2: devs})
+    msg("reach of nobody", {0: 18})
+    bad("reach, devices out of order", {0: 18, 2: list(reversed(devs))}, "reach/devices")
+    bad("reach of 257 devices", {0: 18, 2: sorted(sha(b"d %d" % i)[:16] for i in range(257))}, "reach/devices")
+    msg("evidence", {0: 19, 2: 1, 3: fake("key hash", 32), 4: fake("attestation", 3000)})
+    bad("evidence of a format of a later version", {0: 19, 2: 5, 3: fake("key hash", 32), 4: b"x"},
+        "evidence/format")
+    # The widest have, a release file and evidence at their bounds and one
+    # past them are tested where they are built (core/src/msg/tests.rs,
+    # the_member_messages_hold_at_their_bounds): written out here they
+    # would pass the repository's limit on one file.
+    out["take"], out["refuse"] = take, refuse
+
+    # An evidence message's data, by its format (section 17).
+    data_take, data_refuse = [], []
+    tag, salt = GROUP[:8], fake("challenge salt", 16)
+    cert = fake("certificate", 600)
+    tpm = {4: fake("ek", 314), 5: fake("ak", 90), 6: fake("key", 90), 7: fake("attest", 150),
+           8: fake("signature", 76)}
+
+    def data(name, fmt, d):
+        rule = check_map(EVIDENCE_FORMATS[fmt], d)
+        assert rule is None, (name, rule)
+        data_take.append({"name": name, "format": fmt, "data": enc(d).hex()})
+
+    def bad_data(name, fmt, d, rule):
+        got = check_map(EVIDENCE_FORMATS[fmt], d)
+        assert got == rule, (name, got, rule)
+        data_refuse.append({"name": name, "format": fmt, "rule": rule, "data": enc(d).hex()})
+
+    data("android-key evidence", 1, {1: tag, 2: salt, 3: [cert, cert, cert]})
+    data("android-key evidence of a key made outside a group", 1, {2: salt, 3: [cert]})
+    data("android-key evidence, 10 certificates", 1, {2: salt, 3: [cert] * 10})
+    data("android-key evidence, a certificate of 8192 bytes", 1, {2: salt, 3: [fake("certificate", 8192)]})
+    data("TPM evidence", 2, {1: tag, 2: salt, 3: [cert], **tpm})
+    data("TPM evidence, a structure of 2048 bytes", 2, {2: salt, 3: [cert], **tpm, 4: fake("ek", 2048)})
+    data("the root's TPM credential", 3, {1: fake("id object", 68), 2: fake("encrypted seed", 256)})
+    data("the TPM's activated credential", 4, {1: fake("credential value", 32)})
+    data("evidence data with a field of a later version", 4, {1: fake("credential value", 32), 300: "later"})
+    bad_data("android-key evidence without a salt", 1, {3: [cert]}, "evidence/android/salt")
+    bad_data("android-key evidence, a salt of 15 bytes", 1, {2: salt[:15], 3: [cert]}, "evidence/android/salt")
+    bad_data("android-key evidence, a group tag of 16 bytes", 1, {1: GROUP, 2: salt, 3: [cert]},
+             "evidence/android/group_tag")
+    bad_data("android-key evidence, 11 certificates", 1, {2: salt, 3: [cert] * 11}, "evidence/android/chain")
+    bad_data("android-key evidence, a certificate of 8193 bytes", 1, {2: salt, 3: [fake("certificate", 8193)]},
+             "evidence/android/chain")
+    bad_data("android-key evidence, no certificate", 1, {2: salt, 3: []}, "evidence/android/chain")
+    bad_data("TPM evidence without its signature", 2, {1: tag, 2: salt, 3: [cert], **{k: v for k, v in tpm.items() if k != 8}},
+             "evidence/tpm/signature")
+    bad_data("TPM evidence, a structure of 2049 bytes", 2, {2: salt, 3: [cert], **tpm, 4: fake("ek", 2049)},
+             "evidence/tpm/ek")
+    bad_data("a TPM credential without its seed", 3, {1: fake("id object", 68)}, "evidence/credential/secret")
+    bad_data("an activated credential of 31 bytes", 4, {1: fake("credential value", 31)},
+             "evidence/activated/secret")
+    bad_data("evidence data that is no map", 4, [fake("credential value", 32)], "evidence/activated/shape")
+    out["data_take"], out["data_refuse"] = data_take, data_refuse
+    return out
+
+
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
@@ -3768,7 +4055,7 @@ def main():
     cdt, cdr = card_vectors()
     files["messages3.json"] = {
         "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
-                   for name, rows in TABLES.items() if name not in TABLES4},
+                   for name, rows in TABLES.items() if name not in TABLES4 and name not in TABLES5},
         "types": {str(t): name for t, name in MESSAGE_TYPES.items()},
         "take": wt, "refuse": wr, "maps": wm,
         "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
@@ -3778,6 +4065,7 @@ def main():
         "intros": intro_vectors(rt),
     }
     files["wave4.json"] = wave4_vectors()
+    files["messages5.json"] = wave5_vectors()
     files["future.json"] = future_vectors()
     files["sheet.json"] = sheet_vectors()
     # Each signature has one form: the high-S twin of a valid signature

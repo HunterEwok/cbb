@@ -135,6 +135,13 @@ pub fn os_name() -> &'static str {
 /// the key level files (docs/roadmap.md, "Key levels"). It returns the new
 /// identity, which the service starts in, and why the member key is in a
 /// file when the hardware could not take it.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "cbb new makes groups of 0.6 (founding.rs); the old member's tests make theirs here until it goes"
+    )
+)]
 pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     if Identity::load(dir)?.is_some() {
         return Err(Error::msg("this device is already in a group; cbb status shows it"));
@@ -1103,34 +1110,6 @@ impl Admin<'_> {
         Ok(Some(d.name))
     }
 
-    /// Sends the device d a hub command with the order hub, signed as an
-    /// admin (Go's moveHub, makeHub and stopHub on another device), and
-    /// returns its result once it carried the command out.
-    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
-    pub fn hub_command(&self, d: &Device, hub: serde_json::Value) -> Result<crate::wire::CommandResult> {
-        self.order_command(
-            d,
-            cbb_core::manage::Order::Hub(hub),
-            "only an admin makes a device a hub, moves the hub or stops one: the group's root, an admin it made (cbb admin), or an admin phone",
-        )
-    }
-
-    /// Turns sync away from home off on the device target names with an
-    /// away-off command (Go's awayOffOn); only its own user turns it on
-    /// again (D-45).
-    pub fn away_off_on(&self, target: &str) -> Result<()> {
-        let d = find_device(self.node, target)?;
-        if d.id == self.me() {
-            return Err(Error::msg("-on names this device; cbb global off turns it off here"));
-        }
-        self.order_command(
-            &d,
-            cbb_core::manage::Order::AwayOff,
-            "only an admin turns sync away from home off on another device: the group's root, an admin it made (cbb admin), or an admin phone",
-        )
-        .map(|_| ())
-    }
-
     /// Turns sync on or off on the device target names with a mode command
     /// (Go's `cbb sync -on DEVICE`); this device's own sync is the
     /// service's, without -on: None when target names this device, as Go's
@@ -1198,67 +1177,6 @@ impl Admin<'_> {
             let what = if paste { "remote paste" } else { "the quick actions" };
             return Err(Error::msg(format!("{what} may still be on: {}", failed.join("; "))));
         }
-        Ok(())
-    }
-
-    /// Signs the device d a record with forward_only unless its newest has
-    /// it, as Go's markForwardOnly: d then passes the copies on as a hub
-    /// and reads none (docs/protocol.md, section 11, "Two kinds of hub").
-    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
-    pub fn mark_forward_only(&self, d: &Device) -> Result<()> {
-        if d.forward_only {
-            return Ok(());
-        }
-        if d.admin_key.is_some() {
-            return Err(Error::msg(format!(
-                "{} is an admin; only a computer that is no admin only passes copies on",
-                d.name
-            )));
-        }
-        if !d.can(authority::CAP_HUB) {
-            return Err(Error::msg(format!(
-                "{} cannot be a hub; only a member with the cap hub only passes copies on",
-                d.name
-            )));
-        }
-        if d.store == "rootless" {
-            return Err(Error::msg(format!(
-                "{} is installed without root, and such a computer is never a hub (D-79)",
-                d.name
-            )));
-        }
-        if d.id == self.root_device() {
-            return Err(Error::msg(format!("{} is the root's own computer, a hub that reads the copies", d.name)));
-        }
-        let s = self.signing()?;
-        self.sign(
-            &s,
-            Body {
-                kind: authority::TYPE_DEVICE.into(),
-                device: d.id.clone(),
-                name: d.name.clone(),
-                role: d.role.clone(),
-                caps: d.caps.clone(),
-                os: d.os.clone(),
-                key: Some(Hash(d.key)),
-                store: d.store.clone(),
-                hardware: d.kind.clone(),
-                proof: d.proof.clone(),
-                seal: d.seal.clone(),
-                forward_only: true,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| {
-            Error::msg(format!(
-                "the group's records did not take the record that makes it a hub: only the root or an admin with the powers admit and hub signs it ({})",
-                e.message()
-            ))
-        })?;
-        self.node.logf(&format!(
-            "cbb: {} ({}) only passes the copies on now, and reads none; the next copies are no longer sealed to it",
-            d.name, d.id
-        ));
         Ok(())
     }
 
@@ -1634,27 +1552,6 @@ pub fn record_admitted(node: &Node, admitter: &admit::Admitter, a: &admit::Admit
     Ok(())
 }
 
-/// Why this device may not be one of the group's hubs, if it may not, as
-/// Go's away does: only the root or an admin, whose key the group's key
-/// level still lets be a hub (it had the user's consent when it was made
-/// one).
-pub fn may_be_hub(dir: &Path, node: &Node) -> Result<()> {
-    let ident = node.identity();
-    if signer(dir, &ident)?.is_none() {
-        return Err(Error::msg(
-            "only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)",
-        ));
-    }
-    let store = if crate::rootless::is() {
-        "rootless"
-    } else if ident.external.is_some() {
-        "hardware"
-    } else {
-        "file"
-    };
-    level_allows(&settled_level(node), store, "this device", "", true)
-}
-
 /// The image sets CBB_CONTAINER (packaging/docker/Dockerfile). A container
 /// keeps its keys in a file in its volume, which whoever copies the volume
 /// has, so it holds no key that admits or removes devices: it is never the
@@ -1704,26 +1601,10 @@ const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
 /// Whether the group's key level lets a device whose key is in store be
-/// its root, an admin or a hub, as Go's levelAllows; at the level files a
-/// key in a file needs consent, which hint says how to give.
-fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
-    let msg = match () {
-        _ if store == "rootless" => format!(
-            "{name} is installed without root, so every program of its user can read its keys; such a device is never the group's root, an admin or a hub (D-79)"
-        ),
-        _ if level == "proven" && store != "proven" => format!(
-            "attestation does not prove that {name} keeps its key in hardware, and the group's key level lets only such keys be its root, an admin or a hub; on the root, cbb keys hardware lets keys in hardware by the device's own word too"
-        ),
-        _ if store != "file" => return Ok(()),
-        _ if level != "files" => format!(
-            "{name} keeps its keys in a file, and the group's key level lets only keys in hardware be its root, an admin or a hub; on the root, cbb keys files lets keys in files too, each time after a warning"
-        ),
-        _ if !consent => format!(
-            "{name} keeps its keys in a file, which a thief with it can copy and then act for it until another admin removes it; to allow it anyway, {hint}"
-        ),
-        _ => return Ok(()),
-    };
-    Err(Error::msg(msg))
+/// its root, an admin or a hub: the core's rule (`cbb_core::keylevel`),
+/// which the phones' apps share.
+pub(crate) fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
+    cbb_core::keylevel::allows(level, store, name, hint, consent)
 }
 
 /// Where this device says its keys live, as Go's keyStore: rootless for a

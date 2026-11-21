@@ -175,6 +175,36 @@
     },
     {
       "class": "frozen",
+      "name": "copies::blob::SEGMENT",
+      "reached": [
+        "a_copy_with_a_blob_seals_and_opens_with_its_bytes"
+      ],
+      "refusal": "",
+      "value": 65536,
+      "widest": "a blob's plaintext segment, the last one padded with zeros"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::blob::SEALED_SEGMENT",
+      "reached": [
+        "a_copy_with_a_blob_seals_and_opens_with_its_bytes"
+      ],
+      "refusal": "",
+      "value": 65552,
+      "widest": "a segment and its AES-256-GCM tag, the unit a fetch gets"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::blob::MAX_SEGMENTS",
+      "reached": [
+        "a_blob_holds_at_most_max_segments"
+      ],
+      "refusal": "",
+      "value": 16384,
+      "widest": "the largest media copy in segments"
+    },
+    {
+      "class": "frozen",
       "name": "content::MAX_STATE",
       "reached": [
         "vec:wave4.json:state over 4 KiB"
@@ -953,6 +983,36 @@
       "widest": "failed attempts before an open invitation closes"
     },
     {
+      "class": "frozen",
+      "name": "join::invitation::HOME_DIGITS",
+      "reached": [
+        "a_home_window_has_six_digits"
+      ],
+      "refusal": "",
+      "value": 6,
+      "widest": "the digits of a home window's code, CPace's password"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::MAX_WINDOW_ADDRS",
+      "reached": [
+        "a_window_link_reads_back"
+      ],
+      "refusal": "",
+      "value": 4,
+      "widest": "addresses in a home window's QR code"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::MAX_WINDOW_TEXT",
+      "reached": [
+        "a_window_link_reads_back"
+      ],
+      "refusal": "",
+      "value": 512,
+      "widest": "the text of a home window's QR code"
+    },
+    {
       "class": "reader",
       "name": "join::invitation::ATTEMPT_MS",
       "reached": [
@@ -961,16 +1021,6 @@
       "refusal": "",
       "value": 30000,
       "widest": "the machine's steps of one attempt"
-    },
-    {
-      "class": "reader",
-      "name": "join::invitation::ANSWER_MS",
-      "reached": [
-        "the_short_code_opens_its_commitment"
-      ],
-      "refusal": "",
-      "value": 600000,
-      "widest": "the person comparing the codes"
     },
     {
       "class": "frozen",
@@ -1131,6 +1181,110 @@
       "refusal": "",
       "value": 12,
       "widest": "a store frame's header"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_ACTIONS",
+      "reached": [
+        "vec:messages5.json:hello with 64 actions",
+        "vec:messages5.json:hello, 65 actions"
+      ],
+      "refusal": "hello/actions",
+      "value": 64,
+      "widest": "the action names a hello offers"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_ACTION_NAME",
+      "reached": [
+        "vec:messages5.json:hello, an action name of 33 bytes"
+      ],
+      "refusal": "hello/actions",
+      "value": 32,
+      "widest": "an action's name"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_VERSION_TEXT",
+      "reached": [
+        "vec:messages5.json:hello, a version of 33 bytes"
+      ],
+      "refusal": "hello/device",
+      "value": 32,
+      "widest": "a system's or cbb's version in a hello"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_ARCHIVE",
+      "reached": [
+        "vec:messages5.json:hello, an archive of 65 bytes"
+      ],
+      "refusal": "hello/device",
+      "value": 64,
+      "widest": "a release archive's name, 61 bytes at the widest"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_RELEASE_FILE",
+      "reached": [
+        "the_member_messages_hold_at_their_bounds"
+      ],
+      "refusal": "release/release",
+      "value": 524288,
+      "widest": "a release file of a 256 KiB body in base64 with its signature"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE",
+      "reached": [
+        "the_member_messages_hold_at_their_bounds"
+      ],
+      "refusal": "evidence/data",
+      "value": 65536,
+      "widest": "an attestation's chain or a TPM's quote with its certificates"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE_CERT",
+      "reached": [
+        "vec:messages5.json:android-key evidence, a certificate of 8192 bytes",
+        "vec:messages5.json:android-key evidence, a certificate of 8193 bytes"
+      ],
+      "refusal": "evidence/android/chain",
+      "value": 8192,
+      "widest": "a certificate of an attestation's chain: Android's with Remote Key Provisioning, a TPM maker's"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_EVIDENCE_CHAIN",
+      "reached": [
+        "vec:messages5.json:android-key evidence, 10 certificates",
+        "vec:messages5.json:android-key evidence, 11 certificates"
+      ],
+      "refusal": "evidence/android/chain",
+      "value": 10,
+      "widest": "an attestation's chain, leaf or endorsement key's certificate first"
+    },
+    {
+      "class": "frozen",
+      "name": "msg::member::MAX_TPM_STRUCTURE",
+      "reached": [
+        "vec:messages5.json:TPM evidence, a structure of 2048 bytes",
+        "vec:messages5.json:TPM evidence, a structure of 2049 bytes"
+      ],
+      "refusal": "evidence/tpm/ek",
+      "value": 2048,
+      "widest": "a TPM structure: an RSA endorsement key's TPM2B_PUBLIC, an encrypted seed"
+    },
+    {
+      "class": "frozen",
+      "name": "join::guest::MAX_DATA",
+      "reached": [
+        "a_guest_data_holds_at_its_bound"
+      ],
+      "refusal": "guest/data",
+      "value": 16384,
+      "widest": "bytes of a guest's connection in one guest message"
     },
     {
       "class": "reader",

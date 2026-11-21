@@ -345,6 +345,13 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   also name where the project's relay is reached, `"relays": [{"name": "cbb.tools:8765",
   "endpoints": ["relay.cbb.tools:8765"]}]` (no `endpoints`: its name), for moving it to
   another server; the devices on it follow at their next failed registration.
+- **The project's push service's key** goes into `keys.json` the same way, since no pin of it is
+  built in and no group reaches the service before one is listed: on cbb.tools `cbb-push`
+  makes `push.pem` in its state directory on its first start (keep that file; it is the
+  service's TLS key), `sudo openssl pkey -in /var/lib/private/cbb-push/push.pem -pubout -out
+  push-pub.pem` takes its public key, and on the Mac `release-sign renew -push
+  cbb.tools:8767=push-pub.pem` (or `-push` with `publish`) lists it in the next signed
+  `keys.json`. A new key for it later goes as below, with `-push`.
 - **A new key for the project's forwarder or relay**, without a release: make the new key
   file beside the running one, take its public key (`openssl pkey -in relay.pem -pubout -out
   relay-2.pem`; the WireGuard block of a relay's file is skipped), and on the Mac

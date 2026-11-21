@@ -54,6 +54,12 @@ required-features = ["testhooks"]
 name = "helper_faults"
 required-features = ["testhooks"]
 
+# It shortens a hub's wait before it serves with CBB_TEST_STANDBY_GRACE,
+# which only a build for tests reads: cargo test --features testhooks.
+[[test]]
+name = "away_hubs"
+required-features = ["testhooks", "tunnel"]
+
 [features]
 default = ["tunnel"]
 # Builds cbbw as well; for Windows.

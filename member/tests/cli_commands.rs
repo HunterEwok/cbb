@@ -923,11 +923,13 @@ fn pair_with_a_code() {
     run_cases(
         "pair-code",
         vec![
+            // The window's six digits from standard input, never the
+            // command line; the service finds the window.
             Case {
                 name: "pair -code",
                 args: &["pair", "-code"],
                 stdin: "123 456\n",
-                sent: Some(("join", Some(|s| s.s("code") == "123456"))),
+                sent: Some(("join", Some(|s| s.s("code") == "123456" && s.s("address").is_empty()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -936,7 +938,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS",
                 args: &["pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some((
                     "join",
                     Some(|s| {
@@ -952,7 +954,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -name -caps -code ADDRESS",
                 args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
                 stdout: "Joined the group",
                 ..Case::default()
@@ -960,8 +962,17 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -caps none -code",
                 args: &["pair", "-caps", "none", "-code"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // The window's QR code text goes as it is.
+            Case {
+                name: "pair -code with the QR code's text",
+                args: &["pair", "-code"],
+                stdin: WINDOW_LINK,
+                sent: Some(("join", Some(|s| s.s("code") == WINDOW_LINK.trim()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -969,9 +980,9 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS, no service",
                 args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: WINDOW_LINK,
                 code: 1,
-                stderr: "cannot connect to 127.0.0.1:1",
+                stderr: "cannot reach 127.0.0.1:1",
                 ..Case::default()
             },
             Case {
@@ -1019,19 +1030,10 @@ fn pair_with_a_code() {
                 stderr: "invitation",
                 ..Case::default()
             },
-            // A bad code fails before the service is asked or the address
-            // dialed.
+            // Not six digits: refused here, before the service hears of it.
             Case {
-                name: "five digits",
+                name: "five digits on standard input",
                 args: &["pair", "-code"],
-                stdin: "12345\n",
-                code: 1,
-                stderr: "six digits",
-                ..Case::default()
-            },
-            Case {
-                name: "five digits with an address",
-                args: &["pair", "-code", "127.0.0.1:1"],
                 stdin: "12345\n",
                 code: 1,
                 stderr: "six digits",
@@ -1041,12 +1043,54 @@ fn pair_with_a_code() {
     );
 }
 
+/// A home window's QR code text, as standard input gives it.
+const WINDOW_LINK: &str = "cbb://pair?addr=192.168.1.5:8764&fp=1111111111111111111111111111111111111111111111111111111111111111&i=22222222222222222222222222222222&c=123456\n";
+
+/// A join of 0.6 needs no answer: the six digits are CPace's password. A
+/// home window shows its digits, its address, each failed try, and the
+/// device's name.
+#[test]
+fn pairing_by_a_home_window() {
+    let dir = tempdir("compare");
+    let r = run_with(&dir, &["pair", "-code"], "123456\n", group_then("", |_| vec![done(json!({}))]), &[]);
+    want("join", &r, 0, "Joined the group", "");
+    assert!(!r.sent.iter().any(|s| s.op() == "answer"), "nothing to answer");
+    let window = group_then("g1", |s| match s.op() {
+        "pair" => vec![
+            (
+                json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                       "invite": WINDOW_LINK.trim()}),
+                Vec::new(),
+            ),
+            (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
+            done(json!({"name": "laptop"})),
+        ],
+        "devices" => vec![done(json!({}))],
+        _ => Vec::new(),
+    });
+    let r = run_with(&dir, &["pair"], "", window, &[]);
+    want("window", &r, 0, "cbb pair -code 192.168.1.5:8764", "");
+    for part in ["Pairing code: 654 321", "scan this QR code", "A device did not pair", "laptop joined the group"] {
+        assert!(r.stdout.contains(part), "{part}: {:?}", r.stdout);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn new_group() {
     let dir = tempdir("new");
     let r = run_with(&dir, &["new"], "", group_then("g1", |_| vec![done(status(json!({"group": "g1"})))]), &[]);
     want("new", &r, 0, "group g1", "");
     assert!(ops(&r).contains(&"new"), "new sent {:?}", ops(&r));
+    // The recovery sheet shows, once, as the service gives it.
+    let sheet = json!({"sheet": "AAAA BBBB CCCC DDDD\nEEEE FFFF GGGG HHHH", "qr": "CBBR1XYZ"}).to_string();
+    let with_sheet = group_then("g1", move |_| {
+        let (h, _) = done(status(json!({"group": "g1", "key_level": "hardware"})));
+        vec![(h, sheet.clone().into_bytes())]
+    });
+    let r = run_with(&dir, &["new"], "", with_sheet, &[]);
+    want("new with its sheet", &r, 0, "EEEE FFFF GGGG HHHH", "");
+    assert!(r.stdout.contains("recovery key") && !r.stdout.contains("root key is a file"), "{:?}", r.stdout);
     let r = run_in(&dir, &["new", "x"], "", json!({}), b"");
     want("new with an argument", &r, 2, "", "");
     let _ = std::fs::remove_dir_all(&dir);
@@ -2030,6 +2074,12 @@ fn global_commands() {
                 name: "relay without a key",
                 args: &["global", "relay", "198.51.100.9:8765"],
                 code: 2,
+                ..Case::default()
+            },
+            Case {
+                name: "relay off",
+                args: &["global", "relay", "off"],
+                sent: Some(("away", Some(|s| s.s("relay") == "off" && !s.b("consent")))),
                 ..Case::default()
             },
             Case {

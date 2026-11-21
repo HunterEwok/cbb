@@ -75,6 +75,7 @@ pub mod invite;
 pub mod issue;
 pub mod join;
 pub mod keyboard;
+pub mod keylevel;
 pub mod keystore;
 #[cfg(test)]
 mod longrules;
@@ -91,10 +92,12 @@ pub mod push;
 pub mod records;
 pub mod recovery;
 pub mod release;
+pub mod remotepaste;
 pub mod root;
 pub mod rule;
 pub mod seal;
 pub mod secret;
+pub mod setfile;
 pub mod sheet;
 #[cfg(test)]
 mod sim;

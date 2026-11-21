@@ -36,8 +36,9 @@ other device stays in the group:
 
 - with phones: on the other phone, which is an admin, remove the lost one; the app takes the
   group over in the same step;
-- with computers: on an admin computer, `sudo cbb takeover NAME`, where NAME is the lost
-  root.
+- with computers: on another computer of the group, `sudo cbb recovery` with the group's
+  recovery sheet; on the records of 0.6 the root changes only with the recovery key, so an
+  admin computer no longer takes the group over by itself.
 
 If someone else holds a removed admin's device, they can stop the group for a while by
 signing claims of their own: the devices say the group is stopped. Then the old root ends it,

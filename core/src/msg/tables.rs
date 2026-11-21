@@ -40,26 +40,19 @@ pub static ADB: Table = Table {
     ],
 };
 
+/// Messages 64, 65 and 66 carry CPace alone: the short code's commitment
+/// and nonces of earlier drafts (64 field 4, 65 field 4, 66 field 3) are
+/// retired, never given again, and refused (`msg::check`).
 pub static PAIR_START: Table = Table {
     shape: "pair/start/shape",
-    fields: &[
-        f(2, "pair/start/ya", Ty::BytesUpTo(256), true),
-        f(3, "pair/start/ada", Ty::BytesUpTo(16384), true),
-        f(4, "pair/start/commitment", B32, true),
-    ],
+    fields: &[f(2, "pair/start/ya", Ty::BytesUpTo(256), true), f(3, "pair/start/ada", Ty::BytesUpTo(16384), true)],
 };
 pub static PAIR_REPLY: Table = Table {
     shape: "pair/reply/shape",
-    fields: &[
-        f(2, "pair/reply/yb", Ty::BytesUpTo(256), true),
-        f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true),
-        f(4, "pair/reply/nonce", B32, true),
-    ],
+    fields: &[f(2, "pair/reply/yb", Ty::BytesUpTo(256), true), f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true)],
 };
-pub static PAIR_CONFIRM: Table = Table {
-    shape: "pair/confirm/shape",
-    fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true), f(3, "pair/confirm/nonce", B32, true)],
-};
+pub static PAIR_CONFIRM: Table =
+    Table { shape: "pair/confirm/shape", fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true)] };
 /// Message 67: CPace's Tb, the Welcome, and `Tw`, the Welcome's tag from
 /// the session's ISK over field 3's bytes (`join::welcome::tag`).
 pub static PAIR_WELCOME: Table = Table {
@@ -200,6 +193,8 @@ pub static OFFER: Table = Table {
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
         f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
+        f(10, "offer/next-obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(11, "offer/next-vless", Ty::Map(&VLESS), false),
     ],
 };
 
@@ -245,7 +240,7 @@ pub static GUEST: Table = Table {
         f(6, "guest/offer", Ty::Map(&OFFER), false),
         f(7, "guest/reason", REASON, false),
         f(8, "guest/conn", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
-        f(9, "guest/data", Ty::BytesUpTo(16384), false),
+        f(9, "guest/data", Ty::BytesUpTo(crate::join::guest::MAX_DATA), false),
         f(10, "guest/device", ID16, false),
         f(11, "guest/invite", INVITE_ID, false),
     ],
@@ -255,12 +250,17 @@ pub static GUEST: Table = Table {
 /// and in field 3 room for the group's AmneziaWG settings to change with
 /// the period in a later version. Only members get this message, so a
 /// server never sees the settings. No 0.6 writer sets field 3; a 0.6
-/// reader checks its shape and does not apply it.
+/// reader checks its shape and does not apply it. Fields 4 and 5 name the
+/// server these credentials are for (A-55, a face for each server): its
+/// pin, the hash of its key, always, and its address. There is no face
+/// for all servers, so that no two servers see the same one.
 pub static CREDENTIALS: Table = Table {
     shape: "member-credentials/shape",
     fields: &[
         f(2, "member-credentials/list", Ty::Array { of: &ENV, max: 259 }, true),
         f(3, "member-credentials/obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(4, "member-credentials/server", B32, true),
+        f(5, "member-credentials/address", Ty::Text(261), false),
     ],
 };
 

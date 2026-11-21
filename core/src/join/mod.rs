@@ -7,7 +7,8 @@
 //! it, the intro a member sends a peer that does not know its key yet, and
 //! the invitation (one for home and away).
 //!
-//! The order stays: a code or an invitation, CPace, the channel binding.
+//! The order stays: an invitation (a QR code, or a home window's six
+//! digits), CPace, the channel binding.
 //! What changes is what is bound and sent: CPace binds the key hashes of
 //! both TLS keys (each side's key container), and the Welcome carries the
 //! group's first root key and records, no certificate. The joiner's device
@@ -16,9 +17,11 @@
 
 pub mod approve;
 pub mod decide;
+pub mod guest;
 pub mod info;
 pub mod intro;
 pub mod invitation;
+pub mod session;
 pub mod waiting;
 pub mod welcome;
 
@@ -41,7 +44,7 @@ pub const T_ERROR: u64 = 69;
 /// The intro of a peer whose key the other side does not know (format 11.3).
 pub const T_INTRO: u64 = 8;
 
-/// Reads one frame of pairing. Before the code is confirmed every message
+/// Reads one frame of pairing. Before CPace is confirmed every message
 /// takes the pairing limit (1 MiB); after it, the Welcome (message 67) may
 /// take the member limit (7 MiB) and every other message still the pairing
 /// limit. A Welcome before the confirm is refused whatever its size.
@@ -120,22 +123,10 @@ impl PairError {
     }
 }
 
-/// The invitation ID of a pairing at home without an invitation: 16 zero
-/// bytes, which no invitation has (`invite/shape`).
-pub const NO_INVITATION: [u8; 16] = [0; 16];
-
-/// CPace's password at home without an invitation: 32 zero bytes, which no
-/// invitation's secret is (`invite/shape`). It is public, so CPace
-/// authenticates nothing by itself there: the member sends message 67 only
-/// with the approval of its person's "they match" (`approve::Approved`),
-/// and the joiner takes the Welcome only after its own person's
-/// (`welcome::Way::Home`).
-pub const NO_SECRET: [u8; invitation::SECRET] = [0; invitation::SECRET];
-
 /// The exporter of a pairing session of 0.6: 32 bytes of the TLS label
 /// [`crate::alpn::PAIR_EXPORTER`] with an empty context, from a session
 /// that negotiated `cbb-pair/3`. It is CPace's session identifier and what
-/// the short code, the session mark and the admin key's proof take. Every
+/// the session mark and the admin key's proof take. Every
 /// entry point of the pairing takes it, not bytes, and it has two makers:
 /// `tls::bykey::pairing_exporter`, from the core's own TLS session, and
 /// [`PairExporter::exported_by_platform_tls`], for a device whose platform
@@ -183,8 +174,7 @@ impl core::fmt::Debug for PairExporter {
 
 /// CPace's channel identifier: the prefix, the key hashes of the member's
 /// TLS key and the joiner's, the member's first, and the ID of the
-/// invitation each side believes it is using ([`NO_INVITATION`] at home
-/// without one). The keys come from the key containers the TLS handshake
+/// invitation each side believes it is using. The keys come from the key containers the TLS handshake
 /// saw, so a party in the middle with its own keys gets another
 /// identifier and the exchange fails; two ends in the flows of two
 /// invitations get two identifiers too.

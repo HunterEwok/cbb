@@ -28,7 +28,7 @@ const INVITE_FILE: &str = "cbb.cbbinvite";
 
 /// A request on its own connection, for the operations that answer more
 /// than once: the writer, the reader and the first answer.
-fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
+pub(crate) fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
     let conn = open(g, &mut h)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(&mut w, &Message::new(h, Vec::new()))?;
@@ -38,7 +38,7 @@ fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, 
 }
 
 /// The service's next message on r.
-fn next(r: &mut Reader<UnixStream>) -> Result<Message> {
+pub(crate) fn next(r: &mut Reader<UnixStream>) -> Result<Message> {
     r.read()?.ok_or_else(|| Error::msg("the service closed the connection"))
 }
 
@@ -117,20 +117,22 @@ pub(crate) fn pair(g: &Global, args: &[String]) -> Result<()> {
 }
 
 /// What cbb pair takes, as Go's pairUsage.
-pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: show a code for a new computer;
+pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open a pairing window with a six-digit code;
                                 in no group: join by the phone's QR code or a typed code
        cbb pair -admin          on the group's root: show a code for a phone with the app,
                                 which joins as an admin
-       cbb pair -qr [-admin]    on the root or an admin: admit the device that shows a QR
+       cbb pair -qr [-admin]    on a group of 0.5 only: admit the device that shows a QR
                                 code and a code and waits, the code or the QR code's text read
-                                from standard input; with -admin, on the root, the phone
-                                becomes an admin
-       cbb pair -code [address:port]   join with the code, read from standard input";
+                                from standard input; on 0.6 the new device dials the window
+       cbb pair -code [address:port]   join a pairing window: type the six digits it shows";
 
 /// Opens a pairing window and waits for the device that joins with its
 /// code, as Go's admit.
 fn window(g: &Global, admins: bool) -> Result<()> {
     let (_w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
+    if m.header.kind == HOME_WINDOW {
+        return home_window(g, &mut r, &m);
+    }
     if admins {
         println!("The phone that joins with this code becomes an admin of the group. It may then");
         println!("add, remove and renew devices, freeze other admins, choose the hub, and take");
@@ -157,6 +159,77 @@ fn window(g: &Global, admins: bool) -> Result<()> {
     Ok(())
 }
 
+/// The kind of the answer that opens a home window of a group of 0.6.
+pub(crate) const HOME_WINDOW: &str = "home-window";
+
+/// A home window of a group of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+/// its six digits and its QR code, which carries them for a phone; each
+/// device that fails is told here, and the third failure closes the
+/// window.
+fn home_window(g: &Global, r: &mut Reader<UnixStream>, m: &Message) -> Result<()> {
+    let code = &m.header.code;
+    let (a, b) = code.split_at(3.min(code.len()));
+    println!("Pairing code: {a} {b}\n");
+    if !m.header.invite.is_empty() && !m.header.address.is_empty() {
+        print!("{}", crate::qr(&m.header.invite));
+        println!("\nOn a phone, scan this QR code in the app.");
+    }
+    println!("On the new computer run cbb pair -code and type the code.");
+    // Six digits name no window: without mDNS the new computer finds the
+    // window by its QR code's text, which carries its addresses, ID and
+    // key (cbb pair -code ADDRESS dials another address for it).
+    match (m.header.address.is_empty(), m.header.invite.is_empty()) {
+        (false, false) => {
+            println!(
+                "If it cannot find this one: cbb pair -code {}, and type this line instead of the code:",
+                m.header.address
+            );
+            println!("  {}", m.header.invite);
+        }
+        (true, false) => {
+            println!("If it cannot find this one, type this line instead of the code:");
+            println!("  {}", m.header.invite);
+        }
+        (false, true) => println!("If it cannot find this one: cbb pair -code {}", m.header.address),
+        (true, true) => {}
+    }
+    println!("\nWaiting up to {} minutes. Press Ctrl+C to cancel.", m.header.expires / 60);
+    loop {
+        std::io::stdout().flush().ok();
+        let m = check(next(r)?)?;
+        if m.header.done {
+            println!("{} joined the group.", m.header.name);
+            admin_hint(g);
+            return Ok(());
+        }
+        if m.header.refused {
+            println!("A device did not pair: {}", m.header.detail);
+            println!("The window stays open; a wrong code spends one of three tries.");
+        }
+    }
+}
+
+/// The six digits a home window shows (spaces dropped), or its QR code's
+/// text, from standard input, with a prompt on a terminal.
+pub(crate) fn window_code() -> Result<cbb_core::secret::Zeroizing<String>> {
+    if interactive() {
+        print!("The six digits the pairing window shows (or its QR code's text): ");
+        std::io::stdout().flush().ok();
+    }
+    let line = cbb_core::secret::Zeroizing::new(read_line(MAX_QR_TEXT)?);
+    let text = line.trim();
+    if text.starts_with(cbb_core::join::invitation::WINDOW_PREFIX) {
+        return Ok(cbb_core::secret::Zeroizing::new(text.to_string()));
+    }
+    let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    if cbb_core::join::invitation::home_secret(&digits).is_none() {
+        return Err(Error::msg(
+            "type the six digits the pairing window shows (cbb pair on the group's root or an admin), or its QR code's text",
+        ));
+    }
+    Ok(cbb_core::secret::Zeroizing::new(digits))
+}
+
 /// Suggests a second admin when this computer, the root, is the group's
 /// only one, as Go's adminHint.
 fn admin_hint(g: &Global) {
@@ -176,8 +249,10 @@ fn admin_hint(g: &Global) {
 /// admin that is not the hub it goes through a hub, the first connected
 /// one or -hub's.
 pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str = "cbb invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
+    const USE: &str =
+        "cbb invite [-phone] [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]   (valid for up to 24h)";
     let (mut valid, mut out, mut hub) = (INVITE_LIFETIME_MS, INVITE_FILE.to_string(), String::new());
+    let mut phone = false;
     let (mut app, mut answers) = (None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -187,6 +262,7 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
             }
             Some("o") => out = it.next().cloned().ok_or_else(|| usage(USE))?,
             Some("hub") => hub = it.next().cloned().ok_or_else(|| usage(USE))?,
+            Some("phone") => phone = true,
             Some("app") => app = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
             Some("answers") => answers = Some(it.next().cloned().ok_or_else(|| usage(USE))?),
             _ => return Err(usage(USE)),
@@ -195,7 +271,9 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
     if valid <= 0 || valid > INVITE_MAX_MS || app.is_some() != answers.is_some() {
         return Err(usage(USE));
     }
-    let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, ..Default::default() };
+    // A group of 0.6 invites a computer, or with -phone a phone.
+    let kind = if phone { "phone".to_string() } else { String::new() };
+    let h = Header { op: "invite".into(), expires: valid / 1000, device: hub, kind, ..Default::default() };
     if let (Some(app), Some(answers)) = (app, answers) {
         return invite_app(g, h, &app, &answers);
     }
@@ -213,10 +291,16 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
         MONTHS[(until.month as usize).clamp(1, 12) - 1],
         until.day
     );
-    println!("On a new phone, open the CBB app, tap Join with an invitation and scan this:\n");
-    print!("{}", crate::qr(&m.header.invite));
-    println!("\nOr send it in the file {out}. On a new computer run:");
-    println!("\n  cbb pair -invite {out}\n");
+    // A group of 0.6 invites one kind of device: a computer, or a phone.
+    let only = m.header.invite.starts_with(cbb_core::join::invitation::PREFIX);
+    if !only || phone {
+        println!("On a new phone, open the CBB app, tap Join with an invitation and scan this:\n");
+        print!("{}", crate::qr(&m.header.invite));
+    }
+    if !only || !phone {
+        println!("\nSend it in the file {out}. On the new computer run:");
+        println!("\n  cbb pair -invite {out}\n");
+    }
     println!("Pass the code or the file only through a channel you trust: until it is used,");
     println!("whoever has it can ask to join.");
     println!("You confirm the device here before it is admitted. Keep this running; Ctrl+C");
@@ -227,6 +311,11 @@ pub(crate) fn invite(g: &Global, args: &[String]) -> Result<()> {
         if m.header.done {
             println!("{} joined the group.", m.header.name);
             return Ok(());
+        }
+        if m.header.refused {
+            println!("\nA device tried the invitation and was not admitted: {}", m.header.detail);
+            println!("The invitation stays open for another attempt.");
+            continue;
         }
         let Some(j) = m.header.joining else { continue };
         println!("\n{} ({}, device {}) used the invitation.", j.name, crate::status_text::os_name(&j.os), j.id);

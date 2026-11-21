@@ -3,7 +3,7 @@
 
 use serde_json::Value as Json;
 
-use super::{check, check_map, tables, wave4};
+use super::{check, check_map, member, tables, wave4};
 use crate::blind::card::Card;
 use crate::format::{Rule, cbor};
 use crate::join::invitation::Invitation;
@@ -242,8 +242,48 @@ fn an_offer_names_its_endpoint_keys() {
     );
 }
 
+#[test]
+fn an_offer_gives_its_next_settings_with_its_next_key() {
+    use crate::format::Value;
+    static HUB: [u8; 32] = [3; 32];
+    static NEXT: [u8; 32] = [5; 32];
+    static USER: [u8; 16] = [6; 16];
+    let key = |k: &'static [u8; 32]| Value::Array(vec![Value::Uint(3), Value::Bytes(k)]);
+    let obf = || {
+        Value::Map(vec![
+            (1, Value::Uint(4)),
+            (2, Value::Uint(40)),
+            (3, Value::Uint(70)),
+            (4, Value::Array(vec![Value::Uint(0), Value::Uint(0), Value::Uint(0), Value::Uint(0)])),
+            (5, Value::Array((1..=4u64).map(|h| Value::Array(vec![Value::Uint(h), Value::Uint(h)])).collect())),
+        ])
+    };
+    let vless = || Value::Map(vec![(1, Value::Bytes(&USER))]);
+    let offer = |fields: &[u16]| {
+        let mut m = vec![(1, key(&HUB))];
+        for f in fields {
+            m.push(match f {
+                3 => (3, obf()),
+                4 => (4, vless()),
+                7 => (7, key(&NEXT)),
+                10 => (10, obf()),
+                _ => (11, vless()),
+            });
+        }
+        Value::Map(m)
+    };
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 4, 7, 10, 11])), Ok(()));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 7, 10])), Ok(()));
+    let next_obf = Err(Rule::field("offer/next-obfuscation"));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 10])), next_obf, "without the next key");
+    assert_eq!(check_map(&tables::OFFER, &offer(&[7, 10])), next_obf, "without settings now");
+    let next_vless = Err(Rule::field("offer/next-vless"));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[4, 11])), next_vless, "without the next key");
+    assert_eq!(check_map(&tables::OFFER, &offer(&[7, 11])), next_vless, "without a way now");
+}
+
 mod reading {
-    use super::super::{Field, Later, Table, Ty, check_map, later, read_map, read_map_by, tables, wave4};
+    use super::super::{Field, Later, Table, Ty, check_map, later, member, read_map, read_map_by, tables, wave4};
     use crate::format::{Rule, Value};
 
     const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
@@ -363,7 +403,8 @@ mod reading {
     /// that does not exist.
     #[test]
     fn every_optional_field_has_one_row() {
-        let all: Vec<&'static Table> = tables::ALL.iter().chain(wave4::ALL.iter()).copied().collect();
+        let all: Vec<&'static Table> =
+            tables::ALL.iter().chain(wave4::ALL.iter()).chain(member::ALL.iter()).copied().collect();
         let mut seen = 0;
         for t in &all {
             for f in t.fields.iter().filter(|f| !f.needed) {
@@ -524,7 +565,8 @@ mod reading {
     fn the_future_vectors_are_what_the_reader_says() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/future.json");
         let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
-        let all: Vec<&'static Table> = tables::ALL.iter().chain(wave4::ALL.iter()).copied().collect();
+        let all: Vec<&'static Table> =
+            tables::ALL.iter().chain(wave4::ALL.iter()).chain(member::ALL.iter()).copied().collect();
         let by_name = |n: &str| *all.iter().find(|t| t.name() == n).unwrap_or_else(|| panic!("no table {n}"));
         let word = |l: Later| match l {
             Later::Refuse => "refuse".into(),
@@ -633,4 +675,87 @@ fn every_kind_refuses_trailing_bytes_as_cbor_trailing() {
     }
     let wrong: Vec<&(String, &str)> = got.iter().filter(|(_, r)| *r != "cbor/trailing").collect();
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+fn load5() -> Json {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages5.json");
+    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+}
+
+/// messages5.json: the member connection's tables are the vectors', and
+/// each message reads as the vectors say.
+#[test]
+fn the_member_messages_are_the_vectors() {
+    let v = load5();
+    let theirs = v["tables"].as_object().unwrap();
+    assert_eq!(theirs.len(), member::ALL.len());
+    for t in member::ALL {
+        let rows = theirs[t.name()].as_array().unwrap_or_else(|| panic!("{} missing", t.name()));
+        let ours: Vec<Json> = t
+            .fields
+            .iter()
+            .map(|f| serde_json::json!({"n": f.n, "rule": f.rule, "type": f.ty.describe(), "needed": f.needed}))
+            .collect();
+        assert_eq!(rows, &ours, "{}", t.name());
+        assert!(tables::ALL.iter().chain(wave4::ALL.iter()).all(|o| o.name() != t.name()), "{} twice", t.name());
+    }
+    for (t, name) in v["types"].as_object().unwrap() {
+        let n: u64 = t.parse().unwrap();
+        assert_eq!(member::of(n).map(super::Table::name), name.as_str(), "type {t}");
+        assert!(tables::of(n).is_none() && wave4::of(n).is_none(), "type {t} named twice");
+    }
+    for t in v["take"].as_array().unwrap() {
+        assert_eq!(check(&unhex(&t["message"])), Ok(t["t"].as_u64().unwrap()), "{}", t["name"]);
+    }
+    for r in v["refuse"].as_array().unwrap() {
+        let rule = r["rule"].as_str().unwrap();
+        assert_eq!(check(&unhex(&r["message"])).err().map(|e| e.name()), Some(rule), "{}", r["name"]);
+    }
+    // An evidence message's data, by its format.
+    for t in v["data_take"].as_array().unwrap() {
+        let data = unhex(&t["data"]);
+        assert!(member::evidence_data(t["format"].as_u64().unwrap(), &data).is_ok(), "{}", t["name"]);
+    }
+    for r in v["data_refuse"].as_array().unwrap() {
+        let data = unhex(&r["data"]);
+        let got = member::evidence_data(r["format"].as_u64().unwrap(), &data).err().map(|e| e.name());
+        assert_eq!(got, r["rule"].as_str(), "{}", r["name"]);
+    }
+}
+
+/// The member messages at their widest and one past it, built here rather
+/// than written into messages5.json, where they would pass the
+/// repository's limit on one file.
+#[test]
+fn the_member_messages_hold_at_their_bounds() {
+    use crate::format::cbor::Encoder;
+    let have = |n: usize| {
+        let mut ids: Vec<[u8; 32]> = (0..n as u32).map(|i| crate::certs::sha256(&i.to_be_bytes())).collect();
+        ids.sort_unstable();
+        let mut e = Encoder::new();
+        e.map(2).uint(0).uint(member::T_HAVE).uint(2).array(n);
+        for id in &ids {
+            e.bytes(id);
+        }
+        e.finish()
+    };
+    assert_eq!(check(&have(crate::records::sync::HAVE_IDS)), Ok(member::T_HAVE));
+    assert_eq!(check(&have(crate::records::sync::HAVE_IDS + 1)).err().map(|e| e.name()), Some("have/ids"));
+
+    let release = |len: usize| {
+        let mut e = Encoder::new();
+        e.map(4).uint(0).uint(member::T_RELEASE);
+        e.uint(2).bytes(b"keys").uint(3).bytes(b"channel").uint(4).bytes(&vec![b'x'; len]);
+        e.finish()
+    };
+    assert_eq!(check(&release(member::MAX_RELEASE_FILE)), Ok(member::T_RELEASE));
+    assert_eq!(check(&release(member::MAX_RELEASE_FILE + 1)).err().map(|e| e.name()), Some("release/release"));
+
+    let evidence = |len: usize| {
+        let mut e = Encoder::new();
+        e.map(4).uint(0).uint(member::T_EVIDENCE).uint(2).uint(2).uint(3).bytes(&[7; 32]).uint(4).bytes(&vec![1; len]);
+        e.finish()
+    };
+    assert_eq!(check(&evidence(member::MAX_EVIDENCE)), Ok(member::T_EVIDENCE));
+    assert_eq!(check(&evidence(member::MAX_EVIDENCE + 1)).err().map(|e| e.name()), Some("evidence/data"));
 }

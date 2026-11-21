@@ -358,7 +358,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W33 | Two groups on one forwarder cannot reach each other [S8] | fleet | |
 | W34 | VLESS: a forwarder with `-vless-xhttp` behind a web server whose CA the members trust; anyone who is not a client gets the web server's site; clients reach the hub only over VLESS; with UDP to the forwarder blocked, VLESS still works [P20] | real, fleet | |
 | W35 | AmneziaWG: nothing on the wire starts or is sized like WireGuard, directly and through the forwarder | fleet | |
-| W36 | The blind relay: `-group TAG` and `-open`; the consent text and `-yes`; sync both ways; a member and the relay restarted; a wrong key [P12] | real, fleet | |
+| W36 | The blind relay: `-group GROUP` (from `cbb status -relay`) and `-open`; the consent text and `-yes`; sync both ways; a member and the relay restarted; a wrong key [P12] | real, fleet | |
 | W37 | The relay with credentials: pseudonyms only; a device the members' credential does not list is refused; one a newer credential leaves out is dropped | fleet | |
 | W38 | The relay's limits: 4096 groups, 64 devices per group, 16 registrations per address and 64 per network, 1 MiB/s per group; a group forgotten when its last device leaves [P38] | fleet | |
 | W39 | A new credential period (30 days): new tag, period key and server keys; the servers cannot link two periods; the lists padded | time | |

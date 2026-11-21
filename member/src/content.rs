@@ -24,6 +24,31 @@ use crate::error::{Context, Error, Result};
 /// which a member that reconnects may still fetch.
 const KEEP: usize = 8;
 
+/// The key a blob's segments are sealed under.
+#[derive(Clone, Copy)]
+pub enum BlobKey<'a> {
+    /// A copy of 0.5: its copy key, from which the segments' key comes.
+    Copy(&'a [u8; KEY_SIZE]),
+    /// A copy of 0.6: the blob key itself (`format::copy::blob_key`).
+    Blob(&'a [u8; 32]),
+}
+
+impl BlobKey<'_> {
+    fn seal_segment(self, i: u64, last: bool, plain: &[u8]) -> Result<Vec<u8>> {
+        match self {
+            BlobKey::Copy(k) => copy::seal_segment(k, i, last, plain),
+            BlobKey::Blob(k) => cbb_core::copies::blob::seal_segment(k, i, last, plain),
+        }
+    }
+
+    fn open_segment(self, i: u64, last: bool, sealed: &[u8]) -> Result<Vec<u8>> {
+        match self {
+            BlobKey::Copy(k) => copy::open_segment(k, i, last, sealed),
+            BlobKey::Blob(k) => cbb_core::copies::blob::open_segment(k, i, last, sealed),
+        }
+    }
+}
+
 /// What a part of a copy the app hands in holds.
 pub enum Source {
     /// Clipboard data, such as an image, in memory.
@@ -70,6 +95,11 @@ impl Store {
     /// Sets the largest blob served through the group's tunnel.
     pub fn set_away_limit(&self, n: u64) {
         *self.away.lock().unwrap() = n;
+    }
+
+    /// The largest blob served through the group's tunnel.
+    pub fn away_limit(&self) -> u64 {
+        *self.away.lock().unwrap()
     }
 
     /// Whether the blob sum is served to a peer through the group's tunnel:
@@ -140,7 +170,7 @@ impl Store {
     /// Seals the parts into a blob under key and keeps it: returns the
     /// manifest, with each part's size and hash, and the blob, None when no
     /// part holds bytes.
-    pub fn seal(&self, parts: Vec<(Part, Source)>, key: &[u8; KEY_SIZE]) -> Result<(Manifest, Option<Blob>)> {
+    pub fn seal(&self, parts: Vec<(Part, Source)>, key: BlobKey<'_>) -> Result<(Manifest, Option<Blob>)> {
         fs::create_dir_all(&self.dir).context("make the folder of the copies' content")?;
         // The parts' sizes and hashes first, so the manifest is whole.
         let mut manifest = Manifest { size: 0, parts: Vec::with_capacity(parts.len()) };
@@ -227,7 +257,7 @@ impl Store {
         &self,
         sum: Option<&[u8]>,
         manifest: &Manifest,
-        key: &[u8; KEY_SIZE],
+        key: BlobKey<'_>,
         out: &Path,
     ) -> Result<Vec<(Part, PathBuf)>> {
         // The folder it goes in, such as a phone's Downloads/CBB, may not
@@ -247,7 +277,7 @@ impl Store {
         &self,
         sum: Option<&[u8]>,
         manifest: &Manifest,
-        key: &[u8; KEY_SIZE],
+        key: BlobKey<'_>,
         out: &Path,
     ) -> Result<Vec<(Part, PathBuf)>> {
         let total = manifest.size.max(0) as u64;
@@ -339,7 +369,7 @@ pub fn file_sum(path: &Path) -> Result<(u64, [u8; 32])> {
 
 /// Seals plain bytes a segment at a time into out, hashing what it writes.
 struct Segments<'a, W: Write> {
-    key: &'a [u8; KEY_SIZE],
+    key: BlobKey<'a>,
     out: &'a mut W,
     buf: Vec<u8>,
     i: u64,
@@ -366,7 +396,7 @@ impl<W: Write> Segments<'_, W> {
             return Err(Error::msg("the parts hold more bytes than their sizes say"));
         }
         let last = self.i + 1 == self.segments;
-        let sealed = copy::seal_segment(self.key, self.i, last, &self.buf)?;
+        let sealed = self.key.seal_segment(self.i, last, &self.buf)?;
         self.hash.update(&sealed);
         self.out.write_all(&sealed).context("write the blob")?;
         self.buf.clear();
@@ -388,7 +418,7 @@ impl<W: Write> Segments<'_, W> {
 /// Opens a sealed blob a segment at a time.
 struct Opened<'a> {
     f: File,
-    key: &'a [u8; KEY_SIZE],
+    key: BlobKey<'a>,
     i: u64,
     segments: u64,
     buf: Vec<u8>,
@@ -404,7 +434,7 @@ impl Opened<'_> {
             }
             let mut sealed = vec![0u8; SEALED_SEGMENT];
             self.f.read_exact(&mut sealed).context("the copy's blob is cut short")?;
-            self.buf = copy::open_segment(self.key, self.i, self.i + 1 == self.segments, &sealed)?;
+            self.buf = self.key.open_segment(self.i, self.i + 1 == self.segments, &sealed)?;
             self.at = 0;
             self.i += 1;
         }
@@ -420,7 +450,7 @@ mod tests {
     use cbb_core::copy::new_key;
     use cbb_core::media::Part;
 
-    use super::{KEEP, Source, Store};
+    use super::{BlobKey, KEEP, Source, Store};
 
     /// The cache keeps the KEEP newest blobs and drops the rest, and drops
     /// what fetches and seals left once it is a day old, while a newer
@@ -498,19 +528,19 @@ mod tests {
             (Part { path: "trip/big.bin".into(), ..Part::default() }, Source::File(dir.join("big.bin"))),
             (Part { path: "trip/note.txt".into(), ..Part::default() }, Source::Bytes(b"hello".to_vec())),
         ];
-        let (m, blob) = store.seal(parts, &key).unwrap();
+        let (m, blob) = store.seal(parts, BlobKey::Copy(&key)).unwrap();
         let blob = blob.unwrap();
         assert_eq!(m.size, 200_005);
         assert_eq!(blob.size as u64, cbb_core::copy::blob_size(200_005));
         assert_eq!(store.held(&blob.sha256), Some(blob.size as u64));
         // The folder it goes in is made too, as a phone's Downloads/CBB.
         let out = dir.join("Downloads/CBB/out");
-        let placed = store.open_into(Some(&blob.sha256), &m, &key, &out).unwrap();
+        let placed = store.open_into(Some(&blob.sha256), &m, BlobKey::Copy(&key), &out).unwrap();
         assert_eq!(placed.len(), 3);
         assert_eq!(std::fs::read(out.join("trip/big.bin")).unwrap(), big);
         assert_eq!(std::fs::read(out.join("trip/note.txt")).unwrap(), b"hello");
         // Under another key nothing opens, and the folder is gone.
-        assert!(store.open_into(Some(&blob.sha256), &m, &new_key(), &dir.join("bad")).is_err());
+        assert!(store.open_into(Some(&blob.sha256), &m, BlobKey::Copy(&new_key()), &dir.join("bad")).is_err());
         assert!(!dir.join("bad").exists());
         // A range of it reads as served.
         let all = std::fs::read(dir.join("content").join(super::hex(&blob.sha256))).unwrap();
@@ -531,9 +561,14 @@ mod tests {
         let key = new_key();
         let png = vec![0x89u8; 70_000];
         let (m, blob) = store
-            .seal(vec![(Part { kind: "image/png".into(), ..Part::default() }, Source::Bytes(png.clone()))], &key)
+            .seal(
+                vec![(Part { kind: "image/png".into(), ..Part::default() }, Source::Bytes(png.clone()))],
+                BlobKey::Copy(&key),
+            )
             .unwrap();
-        let placed = store.open_into(blob.as_ref().map(|b| b.sha256.as_slice()), &m, &key, &dir.join("o")).unwrap();
+        let placed = store
+            .open_into(blob.as_ref().map(|b| b.sha256.as_slice()), &m, BlobKey::Copy(&key), &dir.join("o"))
+            .unwrap();
         assert_eq!(std::fs::read(&placed[0].1).unwrap(), png);
         let _ = std::fs::remove_dir_all(&dir);
     }

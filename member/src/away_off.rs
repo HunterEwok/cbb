@@ -9,9 +9,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use cbb_core::certs::Cert;
-use cbb_core::wire::{Message, TunnelOffer};
+use cbb_core::wire::Message;
 
-use crate::admin::Admin;
 use crate::certs::DeviceId;
 use crate::control::{self, Header};
 use crate::error::{Error, Result};
@@ -56,10 +55,6 @@ impl Away {
         None
     }
 
-    pub fn update_way(&self, _node: &Node) -> Option<serde_json::Value> {
-        None
-    }
-
     pub fn make_hub(&self, _h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
         self.turn_on()
     }
@@ -96,54 +91,49 @@ impl Away {
 
     pub fn guest_message(self: &Arc<Self>, _node: &Node, _from: &DeviceId, _chain: &[Cert], _g: crate::wire::Guest) {}
 
-    pub fn known_hubs(&self, _order: &[String]) -> Vec<String> {
-        Vec::new()
-    }
-
-    pub fn take_hub(&self, _node: &Arc<Node>, _by: &str, _order: &serde_json::Value) -> Result<TunnelOffer> {
-        Err(Error::msg("sync away from home is off on this computer; this build has no tunnel"))
-    }
-
-    pub fn make_hub_on(
-        &self,
-        _a: &Admin,
-        _target: &str,
-        _addrs: &[String],
-        _fwd: (&str, &str),
-        _fo: bool,
-    ) -> Result<()> {
-        self.turn_on().map(|_| ())
-    }
-
-    pub fn move_hub(&self, _a: &Admin, _target: &str, _addrs: &[String], _fwd: (&str, &str)) -> Result<()> {
-        Err(Error::msg("this device is not the group's hub; cbb global hub makes it the hub"))
-    }
-
-    pub fn stop_hub_on(&self, _a: &Admin, _target: &str, _anyway: bool) -> Result<()> {
-        self.turn_on().map(|_| ())
-    }
-
     pub fn hubs_shared(self: &Arc<Self>, _node: &Arc<Node>, _from: &DeviceId, _chain: &[Cert], _v: &serde_json::Value) {
     }
 
     pub fn run(self: Arc<Self>, _node: Arc<Node>) {}
+
+    pub fn is_hub_now(&self) -> bool {
+        false
+    }
+
+    pub fn is_on(&self) -> bool {
+        false
+    }
+
+    pub fn held_hubs(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    pub fn drop_held_gone(&self, _is_device: &dyn Fn(&cbb_core::records::DeviceId) -> bool) {}
+
+    pub fn live_status(&self) -> Option<control::Away> {
+        None
+    }
+
+    pub fn live_status_as(&self, _standby: bool, _order: &[String]) -> Option<control::Away> {
+        None
+    }
+
+    pub fn live_forwarder(&self, _entries_held: bool) -> Option<control::Forwarder> {
+        None
+    }
+
+    pub fn own_forwarder(&self) -> Option<(String, [u8; 32])> {
+        None
+    }
+
+    pub fn hub_settings(&self) -> Option<([u8; 32], Option<serde_json::Value>, u16)> {
+        None
+    }
 }
 
-/// Whether a hub order is a stop order: this build is never a hub.
-pub fn is_stop(_order: &serde_json::Value) -> bool {
-    false
-}
-
-/// Joining with a remote invitation, which needs the tunnel.
-pub fn join_invite(
-    _dir: &std::path::Path,
-    _joiner: &crate::pair::Joiner,
-    _save: &crate::pair::Save,
-    _text: &str,
-    _shown: &dyn Fn(&str),
-    _log: Arc<dyn Fn(&str) + Send + Sync>,
-) -> Result<crate::identity::Identity> {
-    Err(off())
+/// A forwarder a hub command names: this build reaches none.
+pub fn forwarder_named(fwd: &str, _key: &str) -> Result<Option<(String, [u8; 32])>> {
+    if fwd.is_empty() { Ok(None) } else { Err(off()) }
 }
 
 /// Why sync away from home is off in this build.

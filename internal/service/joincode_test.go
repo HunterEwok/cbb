@@ -4,16 +4,19 @@
 package service
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// TestJoinByShownCode: a new computer shows a code and waits, announced by
-// mDNS; a computer of the group types that code and admits it, as a phone
-// would scan its QR code. A wrong code admits nothing, and a code with no
-// device that waits says so.
+// TestJoinByShownCode: on the records of 0.6 the new device does not show
+// a code and wait; the group's admin opens a home window and shows its six
+// digits, and a new computer that finds the window by mDNS types them, as
+// a phone scans the window's QR code. A code typed on the admin with no
+// window says how pairing goes now, a wrong code admits nothing, and the
+// right one admits the device.
 func TestJoinByShownCode(t *testing.T) {
 	var h hub
 	a := startService(t, &h, "alpha")
@@ -21,28 +24,34 @@ func TestJoinByShownCode(t *testing.T) {
 	if _, err := a.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.do(t, control.Header{Op: control.OpPair, Code: "123456"}, ""); err == nil || !strings.Contains(err.Error(), "no device that waits") {
+	if _, err := a.do(t, control.Header{Op: control.OpPair, Code: "123456"}, ""); err == nil || !strings.Contains(err.Error(), "no device waits") || !strings.Contains(err.Error(), "cbb pair") {
 		t.Errorf("a code with no device that waits: %v", err)
 	}
 
-	jc := b.dial(t)
-	defer jc.Close()
-	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: "246810", Listen: true, Expires: 300}})
-	if err != nil || m.Fingerprint == "" {
-		t.Fatalf("listening join on beta: %+v, %v", m, err)
+	c, code := openWindow(t, a)
+	defer c.Close()
+	id := a.status(t).Device
+	waitFor(t, "alpha announces its window", func() bool { return slices.Contains(h.txtOf(id), "p=1") })
+	wrong := "135791"
+	if code == wrong {
+		wrong = "246810"
 	}
-	waitFor(t, "beta announces that it waits", func() bool {
-		return h.anyPublishes("j=1")
-	})
-	if _, err := a.do(t, control.Header{Op: control.OpPair, Code: "135791"}, ""); err == nil {
+	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: wrong}, ""); err == nil {
 		t.Error("a wrong code admitted the device")
 	}
-	got, err := a.do(t, control.Header{Op: control.OpPair, Code: "246 810"}, "")
-	if err != nil || got.Name != "beta" {
-		t.Fatalf("admitting by the shown code: %+v, %v", got, err)
+	if st := b.status(t); st.Group != "" {
+		t.Fatal("beta is in a group after a wrong code")
 	}
-	if m, err := jc.Receive(); err != nil || !m.Done {
-		t.Fatalf("the join on beta ended with %+v, %v", m, err)
+	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: code[:3] + " " + code[3:]}, ""); err != nil {
+		t.Fatalf("joining by the shown code: %v", err)
+	}
+	// The window tells of the wrong try, then of the device it admitted.
+	m, err := c.Receive()
+	if err != nil || !m.Refused {
+		t.Fatalf("the window on alpha told of the wrong try with %+v, %v", m, err)
+	}
+	if m, err = c.Receive(); err != nil || m.Name != "beta" {
+		t.Fatalf("the window on alpha ended with %+v, %v", m, err)
 	}
 	waitFor(t, "beta is in alpha's group", func() bool { return b.status(t).Group == a.status(t).Group })
 }

@@ -58,6 +58,7 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
     let peer = Peer {
         key: tunnel::public_key_of(&client_key).try_into().unwrap(),
         psk,
+        older_psks: Vec::new(),
         addr: client,
         until: None,
         source: None,
@@ -82,6 +83,7 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
         vless: None,
         next_obfuscation: None,
         next_vless: None,
+        faces: Vec::new(),
     };
     let me = cbb_core::certs::DeviceId::parse(&g.id(1)).unwrap();
     let link = Link::start(&State::with_key(&client_key).unwrap(), &hub, &me, Arc::new(|_| {})).unwrap();
@@ -206,8 +208,12 @@ fn registrations_at_once_and_a_stop() {
     // More devices than a hub passes connections (tunnel.rs, MAX_BRIDGES):
     // each keeps its watch open through the relay.
     let n = 40;
-    let mut g = Group::new(n);
-    g.revoke(n - 1);
+    let g = crate::nettest::blind::Blind::new(n);
+    // The last device left the group: the period's members' credential
+    // does not list it, so it has nothing to register with.
+    let listed: Vec<usize> = (0..n - 1).collect();
+    let creds = g.credentials(1, &listed);
+    let cred = |i: usize| (i < n - 1).then(|| g.credentialed_by(i, &creds));
     let keys = Keys::new().unwrap();
     let pin = cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash();
     let s = RelayServer::start(server::Config {
@@ -235,13 +241,8 @@ fn registrations_at_once_and_a_stop() {
                 Config {
                     endpoint: s.addr(),
                     pins: vec![pin],
-                    chain: g.chain(i),
-                    key: g.key(i),
-                    device: g.id(i),
-                    wg_key: key(),
-                    records: Arc::new(std::sync::Mutex::new(g.records_json())),
                     member_port: 1,
-                    credentials: Arc::new(std::sync::Mutex::new(None)),
+                    credentials: Arc::new(std::sync::Mutex::new(cred(i))),
                 },
                 seen[i].clone(),
             )
@@ -264,13 +265,8 @@ fn registrations_at_once_and_a_stop() {
                 Config {
                     endpoint: s.addr(),
                     pins: vec![pin],
-                    chain: g.chain(i),
-                    key: g.key(i),
-                    device: g.id(i),
-                    wg_key: key(),
-                    records: Arc::new(std::sync::Mutex::new(g.records_json())),
                     member_port: 1,
-                    credentials: Arc::new(std::sync::Mutex::new(None)),
+                    credentials: Arc::new(std::sync::Mutex::new(cred(i))),
                 },
                 Arc::new(Count::default()),
             )

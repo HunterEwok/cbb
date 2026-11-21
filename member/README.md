@@ -316,6 +316,11 @@ cbb service -peer 127.0.0.1:8769
 - `-join code`: join the group with the code of `cbb pair` on the computer at `-to`,
   through a connection to the link's own port, once the Pi's clock is set; the service
   starts after it has joined. `.cbb pair CODE` on the Next runs the link with it.
+- `-window id -fp hash`, with `-join`: the home window of a group of 0.6 that the Next
+  found by mDNS, its ID (TXT `i`, 32 hex digits) and the hash of its member's key (TXT
+  `f`); the code is then the window's six digits (dashes and spaces are dropped), and the
+  link joins only the member with that key. Without them, `-join` joins an old group's
+  window.
 - `-paste on|on-enter|off`: tells the service, once it answers, whether the group's admins
   may paste on the Next (`cbb paste-receive`), as `.cbb paste-receive` on the Next set it:
   the Next's user is the Pi's. The Next passes it once after each change of its user's and

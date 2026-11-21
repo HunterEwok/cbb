@@ -70,9 +70,10 @@ becomes a vector here.
 - The Swift kit's `cbb-interop` and the Kotlin kit's (built by `./gradlew -p kit
   interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
   over real TLS on macOS and with Conscrypt on Linux.
-- `TestAloneMember`, `TestAloneRemotePaste`, `TestAloneQuickActions` and `TestAloneMemberAway`
-  run the built cbb without its helper (`CBB_TEST_ALONE`) among Go members, at home and through the hub's
-  tunnel.
+- `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
+  without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
+  a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with
+  `--features testhooks`) run real services of such a group through the hub's tunnel.
 - `TestEmbassyJoiner` runs the Nano ESP32's network code on Linux over a TAP interface
   (`CBB_ESP32_ON_LINUX`).
 
@@ -416,7 +417,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 
@@ -442,6 +443,19 @@ CGO_ENABLED=0 go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-he
 CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
+```
+
+A member finds a pairing window, and the other members, only at a home address (a private,
+link-local or unique local one), as on a real network. A container whose one address is
+public finds none; run the tests there in a network namespace of their own with a private
+address, as root and with `iproute2`:
+
+```sh
+unshare -n sh -c 'ip link set lo up && ip link add home0 type bridge &&
+  ip link set home0 multicast on && ip addr add 10.77.0.2/24 dev home0 &&
+  ip link set home0 up && ip route add default dev home0 && exec "$@"' _ \
+  env CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb \
+  go test ./internal/service
 ```
 
 ## Firmware size
@@ -538,5 +552,4 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 | Test | Where | Seen | What is known |
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
-| `TestAloneHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
 | `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs, 2026-11 | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line came 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test now writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |

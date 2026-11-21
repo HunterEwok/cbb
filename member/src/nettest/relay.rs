@@ -14,7 +14,8 @@ use std::time::Duration;
 use cbb_core::certs::{self, Cert};
 
 use super::*;
-use crate::nettest::{Group, wait_for};
+use crate::nettest::blind::Blind;
+use crate::nettest::wait_for;
 use crate::relayd::keys::Keys;
 use crate::relayd::limits::Limits;
 use crate::relayd::server::{self, Relay as Server};
@@ -73,59 +74,47 @@ fn server(open: bool, groups: Vec<String>) -> (Server, Vec<certs::KeyHash>) {
     (s, vec![pin])
 }
 
-fn config(g: &Group, i: usize, s: &Server, pins: &[certs::KeyHash], member_port: u16) -> Config {
-    Config {
-        endpoint: s.addr(),
-        pins: pins.to_vec(),
-        chain: g.chain(i),
-        key: g.key(i),
-        device: g.id(i),
-        wg_key: crate::tunnel::new_key().unwrap().try_into().unwrap(),
-        records: Arc::new(Mutex::new(g.records_json())),
-        member_port,
-        credentials: Arc::new(Mutex::new(None)),
-    }
+fn config(s: &Server, pins: &[certs::KeyHash], member_port: u16, cred: Option<Arc<Credentialed>>) -> Config {
+    Config { endpoint: s.addr(), pins: pins.to_vec(), member_port, credentials: Arc::new(Mutex::new(cred)) }
 }
 
 fn connected(seen: &Seen, others: usize) -> bool {
     seen.last().is_some_and(|r| r.connected && r.online.len() == others)
 }
 
-/// Two devices of a group register; the one with the lower ID dials the
-/// other through the relay when the app wants it, and the bytes pass both
-/// ways between the port the app dials and the other's member listener.
+/// Two devices of a group register with their credentials; the one with
+/// the lower pseudonym dials the other through the relay when the app
+/// wants it, and the bytes pass both ways between the port the app dials
+/// and the other's member listener. The relay names them by pseudonym, the
+/// link by the device IDs they stand for.
 #[test]
 fn dials_and_answers_through_the_relay() {
-    let mut g = Group::new(2);
+    let g = Blind::new(2);
     let (s, pins) = server(true, Vec::new());
-    // The lower ID dials.
-    if g.id(0) > g.id(1) {
-        g.devs.swap(0, 1);
-    }
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let member_port = listener.local_addr().unwrap().port();
     let (a, b) = (Arc::new(Seen::default()), Arc::new(Seen::default()));
-    let ra = Relay::start(config(&g, 0, &s, &pins, 1), a.clone());
-    let rb = Relay::start(config(&g, 1, &s, &pins, member_port), b.clone());
+    let ra = Relay::start(config(&s, &pins, 1, Some(g.credentialed(0, 1))), a.clone());
+    let rb = Relay::start(config(&s, &pins, member_port, Some(g.credentialed(1, 1))), b.clone());
     assert!(
         wait_for(Duration::from_secs(20), || connected(&a, 1) && connected(&b, 1)),
         "{:?} {:?}",
         a.last(),
         b.last()
     );
-    assert!(a.last().unwrap().online.contains(&g.id(1)));
+    assert_eq!(a.last().unwrap().online, vec![g.ids[1].clone()]);
     assert_eq!(s.stats().1, 2);
 
     *a.want.lock().unwrap() = true;
     assert!(wait_for(Duration::from_secs(20), || !a.dials.lock().unwrap().is_empty()), "no dial");
     let (peer, port) = a.dials.lock().unwrap()[0].clone();
-    assert_eq!(peer, g.id(1));
+    assert_eq!(peer, g.ids[1]);
     let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
     c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
     let (mut k, _) = listener.accept().unwrap();
     k.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
     assert!(wait_for(Duration::from_secs(5), || !b.calls.lock().unwrap().is_empty()));
-    assert_eq!(b.calls.lock().unwrap()[0].0, g.id(0));
+    assert_eq!(b.calls.lock().unwrap()[0].0, g.ids[0]);
     c.write_all(b"hello").unwrap();
     let mut buf = [0u8; 5];
     k.read_exact(&mut buf).unwrap();
@@ -157,16 +146,14 @@ fn dials_and_answers_through_the_relay() {
 /// in its log, then dials again.
 #[test]
 fn a_dial_the_app_does_not_take() {
-    let mut g = Group::new(2);
+    let g = Blind::new(2);
     let (s, pins) = server(true, Vec::new());
-    if g.id(0) > g.id(1) {
-        g.devs.swap(0, 1);
-    }
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let (a, b) = (Arc::new(Seen::default()), Arc::new(Seen::default()));
     *a.want.lock().unwrap() = true;
-    let _ra = Relay::start(config(&g, 0, &s, &pins, 1), a.clone());
-    let _rb = Relay::start(config(&g, 1, &s, &pins, listener.local_addr().unwrap().port()), b.clone());
+    let _ra = Relay::start(config(&s, &pins, 1, Some(g.credentialed(0, 1))), a.clone());
+    let port = listener.local_addr().unwrap().port();
+    let _rb = Relay::start(config(&s, &pins, port, Some(g.credentialed(1, 1))), b.clone());
     assert!(
         wait_for(Duration::from_secs(40), || a.logged("did not take the connection")),
         "{:?}",
@@ -178,33 +165,54 @@ fn a_dial_the_app_does_not_take() {
 /// link reports why and keeps trying.
 #[test]
 fn refused_by_a_relay_of_other_groups() {
-    let g = Group::new(1);
-    let (s, pins) = server(false, vec!["0123456789abcdef".into()]);
+    let g = Blind::new(1);
+    let (s, pins) = server(false, vec![Blind::new(1).listed()]);
     let a = Arc::new(Seen::default());
-    let _r = Relay::start(config(&g, 0, &s, &pins, 1), a.clone());
+    let _r = Relay::start(config(&s, &pins, 1, Some(g.credentialed(0, 1))), a.clone());
     assert!(wait_for(Duration::from_secs(20), || a.last().is_some_and(|r| r.error.is_some())), "no error");
     let r = a.last().unwrap();
     assert!(!r.connected);
+    assert!(r.error.unwrap().contains("not of a group this relay serves"));
     assert!(a.logged("the relay"));
 }
 
 /// A relay whose key is not pinned is not one to register with.
 #[test]
 fn refuses_a_relay_of_another_key() {
-    let g = Group::new(1);
+    let g = Blind::new(1);
     let (s, _) = server(true, Vec::new());
     let a = Arc::new(Seen::default());
-    let _r = Relay::start(config(&g, 0, &s, &[[7u8; 32]], 1), a.clone());
+    let _r = Relay::start(config(&s, &[[7u8; 32]], 1, Some(g.credentialed(0, 1))), a.clone());
     assert!(wait_for(Duration::from_secs(20), || a.last().is_some_and(|r| r.error.is_some())), "no error");
 }
 
-/// The relay serves the device's group by its tag.
+/// A relay with a list serves the device's group, named by its root and
+/// recovery key: it asks for the period credential and the root.
 #[test]
 fn a_relay_of_the_group() {
-    let g = Group::new(1);
-    let (s, pins) = server(false, vec![certs::tag(&g.root)]);
+    let g = Blind::new(1);
+    let (s, pins) = server(false, vec![g.listed()]);
     let a = Arc::new(Seen::default());
-    let _r = Relay::start(config(&g, 0, &s, &pins, 1), a.clone());
+    let _r = Relay::start(config(&s, &pins, 1, Some(g.credentialed(0, 1))), a.clone());
+    assert!(wait_for(Duration::from_secs(20), || connected(&a, 0)), "{:?}", a.last());
+}
+
+/// Before the members' credential lists the device the link does not
+/// reach the relay: it waits and says why, once; it registers as soon as
+/// the credentials come.
+#[test]
+fn waits_for_its_credentials() {
+    let g = Blind::new(1);
+    let (s, pins) = server(true, Vec::new());
+    let a = Arc::new(Seen::default());
+    let cfg = config(&s, &pins, 1, None);
+    let creds = cfg.credentials.clone();
+    let _r = Relay::start(cfg, a.clone());
+    assert!(wait_for(Duration::from_secs(5), || a.last().is_some_and(|r| r.error.as_deref() == Some(NOT_LISTED))));
+    std::thread::sleep(CREDENTIAL_CHECK * 3);
+    assert_eq!(a.reports.lock().unwrap().len(), 1, "said once");
+    assert_eq!(s.stats().1, 0);
+    *creds.lock().unwrap() = Some(g.credentialed(0, 1));
     assert!(wait_for(Duration::from_secs(20), || connected(&a, 0)), "{:?}", a.last());
 }
 
@@ -212,7 +220,7 @@ fn a_relay_of_the_group() {
 /// ends the link at once.
 #[test]
 fn no_relay_there() {
-    let g = Group::new(1);
+    let g = Blind::new(1);
     let ln = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let addr = ln.local_addr().unwrap();
     drop(ln);
@@ -220,15 +228,9 @@ fn no_relay_there() {
     let cfg = Config {
         endpoint: addr,
         pins: vec![[0; 32]],
-        chain: g.chain(0),
-        key: g.key(0),
-        device: g.id(0),
-        wg_key: [1; 32],
-        records: Arc::new(Mutex::new(Vec::new())),
         member_port: 1,
-        credentials: Arc::new(Mutex::new(None)),
+        credentials: Arc::new(Mutex::new(Some(g.credentialed(0, 1)))),
     };
-    cfg.records.lock().unwrap().push(serde_json::json!({}));
     let r = Relay::start(cfg, a.clone());
     assert!(wait_for(Duration::from_secs(10), || a.last().is_some_and(|r| r.error.is_some())));
     let t = std::time::Instant::now();
@@ -242,16 +244,21 @@ fn no_relay_there() {
 /// devices.
 #[test]
 fn notes_of_the_watch() {
-    let g = Group::new(1);
+    let g = Blind::new(1);
     let seen = Arc::new(Seen::default());
     let events: Arc<dyn Events> = seen.clone();
-    let cfg = Arc::new(config_without_server(&g));
-    let pseudonym = "A".repeat(43) + "=";
+    let cfg = Arc::new(Config {
+        endpoint: SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
+        pins: Vec::new(),
+        member_port: 1,
+        credentials: Arc::new(Mutex::new(None)),
+    });
+    let (low, high) = ("A".repeat(43) + "=", "/".repeat(43) + "w");
     let s = Arc::new(Session {
         cfg,
-        name: "f".repeat(32),
-        names: HashMap::from([(pseudonym.clone(), g.id(0))]),
-        was: None,
+        name: "Q".repeat(43) + "=",
+        names: HashMap::from([(high.clone(), g.ids[0].clone())]),
+        was: String::new(),
         events,
         at: SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
         stop: AtomicBool::new(false),
@@ -260,36 +267,36 @@ fn notes_of_the_watch() {
         threads: Mutex::new(Vec::new()),
     });
     assert!(s.note(Note { online: Some(vec!["relay".into()]), ..Note::default() }).is_err());
-    assert!(s.note(Note { online: Some(vec!["0".repeat(32); MAX_MEMBERS + 1]), ..Note::default() }).is_err());
+    assert!(s.note(Note { online: Some(vec!["0".repeat(32)]), ..Note::default() }).is_err(), "a device ID");
+    assert!(s.note(Note { online: Some(vec![low.clone(); MAX_MEMBERS + 1]), ..Note::default() }).is_err());
     // A device with a lower name than this one's is not dialed.
-    s.note(Note { online: Some(vec![pseudonym.clone(), "0".repeat(32)]), ..Note::default() }).unwrap();
+    s.note(Note { online: Some(vec![low.clone()]), ..Note::default() }).unwrap();
     assert!(s.state.lock().unwrap().dialers.is_empty());
-    assert_eq!(seen.last().unwrap().online, vec![g.id(0), "0".repeat(32)]);
-    assert_eq!(s.device(&pseudonym), g.id(0));
+    assert_eq!(seen.last().unwrap().online, vec![low.clone()]);
+    assert_eq!(s.device(&high), g.ids[0]);
     assert_eq!(s.device("x"), "x");
     // Calls not valid are dropped without a thread.
     s.note(Note { call: "bad".into(), ticket: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Note::default() }).unwrap();
-    s.note(Note { call: "0".repeat(32), ticket: "bad".into(), ..Note::default() }).unwrap();
+    s.note(Note { call: low.clone(), ticket: "bad".into(), ..Note::default() }).unwrap();
     s.note(Note::default()).unwrap();
     assert!(s.threads.lock().unwrap().is_empty());
     for _ in 0..MAX_CALLS {
         assert!(s.take_call());
     }
     assert!(!s.take_call());
-    s.note(Note { call: "0".repeat(32), ticket: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Note::default() }).unwrap();
+    s.note(Note { call: low.clone(), ticket: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Note::default() }).unwrap();
     assert!(s.threads.lock().unwrap().is_empty());
     s.state.lock().unwrap().calls = 0;
     // A call taken goes nowhere here: the relay's port is closed, and the
     // log says so.
-    s.note(Note { call: "0".repeat(32), ticket: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Note::default() }).unwrap();
+    s.note(Note { call: low.clone(), ticket: "AAAAAAAAAAAAAAAAAAAAAA==".into(), ..Note::default() }).unwrap();
     assert!(wait_for(Duration::from_secs(10), || seen.logged("answering")), "{:?}", seen.logs.lock().unwrap());
     assert!(wait_for(Duration::from_secs(5), || s.state.lock().unwrap().calls == 0));
     // Once the session ended nothing more is held.
     s.end();
     let c = TcpStream::connect(("127.0.0.1", member_listener().1)).unwrap();
     assert!(s.hold(&c).is_err());
-    assert!(!s.credentials_changed());
-    *s.cfg.credentials.lock().unwrap() = None;
+    assert!(s.credentials_changed(), "none now, a registration before");
 }
 
 fn member_listener() -> (TcpListener, u16) {
@@ -302,30 +309,19 @@ fn member_listener() -> (TcpListener, u16) {
     (l.try_clone().unwrap(), *p)
 }
 
-fn config_without_server(g: &Group) -> Config {
-    Config {
-        endpoint: SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
-        pins: Vec::new(),
-        chain: g.chain(0),
-        key: g.key(0),
-        device: g.id(0),
-        wg_key: [1; 32],
-        records: Arc::new(Mutex::new(Vec::new())),
-        member_port: 1,
-        credentials: Arc::new(Mutex::new(None)),
-    }
-}
-
-/// Frames: a frame too long is an error, a partial one waits.
+/// Frames: a frame off the format's grid is an error, a partial one waits.
 #[test]
 fn frames_of_the_watch() {
     let mut inbox = vec![0xff, 0xff, 0xff, 0xff];
     assert!(take_frame(&mut inbox).is_err());
     let mut inbox = vec![0, 0, 0, 3, b'{'];
+    assert!(take_frame(&mut inbox).is_err(), "off the grid");
+    let mut inbox = vec![0, 0, 0, 64, 0xa1];
     assert_eq!(take_frame(&mut inbox).unwrap(), None);
     let mut inbox = vec![0, 0];
     assert_eq!(take_frame(&mut inbox).unwrap(), None);
     assert!(!valid_name(&"g".repeat(32)));
+    assert!(!valid_name(&"0".repeat(32)));
     assert!(!valid_name(&("A".repeat(42) + "==")));
     assert!(io_err(std::io::Error::other("x")).to_string().contains("through the relay"));
 }
@@ -342,50 +338,22 @@ fn pause_stops() {
     assert!(t.elapsed() >= Duration::from_millis(50));
 }
 
-/// Two devices register with the group's credentials in place of their
-/// member certificates: on an open relay and on one that serves the group,
-/// which asks for the roots; each knows the other by its pseudonym. A
-/// change of the credentials makes the link register again.
+/// A new period makes the link register again with it, on an open relay
+/// and on one that serves the group; what does not verify is refused
+/// before it reaches a relay.
 #[test]
-fn registers_with_credentials() {
-    let mut g = Group::new(2);
-    let servers = [crate::nettest::new_key(), crate::nettest::new_key()];
-    // The lower pseudonym dials.
-    let pseudo = |k: &Arc<cbb_core::identity::FileKey>| {
-        cbb_core::credential::pseudonym(&certs::sha256(&certs::p256_spki_of(&crate::identity::ExternalKey::public(
-            &**k,
-        ))))
-    };
-    let mut servers = servers.to_vec();
-    if pseudo(&servers[0]) > pseudo(&servers[1]) {
-        servers.swap(0, 1);
-    }
-    let creds = g.period(&servers, 1);
-    let names = |i: usize| HashMap::from([(pseudo(&servers[1 - i]), g.id(1 - i))]);
-    let cred = |i: usize, creds: &[cbb_core::credential::Credential]| {
-        Arc::new(
-            Credentialed::new(
-                servers[i].clone(),
-                creds.to_vec(),
-                vec![g.root.der.clone()],
-                names(i),
-                crate::nettest::now_ms(),
-            )
-            .unwrap(),
-        )
-    };
+fn registers_again_for_a_new_period() {
+    let g = Blind::new(2);
     for open in [true, false] {
-        let groups = if open { Vec::new() } else { vec![certs::tag(&g.root)] };
+        let groups = if open { Vec::new() } else { vec![g.listed()] };
         let (s, pins) = server(open, groups);
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let (a, b) = (Arc::new(Seen::default()), Arc::new(Seen::default()));
-        let ca = config(&g, 0, &s, &pins, 1);
-        *ca.credentials.lock().unwrap() = Some(cred(0, &creds));
+        let ca = config(&s, &pins, 1, Some(g.credentialed(0, 1)));
         let creds_a = ca.credentials.clone();
-        let cb = config(&g, 1, &s, &pins, listener.local_addr().unwrap().port());
-        *cb.credentials.lock().unwrap() = Some(cred(1, &creds));
+        let port = listener.local_addr().unwrap().port();
         let _ra = Relay::start(ca, a.clone());
-        let _rb = Relay::start(cb, b.clone());
+        let _rb = Relay::start(config(&s, &pins, port, Some(g.credentialed(1, 1))), b.clone());
         assert!(
             wait_for(Duration::from_secs(20), || connected(&a, 1) && connected(&b, 1)),
             "open {open}: {:?} {:?} {:?}",
@@ -393,41 +361,30 @@ fn registers_with_credentials() {
             b.last(),
             a.logs.lock().unwrap()
         );
-        assert_eq!(a.last().unwrap().online, vec![g.id(1)], "the pseudonym stands for its device");
-        *a.want.lock().unwrap() = true;
-        assert!(wait_for(Duration::from_secs(20), || !a.dials.lock().unwrap().is_empty()), "no dial");
-        let (_, port) = a.dials.lock().unwrap()[0].clone();
-        let _c = TcpStream::connect(("127.0.0.1", port)).unwrap();
-        let _k = listener.accept().unwrap();
-        assert!(wait_for(Duration::from_secs(5), || b.calls.lock().unwrap().first().is_some_and(|c| c.0 == g.id(0))));
-        // A new period: the link registers again with it.
-        let newer = g.period(&servers, 2);
-        *creds_a.lock().unwrap() = Some(cred(0, &newer));
+        *creds_a.lock().unwrap() = Some(g.credentialed(0, 2));
         assert!(wait_for(Duration::from_secs(20), || a.logged("credentials changed")), "{:?}", a.logs.lock().unwrap());
+        assert!(wait_for(Duration::from_secs(20), || connected(&a, 1)), "{:?}", a.last());
     }
-    // Credentials that do not list the server key, a key that is not
-    // P-256's, too many roots, a pseudonym that is not one.
-    let other = crate::nettest::new_key();
-    assert!(Credentialed::new(other, creds.to_vec(), Vec::new(), HashMap::new(), crate::nettest::now_ms()).is_err());
-    assert!(
-        Credentialed::new(
-            servers[0].clone(),
-            creds.to_vec(),
-            vec![Vec::new(); MAX_ROOTS + 1],
-            HashMap::new(),
-            crate::nettest::now_ms()
-        )
-        .is_err()
-    );
-    assert!(
-        Credentialed::new(
-            servers[0].clone(),
-            creds.to_vec(),
-            Vec::new(),
-            HashMap::from([("x".to_string(), g.id(0))]),
-            crate::nettest::now_ms()
-        )
-        .is_err()
-    );
-    g.add();
+    // A members' credential that does not list the server key, a period
+    // of another group, a pseudonym that is not one, too many.
+    let now = u64::try_from(crate::nettest::now_ms()).unwrap();
+    let [period, hubs, members] = g.credentials(1, &[1]);
+    let creds = vec![hubs.clone(), members.clone()];
+    let key = |i: usize| -> Arc<dyn crate::identity::ExternalKey> { g.servers[i].clone() };
+    let make = |k, c: Vec<Vec<u8>>, p: Vec<u8>, root: Vec<u8>, names| Credentialed::new(k, c, p, root, names, now);
+    assert!(make(key(0), creds.clone(), period.clone(), g.root(), HashMap::new()).is_err());
+    assert!(make(key(1), creds.clone(), period.clone(), g.root(), HashMap::new()).is_ok());
+    let other = Blind::new(1);
+    let [other_period, ..] = other.credentials(1, &[0]);
+    assert!(make(key(1), creds.clone(), other_period, g.root(), HashMap::new()).is_err());
+    let bad = HashMap::from([("x".to_string(), g.ids[0].clone())]);
+    assert!(make(key(1), creds.clone(), period.clone(), g.root(), bad).is_err());
+    let many: HashMap<String, String> = (0..=MAX_NAMES as u64)
+        .map(|i| {
+            let mut n = [0u8; 32];
+            n[..8].copy_from_slice(&i.to_be_bytes());
+            (base64::Engine::encode(&base64::engine::general_purpose::STANDARD, n), g.ids[0].clone())
+        })
+        .collect();
+    assert!(make(key(1), creds, period, g.root(), many).is_err());
 }

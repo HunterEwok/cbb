@@ -8,10 +8,12 @@
 //! slept through a key change.
 //!
 //! - The origin picks a copy key K for each copy and binds it to the
-//!   header: `commit` in the header is derived from K, and the payload and
-//!   blob keys are derived from K under the header's hash `h` (A-5, A-75).
-//!   So a K used twice still gives other keys under another header, and a
-//!   reader refuses a copy whose `commit` does not match the K it opened.
+//!   header: `commit` in the header is derived from K, and the payload key
+//!   is derived from K under the header's hash `h` (A-5, A-75), so a K used
+//!   twice still gives another payload key under another header. The blob
+//!   key comes from K alone, since `h` covers the sealed blob's size and
+//!   hash ([`blob`]). A reader refuses a copy whose `commit` does not match
+//!   the K it opened.
 //! - K is sealed to each reader's sealing key of the epoch the header names,
 //!   taken from that device's own keys statement. Root and admin keys open
 //!   nothing: a copy is sealed to device keys only.
@@ -27,6 +29,7 @@
 //! This is the new path beside the old one (`crate::copy`); the service and
 //! the phones switch to it in wave 5.
 
+pub mod blob;
 pub mod fresh;
 
 #[cfg(test)]
@@ -178,6 +181,78 @@ pub fn seal(origin: &dyn ExternalKey, readers: &[Reader], made: &Made, content: 
     seal_with(origin, readers, made, content, &random::<32>()?, &seeds)
 }
 
+/// A new copy key K, for a copy with a blob: the origin seals the blob
+/// under `format::copy::blob_key(K)` first, then the copy under K
+/// ([`seal_keyed`]).
+pub fn new_key() -> Result<[u8; 32], Error> {
+    random::<32>()
+}
+
+/// [`seal`] under a copy key the origin chose: a copy with a blob, whose
+/// blob is sealed under that key's blob key, or such a copy sealed again.
+pub fn seal_keyed(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    k: &[u8; 32],
+) -> Result<Vec<u8>, Error> {
+    let mut seeds = Vec::with_capacity(readers.len());
+    for _ in readers {
+        seeds.push(random::<32>()?);
+    }
+    seal_with(origin, readers, made, content, k, &seeds)
+}
+
+/// A copy with a blob, sealed in memory.
+pub struct SealedMedia {
+    /// The copy's map, as message `copy` carries it.
+    pub copy: Vec<u8>,
+    /// The sealed blob.
+    pub blob: Vec<u8>,
+    /// What the origin keeps to seal it again.
+    pub kept: Kept,
+}
+
+/// Seals content with images or files and their bytes in memory: the
+/// copy's map and the sealed blob, `made.blob` filled from it.
+pub fn seal_media(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    parts: &[u8],
+) -> Result<SealedMedia, Error> {
+    let k = new_key()?;
+    let mut seeds = Vec::with_capacity(readers.len());
+    for _ in readers {
+        seeds.push(random::<32>()?);
+    }
+    let (copy, blob) = seal_media_with(origin, readers, made, content, parts, &k, &seeds)?;
+    let made = Made { blob: Some((blob.len() as u64, sha256(&[&blob]))), ..*made };
+    Ok(SealedMedia { copy, blob, kept: Kept::keyed(made, content.clone(), readers, k) })
+}
+
+/// [`seal_media`] with K and the seals' randomness given: for the tests only.
+#[doc(hidden)]
+pub fn seal_media_with(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    parts: &[u8],
+    k: &[u8; 32],
+    seeds: &[[u8; 32]],
+) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    let size = content.manifest.as_ref().map_or(0, |m| m.size);
+    if u64::try_from(size).ok() != Some(parts.len() as u64) {
+        return Err(Error::msg("the parts' bytes do not match the manifest's size"));
+    }
+    let sealed = blob::seal(&fcopy::blob_key(k), parts)?;
+    let made = Made { blob: Some((sealed.len() as u64, sha256(&[&sealed]))), ..*made };
+    Ok((seal_with(origin, readers, &made, content, k, seeds)?, sealed))
+}
+
 /// [`seal`] with K and the seals' randomness given: for the tests only.
 #[doc(hidden)]
 pub fn seal_with(
@@ -269,6 +344,17 @@ pub struct Origin<'a> {
     pub key: &'a rkey::Key,
     pub rights: u64,
     pub frozen: bool,
+}
+
+impl Checked<'_> {
+    /// The sealed blob's size and SHA-256 (header field 5), when the copy
+    /// has one.
+    pub fn blob(&self) -> Option<(u64, [u8; 32])> {
+        match self.copy.header.get(5)?.as_array()? {
+            [Value::Uint(size), Value::Bytes(h)] => Some((*size, (*h).try_into().ok()?)),
+            _ => None,
+        }
+    }
 }
 
 /// Finds a copy's origin by its device ID. The records' state is one; a
@@ -472,12 +558,20 @@ pub struct Kept {
     pub readers: Vec<DeviceId>,
     /// How many times it was sealed again for each asker.
     pub resealed: BTreeMap<DeviceId, u8>,
+    /// The copy key of a copy with a blob: sealed again, it keeps K, so
+    /// that its blob, sealed once under K's blob key, still opens.
+    pub k: Option<[u8; 32]>,
 }
 
 impl Kept {
     /// What the origin keeps of a copy it just sealed to readers.
     pub fn new(made: Made, content: Content, readers: &[Reader]) -> Kept {
-        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new() }
+        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new(), k: None }
+    }
+
+    /// What the origin keeps of a copy with a blob it sealed under K.
+    pub fn keyed(made: Made, content: Content, readers: &[Reader], k: [u8; 32]) -> Kept {
+        Kept { k: Some(k), ..Kept::new(made, content, readers) }
     }
 
     /// The copy's lifetime: its own `ttl`, or for a secret the group's.
@@ -543,7 +637,11 @@ pub fn reseal(
     if r.epoch != ask.epoch {
         return Err(RULE_RESEAL_EPOCH);
     }
-    let sealed = seal(origin, &[r], &kept.made, &kept.content).map_err(|_| fcopy::RULE_SHAPE)?;
+    let sealed = match &kept.k {
+        Some(k) => seal_keyed(origin, &[r], &kept.made, &kept.content, k),
+        None => seal(origin, &[r], &kept.made, &kept.content),
+    }
+    .map_err(|_| fcopy::RULE_SHAPE)?;
     kept.resealed.insert(ask.asker, done.saturating_add(1));
     Ok(sealed)
 }

@@ -610,9 +610,9 @@ pub(crate) fn decode_keys(body: &[u8]) -> Result<Keys> {
         }
         check_public(key.alg, &key.key)?;
         // A key that signs is its halves under one name and use, one of
-        // each algorithm; pins of forwarders and relays may repeat.
+        // each algorithm; pins of forwarders, relays and the push service may repeat.
         let usage = if key.usage.is_empty() { "release" } else { key.usage.as_str() };
-        if usage != "forwarder" && usage != "relay" && !halves.insert((key.name.as_str(), usage, key.alg)) {
+        if !matches!(usage, "forwarder" | "relay" | "push") && !halves.insert((key.name.as_str(), usage, key.alg)) {
             return Err(Error::msg("two keys of one name and use hold a half of one algorithm"));
         }
     }
@@ -1101,6 +1101,43 @@ mod tests {
     }
 
     use super::*;
+
+    /// The push service's pins, as a relay's: two under one name while its
+    /// key changes; two halves of one algorithm under a signer's name and
+    /// use refuse the file.
+    #[test]
+    fn push_pins_may_repeat_and_a_signers_halves_may_not() {
+        use testing::TestKey;
+        let (root, release, push1, push2) = (TestKey::new(1), TestKey::new(2), TestKey::new(4), TestKey::new(5));
+        let roots = root.root("root-1");
+        let t: i64 = 1_800_000_000_000;
+        let keys_with = |extra: Vec<Key>| {
+            let mut named = release.keys("release key", "");
+            named.extend(extra);
+            root.sign(
+                &serde_json::to_vec(&serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": t - 1000,
+                    "expires_ms": t + 86_400_000, "keys": named}))
+                .unwrap(),
+            )
+        };
+        let pin = |k: &TestKey| Key {
+            alg: ALG_ES256,
+            key: k.spki(ALG_ES256),
+            name: "cbb.tools:8767".into(),
+            usage: "push".into(),
+        };
+        let k = verify_keys(&keys_with(alloc::vec![pin(&push1), pin(&push2)]), &roots, t, &Seen::default()).unwrap();
+        let pushes: Vec<_> = k.keys.iter().filter(|k| k.usage == "push").collect();
+        assert_eq!(pushes.len(), 2);
+        let mut twice = push1.keys("status key", "status");
+        twice.push(Key {
+            alg: ALG_ES256,
+            key: push2.spki(ALG_ES256),
+            name: "status key".into(),
+            usage: "status".into(),
+        });
+        assert!(verify_keys(&keys_with(twice), &roots, t, &Seen::default()).is_err());
+    }
 
     /// A channel and its release, or attest-status.json, signed at a time
     /// a day ahead of the device's clock is refused once that clock is

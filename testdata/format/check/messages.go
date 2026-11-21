@@ -189,6 +189,8 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
+	case "copy":
+		return copyRule([]byte(encOf(v))) == ""
 	}
 	panic("type " + ty)
 }
@@ -242,9 +244,33 @@ func betweenRule(name string, m map[any]any) string {
 			seen[e] = true
 		}
 	}
+	// The next key's settings and way go with that key and with the
+	// present ones.
+	if name == "offer" {
+		has := func(n uint64) bool { _, ok := m[n]; return ok }
+		if has(10) && (!has(7) || !has(3)) {
+			return "offer/next-obfuscation"
+		}
+		if has(11) && (!has(7) || !has(4)) {
+			return "offer/next-vless"
+		}
+	}
+	// A want asks for something.
+	if _, ids := m[uint64(2)]; name == "want" && !ids && m[uint64(3)] == nil {
+		return "want/empty"
+	}
 	// A root's fork is two records.
 	if fork, ok := m[uint64(3)].([]any); ok && name == "roots" && len(fork) != 2 {
 		return "roots/fork"
+	}
+	// The short code's commitment and nonces of earlier drafts.
+	for _, r := range []struct {
+		table string
+		n     uint64
+	}{{"pair/start", 4}, {"pair/reply", 4}, {"pair/confirm", 3}} {
+		if _, ok := m[r.n]; name == r.table && ok {
+			return r.table + "/retired"
+		}
 	}
 	// Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
 	if _, three := m[uint64(3)]; name == "welcome" && (three || m[uint64(8)] != nil) {
@@ -362,20 +388,11 @@ func checkMessages(dir string) {
 		} `json:"invitations"`
 		Cards signedFile `json:"cards"`
 		Codes struct {
-			Label        string `json:"short_code_label"`
-			Prefix       string `json:"channel_prefix"`
-			NoInvitation string `json:"no_invitation"`
-			NoSecret     string `json:"no_secret"`
-			Passwords    []struct {
-				Name       string `json:"name"`
-				Invitation string `json:"invitation"`
-				Password   string `json:"password"`
-				Keyed      *bool  `json:"keyed"`
-				Error      string `json:"error"`
-			} `json:"passwords"`
-			Short []struct {
-				Name, Exporter, Nj, Nm, Invitation, Code string
-			} `json:"short_code"`
+			Label  string `json:"home_code_label"`
+			Prefix string `json:"channel_prefix"`
+			Home   []struct {
+				Name, Digits, Secret, Error string
+			} `json:"home_secret"`
 			Channel []struct {
 				Name, Member, Joiner, Invitation, Ci string
 			} `json:"channel_id"`
@@ -519,15 +536,9 @@ func checkMessages(dir string) {
 		}
 		count++
 	}
-	count += checkCodes(f.Codes.Label, f.Codes.Prefix, f.Codes.NoInvitation, len(f.Codes.Short), func(i int) (string, []byte, string) {
-		c := f.Codes.Short[i]
-		h := sha256.New()
-		h.Write([]byte("cbb short code v3\x00"))
-		for _, part := range []string{c.Exporter, c.Nj, c.Nm, c.Invitation} {
-			h.Write(unhex(part))
-		}
-		d := h.Sum(nil)
-		return c.Name, unhex(c.Invitation), fmt.Sprintf("%06d", binary.BigEndian.Uint32(d[:4])%1000000) + "|" + c.Code
+	count += checkCodes(f.Codes.Label, f.Codes.Prefix, len(f.Codes.Home), func(i int) (string, string, string, string) {
+		c := f.Codes.Home[i]
+		return c.Name, c.Digits, c.Secret, c.Error
 	}, len(f.Codes.Channel), func(i int) (string, []byte, string) {
 		c := f.Codes.Channel[i]
 		ci := append([]byte("cbb pair channel v3\x00"), unhex(c.Member)...)
@@ -535,28 +546,6 @@ func checkMessages(dir string) {
 		ci = append(ci, unhex(c.Invitation)...)
 		return c.Name, unhex(c.Invitation), hex.EncodeToString(ci) + "|" + c.Ci
 	})
-	// CPace's password goes with the invitation ID: both zero at home
-	// without an invitation, neither with one; one without the other is
-	// refused.
-	if f.Codes.NoSecret != strings.Repeat("00", 32) || len(f.Codes.Passwords) < 4 {
-		fail("codes: no secret %q, %d password cases", f.Codes.NoSecret, len(f.Codes.Passwords))
-	}
-	for _, c := range f.Codes.Passwords {
-		id, pw := unhex(c.Invitation), unhex(c.Password)
-		if len(id) != 16 || len(pw) != 32 {
-			fail("codes %s: an ID of %d bytes, a password of %d", c.Name, len(id), len(pw))
-		}
-		zeroID, zeroPw := bytes.Equal(id, make([]byte, 16)), bytes.Equal(pw, make([]byte, 32))
-		switch {
-		case zeroID != zeroPw:
-			if c.Error != "refused" || c.Keyed != nil {
-				fail("codes %s: want refused", c.Name)
-			}
-		case c.Error != "" || c.Keyed == nil || *c.Keyed == zeroID:
-			fail("codes %s: want keyed %v", c.Name, !zeroID)
-		}
-		count++
-	}
 	count += checkWelcomeParts(f.WelcomeParts.DigestLabel, f.WelcomeParts.KeyLabel, f.WelcomeParts.TagLabel,
 		len(f.WelcomeParts.Digest), func(i int) (string, []byte, [][]byte, string) {
 			c := f.WelcomeParts.Digest[i]
@@ -572,39 +561,64 @@ func checkMessages(dir string) {
 	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
 }
 
-// checkCodes checks the short code and CPace's channel identifier (W.3,
-// 11.1), each computed here from its inputs: both take the invitation ID,
-// 16 bytes, all zero at home without an invitation, and every case gives
-// a value of its own. Each case returns its name, its ID and "computed|vector".
-func checkCodes(label, prefix, none string, nShort int, short func(int) (string, []byte, string),
+// checkCodes checks a home window's secret, from its six digits (owner,
+// 11-20), and CPace's channel identifier (11.1), each computed here from
+// its inputs. Six ASCII digits give SHA-256 of the label, a zero byte and
+// the digits; anything else gives no secret. The channel identifier takes
+// the invitation ID, 16 bytes; every case gives a value of its own. Each
+// home case returns its name, digits, secret and error; each channel case
+// its name, its ID and "computed|vector".
+func checkCodes(label, prefix string, nHome int, home func(int) (string, string, string, string),
 	nChannel int, channel func(int) (string, []byte, string)) int {
-	if label != "cbb short code v3" || prefix != "cbb pair channel v3" || none != strings.Repeat("00", 16) {
-		fail("codes: label %q, prefix %q, no invitation %q", label, prefix, none)
+	if label != "cbb pair home code v1" || prefix != "cbb pair channel v3" {
+		fail("codes: label %q, prefix %q", label, prefix)
 	}
 	n := 0
-	for _, part := range []struct {
-		count int
-		at    func(int) (string, []byte, string)
-	}{{nShort, short}, {nChannel, channel}} {
-		if part.count < 3 {
-			fail("codes: %d cases", part.count)
+	if nHome < 4 {
+		fail("codes: %d home cases", nHome)
+	}
+	seen := map[string]string{}
+	for i := 0; i < nHome; i++ {
+		name, digits, secret, errText := home(i)
+		six := len(digits) == 6
+		for _, b := range []byte(digits) {
+			six = six && b >= '0' && b <= '9'
 		}
-		seen := map[string]string{}
-		for i := 0; i < part.count; i++ {
-			name, id, both := part.at(i)
-			got, want, _ := strings.Cut(both, "|")
-			if len(id) != 16 {
-				fail("codes %s: an invitation ID of %d bytes", name, len(id))
+		if !six {
+			if secret != "" || errText != "not six digits" {
+				fail("codes %s: want no secret for %q", name, digits)
 			}
-			if got != want {
-				fail("codes %s: %s, want %s", name, got, want)
-			}
-			if other, ok := seen[got]; ok {
-				fail("codes %s: the same value as %s", name, other)
-			}
-			seen[got] = name
 			n++
+			continue
 		}
+		d := sha256.Sum256(append([]byte(label+"\x00"), digits...))
+		if got := hex.EncodeToString(d[:]); got != secret || errText != "" {
+			fail("codes %s: %s, want %s", name, got, secret)
+		}
+		if other, ok := seen[secret]; ok {
+			fail("codes %s: the same secret as %s", name, other)
+		}
+		seen[secret] = name
+		n++
+	}
+	if nChannel < 3 {
+		fail("codes: %d channel cases", nChannel)
+	}
+	seen = map[string]string{}
+	for i := 0; i < nChannel; i++ {
+		name, id, both := channel(i)
+		got, want, _ := strings.Cut(both, "|")
+		if len(id) != 16 {
+			fail("codes %s: an invitation ID of %d bytes", name, len(id))
+		}
+		if got != want {
+			fail("codes %s: %s, want %s", name, got, want)
+		}
+		if other, ok := seen[got]; ok {
+			fail("codes %s: the same value as %s", name, other)
+		}
+		seen[got] = name
+		n++
 	}
 	return n
 }

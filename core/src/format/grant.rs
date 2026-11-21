@@ -508,8 +508,8 @@ impl Granted<'_> {
 }
 
 /// A binding in person by code: made only by the leaf's own pairing
-/// session once the person said its code matches
-/// (`crate::join::invitation::Matched::binding`), for that session alone; no
+/// session at a home window, once the member proved the window's code in
+/// it (`crate::join::invitation::Proven::binding`), for that session alone; no
 /// message carries it, it is never built from values a caller passes, and
 /// it is not kept past the session or a restart. It holds what the leaf
 /// knows by itself: the new root's key hash and the recovery seq from the
@@ -530,9 +530,9 @@ pub fn session_mark(exporter: &[u8]) -> [u8; 32] {
 }
 
 impl Binding {
-    /// The binding a session of the leaf `leaf` makes once the person said
-    /// the codes match, from the leaf's stored state ([`Kept::start`]):
-    /// none unless it waits to be bound again.
+    /// The binding a session of the leaf `leaf` makes once the member
+    /// proved the window's code, from the leaf's stored state
+    /// ([`Kept::start`]): none unless it waits to be bound again.
     pub(crate) fn matched(
         kept: &Kept,
         head: Option<(KeyHash, u64)>,
@@ -551,8 +551,8 @@ impl Binding {
 /// change of root takes a grant again; the grant must be the root's,
 /// guarded, under `recovery`, and it starts the counters afresh. The
 /// binding is taken by value: one binding reads one grant, and only one
-/// that came over the very pairing session whose code the person
-/// confirmed: `exporter` is the TLS exporter of the session the grant
+/// that came over the very pairing session in which the member proved the
+/// code: `exporter` is the TLS exporter of the session the grant
 /// arrived on, and a grant by sync or by another session is refused.
 #[allow(clippy::too_many_arguments, reason = "the grant, the leaf's state and the session it came on")]
 pub fn read_bound<'a>(

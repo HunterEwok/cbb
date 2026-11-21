@@ -2,11 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The copy's wire form and signature (format section 10): the header
-//! hashed into `h`, the copy key K bound by `commit`, the payload and blob
-//! keys derived from K under `h`, and the origin's signature over `h`, the
-//! digest of the wraps `W` and the payload's hash `P`. A reduced copy (for a
-//! leaf) carries the other readers' wraps and the payload as their hashes,
-//! and verifies the same.
+//! hashed into `h`, the copy key K bound by `commit`, the payload key
+//! derived from K under `h` and the blob key from K alone, and the
+//! origin's signature over `h`, the digest of the wraps `W` and the
+//! payload's hash `P`. A reduced copy (for a leaf) carries the other
+//! readers' wraps and the payload as their hashes, and verifies the same.
 //!
 //! The content inside the payload is a map padded to one of the content
 //! steps (1 KiB to 4 MiB).

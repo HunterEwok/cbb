@@ -336,6 +336,9 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
 			fail("%s / %s: its name is refused", file, t.Name)
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 7 && !serversOK(m[uint64(15)]) {
+			fail("%s / %s: its servers are refused", file, t.Name)
+		}
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadIsPrev(m) {
 			fail("%s / %s: its own head is not its prev", file, t.Name)
 		}
@@ -384,6 +387,15 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if r.Rule == "records/checkpoint/own-head" {
 			if err != nil || ownHeadBefore(m) {
 				fail("%s / %s: its heads hold", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
+		if r.Rule == "records/settings/servers" {
+			// the group's servers: checked here by themselves
+			if err != nil || serversOK(m[uint64(15)]) {
+				fail("%s / %s: its servers hold", file, r.Name)
 			} else {
 				ok++
 			}
@@ -1103,6 +1115,7 @@ func main() {
 	checkBounds(dir)
 	checkMessages(dir)
 	checkWave4(dir)
+	checkMember(dir)
 	checkFuture(dir)
 	checkPush(dir)
 	if bad > 0 {
@@ -1683,4 +1696,42 @@ func ownHeadIsPrev(m map[any]any) bool {
 		return hasPrev && n+1 == seq && bytes.Equal(id, prev)
 	}
 	return !hasPrev && seq == 1
+}
+
+// serversOK checks a settings record's servers (field 15), absent or at
+// most 16 entries of [kind, endpoint, pin]: kind 1 or more (a kind this
+// version does not know is kept), endpoint text of 1 to 255 bytes without
+// a control character, pin 32 bytes, each kind and endpoint once.
+func serversOK(v any) bool {
+	if v == nil {
+		return true
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 || len(list) > 16 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, e := range list {
+		a, ok := e.([]any)
+		if !ok || len(a) != 3 {
+			return false
+		}
+		kind, ok1 := a[0].(uint64)
+		ep, ok2 := a[1].(string)
+		pin, ok3 := a[2].([]byte)
+		if !ok1 || !ok2 || !ok3 || kind == 0 || len(ep) == 0 || len(ep) > 255 || len(pin) != 32 {
+			return false
+		}
+		for _, r := range ep {
+			if r < 0x20 || r == 0x7f {
+				return false
+			}
+		}
+		k := fmt.Sprintf("%d %s", kind, ep)
+		if seen[k] {
+			return false
+		}
+		seen[k] = true
+	}
+	return true
 }

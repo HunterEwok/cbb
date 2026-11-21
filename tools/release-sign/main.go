@@ -266,6 +266,11 @@ func keys(args []string) error {
 		relays = append(relays, v)
 		return nil
 	})
+	var pushes []string
+	fs.Func("push", "ADDRESS=KEY.pem of the project's push service, whose pin its members accept (repeatable)", func(v string) error {
+		pushes = append(pushes, v)
+		return nil
+	})
 	fs.Parse(args)
 	k := release.Keys{V: 1, Type: release.TypeKeys, Seq: *seq, TimeMS: now().UnixMilli()}
 	k.ExpiresMS = k.TimeMS + int64(*days)*24*time.Hour.Milliseconds()
@@ -291,6 +296,11 @@ func keys(args []string) error {
 	}
 	for _, arg := range relays {
 		if err := add(arg, release.UseRelay); err != nil {
+			return err
+		}
+	}
+	for _, arg := range pushes {
+		if err := add(arg, release.UsePush); err != nil {
 			return err
 		}
 	}
@@ -347,9 +357,9 @@ func keyArg(arg, use string) ([]release.Key, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if use == release.UseForwarder || use == release.UseRelay {
+	if release.IsPin(use) {
 		if len(halves) != 1 || halves[release.AlgES256] == nil {
-			return nil, fmt.Errorf("%s: a forwarder's or relay's pin is one P-256 key", path)
+			return nil, fmt.Errorf("%s: a forwarder's, relay's or push service's pin is one P-256 key", path)
 		}
 		return []release.Key{{Alg: release.AlgES256, Key: halves[release.AlgES256], Name: name, Use: use}}, nil
 	}

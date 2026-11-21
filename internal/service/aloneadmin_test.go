@@ -4,7 +4,6 @@
 package service
 
 import (
-	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -19,19 +18,8 @@ import (
 // member named rust and returns its state folder.
 func joinFull(t *testing.T, bin string, root *testService) string {
 	t.Helper()
-	c, code := openWindow(t, root)
-	defer c.Close()
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", root.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on %s ended with %+v, %v", root.name, m, err)
-	}
-	return dir
+	// Home pairing of 0.6: the window's QR link, as joinAloneAs gives it.
+	return joinAloneAs(t, bin, root, "rust", nil)
 }
 
 // TestAloneAdminCommands checks the commands an admin Rust service signs

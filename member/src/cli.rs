@@ -380,28 +380,45 @@ pub(crate) fn new(g: &Global, args: &[String]) -> Result<()> {
     let m = ask(g, header("new"))?;
     let s = m.header.status.unwrap_or_default();
     println!("{}", tr!("Created the group {}; this computer is its root.", s.group));
-    println!(
-        "{}",
-        tr!(
-            "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
-        )
-    );
-    if !s.key_problem.is_empty() {
-        println!("{}", tr!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem));
-    }
     if s.key_level == "files" {
         println!(
             "{}",
             tr!(
-                "So the group's key level is files: an admin or a hub may keep its keys in a file too, each after a warning (cbb keys)."
+                "Its root key is a file here: guard this computer, since whoever copies the file can act as the group's root. A group made on a phone keeps its root key in the phone's hardware."
             )
         );
+    }
+    if !s.key_problem.is_empty() {
+        println!("{}", tr!("This computer's own key is in a file too, although it has a TPM: {}.", s.key_problem));
+    }
+    if let Ok(sheet) = serde_json::from_slice::<RecoverySheet>(&m.payload) {
+        println!();
+        println!(
+            "{}",
+            tr!(
+                "The group's recovery key, shown this once and kept nowhere: write it on paper, or print this screen, and keep it apart from your devices. With it you take the group back if this computer is lost (cbb recovery)."
+            )
+        );
+        println!();
+        for line in sheet.sheet.lines() {
+            println!("    {line}");
+        }
+        println!();
+        print!("{}", crate::qr(&sheet.qr));
+        println!();
     }
     println!(
         "{}",
         tr!("Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
     );
     Ok(())
+}
+
+/// The recovery sheet that cbb new shows once.
+#[derive(serde::Deserialize)]
+struct RecoverySheet {
+    sheet: String,
+    qr: String,
 }
 
 /// The most cbb recovery reads: the QR code's text with its admin CA fits
@@ -429,18 +446,46 @@ fn read_secret_line(limit: usize) -> Result<String> {
 /// sheet or its QR code's text, or on a YubiKey with -yubikey, as Go's
 /// cmdRecovery. The key comes from standard input, never the command line.
 pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
-    use std::io::IsTerminal;
+    use std::io::{IsTerminal, Write as _};
+    const USE: &str = "cbb recovery [-yubikey] [-leave NAME]..., then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; -leave names a device that does not stay in the group, such as a lost root";
     let mut h = Header { kind: "secret".into(), ..header("recover") };
-    match args {
-        [] => {}
-        [a] if flag(a) == Some("yubikey") => h.name = "yubikey".into(),
-        _ => {
-            return Err(usage(
-                "cbb recovery [-yubikey], then type the recovery key from the sheet (or paste its QR code's text), or with -yubikey the YubiKey's PIN; cbb status shows the claim",
-            ));
+    let mut i = 0;
+    while i < args.len() {
+        match flag(&args[i]) {
+            Some("yubikey") => h.name = "yubikey".into(),
+            Some("leave") => {
+                let name = args.get(i + 1).filter(|n| !n.starts_with('-')).ok_or_else(|| usage(USE))?;
+                h.leave.push(name.clone());
+                i += 1;
+            }
+            _ => return Err(usage(USE)),
         }
+        i += 1;
     }
     let terminal = std::io::stdin().is_terminal();
+    // Who stays and who leaves, asked once before the key is typed: a
+    // change of root cannot be undone.
+    if terminal && let Ok(m) = request(g, &Message::new(header("devices"), Vec::new())) {
+        let leaves = |d: &crate::control::Device| {
+            h.leave
+                .iter()
+                .any(|n| d.name.eq_ignore_ascii_case(n) || (n.len() >= 4 && d.id.starts_with(&n.to_lowercase())))
+        };
+        let (gone, stay): (Vec<_>, Vec<_>) = m.header.devices.iter().partition(|d| leaves(d));
+        let names = |v: &[&crate::control::Device]| v.iter().map(|d| d.name.as_str()).collect::<Vec<_>>().join(", ");
+        println!("{}", tr!("Stays in the group: {}", names(&stay)));
+        if !gone.is_empty() {
+            println!("{}", tr!("Leaves the group: {}", names(&gone)));
+        }
+        print!("{}", tr!("Make this computer the group's root, with these devices? [y/N] "));
+        std::io::stdout().flush().ok();
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).ok();
+        if !matches!(line.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("{}", tr!("Nothing changed."));
+            std::process::exit(1);
+        }
+    }
     let card = h.name == "yubikey";
     if terminal {
         if card {
@@ -464,7 +509,17 @@ pub(crate) fn recovery(g: &Global, args: &[String]) -> Result<()> {
     if card && terminal {
         eprintln!("{}", tr!("Touch the YubiKey when it blinks."));
     }
-    request(g, &Message::new(h, text.into_bytes()))?;
+    let m = request(g, &Message::new(h, text.into_bytes()))?;
+    // A group of 0.6 changes its root at once (rule 33); 0.5's claim waits.
+    if m.header.done {
+        println!(
+            "{}",
+            tr!(
+                "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key."
+            )
+        );
+        return Ok(());
+    }
     println!(
         "{}",
         tr!(

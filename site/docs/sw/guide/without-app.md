@@ -54,6 +54,8 @@ Kompyuta isiyo nyumbani hujiunga kwa mwaliko kutoka kitovu ([Nje ya nyumbani](aw
 - **SSH** kwenda kwenye mzizi au msimamizi: kwenye kompyuta mpya endesha `ssh -N -L 18764:localhost:8764 user@that-machine`, kisha `sudo cbb pair` pale (katika kikao kingine cha SSH) na `sudo cbb pair -code 127.0.0.1:18764` hapa.
 - **VPN yako mwenyewe** inayozipa mashine zote mbili anwani za kibinafsi: `sudo cbb pair` kwenye mzizi au msimamizi, kisha `sudo cbb pair -code ITS-VPN-ADDRESS:8764` hapa. Kwenye Linux, endesha kisakinishi tena baada ya kuweka VPN, ili kanuni zake za ngome ya moto ziruhusu mtandao wa VPN.
 
+Kwa njia zote mbili, andika mstari ambao `cbb pair` huchapisha chini ya msimbo (`cbb://pair?...`) badala ya tarakimu sita: tarakimu peke yake hazitaji dirisha lolote mahali ambapo mDNS haifiki, na mstari unalitaja, ukiwa na msimbo uleule ndani yake.
+
 Msimbo haupiti wazi kamwe: uoanishaji hufanyika ndani ya SSH au VPN yako, na ndani ya TLS. Kompyuta mpya husawazisha kupitia njia hiyo hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha baadaye, washa [usawazishaji nje ya nyumbani](away-from-home.md) kwenye zote mbili kabla ya kufunga muunganisho.
 
 ## Kikundi cha kabla ya 0.6

@@ -297,17 +297,35 @@ impl Svc {
         st
     }
 
-    /// Admits joiner through a pairing window here, the joiner dialing
-    /// this member's port with the window's code; returns the name the
-    /// window reports.
-    pub fn admit(&self, joiner: &Svc, admins: bool) -> String {
-        let (_conn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
+    /// Opens a home window here: its six digits, and the link of its QR
+    /// code with this member's loopback address, for a joiner here.
+    pub fn window(&self, admins: bool) -> (UnixStream, BufReader<UnixStream>, String, String) {
+        let (wconn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
         let opened = read(&mut r).unwrap_or_else(|| panic!("no window:\n{}", self.log()));
         assert!(opened.error().is_empty(), "the window: {}\n{}", opened.error(), self.log());
-        let code = opened.s("code").to_string();
-        assert_eq!(code.len(), 6, "{:?}", opened.h);
-        let joined = joiner.ask(true, json!({"op": "join", "code": code, "address": self.addr()}), b"");
-        assert!(joined.error().is_empty(), "join: {}\n{}\n{}", joined.error(), joiner.log(), self.log());
+        assert_eq!(opened.s("kind"), "home-window", "{:?}", opened.h);
+        let digits = opened.s("code").to_string();
+        assert_eq!(digits.len(), 6, "{:?}", opened.h);
+        let mut link = cbb_core::join::invitation::WindowLink::parse(opened.s("invite"))
+            .unwrap_or_else(|| panic!("no QR code text: {:?}", opened.h));
+        link.addrs = vec![self.addr()];
+        (wconn, r, digits, link.text())
+    }
+
+    /// Admits joiner through a home window here, the joiner dialing this
+    /// member's port with the window's link (its six digits, ID and key);
+    /// returns the name the window reports.
+    pub fn admit(&self, joiner: &Svc, admins: bool) -> String {
+        let (_wconn, mut r, _, link) = self.window(admins);
+        let (_jconn, mut jr) = joiner.open(true, &json!({"op": "join", "code": link}), b"");
+        let joined = read(&mut jr).unwrap_or_else(|| panic!("the join did not end:\n{}", joiner.log()));
+        assert!(
+            joined.error().is_empty() && joined.done(),
+            "join: {}\n{}\n{}",
+            joined.error(),
+            joiner.log(),
+            self.log()
+        );
         let closed = read(&mut r).unwrap_or_else(|| panic!("the window did not close:\n{}", self.log()));
         assert!(closed.error().is_empty(), "the window: {}", closed.error());
         joiner.port();

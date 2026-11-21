@@ -107,6 +107,20 @@ unread, key}`: `media` is the manifest of images or files, and `key` what the bu
 it by (a text by itself, an image by `"\u0000image:"` and the hex SHA-256 of its PNG or JPEG
 part, files by `"\u0000files:"` and the copy's ID).
 
+On a group of 0.6, when the app's data directory holds the group's `group.cbor`,
+`cbb_member_start` runs the member of 0.6 instead (`ffi/src/member/live.rs`, over
+`cbb_member::live`): the request needs only `dir`, `name`, `os`, `os_version`, `version`,
+`device`, `public`, `peers` and `mdns`, the records naming the group's devices and keys, and
+`device` must be the one the member key makes. Its events are `write`, `copy` (`{id, origin,
+age_ms, kind, text, key}`, the key the copy's ID), `log` and `panic`. Its operations are `copy`,
+`current`, `found`, `lost`, `listen` and `unlisten` for the home port, `pause`, `resume`, `wait`,
+`set_mute`, `sync`, `muted`, `peers`, `devices` and `why`; `cbb_member_manage` takes `remove`,
+`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge.
+Everything else, and `cbb_member_servers`, `cbb_member_manage_watch`, `cbb_admit_new` and
+`cbb_invite_new`, answers that it does not work in this build yet, with the cause
+`not on the records of 0.6 yet` in its details, until its part moves over. Images and files
+of a copy are not written yet: its text is, and the log says why the rest is not.
+
 ### The member's operations
 
 A phone's `cbb_member_call` and a computer's control socket (protocol.md, section 8: the
@@ -126,7 +140,7 @@ after the header, and an operation that answers more than once marks the last an
 | `bug` | computer | none | the bug report of the panic before the last restart as `bug_report` answers it (payload; empty when none waits); see "Bug reports" |
 | `bug_allow` | computer | payload `{"always"}` | the user allowed the report, and maybe always: it goes, and the panic no longer waits |
 | `bug_cancel` | computer | none | the user cancelled the report: nothing goes |
-| `devices` | both | none | `{"devices"}`: every device of the group, `[{id, name, role, caps, os, store, skew_ms, form, os_version, version, mac, mode, muted, muted_until_ms, admin, root, frozen, online, last_seen_ms, self, listed, may_hub, forward_only, hub}]` (`control::Device`; empty fields left out): the group's device records, whether it is connected and whether it is this device, what a connected member's hello says (`form`, `os_version`, `version`, `mac`, `mode` `shared` or `own`, `muted` and `muted_until_ms` in Unix milliseconds, 0 for until lifted), then the connected members no record lists yet (`listed` false). `last_seen_ms` is when this member last saw the device connected. A phone fills in what its node knows: no `store`, `skew_ms`, `last_seen_ms` or hub fields |
+| `devices` | both | none | `{"devices"}`: every device of the group, `[{id, name, role, caps, os, store, skew_ms, form, os_version, version, mac, mode, muted, muted_until_ms, admin, root, frozen, online, last_seen_ms, self, listed, may_hub, forward_only, hub, hub_rank}]` (`control::Device`; empty fields left out): the group's device records, whether it is connected and whether it is this device, what a connected member's hello says (`form`, `os_version`, `version`, `mac`, `mode` `shared` or `own`, `muted` and `muted_until_ms` in Unix milliseconds, 0 for until lifted), then the connected members no record lists yet (`listed` false). `last_seen_ms` is when this member last saw the device connected. A phone fills in what its node knows: no `store`, `skew_ms`, `last_seen_ms` or hub fields. `hub` is whether the device serves as a hub as this member knows it: with sync away from home on, this device while it serves or a hub whose offer it keeps; with it off, a device the root's hubs record names. `hub_rank` is the device's place in the group's order of hubs, from 1 (protocol section 11, "Several hubs"), left out when it may not serve |
 | `view` | both | `away` (optional on a phone, as `why` takes it) | `{"view": {"tiles", "online", "others", "custom", "warnings?"}}`: the device tiles to draw in the user's order and collections, each `{"device"}` (as `devices` lists it) or `{"collection": {id, name, devices}}`, this device among them, and how many other devices are online out of how many, whether the user changed the order, and `warnings`, why this device does not sync, the same reasons as `why` and status's `why`, left out when everything syncs (`member/src/view.rs`; docs/apps.md, "What the member shows" and "Why it does not sync") |
 | `arrange` | both | `arrange` (`{"op": "move", "item", "before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as `testdata/arrangement/vectors.json` names them), `away` as `view` | as `view`, after the change, which the member keeps in `arrangement.json`; a change that does not fit is refused whole |
 | `current` | phone | none | `{"copy"}`: the group's current copy, or null |
@@ -196,19 +210,19 @@ after the header, and an operation that answers more than once marks the last an
 | `confirm_key` | computer | `name`, `value`: a user's SID and the public key (PKCS #1 RSAPublicKey, base64) of the user's Windows Hello key | `{}`: the key that confirms this user's admin actions on Windows. Only on the admin socket |
 | `release_get` | computer | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{}`: the archive of the held release, from this device or fetched from its peers |
 | `watch` | computer | `kind`, `via`, `inject` (the remote paste target the watcher offers: `desktop`, `tmux` or `console`), `paste_only` (it holds no clipboard and only pastes, like the Mac app), `act` (it runs the quick actions in its session), `images`, `files`, `html` (it writes copies with images, files, formatted text) + payload = what the clipboard holds now (may be empty) | an answer `{"ok":{}}` without `done`; then the watcher protocol (protocol.md, section 8) |
-| `away` | computer | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate_off?, vless_off?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (protocol.md section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (protocol.md section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (protocol.md section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (protocol.md section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, protocol.md section 14), in place of a hub or its offer (protocol.md section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (protocol.md section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; with `hub`, `obfuscate_off` turns off the AmneziaWG a hub speaks by default and `vless_off` the VLESS it asks a forwarder for (protocol.md section 11; `obfuscate_off` goes with `vless_off` where there is a forwarder), and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (protocol.md section 11, "Stopping a hub"). The members connected learn the change from a `presence` message, without connecting again (protocol.md section 4, "Presence") |
+| `away` | computer | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate_off?, vless_off?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, relays?, consent}` | `{status}`, `{relays}` from the root of a group of 0.6, or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (protocol.md section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (protocol.md section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (protocol.md section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (protocol.md section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, protocol.md section 14), in place of a hub or its offer (protocol.md section 14), and needs `consent`, since the relay learns which devices talk; in a group of 0.6 the root signs the relay, with the ones `relays` adds (each `address pin`, up to 16 in all), in the group's settings and answers their addresses in `relays` (protocol.md section 14, "The project's relay"); `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (protocol.md section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; with `hub`, `obfuscate_off` turns off the AmneziaWG a hub speaks by default and `vless_off` the VLESS it asks a forwarder for (protocol.md section 11; `obfuscate_off` goes with `vless_off` where there is a forwarder), and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (protocol.md section 11, "Stopping a hub"). The members connected learn the change from a `presence` message, without connecting again (protocol.md section 4, "Presence") |
 | `remove` | computer | `device`: a device ID, or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on the root or an admin whose powers allow it (`remove`, and `remove-admins` for an admin; protocol.md section 10, "Who signs what"); a device cannot remove itself; the root is never removed, only replaced by a claim (`take_over`) |
-| `make_admin` | computer | `device`: a device ID, or a name (case-insensitive); `allow_file_key`: the user agreed to the warning about an admin key in a file | `{name}`, the device's name, or an error. Only on the root computer: makes the connected phone, or member with `admin`, an admin (protocol.md section 10, "Admins") |
-| `take_over` | computer | `device`: the lost root, a device ID or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it (protocol.md section 10, "Handing the group over") |
-| `takeover_delay` | computer | `{value}`: a duration from `0s` to `168h` | `{}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had |
+| `make_admin` | computer | `device`: a device ID, or a name (case-insensitive); `allow_file_key`: the user agreed to the warning about an admin key in a file | `{name}`, the device's name, or an error. Only on the root computer: makes the connected phone, or member with `admin`, an admin (protocol.md section 10, "Admins"). On a group of 0.6 the device need not be connected: the root writes its record with the admin key the device offered, with its proof, when it paired with the root (kept in `offered.json`); for a device another admin admitted it answers that the device pairs with the root to be made an admin (D-118) |
+| `take_over` | computer | `device`: the lost root, a device ID or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on an admin computer of a group whose root is a computer: signs a `claim` against the root that name names, which takes effect when the root's takeover delay has passed on each member, unless the root cancels it (protocol.md section 10, "Handing the group over"). On a group of 0.6 it answers an error that points to `recover`: the root changes only with the recovery key there (rule 33, D-117) |
+| `takeover_delay` | computer | `{value}`: a duration from `0s` to `168h` | `{}` or an error. Only on the group's root: signs a `settings` record with `takeover_delay_ms`, how long a claim waits on each member, and the `key_level` its newest one had. On a group of 0.6 it answers an error that points to `recover`: no claim waits there (D-117) |
 | `key_level` | computer | `{value}`: `proven`, `hardware` or `files` | `{below}` or an error. Only on the group's root, and never a level its own key does not pass: signs a `settings` record with `key_level` and the `takeover_delay_ms` its newest one had; `below` names the admins and hubs whose keys the new level would not let in, which stay until removed. `cbb new` signs `files` itself when the root's keys are in a file, as a computer's CA keys are (protocol.md section 17) |
 | `incoming` | computer | `{value}`: a duration from `5s` to `1h` | `{}` or an error. On the group's root or any admin: signs a `copies` record with `incoming_ms`, how long a copy from another device stays live on each member (protocol.md section 10, "The copies setting") |
 | `hubs` | computer | `{hubs}`: 1 to 16 names or device IDs of computers and phones, in the order they serve | `{}` or an error. On the group's root or an admin with `hub`: signs a `hubs` record, the group's main hubs |
 | `freeze` | computer | `device`: a device ID, or a name (case-insensitive) | `{name}`, the device's name, or an error. Only on an admin that is not frozen: freezes another admin without `remove-admins`, never the root or an admin phone (protocol.md section 10, "Removals and freezes keep what the author saw") |
 | `thaw` | computer | `device` | `{name}`, the device's name, or an error. Only on the root computer (a computer's admin has no `thaw`): ends every freeze of that admin (protocol.md section 10, "Removals and freezes keep what the author saw") |
 | `resolve` | computer | none | `{name}`: on the root, voids both histories of every key that signed two; `name` lists whose. Only on the admin socket |
-| `recover` | computer | payload = the recovery sheet's text or QR code, or `name` `yubikey` and the YubiKey's PIN as the payload | `{}`: claims the group with its recovery key (protocol.md, section 10, "The recovery key"). Only on the admin socket |
-| `hand_over` | computer | `device`: the admin, a device ID or a name (case-insensitive) | `{name}`: on the root, a `handover` record naming that admin's key, whose claim then takes effect at once (protocol.md section 10, "Handing the group over"). Only on the admin socket |
+| `recover` | computer | payload = the recovery sheet's text or QR code, or `name` `yubikey` and the YubiKey's PIN as the payload | `{}`: claims the group with its recovery key (protocol.md, section 10, "The recovery key"). Only on the admin socket. On a group of 0.6, `{done}`: this device becomes the root at once by a change of root (rule 33) with a new root key, every device staying but those `leave` names (names or device IDs; never this device), and the service restarts to sign with that key; "the group's root already" on the root, and a YubiKey is not on 0.6 yet |
+| `hand_over` | computer | `device`: the admin, a device ID or a name (case-insensitive) | `{name}`: on the root, a `handover` record naming that admin's key, whose claim then takes effect at once (protocol.md section 10, "Handing the group over"). Only on the admin socket. On a group of 0.6 it answers an error that points to `recover` (D-117) |
 
 A phone's node passes on a command for another device when it is connected to it, as
 protocol.md section 15 says: once until it expires, never one that has expired or claims to live
@@ -338,15 +352,15 @@ clients, its remote invitations with a guest tunnel to the pairing window), for 
 joined by an invitation (`guest_start` with the `invite`, which answers the guest tunnel's
 `id` and loopback `port` to the hub's member port, for its first hello), and their status;
 `cbb_tunnel_register` registers the phone's hub with the group's forwarder (inside VLESS with
-XHTTP when the forwarder's TCP port does not answer, as the Go hub does) and
-`cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
-key through the same callback, the relay's link telling the app through an events' callback
-which connections it joined; `cbb_tunnel_relay_credentials` makes the link register with the
-group's server credentials (docs/protocol.md, section 18), signed with the period's server key
-through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
-`TestRustPhoneHubForwarder`, `TestRustPhoneHubOverXHTTP`, `TestRustPhoneRelay` and
-`TestRustPhoneRelayCredentials` run them
-against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
+XHTTP when the forwarder's TCP port does not answer, as the Go hub does) and signs its TLS with the member key through a callback; `cbb_tunnel_relay` links the phone to the
+blind relay by `cbb-relay/3`, telling the app through an events' callback which connections it
+joined, and registers once `cbb_tunnel_relay_credentials` gives it the period's server
+credentials of 0.6 (`cbb_core::blind::credential`), signed with the period's server key through
+a callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
+`TestRustPhoneHubForwarder` and `TestRustPhoneHubOverXHTTP` run them against Go's hub, clients
+and forwarder through the example `tunnel-on-linux`; `two_phones_meet_at_the_relay`
+(ffi/src/tunnel/relay_tests.rs) runs two relay links through the C functions against the relay
+of `cbb relay` in the same process.
 
 The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core: they run
 Go's own `internal/authority`, `internal/clip` and `internal/group`, which the interop
@@ -389,7 +403,7 @@ the core's.
 | `release_named` | `channel` (a channel file's bytes, base64) | `{"release"}`: the version it names, read but not yet checked, so that a device knows which release.json to fetch; `release_check` then checks both |
 | `new_device_key` | none | `{"pkcs8", "public"}`: a new P-256 device key (base64 PKCS #8 and SEC1 uncompressed) for a phone that keeps its key in a file (level 3) |
 | `sign_digest` | `pkcs8`, `digest` (base64, 32 bytes) | `{"sig"}`: ECDSA P-256 over the SHA-256 digest with that key, DER, base64: what the phone's signing callback gives for a key in a file |
-| `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `taken_over_by`, `cert_ends_ms`, `stop`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`) |
+| `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `stop`, `admins_conflict`, `root_two_histories`, `recovery_fork`, `change_arriving`, `checkpoint_stuck`, `owner_disagrees`, `no_secrets_here`, `nothing_here`, `copy_waits`, `update_needed`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`); on the group of 0.6 a driver fills the group's part with `why::group_facts` from the state (removed, frozen, the stop, `admins_conflict` from a conflict of admins, `root_two_histories` from `root_pair`, `recovery_fork` from `fork`, `change_arriving` from `first_missing` or `list_missing`, `no_secrets_here` and `nothing_here` from `no_secrets_to` and `nothing_to`, `update_needed` from `update_needed` or `too_old`, `newer`) and adds `owner_disagrees` (peers whose chain parts from its own, `State::disagrees`), `copy_waits` (senders whose copies wait for their records) and `checkpoint_stuck` (`RecordSet::stuck_checkpoints`) |
 | `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
@@ -493,6 +507,22 @@ service found its registration stale, with `ahead` when it found its number more
 its clock), `forget` (a device removed or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
 `event`, and the traits `Faces` (the push service's address, pin, server key and credentials
 of the group's face) and `Saved` (where the registrations are kept).
+
+On the records of 0.6 the mesh calls the seam (`member/src/mesh/push.rs`). Events (rule 33's,
+`pushbody/event`) come from the records a member applies: a device record that adds a device
+(`joined`, naming it), a `revoke` (`removed`, naming the device when it removes one) and a
+recovery record that changed the root (`root`), a device record that changes a device
+already in the group (`own_record`, to that device's phone alone) and the records that stop
+the group (`stopped`, once, when the state comes to stop the exchange with every device or
+halts, named by the lowest of the records its conflicts name), each with the record's own
+time. The event's `id` is the first 16 bytes of the record's ID, so every member that applies
+the record gives the same ID and a phone woken by a hub and by the root shows the event once
+(a copy's notification keeps the copy's random ID). A hub sends them, else the root's device
+or an admin's when the group has no hub. `waiting` is not sent yet: on 0.6 a device waits to
+join only while the inviting admin's window is open, so no member holds a waiting device to
+tell of. The previous period's face is kept in `push-previous.cbor` in the group's directory
+(the group, the service's pin and address, the credentials, the tag and their expiry; the
+server key comes again from the server secret and the tag), so a restart does not lose it.
 
 Every honest sender of one body makes the same bytes (the nonce is derived from the plaintext, a
 copy is reduced with age 0, an event carries its record's time), so the service drops a repeat by
@@ -721,6 +751,58 @@ most the records records-v2.md allows. `group_view` answers:
 | `known` | every device ID a device record names, counted or not: IDs a new device must not take |
 | `records` | the number of records the set holds |
 
+## The group (records v3)
+
+The calls whose names start with `set_` are the group of 0.6: its records v3 (`cbb_core::records`)
+kept in a set file (`cbb_core::setfile`), which the computers' member writes in its state folder and
+Go and the tests pass in each call. They take the place of the `group_` calls above when the
+programs move to the core of 0.6. Keys, key hashes, record IDs, device IDs and digests are base64;
+a key is the point (SEC1, 65 bytes) except the recovery key's second half, the SLH-DSA public key.
+
+Every call takes `set`, the set file, and `local`, the device's 32-byte local key, when the file is
+pinned to it. A call that changes the set answers the new `set`, and every call that reads it the
+group's view.
+
+**The set file** is one CBOR map in the format's profile, written whole: 1 its version (1), 2 the
+group's first root key, 3 and 4 the two halves of the recovery key, 5 the pin (the HMAC under the
+local key over the three keys, `records::pin_mark`), 6 the records in dependency order, each
+`[envelope]` or `[envelope, mark]`, 7 the lists, 8 the removal records the notices keep, 9 the
+notices dismissed, 10 the devices that came in through each change of root `[change, seq, [key
+hash]]`, 11 the newest change applied with the devices before it `[change, seq, [device ID]]`. A
+record whose mark holds under the local key is taken without its signature checked again; every
+other is checked as if a peer sent it. With `local`, a file without a pin, or whose pin does not
+hold, is refused (code `saved`): its keys were changed. A file of a later version says to update.
+
+**Signing in rounds.** The root's, an admin's and a new root's keys stay where the device keeps
+them. A call that writes answers `{"sign": [{key, digest}]}` while it needs signatures: the caller
+signs each digest with that key (ECDSA P-256 over the SHA-256 digest as given) and calls again
+with the same arguments and `sigs`, `[{digest, sig}]`, every signature so far (`sig` DER or the 64
+bytes r ‖ s). A record's ID covers its body only, so the digests are the same in every round; an
+admin key's first record after its grant goes with its acknowledgement, whose digest comes first.
+
+| `op` | `args` | `ok` |
+|---|---|---|
+| `set_new` | `root`, `recovery`, `recovery2`, `local` (optional) | the empty set of a group, as its creator or a joiner starts it, and its view |
+| `set_add` | `records` (envelopes), `lists` | the records and lists a peer sent, each checked before it is kept, round after round as one may wait for another: `stored` (IDs), `refused` `[{id, why}]` (`why` `group`, `unknown_signer` or the rule broken; `id` null for bytes that are no record), `changed`, the view |
+| `set_view` | none | the view |
+| `set_records` | `peer` (optional, a member key's hash) | `{records, lists, digest}` to send, in dependency order; with `peer`, what the set gives that peer |
+| `set_write` | `signer`, `record`, `time_ms`, `sigs` | a record of the root or an admin: `records` (envelopes, to send), the view. `record` is `{"type": ...}`: `device` (`key`, `name`, `role` `member`, `phone`, `watch` or `leaf`, `rights` of `read`, `send`, `hub`, `secrets`, `caps` of `admin`, `dials`, `hub`, `os`, `store` `file`, `hardware`, `rootless` or `proven`, `admin` and `admin_kind` `watch`, `computer` or `phone`, which fixes the powers and commands, `holds_root`, `guarded`, `replaces`), `freeze` (`keys`), `thaw` (`ids`), `resolve` (`ids`), `settings` (`key_level`, `min_rules`, `shared`), `copies` (`incoming_ms`), `hubs` (device IDs), `ack` (`spare`, a spare admin key), `checkpoint` |
+| `set_remove` | `signer`, `keys` (member key hashes), `time_ms`, `sigs` | the removal of devices by the root (with what a key in two histories needs) or an admin that may remove |
+| `set_dismiss` | `id` | the notice is not shown again |
+| `set_change_preview` | `leave_out` (member key hashes) | `{"preview": [{device, outcome, frozen}]}`, what a change of root does to each device: `outcome` `stays`, `out`, `admin_kept_with_spare`, `admin_rights_lost` or `frozen` |
+| `set_change` | `recovery_secret` (32 bytes, from the recovery sheet; used for the call and forgotten), `new_root`, `device` (the new root's own device record, as `set_write`'s), `leave_out`, `drop_hubs`, `over_waiting` (write past a change the set holds and has not applied), `time_ms`, `sigs` | a change of root by the recovery key: `records` (the recovery record first, then the new root's first records), `list`, `again` (the change the set held, given back), `blind` (written without records from a member since the set was read: warn before sending), the view |
+| `set_standing` | `own`, `peer` (member keys) | where the peer's key stands in the records, as TLS by key asks: `standing` `member` (with `device`), `unknown` (it must send its intro), `refused` (with `reason`), `halted` or `fork_proof` |
+
+The view: `group`, `digest`, `record_count`, `bytes`, `first_root`, `recovery` (K1's hash), `roots`
+(the path, the current one last), `root_device`, `devices` `[{id, key, key_hash, name, role, rights,
+caps, os, store, admin, powers, commands, root, frozen, guarded, by_root, no_secrets, nothing}]`,
+`revoked`, `hubs`, `stop` (`""`, `secrets` or `full`), `stopped`, `halted`, `too_old`,
+`update_needed`, `incoming_ms`, `conflicts` `[{kind, records, signers}]` (`admins`, `fork`,
+`two_histories`, `admits`, `ids`), `changes` `[{record, seq, root, state}]` (`effective`, `void`,
+`competing`), `list_missing`, `change_arriving`, `newer`, `notices` `[{id, keys}]` (removals by an
+earlier root the person has not dismissed) and `came_in` `[{change, seq, keys}]` (devices that came
+in through a change of root).
+
 ## Signed bodies
 
 `parse_body` reads the signed bodies other than records as every program reads them
@@ -814,12 +896,13 @@ service and command line, the kits are the phones' Swift and Kotlin kits, and th
 | `sheet::yubikey::seal`, `open`, `read`, `is_ours`, `ecdh`, `check` | the bytes of the YubiKey's recovery object: the object's layout, the seal and opening by ECDH with the card's key, and the check that the opened secret is the group's recovery key. The card itself is the caller's | `member/` (`member/src/piv/recovery.rs` calls it today); the phones over NFC | to add for the phones |
 | `tls::bykey::pairing_exporter` | the session's `join::PairExporter`, only from a finished handshake on `cbb-pair/3` | `member/` and the boards, which run the core's TLS | none: the core's TLS stays inside the core |
 | `join::PairExporter::exported_by_platform_tls` | the same from 32 bytes a platform's TLS exported with `EXPERIMENTAL-cbb-pair-v3` and an empty context; the caller states where they came from | the kits, whose TLSTransport runs pairing | to add, as the only way the kits make one |
-| `join::approve::MemberExchange::respond`, `confirm` | the member's CPace exchange with its password (`approve::Password`); `confirm` takes the joiner's Ta and gives an `Approved` only under an invitation's secret | every program that admits: `member/`, the kits | to add |
-| `join::invitation::home_code`, `Open::short_code` | the code the member shows, with its `approve::MemberShown` | the same | to add |
-| `join::approve::answered_at_home`, `join::invitation::Open::answered` | turn the person's "they match" on that code into an `Approved` | the same | to add |
+| `join::approve::MemberExchange::respond`, `confirm` | the member's CPace exchange with an invitation's secret; `confirm` takes the joiner's Ta and gives the `Approved` that message 67 needs | every program that admits: `member/`, the kits | to add |
+| `join::invitation::Invitation::home`, `typed`, `home_secret` | a home window: its ID and six digits, and the joiner's same invitation from the ID and the digits it scanned or its person typed | the same, and every program that joins at home | to add |
+| `join::invitation::Proven` (`binding`, `to`) | at a home window, the joiner's proof of the member in that session, from `JoinerSession::proven`; a guarded leaf's only binding to a new root | the boards; the kits for a phone that binds a leaf | to add |
 | `join::welcome::message` | message 67, made only with an `Approved` naming the exchange's session and joiner | the same | to add |
 | `join::welcome::Welcome::build`, `part_message` | the Welcome and the parts that follow it when the set does not fit one frame | the same | to add |
 | `join::welcome::Assembly` (`new`, `due`, `late`, `take`, `finish`) | the joiner takes the parts after message 67 within `join::welcome::MAX_PARTS_BYTES` and their time limits, then gives the whole Welcome to `Welcome::check` | every program that joins: `member/`, the kits, the boards | to add |
+| `join::session::JoinerSession`, `MemberSession` | one whole pairing session at each end, without I/O: the frames of messages 64 to 69 in order, the member's counting the attempts on its `invitation::Open`; the joiner ends with `Joined::Done`, a checked Welcome's set and state to store and message 68 to send. They only call the entries above in their order, so a program that runs them needs none of those itself | every program that joins or admits: `member/`, the kits, the boards | to add: the one pairing entry the kits need beside the exporter |
 | `bounds::BOUNDS` | every number of the format with its rule, refusal and the vector that reaches it ([protocol.md](protocol.md), section 19) | no driver; the tests and the docs check against it | none |
 | `records::RecordSet::parts_for_peer` | what a peer gets in sync (`for_peer` and its lists), as parts that each fit one frame, every change of root's list beside its head | every program that syncs: `member/`, the kits, the boards; today only the Welcome | to add |
 | `records::RecordSet::digest` | the set's digest, which a hello and each sync round carry | the same | to add |

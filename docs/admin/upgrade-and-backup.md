@@ -56,8 +56,8 @@ The safest way back is a second device that may act for the group:
   phone, "Make it an admin"). If the root phone is lost, the admin phone takes the group
   over and every device stays in it.
 - **In a computer's group**, make another computer an admin (`sudo cbb admin NAME` on the
-  root). If the root is lost, `sudo cbb takeover LOST_ROOT` on the admin, with the lost
-  root's name or ID, makes the admin the root.
+  root). If the root is lost, `sudo cbb recovery` on another computer of the group, with the
+  group's recovery sheet, makes it the root; keep the sheet safe.
 
 ## Bringing a device back
 
@@ -65,7 +65,7 @@ The safest way back is a second device that may act for the group:
 |---|---|
 | A device was reinstalled or replaced | remove the old one (`sudo cbb remove NAME`, or Remove in the app), then pair the new one as a new device |
 | A computer was restored from its own backup, on the same hardware | start the service; it rejoins with its old keys, as long as nobody removed it |
-| The root computer is gone and an admin remains | `sudo cbb takeover LOST_ROOT` on the admin, with the lost root's name or ID |
+| The root computer is gone | `sudo cbb recovery` on another computer of the group, with the group's recovery sheet |
 | The root phone is gone and an admin phone remains | remove the lost root on the admin phone; the app takes the group over in the same step |
 | The root is gone and no admin remains | the group cannot admit or remove devices any more; make a new group and pair every device into it |
 | An OpenWrt router was upgraded | a plain sysupgrade keeps the whole install, keys included; after an attended sysupgrade (ASU, owut) run the install command again, and the keys are still there |

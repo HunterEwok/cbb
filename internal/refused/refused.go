@@ -8,10 +8,10 @@
 // on as before; the list never limits who may use the server.
 //
 // The file has one group tag a line, 16 hex characters as cbb status shows
-// them; a line may also name a period's tag as "period <tag>", for a group
-// that registers with credentials. Blank lines and lines that begin with #
-// are skipped, and so is anything after a tag on its line, such as the date
-// of the report.
+// them; a line may also name a period's tag as "period <tag>", 32 hex
+// characters, for a group that registers with credentials. Blank lines and
+// lines that begin with # are skipped, and so is anything after a tag on its
+// line, such as the date of the report.
 package refused
 
 import (
@@ -158,11 +158,11 @@ func Parse(b []byte) (map[string]bool, error) {
 		}
 		tag := f[0]
 		if tag == "period" {
-			if len(f) < 2 || !isTag(f[1]) {
-				return nil, fmt.Errorf("line %d: \"period\" without a tag of 16 hex characters", n)
+			if len(f) < 2 || !isHex(f[1], 32) {
+				return nil, fmt.Errorf("line %d: \"period\" without a period's tag of 32 hex characters", n)
 			}
 			tag = "period " + f[1]
-		} else if !isTag(tag) {
+		} else if !isHex(tag, 16) {
 			return nil, fmt.Errorf("line %d: %q is not a group tag of 16 hex characters", n, tag)
 		}
 		tags[tag] = true
@@ -173,8 +173,9 @@ func Parse(b []byte) (map[string]bool, error) {
 	return tags, nil
 }
 
-func isTag(s string) bool {
-	if len(s) != 16 {
+// isHex tells whether s is n lower-case hex characters.
+func isHex(s string, n int) bool {
+	if len(s) != n {
 		return false
 	}
 	for _, c := range s {

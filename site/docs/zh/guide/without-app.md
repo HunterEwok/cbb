@@ -54,6 +54,8 @@ sudo cbb takeover NAME       # on the admin; NAME is the lost root
 - **SSH** 连到根或管理员：在新电脑上运行 `ssh -N -L 18764:localhost:8764 user@that-machine`，然后在那边（另开一个 SSH 会话）运行 `sudo cbb pair`，在这边运行 `sudo cbb pair -code 127.0.0.1:18764`。
 - **你自己的 VPN**，让两台机器都有私有地址：在根或管理员上运行 `sudo cbb pair`，然后在这边运行 `sudo cbb pair -code ITS-VPN-ADDRESS:8764`。在 Linux 上，设置好 VPN 后请再运行一次安装程序，让它的防火墙规则放行 VPN 的网络。
 
+两种方式下，都请输入 `cbb pair` 在数字码下方打印的那一行（`cbb://pair?...`），而不是六位数字：在 mDNS 到达不了的地方，单凭数字指不出任何窗口，而这一行能指出它，里面也是同一个数字码。
+
 数字码从不以明文传输：配对在 SSH 或你的 VPN 内部进行，同时还在 TLS 内部。新电脑会通过这条路径同步，直到它的服务重启；若要之后继续同步，请在关闭连接之前，在两边都开启[离家同步](away-from-home.md)。
 
 ## 0.6 之前的群组

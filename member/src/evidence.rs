@@ -50,11 +50,11 @@ pub struct Proven {
 
 /// The credential the root sent a device, and what it expects back.
 #[derive(Deserialize)]
-struct Challenge {
-    evidence: Value,
+pub(crate) struct Challenge {
+    pub evidence: Value,
     #[serde(with = "b64")]
-    value: Vec<u8>,
-    proof: String,
+    pub value: Vec<u8>,
+    pub proof: String,
 }
 
 struct Pending {
@@ -108,13 +108,13 @@ pub struct Attestations {
 }
 
 /// Bytes as a JSON string in base64, as Go's []byte.
-fn b64_value(b: &[u8]) -> Value {
+pub(crate) fn b64_value(b: &[u8]) -> Value {
     #[derive(Serialize)]
     struct W<'a>(#[serde(with = "b64")] &'a [u8]);
     serde_json::to_value(W(b)).unwrap_or_default()
 }
 
-fn call(op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
+pub(crate) fn call(op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
     let helper = crate::helper::shared().ok_or_else(|| Error::msg("attestations need cbb-helper beside cbb"))?;
     let payload = serde_json::to_vec(req).context("cannot encode an attestation request")?;
     Ok(helper.call(Header { op: op.into(), ..Default::default() }, payload, HELPER_TIME)?.payload)
@@ -302,10 +302,34 @@ impl Attestations {
         }
     }
 
+    /// The serial numbers the revocation list taken last revokes.
+    pub fn revoked(&self) -> Vec<String> {
+        self.revoked.lock().unwrap().clone()
+    }
+
     /// Fetches the mirror's list, takes it when it checks out and is not
     /// older than the kept one, and checks the peers' evidence again when
     /// it changed.
     fn fetch_status(&self, node: &Node) -> Result<()> {
+        if !self.fetch_status_with(&|s| node.logf(s))? {
+            return Ok(());
+        }
+        let peers: Vec<(DeviceId, (Vec<Cert>, Value))> =
+            self.last.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        for (id, (chain, e)) in peers {
+            if let Some(leaf) = chain.first()
+                && let Err(err) = self.android(node, &id, leaf, &e)
+            {
+                node.logf(&format!("cbb: checking the attestation of {id} again: {}", err.for_log()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Fetches the mirror's list and takes it when it checks out and is
+    /// not older than the kept one; whether it changed, for the caller to
+    /// check the peers' evidence again.
+    pub fn fetch_status_with(&self, log: &dyn Fn(&str)) -> Result<bool> {
         let path = self.dir.join(STATUS_FILE);
         let kept_seen = std::fs::read(&path)
             .ok()
@@ -322,27 +346,18 @@ impl Attestations {
         let roots = crate::update::release_roots();
         let (st, seen) = release::check_status(&f.keys, &f.status, &roots, crate::update::now_ms(), &kept_seen)?;
         if seen == kept_seen {
-            return Ok(()); // the same list
+            return Ok(false); // the same list
         }
         let data =
             serde_json::to_vec(&Kept { keys: f.keys, status: f.status, seen }).context("cannot encode the list")?;
         write_atomic(&path, &data, 0o600)?;
         let n = st.android_revoked.len();
         *self.revoked.lock().unwrap() = st.android_revoked;
-        node.logf(&format!(
+        log(&format!(
             "cbb: took the revocation list of Android attestations of {}, {n} certificates",
             crate::node::date(st.time_ms / 1000)
         ));
-        let peers: Vec<(DeviceId, (Vec<Cert>, Value))> =
-            self.last.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        for (id, (chain, e)) in peers {
-            if let Some(leaf) = chain.first()
-                && let Err(err) = self.android(node, &id, leaf, &e)
-            {
-                node.logf(&format!("cbb: checking the attestation of {id} again: {}", err.for_log()));
-            }
-        }
-        Ok(())
+        Ok(true)
     }
 
     /// Keeps the revocation list current on the group's root: it fetches

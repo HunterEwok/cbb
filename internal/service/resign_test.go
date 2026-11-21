@@ -12,7 +12,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/authority"
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
 )
 
 // TestRestoredAdminSignsAgain plays an admin computer brought back from an
@@ -30,8 +29,10 @@ func TestRestoredAdminSignsAgain(t *testing.T) {
 	pairWith(t, pi, b)
 	makeAdmin(t, pi, a)
 
+	// The admin's state as a backup keeps it: the group's records and the
+	// log of the records it signed (records06File, signed06File).
 	backup := map[string][]byte{}
-	for _, f := range []string{group.RecordsFileName, signedFile} {
+	for _, f := range []string{records06File, signed06File} {
 		data, err := os.ReadFile(filepath.Join(a.dir, f))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			t.Fatal(err)
@@ -39,33 +40,31 @@ func TestRestoredAdminSignsAgain(t *testing.T) {
 		backup[f] = data
 	}
 	aID, piID := a.status(t).Device, pi.status(t).Device
-	held := func(s *testService) int {
-		id, err := group.Load(s.dir)
-		if err != nil {
-			return 0
+	// The hubs record of s's records: the devices it names.
+	hubs := func(s *testService) []string {
+		var out []string
+		for _, d := range s.devices(t) {
+			if d.Hub {
+				out = append(out, d.ID)
+			}
 		}
-		recs, err := group.LoadRecords(s.dir, id.GroupCA.Cert)
-		if err != nil {
-			return 0
-		}
-		return recs.Len()
+		return out
 	}
-	first := func(s *testService, id string) func() bool {
+	only := func(s *testService, id string) func() bool {
 		return func() bool {
-			order := hubOrderIn(s.dir)
-			return len(order) > 0 && string(order[0]) == id
+			hs := hubs(s)
+			return len(hs) == 1 && hs[0] == id
 		}
 	}
-	// Without a table the root comes first; the table after the backup
-	// names it, the one after the restore names the admin.
-	if !first(pi, piID)() {
-		t.Fatalf("the hubs %v do not start with the root", hubOrderIn(pi.dir))
+	// The table after the backup names the root, the one after the
+	// restore names the admin.
+	if hs := hubs(pi); len(hs) != 0 {
+		t.Fatalf("the group has hubs before any table: %v", hs)
 	}
-	before := held(pi)
 	if _, err := a.do(t, control.Header{Op: control.OpHubs, Hubs: []string{piID}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the root holds the hubs table", func() bool { return held(pi) > before })
+	waitFor(t, "the root holds the hubs table", only(pi, piID))
 
 	a.stop()
 	pi.stop()
@@ -100,7 +99,7 @@ func TestRestoredAdminSignsAgain(t *testing.T) {
 	}
 	waitFor(t, "the admin signs its hubs table again and the group goes on", func() bool {
 		st := pi.status(t)
-		return (st.Stop == "" || st.Stop == authority.StopNone) && len(st.Conflicts) == 0 && first(pi, aID)() && first(b, aID)()
+		return (st.Stop == "" || st.Stop == authority.StopNone) && len(st.Conflicts) == 0 && only(pi, aID)() && only(b, aID)()
 	})
 	if !a.logged("signed 1 of its records again") {
 		t.Error("the admin did not say it signed its record again")

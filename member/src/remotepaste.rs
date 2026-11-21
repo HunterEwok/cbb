@@ -52,68 +52,7 @@ pub fn save(dir: &Path, s: Settings) -> Result<()> {
     files::write_atomic(&dir.join(SETTINGS_FILE), &b, 0o600)
 }
 
-/// The text as it may go in: newlines and tabs, without other control
-/// characters and without terminal escape sequences, so that a paste cannot
-/// move a terminal's cursor or run what the user does not see. CR LF and a
-/// lone CR become LF.
-pub fn clean(text: &str) -> String {
-    let c: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
-    let mut i = 0;
-    while i < c.len() {
-        let mut n = 1;
-        match c[i] {
-            '\r' => {
-                out.push('\n');
-                if c.get(i + 1) == Some(&'\n') {
-                    n += 1;
-                }
-            }
-            '\u{1b}' => n = escape_len(&c[i..]),
-            '\u{9b}' => n += csi_len(&c[i + 1..]),
-            ch @ ('\n' | '\t') => out.push(ch),
-            ch if ch < ' ' || ('\u{7f}'..'\u{a0}').contains(&ch) => {}
-            ch => out.push(ch),
-        }
-        i += n;
-    }
-    out
-}
-
-/// The length of the escape sequence at the start of s, which starts with
-/// ESC: CSI up to its final byte, OSC, DCS and the like up to BEL or ESC \,
-/// or ESC and one character.
-fn escape_len(s: &[char]) -> usize {
-    match s.get(1) {
-        None => s.len(),
-        Some('[') => 2 + csi_len(&s[2..]),
-        Some(']' | 'P' | 'X' | '^' | '_') => {
-            for i in 2..s.len() {
-                if s[i] == '\u{7}' {
-                    return i + 1;
-                }
-                if s[i] == '\u{1b}' && s.get(i + 1) == Some(&'\\') {
-                    return i + 2;
-                }
-            }
-            s.len()
-        }
-        Some(_) => 2,
-    }
-}
-
-/// The length of a CSI sequence's parameters and final byte.
-fn csi_len(s: &[char]) -> usize {
-    for (i, &c) in s.iter().enumerate() {
-        if ('@'..='~').contains(&c) {
-            return i + 1;
-        }
-        if !(' '..='~').contains(&c) {
-            return i;
-        }
-    }
-    s.len()
-}
+pub use cbb_core::remotepaste::{clean, to_paste};
 
 /// The limits per sender: at most one paste a second and BURST a minute.
 pub const EVERY_MS: i64 = 1_000;
@@ -194,25 +133,6 @@ pub fn read_log(dir: &Path) -> Result<Vec<Entry>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cleans_as_the_full_member() {
-        // The cases of internal/remotepaste's TestClean.
-        for (input, want) in [
-            ("ls -l\n", "ls -l\n"),
-            ("a\tb\r\nc\rd", "a\tb\nc\nd"),
-            ("Grüße, 世界 🙂", "Grüße, 世界 🙂"),
-            ("red \x1b[31mtext\x1b[0m", "red text"),
-            ("title \x1b]0;pwned\x07ok", "title ok"),
-            ("osc \x1b]8;;x\x1b\\link", "osc link"),
-            ("csi \u{9b}2Jclear", "csi clear"),
-            ("bell\x07 nul\0 del\x7f", "bell nul del"),
-            ("esc at the end \x1b", "esc at the end "),
-            ("keypad \x1b=on", "keypad on"),
-        ] {
-            assert_eq!(clean(input), want, "{input:?}");
-        }
-    }
 
     #[test]
     fn limits_each_sender() {
