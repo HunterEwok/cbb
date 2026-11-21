@@ -2593,6 +2593,13 @@ made with 0.5 is set up again once. The details follow.
   and scanners that read every `go.mod` (OpenSSF Scorecard) took them for ours. The firmware's
   OSV-Scanner exceptions sit beside `esp32/Cargo.lock`, where Scorecard's run reads them, and
   the stale one for block-buffer, which no longer matches, is gone.
+- OpenSSF Scorecard sees the Android app's `gradle-wrapper.jar` checked: the check runs on each
+  push to `main` as well (`android-wrapper.yml`), since Scorecard wants a successful run of it on
+  `main`'s latest commit and `ci.yml`'s runs are on pull requests. The core's test of a salt of
+  the wrong length takes a real salt a byte short and a byte long, not a run of zeros, and
+  `cbb`'s test of a wrong YubiKey management key takes the factory key with one byte changed.
+  The YubiKey's factory management key is made from Yubico's rule (the bytes 1 to 8 three
+  times) in one place, which the example phone's fake card uses too, not written out twice.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

@@ -548,11 +548,13 @@ mod tests {
     #[test]
     fn challenges() {
         for c in vectors()["challenges"].as_array().unwrap() {
-            let got =
-                challenge(c["group_tag"].as_str().unwrap(), &bytes(&c["member_key"]), &bytes(&c["salt"])).unwrap();
+            let (tag, key, salt) = (c["group_tag"].as_str().unwrap(), bytes(&c["member_key"]), bytes(&c["salt"]));
+            let got = challenge(tag, &key, &salt).unwrap();
             assert_eq!(got.to_vec(), bytes(&c["challenge"]), "{c}");
+            // The same salt a byte short, or a byte long, is refused.
+            assert!(challenge(tag, &key, &salt[..SALT_SIZE - 1]).is_err(), "{c}");
+            assert!(challenge(tag, &key, &[salt.as_slice(), &salt[..1]].concat()).is_err(), "{c}");
         }
-        assert!(challenge("ab", &[], &[0; 15]).is_err());
     }
 
     /// Google's roots are the ones Go pins.

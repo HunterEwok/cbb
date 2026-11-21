@@ -38,6 +38,10 @@ a checked box means the setting is in place.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
   weekly and on each push to `main`, and publishes the score for the README's badge.
+  Its Binary-Artifacts check lets the Android app's `gradle-wrapper.jar` pass only on a
+  successful run of the wrapper's check on `main`'s latest commit: `android-wrapper.yml` runs
+  it on each push to `main`, and its name sorts before `ci.yml`'s, which Scorecard would
+  otherwise find first and which runs on pull requests only.
 
 **Settings → Actions → General**
 
