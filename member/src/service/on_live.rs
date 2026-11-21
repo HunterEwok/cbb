@@ -272,9 +272,13 @@ impl Service {
             })
             .collect();
         let muted = live.board.mute_left();
+        // Its own statement: the set's lock ends here, before the fields
+        // below take it again.
+        let relay_group = relay_group(&live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner));
         let status = Status {
             device: id_text(&me),
             group: live.tag(),
+            relay_group,
             role: "member".into(),
             os: crate::admin::os_name().into(),
             peers,
@@ -1250,6 +1254,15 @@ impl Service {
         }
         Err(last)
     }
+}
+
+/// The group as `cbb relay -group` lists it: the root key and the two
+/// halves of the recovery key, in hex, separated by colons (relayd's
+/// Listed::parse reads it back).
+fn relay_group(set: &cbb_core::records::RecordSet) -> String {
+    let hex = crate::certs::hex;
+    let r = set.recovery();
+    format!("{}:{}:{}", hex(set.root().public()), hex(r.k1.public()), hex(r.k2.public()))
 }
 
 /// Sync away from home on a group of 0.6 for status: where it stands and,

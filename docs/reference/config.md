@@ -60,7 +60,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` and the bounds table of `docs/protocol.md` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when they no longer match it. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys, and the Firebase project's service account `fcm.json` for `-fcm-account`, come from systemd's credentials), and `-new-state` on the very first start only (a missing state file stops any other start). |
-| `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
+| `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group GROUP` (from `cbb status -relay`) or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
 | `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |
 

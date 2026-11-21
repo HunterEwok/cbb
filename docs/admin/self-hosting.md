@@ -14,7 +14,7 @@ with a public address will do: a virtual server with 1 CPU and 512 MB of memory 
 
 | | Forwarder | Blind relay |
 |---|---|---|
-| Command | `cbb forward` | `cbb relay -group TAG` |
+| Command | `cbb forward` | `cbb relay -group GROUP` |
 | Serves | any hub that registers with it | only the groups you list |
 | Devices connect with | the hub's `-forwarder ADDRESS -forwarder-key KEY` | `cbb global relay ADDRESS -key KEY` on each computer; Settings on the phones |
 | Ports | UDP and TCP 8764; TCP 443 with VLESS | UDP and TCP 8764 |
@@ -177,11 +177,13 @@ location /PATH-FROM-THE-LOG {
 
 ## A blind relay
 
-A relay serves only the groups you list. Find your group's tag with `cbb status` on any of
-its computers, then set it up on the server:
+A relay serves only the groups you list, each by its root key and recovery key (public keys:
+the relay takes the group's period from that root alone). Print the line with
+`cbb status -relay` on any of the group's computers (one line, `ROOT:RECOVERY:RECOVERY2`),
+then set it up on the server with that line:
 
 ```sh
-echo 'CBB_RELAY_FLAGS=-group 0123456789abcdef' | sudo tee /etc/cbb/relay.env   # several: -group TAG1,TAG2
+echo 'CBB_RELAY_FLAGS=-group ROOT:RECOVERY:RECOVERY2' | sudo tee /etc/cbb/relay.env   # several: -group G1,G2
 sudo install -m 644 cbb/packaging/linux/cbb-relay.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now cbb-relay

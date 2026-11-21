@@ -485,6 +485,9 @@ impl Mesh {
         if newer {
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            // A project's server with a new key gets its face now, not at
+            // the next period's beat.
+            self.refresh_faces(&self.state());
         }
         Ok(newer)
     }
@@ -696,6 +699,10 @@ impl Mesh {
                 // Newer here: passed on to the others with a new hello.
                 let hello = self.hello_frame(&self.set.lock().unwrap());
                 self.broadcast(&hello, Some(&conn.peer));
+                if t == m::T_ENTRIES {
+                    // As put_entries: the project's servers' faces follow.
+                    self.refresh_faces(&self.state());
+                }
             }
             Some(Err(e)) => {
                 self.logf(&format!("the {what} from {} were not taken: {}", hex(&conn.peer.0[..4]), e.details()))

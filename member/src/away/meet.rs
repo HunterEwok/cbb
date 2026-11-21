@@ -42,7 +42,7 @@ const REFETCH: Duration = Duration::from_secs(600);
 
 /// REFETCH, or what the service's tests shorten it to with
 /// CBB_TEST_REFETCH_EVERY (milliseconds), a test hook a release ignores.
-fn refetch_every() -> Duration {
+pub(crate) fn refetch_every() -> Duration {
     crate::testbuild::env("CBB_TEST_REFETCH_EVERY").and_then(|v| v.parse().ok()).map_or(REFETCH, Duration::from_millis)
 }
 const MOVE_AGAIN: Duration = Duration::from_secs(60);
@@ -413,7 +413,7 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
 /// entries.json names a relay only by a host name. "host=none" is a name
 /// that does not resolve (Some(None)); None is a name the variable leaves
 /// to the system.
-fn test_resolve(name: &str) -> Option<Option<SocketAddr>> {
+pub(crate) fn test_resolve(name: &str) -> Option<Option<SocketAddr>> {
     let v = crate::testbuild::env("CBB_TEST_RESOLVE")?;
     let (host, port) = name.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;

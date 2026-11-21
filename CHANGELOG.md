@@ -16,6 +16,9 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- `cbb status -relay` prints the group as a blind relay of your own lists it, for
+  `cbb relay -group`: its root key and the two halves of its recovery key in hex (public keys
+  only); the status's `relay_group` carries the same line.
 - The relay takes devices of 0.6 by their own protocol, `cbb-relay/3`, on the same port: a
   certificate of the server key alone, the format's messages and the period's server
   credentials only, so it sees no record and no device ID; `-group` names a group of 0.6 by its
@@ -2835,6 +2838,12 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 the project's relay is met where the newest signed entry points put
+  it and with the keys the newest keys.json names, so that a move or a new key there needs no
+  new settings from the root; a link that keeps failing fetches the signed lists again from
+  the relay's server, and newer entry points or keys give the group's devices their faces at
+  once rather than at the next period.
+- A member of 0.6 no longer holds up its status while the link to a relay it leaves ends.
 - The ZX Spectrum Next's `.cbb pair CODE` joins a group of 0.6: it passes the home window's
   ID and member key from mDNS to the Pi's `cbb next link` (`-window`, `-fp`), which joins
   with the six digits through the Next's ESP.

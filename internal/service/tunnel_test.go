@@ -781,21 +781,24 @@ func TestAwayThroughRelay(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	r, keys := startRelay(t, pi.status(t).Group)
+	r, keys := startRelay(t, pi.status(t).RelayGroup)
 
-	// The relay turns sync away from home on by itself (pi), or takes the
-	// place of its hubs (deck).
-	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+	// The group's root names the relay in the group's settings, which the
+	// deck takes from there; each turns sync away from home on.
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope", Consent: true}, ""); err == nil {
+		t.Error("a relay with a bad key")
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
+		t.Errorf("a relay without consent: %v", err)
+	}
+	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+		t.Errorf("a member naming the group's relay: %v", err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range []*testService{pi, deck} {
-		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope"}, ""); err == nil {
-			t.Error("a relay with a bad key")
-		}
-		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
-			t.Errorf("a relay without consent: %v", err)
-		}
-		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -812,9 +815,12 @@ func TestAwayThroughRelay(t *testing.T) {
 	deck.stop()
 	h.hide(deckID)
 	deck = restartService(t, &h, deck)
+	// Hidden from the pi at home, the deck's only way is the relay, which
+	// Through (a hub's way) does not count on 0.6.
 	waitUpTo(t, 30*time.Second, "the deck reaches the pi through the relay", func() bool {
 		st := deck.status(t)
-		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == piID
+		return st.Away != nil && st.Away.Relay != nil && st.Away.Relay.Connected &&
+			slices.Equal(st.Away.Relay.Online, []string{piID}) && len(st.Peers) == 1 && st.Peers[0].ID == piID
 	})
 	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "via the relay"); err != nil {
 		t.Fatal(err)

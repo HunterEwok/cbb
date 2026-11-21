@@ -1673,7 +1673,8 @@ and asks, and the phone apps say it before their switch. The relay keeps nothing
 the devices in its logs, but a user who would rather nobody saw even that runs their own
 relay, or a hub.
 
-- `cbb relay -group TAG` runs a relay for the groups whose tags it is given and no other;
+- `cbb relay -group GROUP` runs a relay for the groups it is given (each by its root key and
+  recovery key, as `cbb status -relay` prints them) and no other;
   `cbb relay -open` serves every group that registers, as the project's relay does, within
   limits that keep groups nobody vouches for from filling it (finding 3 of the security
   audit): 4096 groups, 16 registrations from one address, 64 from one network (an IPv4

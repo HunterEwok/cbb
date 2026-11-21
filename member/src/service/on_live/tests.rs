@@ -267,6 +267,12 @@ fn the_root_sets_the_groups_relay() {
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
     let a = Service::new(&config(&base, Vec::new()), log, false);
     let la = a.start_live(&config(&base, Vec::new())).unwrap();
+    // The group as `cbb relay -group` takes it, which status gives (cbb
+    // status -relay): the relay reads it back.
+    let group = a.live_status(&la).relay_group;
+    #[cfg(feature = "tunnel")]
+    assert!(crate::relayd::register3::Listed::parse(&group).is_ok(), "{group}");
+    assert_eq!(group.split(':').count(), 3, "{group}");
     let pin = [9u8; 32];
     let key = {
         use base64::Engine as _;

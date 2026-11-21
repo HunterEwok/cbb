@@ -133,10 +133,10 @@ func TestProjectRelayRefetch(t *testing.T) {
 	mirror := newListsMirror(t)
 	var h hub
 	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), mirror.env(), "CBB_TEST_REFETCH_EVERY=300",
-		"CBB_TEST_RESOLVE=cbb.tools=none")
+		"CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	group := pi.status(t).Group
+	group := pi.status(t).RelayGroup
 	oldKeys, err := relay.NewKeys()
 	if err != nil {
 		t.Fatal(err)
@@ -147,11 +147,18 @@ func TestProjectRelayRefetch(t *testing.T) {
 	}
 	r, stop := runRelay(t, oldKeys, "127.0.0.1:0", group)
 	at := r.Addr().String()
+	_, port, _ := net.SplitHostPort(at)
+	// A group of 0.6 names the project's relay by its name alone: the
+	// entry points say where it is, in every set signed here.
+	endpoints := []string{"relay.example.org:" + port}
 
-	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 5, oldKeys)); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 5, endpoints, oldKeys)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: projectRelay, Consent: true}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", RelayKey: projectRelay, Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {
@@ -187,7 +194,7 @@ func TestProjectRelayRefetch(t *testing.T) {
 		}
 	}
 
-	k, e := relaySet(t, signer.signRelayKeys(t, 6, oldKeys, newKeys))
+	k, e := relaySet(t, signer.signRelay(t, 6, endpoints, oldKeys, newKeys))
 	half := k
 	half.Sigs = nil
 	for _, s := range k.Sigs {
@@ -200,10 +207,10 @@ func TestProjectRelayRefetch(t *testing.T) {
 	}
 	refused("a keys.json signed by one half of the root", "keys.json is not valid: the signature is not valid", fileBytes(t, half), fileBytes(t, e))
 
-	ok, e := relaySet(t, signer.signRelayKeys(t, 4, oldKeys, newKeys))
+	ok, e := relaySet(t, signer.signRelay(t, 4, endpoints, oldKeys, newKeys))
 	refused("lists older than those it holds", "older than one already seen", fileBytes(t, ok), fileBytes(t, e))
 
-	k, e = relaySet(t, signer.signRelayKeys(t, 6, oldKeys, newKeys))
+	k, e = relaySet(t, signer.signRelay(t, 6, endpoints, oldKeys, newKeys))
 	large := append(fileBytes(t, k), bytes.Repeat([]byte{' '}, release.MaxFile)...)
 	// A download cut at the largest file names the URL; the readers'
 	// refusals name only the file.

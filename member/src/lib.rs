@@ -1302,13 +1302,24 @@ fn terminal_text(text: &str, all: bool) -> (String, usize) {
 }
 
 fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
-    if !args.is_empty() {
-        return Err(cli::usage("status takes no arguments"));
-    }
+    let relay = match args {
+        [] => false,
+        [a] if flag(a) == Some("relay") => true,
+        _ => return Err(cli::usage("cbb status [-relay]")),
+    };
     let ask = |op: &str| {
         request(g, &control::Message::new(control::Header { op: op.into(), ..Default::default() }, Vec::new()))
     };
     let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
+    if relay {
+        // The group as a blind relay of the owner's lists it, alone, for
+        // `cbb relay -group` on the server.
+        if s.relay_group.is_empty() {
+            return Err(Error::msg(tr!("this device is in no group")));
+        }
+        println!("{}", s.relay_group);
+        return Ok(());
+    }
     let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
     let limit = awaynet::limit_note(&awaynet::Net::system(), s.away.as_ref());
     print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms(), &limit));

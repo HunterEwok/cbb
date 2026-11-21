@@ -35,11 +35,15 @@ const NEXT_AFTER: Duration = Duration::from_secs(3);
 const MAX_CALLS: usize = 16;
 
 /// A relay of the group's settings: its address as given (a name or an
-/// address with a port) and the pin of its key.
+/// address with a port) and the pins of its keys. The project's relay is
+/// where the newest entry points held put it, with the keys the newest
+/// keys.json names (else its own name and the keys built in), so that a
+/// move or a new key there needs no new settings.
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct At {
     endpoint: String,
-    pin: [u8; 32],
+    pins: Vec<[u8; 32]>,
+    project: bool,
 }
 
 /// The link to the relay while the device meets the group there.
@@ -54,6 +58,9 @@ pub(super) struct Meeting {
     /// when they expire, and the pseudonyms it knows.
     shown: Option<([u8; 16], u64, usize)>,
     failing_since: Option<Instant>,
+    /// The project's relay's last error that fetched the signed lists
+    /// again, and when.
+    tried: Option<(String, Instant)>,
     _listener: Listener,
 }
 
@@ -132,16 +139,30 @@ impl relay::Events for Events {
 }
 
 impl Live {
-    /// The relays the group's settings name, in their order.
+    /// The relays the group's settings name, in their order; the
+    /// project's at each address its entry points give.
     fn relays(&self) -> Vec<At> {
-        self.mesh
-            .state()
-            .settings
-            .servers
-            .iter()
-            .filter(|s| s.kind == SERVER_RELAY)
-            .map(|s| At { endpoint: s.endpoint.clone(), pin: s.pin })
-            .collect()
+        let mut out = Vec::new();
+        for s in self.mesh.state().settings.servers.iter().filter(|s| s.kind == SERVER_RELAY) {
+            if s.endpoint != crate::faces::PROJECT_RELAY {
+                out.push(At { endpoint: s.endpoint.clone(), pins: vec![s.pin], project: false });
+                continue;
+            }
+            let now = crate::uptime::wall_ms();
+            let entries = self.mesh.entries();
+            let pins: Vec<[u8; 32]> = crate::faces::project_servers(entries.as_deref(), now)
+                .into_iter()
+                .filter(|p| p.address == crate::faces::PROJECT_RELAY)
+                .map(|p| p.pin)
+                .collect();
+            let mut endpoints =
+                entries.map(|e| e.relay_endpoints(crate::faces::PROJECT_RELAY, now)).unwrap_or_default();
+            if endpoints.is_empty() {
+                endpoints.push(crate::faces::PROJECT_RELAY.to_string());
+            }
+            out.extend(endpoints.into_iter().map(|endpoint| At { endpoint, pins: pins.clone(), project: true }));
+        }
+        out
     }
 
     /// What cbb global shows of the link to the group's relay, while the
@@ -150,7 +171,7 @@ impl Live {
         let m = self.meeting.lock().unwrap();
         let m = m.as_ref()?;
         let rep = m.report.lock().unwrap().clone();
-        let project = m.at.endpoint == crate::faces::PROJECT_RELAY;
+        let project = m.at.project;
         let (error, detail) = match &rep.error {
             Some(e) => (crate::away::meet::problem(e, project), e.clone()),
             None => (String::new(), String::new()),
@@ -168,11 +189,8 @@ impl Live {
     /// relay's calls.
     fn start_meeting(self: &Arc<Self>, at: At) -> crate::error::Result<Meeting> {
         use crate::error::Context as _;
-        let addr = at
-            .endpoint
-            .to_socket_addrs()
-            .ok()
-            .and_then(|mut a| a.next())
+        let addr = crate::away::meet::test_resolve(&at.endpoint)
+            .unwrap_or_else(|| at.endpoint.to_socket_addrs().ok().and_then(|mut a| a.next()))
             .ok_or_else(|| crate::error::Error::msg(format!("the relay {} could not be looked up", at.endpoint)))?;
         let calls = Arc::new(Mutex::new(VecDeque::new()));
         let ln = TcpListener::bind("127.0.0.1:0").context("cannot open the port for the relay's calls")?;
@@ -203,7 +221,7 @@ impl Live {
         let credentials = Arc::new(Mutex::new(None));
         let cfg = relay::Config {
             endpoint: addr,
-            pins: vec![at.pin],
+            pins: at.pins.clone(),
             member_port: port.port(),
             credentials: credentials.clone(),
         };
@@ -222,6 +240,7 @@ impl Live {
             credentials,
             shown: None,
             failing_since: None,
+            tried: None,
             _listener: Listener { addr: port, stop },
         })
     }
@@ -232,7 +251,7 @@ impl Live {
         let st = self.mesh.state();
         let now = crate::uptime::wall_ms().max(0) as u64;
         let member = self.mesh.own().member.public();
-        let Some((_, shown)) = self.mesh.relay_credentials(&st, &member, &[m.at.pin], now) else {
+        let Some((_, shown)) = self.mesh.relay_credentials(&st, &member, &m.at.pins, now) else {
             if m.shown.take().is_some() {
                 *m.credentials.lock().unwrap() = None;
             }
@@ -252,11 +271,57 @@ impl Live {
     }
 }
 
+/// How soon the same error of the project's relay may fetch the signed
+/// lists again (`away::meet::refetch_every` bounds every fetch).
+const TRY_AGAIN: Duration = Duration::from_secs(60);
+
+/// What fetches the project's signed lists again after its relay failed:
+/// when it last did, and whether a fetch runs.
+#[derive(Default)]
+struct Refetch {
+    last: Option<Instant>,
+    running: Arc<AtomicBool>,
+}
+
+impl Live {
+    /// After the link to the project's relay failed with an error not tried
+    /// lately, as the old member's project_relay_failed: fetches the newest
+    /// signed lists from the mirror on the relay's server, at most every
+    /// refetch_every and in the background; newer ones give the relay's
+    /// keys and addresses, and the link follows (`relays`).
+    fn project_relay_failed(self: &Arc<Self>, m: &mut Meeting, r: &mut Refetch) {
+        let Some(e) = m.report.lock().unwrap().error.clone() else { return };
+        if m.tried.as_ref().is_some_and(|(t, when)| *t == e && when.elapsed() < TRY_AGAIN) {
+            return;
+        }
+        m.tried = Some((e, Instant::now()));
+        if r.last.is_some_and(|t| t.elapsed() < crate::away::meet::refetch_every())
+            || r.running.swap(true, Ordering::SeqCst)
+        {
+            return;
+        }
+        r.last = Some(Instant::now());
+        let (l, ip, running) = (self.clone(), m.addr.ip(), r.running.clone());
+        std::thread::spawn(move || {
+            match crate::update::fetch_lists_at(ip, l.mesh.dir()).and_then(|set| l.mesh.put_entries(&set)) {
+                Ok(true) => l.logf("cbb: sync away from home: took newer signed lists from the relay's server"),
+                Ok(false) => {}
+                Err(e) => l.logf(&format!(
+                    "cbb: sync away from home: fetching the signed lists for the relay: {}",
+                    e.for_log()
+                )),
+            }
+            running.store(false, Ordering::SeqCst);
+        });
+    }
+}
+
 /// Keeps the device registered at the group's relay while sync away from
 /// home is on and the root chose one; the next of the group's relays when
 /// one keeps failing; until the member closes.
 pub(super) fn meet(w: &Weak<Live>) {
     let mut next = 0usize;
+    let mut refetch = Refetch::default();
     loop {
         let Some(l) = w.upgrade() else { return };
         if l.is_closed() {
@@ -266,7 +331,10 @@ pub(super) fn meet(w: &Weak<Live>) {
         let on = l.away.get().is_some_and(|a| a.is_on());
         let relays = if on { l.relays() } else { Vec::new() };
         if relays.is_empty() {
-            l.meeting.lock().unwrap().take();
+            // Stopped out of the lock: the link's thread may take a while
+            // to end, and status reads the meeting meanwhile.
+            let old = l.meeting.lock().unwrap().take();
+            drop(old);
         } else {
             let mut m = l.meeting.lock().unwrap();
             // The relay it meets at stays while the settings name it.
@@ -281,8 +349,12 @@ pub(super) fn meet(w: &Weak<Live>) {
                     next = (next + 1) % relays.len();
                 }
                 let at = relays[next % relays.len()].clone();
-                m.take();
-                match l.start_meeting(at.clone()) {
+                let old = m.take();
+                drop(m);
+                drop(old);
+                let started = l.start_meeting(at.clone());
+                m = l.meeting.lock().unwrap();
+                match started {
                     Ok(started) => {
                         l.logf(&format!("cbb: sync away from home: meeting the group at the relay {}", at.endpoint));
                         *m = Some(started);
@@ -293,6 +365,9 @@ pub(super) fn meet(w: &Weak<Live>) {
             if let Some(cur) = m.as_mut() {
                 l.give_credentials(cur);
                 let failing = cur.report.lock().unwrap().error.is_some();
+                if failing && cur.at.project {
+                    l.project_relay_failed(cur, &mut refetch);
+                }
                 match (failing, cur.failing_since) {
                     (true, None) => cur.failing_since = Some(Instant::now()),
                     (false, Some(_)) => cur.failing_since = None,

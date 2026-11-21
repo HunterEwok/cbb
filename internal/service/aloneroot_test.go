@@ -1024,16 +1024,24 @@ func TestAloneRelay(t *testing.T) {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
-	r, keys := startRelay(t, desk.status(t).Group)
-	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope", Consent: true}, ""); err == nil {
+	r, keys := startRelay(t, desk.status(t).RelayGroup)
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: "nope", Consent: true}, ""); err == nil {
 		t.Error("a relay with a bad key")
 	}
-	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin()}, ""); err == nil || !strings.Contains(err.Error(), "learns") {
 		t.Errorf("a relay without consent: %v", err)
 	}
+	// In a group of 0.6 the relay is the group's setting: only the root
+	// names it, and every member takes it from the group's settings.
+	if _, err := rust.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err == nil || !strings.Contains(err.Error(), "only the group's root") {
+		t.Errorf("a member naming the group's relay: %v", err)
+	}
+	if _, err := desk.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+		t.Fatalf("cbb global relay on the root: %v", err)
+	}
 	for _, s := range []*testService{desk, rust} {
-		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
-			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global on on the %s: %v", s.name, err)
 		}
 	}
 	deskID, rustID := desk.status(t).Device, rust.status(t).Device
@@ -1041,19 +1049,31 @@ func TestAloneRelay(t *testing.T) {
 		a, b := desk.status(t).Away, rust.status(t).Away
 		return a != nil && a.Relay != nil && a.Relay.Connected && slices.Equal(a.Relay.Online, []string{rustID}) &&
 			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{deskID})
+	}, func() string {
+		a, _ := json.Marshal(desk.status(t).Away)
+		b, _ := json.Marshal(rust.status(t).Away)
+		return fmt.Sprintf("the desk away %s, the Rust member away %s", a, b)
 	})
-	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
-	if err != nil || !strings.Contains(string(raw), r.Addr().String()) {
-		t.Errorf("tunnel.json with the relay: %v\n%s", err, raw)
+	// The member holds the relay from the group's settings (D-121), not
+	// from a file of its own.
+	if a := rust.status(t).Away; a == nil || a.Relay == nil || a.Relay.Endpoint != r.Addr().String() {
+		t.Errorf("the Rust member's relay: %+v", a)
 	}
 
 	// Away from home the Rust member knows no address of the desk: the
 	// relay joins them.
 	rust.stop()
 	rust = startAlone(t, bin, dir, "-no-mdns", "-no-listen")
+	// It has neither mDNS nor the desk's address: the relay is its only
+	// way, which Through (a hub's way) does not count on 0.6.
 	waitUpTo(t, 30*time.Second, "the Rust member reaches the desk through the relay", func() bool {
 		st := rust.status(t)
-		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == deskID
+		return st.Away != nil && st.Away.Relay != nil && st.Away.Relay.Connected &&
+			slices.Equal(st.Away.Relay.Online, []string{deskID}) && len(st.Peers) == 1 && st.Peers[0].ID == deskID
+	}, func() string {
+		st := rust.status(t)
+		raw, _ := json.Marshal(st.Away)
+		return fmt.Sprintf("away %s, peers %+v", raw, st.Peers)
 	})
 	if _, err := rust.do(t, control.Header{Op: control.OpCopy}, "via the relay"); err != nil {
 		t.Fatal(err)
@@ -1074,25 +1094,26 @@ func TestAloneRelay(t *testing.T) {
 	})
 }
 
-// startRelay runs a blind relay, the Rust cbb-relay, for the group of tag
-// until the test ends.
-func startRelay(t *testing.T, tag string) (*relay.Process, relay.Keys) {
+// startRelay runs a blind relay, the Rust cbb-relay, for the group (its
+// status's RelayGroup) until the test ends.
+func startRelay(t *testing.T, group string) (*relay.Process, relay.Keys) {
 	t.Helper()
-	r, _ := runRelay(t, relay.Keys{}, "", tag)
+	r, _ := runRelay(t, relay.Keys{}, "", group)
 	return r, r.Keys
 }
 
 // runRelay runs cbb-relay with keys (new ones when zero) at the address at
-// (a port of its own when empty) for the group of tag, and returns it and
-// how to stop it, which the end of the test does too. The test skips
+// (a port of its own when empty) for the group (its status's RelayGroup),
+// and returns it and how to stop it, which the end of the test does too.
+// The test skips
 // without a cbb-relay (relay.Binary).
-func runRelay(t *testing.T, keys relay.Keys, at, tag string) (*relay.Process, func()) {
+func runRelay(t *testing.T, keys relay.Keys, at, group string) (*relay.Process, func()) {
 	t.Helper()
 	bin := relay.Binary()
 	if bin == "" {
 		t.Skip("no cbb-relay beside cbb, nor CBB_TEST_RUST_RELAY")
 	}
-	r, err := relay.Start(bin, relay.Config{Listen: at, Keys: keys, Groups: []string{tag}, Logf: t.Logf})
+	r, err := relay.Start(bin, relay.Config{Listen: at, Keys: keys, Groups: []string{group}, Logf: t.Logf})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1103,9 +1124,9 @@ func runRelay(t *testing.T, keys relay.Keys, at, tag string) (*relay.Process, fu
 }
 
 // TestAloneRelayRoot runs the Rust service as the root of a group that meets
-// at a blind relay: it starts the period and signs the hubs' and the
-// members' credentials (docs/protocol.md, section 18), with which both
-// devices register there, and the Go laptop and it sync through the relay.
+// at a blind relay: it starts the period and signs the servers' credentials
+// of the relay's face (docs/protocol.md, section 18), with which both
+// devices register there, and the laptop and it sync through the relay.
 func TestAloneRelayRoot(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
@@ -1124,22 +1145,16 @@ func TestAloneRelayRoot(t *testing.T) {
 		st, err := root.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && st.Status.Group != "" && st.Status.Role == "member"
 	})
-	var h hub
-	laptop := startService(t, &h, "laptop")
-	jc := laptop.dial(t)
-	defer jc.Close()
-	code := newCode(t)
-	m, err := jc.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
-	if err != nil || len(m.Addrs) == 0 {
-		t.Fatalf("the laptop's listening join: %v, %+v", err, m)
+	// The laptop joins at the root's window (D-119: cbb pair -qr is gone).
+	laptopDir := joinAloneAs(t, bin, root, "laptop", nil)
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	qr := phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
-	if out, err := runCLI(cli, root.socket, qr+"\n", "pair", "-qr"); err != nil || !strings.Contains(out, "laptop joined the group") {
-		t.Fatalf("cbb pair -qr: %v\n%s", err, out)
-	}
-	if m, err := jc.Receive(); err != nil || m.Error != "" {
-		t.Fatalf("the laptop's join ended with %+v, %v", m, err)
-	}
+	port := free.Addr().(*net.TCPAddr).Port
+	free.Close()
+	laptop := startAlone(t, bin, laptopDir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", root.addr())
+	laptop.name = "laptop"
 	root.stop()
 	root = startAlone(t, bin, dir, "-no-mdns", "-peer", laptop.addr())
 	laptopID, rootID := laptop.status(t).Device, root.status(t).Device
@@ -1147,18 +1162,25 @@ func TestAloneRelayRoot(t *testing.T) {
 		p := root.status(t).Peers
 		return len(p) == 1 && p[0].ID == laptopID
 	})
-	r, keys := startRelay(t, laptop.status(t).Group)
+	group := root.status(t).RelayGroup
+	if out, err := runCLI(cli, root.socket, "", "status", "-relay"); err != nil || strings.TrimSpace(out) != group || strings.Count(group, ":") != 2 {
+		t.Fatalf("cbb status -relay: %v\n%s, status %q", err, out, group)
+	}
+	r, keys := startRelay(t, group)
+	if _, err := root.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+		t.Fatalf("cbb global relay on the root: %v", err)
+	}
 	for _, s := range []*testService{root, laptop} {
-		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
-			t.Fatalf("cbb global relay on the %s: %v", s.name, err)
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatalf("cbb global on on the %s: %v", s.name, err)
 		}
 	}
-	// The root's credentials: the period, both server keys, the hubs' and
-	// the members' credential.
+	// The root's credentials: the period key and the servers' credentials
+	// it signed with it.
 	waitUpTo(t, 30*time.Second, "the Rust root signs the group's credentials", func() bool {
-		raw, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
-		var all []json.RawMessage
-		return err == nil && json.Unmarshal(raw, &all) == nil && len(all) == 5
+		_, err1 := os.Stat(filepath.Join(dir, "period-key"))
+		_, err2 := os.Stat(filepath.Join(dir, "server-credentials.cbor"))
+		return err1 == nil && err2 == nil
 	})
 	waitUpTo(t, 60*time.Second, "both meet at the relay with the credentials", func() bool {
 		a, b := root.status(t).Away, laptop.status(t).Away
@@ -1166,11 +1188,13 @@ func TestAloneRelayRoot(t *testing.T) {
 			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{rootID})
 	})
 
+	// Without the laptop's address the relay is the root's only way.
 	root.stop()
 	root = startAlone(t, bin, dir, "-no-mdns")
 	waitUpTo(t, 30*time.Second, "the Rust root reaches the laptop through the relay", func() bool {
 		st := root.status(t)
-		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == laptopID
+		return st.Away != nil && st.Away.Relay != nil && st.Away.Relay.Connected &&
+			slices.Equal(st.Away.Relay.Online, []string{laptopID}) && len(st.Peers) == 1 && st.Peers[0].ID == laptopID
 	})
 	if _, err := root.do(t, control.Header{Op: control.OpCopy}, "from the root"); err != nil {
 		t.Fatal(err)
@@ -1178,11 +1202,12 @@ func TestAloneRelayRoot(t *testing.T) {
 	waitFor(t, "the laptop has it", func() bool { return laptop.paste(t) == "from the root" })
 }
 
-// TestAloneRelayProject sets the Rust service to the project's relay,
-// whose key the signed keys.json gives, then changes the relay's key: once
-// a newer keys.json names the new key, the device registers again by
-// itself. Then the relay moves, and entries.json says where to, as
-// TestProjectRelayNewKey does with a Go device.
+// TestAloneRelayProject has the group's root choose the project's relay,
+// whose address the signed entry points and whose key the signed keys.json
+// give, then changes the relay's key: once a newer keys.json names the new
+// key, the member registers again by itself, with no new settings. Then
+// the relay moves, and entries.json says where to, as
+// TestProjectRelayNewKey does.
 func TestAloneRelayProject(t *testing.T) {
 	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
@@ -1203,7 +1228,7 @@ func TestAloneRelayProject(t *testing.T) {
 	// TestProjectRelayNewKey): with a network, the device would look the
 	// relay up again when the test's relay drops it, and reach the live one.
 	small := startAloneEnv(t, bin, dir, []string{"CBB_RELEASE_ROOTS=" + pemFile, "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none"}, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	group := pi.status(t).Group
+	group := pi.status(t).RelayGroup
 	serve := func(keys relay.Keys, at string) (*relay.Process, func()) {
 		return runRelay(t, keys, at, group)
 	}
@@ -1217,11 +1242,23 @@ func TestAloneRelayProject(t *testing.T) {
 	}
 	r, stop := serve(oldKeys, "127.0.0.1:0")
 	at := r.Addr().String()
-
-	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
+	_, port, _ := net.SplitHostPort(at)
+	// Both hold the same entry points: the root makes the relay's face
+	// for each key listed, the member meets it where they say.
+	entries := func(seq uint64, endpoint string, keys ...relay.Keys) {
+		t.Helper()
+		e := signer.signRelay(t, seq, []string{endpoint}, keys...)
+		for _, s := range []*testService{pi, small} {
+			if _, err := s.do(t, control.Header{Op: control.OpEntries}, e); err != nil {
+				t.Fatalf("entries on the %s: %v", s.name, err)
+			}
+		}
+	}
+	entries(1, "relay.example.org:"+port, oldKeys)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", RelayKey: projectRelay, Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: projectRelay, Consent: true}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {
@@ -1229,6 +1266,9 @@ func TestAloneRelayProject(t *testing.T) {
 		return a != nil && a.Relay != nil && a.Relay.Connected
 	}
 	waitUpTo(t, 60*time.Second, "the Rust member registers with the relay's listed key", connected)
+	if a := small.status(t).Away; a.Relay.Endpoint != at {
+		t.Errorf("the Rust member meets the project's relay at %q, not %q", a.Relay.Endpoint, at)
+	}
 
 	// The relay changes its key; the device refuses the new one until
 	// keys.json names it, then takes it without being set again.
@@ -1238,9 +1278,7 @@ func TestAloneRelayProject(t *testing.T) {
 		a := small.status(t).Away
 		return a != nil && a.Relay != nil && !a.Relay.Connected && a.Relay.Error != "" && a.Relay.Detail != ""
 	})
-	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
-		t.Fatal(err)
-	}
+	entries(2, "relay.example.org:"+port, oldKeys, newKeys)
 	waitUpTo(t, 90*time.Second, "the Rust member registers with the new key", connected)
 	if a := small.status(t).Away; a.Relay.Error != "" {
 		t.Errorf("an error left in status: %q", a.Relay.Error)
@@ -1250,16 +1288,10 @@ func TestAloneRelayProject(t *testing.T) {
 	stop()
 	moved, stop := serve(newKeys, "127.0.0.1:0")
 	defer stop()
-	_, port, _ := net.SplitHostPort(moved.Addr().String())
-	if _, err := small.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
-		t.Fatal(err)
-	}
+	_, port, _ = net.SplitHostPort(moved.Addr().String())
+	entries(3, "relay.example.org:"+port, newKeys)
 	waitUpTo(t, 90*time.Second, "the Rust member registers where the relay moved", func() bool {
 		a := small.status(t).Away
 		return connected() && a.Relay.Endpoint == moved.Addr().String()
 	})
-	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
-	if err != nil || !strings.Contains(string(raw), moved.Addr().String()) {
-		t.Errorf("tunnel.json after the move: %v\n%s", err, raw)
-	}
 }

@@ -336,6 +336,11 @@ pub struct Status {
     pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
+    /// The group as a blind relay of the owner's lists it: its root key and
+    /// the two halves of its recovery key in hex, separated by colons, the
+    /// value of `cbb relay -group` (cbb status -relay); empty in no group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_group: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
