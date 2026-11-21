@@ -260,7 +260,7 @@ func TestEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	deck.env = append(deck.env, "CBB_TEST_OWN_EVIDENCE="+evidenceFile)
-	deck = restartService(t, &h, deck)
+	restartService(t, &h, deck)
 	store := func() string {
 		for _, d := range pi.devices(t) {
 			if d.Name == "deck" {

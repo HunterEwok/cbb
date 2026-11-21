@@ -2948,6 +2948,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device that joins with six digits no longer dials a member whose pairing window just
+  closed: mDNS may still serve that member's old announcement for a moment, and the browse
+  now drops a device whose newer announcement shows no window, or that leaves.
 - On the records of 0.6 a hub's status gives its UDP port and whether it hides its tunnel, a
   hub that stands by names the hub above it that it uses, `cbb devices` marks as hubs the
   devices this one knows serve and gives each its place in the group's order of hubs

@@ -21,8 +21,6 @@ import (
 
 var randReader = rand.Reader
 
-func ellipticP256() elliptic.Curve { return elliptic.P256() }
-
 // tool is a key held by a hardware key that a program reaches: it prints
 // the public key (a PUBLIC KEY or a CERTIFICATE in PEM) and signs the data
 // on its standard input, writing an ECDSA signature with SHA-256 in DER.
