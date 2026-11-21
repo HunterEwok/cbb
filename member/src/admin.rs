@@ -135,6 +135,13 @@ pub fn os_name() -> &'static str {
 /// the key level files (docs/roadmap.md, "Key levels"). It returns the new
 /// identity, which the service starts in, and why the member key is in a
 /// file when the hardware could not take it.
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "cbb new makes groups of 0.6 (founding.rs); the old member's tests make theirs here until it goes"
+    )
+)]
 pub fn new_group(dir: &Path, name: &str) -> Result<(Identity, String)> {
     if Identity::load(dir)?.is_some() {
         return Err(Error::msg("this device is already in a group; cbb status shows it"));
@@ -326,6 +333,17 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 /// level waits for that, as Go does both under one lock.
 static TAKEOVER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Holds off a takeover that would finish while the caller signs with the
+/// key signer reads. finish_takeover saves the claim's key as the root key
+/// before it adds the records the new root starts with, so a signer read in
+/// between would sign as the new root ahead of those records, at a number
+/// they take too: two histories of the root key, which stop the group.
+/// What signs on its own, as the service's loop does, holds this from
+/// reading the signer until its records are added.
+pub fn no_takeover_finishing() -> std::sync::MutexGuard<'static, ()> {
+    TAKEOVER.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// The group's key level, hardware when no record sets it, once a takeover
 /// that is finishing has signed the settings again.
 fn settled_level(node: &Node) -> String {
@@ -395,6 +413,7 @@ static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover:
 /// ADMIN_CAS_SENT remembers, by device, the root each got one from.
 pub fn renew_admin_cas(dir: &Path, node: &Node) {
     let sent = &ADMIN_CAS_SENT;
+    let _settled = no_takeover_finishing();
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {
@@ -490,7 +509,13 @@ impl Admin<'_> {
     /// admin's powers unless body names them, and the root's record of its
     /// own device says it holds the root. The record goes into the set and
     /// to the group.
-    fn sign(&self, s: &Signing, mut b: Body) -> Result<Record> {
+    fn sign(&self, s: &Signing, b: Body) -> Result<Record> {
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
+        self.sign_locked(s, b)
+    }
+
+    /// As sign, with Node::signing already held.
+    fn sign_locked(&self, s: &Signing, mut b: Body) -> Result<Record> {
         let records = self.node.records();
         let r = {
             let rs = records.lock().unwrap();
@@ -529,6 +554,7 @@ impl Admin<'_> {
         make: impl FnOnce(&cbb_core::group::Records, &Signer, i64) -> cbb_core::error::Result<Record>,
     ) -> Result<Record> {
         let me = self.me();
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let records = self.node.records();
         let r = make(&records.lock().unwrap(), &Signer { ca: &s.ca, key: &*s.key, me: &me }, uptime::wall_ms())?;
         self.node.add_own_records(std::slice::from_ref(&r));
@@ -701,6 +727,9 @@ impl Admin<'_> {
         if self.root_device() != self.me() {
             return Ok(None);
         }
+        // The check and the record are one step: the evidence of two
+        // connections at once is recorded once.
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer) else { return Ok(None) };
         if d.key != *key {
             return Ok(None); // not listed yet; it sends the evidence again when it next connects
@@ -736,7 +765,7 @@ impl Admin<'_> {
             forward_only: d.forward_only,
             ..Default::default()
         };
-        self.sign(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
+        self.sign_locked(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
         let why = if p.why.is_empty() { String::new() } else { format!(": {}", p.why) };
         Ok(Some(format!("cbb: the attestation of {} ({}) shows its keys {} ({kind}){why}", d.name, d.id, p.store)))
     }
@@ -819,11 +848,11 @@ impl Admin<'_> {
         Ok(who)
     }
 
-    /// Makes the computer target names an admin, on the group's root, as
-    /// Go's makeAdmin: the admin CA for the admin key its hello offers, its
-    /// device record naming it, and the admin message. A computer whose
-    /// keys sit in a file becomes one only with allow_file_key. It returns
-    /// its name.
+    /// Makes the phone or computer target names an admin, on the group's
+    /// root, as Go's makeAdmin: the admin CA for the admin key its hello
+    /// offers, its device record naming it, and the admin message. A
+    /// computer whose keys sit in a file becomes one only with
+    /// allow_file_key. It returns its name.
     pub fn make_admin(&self, target: &str, allow_file_key: bool) -> Result<String> {
         let d = find_device(self.node, target)?;
         let root_only = || {
@@ -838,9 +867,10 @@ impl Admin<'_> {
         if d.id == self.me() {
             return Err(Error::msg("this device is the group's root, which is more than an admin"));
         }
-        if !d.can(authority::CAP_ADMIN) {
+        let phone = d.role == authority::ROLE_PHONE;
+        if !phone && !d.can(authority::CAP_ADMIN) {
             return Err(Error::msg(format!(
-                "{} cannot hold an admin key; only a member with the cap admin can be an admin",
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
                 d.name
             )));
         }
@@ -865,7 +895,24 @@ impl Admin<'_> {
                 d.name
             )));
         };
-        let (store, kind, proof) = if d.store == "proven" {
+        // A key another device holds, or a root's, would give its holder a
+        // second device's admin CA.
+        let hash = cbb_core::certs::sha256(&admin_key);
+        let taken = {
+            let rs = self.node.records();
+            let rs = rs.lock().unwrap();
+            rs.devices().iter().any(|o| o.admin_key == Some(hash) || o.keys.contains(&hash))
+                || rs.state().roots.contains(&Hash(hash))
+        };
+        if taken {
+            return Err(Error::msg(format!(
+                "the admin key that {} offers belongs to another key of the group",
+                d.name
+            )));
+        }
+        // A phone's keys stay where its record says (hardware); a
+        // computer's are where its hello says.
+        let (store, kind, proof) = if d.store == "proven" || phone {
             (d.store.clone(), d.kind.clone(), d.proof.clone())
         } else {
             (
@@ -915,6 +962,10 @@ impl Admin<'_> {
                 os: d.os.clone(),
                 key: Some(Hash(d.key)),
                 admin: Some(admin),
+                // A phone admin has every power, as one admitted as an
+                // admin; a computer's come from computer_admin_powers.
+                powers: if phone { authority::POWERS.iter().map(|p| (*p).into()).collect() } else { Vec::new() },
+                commands: if phone { authority::COMMANDS.iter().map(|c| (*c).into()).collect() } else { Vec::new() },
                 store,
                 hardware: kind,
                 proof,
@@ -1059,34 +1110,6 @@ impl Admin<'_> {
         Ok(Some(d.name))
     }
 
-    /// Sends the device d a hub command with the order hub, signed as an
-    /// admin (Go's moveHub, makeHub and stopHub on another device), and
-    /// returns its result once it carried the command out.
-    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
-    pub fn hub_command(&self, d: &Device, hub: serde_json::Value) -> Result<crate::wire::CommandResult> {
-        self.order_command(
-            d,
-            cbb_core::manage::Order::Hub(hub),
-            "only an admin makes a device a hub, moves the hub or stops one: the group's root, an admin it made (cbb admin), or an admin phone",
-        )
-    }
-
-    /// Turns sync away from home off on the device target names with an
-    /// away-off command (Go's awayOffOn); only its own user turns it on
-    /// again (D-45).
-    pub fn away_off_on(&self, target: &str) -> Result<()> {
-        let d = find_device(self.node, target)?;
-        if d.id == self.me() {
-            return Err(Error::msg("-on names this device; cbb global off turns it off here"));
-        }
-        self.order_command(
-            &d,
-            cbb_core::manage::Order::AwayOff,
-            "only an admin turns sync away from home off on another device: the group's root, an admin it made (cbb admin), or an admin phone",
-        )
-        .map(|_| ())
-    }
-
     /// Turns sync on or off on the device target names with a mode command
     /// (Go's `cbb sync -on DEVICE`); this device's own sync is the
     /// service's, without -on: None when target names this device, as Go's
@@ -1154,67 +1177,6 @@ impl Admin<'_> {
             let what = if paste { "remote paste" } else { "the quick actions" };
             return Err(Error::msg(format!("{what} may still be on: {}", failed.join("; "))));
         }
-        Ok(())
-    }
-
-    /// Signs the device d a record with forward_only unless its newest has
-    /// it, as Go's markForwardOnly: d then passes the copies on as a hub
-    /// and reads none (docs/protocol.md, section 11, "Two kinds of hub").
-    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
-    pub fn mark_forward_only(&self, d: &Device) -> Result<()> {
-        if d.forward_only {
-            return Ok(());
-        }
-        if d.admin_key.is_some() {
-            return Err(Error::msg(format!(
-                "{} is an admin; only a computer that is no admin only passes copies on",
-                d.name
-            )));
-        }
-        if !d.can(authority::CAP_HUB) {
-            return Err(Error::msg(format!(
-                "{} cannot be a hub; only a member with the cap hub only passes copies on",
-                d.name
-            )));
-        }
-        if d.store == "rootless" {
-            return Err(Error::msg(format!(
-                "{} is installed without root, and such a computer is never a hub (D-79)",
-                d.name
-            )));
-        }
-        if d.id == self.root_device() {
-            return Err(Error::msg(format!("{} is the root's own computer, a hub that reads the copies", d.name)));
-        }
-        let s = self.signing()?;
-        self.sign(
-            &s,
-            Body {
-                kind: authority::TYPE_DEVICE.into(),
-                device: d.id.clone(),
-                name: d.name.clone(),
-                role: d.role.clone(),
-                caps: d.caps.clone(),
-                os: d.os.clone(),
-                key: Some(Hash(d.key)),
-                store: d.store.clone(),
-                hardware: d.kind.clone(),
-                proof: d.proof.clone(),
-                seal: d.seal.clone(),
-                forward_only: true,
-                ..Default::default()
-            },
-        )
-        .map_err(|e| {
-            Error::msg(format!(
-                "the group's records did not take the record that makes it a hub: only the root or an admin with the powers admit and hub signs it ({})",
-                e.message()
-            ))
-        })?;
-        self.node.logf(&format!(
-            "cbb: {} ({}) only passes the copies on now, and reads none; the next copies are no longer sealed to it",
-            d.name, d.id
-        ));
         Ok(())
     }
 
@@ -1487,6 +1449,10 @@ impl Admin<'_> {
     /// the core (cbb_core::admit), and records the device once its Welcome
     /// is out. With admins, on the root only, a phone that offers an admin
     /// key becomes an admin. It returns the device's name.
+    ///
+    /// It dials at most the QR code's four addresses, and stops at the
+    /// first attempt that showed the device this member's CPace message:
+    /// that attempt tried the code, which serves one guess only.
     pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
         let code = cbb_core::pair::normalize_code(code)?;
         if fingerprint.is_empty() {
@@ -1495,9 +1461,11 @@ impl Admin<'_> {
         let admitter = self.admitter(admins)?;
         let end = Instant::now() + PAIR_LIFETIME;
         let mut tried = Vec::new();
-        for addr in addrs {
-            match self.admit_at(&admitter, &code, addr, fingerprint, end) {
+        for addr in addrs.iter().take(cbb_core::pair::MAX_ADDRS) {
+            let mut started = false;
+            match self.admit_at(&admitter, &code, addr, fingerprint, end, &mut started) {
                 Ok(name) => return Ok(name),
+                Err(e) if started => return Err(e.context("could not admit the device that shows the QR code")),
                 Err(e) => tried.push(format!("{addr}: {}", e.for_log())),
             }
         }
@@ -1511,6 +1479,7 @@ impl Admin<'_> {
         addr: &str,
         fingerprint: &str,
         end: Instant,
+        started: &mut bool,
     ) -> Result<String> {
         let to: SocketAddr = addr.parse().map_err(|_| Error::msg("not an address and port"))?;
         if !crate::pair::home_address(to.ip()) {
@@ -1524,6 +1493,7 @@ impl Admin<'_> {
         let mut buf = vec![0u8; 16 << 10];
         loop {
             let step = adm.feed(&input, uptime::wall_ms());
+            *started |= adm.started();
             if !step.send.is_empty() {
                 sock.write_all(&step.send).context("cannot send to the device")?;
             }
@@ -1582,27 +1552,6 @@ pub fn record_admitted(node: &Node, admitter: &admit::Admitter, a: &admit::Admit
     Ok(())
 }
 
-/// Why this device may not be one of the group's hubs, if it may not, as
-/// Go's away does: only the root or an admin, whose key the group's key
-/// level still lets be a hub (it had the user's consent when it was made
-/// one).
-pub fn may_be_hub(dir: &Path, node: &Node) -> Result<()> {
-    let ident = node.identity();
-    if signer(dir, &ident)?.is_none() {
-        return Err(Error::msg(
-            "only the group's root or an admin can be its hub, since the members take the hub's offer from them only; make this device an admin first (cbb admin on the root)",
-        ));
-    }
-    let store = if crate::rootless::is() {
-        "rootless"
-    } else if ident.external.is_some() {
-        "hardware"
-    } else {
-        "file"
-    };
-    level_allows(&settled_level(node), store, "this device", "", true)
-}
-
 /// The image sets CBB_CONTAINER (packaging/docker/Dockerfile). A container
 /// keeps its keys in a file in its volume, which whoever copies the volume
 /// has, so it holds no key that admits or removes devices: it is never the
@@ -1652,26 +1601,10 @@ const NO_RECOVERY_KEY: &str = "the group has no recovery key: the root phone has
 const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
 /// Whether the group's key level lets a device whose key is in store be
-/// its root, an admin or a hub, as Go's levelAllows; at the level files a
-/// key in a file needs consent, which hint says how to give.
-fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
-    let msg = match () {
-        _ if store == "rootless" => format!(
-            "{name} is installed without root, so every program of its user can read its keys; such a device is never the group's root, an admin or a hub (D-79)"
-        ),
-        _ if level == "proven" && store != "proven" => format!(
-            "attestation does not prove that {name} keeps its key in hardware, and the group's key level lets only such keys be its root, an admin or a hub; on the root, cbb keys hardware lets keys in hardware by the device's own word too"
-        ),
-        _ if store != "file" => return Ok(()),
-        _ if level != "files" => format!(
-            "{name} keeps its keys in a file, and the group's key level lets only keys in hardware be its root, an admin or a hub; on the root, cbb keys files lets keys in files too, each time after a warning"
-        ),
-        _ if !consent => format!(
-            "{name} keeps its keys in a file, which a thief with it can copy and then act for it until another admin removes it; to allow it anyway, {hint}"
-        ),
-        _ => return Ok(()),
-    };
-    Err(Error::msg(msg))
+/// its root, an admin or a hub: the core's rule (`cbb_core::keylevel`),
+/// which the phones' apps share.
+pub(crate) fn level_allows(level: &str, store: &str, name: &str, hint: &str, consent: bool) -> Result<()> {
+    cbb_core::keylevel::allows(level, store, name, hint, consent)
 }
 
 /// Where this device says its keys live, as Go's keyStore: rootless for a

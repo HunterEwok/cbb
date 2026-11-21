@@ -286,6 +286,22 @@ pub fn exporting_server(mut cfg: rustls::ServerConfig) -> (rustls::ServerConfig,
     (cfg, x)
 }
 
+/// The exporter of a pairing session of 0.6: [`crate::alpn::PAIR_EXPORTER`]
+/// with an empty context, from a session whose handshake is over and took
+/// `cbb-pair/3`; any other session gives none. `exporter` is the one
+/// [`exporting_client`] or [`exporting_server`] gave with that session's
+/// configuration.
+pub fn pairing_exporter(session: &super::Session, exporter: &super::Exporter) -> Result<crate::join::PairExporter> {
+    if session.is_handshaking() || !crate::alpn::is_pair(session.alpn_protocol()) {
+        return Err(Error::msg("not a pairing session"));
+    }
+    let mut out = [0u8; crate::alpn::PAIR_EXPORTER_LEN];
+    exporter.export(crate::alpn::PAIR_EXPORTER, &[], &mut out)?;
+    let made = crate::join::PairExporter::from_core_tls(out);
+    zeroize::Zeroize::zeroize(&mut out);
+    Ok(made)
+}
+
 /// A judge that takes every well-formed key: for pairing, where CPace bound
 /// to both keys authenticates the peer, and for a server's own client
 /// checks.
@@ -296,11 +312,13 @@ pub fn any_key() -> Judge {
 /// A judge from a device's view of the records: members go on, unknown
 /// keys too when `unknown_ok` (the caller then waits for the intro), any
 /// key of a halted group (the caller then gives and takes the recovery
-/// key's records only, `RecordSet::for_peer`), the rest are refused. `look` usually locks the caller's records and answers
+/// key's records only, `RecordSet::for_peer`), a key that gets a root
+/// fork's proof (`Standing::ForkProof`: the pair alone, both ways), the
+/// rest are refused. `look` usually locks the caller's records and answers
 /// with [`standing`].
 pub fn by_standing(look: impl Fn(&[u8; 65]) -> Standing + Send + Sync + 'static, unknown_ok: bool) -> Judge {
     Arc::new(move |point| match look(point) {
-        Standing::Member(_) | Standing::Halted => Ok(()),
+        Standing::Member(_) | Standing::Halted | Standing::ForkProof => Ok(()),
         Standing::Unknown if unknown_ok => Ok(()),
         Standing::Unknown => Err("not a device of the group".to_string()),
         Standing::Refused(why) => Err(format!("refused: {why}")),

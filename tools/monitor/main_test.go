@@ -23,7 +23,7 @@ func signedFile(t *testing.T, expires time.Time) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal(release.File{Body: body, Sig: []byte{1}, Key: []byte{2}})
+	b, err := json.Marshal(release.File{Body: body, Sigs: []release.Sig{{Alg: release.AlgES256, Key: []byte{2}, Sig: []byte{1}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

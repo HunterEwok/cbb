@@ -26,7 +26,7 @@ use cbb_core::invite::Invitation;
 
 use super::Away;
 use crate::certs::{Cert, DeviceId};
-use crate::error::{Context, Error, Result};
+use crate::error::{Error, Result};
 use crate::hub::{self, Hub};
 use crate::inviter::{GuestKeys, Opened};
 use crate::node::{Node, OnPairing};
@@ -90,7 +90,8 @@ impl Away {
     /// pairing connections the window serves.
     pub fn open_own(self: &Arc<Self>, keys: &GuestKeys, w: &Arc<Window>) -> Result<Opened> {
         let addr = hub::guest_addr(&keys.public);
-        let peer = hub::Peer { key: keys.public, psk: keys.psk, addr, until: None };
+        let peer =
+            hub::Peer { key: keys.public, psk: keys.psk, older_psks: Vec::new(), addr, until: None, source: None };
         let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, Some(w.clone()), None)?;
         let me = self.clone();
         Ok(Opened {
@@ -305,13 +306,15 @@ impl Away {
         if self.guests.lock().unwrap().contains_key(&addr) {
             return Err(Error::msg("that guest key is in use"));
         }
-        let peer = hub::Peer { key, psk, addr, until: None };
+        let peer = hub::Peer { key, psk, older_psks: Vec::new(), addr, until: None, source: None };
         let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, None, Some(from.clone()))?;
         // The guest goes at its expiry unless its window admitted a device.
         let (me, left) = (self.clone(), Duration::from_millis(u64::try_from(g.expires_ms - now).unwrap_or(0)));
         std::thread::spawn(move || {
-            let until = Instant::now() + left;
-            while Instant::now() < until {
+            // On the clock that counts sleep, as the window's: a hub that
+            // slept does not keep the guest past the invitation.
+            let until = crate::uptime::now() + left;
+            while crate::uptime::now() < until {
                 std::thread::sleep(Duration::from_secs(1));
                 if me.guests.lock().unwrap().get(&addr).is_none_or(|g| g.admitted.is_some()) {
                     return;
@@ -441,45 +444,6 @@ const GUEST_FILE: &str = "invite-guest";
 /// the hub keeps the guest for the admitted device.
 const GUEST_FILE_LIFE: Duration = GUEST_GRACE;
 
-/// Joins the group of a remote invitation (cbb pair -invite), as Go's
-/// joinInvite: through the guest tunnel to the hub, with the invitation's
-/// secret, once the hub's admin confirmed the device. Sync away from home
-/// goes on with the join, and the service then offers this device's own
-/// tunnel key to the hub through the guest tunnel (Away::through_guest).
-/// shown gets the device's key fingerprint, which the admin compares.
-pub fn join_invite(
-    dir: &std::path::Path,
-    joiner: &crate::pair::Joiner,
-    save: &crate::pair::Save,
-    text: &str,
-    shown: &dyn Fn(&str),
-    log: Arc<dyn Fn(&str) + Send + Sync>,
-) -> Result<crate::identity::Identity> {
-    let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
-    if inv.expired(crate::uptime::wall_ms() / 1000) {
-        return Err(Error::msg("the invitation has expired; ask for a new one"));
-    }
-    shown(&joiner.fingerprint());
-    let link = guest_link(&inv, log)?;
-    let sock = std::net::TcpStream::connect_timeout(&link.local(), Duration::from_secs(10))
-        .context("cannot reach the tunnel's local port")?;
-    let text = text.trim().to_string();
-    let save_all = |id: &crate::identity::Identity, rs: &[crate::records::Record], ts: &[crate::records::ClaimTime]| {
-        // Sync away from home is on, and the guest file there, before the
-        // identity, which a running service takes.
-        crate::tunnel::State::new(&id.tag())?.save(dir)?;
-        crate::files::write_atomic(&dir.join(GUEST_FILE), text.as_bytes(), 0o600)?;
-        save(id, rs, ts)
-    };
-    crate::pair::join_secret(joiner, sock, &inv.secret, &save_all).map_err(|e| {
-        if link.answered() {
-            e
-        } else {
-            e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")
-        }
-    })
-}
-
 /// Keeps the invitation a device joined with in the state directory, once
 /// sync away from home is on there: the member then offers its own tunnel
 /// key to the hub through the invitation's guest tunnel, as after cbb pair
@@ -528,6 +492,7 @@ fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<
         next: Vec::new(),
         obfuscation,
         vless: inv.vless.as_ref().map(cbb_core::invite::Vless::to_json),
+        ..Default::default()
     };
     let own = hub::guest_addr(&crate::tunnel::key32(&crate::tunnel::public_of(&inv.guest_key))?);
     let peer = crate::tunnel::addr(&inv.hub).ok_or_else(|| Error::msg("the invitation names no hub"))?;

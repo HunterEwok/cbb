@@ -3,7 +3,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # Prepares a Linux host for the bench's member in a container (a device with
-# os = "docker" in the inventory; docs/testbench.md). Run it from a checkout
+# os = "docker" in the inventory; docs/maintainers/testbench.md). Run it from a checkout
 # of the repository, as the user the bench connects as, who has sudo:
 #
 #   sh tools/bench/setup-docker.sh setup        # once: Docker, the docker group, the kill helper

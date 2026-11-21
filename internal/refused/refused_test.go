@@ -13,14 +13,17 @@ import (
 const (
 	tagA = "0123456789abcdef"
 	tagB = "fedcba9876543210"
+	// periodC is a period's tag, 16 bytes as the format's credentials
+	// carry it.
+	periodC = "00112233445566778899aabbccddeeff"
 )
 
 func TestParse(t *testing.T) {
-	tags, err := Parse([]byte("# reports\n\n" + tagA + " 2026-11-09 abuse@ report\nperiod " + tagB + "\n  " + tagB + "\n"))
+	tags, err := Parse([]byte("# reports\n\n" + tagA + " 2026-11-09 abuse@ report\nperiod " + periodC + "\n  " + tagB + "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tags) != 3 || !tags[tagA] || !tags[tagB] || !tags["period "+tagB] {
+	if len(tags) != 3 || !tags[tagA] || !tags[tagB] || !tags["period "+periodC] {
 		t.Fatalf("tags = %v", tags)
 	}
 	for _, bad := range []string{
@@ -29,6 +32,7 @@ func TestParse(t *testing.T) {
 		"0123456789abcdef0\n",
 		"period\n",
 		"period xyz\n",
+		"period " + tagA + "\n", // a period's tag is 16 bytes
 		"group " + tagA + "\n",
 	} {
 		if _, err := Parse([]byte(bad)); err == nil {
@@ -100,6 +104,14 @@ func TestReload(t *testing.T) {
 
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
+	}
+	// Missing once, as when an editor moves it aside to save it, the list
+	// stays; missing again, it is gone.
+	if changed, err := l.Reload(); changed || err != nil {
+		t.Fatalf("a file moved aside: Reload = %v, %v", changed, err)
+	}
+	if !l.Refused(tagB) {
+		t.Fatal("a file moved aside let a refused group back in")
 	}
 	if changed, err := l.Reload(); !changed || err != nil {
 		t.Fatalf("a removed file: Reload = %v, %v", changed, err)

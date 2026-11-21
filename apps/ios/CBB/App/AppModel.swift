@@ -102,10 +102,10 @@ protocol GroupController: AnyObject {
     /// Admits the device whose QR code the user scanned; retrying is told
     /// each time the device did not answer yet and is dialed again.
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
-    /// Joins another phone's group: listens, hands show the QR code for the
-    /// other phone to scan, and returns once this phone is in the group.
-    /// With asAdmin it offers an admin key, which only the root grants.
-    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws
+    /// Joins another phone's group as a member: listens, hands show the QR
+    /// code for the other phone to scan, and returns once this phone is in
+    /// the group. The root makes it an admin later from its device page.
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
     /// Joins a group from afar by a remote invitation the user accepted;
@@ -226,7 +226,13 @@ extension GroupController {
 final class AppModel: ObservableObject {
     /// The one model of the running app, which the Shortcuts action uses
     /// too.
-    static let shared = AppModel(group: LiveGroup(), notifies: true)
+    static let shared: AppModel = {
+        #if DEBUG
+        // The made-up group of the screenshots and Home's UI tests.
+        if let showcase = ShowcaseGroup.requested() { return AppModel(group: showcase) }
+        #endif
+        return AppModel(group: LiveGroup(), notifies: true)
+    }()
 
     enum Phase: Equatable { case start, joining, home }
 
@@ -303,6 +309,17 @@ final class AppModel: ObservableObject {
         init(until: Date?) { self.until = until }
     }
 
+    /// Whether a device's tile shows it muted: the answer the group is
+    /// waiting on, else its mute; for this phone, sync turned off.
+    func shownMuted(_ d: Computer) -> Bool {
+        if d.isSelf { return d.syncOff != nil }
+        return pendingMute[d.id] ?? (d.muted != nil)
+    }
+
+    /// Whether this phone may mute the device from its tile: its own sync
+    /// always, another device only as an admin.
+    func mayMute(_ d: Computer) -> Bool { d.isSelf || isAdmin }
+
     /// Sync turned off on this phone; nil while it is on.
     var syncOff: Hold? { devices.first(where: \.isSelf)?.syncOff }
 
@@ -341,6 +358,13 @@ final class AppModel: ObservableObject {
         /// Files a computer copied, saved in the app's folder in Files, or
         /// one image or video in Photos.
         case savedFiles(photos: Bool)
+
+        /// The same result without the start of the text, for an answer
+        /// that may show on a locked phone.
+        var withoutPreview: SyncResult {
+            if case .fetched(let from, _) = self { return .fetched(from: from, preview: nil) }
+            return self
+        }
     }
 
     enum ScanResult: Equatable {
@@ -354,6 +378,8 @@ final class AppModel: ObservableObject {
         didSet {
             loadTiles()
             SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
+            PushSetup.shared.group(tag: group.groupTag, me: devices.first(where: \.isSelf)?.id, devices: devices.map(\.id),
+                                   root: devices.first(where: \.isRoot)?.id)
         }
     }
     /// The devices and collections, this phone among them, in the user's
@@ -363,6 +389,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var customOrder = false
     /// One line about the last action, in plain words.
     @Published var message: String?
+    /// The mutes asked for and not yet answered, by device: the tile shows
+    /// the new state at once and goes back only when the group refuses it.
+    @Published private(set) var pendingMute: [String: Bool] = [:]
     /// The bug report to ask about in release mode ("Oops, something
     /// broke"); in debug mode a break shows whole in `message` instead.
     @Published private(set) var bug: BugReports.Offer?
@@ -679,14 +708,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Whether the join screen asks to join as an admin, which only the
-    /// group's root grants.
-    @Published private(set) var joinAsAdmin = false
-
-    /// Opens the screen that joins a group; with admin, as an admin.
-    func startJoining(admin: Bool = false) {
+    /// Opens the screen that joins a group, always as a member.
+    func startJoining() {
         message = nil
-        joinAsAdmin = admin
         joiningInvite = nil
         phase = .joining
     }
@@ -729,7 +753,6 @@ final class AppModel: ObservableObject {
         guard let p = pendingInvite else { return }
         pendingInvite = nil
         message = nil
-        joinAsAdmin = false
         joiningInvite = p
         phase = .joining
     }
@@ -759,7 +782,7 @@ final class AppModel: ObservableObject {
     /// task, so leaving the screen cancels it and stops listening.
     func join() async {
         do {
-            try await group.join(asAdmin: joinAsAdmin) { [weak self] code in self?.joinCode = code }
+            try await group.join { [weak self] code in self?.joinCode = code }
             computers = group.computers
             devices = group.devices
             isAdmin = group.isAdmin
@@ -841,12 +864,12 @@ final class AppModel: ObservableObject {
 
     /// The one big button: the paste button hands over board; a button
     /// that is not one lets the app read the clipboard when it sends.
-    func sync(board: Board? = nil) async {
+    func sync(board: Board? = nil, preview: Bool = true) async {
         busy = true
         defer { busy = false }
         do {
             let result = try await group.sync(board: board)
-            message = Self.said(result)
+            message = Self.said(preview ? result : result.withoutPreview)
             if let message { Island.flash(message) }
             feel(result == .nothingNew ? .warning : .success)
         } catch {
@@ -965,7 +988,9 @@ final class AppModel: ObservableObject {
         }
         progress?.completedUnitCount = 1
         progress?.localizedDescription = String(localized: "Syncing…", bundle: .app)
-        await sync(board: text.map { Board(text: $0) })
+        // Siri and the Shortcuts app may speak or show the answer on the
+        // lock screen: it names the device, never the copy.
+        await sync(board: text.map { Board(text: $0) }, preview: false)
         return message ?? ""
     }
 
@@ -1240,12 +1265,16 @@ final class AppModel: ObservableObject {
     func leave() async -> Bool {
         busy = true
         defer { busy = false }
+        // Push off in this group while the phone still reaches its members.
+        PushSetup.shared.leaving()
         do {
             try await group.leave()
         } catch {
             message = Self.describe(error)
+            PushSetup.shared.stayed()
             return false
         }
+        PushSetup.shared.left()
         if notifies { Notifier.shared.forget() }
         do {
             try group.prepare()
@@ -1344,6 +1373,8 @@ final class AppModel: ObservableObject {
 
     /// Mutes a device for the whole group, or unmutes it.
     func setMuted(_ id: String, _ on: Bool, forMS: Int64 = 0) async {
+        pendingMute[id] = on
+        defer { pendingMute[id] = nil }
         do {
             try await group.setMuted(id, on, forMS: forMS)
             message = on ? String(localized: "The device is muted: its copies stay its own.", bundle: .app)
@@ -1760,7 +1791,7 @@ final class PendingGroup: GroupController {
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
-    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

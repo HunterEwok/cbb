@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: bb4c4f917772 -->
+<!-- source: fc79c2973911 -->
 # Claves y atestación
 
 Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es, y las claves de la raíz y de los administradores añaden y quitan dispositivos. El lugar donde un dispositivo guarda sus claves decide lo que se lleva un ladrón con él. Esta página dice dónde guarda las suyas cada tipo de dispositivo, cómo puede comprobarlo el grupo y qué nivel de rigor elegir. Las reglas exactas están en el [protocolo](../protocol.md), sección 17.
@@ -10,7 +10,7 @@ Cada dispositivo de un grupo tiene claves: una demuestra a los demás quién es,
 
 | Dónde | Dispositivos | Qué se lleva un ladrón |
 |---|---|---|
-| **En un archivo** | Mac con Intel sin el chip T2, PC con Windows y ordenadores Linux sin TPM, el miembro ligero | una copia del archivo, que funciona en cualquier sitio hasta que un administrador quita el dispositivo |
+| **En un archivo** | Mac con Intel sin el chip T2, PC con Windows y ordenadores Linux sin TPM, dispositivos pequeños | una copia del archivo, que funciona en cualquier sitio hasta que un administrador quita el dispositivo |
 | **En hardware** | iPhone (Secure Enclave), teléfonos Android (Keystore: StrongBox o el TEE), Mac con Apple silicon o el chip T2 (Secure Enclave), ordenadores Linux y PC con Windows con TPM | nada que copiar: la clave firma solo en ese dispositivo, y en un teléfono las claves de la raíz y de los administradores solo tras tu cara, tu huella o tu código |
 | **Hardware demostrado** | un teléfono Android cuya clave comprobó la raíz del grupo | lo mismo que el hardware, y el grupo sabe que es verdad, no solo que el dispositivo lo dice |
 

@@ -12,7 +12,10 @@ import UIKit
 /// relay) and, for admins, the group (copy lifetime, security level). No
 /// long texts under the items: a hard one has a tip, shown until closed.
 struct SettingsView: View {
-    @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
+    /// One part, as a big screen's sidebar opens it; nil for them all, as
+    /// one page with the advanced ones behind their switch.
+    var part: SettingsPart?
+    @AppStorage(ThemeChoice.key) private var theme = Tokens.themes[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
     @Environment(\.palette) private var palette
@@ -37,48 +40,39 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 
+    /// Whether the page shows a part.
+    private func shows(_ p: SettingsPart) -> Bool { part == nil || part == p }
+
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: Tokens.spacingMedium) {
-                    Picker(selection: $appearance) {
-                        ForEach(Appearance.allCases) { a in
-                            Image(systemName: a.symbol).accessibilityLabel(Text(a.title)).tag(a)
-                        }
-                    } label: {
-                        Text("Theme")
-                    }
-                    .pickerStyle(.segmented)
-                    Menu {
-                        Picker(selection: $language) {
-                            ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
-                        } label: { Text("Language") }
-                    } label: {
-                        Image(systemName: "globe").font(.title3)
-                    }
-                    .accessibilityLabel(Text("Language"))
-                    .accessibilityValue(Text(verbatim: language.title))
+            if shows(.look) { lookSection }
+            if shows(.notifications) {
+                NotificationSettings()
+                if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
+                    watchSection
                 }
-                ColorSwatches(selection: $color)
             }
-            .listRowBackground(palette.surface)
-            NotificationSettings()
-            if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
-                watchSection
-            }
-            if model.isRoot {
+            if shows(.recovery), model.isRoot {
                 RecoverySection()
             }
-            Section {
-                Toggle(isOn: $advanced) { Text("Advanced settings") }
+            if part == nil {
+                Section {
+                    Toggle(isOn: $advanced) {
+                        // Its own height, so that a script with tall marks
+                        // (Devanagari) is not cut at the line's edge.
+                        Text("Advanced settings").fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .listRowBackground(palette.surface)
             }
-            .listRowBackground(palette.surface)
-            if advanced {
+            if part == nil, advanced {
                 Section {
                     NavigationLink { WhyScreen() } label: { Text("Why it does not sync") }
                         .accessibilityIdentifier("why")
                 }
                 .listRowBackground(palette.surface)
+            }
+            if part == nil ? advanced : part == .away {
                 if let hub = model.hub {
                     hubSection(hub)
                     if !hub.computers.isEmpty {
@@ -91,6 +85,8 @@ struct SettingsView: View {
                 if let relay = model.blindRelay {
                     relaySection(relay)
                 }
+            }
+            if part == nil ? advanced : part == .group {
                 if model.isAdmin, model.phase == .home {
                     incomingSection
                 }
@@ -98,41 +94,11 @@ struct SettingsView: View {
                     keyLevelSection(level)
                 }
             }
-            if model.phase == .home {
-                Section {
-                    LeaveButton()
-                }
-                .listRowBackground(palette.surface)
-            }
-            Section {
-                LabeledContent {
-                    Text(version).font(.system(.body, design: .monospaced))
-                } label: {
-                    Text("Version")
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    versionTaps += 1
-                    if versionTaps >= 7 { detailsSwitch = true }
-                }
-                if detailsSwitch {
-                    Toggle(isOn: $errorDetails) {
-                        Text("Show error details")
-                    }
-                    // The share extension reads it from the app group.
-                    .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
-                }
-                Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
-                    Text("Source code and license (AGPL-3.0)")
-                }
-            } header: {
-                Text("About")
-            }
-            .listRowBackground(palette.surface)
+            if shows(.about) { aboutSections }
         }
         .scrollContentBackground(.hidden)
         .background(AppBackground())
-        .navigationTitle(Text("Settings"))
+        .navigationTitle(part?.title ?? Text("Settings"))
         .task {
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
@@ -140,6 +106,68 @@ struct SettingsView: View {
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// The theme, the language and the colour, as icons without a heading.
+    private var lookSection: some View {
+        Section {
+            HStack(spacing: Tokens.spacingMedium) {
+                Picker(selection: $appearance) {
+                    ForEach(Appearance.allCases) { a in
+                        Image(systemName: a.symbol).accessibilityLabel(Text(a.title)).tag(a)
+                    }
+                } label: {
+                    Text("Theme")
+                }
+                .pickerStyle(.segmented)
+                Menu {
+                    Picker(selection: $language) {
+                        ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
+                    } label: { Text("Language") }
+                } label: {
+                    Image(systemName: "globe").font(.title3)
+                }
+                .accessibilityLabel(Text("Language"))
+                .accessibilityValue(Text(verbatim: language.title))
+            }
+            ThemeSwatches(selection: $theme)
+        }
+        .listRowBackground(palette.surface)
+    }
+
+    /// Leaving the group, and about the app.
+    @ViewBuilder private var aboutSections: some View {
+        if model.phase == .home {
+            Section {
+                LeaveButton()
+            }
+            .listRowBackground(palette.surface)
+        }
+        Section {
+            LabeledContent {
+                Text(version).font(.system(.body, design: .monospaced))
+            } label: {
+                Text("Version")
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                versionTaps += 1
+                if versionTaps >= 7 { detailsSwitch = true }
+            }
+            if detailsSwitch {
+                Toggle(isOn: $errorDetails) {
+                    Text("Show error details")
+                }
+                // The share extension reads it from the app group.
+                .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
+            }
+            Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
+                Text("Source code and license (AGPL-3.0)")
+            }
+        } header: {
+            Text("About")
+        }
+        .listRowBackground(palette.surface)
     }
 
     /// Which keys may be the group's admins and hubs, on the root phone
@@ -448,34 +476,46 @@ extension SettingsView {
     }
 }
 
-/// The ten colours as round swatches, the chosen one ringed and ticked.
-struct ColorSwatches: View {
+/// The ten themes as round swatches, each its background and its accent,
+/// the chosen one ringed and ticked.
+struct ThemeSwatches: View {
     @Binding var selection: String
     @Environment(\.palette) private var palette
+    /// A swatch's least width, growing with the text size so that a
+    /// theme's name ("Liquid Glass" and its longer translations) breaks between words,
+    /// never inside one.
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 76
+    /// The swatch grows with the text, as its name and checkmark do: at the
+    /// largest sizes a fixed swatch left the checkmark wider than it.
+    @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Tokens.spacingSmall), count: 5), spacing: Tokens.spacingMedium) {
-            ForEach(Tokens.colors, id: \.name) { pair in
-                let swatch = palette.dark ? pair.dark : pair.light
-                let chosen = pair.name == selection
-                Button { selection = pair.name } label: {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
+            ForEach(Tokens.themes, id: \.name) { theme in
+                let swatch = palette.dark ? theme.dark : theme.light
+                let chosen = theme.name == selection
+                Button { selection = theme.name } label: {
                     VStack(spacing: 6) {
-                        Circle()
-                            .fill(swatch.accent)
-                            .frame(width: 36, height: 36)
+                        ThemeSwatch(palette: swatch)
+                            .frame(width: swatchSize, height: swatchSize)
                             .overlay {
                                 if chosen {
-                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.onAccent)
+                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
                                 }
                             }
                             .padding(3)
-                            .overlay(Circle().stroke(chosen ? swatch.accent : .clear, lineWidth: 2))
-                        Text(AccentChoice.title(pair.name)).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                            .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
+                        // A hair space on each side: some names' last letter draws a
+                        // little past the text's own width (the Hindi names of Swiss and
+                        // Hardware), which the accessibility audit reports as clipped text.
+                        (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
+                            .font(.caption2).multilineTextAlignment(.center)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }
@@ -512,6 +552,48 @@ extension SettingsView {
     }
 }
 
+/// A part of the settings, as a big screen's sidebar lists them: the look,
+/// notifications (and the watch), the recovery key on the root, away from
+/// home (the hub, moving it, Everywhere, the relay), the group's rules for
+/// admins, why it does not sync, and about (leaving the group too).
+enum SettingsPart: String, CaseIterable, Hashable {
+    case look, notifications, recovery, away, group, why, about
+
+    var title: Text {
+        switch self {
+        case .look: Text("Appearance")
+        case .notifications: Text("Notifications")
+        case .recovery: Text("Recovery key")
+        case .away: Text("Away from home")
+        case .group: Text("Group")
+        case .why: Text("Why it does not sync")
+        case .about: Text("About")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .look: "circle.lefthalf.filled"
+        case .notifications: "bell"
+        case .recovery: "key"
+        case .away: "globe"
+        case .group: "person.3"
+        case .why: "questionmark.circle"
+        case .about: "info.circle"
+        }
+    }
+
+    /// Whether the part has anything on this device.
+    @MainActor func shown(_ model: AppModel) -> Bool {
+        switch self {
+        case .recovery: model.isRoot
+        case .away: model.hub != nil || model.away != nil || model.blindRelay != nil
+        case .group: (model.isAdmin && model.phase == .home) || model.keyLevel != nil
+        default: true
+        }
+    }
+}
+
 /// A switch for each kind of the group's events (GroupEvent.Kind).
 struct NotificationSettings: View {
     @Environment(\.palette) private var palette
@@ -519,10 +601,38 @@ struct NotificationSettings: View {
     var body: some View {
         Section {
             ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
+            if PushSetup.accessGroup != nil { PushToggle() }
         } header: {
             Text("Notifications")
         }
         .listRowBackground(palette.surface)
+    }
+}
+
+/// Push while the app is closed (App/PushSetup.swift).
+private struct PushToggle: View {
+    @AppStorage(PushSetup.onKey) private var on = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(get: { on }, set: { PushSetup.shared.set(on: $0); on = $0 })) {
+                Text("Notify me when the app is closed")
+            }
+            Text("A sealed notice goes through Apple's push service; only this phone opens it, and neither Apple nor CBB's service sees your copies.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let problem = PushSetup.shared.problem {
+                Text(problem).font(.footnote).foregroundStyle(.red)
+            }
+            #if DEBUG
+            // The test tool's input (member/src/pushd/tests.rs,
+            // live_push_to_a_phone), only in a debug build with
+            // -PushTestTools YES; never in a release build.
+            if UserDefaults.standard.bool(forKey: "PushTestTools"), let frame = PushSetup.shared.testFrame() {
+                Button { UIPasteboard.general.string = frame } label: { Text(verbatim: "Copy the push registration (test)") }
+            }
+            #endif
+        }
     }
 }
 

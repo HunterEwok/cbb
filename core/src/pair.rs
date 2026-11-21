@@ -18,7 +18,7 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use serde::{Deserialize, Serialize};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use crate::authority::Record;
 use crate::certs::{self, Cert, DeviceId, b64};
@@ -35,6 +35,50 @@ const CHANNEL_PREFIX: &[u8] = b"cbb pair v2\x00";
 pub const MAX_FRAME: usize = 64 << 10;
 /// How many wrong codes a listening join takes.
 pub const MAX_FAILURES: u32 = 3;
+/// How many failed attempts a listening join takes from one address before
+/// it refuses that address's connections for the rest of its window.
+pub const MAX_PER_ADDRESS: u8 = 3;
+/// How many addresses a listening join keeps the attempts of.
+const ADDRESSES_KEPT: usize = 32;
+
+/// Whether e is a wrong code, which counts toward MAX_FAILURES: told by the
+/// refusal the error carries, never by its text.
+pub fn is_wrong_code(e: &Error) -> bool {
+    e.find::<Refusal>() == Some(&Refusal::WrongCode)
+}
+
+/// The failed attempts of a listening join by address, so that one
+/// address cannot keep it busy for its whole window.
+pub struct Attempts<A> {
+    failed: Vec<(A, u8)>,
+}
+
+impl<A: PartialEq + Copy> Default for Attempts<A> {
+    fn default() -> Self {
+        Attempts { failed: Vec::new() }
+    }
+}
+
+impl<A: PartialEq + Copy> Attempts<A> {
+    /// Whether a connection from a may try.
+    pub fn allowed(&self, a: A) -> bool {
+        self.failed.iter().all(|(b, n)| *b != a || *n < MAX_PER_ADDRESS)
+    }
+
+    /// Counts a failed attempt from a; past ADDRESSES_KEPT addresses the
+    /// one heard of longest ago is forgotten.
+    pub fn failed(&mut self, a: A) {
+        if let Some(i) = self.failed.iter().position(|(b, _)| *b == a) {
+            let (_, n) = self.failed.remove(i);
+            self.failed.push((a, n.saturating_add(1)));
+            return;
+        }
+        if self.failed.len() >= ADDRESSES_KEPT {
+            self.failed.remove(0);
+        }
+        self.failed.push((a, 1));
+    }
+}
 
 /// The joiner's CPace associated data. The caps tell the admitting member
 /// what this member can do, which its device record names; a phone has
@@ -174,6 +218,13 @@ impl core::fmt::Display for Refusal {
 
 impl core::error::Error for Refusal {}
 
+impl Refusal {
+    /// The refusal under an error, if it carries one as a value.
+    pub fn in_error(e: &Error) -> Option<Refusal> {
+        e.find::<Refusal>().copied()
+    }
+}
+
 /// Returns the six digits of a code a user typed, without spaces and
 /// dashes, wiped when dropped.
 pub fn normalize_code(s: &str) -> Result<Zeroizing<String>> {
@@ -185,10 +236,23 @@ pub fn normalize_code(s: &str) -> Result<Zeroizing<String>> {
     Ok(c)
 }
 
-/// A random six-digit code.
+/// A random six-digit code, each of the million equally likely
+/// (docs/protocol.md, section 7).
 pub fn new_code() -> String {
-    let n = u32::from_le_bytes(certs::random_bytes::<4>()) % 1_000_000;
-    format!("{n:06}")
+    code_from(|| u32::from_le_bytes(certs::random_bytes::<4>()))
+}
+
+/// The code of the first number next gives below the largest multiple of a
+/// million that fits in a u32: a number above it would make the low codes
+/// a little more likely than the others.
+fn code_from(mut next: impl FnMut() -> u32) -> String {
+    const LIMIT: u32 = u32::MAX - u32::MAX % 1_000_000;
+    loop {
+        let n = next();
+        if n < LIMIT {
+            return format!("{:06}", n % 1_000_000);
+        }
+    }
 }
 
 /// A device that joins: its new device ID, its key and the self-signed
@@ -217,8 +281,9 @@ pub struct Joiner {
 }
 
 impl Drop for Joiner {
+    /// The new device key does not outlive the joiner in memory.
     fn drop(&mut self) {
-        self.key.zeroize();
+        zeroize::Zeroize::zeroize(&mut self.key);
     }
 }
 
@@ -254,7 +319,7 @@ impl Joiner {
         if !crate::command::valid_name(name) {
             return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
         }
-        if !matches!(os, "ios" | "android" | "aurora" | "sailfish") {
+        if !matches!(os, "ios" | "android" | "aurora" | "sailfish" | "harmonyos") {
             return Err(Error::msg(format!("{os} is not a phone's system")));
         }
         let id = DeviceId::random();
@@ -301,7 +366,7 @@ impl Joiner {
     /// admins, on the group's root or an admin phone, admits it, and its
     /// Welcome carries the admin CA for that key.
     pub fn offering_admin_key(mut self, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
-        if !matches!(self.os.as_str(), "ios" | "android" | "aurora" | "sailfish") {
+        if !matches!(self.os.as_str(), "ios" | "android" | "aurora" | "sailfish" | "harmonyos") {
             return Err(Error::msg("only a phone offers an admin key as it joins"));
         }
         self.admin = Some(key);
@@ -333,12 +398,24 @@ impl Joiner {
     /// Starts the exchange like start with a remote invitation's secret in
     /// place of a typed code (docs/design.md, "Joining from another
     /// network"), as Go's JoinSecret: the member asks its admin to confirm
-    /// the device before it sends the Welcome.
-    pub fn start_secret(&self, secret: &[u8], member_der: &[u8], sid: &[u8]) -> Result<(Exchange, Vec<u8>)> {
+    /// the device before it sends the Welcome. group is the invitation's
+    /// group tag: a member of any other group is refused, whatever it knows.
+    pub fn start_secret(
+        &self,
+        secret: &[u8],
+        group: &str,
+        member_der: &[u8],
+        sid: &[u8],
+    ) -> Result<(Exchange, Vec<u8>)> {
         if secret.len() < MIN_SECRET {
             return Err(Error::msg("the invitation's secret is too short"));
         }
-        self.start_with(secret, member_der, sid, false)
+        if group.is_empty() {
+            return Err(Error::msg("the invitation names no group"));
+        }
+        let (mut ex, first) = self.start_with(secret, member_der, sid, false)?;
+        ex.group = Some(group.to_string());
+        Ok((ex, first))
     }
 
     fn start_with(
@@ -383,6 +460,7 @@ impl Joiner {
                 st,
                 member_cert,
                 member_first,
+                group: None,
                 member: None,
                 records: RefCell::new(Vec::new()),
                 claim_times: RefCell::new(Vec::new()),
@@ -403,6 +481,8 @@ pub struct Exchange {
     st: cpace::State,
     member_cert: Cert,
     member_first: bool,
+    /// The group a remote invitation names: the member must be of it.
+    group: Option<String>,
     member: Option<MemberAd>,
     /// The records the Welcome gave that lead to the group's roots, once
     /// welcome took it: the program keeps them with the identity.
@@ -438,6 +518,9 @@ impl Exchange {
         let peer_ad = reply.ad.unwrap_or_default();
         self.st.finish(&reply.msg.unwrap_or_default(), &peer_ad).context("the pairing failed")?;
         let member: MemberAd = serde_json::from_slice(&peer_ad).context("the member's description does not decode")?;
+        if self.group.as_ref().is_some_and(|g| *g != member.group) {
+            return Err(Error::msg("the member is not of the group the invitation names").into());
+        }
         if self.member_first && self.st.verify(&reply.tag.unwrap_or_default()).is_err() {
             return Err(Failure {
                 error: Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode),
@@ -492,6 +575,9 @@ impl Exchange {
         let group_ca = Cert::parse(&w.group_ca).wrap("the group CA")?;
         if certs::tag(&group_ca) != member.group {
             return Err(Error::msg("the member sent another group CA than it announced"));
+        }
+        if self.group.as_ref().is_some_and(|g| *g != member.group) {
+            return Err(Error::msg("the member is not of the group the invitation names"));
         }
         // The roots are only those the records lead to: an admin could
         // otherwise name a root of its own, and every certificate from it
@@ -709,6 +795,55 @@ mod tests {
         assert!(normalize_code("12345").is_err());
         assert!(normalize_code("12345a").is_err());
         assert_eq!(new_code().len(), 6);
+    }
+
+    #[test]
+    fn a_wrong_code_by_its_type() {
+        let wrong =
+            Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode).context("the pairing failed");
+        assert!(is_wrong_code(&wrong));
+        // The words alone, as a peer could send them, are not a wrong code.
+        let words = Error::msg(format!("pair: {}", Refusal::WrongCode.message())).context("the pairing failed");
+        assert!(!is_wrong_code(&words));
+        assert!(!is_wrong_code(&Error::with("pair: closed", Refusal::Closed)));
+    }
+
+    #[test]
+    fn attempts_by_address() {
+        let mut a = Attempts::default();
+        for _ in 0..MAX_PER_ADDRESS {
+            assert!(a.allowed(1u32));
+            a.failed(1);
+        }
+        assert!(!a.allowed(1));
+        assert!(a.allowed(2));
+        // Past the addresses it keeps, the oldest is forgotten.
+        for b in 2..=ADDRESSES_KEPT as u32 + 1 {
+            a.failed(b);
+        }
+        assert!(a.allowed(1));
+        assert_eq!(a.failed.len(), ADDRESSES_KEPT);
+    }
+
+    #[test]
+    fn every_code_equally_likely() {
+        // The numbers at and above the last whole million are drawn again.
+        let limit = u32::MAX - u32::MAX % 1_000_000;
+        let mut drawn = [u32::MAX, limit, limit - 1].into_iter();
+        assert_eq!(code_from(|| drawn.next().unwrap()), format!("{:06}", (limit - 1) % 1_000_000));
+        assert_eq!(drawn.next(), None);
+        let mut low = [limit + 5, 7].into_iter();
+        assert_eq!(code_from(|| low.next().unwrap()), "000007");
+        assert_eq!(limit % 1_000_000, 0);
+    }
+
+    #[test]
+    fn every_code_is_as_likely() {
+        // Draws in the last, partial million are drawn again.
+        let mut draws = [u32::MAX, u32::MAX - u32::MAX % 1_000_000, 4_000_123_456].into_iter();
+        assert_eq!(code_from(|| draws.next().unwrap()), "123456");
+        let mut draws = [7u32].into_iter();
+        assert_eq!(code_from(|| draws.next().unwrap()), "000007");
     }
 
     #[test]

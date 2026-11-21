@@ -57,10 +57,54 @@ fn keys() -> HashMap<String, Vec<u8>> {
         let v = cbor::decode(&b).unwrap();
         crate::records::Key::es256(Key::from_value(&v).unwrap().public.to_vec())
     };
-    assert_eq!(hex(&crate::records::group_id(&point("root"), &point("recovery")).0), s(&k, "group_id"));
+    assert_eq!(hex(&crate::records::group_id(&point("root"), &vector_recovery()).0), s(&k, "group_id"));
     out
 }
 
+/// The vectors' recovery key: K1 the test key "recovery", K2 the SLH-DSA
+/// key of keys.json's `recovery2`, which its seeds make.
+fn vector_recovery() -> crate::records::Recovery {
+    let k = load("keys.json");
+    let row = k["keys"].as_array().unwrap().iter().find(|r| r["name"] == "recovery").unwrap();
+    let (b1, r2) = (unhex(s(row, "key")), &k["recovery2"]);
+    let b2 = unhex(s(r2, "key"));
+    let k1 = Key::from_value(&cbor::decode(&b1).unwrap()).unwrap();
+    let k2 = Key::from_value(&cbor::decode(&b2).unwrap()).unwrap();
+    assert_eq!(k2.alg, Alg::SlhDsa);
+    assert_eq!(hex(&k2.hash().0), s(r2, "key_hash"));
+    let seeds = unhex(s(r2, "seeds"));
+    let made = crate::records::pq::PqKey::from_seeds(
+        &seeds[..16].try_into().unwrap(),
+        &seeds[16..32].try_into().unwrap(),
+        &seeds[32..].try_into().unwrap(),
+    );
+    assert_eq!(made.public(), k2.public.to_vec(), "recovery2 comes of its seeds");
+    crate::records::Recovery::new(
+        crate::records::Key::es256(k1.public.to_vec()),
+        crate::records::Key::new(crate::records::key::ALG_SLH_DSA, k2.public.to_vec()),
+    )
+    .unwrap()
+}
+
+/// Verifies an envelope's signatures as its kind has them: a recovery
+/// head (a record of type 13) carries both halves of the recovery key, K2
+/// over the body, K1 over the body and the SHA-256 of K2's signature.
+fn verify_signed(e: &Envelope<'_>, public: &[u8], label: &str) -> Result<(), Rule> {
+    let head = label == sig::LABEL_RECORD && e.map.get(1) == Some(&Value::Uint(13));
+    match (head, e.sig2) {
+        (true, Some(sig2)) => {
+            let rec = vector_recovery();
+            if !crate::records::pq::verify(&rec.k2, e.body, sig2, crate::records::pq::CONTEXT_RECORD) {
+                return Err(Rule::SIG_VERIFY);
+            }
+            sig::verify_es256(public, label, &crate::records::with_sig2(e.body, sig2), e.sig)
+        }
+        _ => e.verify(public, label),
+    }
+}
+
+/// The pairing exporter of the session in the grant tests.
+const SESSION: [u8; 32] = [0x5e; 32];
 #[test]
 fn profile() {
     let p = load("profile.json");
@@ -81,13 +125,16 @@ fn profile() {
 fn deep_and_wide_inputs_are_refused_quickly() {
     // A count over the limit is refused before any element is read.
     assert_eq!(cbor::decode(&[0x9a, 0, 1, 0, 0]), Err(Rule::COUNT));
-    assert_eq!(cbor::decode(&[0xb9, 0x10, 0x01]), Err(Rule::COUNT));
+    assert_eq!(cbor::decode(&[0xba, 0, 1, 0, 0]), Err(Rule::COUNT));
     assert_eq!(cbor::decode(&[0x5b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), Err(Rule::TRUNCATED));
     // Map key 65535 is the last one allowed.
     assert!(cbor::decode(&[0xa1, 0x19, 0xff, 0xff, 0x00]).is_ok());
-    // 4096 elements are allowed.
+    // 4096 elements are allowed, and 65 535, the profile's count.
     let mut a = vec![0x99, 0x10, 0x00];
     a.extend(std::iter::repeat_n(0u8, 4096));
+    assert!(cbor::decode(&a).is_ok());
+    let mut a = vec![0x99, 0xff, 0xff];
+    a.extend(std::iter::repeat_n(0u8, 65_535));
     assert!(cbor::decode(&a).is_ok());
 }
 
@@ -113,7 +160,7 @@ fn signed(file: &str, by_key: bool) {
         let name = s(t, "name");
         let b = unhex(s(t, "envelope"));
         let e = Envelope::parse(&b).unwrap_or_else(|r| panic!("{name}: {r}"));
-        e.verify(&signer_point(&e), label).unwrap_or_else(|r| panic!("{name}: {r}"));
+        verify_signed(&e, &signer_point(&e), label).unwrap_or_else(|r| panic!("{name}: {r}"));
         assert_eq!(hex(e.body), s(t, "body"), "{name}");
         if let Some(id) = t["id"].as_str() {
             assert_eq!(hex(&e.id()), id, "{name}");
@@ -148,7 +195,12 @@ fn signed(file: &str, by_key: bool) {
         let name = s(t, "name");
         let rule = s(t, "rule");
         let b = unhex(s(t, "envelope"));
-        let got = Envelope::parse(&b).and_then(|e| e.verify(&signer_point(&e), label));
+        // A server credential's ceiling is its reader's (`blind::credential`).
+        let parsed = match file {
+            "credentials.json" => Envelope::parse_limited(&b, crate::blind::credential::MAX_BODY),
+            _ => Envelope::parse(&b),
+        };
+        let got = parsed.and_then(|e| verify_signed(&e, &signer_point(&e), label));
         let format_level = ["cbor/", "env/", "sig/"].iter().any(|p| rule.starts_with(p));
         if format_level {
             assert_eq!(got.err().map(Rule::name), Some(rule), "{name}");
@@ -233,7 +285,7 @@ fn keys_of_the_wrong_size_or_off_the_curve() {
     }
     assert_eq!(seen, 3);
     assert_eq!(Key::new(Alg::X25519, &[0; 31]).check(), Err(Rule::KEYS_X25519));
-    assert_eq!(Key::new(Alg::Unknown(4), &[1]).check(), Ok(()));
+    assert_eq!(Key::new(Alg::Unknown(9), &[1]).check(), Ok(()));
     assert_eq!(Key::from_value(&Value::Array(vec![Value::Uint(1)])), Err(Rule::KEYS_SHAPE));
 }
 
@@ -376,6 +428,45 @@ fn own_head_before(m: &Value<'_>) -> bool {
         Some([Value::Bytes(k), Value::Uint(n), _]) if k == &signer => *n < seq,
         _ => true,
     })
+}
+
+/// Whether a checkpoint's own head is its prev, one seq below it, and it
+/// names none at seq 1.
+fn own_head_is_prev(m: &Value<'_>) -> bool {
+    let (Some(signer), Some(seq)) = (m.get(3).and_then(Value::as_bytes), m.get(4).and_then(Value::as_uint)) else {
+        return false;
+    };
+    let prev = m.get(5).and_then(Value::as_bytes);
+    let own = m.get(10).and_then(Value::as_array).unwrap_or(&[]).iter().find_map(|h| match h.as_array() {
+        Some([Value::Bytes(k), Value::Uint(n), Value::Bytes(id)]) if k == &signer => Some((*n, *id)),
+        _ => None,
+    });
+    match (own, prev) {
+        (Some((n, id)), Some(p)) => n.checked_add(1) == Some(seq) && id == p,
+        (None, None) => seq == 1,
+        _ => false,
+    }
+}
+
+#[test]
+fn checkpoints_name_their_prev_as_their_own_head() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for (verdict, list) in [("take", &r["take"]), ("refuse", &r["refuse"])] {
+        for t in list.as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let Ok(e) = Envelope::parse(&b) else { continue };
+            if e.map.get(1) != Some(&Value::Uint(9)) {
+                continue;
+            }
+            let own = verdict == "refuse" && s(t, "rule") == "records/checkpoint/own-prev";
+            if verdict == "take" || own {
+                assert_eq!(own_head_is_prev(&e.map), !own, "{}", s(t, "name"));
+                refused += usize::from(own);
+            }
+        }
+    }
+    assert_eq!(refused, 2);
 }
 
 #[test]
@@ -543,7 +634,7 @@ fn copies() {
     assert_eq!(hex(&copy::header_hash(&unhex(s(&c, "hdr")))), s(&c, "h"));
     assert_eq!(hex(&copy::commit(&k)), s(&c, "commit"));
     assert_eq!(hex(&copy::payload_key(&k, &h)), s(&c, "payload_key"));
-    assert_eq!(hex(&copy::blob_key(&k, &h)), s(&c, "blob_key"));
+    assert_eq!(hex(&copy::blob_key(&k)), s(&c, "blob_key"));
     for form in ["copy", "reduced_copy_for_board"] {
         let b = unhex(s(&c, form));
         let v = cbor::decode(&b).unwrap();
@@ -557,6 +648,13 @@ fn copies() {
         assert!(print::describe(Kind::Copy, &v).contains("hdr(1)"));
         assert!(print::describe(Kind::CopyHeader, &cp.header).contains("origin(2)"));
     }
+    // Wraps of two algorithms in one copy.
+    let b = unhex(s(&c, "mixed_copy"));
+    let v = cbor::decode(&b).unwrap();
+    let cp = copy::Copy::from_value(&v).unwrap();
+    assert_eq!(hex(&cp.w), s(&c, "mixed_W"));
+    assert!(cp.wraps.iter().any(|w| w.len() != copy::WRAP_SIZE));
+    cp.verify(&laptop).unwrap();
     let twin = unhex(s(&c, "copy_high_s_twin"));
     let tv = cbor::decode(&twin).unwrap();
     assert_eq!(copy::Copy::from_value(&tv).unwrap().verify(&laptop), Err(Rule::SIG_LOW_S));
@@ -614,6 +712,7 @@ fn key_container() {
     for r in c["refuse"].as_array().unwrap() {
         if let Some(b) = r["cert"].as_str() {
             assert_eq!(container::read(&unhex(b)), Err(Rule::CONTAINER), "{}", s(r, "name"));
+            assert_eq!(s(r, "rule"), Rule::CONTAINER.name(), "{}", s(r, "name"));
         }
     }
     // The tolerant reader: any signature value in its form, the constant
@@ -778,8 +877,11 @@ fn every_signature_has_one_form() {
                 keys[&hex(e.signer().unwrap().as_bytes().unwrap())].clone()
             };
             let twin = high_s_twin(e.sig);
+            // Beside a second signature the first covers its hash too (a
+            // recovery head's K1 over K2's, any kind's alike).
+            let signed = envelope::signed_data(e.body, e.sig2);
             assert_eq!(
-                sig::verify_es256(&point, label, e.body, &twin),
+                sig::verify_es256(&point, label, &signed, &twin),
                 Err(Rule::SIG_LOW_S),
                 "{file} {}",
                 s(t, "name")
@@ -790,7 +892,7 @@ fn every_signature_has_one_form() {
             assert!(
                 p256::ecdsa::VerifyingKey::from_sec1_bytes(&point)
                     .unwrap()
-                    .verify(&sig::message(label, e.body), &full)
+                    .verify(&sig::message(label, &signed), &full)
                     .is_ok()
             );
         }
@@ -857,4 +959,444 @@ fn the_admins_record_of_a_grant_is_read_as_a_record() {
         assert!(crate::records::Record::decode(&rec).is_err(), "{change:?}");
         assert_eq!(grant_of(&rec), Err("grants/admin"), "{change:?}");
     }
+}
+
+/// A leaf handed two records of its root at one seq stops obeying that
+/// root: its grant is over, and it takes a grant again only one made under
+/// a higher recovery seq.
+#[test]
+fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
+    use crate::records::body::{Device, ROLE_MEMBER};
+    use crate::records::{Body, Kind as RecordKind, Record, group_id};
+    use crate::testkit::{G, k};
+    let mut g = G::new();
+    let root = k("root");
+    let point = root.key.public().to_vec();
+    let device = |name: &str| RecordKind::device(Device::new(k(name).key.clone(), name, ROLE_MEMBER));
+    g.rec(&root, device("laptop"));
+    let a = g.rec(&root, device("lamp"));
+    let b = Record::sign(Body { kind: device("thief"), ..a.body().clone() }, &root).unwrap();
+    let later = g.rec(&root, device("tv"));
+    let (ea, eb) = (a.envelope(), b.envelope());
+    assert_eq!(grant::fork(&ea, &eb, &point, &g.gid), Ok(a.body().seq));
+    assert_eq!(grant::fork(&eb, &ea, &point, &g.gid), Ok(a.body().seq));
+    let no = Err(grant::RULE_FORK);
+    // One record twice, two seqs, another group, another signer: no fork.
+    assert_eq!(grant::fork(&ea, &ea, &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &later.envelope(), &point, &g.gid), no);
+    let other =
+        group_id(&root.key, &crate::records::Recovery { k1: k("other recovery").key, ..crate::testkit::recovery() });
+    let elsewhere = Record::sign(Body { group: other, ..b.body().clone() }, &root).unwrap();
+    assert_eq!(grant::fork(&ea, &elsewhere.envelope(), &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &eb, &point, &other), no);
+    let thief = k("thief");
+    let by_thief = Record::sign(Body { signer: thief.hash, ..b.body().clone() }, &thief).unwrap();
+    assert_eq!(grant::fork(&ea, &by_thief.envelope(), &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &eb, thief.key.public(), &g.gid), no);
+    // A signature that is not the root's over the root's body.
+    let mut forged = cbor::Encoder::new();
+    forged.array(2).bytes(b.body_bytes()).bytes(by_thief.sig());
+    let forged = forged.finish();
+    assert!(Record::decode(&forged).is_ok());
+    assert_eq!(grant::fork(&ea, &forged, &point, &g.gid), no);
+
+    // The lamp's grants from the root.
+    let lamp = k("lamp").key.device_id();
+    let phone_point = k("phone").key.public().to_vec();
+    let phone = Key::new(Alg::Es256, &phone_point);
+    let grant_msg = |counter: u64, recovery: u64| {
+        let mut m = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&g.gid.0)),
+            (3, Value::Bytes(&root.hash.0)),
+            (4, Value::Uint(counter)),
+            (10, Value::Bytes(&lamp.0)),
+            (12, Value::Array(vec![phone.to_value()])),
+        ];
+        if recovery > 0 {
+            m.push((19, Value::Uint(recovery)));
+        }
+        let env = envelope::sign(&root.sk, sig::LABEL_GRANT, &Value::Map(m).encode());
+        let mut e = cbor::Encoder::new();
+        e.map(1).uint(2).raw(&env);
+        e.finish()
+    };
+    let read = |msg: &[u8], kept: Option<&grant::Kept>, recovery| {
+        let v = cbor::decode(msg).unwrap();
+        grant::read(&v, &point, &lamp, &g.gid, kept, recovery).map(|got| got.keep(kept))
+    };
+    let kept = read(&grant_msg(1, 0), None, 0).unwrap();
+    assert!(kept.commander(&phone.hash()).is_some() && !kept.forked);
+    let forked = kept.fork(0);
+    assert!(forked.forked && forked.commanders.is_empty() && forked.recovery == 0);
+    assert_eq!(read(&grant_msg(2, 0), Some(&forked), 0), Err(grant::RULE_FORKED));
+    // After a recovery head, a grant of its seq is taken.
+    let after = read(&grant_msg(1, 1), Some(&forked), 1).unwrap();
+    assert!(!after.forked && after.commander(&phone.hash()).is_some());
+    // A leaf that knows recovery seq 1 and keeps a grant made under 0
+    // records the fork under 1: a grant under 1 is refused, one under 2
+    // taken.
+    let forked = kept.fork(1);
+    assert_eq!(forked.recovery, 1);
+    assert_eq!(read(&grant_msg(1, 1), Some(&forked), 1), Err(grant::RULE_FORKED));
+    assert!(read(&grant_msg(1, 2), Some(&forked), 2).is_ok());
+}
+
+/// A guarded leaf that takes a change of root obeys nobody and takes no
+/// grant until the new root binds it again in person by code: the new
+/// root's grant by any other way is refused, the binding takes it and
+/// starts afresh, an old grant or an old binding after a later change does
+/// nothing, and a leaf that forgot it was waiting still waits. An ordinary
+/// leaf follows the change.
+#[test]
+fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
+    use crate::testkit::k;
+    let (root, new_root) = (k("root"), k("new root"));
+    let group = DeviceId([7; 16]);
+    let lock = k("lock").key.device_id();
+    let phone_point = k("phone").key.public().to_vec();
+    let phone = Key::new(Alg::Es256, &phone_point);
+    let grant_msg = |by: &crate::testkit::K, counter: u64, recovery: u64, guarded: bool| {
+        let mut m = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group.0)),
+            (3, Value::Bytes(&by.hash.0)),
+            (4, Value::Uint(counter)),
+            (10, Value::Bytes(&lock.0)),
+            (12, Value::Array(vec![phone.to_value()])),
+        ];
+        if guarded {
+            m.push((15, Value::Uint(1)));
+        }
+        if recovery > 0 {
+            m.push((19, Value::Uint(recovery)));
+        }
+        let env = envelope::sign(&by.sk, sig::LABEL_GRANT, &Value::Map(m).encode());
+        let mut e = cbor::Encoder::new();
+        e.map(1).uint(2).raw(&env);
+        e.finish()
+    };
+    let read = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery| {
+        let v = cbor::decode(msg).unwrap();
+        grant::read(&v, by.key.public(), &lock, &group, kept, recovery).map(|got| got.keep(kept))
+    };
+    let bound = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery, b: grant::Binding| {
+        let v = cbor::decode(msg).unwrap();
+        grant::read_bound(
+            &v,
+            by.key.public(),
+            &lock,
+            &group,
+            kept,
+            recovery,
+            b,
+            &crate::join::PairExporter::for_tests(SESSION),
+        )
+        .map(|got| got.keep(kept))
+    };
+    let kept = read(&grant_msg(&root, 1, 0, true), &root, None, 0).unwrap();
+    assert!(kept.guarded && kept.commander(&phone.hash()).is_some());
+
+    // The change of root to recovery seq 1: the lock obeys nobody.
+    let waiting = kept.changed(new_root.hash, 1);
+    assert_eq!(waiting.rebind, Some((new_root.hash, 1)));
+    assert!(waiting.commanders.is_empty() && waiting.guarded);
+    assert!(waiting.needs_rebind(1));
+    // The new root's grant, any counter, by any way but a binding: refused.
+    for counter in [1, 2, 1000] {
+        let msg = grant_msg(&new_root, counter, 1, true);
+        assert_eq!(read(&msg, &new_root, Some(&waiting), 1), Err(grant::RULE_REBIND), "counter {counter}");
+    }
+    // Even by a caller that never told the lock of the change, and after
+    // a restart that lost the flag: its grant is of a lower seq.
+    assert_eq!(read(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&kept), 1), Err(grant::RULE_REBIND));
+    let forgot = grant::Kept { rebind: None, ..waiting.clone() };
+    assert_eq!(read(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&forgot), 1), Err(grant::RULE_REBIND));
+
+    // A later head while it waits: it waits for that one's root.
+    let later = waiting.changed(k("third root").hash, 2);
+    assert_eq!(later.rebind, Some((k("third root").hash, 2)));
+    assert_eq!(later.changed(new_root.hash, 1), later, "an older head changes nothing");
+    let late = grant::Binding::matched(&later, None, lock, grant::session_mark(&SESSION)).unwrap();
+    assert!(bound(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&later), 1, late).is_err());
+    // A binding is made from what the leaf knows: none for a leaf that
+    // waits for nothing; another leaf's session, or a grant of another
+    // root than the head named, does nothing.
+    let msg = grant_msg(&new_root, 1, 1, true);
+    assert!(grant::Binding::matched(&kept, None, lock, grant::session_mark(&SESSION)).is_none());
+    let elsewhere =
+        grant::Binding::matched(&waiting, None, k("other lock").key.device_id(), grant::session_mark(&SESSION))
+            .unwrap();
+    assert_eq!(bound(&msg, &new_root, Some(&waiting), 1, elsewhere), Err(grant::RULE_REBIND));
+    let binding = || grant::Binding::matched(&waiting, None, lock, grant::session_mark(&SESSION)).unwrap();
+    let thief = k("thief");
+    assert_eq!(bound(&grant_msg(&thief, 1, 1, true), &thief, Some(&waiting), 1, binding()), Err(grant::RULE_REBIND));
+    // The binding by code takes the new root's guarded grant, afresh.
+    let rebound = bound(&msg, &new_root, Some(&waiting), 1, binding()).unwrap();
+    assert!(rebound.rebind.is_none() && rebound.guarded && rebound.recovery == 1 && rebound.root_counter == 1);
+    assert!(rebound.commander(&phone.hash()).is_some() && !rebound.needs_rebind(1));
+    // Not a grant without `guarded`.
+    assert_eq!(
+        bound(&grant_msg(&new_root, 1, 1, false), &new_root, Some(&waiting), 1, binding()),
+        Err(grant::RULE_GUARDED)
+    );
+    // One binding reads one grant: it is taken by value. A binding made
+    // while the lock waited for one root clears nothing once it waits for a
+    // later one, whatever root and seq the caller passes with it.
+    let early = binding();
+    assert_eq!(bound(&msg, &new_root, Some(&later), 1, early), Err(grant::RULE_REBIND));
+    // A grant right in every byte that came by sync or another session than
+    // the one whose code the person confirmed: refused while the lock waits.
+    let v = cbor::decode(&msg).unwrap();
+    let other = grant::read_bound(
+        &v,
+        new_root.key.public(),
+        &lock,
+        &group,
+        Some(&waiting),
+        1,
+        binding(),
+        &crate::join::PairExporter::for_tests([0xa0; 32]),
+    );
+    assert_eq!(other.err(), Some(grant::RULE_REBIND));
+    // A head stored without the kept state that should follow it: the
+    // binding is made from the head and the grant is taken.
+    let head = Some((new_root.hash, 1));
+    let from_head = grant::Binding::matched(&kept, head, lock, grant::session_mark(&SESSION)).unwrap();
+    assert_eq!(kept.start(head), waiting);
+    let rebound2 = bound(&msg, &new_root, Some(&kept), 1, from_head).unwrap();
+    assert_eq!(rebound2, rebound);
+    // Then the new root's later grants come as usual.
+    assert!(read(&grant_msg(&new_root, 2, 1, true), &new_root, Some(&rebound), 1).is_ok());
+
+    // A later change: the old grant and the old binding do nothing.
+    let again = rebound.changed(new_root.hash, 2);
+    assert!(again.rebind.is_some());
+    assert!(read(&grant_msg(&new_root, 3, 1, true), &new_root, Some(&again), 2).is_err());
+    assert!(bound(&msg, &new_root, Some(&again), 2, binding()).is_err());
+    assert!(read(&grant_msg(&new_root, 3, 2, true), &new_root, Some(&again), 2).is_err());
+    let binding2 = grant::Binding::matched(&again, None, lock, grant::session_mark(&SESSION)).unwrap();
+    assert!(bound(&grant_msg(&new_root, 1, 2, true), &new_root, Some(&again), 2, binding2).is_ok());
+
+    // An ordinary leaf follows the change: the new root's grant is taken.
+    let plain = read(&grant_msg(&root, 1, 0, false), &root, None, 0).unwrap();
+    let after = plain.changed(new_root.hash, 1);
+    assert_eq!(after, plain);
+    assert!(!after.needs_rebind(1));
+    assert!(read(&grant_msg(&new_root, 1, 1, false), &new_root, Some(&after), 1).is_ok());
+}
+
+/// A leaf's stored state reads back as it was written, in one spelling;
+/// a later version's fields are kept and written back, an unknown field
+/// below 256 is refused, and the reader gives the kept state only with the
+/// stored head applied.
+#[test]
+fn a_leafs_stored_state_reads_back_in_one_spelling() {
+    use crate::testkit::k;
+    use grant::{Kept, Stored};
+    let phone = k("phone");
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
+    let mut commanders = vec![(phone.hash, point), {
+        let p: [u8; 65] = k("tablet").key.public().to_vec().try_into().unwrap();
+        (k("tablet").hash, p)
+    }];
+    commanders.sort_by_key(|c| c.0);
+    let full = Kept {
+        guarded: true,
+        root_counter: 3,
+        admin_counter: 2,
+        commanders: commanders.clone(),
+        grant_hash: [5; 32],
+        recovery: 1,
+        forked: false,
+        rebind: None,
+    };
+    for (kept, head) in [
+        (Kept::default(), None),
+        (full.clone(), None),
+        (full.clone(), Some((k("new root").hash, 2))),
+        (full.changed(k("new root").hash, 2), Some((k("new root").hash, 2))),
+        (full.fork(1), Some((k("root").hash, 1))),
+    ] {
+        let s = Stored::new(kept.clone(), head, None);
+        let back = Stored::decode(&s.encode()).unwrap();
+        assert_eq!(back, s);
+        assert_eq!(back.start(), (kept.start(head), head.map_or(kept.recovery, |h| h.1.max(kept.recovery))));
+    }
+    // The stored head applies at the start: the kept grant is over.
+    let (started, recovery) = Stored::new(full.clone(), Some((k("new root").hash, 2)), None).start();
+    assert!(started.commanders.is_empty() && started.needs_rebind(recovery) && recovery == 2);
+
+    let bytes = Stored::new(full.clone(), None, None).encode();
+    let v = cbor::decode(&bytes).unwrap();
+    let with = |extra: Vec<(u16, Value<'_>)>| {
+        let mut m = v.as_map().unwrap().to_vec();
+        m.extend(extra);
+        m.sort_by_key(|(n, _)| *n);
+        Value::Map(m).encode()
+    };
+    // A later version's field is kept and written back.
+    let later = with(vec![(300, Value::Text("later"))]);
+    let s = Stored::decode(&later).unwrap();
+    assert_eq!(s.encode(), later);
+    assert_eq!(Stored::new(Kept::default(), None, Some(&s)).encode(), {
+        let m = vec![(1u16, Value::Uint(1)), (300, Value::Text("later"))];
+        Value::Map(m).encode()
+    });
+    // An unknown field below 256, another version, a default written out,
+    // commanders out of order or with a hash of another key: refused.
+    assert_eq!(Stored::decode(&with(vec![(11, Value::Uint(1))])), Err(Rule::FORM_CRITICAL));
+    let other_version = Value::Map(vec![(1, Value::Uint(2))]).encode();
+    assert_eq!(Stored::decode(&other_version), Err(grant::RULE_STATE_NEWER));
+    let zero = Value::Map(vec![(1, Value::Uint(1)), (3, Value::Uint(0))]).encode();
+    assert_eq!(Stored::decode(&zero), Err(Rule::FORM_DEFAULT));
+    let swapped = Kept { commanders: commanders.iter().rev().cloned().collect(), ..full.clone() };
+    assert_eq!(Stored::decode(&Stored::new(swapped, None, None).encode()), Err(grant::RULE_STATE));
+    let wrong = Kept { commanders: vec![(k("tablet").hash, point)], ..full.clone() };
+    assert_eq!(Stored::decode(&Stored::new(wrong, None, None).encode()), Err(grant::RULE_STATE));
+    assert_eq!(Stored::decode(&[0xa0]), Err(grant::RULE_STATE));
+}
+
+/// Bytes that are there and do not read are never "no state": the leaf
+/// then obeys nobody and takes no grant, by any way, until it is set up
+/// again; a later version's state or a seq above this version's says that
+/// the firmware needs an update. The reader takes no state a writer never
+/// makes.
+#[test]
+fn a_leafs_state_that_does_not_read_obeys_nobody() {
+    use crate::testkit::k;
+    use grant::{Kept, Stored};
+    let (root, new_root) = (k("root"), k("new root"));
+    let phone = k("phone");
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
+    let full = Kept {
+        guarded: true,
+        root_counter: 1,
+        commanders: vec![(phone.hash, point)],
+        grant_hash: [5; 32],
+        ..Kept::default()
+    };
+    let waiting = full.changed(new_root.hash, 1);
+    let bytes = Stored::new(waiting.clone(), Some((new_root.hash, 1)), None).encode();
+    assert_eq!(Stored::load(Some(&bytes)).start().0, waiting);
+    // A leaf never set up has no state; cut bytes are not that.
+    assert_eq!(Stored::load(None), Stored::default());
+    let lost = Stored::load(Some(&bytes[..bytes.len() - 3]));
+    assert!(!lost.update_needed());
+    assert_eq!(lost, Stored::unreadable(false));
+    let (kept, recovery) = lost.start();
+    assert!(kept.commanders.is_empty() && kept.forked && kept.guarded);
+    // No grant by any way, whatever seq: not the new root's, not the old one's.
+    let group = DeviceId([7; 16]);
+    let lock = k("lock").key.device_id();
+    let grant_msg = |by: &crate::testkit::K, seq: u64| {
+        let mut m = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group.0)),
+            (3, Value::Bytes(&by.hash.0)),
+            (4, Value::Uint(1)),
+            (10, Value::Bytes(&lock.0)),
+            (12, Value::Array(vec![Key::new(Alg::Es256, phone.key.public()).to_value()])),
+            (15, Value::Uint(1)),
+        ];
+        if seq > 0 {
+            m.push((19, Value::Uint(seq)));
+        }
+        let env = envelope::sign(&by.sk, sig::LABEL_GRANT, &Value::Map(m).encode());
+        let mut e = cbor::Encoder::new();
+        e.map(1).uint(2).raw(&env);
+        e.finish()
+    };
+    for (by, seq) in [(&new_root, 1), (&root, 0), (&new_root, recovery)] {
+        let msg = grant_msg(by, seq);
+        let v = cbor::decode(&msg).unwrap();
+        assert!(grant::read(&v, by.key.public(), &lock, &group, Some(&kept), seq).is_err(), "seq {seq}");
+        let b = grant::Binding::matched(&kept, Some((by.hash, seq.max(1))), lock, grant::session_mark(b"s"));
+        assert!(b.is_none(), "no binding for an unreadable state");
+    }
+    // A later version, or a seq above this version's: the same, and says so.
+    let newer = Value::Map(vec![(1, Value::Uint(2))]).encode();
+    assert!(Stored::load(Some(&newer)).update_needed());
+    let above = Value::Map(vec![
+        (1, Value::Uint(1)),
+        (10, Value::Array(vec![Value::Bytes(&new_root.hash.0), Value::Uint(grant::MAX_RECOVERY + 1)])),
+    ])
+    .encode();
+    assert_eq!(Stored::decode(&above), Err(grant::RULE_STATE_NEWER));
+    assert_eq!(Stored::load(Some(&above)), Stored::unreadable(true));
+    // States no writer makes: the wait without `guarded`, the wait or the
+    // fork beside a grant, a grant's parts without its hash, a head below
+    // the grant's seq.
+    let not_guarded = Kept { guarded: false, ..waiting.clone() };
+    let waiting_with_grant = Kept { grant_hash: [5; 32], ..waiting.clone() };
+    let forked_with_grant = Kept { forked: true, ..full.clone() };
+    let parts_without_hash = Kept { grant_hash: [0; 32], ..full.clone() };
+    for (kept, head) in [
+        (not_guarded, None),
+        (waiting_with_grant, None),
+        (forked_with_grant, None),
+        (parts_without_hash, None),
+        (Kept { recovery: 2, ..full.clone() }, Some((new_root.hash, 1))),
+    ] {
+        let b = Stored::new(kept, head, None).encode();
+        assert_eq!(Stored::decode(&b), Err(grant::RULE_STATE));
+        assert_eq!(Stored::load(Some(&b)), Stored::unreadable(false));
+    }
+}
+
+/// The first signature covers the second's SHA-256 (audit Q-1): the
+/// records' vectors of a second signature swapped, cut or signed apart
+/// are damaged copies by the envelope's reader; a
+/// held record whose two signatures were made in order verifies.
+#[test]
+fn a_second_signature_swapped_on_the_way_spoils_the_copy() {
+    let keys = keys();
+    let r = load("records.json");
+    let signer = |e: &Envelope<'_>| -> Vec<u8> {
+        let h = e.signer().and_then(Value::as_bytes).unwrap();
+        keys[&hex(h)].clone()
+    };
+    let mut damaged = 0;
+    for t in r["refuse"].as_array().unwrap().iter().filter(|t| t["rule"] == "env/damaged") {
+        let b = unhex(s(t, "envelope"));
+        let v = cbor::decode(&b).unwrap();
+        let e = Envelope::from_value(&v).unwrap();
+        assert!(e.sig2.is_some(), "{}", s(t, "name"));
+        assert_eq!(e.verify(&signer(&e), sig::LABEL_RECORD), Err(Rule::ENV_DAMAGED), "{}", s(t, "name"));
+        damaged += 1;
+    }
+    assert_eq!(damaged, 3);
+    let mut held = 0;
+    for t in r["take"].as_array().unwrap() {
+        let b = unhex(s(t, "envelope"));
+        let v = cbor::decode(&b).unwrap();
+        let e = Envelope::from_value(&v).unwrap();
+        if e.sig2.is_none() || e.map.get(1).and_then(Value::as_uint) == Some(13) {
+            continue;
+        }
+        assert_eq!(e.verify(&signer(&e), sig::LABEL_RECORD), Ok(()), "{}", s(t, "name"));
+        held += 1;
+    }
+    assert!(held >= 1);
+    // The same with a fresh signer: the second signs first, the first
+    // covers its hash; a bent second signature, a bad first one.
+    let sk = p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap();
+    let point = sig::public_point(&sk);
+    let body = Value::Map(vec![(1, Value::Uint(7)), (8, Value::Bytes(&[1; 32]))]).encode();
+    let s2 = vec![9u8; 100];
+    let first = sig::sign_es256(&sk, sig::LABEL_RECORD, &envelope::signed_data(&body, Some(&s2)));
+    let read = |b: &[u8]| -> Result<(), Rule> {
+        let v = cbor::decode(b)?;
+        Envelope::from_value(&v)?.verify(&point, sig::LABEL_RECORD)
+    };
+    assert_eq!(read(&envelope::write(&body, &first, Some(&s2))), Ok(()));
+    let mut bent = s2.clone();
+    bent[0] ^= 1;
+    assert_eq!(read(&envelope::write(&body, &first, Some(&bent))), Err(Rule::ENV_DAMAGED));
+    // A signature of the wrong form keeps its own rule.
+    assert_eq!(read(&envelope::write(&body, &[0u8; 64], Some(&s2))), Err(Rule::SIG_RANGE));
+    // Without a second signature nothing changes.
+    let plain = Value::Map(vec![(1, Value::Uint(7))]).encode();
+    let sig_plain = sig::sign_es256(&sk, sig::LABEL_RECORD, &plain);
+    assert_eq!(read(&envelope::write(&plain, &sig_plain, None)), Ok(()));
 }

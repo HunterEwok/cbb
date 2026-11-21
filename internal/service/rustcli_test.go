@@ -64,7 +64,11 @@ func TestRustCommandLine(t *testing.T) {
 	want("max-copy-away", "config")
 	misuse("config", "max-copy")
 	want("This network is one where the group is now", "network")
-	want("now waits 48h on each member", "takeover", "-delay", "48h")
+	// On the records of 0.6 the root changes only with its recovery key: a
+	// claim's delay is refused with that way.
+	if out, code := run("takeover", "-delay", "48h"); code != 1 || !strings.Contains(out, "cbb recovery") {
+		t.Fatalf("cbb takeover -delay 48h exited with %d: %s; want a refusal naming cbb recovery", code, out)
+	}
 	misuse("takeover", "-delay")
 	misuse("recovery", "now")
 

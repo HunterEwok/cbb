@@ -11,6 +11,10 @@ struct SyncClipboardIntent: AppIntent, ProgressReportingIntent {
     static let title: LocalizedStringResource = "Sync clipboard"
     static let description = IntentDescription("Fetches what another device copied in the last minute, or sends the text, as from Get Clipboard, to your devices.")
     static let openAppWhenRun = false
+    /// It fetches a copy into the pasteboard and says where it came from,
+    /// so it runs only on an unlocked phone: on a locked one, Siri and the
+    /// Shortcuts app ask for Face ID or the passcode first.
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Text")
     var text: String?

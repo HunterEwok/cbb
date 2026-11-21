@@ -1,0 +1,7 @@
+# actionlint: GitHub's runner labels it does not know yet.
+# Reference: https://github.com/rhysd/actionlint/blob/main/docs/config.md
+self-hosted-runner:
+  labels:
+    # GitHub's hosted Xcode 27 image (preview), which the iPhone app's UI
+    # tests run on: https://github.com/actions/runner-images
+    - xcode-27

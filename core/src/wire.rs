@@ -4,6 +4,8 @@
 //! The frames of the member protocol (docs/protocol.md, section 4): a
 //! 4-byte big-endian length and a JSON message.
 
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -11,6 +13,7 @@ use alloc::vec::Vec;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::authority::Record;
 use crate::certs::b64;
@@ -53,13 +56,15 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<CommandResult>,
     /// In an entries message, the signed entry points `{keys, entries}`
-    /// (section 16, "Entry points"), decoded on their own.
+    /// (section 16, "Entry points"), kept as the bytes that came, so that
+    /// each file is read as every reader reads it, decoded on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Value>,
+    pub entries: Option<Box<RawValue>>,
     /// In a release message, the signed release `{keys, channel, release}`
-    /// (section 16, "In the group"), decoded on their own.
+    /// (section 16, "In the group"), kept as the bytes that came, decoded
+    /// on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub release: Option<Value>,
+    pub release: Option<Box<RawValue>>,
     /// In a reach message, the members a computer is connected to (section
     /// 4, "Reach"), kept as it came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -529,6 +534,14 @@ pub struct TunnelOffer {
     /// tries after `hub_key` (section 11, "The hub's key"); empty for none.
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub next_key: Vec<u8>,
+    /// The AmneziaWG settings the hub serves with together with `next_key`
+    /// (section 11, "The hub's key"); absent for the same as `obfuscation`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_obfuscation: Option<Value>,
+    /// The way to the hub's forwarder over VLESS with `next_key`: a new
+    /// user ID and the path made for it; absent for the same as `vless`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_vless: Option<Value>,
 }
 
 impl core::fmt::Debug for TunnelOffer {
@@ -633,13 +646,13 @@ pub fn event(s: &Sealed) -> Message {
 }
 
 /// An entries message, which passes the signed entry points on.
-pub fn entries(set: &Value) -> Message {
-    Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+pub fn entries(set: &RawValue) -> Message {
+    Message { kind: "entries".into(), entries: Some(set.to_owned()), ..Default::default() }
 }
 
 /// A release message, which passes the signed release on.
-pub fn release(set: &Value) -> Message {
-    Message { kind: "release".into(), release: Some(set.clone()), ..Default::default() }
+pub fn release(set: &RawValue) -> Message {
+    Message { kind: "release".into(), release: Some(set.to_owned()), ..Default::default() }
 }
 
 /// A command message: a command an admin signed for its receiver
@@ -709,13 +722,9 @@ pub fn decode(body: &[u8]) -> Result<Message> {
 /// version, counts as none.
 pub fn decode_hello(v: Option<&Value>) -> Result<(Hello, HelloBody)> {
     let v = v.filter(|v| v.is_object()).ok_or_else(|| Error::msg("the hello does not decode"))?;
-    let b: HelloBody = serde_json::from_value(v.clone()).context("the hello does not decode")?;
-    let current = b
-        .current
-        .as_ref()
-        .filter(|c| !c.is_null())
-        .and_then(|c| serde_json::from_value::<Sealed>(c.clone()).ok())
-        .map(Event::of);
+    // Decoded from the value in place, never from a copy of it.
+    let b = HelloBody::deserialize(v).context("the hello does not decode")?;
+    let current = b.current.as_ref().filter(|c| !c.is_null()).and_then(|c| Sealed::deserialize(c).ok()).map(Event::of);
     Ok((Hello { wall: b.wall, current }, b))
 }
 
@@ -836,5 +845,207 @@ mod tests {
         let again = serde_json::to_value(&r).unwrap();
         assert_eq!(again["tunnel"]["hub_key"], "x");
         assert!(serde_json::to_value(CommandResult::default()).unwrap().get("tunnel").is_none());
+    }
+
+    /// A guest message is taken with a key of 32 bytes, a known op and what
+    /// that op needs, and travels as its object.
+    #[test]
+    fn guest_messages() {
+        use super::{Guest, MAX_GUEST_DATA, guest};
+        let base = Guest { key: vec![7; 32], ..Default::default() };
+        let with = |f: &dyn Fn(&mut Guest)| {
+            let mut g = base.clone();
+            f(&mut g);
+            g
+        };
+        let taken = [
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 32]);
+                g.expires_ms = 5;
+            }),
+            with(&|g| {
+                g.op = "opened".into();
+                g.hub_key = Some(vec![2; 32]);
+                g.endpoints = vec!["192.0.2.1:51820".into()];
+            }),
+            with(&|g| g.op = "refused".into()),
+            with(&|g| g.op = "close".into()),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(vec![0; MAX_GUEST_DATA]);
+            }),
+            with(&|g| {
+                g.op = "end".into();
+                g.conn = 2;
+            }),
+            with(&|g| {
+                g.op = "admitted".into();
+                g.device = "d".into();
+            }),
+        ];
+        for g in taken {
+            let m = guest(&g);
+            assert_eq!(m.kind, "guest");
+            assert_eq!(Guest::decode(m.guest.as_ref().unwrap()), Some(g.clone()), "{}", g.op);
+        }
+        let refused = [
+            with(&|g| g.op = "nonsense".into()),
+            with(&|g| {
+                g.op = "close".into();
+                g.key = vec![7; 31];
+            }),
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 31]);
+                g.expires_ms = 5;
+            }),
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 32]);
+            }),
+            with(&|g| {
+                g.op = "opened".into();
+                g.hub_key = Some(vec![2; 32]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(vec![0; MAX_GUEST_DATA + 1]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.data = Some(vec![0; 1]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(Vec::new());
+            }),
+            with(&|g| g.op = "end".into()),
+            with(&|g| g.op = "admitted".into()),
+        ];
+        for g in refused {
+            assert_eq!(Guest::decode(guest(&g).guest.as_ref().unwrap()), None, "{:?}", g);
+        }
+        assert_eq!(Guest::decode(&serde_json::json!("not an object")), None);
+    }
+
+    /// Every message builder gives its type and its part, which a frame
+    /// carries and decode reads back.
+    #[test]
+    fn messages_and_frames() {
+        use super::*;
+        let v = serde_json::json!({"a": 1});
+        let g = Get { sha256: vec![3; 32], offset: 0, length: 10 };
+        assert!(g.valid());
+        assert!(!Get { length: MAX_GET + 1, ..g.clone() }.valid());
+        assert!(!Get { offset: -1, ..g.clone() }.valid());
+        assert!(!Get { sha256: vec![3; 31], ..g.clone() }.valid());
+        assert!(Get { length: 0, ..g.clone() }.valid());
+        let r = crate::authority::Record::new(vec![1], vec![2], None);
+        let raw = RawValue::from_string(r#"{"a":1}"#.into()).unwrap();
+        let cases: Vec<(Message, &str)> = vec![
+            (get(g.clone()), "get"),
+            (missing(g.clone()), "missing"),
+            (result(CommandResult::default()), "result"),
+            (event(&crate::copy::Sealed::default()), "event"),
+            (entries(&raw), "entries"),
+            (release(&raw), "release"),
+            (command(&r), "command"),
+            (cert(&[1], Some(&[2])), "cert"),
+            (admin(&[1]), "admin"),
+            (tunnel(&v), "tunnel"),
+            (hubs(&v), "hubs"),
+            (credentials(&v), "credentials"),
+            (evidence(&v), "evidence"),
+            (reach(&["a", "b"]), "reach"),
+            (bare("ping"), "ping"),
+        ];
+        for (m, kind) in cases {
+            assert_eq!(m.kind, kind);
+            let f = frame(&m).unwrap();
+            let len = u32::from_be_bytes(f[..4].try_into().unwrap()) as usize;
+            assert_eq!(len, f.len() - 4);
+            let back = decode(&f[4..]).unwrap();
+            assert_eq!(back.kind, kind);
+            assert_eq!(serde_json::to_value(&back).unwrap(), serde_json::to_value(&m).unwrap(), "{kind}");
+        }
+        assert_eq!(reach(&["a"]).reach, Some(serde_json::json!(["a"])));
+        assert!(decode(b"{\"t\":\"ping\",\"n\":1.5}").is_err());
+        assert!(decode(b"[").is_err());
+
+        let big = bare(&"x".repeat(MAX_FRAME));
+        assert!(frame(&big).is_err());
+        assert_eq!(json_frame(&v, 100).unwrap()[4..], *b"{\"a\":1}");
+        assert!(json_frame(&v, 3).is_err());
+    }
+
+    /// The hello's features, capabilities and release go in only when there
+    /// are some; a hello's current copy that does not decode counts as none.
+    #[test]
+    fn hello_parts() {
+        use super::*;
+        let h = Hello { wall: 1, current: None };
+        let m = hello(
+            &h,
+            "d".into(),
+            "member",
+            "pi",
+            "linux",
+            &DeviceInfo::default(),
+            Some((&[1; 32], &[2; 32])),
+            "own",
+            Some(9),
+            &["lock".into()],
+            "file",
+            Some(&[3; 4]),
+            (4, 5),
+            Some(&[6; 65]),
+        );
+        let plain = serde_json::to_value(&m).unwrap();
+        let m2 = with_release(with_caps(with_features(m.clone(), &[]), &[]), (1, 0));
+        assert_eq!(serde_json::to_value(&m2).unwrap(), plain);
+        let m = with_release(with_caps(with_features(m, &["media"]), &["admin".into()]), (2, 7));
+        let hb = m.hello.as_ref().unwrap();
+        assert_eq!(hb["features"], serde_json::json!(["media"]));
+        assert_eq!(hb["caps"], serde_json::json!(["admin"]));
+        assert_eq!((hb["release_seq"].as_u64(), hb["release_keys_seq"].as_u64()), (Some(7), Some(2)));
+        let (back, body) = decode_hello(m.hello.as_ref()).unwrap();
+        assert_eq!(back.wall, 1);
+        assert!(back.current.is_none());
+        assert!(body.muted && body.muted_for_ms == 9);
+        assert_eq!((body.entries_seq, body.entries_keys_seq), (5, 4));
+        let mut odd = m.hello.clone().unwrap();
+        odd["current"] = serde_json::json!("from a newer version");
+        assert!(decode_hello(Some(&odd)).unwrap().0.current.is_none());
+        assert!(decode_hello(None).is_err());
+        assert!(decode_hello(Some(&serde_json::json!([1]))).is_err());
+        assert!(decode_hello(Some(&serde_json::json!({"records": 5}))).is_err());
+        // Not a hello: the parts are not added.
+        assert!(with_features(bare("ping"), &["media"]).hello.is_none());
+
+        let caps: Vec<String> = ["hub", "admin", "nonsense", "admin", "dials"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(clean_caps(&caps), vec!["admin", "dials", "hub"]);
+        let many: Vec<String> = core::iter::repeat_n("x".to_string(), 40).chain(["admin".to_string()]).collect();
+        assert!(clean_caps(&many).is_empty());
+    }
+
+    // The signed files of an entries or release message are kept as the
+    // bytes that came, so that a member reads and passes on each file as
+    // it was signed (docs/protocol.md, section 16, "Two signatures").
+    #[test]
+    fn signed_sets_keep_their_bytes() {
+        let set = r#"{ "keys" : {"sigs":[],"body":"e30="} ,"entries":{"body":"e30=", "sigs":[]}}"#;
+        for kind in ["entries", "release"] {
+            let m = decode(format!(r#"{{"t":"{kind}","{kind}":{set}}}"#).as_bytes()).unwrap();
+            let got = if kind == "entries" { m.entries.as_ref() } else { m.release.as_ref() };
+            assert_eq!(got.unwrap().get(), set);
+            let raw: &serde_json::value::RawValue = serde_json::from_str(set).unwrap();
+            let out = if kind == "entries" { super::entries(raw) } else { super::release(raw) };
+            let again = String::from_utf8(serde_json::to_vec(&out).unwrap()).unwrap();
+            assert!(again.contains(set), "{again}");
+        }
     }
 }

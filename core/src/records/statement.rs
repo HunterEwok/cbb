@@ -17,8 +17,18 @@ use crate::identity::ExternalKey;
 
 /// The label statements are signed under.
 pub const LABEL_KEYS: &str = "cbb keys v1";
-/// The ceiling on a statement's body.
-pub const MAX_STATEMENT_BODY: usize = 2 << 10;
+/// The ceiling on a statement's body: room for the seal keys of later
+/// algorithms beside X-Wing's 1216 bytes ([`FIELD_SEALS`]).
+pub const MAX_STATEMENT_BODY: usize = 32 << 10;
+
+/// Field 10, `seal`: the X-Wing key every 0.6 sender seals to; a later
+/// version keeps writing it there.
+pub const FIELD_SEAL: u16 = 10;
+
+/// Field 256, `seals`, in the optional zone: further seal keys of later
+/// algorithms, which a 0.6 device skips. A sender seals to the first key it
+/// knows of field 10 and then this list.
+pub const FIELD_SEALS: u16 = 256;
 
 /// A statement's body.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -39,7 +49,7 @@ impl Body {
         if self.epoch == 0 || self.epoch > i64::MAX as u64 {
             return Err(Rule::field("keys", "epoch"));
         }
-        if self.seal.alg != ALG_XWING || self.seal.public.len() != XWING_PUBLIC {
+        if self.seal.alg() != ALG_XWING || self.seal.public().len() != XWING_PUBLIC {
             return Err(Rule::field("keys", "seal"));
         }
         Ok(())
@@ -55,7 +65,7 @@ impl Body {
         if self.time_ms != 0 {
             m.push((6, Value::Uint(self.time_ms)));
         }
-        m.push((10, self.seal.to_value()));
+        m.push((FIELD_SEAL, self.seal.to_value()));
         if self.held {
             m.push((250, Value::Uint(1)));
         }
@@ -68,6 +78,10 @@ impl Body {
 pub struct Statement {
     bytes: Vec<u8>,
     sig: Vec<u8>,
+    /// A second signature of a later version (its body names `signer2`):
+    /// the statement is applied on the first alone, which covers this
+    /// one's SHA-256, and passed on with it.
+    sig2: Option<Vec<u8>>,
     body: Body,
     id: RecordId,
 }
@@ -81,7 +95,7 @@ impl Statement {
         }
         let bytes = body.encode();
         let sig = key::sign_es256(key, LABEL_KEYS, &bytes)?.to_vec();
-        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, body })
+        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2: None, body })
     }
 
     /// A statement from what a reader found; the value must encode to the
@@ -90,14 +104,14 @@ impl Statement {
         if body.encode() != bytes {
             return Err(Rule::new("cbor/encoding"));
         }
-        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, body })
+        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2: None, body })
     }
 
     /// A statement from a reader that checked the bytes itself and found
     /// body in them (`crate::keystore::read_statement`): fields of the
     /// optional zone it skipped stay in the bytes and the signature.
-    pub(crate) fn from_read(bytes: Vec<u8>, sig: Vec<u8>, body: Body) -> Statement {
-        Statement { id: RecordId(sha256(&bytes)), bytes, sig, body }
+    pub(crate) fn from_read(bytes: Vec<u8>, sig: Vec<u8>, sig2: Option<Vec<u8>>, body: Body) -> Statement {
+        Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2, body }
     }
 
     pub fn body(&self) -> &Body {
@@ -108,9 +122,10 @@ impl Statement {
         self.id
     }
 
-    /// The envelope `[body, sig]`, as message `keys` carries it.
+    /// The envelope `[body, sig]`, or `[body, sig, sig2]`, as message `keys`
+    /// carries it.
     pub fn envelope(&self) -> Vec<u8> {
-        crate::format::envelope::write(&self.bytes, &self.sig, None)
+        crate::format::envelope::write(&self.bytes, &self.sig, self.sig2.as_deref())
     }
 
     /// Checks the statement against the device's member key.
@@ -122,7 +137,20 @@ impl Statement {
         if member.hash() != self.body.signer {
             return Err(Rule::new("sig/verify"));
         }
-        key::verify_es256(member, LABEL_KEYS, &self.bytes, &self.sig)
+        match &self.sig2 {
+            None => key::verify_es256(member, LABEL_KEYS, &self.bytes, &self.sig),
+            // The first signature covers the second's SHA-256: a second
+            // signature swapped or cut on the way is a damaged copy.
+            Some(s2) => match key::verify_es256(
+                member,
+                LABEL_KEYS,
+                &crate::format::envelope::signed_data(&self.bytes, Some(s2)),
+                &self.sig,
+            ) {
+                Err(r) if r.is("sig/verify") => Err(Rule::new("env/damaged")),
+                other => other,
+            },
+        }
     }
 }
 
@@ -164,4 +192,56 @@ pub fn choose<'a>(state: &State, statements: impl IntoIterator<Item = &'a Statem
         }
     }
     out
+}
+
+/// The most statements one message `keys` carries (field 2).
+pub const KEYS_PER_MESSAGE: usize = 256;
+
+/// Splits statements' envelopes, in the order they are sent, into messages
+/// `keys` of at most [`KEYS_PER_MESSAGE`] each that fit a frame: 256
+/// statements at their widest (a 32 KiB body and a second signature) are
+/// over 10 MiB, more than one frame holds.
+pub fn keys_messages<'a>(envelopes: &[&'a [u8]]) -> Vec<Vec<&'a [u8]>> {
+    let mut out: Vec<Vec<&'a [u8]>> = Vec::new();
+    let mut cur: Vec<&'a [u8]> = Vec::new();
+    let mut used = 0usize;
+    for &e in envelopes {
+        let item = e.len().saturating_add(9);
+        if !cur.is_empty()
+            && (cur.len() >= KEYS_PER_MESSAGE || used.saturating_add(item) > crate::records::sync::PART_BYTES)
+        {
+            out.push(core::mem::take(&mut cur));
+            used = 0;
+        }
+        cur.push(e);
+        used = used.saturating_add(item);
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 256 statements at their widest go in two messages, each inside a
+    /// frame; 300 small ones in two of at most 256.
+    #[test]
+    fn statements_are_split_into_messages_that_fit_a_frame() {
+        let wide = alloc::vec![0u8; MAX_STATEMENT_BODY + 8192 + 128];
+        let all: Vec<&[u8]> = (0..256).map(|_| wide.as_slice()).collect();
+        let msgs = keys_messages(&all);
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs.iter().map(Vec::len).sum::<usize>(), 256);
+        for m in &msgs {
+            assert!(m.iter().map(|e| e.len() + 9).sum::<usize>() <= crate::records::sync::PART_BYTES);
+        }
+        let small = [0u8; 100];
+        let all: Vec<&[u8]> = (0..300).map(|_| small.as_slice()).collect();
+        let msgs = keys_messages(&all);
+        assert_eq!(msgs.iter().map(Vec::len).collect::<Vec<_>>(), [256, 44]);
+        assert!(keys_messages(&[]).is_empty());
+    }
 }

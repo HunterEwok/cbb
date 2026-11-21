@@ -29,6 +29,11 @@ func TestMediaAway(t *testing.T) {
 	mac := startService(t, &h, "mac")
 	pairWith(t, pi, deck)
 	pairWith(t, pi, mac)
+	// On the records of 0.6 the root names the group's hubs (cbb global hubs)
+	// before one serves.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)

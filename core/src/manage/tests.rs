@@ -307,6 +307,54 @@ fn the_root_makes_a_computer_an_admin() {
 }
 
 #[test]
+fn the_root_makes_a_member_phone_an_admin() {
+    let mut g = group();
+    let phone = DeviceId::random().to_string();
+    let r = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_DEVICE.into(),
+        signer: Hash(g.root.key_hash()),
+        time_ms: now_ms(),
+        device: phone.clone(),
+        name: "iPhone".into(),
+        role: "phone".into(),
+        os: "ios".into(),
+        key: Some(Hash(certs::random_bytes())),
+        store: "hardware".into(),
+        ..Default::default()
+    };
+    let body = g.rs.next_body(r).unwrap();
+    let sig = identity::sign_external(&*g.root_key, &body).unwrap();
+    assert!(g.rs.add(&Record::new(body, sig, None)).unwrap());
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+
+    // Another admin's key, or the root's, is refused: it would hand its
+    // holder a second device's admin CA.
+    let taken = certs::p256_spki_of(&g.admin_key.public());
+    let e = make_admin(&g.rs, &root, &phone, &taken, "", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("belongs to another key"));
+    let rootk = certs::p256_spki_of(&g.root_key.public());
+    assert!(make_admin(&g.rs, &root, &phone, &rootk, "", false, now_ms()).is_err());
+
+    let key = soft();
+    let spki = certs::p256_spki_of(&key.public());
+    let e = make_admin(&g.rs, &root, &g.root_phone, &spki, "", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("more than an admin"));
+    // The phone's hello says nothing of a file: its record's store counts.
+    let made = make_admin(&g.rs, &root, &phone, &spki, "file", false, now_ms()).unwrap();
+    let ca = Cert::parse(&made.admin_ca).unwrap();
+    certs::check_admin_ca(&ca, &g.root).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    let d = g.rs.devices().into_iter().find(|d| d.id == phone).unwrap();
+    assert!(d.admin && d.admin_key == Some(ca.key_hash()));
+    assert_eq!((d.role.as_str(), d.store.as_str()), ("phone", "hardware"));
+    assert!(d.may("admit"));
+    let e = make_admin(&g.rs, &root, &phone, &spki, "hardware", false, now_ms()).err().unwrap();
+    assert!(e.message().contains("an admin already"));
+}
+
+#[test]
 fn a_due_certificate_is_renewed() {
     let g = group();
     let now = now_ms() / 1000;
@@ -410,4 +458,104 @@ fn an_admin_peer_needs_a_real_admin_ca() {
     assert!(!g.rs.admin_peer(dev.as_str(), &[leaf(&fake, &*fake_key), g.admin_ca.clone()]));
     // The real thing: the admin CA from the root, which issued the leaf.
     assert!(g.rs.admin_peer(dev.as_str(), &[leaf(&g.admin_ca, &*g.admin_key), g.admin_ca.clone()]));
+}
+
+/// The root records what an attestation showed once, takes a revoked one
+/// back to "hardware", and an admin records none.
+#[test]
+fn the_root_records_what_an_attestation_shows() {
+    let mut g = group();
+    let s = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let key = g.rs.devices().into_iter().find(|d| d.id == g.admin_phone).unwrap().key;
+    let device = |rs: &Records, id: &str| rs.devices().into_iter().find(|d| d.id == id).unwrap();
+    let proven = Attested { store: "proven", kind: "android-tee", proof: "ab" };
+    // Another key than the record's: nothing yet.
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &certs::random_bytes(), &proven, now_ms()).unwrap().is_none());
+    let r = evidence(&g.rs, &s, &g.admin_phone, &key, &proven, now_ms()).unwrap().unwrap();
+    assert!(g.rs.add(&r).unwrap());
+    let d = device(&g.rs, &g.admin_phone);
+    assert_eq!((d.store.as_str(), d.kind.as_str(), d.proof.as_str()), ("proven", "android-tee", "ab"));
+    assert!(d.admin_key.is_some() && !d.powers.is_empty(), "the admin keeps its powers");
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &key, &proven, now_ms()).unwrap().is_none(), "said already");
+
+    // Revoked: back to hardware with the kind it had.
+    let revoked = Attested { store: "hardware", kind: "", proof: "" };
+    let r = evidence(&g.rs, &s, &g.admin_phone, &key, &revoked, now_ms()).unwrap().unwrap();
+    assert!(g.rs.add(&r).unwrap());
+    let d = device(&g.rs, &g.admin_phone);
+    assert_eq!((d.store.as_str(), d.kind.as_str()), ("hardware", "android-tee"));
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &key, &revoked, now_ms()).unwrap().is_none(), "proven no more");
+
+    let a = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    let laptop_key = device(&g.rs, &g.laptop).key;
+    assert!(evidence(&g.rs, &a, &g.laptop, &laptop_key, &proven, now_ms()).is_err());
+}
+
+/// A key whose holder sees what it signs, as a watch's does.
+struct SeeingKey(SoftKey, std::sync::Mutex<Vec<Vec<u8>>>);
+
+impl ExternalKey for SeeingKey {
+    fn public(&self) -> Vec<u8> {
+        self.0.public()
+    }
+
+    fn sign_digest(&self, _: &[u8; 32]) -> Result<Vec<u8>> {
+        Err(Error::msg("the watch signs only what it sees"))
+    }
+
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.1.lock().unwrap().push(data.to_vec());
+        self.0.sign_digest(&certs::sha256(data))
+    }
+}
+
+#[test]
+fn a_watch_freezes_and_removes_from_the_wrist() {
+    let mut g = group();
+    let root = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let watch = DeviceId::random().to_string();
+    let key =
+        SeeingKey(SoftKey(SigningKey::from_bytes(&certs::random_bytes::<32>().into()).unwrap()), Default::default());
+    let admin = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    assert!(add_watch(&g.rs, &admin, &watch, "Watch", "harmonyos", &key.public(), now_ms()).is_err());
+    assert!(add_watch(&g.rs, &root, &watch, "Watch", "linux", &key.public(), now_ms()).is_err());
+    assert!(add_watch(&g.rs, &root, &g.laptop, "Watch", "harmonyos", &key.public(), now_ms()).is_err());
+    let made = add_watch(&g.rs, &root, &watch, "Watch", "harmonyos", &key.public(), now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    let w = g.rs.devices().into_iter().find(|d| d.id == watch).unwrap();
+    assert!(w.admin && w.role == "watch");
+    let ca = Cert::parse(&made.admin_ca).unwrap();
+
+    // Nothing to the root's phone, a phone or the watch; the laptop, no
+    // admin, is removed but not frozen.
+    assert!(watch_actions(&g.rs, &g.root_phone).is_empty());
+    assert!(watch_actions(&g.rs, &g.admin_phone).is_empty());
+    assert_eq!(watch_actions(&g.rs, &g.laptop), ["remove", "paste-off", "actions-off", "away-off", "action"]);
+
+    let s = Signer { ca: &ca, key: &key, me: &watch };
+    let off = order(&g.rs, &s, &g.laptop, &Order::PasteOff, now_ms()).unwrap();
+    assert!(!off.body.is_empty());
+    let seen = key.1.lock().unwrap().last().cloned().unwrap();
+    assert!(!seen.is_empty(), "the watch saw the command it signed");
+
+    // The laptop made a full admin is neither frozen nor removed from the
+    // wrist: only the root takes back an admin that removes admins.
+    let lkey = soft();
+    let spki = certs::p256_spki_of(&lkey.public());
+    let made = make_admin(&g.rs, &root, &g.laptop, &spki, "hardware", false, now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    assert!(!watch_actions(&g.rs, &g.laptop).contains(&"freeze"));
+    assert!(!watch_actions(&g.rs, &g.laptop).contains(&"remove"));
+    assert!(change(&g.rs, &s, &g.laptop, &Change::Freeze, now_ms()).is_err());
+
+    // A second watch, lost, is frozen by the first.
+    let lost = DeviceId::random().to_string();
+    let made = add_watch(&g.rs, &root, &lost, "Old watch", "wearos", &soft().public(), now_ms()).unwrap();
+    assert!(g.rs.add(&made.record).unwrap());
+    assert_eq!(watch_actions(&g.rs, &lost), ["freeze"]);
+    apply(&mut g.rs, &s, &lost, &Change::Freeze, now_ms()).unwrap();
+    let body = Body::parse(key.1.lock().unwrap().last().unwrap()).unwrap();
+    assert_eq!((body.kind.as_str(), body.signer), ("freeze", Hash(ca.key_hash())));
+    assert!(g.rs.devices().into_iter().find(|d| d.id == lost).unwrap().frozen);
+    assert!(watch_actions(&g.rs, &lost).is_empty());
 }

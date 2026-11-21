@@ -12,7 +12,10 @@ works with a read-only root file system. Its state is one volume, `/var/lib/cbb`
 
 Each release publishes it as `ghcr.io/hunterewok/cbb` (from 0.5), tagged with its
 version and `latest`, with a build provenance attestation; the release notes give its
-digest. Pin it by that digest, `image: ghcr.io/hunterewok/cbb@sha256:...`, and
+digest. The version and `latest` move to an image only after the release is signed with the
+offline release key, by the digest the signed `release.json` names; until then the build
+waits as `VERSION-unsigned`, which nothing should run.
+Pin it by that digest, `image: ghcr.io/hunterewok/cbb@sha256:...`, and
 check it with `gh attestation verify oci://ghcr.io/hunterewok/cbb@sha256:...
 --repo HunterEwok/cbb`.
 
@@ -64,7 +67,7 @@ docker compose -f compose.server.yaml exec forward cbb forward -show-key
 ## Building it
 
 ```sh
-rust=$(sh member/packaging/build.sh linux/amd64)
+rust=$(sh packaging/build.sh linux/amd64)
 mkdir -p bin-amd64 && cp "$rust/cbb" "$rust/cbb-relay" bin-amd64/
 for p in cbb-helper cbb-forward; do
 	CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -o "bin-amd64/$p" "./cmd/$p"

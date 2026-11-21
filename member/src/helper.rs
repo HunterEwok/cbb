@@ -64,6 +64,9 @@ const KEPT_ENV: &[&str] = &[
     "APPDATA",
     "USERPROFILE",
     "COMPUTERNAME",
+    // Where a helper built with -cover writes its coverage, in the tests;
+    // a release's helper reads nothing from it.
+    "GOCOVERDIR",
 ];
 
 /// What the helper says it is, the answer to hello.
@@ -120,10 +123,10 @@ impl std::fmt::Display for Remote {
 
 impl std::error::Error for Remote {}
 
-/// Where the helper is: CBB_HELPER if set (empty for none), else cbb-helper
-/// beside this program, if it is there.
+/// Where the helper is: in a build with the test hooks CBB_HELPER if set
+/// (empty for none), else cbb-helper beside this program, if it is there.
 pub fn locate() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("CBB_HELPER") {
+    if let Some(p) = crate::testbuild::env_os("CBB_HELPER") {
         return if p.is_empty() { None } else { Some(PathBuf::from(p)) };
     }
     let exe = std::env::current_exe().ok()?;
@@ -446,6 +449,12 @@ mod tests {
         SCRIPT.get_or_init(|| {
             let dir = std::env::temp_dir().join(format!("cbb-helper-test-{}-{}", std::process::id(), next()));
             std::fs::create_dir_all(&dir).unwrap();
+            // cbb refuses a helper in a folder its group may write, which a
+            // umask of 0002 would make it.
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
             let script = dir.join(PROGRAM);
             let exe = std::env::current_exe().unwrap();
             std::fs::write(
@@ -574,7 +583,7 @@ mod tests {
     #[test]
     fn locate_takes_the_environment() {
         // Only CBB_HELPER's value is read here; the test sets nothing.
-        if std::env::var_os("CBB_HELPER").is_none() {
+        if crate::testbuild::env_os("CBB_HELPER").is_none() {
             let beside = std::env::current_exe().unwrap().with_file_name(PROGRAM);
             assert_eq!(locate(), beside.is_file().then_some(beside));
         }

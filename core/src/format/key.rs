@@ -19,8 +19,11 @@ pub enum Alg {
     XWing,
     /// X25519 (WireGuard); a 32-byte key.
     X25519,
-    /// A number this version does not know (4 is kept for a post-quantum
-    /// signature). A record naming one where a key is wanted is held.
+    /// SLH-DSA-SHA2-128s (FIPS 205); a 32-byte key: the recovery key's
+    /// second half (E-6), never a record's signer.
+    SlhDsa,
+    /// A number this version does not know. A record naming one where a
+    /// key is wanted is held.
     Unknown(u64),
 }
 
@@ -31,6 +34,7 @@ impl Alg {
             1 => Alg::Es256,
             2 => Alg::XWing,
             3 => Alg::X25519,
+            4 => Alg::SlhDsa,
             n => Alg::Unknown(n),
         }
     }
@@ -41,6 +45,7 @@ impl Alg {
             Alg::Es256 => 1,
             Alg::XWing => 2,
             Alg::X25519 => 3,
+            Alg::SlhDsa => 4,
             Alg::Unknown(n) => n,
         }
     }
@@ -51,6 +56,7 @@ impl Alg {
             Alg::Es256 => Some(65),
             Alg::XWing => Some(1216),
             Alg::X25519 => Some(32),
+            Alg::SlhDsa => Some(32),
             Alg::Unknown(_) => None,
         }
     }
@@ -128,6 +134,7 @@ impl<'a> Key<'a> {
             }
             Alg::XWing if self.public.len() != 1216 => Err(Rule::KEYS_XWING),
             Alg::X25519 if self.public.len() != 32 => Err(Rule::KEYS_X25519),
+            Alg::SlhDsa if self.public.len() != 32 => Err(Rule::KEYS_SLH_DSA),
             _ => Ok(()),
         }
     }

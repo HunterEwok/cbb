@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0ee54fa655f3 -->
+<!-- source: 1abdaa297166 -->
 # Mbali na nyumbani
 
 Nyumbani vifaa vyako husawazisha vyenyewe. Ili kuendelea kusawazisha laptopu au simu inapokuwa mahali pengine, kompyuta moja nyumbani huwa **kitovu** cha kikundi, na vifaa vinavyosafiri hukifikia kupitia handaki lililosimbwa la kikundi chenyewe. Picha za kila hali ziko katika [Jinsi inavyofanya kazi](how-it-works.md#away-from-home-the-hub).
@@ -44,7 +44,7 @@ Nyumbani, kitovu kikiwa kimewashwa:
 
 - **Kompyuta**: `sudo cbb global on` (kwenye Windows, kwenye terminal ya msimamizi).
 - **Simu**: kwenye programu, Mipangilio, **Sync away from home**. Kisha acha programu wazi kwa muda nyumbani, ili ikutane na kitovu. iPhone husawazisha ukiwa mbali na nyumbani programu ikiwa wazi; Android pia chinichini. Katika kikundi kilichoundwa kwenye simu, simu hiyo huanza ikiwa kitovu, na swichi huonekana inapoacha kuwa kitovu: chini ya **Move the hub to a computer** ifanye kompyuta kuwa kitovu (ukihifadhi kisambazaji kwenye simu kwanza), au zima **This phone as the hub**.
-- **Mwanachama mwepesi**: `sudo cbb global on` kwenye kifaa ([mwanachama mwepesi](../../member/README.md#sync-away-from-home)).
+- **Kifaa kidogo** (kipanga njia, Raspberry Pi): `sudo cbb global on` kwenye kifaa ([vifaa vidogo](../../member/README.md#sync-away-from-home)).
 
 ## 4. Kikague
 

@@ -13,13 +13,15 @@ use super::decide::{self, Checked, Choice, Signer};
 use super::info::Info;
 use super::intro::{self, Intro};
 use super::invitation::{self, Invitation, Network, Open, Path, PathKind, Profile};
-use super::welcome::{self, Joining, Welcome};
+use super::welcome::{self, Joining, Way, Welcome};
 use super::*;
 use crate::certs::sha256;
 use crate::format::{self, Alg};
 use crate::records::body::*;
 use crate::records::set::RecordSet;
 use crate::records::{Body, GroupId, Key, KeyHash, Kind, Record, RecordId, State};
+
+mod session;
 
 struct K {
     sk: SigningKey,
@@ -29,7 +31,7 @@ struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> crate::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
@@ -45,11 +47,11 @@ fn k(name: &str) -> K {
 }
 
 fn point(k: &K) -> [u8; 65] {
-    k.key.public.clone().try_into().unwrap()
+    k.key.public().to_vec().try_into().unwrap()
 }
 
 fn fhash(k: &K) -> format::KeyHash {
-    format::Key::new(Alg::Es256, &k.key.public).hash()
+    format::Key::new(Alg::Es256, k.key.public()).hash()
 }
 
 /// A group: the root phone (member key "phone", root key "root"), an admin
@@ -65,7 +67,7 @@ struct G {
 impl G {
     fn new() -> G {
         let root = k("root");
-        let gid = crate::records::group_id(&root.key, &k("recovery").key);
+        let gid = crate::records::group_id(&root.key, &crate::testkit::recovery());
         let mut g = G { root, gid, heads: BTreeMap::new(), recs: Vec::new(), lists: Vec::new() };
         let phone = k("phone");
         let mut d = Device::new(phone.key.clone(), "phone", ROLE_PHONE);
@@ -83,13 +85,25 @@ impl G {
         g
     }
 
-    fn rec(&mut self, by: &K, kind: Kind) -> Record {
+    fn rec(&mut self, by: &K, mut kind: Kind) -> Record {
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // root's head, so what it signs stands on its grant line.
+        let root = k("root").hash;
+        if by.hash != root
+            && seq == 1
+            && let Some(&(rs, rid)) = self.heads.get(&root)
+            && let Kind::Device(d) = &mut kind
+            && !d.seen.iter().any(|x| x.key == root)
+        {
+            d.seen.push(crate::records::body::Seen { key: root, seq: rs, id: rid });
+            d.seen.sort_by_key(|x| x.key);
+        }
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
-        let r = Record::sign(body, by).unwrap();
+        let r = crate::testkit::sign_by(body, by);
         self.heads.insert(by.hash, (seq, r.id()));
         self.recs.push(r.clone());
         r
@@ -101,7 +115,7 @@ impl G {
     }
 
     fn empty(&self) -> RecordSet {
-        RecordSet::new(self.root.key.clone(), k("recovery").key)
+        RecordSet::new(self.root.key.clone(), crate::testkit::recovery())
     }
 
     /// The set of a member that holds every record: the heads with their
@@ -113,7 +127,19 @@ impl G {
             s.insert_list(l).unwrap();
         }
         let (_, refused) = s.insert_all(self.recs.iter().cloned());
-        assert!(refused.is_empty(), "{refused:?}");
+        // L: after a change of root the admin keys of the roots before it
+        // are no keys of the set, and their records are refused as such;
+        // nothing else is refused.
+        let st = s.state();
+        let old_admin = |id: &crate::records::RecordId| {
+            self.recs.iter().find(|r| r.id() == *id).is_some_and(|r| {
+                st.roots.len() > 1 && !st.roots.contains(&r.body().signer) && !st.may_command(&r.body().signer)
+            })
+        };
+        assert!(
+            refused.iter().all(|(id, why)| *why == crate::records::set::Refused::UnknownSigner && old_admin(id)),
+            "{refused:?}"
+        );
         s
     }
 
@@ -127,7 +153,25 @@ impl G {
         let set = self.set();
         let list = set.change_list(&set.state());
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from: 0 })
+        // The new root's first checkpoint, which the head names: it keeps
+        // the whole list and names the first root's head.
+        let (seq, id) = self.heads[&self.root.hash];
+        let first = self
+            .rec(
+                new_root,
+                Kind::Checkpoint { heads: vec![Head { key: self.root.hash, seq, id }], keep: list.0.clone() },
+            )
+            .id();
+        self.rec(
+            &k("recovery"),
+            Kind::Recovery {
+                root: new_root.key.clone(),
+                list: list.hash(),
+                from: 0,
+                first,
+                signer2: crate::testkit::rk2().key().hash(),
+            },
+        )
     }
 
     fn seen(&self) -> Vec<Seen> {
@@ -162,24 +206,30 @@ fn info(name: &str, role: u64) -> Info {
 #[test]
 fn the_channel_binds_both_keys() {
     let (a, b) = (k("a"), k("b"));
-    let ab = channel_id(&fhash(&a), &fhash(&b));
-    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a)), "the member's key comes first");
-    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c"))));
-    assert!(ab.ends_with(&fhash(&b).0));
+    let id = [5u8; 16];
+    let ab = channel_id(&fhash(&a), &fhash(&b), &id);
+    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a), &id), "the member's key comes first");
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c")), &id));
+    assert!(ab.ends_with(&id));
+    assert_eq!(&ab[ab.len() - 48..ab.len() - 16], &fhash(&b).0);
+    // Two ends in the flows of two invitations, or one at home without
+    // one, get two identifiers.
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &[6u8; 16]));
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &[0; 16]));
 }
 
 #[test]
 fn an_admin_key_needs_its_proof() {
     let admin = k("phone admin");
-    let exporter = [7u8; 32];
+    let exporter = PairExporter::for_tests([7u8; 32]);
     let pop = sign_admin_pop(&admin, &exporter).unwrap();
     assert!(verify_admin_pop(&admin.key, &exporter, &pop));
-    assert!(!verify_admin_pop(&admin.key, &[8u8; 32], &pop), "another session's proof");
+    assert!(!verify_admin_pop(&admin.key, &PairExporter::for_tests([8u8; 32]), &pop), "another session's proof");
     assert!(!verify_admin_pop(&k("other").key, &exporter, &pop), "another key's proof");
 
     // In the Info, a key and its proof come together, from a phone or an admin member.
     let mut i = info("phone 2", ROLE_PHONE);
-    i.admin = Some(admin.key.public.clone());
+    i.admin = Some(admin.key.public().to_vec());
     assert_eq!(Info::decode(&i.encode()), Err(super::info::RULE_ADMIN));
     i.admin_pop = Some(pop.to_vec());
     assert_eq!(Info::decode(&i.encode()).unwrap(), i);
@@ -218,7 +268,11 @@ fn the_info_follows_its_table() {
     };
     // A field at its default is left out, not written.
     assert_eq!(Info::decode(&info_of((2, Value::Uint(0)))), Err(Rule::field("pair/info/os")));
-    assert_eq!(Info::decode(&info_of((3, Value::Uint(0)))), Err(Rule::field("pair/info/caps")));
+    // Capabilities are bits: those this version does not know are ignored
+    // and grant nothing, so none left reads as no capability.
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(0)))).unwrap().caps, 0);
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(8)))).unwrap().caps, 0);
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(8 | CAP_HUB)))).unwrap().caps, CAP_HUB);
     // Admin keys come as a signed envelope.
     assert_eq!(Info::decode(&info_of((7, Value::Bytes(b"not an envelope")))), Err(Rule::field("pair/info/keys")));
     assert_eq!(Info::decode(&info_of((9, Value::Bytes(&[1; 8])))), Err(Rule::field("pair/info/invite")));
@@ -226,16 +280,8 @@ fn the_info_follows_its_table() {
     assert!(Info::decode(&info_of((40, Value::Uint(7)))).is_ok());
 }
 
-/// A joiner's new session, as if the person started it on a fresh joiner.
-fn joiner_session() -> (invitation::JoinerAttempts, invitation::JoinerCode, [u8; 32]) {
-    let mut j = invitation::JoinerAttempts::default();
-    let (code, c) = j.start().unwrap();
-    (j, code, c)
-}
-
-#[test]
-fn the_short_code_opens_its_commitment() {
-    let mut open = invitation::Open {
+fn kettle() -> Open {
+    Open {
         invitation: Invitation::new(Vec::new(), Profile::small_device()),
         name: "kettle".into(),
         created_ms: 1,
@@ -245,138 +291,199 @@ fn the_short_code_opens_its_commitment() {
         allowed_key: None,
         attempt: None,
         next_attempt: 0,
-    };
-    let e = [9u8; 32];
-    // One attempt to the end: both ends show one code, and the Welcome
-    // takes back the count.
-    let n = open.begin(Network::Home, 100).unwrap();
-    let (mut j, joiner, c) = joiner_session();
-    let nm = open.reply(n, c, 110).unwrap();
-    assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj) = j.open(joiner, &e, &nm);
-    assert_eq!(code.len(), 6);
-    assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
-    open.end(n, true, 130);
-    assert_eq!(open.failures, 0);
+    }
+}
 
-    // Each session draws new nonces at both ends.
+/// An open invitation counts an attempt as failed from its start, until
+/// it ends in a Welcome, which takes the count back and closes it; one
+/// attempt at a time; one that runs out of time frees it and stays
+/// counted, and the third failure closes it (A-49).
+#[test]
+fn an_attempt_counts_until_its_welcome() {
+    let mut open = kettle();
+    let n = open.begin(Network::Home, 100).unwrap();
+    assert_eq!(open.failures, 1, "counted from the start");
+    assert_eq!(open.begin(Network::Home, 110), Err(PairError::Busy));
+    // Walking away counts.
+    open.end(n, false, 120);
+    assert_eq!(open.failures, 1);
+    assert!(open.attempt.is_none() && !open.used);
+    // A Welcome takes its count back and closes the invitation.
     let n2 = open.begin(Network::Home, 200).unwrap();
     assert_ne!(n2, n);
-    let (mut j2, joiner2, c2) = joiner_session();
-    assert_ne!(c2, c);
-    let nm2 = open.reply(n2, c2, 210).unwrap();
-    assert_ne!(nm2, nm);
-    // A second attempt while one is in progress: busy.
-    assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
-    // Walking away after the reply counts as a failed attempt.
-    let (_, nj2) = j2.open(joiner2, &e, &nm2);
-    open.end(n2, false, 230);
+    open.end(n2, true, 210);
     assert_eq!(open.failures, 1);
-    assert_ne!(nj2, nj);
+    assert!(open.used);
+    assert_eq!(open.begin(Network::Home, 300), Err(PairError::Closed));
 
-    // Another nonce than the committed one ends the attempt, counted.
-    let n3 = open.begin(Network::Home, 300).unwrap();
-    let (_, _, c3) = joiner_session();
-    open.reply(n3, c3, 310).unwrap();
-    assert_eq!(open.short_code(n3, &e, &nj, 320), Err(PairError::WrongCode));
-    assert_eq!(open.failures, 2);
-    assert!(open.attempt.is_none());
-
-    // The person takes minutes to compare and answer: the attempt stays the
-    // open one, and the Welcome still takes back its count.
-    let kept = open.failures;
-    let n5 = open.begin(Network::Home, 1_000).unwrap();
-    let (mut j5, joiner5, c5) = joiner_session();
-    let nm5 = open.reply(n5, c5, 1_010).unwrap();
-    let (code5, nj5) = j5.open(joiner5, &e, &nm5);
-    assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
-    let minutes = 1_020 + 5 * 60_000;
-    assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
-    open.end(n5, true, minutes);
-    assert_eq!(open.failures, kept);
-    // The machine's steps alone have the short timer: a nonce opened late
-    // is refused, and the attempt stays counted.
-    let n6 = open.begin(Network::Home, 2_000_000).unwrap();
-    let (mut j6, joiner6, c6) = joiner_session();
-    let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
-    let (_, nj6) = j6.open(joiner6, &e, &nm6);
-    assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
-    assert_eq!(open.failures, kept + 1);
-    open.failures = kept;
-    // An answer after the person's time takes nothing back.
-    let n7 = open.begin(Network::Home, 3_000_000).unwrap();
-    let (mut j7, joiner7, c7) = joiner_session();
-    let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
-    let (_, nj7) = j7.open(joiner7, &e, &nm7);
-    assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
-    open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
-    assert_eq!(open.failures, kept + 1);
-    open.failures = kept;
-
-    // An attempt that runs out of time frees the invitation; its count stays.
+    // An attempt that runs out of time frees the invitation; its count
+    // stays, and the third failure closes it.
+    let mut open = kettle();
     let t = 4_000_000;
-    let n8 = open.begin(Network::Home, t).unwrap();
-    let (_, _, c8) = joiner_session();
-    open.reply(n8, c8, t + 10).unwrap();
-    assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
-    assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS), Err(PairError::TooMany));
+    for i in 0..invitation::MAX_FAILURES {
+        let at = t + u64::from(i) * invitation::ATTEMPT_MS;
+        open.begin(Network::Home, at).unwrap();
+        assert_eq!(open.begin(Network::Home, at + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
+    }
+    let after = t + u64::from(invitation::MAX_FAILURES) * invitation::ATTEMPT_MS;
+    assert_eq!(open.begin(Network::Home, after), Err(PairError::TooMany));
     assert_eq!(open.failures, invitation::MAX_FAILURES);
 
-    // The first message commits to the nonce, the answer and the confirmation carry the nonces.
-    for (t, rule) in [(64, "pair/start/commitment"), (65, "pair/reply/nonce"), (66, "pair/confirm/nonce")] {
+    // The messages carry CPace alone: the short code's fields are retired,
+    // and a message with one is refused.
+    for (t, n, rule) in [(64, 4, "pair/start/retired"), (65, 4, "pair/reply/retired"), (66, 3, "pair/confirm/retired")]
+    {
         let table = crate::msg::tables::of(t).unwrap();
-        assert!(table.fields.iter().any(|f| f.rule == rule && f.needed), "{rule}");
+        assert!(table.fields.iter().all(|f| f.n != n), "{rule}");
+        let mut m: Vec<(u16, format::cbor::Value<'_>)> =
+            table.fields.iter().map(|f| (f.n, format::cbor::Value::Bytes(&[1; 32]))).collect();
+        m.insert(0, (0, format::cbor::Value::Uint(t)));
+        m.push((n, format::cbor::Value::Bytes(&[2; 32])));
+        let enc = format::cbor::Value::Map(m).encode();
+        assert_eq!(crate::msg::check(&enc).err(), Some(format::Rule::field(rule)));
     }
 }
 
 #[test]
 fn a_late_message_of_an_earlier_attempt_changes_nothing() {
-    let mut open = invitation::Open {
-        invitation: Invitation::new(Vec::new(), Profile::small_device()),
-        name: "kettle".into(),
-        created_ms: 1,
-        expires_ms: 10_000_000,
-        used: false,
-        failures: 0,
-        allowed_key: None,
-        attempt: None,
-        next_attempt: 0,
-    };
-    let e = [9u8; 32];
+    let mut open = kettle();
     let first = open.begin(Network::Home, 0).unwrap();
-    let (mut j1, joiner1, c1) = joiner_session();
-    let nm1 = open.reply(first, c1, 10).unwrap();
-    let (_, nj1) = j1.open(joiner1, &e, &nm1);
     // The first attempt's time runs out; a second begins.
     let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
-    let (_, _, c2) = joiner_session();
-    // The first attempt's late messages name it, and change nothing.
-    assert_eq!(open.reply(first, c2, invitation::ATTEMPT_MS + 1), Err(PairError::Closed));
-    open.reply(second, c2, invitation::ATTEMPT_MS + 2).unwrap();
-    assert_eq!(open.short_code(first, &e, &nj1, invitation::ATTEMPT_MS + 3), Err(PairError::Closed));
-    open.end(first, true, invitation::ATTEMPT_MS + 4);
+    // The first attempt's late end names it, and changes nothing but the
+    // close: its joiner was welcomed.
+    open.end(first, false, invitation::ATTEMPT_MS + 4);
     assert_eq!(open.attempt.as_ref().map(|a| a.number), Some(second), "the second attempt still runs");
     assert_eq!(open.begin(Network::Home, invitation::ATTEMPT_MS + 5), Err(PairError::Busy));
     assert_eq!(open.failures, 2);
+    open.end(first, true, invitation::ATTEMPT_MS + 6);
+    assert_eq!(open.failures, 2, "a late Welcome takes no count back");
+    assert!(open.used, "but one success closes the invitation");
 }
 
 #[test]
 fn the_joiner_counts_its_sessions() {
     let mut j = invitation::JoinerAttempts::default();
-    let e = [9u8; 32];
-    // A session shows its code; until the person answers, no other starts.
-    let (code, _) = j.start().unwrap();
-    let (shown, _) = j.open(code, &e, &[1; 32]);
-    assert_eq!(shown.len(), 6);
-    assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
-    // The session dropped before the person answered: it counted.
-    j.answered();
-    for _ in 1..invitation::MAX_FAILURES {
-        let (code, _) = j.start().unwrap();
-        j.open(code, &e, &[2; 32]);
-        j.answered();
+    for _ in 0..invitation::MAX_FAILURES {
+        j.start().unwrap();
     }
     assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
+}
+
+/// A home window: a new ID, never zero, and six new digits, from which
+/// its secret comes; the joiner derives the same invitation from the ID
+/// and the digits, and nothing else gives one.
+#[test]
+fn a_home_window_has_six_digits() {
+    let (window, digits) = Invitation::home();
+    assert_eq!(digits.len(), invitation::HOME_DIGITS);
+    assert!(digits.bytes().all(|b| b.is_ascii_digit()));
+    assert_ne!(window.id, [0; 16]);
+    assert_eq!(Some(window.secret), invitation::home_secret(&digits));
+    assert_eq!(window.profile, Profile::home());
+    assert!(window.profile.home_only && window.paths.iter().all(|p| p.kind == PathKind::Home));
+    // A home window is never written as an invitation's text: its role
+    // admits any but a leaf's, which no text carries.
+    assert_eq!(Invitation::decode(&window.encode()).err(), Some(invitation::RULE_PROFILE));
+    assert_eq!(Invitation::typed(window.id, &digits).unwrap(), window);
+    // Two windows: two IDs.
+    assert_ne!(Invitation::home().0.id, window.id);
+    // Not six digits, or an ID of zeros: no window.
+    for bad in ["12345", "1234567", "12345a", "12 345", "１２３４５６", ""] {
+        assert!(invitation::home_secret(bad).is_none(), "{bad:?}");
+        assert!(Invitation::typed(window.id, bad).is_none(), "{bad:?}");
+    }
+    assert!(Invitation::typed([0; 16], &digits).is_none());
+    // Another digit, another secret.
+    let other = if digits == "000000" { "000001" } else { "000000" };
+    assert_ne!(invitation::home_secret(other), Some(window.secret));
+}
+
+/// No invitation has an ID or a secret of zero bytes: a new one draws
+/// again, and a reader refuses one (`invite/shape`, the vector "an ID of
+/// zeros").
+#[test]
+fn no_invitation_has_an_id_of_zeros() {
+    let mut draws = [[0u8; 16], [0u8; 16], [7u8; 16]].into_iter();
+    assert_eq!(invitation::not_zero(|| draws.next().unwrap()), [7u8; 16]);
+    let mut draws = [[0u8; 32], [5u8; 32]].into_iter();
+    assert_eq!(invitation::not_zero(|| draws.next().unwrap()), [5u8; 32]);
+    let home = Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None, obfuscation: None };
+    let mut inv = Invitation::new(vec![home], Profile::small_device());
+    assert_ne!(inv.id, [0; 16]);
+    assert!(Invitation::decode(&inv.encode()).is_ok());
+    let mut zero = inv.clone();
+    zero.secret = [0; invitation::SECRET];
+    assert_eq!(Invitation::decode(&zero.encode()).err(), Some(invitation::RULE_SHAPE));
+    inv.id = [0; 16];
+    assert_eq!(Invitation::decode(&inv.encode()).err(), Some(invitation::RULE_SHAPE));
+}
+
+/// A home window's secret and CPace's channel identifier against the
+/// vectors (`testdata/format/messages3.json`, "codes"), which gen.py
+/// writes and the Go check computes on its own.
+#[test]
+fn the_codes_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &serde_json::Value| -> Vec<u8> {
+        let s = s.as_str().unwrap();
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let arr = |s: &serde_json::Value| -> [u8; 32] { hex(s).try_into().unwrap() };
+    let id = |s: &serde_json::Value| -> [u8; 16] { hex(s).try_into().unwrap() };
+    let codes = &v["codes"];
+    assert_eq!(codes["home_code_label"].as_str().map(str::as_bytes), invitation::HOME_CODE_LABEL.strip_suffix(b"\0"));
+    let home = codes["home_secret"].as_array().unwrap();
+    assert!(home.len() >= 4);
+    for c in home {
+        let got = invitation::home_secret(c["digits"].as_str().unwrap());
+        match c.get("secret") {
+            Some(s) => assert_eq!(got, Some(arr(s)), "{}", c["name"]),
+            None => assert_eq!(got, None, "{}", c["name"]),
+        }
+    }
+    let channel = codes["channel_id"].as_array().unwrap();
+    assert!(channel.len() >= 3);
+    for c in channel {
+        let ci = channel_id(&KeyHash(arr(&c["member"])), &KeyHash(arr(&c["joiner"])), &id(&c["invitation"]));
+        assert_eq!(crate::certs::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
+    }
+}
+
+/// The Welcome's digest and tag against the vectors
+/// (`testdata/format/messages3.json`, "welcome_parts"), which gen.py writes
+/// and the Go check computes on its own.
+#[test]
+fn the_welcome_digest_and_tag_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &serde_json::Value| -> Vec<u8> {
+        let s = s.as_str().unwrap();
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let w = &v["welcome_parts"];
+    assert_eq!(w["digest_label"], welcome::LABEL_DIGEST);
+    assert_eq!(w["tag_key_label"], welcome::LABEL_TAG_KEY);
+    assert_eq!(w["tag_label"], welcome::LABEL_TAG);
+    let digests = w["digest"].as_array().unwrap();
+    assert!(digests.len() >= 3);
+    for c in digests {
+        let set: [u8; 32] = hex(&c["set_digest"]).try_into().unwrap();
+        let lists: Vec<Vec<u8>> = c["lists"].as_array().unwrap().iter().map(hex).collect();
+        let got = welcome::digest_from(&set, lists.iter().map(Vec::as_slice));
+        assert_eq!(crate::certs::hex(&got), c["digest"].as_str().unwrap(), "{}", c["name"]);
+    }
+    let tags = w["tag"].as_array().unwrap();
+    assert!(tags.len() >= 6);
+    for c in tags {
+        let (isk, body) = (hex(&c["isk"]), hex(&c["message"]));
+        let got = welcome::open(&body, &isk);
+        match c.get("rule") {
+            Some(rule) => assert_eq!(got.err().map(|r| r.name()), rule.as_str(), "{}", c["name"]),
+            None => assert_eq!(got.map(<[u8]>::to_vec), Ok(hex(&c["welcome"])), "{}", c["name"]),
+        }
+    }
 }
 
 #[test]
@@ -386,7 +493,7 @@ fn an_offered_admin_key_is_new() {
     let tv = k("tv");
     let with_admin = |a: &K| {
         let mut i = info("tv", ROLE_MEMBER);
-        i.admin = Some(a.key.public.clone());
+        i.admin = Some(a.key.public().to_vec());
         i
     };
     let rec =
@@ -473,7 +580,7 @@ fn who_admits_whom() {
     // An admin key: only from the root, only with its proof, only as one of the three sets.
     let phone2 = k("phone 2");
     let mut ph = info("phone 2", ROLE_PHONE);
-    ph.admin = Some(k("phone 2 admin").key.public.clone());
+    ph.admin = Some(k("phone 2 admin").key.public().to_vec());
     let make = Choice { rights: RIGHT_READ | RIGHT_SEND, admin: Some(AdminKind::Phone), guarded: false };
     let none = joiner_record_any(&st, Signer::Root, None, &point(&phone2), &ph, Checked::default(), make).unwrap();
     assert!(none.admin.is_none(), "no proof, no admin key");
@@ -547,7 +654,7 @@ fn admit(g: &mut G, by_admin: bool, joiner: &K, name: &str) -> Welcome {
     let set = g.set();
     let st = set.state();
     let admitter = if by_admin { laptop.hash } else { k("phone").hash };
-    Welcome::build(&set, &st, &admitter, &joiner.hash, 1_793_000_000_000)
+    built(&set, &st, &admitter, &joiner.hash)
 }
 
 #[test]
@@ -556,73 +663,97 @@ fn the_joiner_checks_its_welcome() {
     let tv = k("tv");
     let w = admit(&mut g, true, &tv, "tv");
     let group = format::DeviceId(g.gid.0);
-    let (_, st) = w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).unwrap();
+    let (_, st) =
+        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).unwrap();
     assert!(st.device_by_key(&tv.hash).is_some());
 
     // Another group.
     assert_eq!(
-        w.check(&format::DeviceId([9; 16]), &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
+        w.check(
+            &format::DeviceId([9; 16]),
+            &point(&k("laptop")),
+            &point(&tv),
+            Joining::Ordinary,
+            Way::Invited(&invitation())
+        )
+        .err(),
         Some(welcome::Refusal::OtherGroup)
     );
     // Not my record.
     assert_eq!(
-        w.check(&group, &point(&k("laptop")), &point(&k("someone")), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("laptop")), &point(&k("someone")), Joining::Ordinary, Way::Invited(&invitation()))
+            .err(),
         Some(welcome::Refusal::NotAdmitted)
     );
     // An admitter other than the one who signed: the root phone did not sign this record.
     assert_eq!(
-        w.check(&group, &point(&k("phone")), &point(&tv), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("phone")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::NotAdmitter)
     );
     // A stranger in the middle.
     assert_eq!(
-        w.check(&group, &point(&k("stranger")), &point(&tv), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("stranger")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::NotAdmitter)
     );
 
     // A Welcome without the admitter's own record proves nothing.
     let mut cut = w.clone();
     cut.records.retain(|r| !matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == k("laptop").hash));
-    assert!(cut.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).is_err());
+    assert!(
+        cut.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).is_err()
+    );
 
     // The root's path comes from the records: a Welcome under another root is another group.
     let mut other = w.clone();
-    other.root = k("root 2").key.public.clone();
+    other.root = k("root 2").key.public().to_vec();
     assert_eq!(
-        other.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
+        other.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::OtherGroup)
     );
 
     // By the root phone.
     let tab = k("tablet");
     let w = admit(&mut g, false, &tab, "tablet");
-    assert!(w.check(&group, &point(&k("phone")), &point(&tab), Joining::Ordinary).is_ok());
+    assert!(w.check(&group, &point(&k("phone")), &point(&tab), Joining::Ordinary, Way::Invited(&invitation())).is_ok());
     // A guarded leaf takes the root's own record only, not an admin's.
-    assert!(w.check(&group, &point(&k("phone")), &point(&tab), Joining::Guarded).is_ok());
+    assert!(w.check(&group, &point(&k("phone")), &point(&tab), Joining::Guarded, Way::Invited(&invitation())).is_ok());
     let by_admin = admit(&mut g, true, &k("lamp"), "lamp");
     assert_eq!(
-        by_admin.check(&group, &point(&k("laptop")), &point(&k("lamp")), Joining::Guarded).err(),
+        by_admin
+            .check(&group, &point(&k("laptop")), &point(&k("lamp")), Joining::Guarded, Way::Invited(&invitation()))
+            .err(),
         Some(welcome::Refusal::NotAdmitter)
     );
-    assert!(by_admin.check(&group, &point(&k("laptop")), &point(&k("lamp")), Joining::Ordinary).is_ok());
+    assert!(
+        by_admin
+            .check(&group, &point(&k("laptop")), &point(&k("lamp")), Joining::Ordinary, Way::Invited(&invitation()))
+            .is_ok()
+    );
     assert_eq!(
-        w.check(&group, &point(&k("laptop")), &point(&tab), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("laptop")), &point(&tab), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::NotAdmitter)
     );
 
     // The encoding reads back.
     assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
-    let (root, envs, time, recovery) = Welcome::parts(&w.encode()).unwrap();
-    assert_eq!(root, g.root.key.public);
-    assert_eq!(recovery, k("recovery").key.public);
+    let (root, envs, time, recovery, recovery2) = Welcome::parts(&w.encode()).unwrap();
+    assert_eq!(root, g.root.key.public());
+    assert_eq!(recovery, k("recovery").key.public());
+    assert_eq!(recovery2, crate::testkit::rk2().public());
     assert_eq!(envs.len(), w.records.len());
     assert_eq!(time, 1_793_000_000_000);
+    // Up to 8192 records, past the old profile's 4096 items; not one more.
+    let mut wide = w.clone();
+    wide.records = vec![w.records[0].clone(); 8192];
+    assert_eq!(Welcome::parts(&wide.encode()).map(|p| p.1.len()), Ok(8192));
+    wide.records.push(w.records[0].clone());
+    assert_eq!(Welcome::parts(&wide.encode()).err().map(|r| r.name()), Some("welcome/records"));
     // A recovery key other than the group's gives another Group ID.
     let mut false_key = w.clone();
-    false_key.recovery = k("not the recovery key").key.public.clone();
+    false_key.recovery = k("not the recovery key").key.public().to_vec();
     let back = Welcome::decode(&false_key.encode()).unwrap();
     assert_eq!(
-        back.check(&group, &point(&k("phone")), &point(&tab), Joining::Ordinary).err(),
+        back.check(&group, &point(&k("phone")), &point(&tab), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::OtherGroup)
     );
     // The root's key as the recovery key is no Welcome.
@@ -650,32 +781,53 @@ fn the_joiner_takes_two_changes_of_root() {
     let st = set.state();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
     assert!(st.device_by_key(&slate.hash).is_some());
-    let w = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1_793_000_000_000);
+    let w = built(&set, &st, &k("phone c").hash, &slate.hash);
     let group = format::DeviceId(g.gid.0);
-    let back = Welcome::decode(&w.encode()).unwrap();
-    let r = back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary);
+    // L: both changes name the empty list, one list for both, so a set
+    // this small rides in the Welcome itself.
+    assert_eq!(w.parts, 0);
+    let back = w.clone();
+    let r = back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()));
     let (mine, st) = r.unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
     assert_eq!(st.chain().len(), 2);
     assert_eq!(mine.len(), set.len(), "every record of the Welcome is kept");
     // A guarded leaf may take it too: the newest root signed it, and the
     // admitter is the newest root's device.
-    assert!(back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Guarded).is_ok());
+    assert!(
+        back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Guarded, Way::Invited(&invitation()))
+            .is_ok()
+    );
     // Without the list the joiner does not apply the newest change: n1 is
-    // the root there, and n2's record of it does not count.
+    // the root there, and n2's record of it does not count. Left out by the
+    // way, the digest is not the Welcome's; left out by the admitter, whose
+    // digest says so, the joiner is not admitted.
+    let newest = back
+        .records
+        .iter()
+        .find_map(|r| match &r.body().kind {
+            Kind::Recovery { root, list, .. } if root.hash() == n2.hash => Some(*list),
+            _ => None,
+        })
+        .unwrap();
     let mut bare = back.clone();
-    bare.list = None;
-    assert_eq!(
-        bare.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary).err(),
-        Some(welcome::Refusal::NotAdmitted)
-    );
-    // A list its heads do not name is damage.
+    bare.lists.retain(|l| crate::records::body::list_hash(l) != newest);
+    // Inline, the list rides in field `list`.
+    if bare.list.as_ref().is_some_and(|l| crate::records::body::list_hash(l) == newest) {
+        bare.list = None;
+    }
+    let ordinary = |w: &Welcome| {
+        w.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err()
+    };
+    assert_eq!(ordinary(&bare), Some(welcome::Refusal::Digest));
+    redigest(&mut bare, g.empty().root(), g.empty().recovery());
+    assert_eq!(ordinary(&bare), Some(welcome::Refusal::NotAdmitted));
+    // A list its heads do not name is not held: the set is not the one sent.
     let mut wrong = back.clone();
-    wrong.list = Some(crate::records::List(vec![RecordId([3; 32])]).encode());
-    assert_eq!(
-        wrong.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary).err(),
-        Some(welcome::Refusal::Damaged)
-    );
+    wrong.lists.push(crate::records::List(vec![RecordId([3; 32])]).encode());
+    assert_eq!(ordinary(&wrong), Some(welcome::Refusal::Digest));
+    redigest(&mut wrong, g.empty().root(), g.empty().recovery());
+    assert_eq!(ordinary(&wrong), Some(welcome::Refusal::Digest));
 }
 
 /// A Welcome from a group with two heads at one seq: the joiner does not
@@ -692,10 +844,16 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
             seq: 1,
             prev: None,
             time_ms: 0,
-            kind: Kind::Recovery { root: k("root n9").key.clone(), list: [7; 32], from: 0 },
+            kind: Kind::Recovery {
+                root: k("root n9").key.clone(),
+                list: [7; 32],
+                from: 0,
+                first: RecordId([0xf1; 32]),
+                signer2: crate::testkit::rk2().key().hash(),
+            },
             held: false,
         };
-        Record::sign(body, &k("recovery")).unwrap()
+        crate::testkit::sign_by(body, &k("recovery"))
     };
     g.recs.push(twin);
     phone_admin(&mut g, &k("root n1"), &k("phone b"), &k("admin b"), true);
@@ -704,11 +862,11 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
     g.rec(&k("root n1"), Kind::device(d));
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone b").hash, &tv.hash, 1_793_000_000_000);
+    let w = built(&set, &st, &k("phone b").hash, &tv.hash);
     assert_eq!(w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count(), 2);
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
-        w.check(&group, &point(&k("phone b")), &point(&tv), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("phone b")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::Stopped)
     );
 }
@@ -727,21 +885,34 @@ fn the_joiner_does_not_join_over_a_head_it_cannot_read() {
         seq: 1,
         prev: None,
         time_ms: 0,
-        kind: Kind::Recovery { root: k("root n1").key.clone(), list: [5; 32], from: 0 },
+        kind: Kind::Recovery {
+            root: k("root n1").key.clone(),
+            list: [5; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         held: false,
     };
     let encoded = body.encode();
     let Ok(Value::Map(mut m)) = cbor::decode(&encoded) else { panic!("a body is a map") };
     m.push((99, Value::Uint(1)));
     let bytes = Value::Map(m).encode();
-    let sig = crate::records::key::sign_es256(&k("recovery"), crate::records::LABEL_RECORD, &bytes).unwrap();
-    let later = Record::decode(&crate::format::envelope::write(&bytes, &sig, None)).unwrap();
+    let sig2 = crate::testkit::rk2().sign(&bytes, crate::records::pq::CONTEXT_RECORD).unwrap();
+    let sig = crate::records::key::sign_es256(
+        &k("recovery"),
+        crate::records::LABEL_RECORD,
+        &crate::records::with_sig2(&bytes, &sig2),
+    )
+    .unwrap();
+    let later = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&sig2))).unwrap();
     assert!(later.body().held);
     let mut w = w;
     w.records.insert(0, later);
+    redigest(&mut w, g.empty().root(), g.empty().recovery());
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
-        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
+        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::Stopped)
     );
 }
@@ -778,13 +949,14 @@ fn a_guarded_leaf_joins_by_the_newest_root_only() {
     let group = format::DeviceId(g.gid.0);
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone a").hash, &lock.hash, 1_793_000_000_000);
-    let (_, st) = w.check(&group, &point(&k("phone a")), &point(&lock), Joining::Guarded).unwrap();
+    let w = built(&set, &st, &k("phone a").hash, &lock.hash);
+    let (_, st) =
+        w.check(&group, &point(&k("phone a")), &point(&lock), Joining::Guarded, Way::Invited(&invitation())).unwrap();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash]);
     // The old root's phone is no admitter of it.
-    let w = Welcome::build(&set, &st, &k("phone").hash, &lock.hash, 1_793_000_000_000);
+    let w = built(&set, &st, &k("phone").hash, &lock.hash);
     assert_eq!(
-        w.check(&group, &point(&k("phone")), &point(&lock), Joining::Guarded).err(),
+        w.check(&group, &point(&k("phone")), &point(&lock), Joining::Guarded, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::NotAdmitter)
     );
 }
@@ -840,6 +1012,106 @@ fn an_intro_proves_a_new_device() {
     assert!(keys.is_none());
 }
 
+/// At the most changes of root a group may have, the Welcome still carries
+/// every head (each near 8 KiB with the recovery key's second signature)
+/// with the newest root's list and first checkpoint under its budget, and
+/// the joiner takes it; the intro of a device admitted after them fits too.
+#[test]
+fn the_joiner_takes_the_most_changes_of_root() {
+    let mut g = G::new();
+    let max = crate::records::body::MAX_RECOVERY;
+    let mut last = k("root");
+    for i in 1..=max {
+        last = k(&format!("root n{i}"));
+        g.change(&last);
+    }
+    let (pa, slate) = (k("phone a"), k("slate"));
+    phone_admin(&mut g, &last, &pa, &k("admin a"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&last, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    assert_eq!(st.roots.len() as u64, max + 1);
+    let w = built(&set, &st, &pa.hash, &slate.hash);
+    let heads = w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count();
+    assert_eq!(heads as u64, max);
+    let (sent, parts) = Welcome::build(&set, &st, &pa.hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let bytes = sent.encode().len() + parts.iter().map(|p| welcome::part_message(p).len()).sum::<usize>();
+    assert!(
+        bytes <= crate::format::frame::LIMIT_PAIRING,
+        "a realistic Welcome and its parts stay under 1 MiB: {bytes}"
+    );
+    let back = w;
+    let group = format::DeviceId(g.gid.0);
+    let (mine, st2) = back
+        .check(&group, &point(&pa), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(st2.roots, st.roots);
+    assert_eq!(mine.len(), set.len());
+    let intro = Intro::of(&set, &st, &slate.hash, None).unwrap();
+    assert!(intro::fits(&intro.records));
+    assert!(intro.message().len() <= crate::format::frame::LIMIT_MEMBER);
+}
+
+/// The recovery heads ride beside the intro's 32 records and 16 KiB, at
+/// most MAX_HEADS of them: three changes of root pass 16 KiB in their heads'
+/// envelopes alone, and the device admitted after them still proves
+/// itself. Sender and reader count alike, by the envelopes' bytes.
+#[test]
+fn an_intro_counts_the_recovery_heads_apart() {
+    let mut g = G::new();
+    let (n1, n2, n3, pa) = (k("root n1"), k("root n2"), k("root n3"), k("phone a"));
+    g.change(&n1);
+    g.change(&n2);
+    g.change(&n3);
+    phone_admin(&mut g, &n3, &pa, &k("admin a"), true);
+    let full = g.set();
+    let st = full.state();
+    let intro = Intro::of(&full, &st, &pa.hash, None).unwrap();
+    let heads: Vec<&Record> = intro.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).collect();
+    assert_eq!(heads.len(), 3);
+    assert!(heads.iter().map(|r| r.envelope().len()).sum::<usize>() > intro::MAX_BYTES);
+    assert!(intro::fits(&intro.records));
+
+    // A peer that holds everything but the phone's record takes it.
+    let mut old = g.empty();
+    old.insert_all(g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).cloned());
+    for l in &g.lists {
+        old.insert_list(l).unwrap();
+    }
+    old.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
+    let me = fhash(&k("phone"));
+    let new = intro.check(&old, &me, &point(&pa)).unwrap();
+    assert_eq!(new.len(), 1);
+
+    // The reader counts as the sender did.
+    let back = Intro::read(&intro.message()).unwrap();
+    assert_eq!(back, intro);
+    assert_eq!(back.check(&old, &me, &point(&pa)).unwrap().len(), 1);
+
+    // Up to MAX_HEADS heads pass; one more does not, on either side.
+    let mut many = intro.clone();
+    while many.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count() < intro::MAX_HEADS {
+        many.records.insert(0, heads[0].clone());
+    }
+    assert!(intro::fits(&many.records));
+    assert_eq!(Intro::read(&many.message()).map(|i| i.records.len()), Ok(many.records.len()));
+    many.records.insert(0, heads[0].clone());
+    assert!(!intro::fits(&many.records));
+    assert_eq!(many.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&many.message()), Err(intro::RULE_SIZE));
+
+    // The others still at most 32 records and 16 KiB, by their envelopes.
+    let mut wide = intro.clone();
+    let own = wide.records.last().unwrap().clone();
+    while wide.records.len() - 3 <= intro::MAX_RECORDS {
+        wide.records.insert(3, own.clone());
+    }
+    assert_eq!(wide.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&wide.message()), Err(intro::RULE_SIZE));
+}
+
 /// AmneziaWG settings: jc, jmin, jmax, the four sizes, the four header
 /// ranges.
 fn obfuscation_with(jc: u64, jmin: u64, jmax: u64) -> Vec<u8> {
@@ -885,7 +1157,7 @@ fn one_invitation_for_home_and_away() {
     let b = inv.encode();
     let g = G::new();
     assert!(!b.windows(16).any(|w| w == g.gid.0));
-    assert!(!b.windows(65).any(|w| w == g.root.key.public.as_slice()));
+    assert!(!b.windows(65).any(|w| w == g.root.key.public()));
 
     // Rows.
     let mut home_only = inv.clone();
@@ -1320,4 +1592,658 @@ fn one_invitation_takes_few_waiting_places() {
         held.knock(&point(&k("real tablet")), real, Network::Guest, waiting::Came::Path([6; 16]), t0 + 1, exp),
         "another invitation still has room"
     );
+}
+
+/// The Welcome a joiner ends with: built, and carried with its parts when
+/// it has any.
+fn built(set: &RecordSet, st: &State, admitter: &KeyHash, joiner: &KeyHash) -> Welcome {
+    let (w, parts) = Welcome::build(set, st, admitter, joiner, 1_793_000_000_000).unwrap();
+    if parts.is_empty() { w } else { carried(&w, &parts) }
+}
+
+/// A Welcome whose records were changed after it was built, with the
+/// digest of the set they make: what an admitter that sends them would
+/// have sent.
+fn redigest(w: &mut Welcome, root: &Key, recovery: &crate::records::Recovery) {
+    let mut set = RecordSet::new(root.clone(), recovery.clone());
+    let lists: Vec<&[u8]> = w.list.iter().chain(&w.lists).map(Vec::as_slice).collect();
+    set.take_part(&w.records, &lists);
+    set.take_part(&w.records, &lists);
+    w.digest = Some(welcome::digest_of(&set));
+}
+
+/// A Welcome and its parts as they travel and as the joiner takes them:
+/// message 67 sealed with the session's ISK and opened, each part as a
+/// `records` message into the assembly, the whole Welcome back.
+fn carried(w: &Welcome, parts: &[crate::records::sync::Part<'_>]) -> Welcome {
+    let isk = [0x15u8; 64];
+    let frame = welcome::frame(&[0x7b; 64], &w.encode(), &isk).unwrap();
+    let opened = welcome::open(&frame[4..], &isk).unwrap();
+    let mut a = welcome::Assembly::new(Welcome::decode(opened).unwrap(), 1_000).unwrap();
+    assert_eq!(a.due(), parts.len() as u64);
+    for (i, p) in parts.iter().enumerate() {
+        a.take(&welcome::part_message(p), 1_000 + i as u64).unwrap();
+    }
+    a.finish().unwrap()
+}
+
+/// A Welcome whose set passes its budget sends it whole in parts: the
+/// recovery records and their lists, the new root's first checkpoint, the
+/// removals that count, the two devices' records and everything else;
+/// nothing is cut, and the joiner ends in the admitter's state. A set that
+/// fits rides in the Welcome with no part.
+#[test]
+fn a_welcome_too_wide_for_its_budget_comes_whole_in_parts() {
+    let mut g = G::new();
+    let (n1, tv, slate) = (k("root n1"), k("tv"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    g.rec(&n1, Kind::device(d));
+    let seen = g.seen();
+    let removal = g.rec(&n1, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    let own = g.rec(&n1, Kind::device(d));
+    let mut filler = Vec::new();
+    for i in 0..40u64 {
+        filler.push(g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }).id());
+    }
+    let set = g.set();
+    let st = set.state();
+    assert!(st.revoked.contains(&tv.hash));
+    let admitter = k("phone b").hash;
+    let (all, none) = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    assert!(none.is_empty() && all.parts == 0 && all.digest == Some(welcome::digest_of(&set)));
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let group = format::DeviceId(g.gid.0);
+    for budget in [full - 30 * set.get(&filler[0]).unwrap().envelope().len(), 600] {
+        let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, budget).unwrap();
+        assert!(!parts.is_empty() && w.parts == parts.len() as u64);
+        assert!(w.records.is_empty() && w.list.is_none() && w.digest == all.digest);
+        let whole = carried(&w, &parts);
+        let has = |id: &RecordId| whole.records.iter().any(|r| r.id() == *id);
+        let heads: Vec<RecordId> =
+            g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(Record::id).collect();
+        assert!(heads.iter().all(has) && !whole.lists.is_empty());
+        assert!(has(&removal.id()) && has(&own.id()) && filler.iter().all(has));
+        let (mine, back) = whole
+            .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+            .unwrap();
+        assert_eq!(back, st);
+        assert_eq!(mine.digest(), set.digest());
+    }
+}
+
+/// A map's fields, as a test edits them.
+type Fields<'a> = Vec<(u16, crate::format::cbor::Value<'a>)>;
+
+/// Message 67's tag binds every byte of the Welcome to the session:
+/// a flipped byte, field 13 removed, field 12 changed, no tag, or a tag
+/// from another session's ISK, and the Welcome is not opened.
+#[test]
+fn the_welcome_tag_binds_every_byte() {
+    use crate::format::cbor::{self, Value};
+    let mut g = G::new();
+    let (n1, n2, slate) = (k("root n1"), k("root n2"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    // A small budget, so that the set comes in parts and field 13 is there.
+    let (w, parts) = Welcome::build_within(&set, &st, &k("phone c").hash, &slate.hash, 1, 1024).unwrap();
+    assert!(w.parts >= 1);
+    let (isk, other) = ([0x15u8; 64], [0x16u8; 64]);
+    let bytes = w.encode();
+    let good = welcome::frame(&[0x7b; 64], &bytes, &isk).unwrap();
+    assert_eq!(welcome::open(&good[4..], &isk), Ok(&bytes[..]));
+    assert_eq!(welcome::open(&good[4..], &other), Err(welcome::RULE_TAG));
+    // The same tag over other bytes.
+    let tw = welcome::tag(&isk, &bytes).unwrap();
+    let with = |welcome: &[u8], tw: Option<&[u8]>| {
+        let mut m =
+            vec![(0, Value::Uint(T_WELCOME)), (2, Value::Bytes(&[0x7b; 64])), (3, cbor::decode(welcome).unwrap())];
+        if let Some(t) = tw {
+            m.push((4, Value::Bytes(t)));
+        }
+        crate::format::frame::write(&Value::Map(m))
+    };
+    let edited = |f: &dyn Fn(&mut Fields<'_>)| {
+        let v = cbor::decode(&bytes).unwrap();
+        let mut m = v.as_map().unwrap().to_vec();
+        f(&mut m);
+        Value::Map(m).encode()
+    };
+    let no_parts = edited(&|m| m.retain(|(k, _)| *k != 13));
+    let other_digest = edited(&|m| {
+        for (k, v) in m.iter_mut() {
+            if *k == 12 {
+                *v = Value::Bytes(&[9; 32]);
+            }
+        }
+    });
+    let mut flipped = bytes.clone();
+    let last = flipped.len() - 1;
+    flipped[last] ^= 1;
+    for (name, f) in [
+        ("field 13 removed", with(&no_parts, Some(&tw))),
+        ("field 12 changed", with(&other_digest, Some(&tw))),
+        ("no tag", with(&bytes, None)),
+    ] {
+        assert_eq!(welcome::open(&f[4..], &isk).err(), Some(welcome::RULE_TAG), "{name}");
+    }
+    if cbor::decode(&flipped).is_ok() {
+        assert_eq!(welcome::open(&with(&flipped, Some(&tw))[4..], &isk).err(), Some(welcome::RULE_TAG));
+    }
+    // The assembly: a part after the last, another message while parts are
+    // due, and parts that come late.
+    let decoded = Welcome::decode(&bytes).unwrap();
+    let first = welcome::part_message(&parts[0]);
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    for (i, p) in parts.iter().enumerate() {
+        a.take(&welcome::part_message(p), i as u64).unwrap();
+    }
+    assert_eq!(a.take(&first, 10), Err(welcome::RULE_PARTS));
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    let ping = crate::format::frame::write(&Value::Map(vec![(0, Value::Uint(3))]));
+    assert_eq!(a.take(&ping, 1), Err(welcome::RULE_PARTS));
+    let a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    assert!(!a.late(welcome::PART_MS) && a.late(welcome::PART_MS + 1));
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    assert_eq!(a.take(&first, welcome::PART_MS + 1), Err(welcome::RULE_LATE));
+    // Every part in time, all of them not: PARTS_MS after message 67 the
+    // parts still due are late, however close each came to the one before.
+    let mut many = decoded.clone();
+    many.parts = welcome::MAX_PARTS;
+    let mut a = welcome::Assembly::new(many, 0).unwrap();
+    let step = welcome::PART_MS;
+    let mut t = 0;
+    while t + step <= welcome::PARTS_MS {
+        t += step;
+        a.take(&first, t).unwrap();
+    }
+    assert!(!a.late(welcome::PARTS_MS));
+    assert!(a.late(welcome::PARTS_MS + 1));
+    assert_eq!(a.take(&first, welcome::PARTS_MS + 1), Err(welcome::RULE_LATE));
+    assert_eq!(welcome::Assembly::new(decoded, 0).unwrap().finish().err(), Some(welcome::RULE_PARTS));
+}
+
+/// A part whose recovery record carries another second signature: its ID
+/// and the digest stay the same, but its first signature does not cover
+/// it, so the set does not hold it and the joiner does not join.
+#[test]
+fn a_part_with_a_swapped_second_signature_is_refused() {
+    let mut g = G::new();
+    let (n1, n2, slate) = (k("root n1"), k("root n2"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let group = format::DeviceId(g.gid.0);
+    let mut w = built(&set, &st, &k("phone c").hash, &slate.hash);
+    let heads: Vec<usize> = (0..w.records.len()).filter(|i| w.records[*i].sig2().is_some()).collect();
+    assert!(heads.len() >= 2);
+    let (a, b) = (&w.records[heads[0]], &w.records[heads[1]]);
+    let swapped = Record::decode(&crate::format::envelope::write(a.body_bytes(), a.sig(), b.sig2())).unwrap();
+    assert_eq!(swapped.id(), a.id());
+    w.records[heads[0]] = swapped;
+    assert_eq!(
+        w.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err(),
+        Some(welcome::Refusal::Digest)
+    );
+}
+
+/// The rules between a Welcome's fields.
+#[test]
+fn a_welcome_keeps_its_fields_together() {
+    use crate::format::cbor::{self, Value};
+    let mut g = G::new();
+    let slate = k("slate");
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec_root(Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let (w, _) = Welcome::build(&set, &st, &k("phone").hash, &slate.hash, 1).unwrap();
+    let bytes = w.encode();
+    let v = cbor::decode(&bytes).unwrap();
+    let edit = |f: &dyn Fn(&mut Fields<'_>)| {
+        let mut m = v.as_map().unwrap().to_vec();
+        f(&mut m);
+        m.sort_by_key(|(k, _)| *k);
+        Welcome::decode(&Value::Map(m).encode()).err()
+    };
+    assert_eq!(edit(&|_| {}), None);
+    assert_eq!(edit(&|m| m.push((13, Value::Uint(2)))), Some(welcome::RULE_PARTS), "parts beside the records");
+    assert_eq!(edit(&|m| m.retain(|(k, _)| *k != 2)), Some(welcome::RULE_SHAPE), "neither records nor parts");
+    assert_eq!(edit(&|m| m.retain(|(k, _)| *k != 12)), Some(welcome::RULE_DIGEST), "no digest");
+    let parts = |n: u64| {
+        edit(&|m| {
+            m.retain(|(k, _)| *k != 2 && *k != 10);
+            m.push((13, Value::Uint(n)));
+        })
+    };
+    assert_eq!(parts(64), None);
+    assert_eq!(parts(65).map(|r| r.name()), Some("welcome/parts"));
+}
+
+/// A Welcome in parts leaves nothing to sync: one sync of everything the
+/// admitter holds adds nothing and changes nothing.
+#[test]
+fn a_welcome_in_parts_leaves_nothing_to_sync() {
+    let mut g = G::new();
+    let (n1, slate) = (k("root n1"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n1, Kind::device(d));
+    for i in 0..40u64 {
+        g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let set = g.set();
+    let st = set.state();
+    let admitter = k("phone b").hash;
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 20 * 200).unwrap();
+    assert!(!parts.is_empty());
+    let group = format::DeviceId(g.gid.0);
+    let (mut mine, _) = carried(&w, &parts)
+        .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap();
+    assert_eq!(mine.len(), set.len());
+    // One sync: the admitter sends what it holds.
+    let (stored, refused) = mine.insert_all(set.in_dependency_order().into_iter().cloned());
+    assert!(refused.is_empty(), "{refused:?}");
+    assert_eq!(stored, 0);
+    assert_eq!(mine.state(), st);
+}
+
+/// Pairing frames: before the confirm every message takes the pairing
+/// limit and a Welcome is refused; after it the Welcome alone takes the
+/// member limit.
+#[test]
+fn only_a_confirmed_welcome_takes_the_member_frame() {
+    use crate::format::frame::{self, LIMIT_MEMBER, LIMIT_PAIRING};
+    let big = |t: u64, size: usize| {
+        let filler = vec![7u8; size];
+        frame::write(&crate::format::Value::Map(vec![
+            (0, crate::format::Value::Uint(t)),
+            (2, crate::format::Value::Bytes(&filler)),
+        ]))
+    };
+    let large_welcome = big(T_WELCOME, 2 * LIMIT_PAIRING);
+    let small_welcome = big(T_WELCOME, 100);
+    let large_other = big(T_CONFIRM, 2 * LIMIT_PAIRING);
+    let too_large = big(T_WELCOME, LIMIT_MEMBER);
+    assert!(large_welcome.len() - 4 > LIMIT_PAIRING && large_welcome.len() - 4 <= LIMIT_MEMBER);
+    assert_eq!(read_pairing(&large_welcome, true).map(|m| m.t), Ok(T_WELCOME));
+    assert_eq!(read_pairing(&large_welcome, false).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&small_welcome, false).map(|m| m.t), Err(RULE_EARLY_WELCOME));
+    assert_eq!(read_pairing(&small_welcome, true).map(|m| m.t), Ok(T_WELCOME));
+    assert_eq!(read_pairing(&large_other, true).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&large_other, false).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&too_large, true).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    let head = |f: &[u8]| <[u8; 4]>::try_from(&f[..4]).unwrap();
+    assert_eq!(pairing_length(head(&large_welcome), true), Ok(large_welcome.len() - 4));
+    assert!(pairing_length(head(&large_welcome), false).is_err());
+    assert!(pairing_length(head(&too_large), true).is_err());
+}
+
+/// The joiner's record comes with its signer's chain below it: a budget
+/// that cannot hold the set sends it in parts, which the joiner takes,
+/// never a Welcome it would refuse.
+#[test]
+fn a_welcome_carries_the_chain_of_the_joiners_record() {
+    let mut g = G::new();
+    let slate = k("slate");
+    for i in 0..20u64 {
+        g.rec_root(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec_root(Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let admitter = k("phone").hash;
+    let (all, _) = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let group = format::DeviceId(g.gid.0);
+    let check = |w: &Welcome| {
+        w.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).map(|_| ())
+    };
+    assert!(check(&all).is_ok());
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 1).unwrap();
+    assert!(!parts.is_empty());
+    assert!(check(&carried(&w, &parts)).is_ok());
+}
+
+/// Every gate on admitting asks one predicate (`State::stopped`): two
+/// histories of the current root stop it as a recovery record this version
+/// cannot read does. Sync goes on in the root fork only, so that the pair
+/// reaches every member.
+#[test]
+fn every_gate_asks_whether_the_group_is_stopped() {
+    use super::waiting;
+    let mut g = G::new();
+    let hub = k("hub");
+    let mut d = Device::new(hub.key.clone(), "hub", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_HUB;
+    d.caps = CAP_HUB;
+    let last = g.rec_root(Kind::device(d));
+    let open = g.state();
+    let hub_id = open.device_by_key(&hub.hash).unwrap().id;
+    let root = k("root");
+    assert!(!open.stopped());
+    assert!(decide::may_admit(&open, &k("laptop").hash, Signer::Admin, &root.hash));
+    assert!(waiting::admin_may_take(&open, &hub_id));
+    // A second record of the root at the seq of its newest one.
+    let b = last.body();
+    let twin = Body {
+        group: g.gid,
+        signer: b.signer,
+        seq: b.seq,
+        prev: b.prev,
+        time_ms: 0,
+        kind: Kind::device(Device::new(k("other").key.clone(), "other", ROLE_MEMBER)),
+        held: false,
+    };
+    let twin = Record::sign(twin, &root).unwrap();
+    let mut set = g.set();
+    set.insert(twin.clone()).unwrap();
+    let forked = set.state();
+    assert!(forked.stopped() && !forked.halted());
+    let mut halted = open.clone();
+    halted.update_needed = true;
+    for (name, st) in [("root fork", &forked), ("halted", &halted)] {
+        assert!(st.stopped(), "{name}");
+        assert!(!decide::may_admit(st, &k("laptop").hash, Signer::Admin, &root.hash), "{name}");
+        assert!(!decide::may_admit(st, &k("phone").hash, Signer::Root, &root.hash), "{name}");
+        assert!(!waiting::admin_may_take(st, &hub_id), "{name}");
+        assert!(!st.may_command(&k("laptop admin").hash) && !st.may_command(&root.hash), "{name}");
+    }
+    assert!(set.write_checkpoint(&forked, &root, 0).is_err());
+    let laptop_id = open.device_by_key(&k("laptop").hash).unwrap().id;
+    assert_eq!(
+        crate::peer::standing(&forked, &k("phone").hash, &point(&k("laptop"))),
+        crate::peer::Standing::Member(laptop_id)
+    );
+    assert_eq!(crate::peer::standing(&halted, &k("phone").hash, &point(&k("laptop"))), crate::peer::Standing::Halted);
+    // A joiner handed the pair does not join.
+    let tv = k("tv");
+    let mut w = admit(&mut g, true, &tv, "tv");
+    w.records.push(twin);
+    redigest(&mut w, g.empty().root(), g.empty().recovery());
+    let group = format::DeviceId(g.gid.0);
+    assert_eq!(
+        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
+        Some(welcome::Refusal::Stopped)
+    );
+}
+
+/// An invitation at its bounds (the registry, `bounds.rs`): MAX_PATHS paths
+/// of MAX_ENDPOINTS endpoints read; one path or one endpoint more does not.
+#[test]
+fn an_invitation_at_its_bounds() {
+    let path = |n: usize| Path {
+        kind: PathKind::Guest,
+        endpoints: (0..n).map(|i| alloc::format!("203.0.113.{}:51820", i + 1)).collect(),
+        hub_key: Some([5; 32]),
+        guest: Some(([6; 32], [7; 32])),
+        obfuscation: None,
+    };
+    let away = Profile { role: ROLE_MEMBER, rights: RIGHT_READ | RIGHT_SEND, home_only: false, guarded: false };
+    let read = |paths: Vec<Path>| Invitation::decode(&Invitation::new(paths, away).encode());
+    let full: Vec<Path> = (0..invitation::MAX_PATHS).map(|_| path(invitation::MAX_ENDPOINTS)).collect();
+    assert!(read(full.clone()).is_ok(), "{:?}", read(full.clone()).err());
+    let mut more = full.clone();
+    more.push(path(1));
+    assert_eq!(read(more).err(), Some(invitation::RULE_PATH));
+    let mut wider = full;
+    wider[0] = path(invitation::MAX_ENDPOINTS + 1);
+    assert_eq!(read(wider).err(), Some(invitation::RULE_PATH));
+}
+
+/// A join in parts after two changes of root and a later checkpoint that
+/// prunes a record of the last root (a removed device's admission): the
+/// joiner takes the Welcome and its
+/// parts and ends with the admitter's set and state, and one sync of
+/// everything the admitter holds adds nothing.
+#[test]
+fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
+    let mut g = G::new();
+    let (n1, n2, tv, slate) = (k("root n1"), k("root n2"), k("tv"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    let tv_admission = g.rec(&n2, Kind::device(d));
+    for i in 0..30u64 {
+        g.rec(&n2, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let seen = g.seen();
+    g.rec(&n2, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
+    // The removal is not the root's head when it checkpoints.
+    g.rec(&n2, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
+    // Every live admin acknowledges the removal, so a checkpoint may let
+    // it go.
+    for a in [k("laptop admin"), k("admin b"), k("admin c")] {
+        let seen: Vec<_> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+        g.rec(&a, Kind::Ack { seen, spare: None });
+    }
+    // The current root's later checkpoint, as a member writes it.
+    let before = g.set();
+    assert!(before.contains(&tv_admission.id()));
+    let cp = before.write_checkpoint(&before.state(), &n2, 0).unwrap();
+    let crate::records::Kind::Checkpoint { heads: _, keep } = &cp.body().kind else { panic!("not a checkpoint") };
+    assert!(!keep.contains(&tv_admission.id()), "the checkpoint keeps the removed device's admission");
+    g.heads.insert(n2.hash, (cp.body().seq, cp.id()));
+    g.recs.push(cp.clone());
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+
+    let set = g.set();
+    let st = set.state();
+    assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
+    assert_eq!(st.checkpoint, Some(cp.id()));
+    assert!(!set.contains(&tv_admission.id()), "the later checkpoint pruned the removed device's admission");
+    let admitter = k("phone c").hash;
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 20 * 200).unwrap();
+    // The set rides in a part, not in the Welcome.
+    assert!(!parts.is_empty() && w.records.len() < set.len());
+    let group = format::DeviceId(g.gid.0);
+    let (mut mine, theirs) = carried(&w, &parts)
+        .check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(theirs, st);
+    assert_eq!(mine.len(), set.len());
+    assert_eq!(mine.digest(), set.digest());
+    assert_eq!(mine.state(), st);
+    let (stored, refused) = mine.insert_all(g.recs.iter().cloned());
+    assert_eq!(stored, 0, "refused: {refused:?}");
+    assert_eq!(mine.digest(), set.digest());
+}
+
+/// Intros at their bounds against the vectors (`testdata/format/messages3.json`,
+/// "intros"), whose verdicts gen.py computes on its own: the records and the
+/// recovery heads counted apart, the records' bytes, and too many envelopes
+/// refused before any is read.
+#[test]
+fn intros_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &str| -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let cases = v["intros"].as_array().unwrap();
+    assert!(cases.len() >= 6);
+    for c in cases {
+        let mut envs = Vec::new();
+        for run in c["runs"].as_array().unwrap() {
+            let env = hex(run[0].as_str().unwrap());
+            for _ in 0..run[1].as_u64().unwrap() {
+                envs.push(env.clone());
+            }
+        }
+        // {0: 8, 2: [envelopes]}, each envelope already one CBOR item.
+        let mut msg = vec![0xa2, 0x00, 0x08, 0x02];
+        let n = envs.len();
+        if n < 24 {
+            msg.push(0x80 | n as u8);
+        } else {
+            msg.extend([0x98, u8::try_from(n).unwrap()]);
+        }
+        msg.extend(envs.concat());
+        let got = Intro::read(&msg).map(|i| i.records.len());
+        match c.get("rule") {
+            Some(rule) => assert_eq!(got.err().map(|r| r.name()), rule.as_str(), "{}", c["name"]),
+            None => assert_eq!(got, Ok(n), "{}", c["name"]),
+        }
+    }
+}
+
+/// A pairing session's CPace between the member "laptop" and the joiner
+/// "tv" over `exporter`: the member answers by `member_inv`, the joiner
+/// uses `joiner_secret` and `joiner_id`. Returns the member's exchange,
+/// the joiner's `Ta` and the joiner's ISK.
+fn session(
+    member_inv: &Invitation,
+    joiner_secret: &[u8],
+    joiner_id: &[u8; 16],
+    exporter: &PairExporter,
+) -> Result<(super::approve::MemberExchange, Vec<u8>, Vec<u8>), PairError> {
+    use crate::third_party::cpace;
+    let (member, joiner) = (k("laptop"), k("tv"));
+    let ci = channel_id(&fhash(&member), &fhash(&joiner), joiner_id);
+    let (mut js, ya) = cpace::start(&cpace::Config {
+        role: cpace::Role::Initiator,
+        password: joiner_secret,
+        channel_id: &ci,
+        session_id: exporter.bytes(),
+        ad: b"ada",
+    })
+    .unwrap();
+    let (ex, yb) = super::approve::MemberExchange::respond(
+        member_inv,
+        &fhash(&member),
+        &point(&joiner),
+        exporter,
+        b"adb",
+        &ya,
+        b"ada",
+    )?;
+    let isk = js.finish(&yb, b"adb").unwrap().to_vec();
+    Ok((ex, js.tag().unwrap(), isk))
+}
+
+/// The member makes message 67 only from an approval of that session and
+/// that joiner: the joiner's Ta under the invitation's secret (a QR code's
+/// or a home window's). An approval of another session, or a Ta under
+/// another secret, makes no message; one approval makes one.
+#[test]
+fn the_member_sends_a_welcome_only_when_approved() {
+    let mut g = G::new();
+    let tv = k("tv");
+    let welcome = admit(&mut g, true, &tv, "tv").encode();
+    let e = PairExporter::for_tests([9u8; 32]);
+    let opens = |frame: &[u8], isk: &[u8]| welcome::open(&frame[4..], isk).map(<[u8]>::to_vec);
+
+    for inv in [invitation(), Invitation::home().0] {
+        // The verified Ta approves.
+        let (mut ex, ta, isk) = session(&inv, &inv.secret, &inv.id, &e).unwrap();
+        let approved = ex.confirm(&ta).unwrap();
+        let frame = welcome::message(ex, approved, &welcome).unwrap();
+        assert_eq!(opens(&frame, &isk), Ok(welcome.clone()));
+
+        // A Ta under another secret is a wrong code, and a Ta is taken once.
+        let mut other = invitation();
+        other.id = inv.id;
+        let (mut ex, ta, _) = session(&inv, &other.secret, &inv.id, &e).unwrap();
+        assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+        let (mut ex, ta, _) = session(&inv, &inv.secret, &inv.id, &e).unwrap();
+        assert!(ex.confirm(&ta).is_ok());
+        assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+        // Another invitation ID at the joiner: another channel, a wrong code.
+        let mut id = inv.id;
+        id[0] ^= 1;
+        let (mut ex, ta, _) = session(&inv, &inv.secret, &id, &e).unwrap();
+        assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+
+        // An approval of one session serves no other.
+        let (mut a, ta_a, _) = session(&inv, &inv.secret, &inv.id, &e).unwrap();
+        let from_a = a.confirm(&ta_a).unwrap();
+        let (mut b, ta_b, _) = session(&inv, &inv.secret, &inv.id, &PairExporter::for_tests([8; 32])).unwrap();
+        b.confirm(&ta_b).unwrap();
+        assert_eq!(welcome::message(b, from_a, &welcome).err(), Some(PairError::Refused));
+        // Nor one before this session's Ta verified.
+        let (mut a, ta_a, _) = session(&inv, &inv.secret, &inv.id, &e).unwrap();
+        let early = a.confirm(&ta_a).unwrap();
+        let (c, _, _) = session(&inv, &inv.secret, &inv.id, &e).unwrap();
+        assert_eq!(welcome::message(c, early, &welcome).err(), Some(PairError::Refused));
+    }
+
+    // An invitation with a zero secret, or a zero ID, is no invitation.
+    let mut zero = invitation();
+    zero.secret = [0; invitation::SECRET];
+    assert_eq!(session(&zero, &zero.secret.clone(), &zero.id, &e).err(), Some(PairError::Refused));
+    let mut zero = invitation();
+    zero.id = [0; 16];
+    assert_eq!(session(&zero, &zero.secret.clone(), &[0; 16], &e).err(), Some(PairError::Refused));
+}
+
+/// A home window's QR code text: written and read back the same; the
+/// digits are never shown by its Debug; anything but one key hash, one
+/// ID that is not zero and six digits, with one to four addresses, is no
+/// window's.
+#[test]
+fn a_window_link_reads_back() {
+    let (window, digits) = Invitation::home();
+    let link = invitation::WindowLink {
+        addrs: vec!["192.168.1.20:7000".into(), "[fe80::1%en0]:7000".into()],
+        fp: fhash(&k("laptop")),
+        id: window.id,
+        digits: digits.clone(),
+    };
+    let text = link.text();
+    assert!(text.starts_with("cbb://pair?addr=192.168.1.20:7000&addr=[fe80::1%25en0]:7000&fp="));
+    assert!(text.ends_with(&alloc::format!("&i={}&c={digits}", crate::certs::hex(&window.id))));
+    let back = invitation::WindowLink::parse(&text).unwrap();
+    assert_eq!(back, link);
+    assert_eq!(back.invitation().unwrap(), window);
+    assert!(!alloc::format!("{link:?}").contains(&digits));
+    let fp = crate::certs::hex(&link.fp.0);
+    let id = crate::certs::hex(&window.id);
+    for bad in [
+        alloc::format!("cbb://pair?fp={fp}&i={id}&c={digits}"),
+        alloc::format!("cbb://pair?addr=a:1&i={id}&c={digits}"),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&c={digits}"),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={id}"),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={id}&c=12345"),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={}&c={digits}", "00".repeat(16)),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={}&c={digits}", id.to_uppercase()),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={id}&c={digits}&c={digits}"),
+        alloc::format!("cbb://pair?addr=a:1&addr=b:1&addr=c:1&addr=d:1&addr=e:1&fp={fp}&i={id}&c={digits}"),
+        alloc::format!("cbb://pair?addr=%zz&fp={fp}&i={id}&c={digits}"),
+        alloc::format!("cbb://join?addr=a:1&fp={fp}&i={id}&c={digits}"),
+        alloc::format!("cbb://pair?addr=a:1&fp={fp}&i={id}&c={digits}&x={}", "y".repeat(512)),
+    ] {
+        assert!(invitation::WindowLink::parse(&bad).is_none(), "{bad}");
+    }
+    // A key this version does not know is skipped.
+    assert!(invitation::WindowLink::parse(&alloc::format!("{text}&v=2")).is_some());
 }

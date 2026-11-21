@@ -4,8 +4,14 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"os"
 	"path/filepath"
@@ -23,8 +29,10 @@ type fakeGitHub struct {
 	dir      string
 	drafts   map[string]bool
 	attested bool
-	branch   bool
-	commits  int
+	// unattested are the subjects without the attestation.
+	unattested map[string]bool
+	branch     bool
+	commits    int
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -104,7 +112,7 @@ func (g *fakeGitHub) run(args ...string) ([]byte, error) {
 		}
 		return nil, nil
 	case args[0] == "attestation":
-		if !g.attested {
+		if !g.attested || g.unattested[args[2]] {
 			return nil, errors.New("verification failed")
 		}
 		return nil, nil
@@ -189,7 +197,7 @@ func (g *fakeGitHub) verifyPublished(tag string) {
 
 type keyFiles struct {
 	root1, release, channel, channelPub string
-	roots                               [][]byte
+	roots                               []release.Key
 }
 
 func testKeys(t *testing.T) keyFiles {
@@ -200,9 +208,9 @@ func testKeys(t *testing.T) keyFiles {
 	_, root2Pub = newKey(t, dir, "root-2")
 	k.release, _ = newKey(t, dir, "release")
 	k.channel, k.channelPub = newKey(t, dir, "channel")
-	k.roots = [][]byte{must(readPublic(root1Pub)), must(readPublic(root2Pub))}
+	k.roots = must(readRoots([]string{root1Pub, root2Pub}))
 	prevRoots, prevAsk, prevNow := pinnedRoots, ask, now
-	pinnedRoots = func() [][]byte { return k.roots }
+	pinnedRoots = func() []release.Key { return k.roots }
 	ask = func(string) bool { return true }
 	clock := time.Now()
 	now = func() time.Time { return clock }
@@ -239,9 +247,12 @@ func TestPublish(t *testing.T) {
 	g.file(g.channel(), "keys.json", &ks)
 	g.file(g.channel(), "stable.json", &c)
 	g.file(g.release("v0.6.0"), "release.json", &r)
-	if ks.Seq != 1 || len(ks.Keys) != 2 || ks.Keys[1].Use != release.UseChannel || c.Seq != 1 || c.Release != "0.6.0" ||
+	if ks.Seq != 1 || len(ks.Keys) != 4 || ks.Keys[2].Use != release.UseChannel || c.Seq != 1 || c.Release != "0.6.0" ||
 		r.MinFrom != "0.5.0" || r.Docker == nil || len(r.Files) != 4 {
 		t.Fatalf("keys %+v, channel %+v, release %+v", ks, c, r)
+	}
+	if life := time.Duration(c.ExpiresMS-c.TimeMS) * time.Millisecond; life != 14*24*time.Hour {
+		t.Errorf("the published channel file lives %v", life)
 	}
 	g.verifyPublished("v0.6.0")
 
@@ -251,6 +262,10 @@ func TestPublish(t *testing.T) {
 	call(t, extend, "-key", "file:"+k.channel, "-out", served, "-from", g.channel(), "-releases", g.dir)
 	if out := string(call(t, take, "-new", filepath.Join(served, "stable.json"), "-releases", g.dir, g.channel())); !strings.Contains(out, "took stable.json 2") {
 		t.Errorf("take printed %q", out)
+	}
+	g.file(g.channel(), "stable.json", &c)
+	if life := time.Duration(c.ExpiresMS-c.TimeMS) * time.Millisecond; life != 14*24*time.Hour {
+		t.Errorf("the renewed channel file lives %v", life)
 	}
 	if out := string(call(t, take, "-new", filepath.Join(served, "stable.json"), "-releases", g.dir, g.channel())); !strings.Contains(out, "is the newest") {
 		t.Errorf("take again printed %q", out)
@@ -280,7 +295,7 @@ func TestPublish(t *testing.T) {
 	}
 	g.file(g.channel(), "keys.json", &ks)
 	g.file(g.channel(), "stable.json", &c)
-	if ks.Seq != 2 || len(ks.Keys) != 2 || c.Seq != 4 {
+	if ks.Seq != 2 || len(ks.Keys) != 4 || c.Seq != 4 {
 		t.Fatalf("after the second renew: keys %+v, channel %d", ks, c.Seq)
 	}
 	g.verifyPublished("v0.6.0")
@@ -354,6 +369,21 @@ func TestPublish(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(g.release("v0.6.2"), "release.json")); err == nil {
 		t.Error("uploaded after a failed attestation")
 	}
+	// Refused: an image the notes name without the release workflow's
+	// attestation, and a name that is not the project's image.
+	g.attested = true
+	img := "ghcr.io/hunterewok/cbb@sha256:" + strings.Repeat("ab", 32)
+	g.unattested = map[string]bool{"oci://" + img: true}
+	if pub("-version", "0.6.2") == nil {
+		t.Error("signed an image without its attestation")
+	}
+	g.unattested = nil
+	if pub("-version", "0.6.2", "-docker", "example.org/cbb@sha256:"+strings.Repeat("ab", 32)) == nil {
+		t.Error("signed another image")
+	}
+	if _, err := os.Stat(filepath.Join(g.release("v0.6.2"), "release.json")); err == nil {
+		t.Error("uploaded after a refused image")
+	}
 }
 
 // TestPublishKeepsTheSequence: a keys.json that no longer checks out is
@@ -375,7 +405,7 @@ func TestPublishKeepsTheSequence(t *testing.T) {
 	}
 	var ks release.Keys
 	g.file(g.channel(), "keys.json", &ks)
-	if ks.Seq != 8 || len(ks.Keys) != 1 {
+	if ks.Seq != 8 || len(ks.Keys) != 2 {
 		t.Errorf("keys.json is %+v", ks)
 	}
 }
@@ -409,7 +439,7 @@ func TestDropAChannelKey(t *testing.T) {
 	}
 	var ks release.Keys
 	g.file(g.channel(), "keys.json", &ks)
-	if ks.Seq != 2 || len(ks.Keys) != 1 || ks.Keys[0].Use != "" {
+	if ks.Seq != 2 || len(ks.Keys) != 2 || ks.Keys[0].Use != "" {
 		t.Errorf("keys.json is %+v", ks)
 	}
 	if extend([]string{"-key", "file:" + k.channel, "-out", t.TempDir(), "-from", g.channel(), "-releases", g.dir}) == nil {
@@ -482,5 +512,118 @@ func TestEntries(t *testing.T) {
 	g.file(m, entriesName, &me)
 	if me.Seq != 2 {
 		t.Errorf("the mirror holds entries.json %d", me.Seq)
+	}
+}
+
+// TestDropByEitherPin: -drop with the pin of either half of a channel key
+// drops both its halves.
+func TestDropByEitherPin(t *testing.T) {
+	for _, alg := range []int{release.AlgES256, release.AlgSLHDSA} {
+		g := newFakeGitHub(t)
+		k := testKeys(t)
+		keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+		g.draft("v0.6.0")
+		if err := publish(append(keyFlags, "-version", "0.6.0", "-channel", "cbb.tools="+k.channelPub)); err != nil {
+			t.Fatal(err)
+		}
+		var ks release.Keys
+		g.file(g.channel(), "keys.json", &ks)
+		pin := ""
+		for _, key := range ks.Keys {
+			if key.Use == release.UseChannel && key.Alg == alg {
+				sum := sha256.Sum256(key.Key)
+				pin = base64.StdEncoding.EncodeToString(sum[:])
+			}
+		}
+		if pin == "" {
+			t.Fatalf("keys.json holds no channel half of algorithm %d", alg)
+		}
+		if err := renew(append(keyFlags, "-drop", pin)); err != nil {
+			t.Fatal(err)
+		}
+		g.file(g.channel(), "keys.json", &ks)
+		for _, key := range ks.Keys {
+			if key.Use == release.UseChannel {
+				t.Errorf("-drop by the pin of the half of algorithm %d left %+v", alg, key)
+			}
+		}
+		if ks.Seq != 2 || len(ks.Keys) != 2 {
+			t.Errorf("keys.json is %+v", ks)
+		}
+	}
+}
+
+// TestNewKeyUnderAHeldName: a new channel key under the name of one that
+// keys.json holds is refused until that one is dropped.
+func TestNewKeyUnderAHeldName(t *testing.T) {
+	g := newFakeGitHub(t)
+	k := testKeys(t)
+	keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+	g.draft("v0.6.0")
+	if err := publish(append(keyFlags, "-version", "0.6.0", "-channel", "cbb.tools="+k.channelPub)); err != nil {
+		t.Fatal(err)
+	}
+	_, otherPub := newKey(t, t.TempDir(), "channel")
+	err := renew(append(keyFlags, "-channel", "cbb.tools="+otherPub))
+	if err == nil || !strings.Contains(err.Error(), `another key named "cbb.tools"`) {
+		t.Fatalf("a new key under a held name: %v", err)
+	}
+	var ks release.Keys
+	g.file(g.channel(), "keys.json", &ks)
+	if ks.Seq != 1 {
+		t.Errorf("a refused key wrote keys.json %d", ks.Seq)
+	}
+	if err := renew(append(keyFlags, "-drop", "cbb.tools", "-channel", "cbb.tools="+otherPub)); err != nil {
+		t.Errorf("the new key after the old one is dropped: %v", err)
+	}
+}
+
+// p256Pub writes a P-256 public key alone, as openssl pkey -pubout writes
+// a server's, and returns its file and the pin of it.
+func p256Pub(t *testing.T, dir, name string) (string, string) {
+	t.Helper()
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der := must(x509.MarshalPKIXPublicKey(&k.PublicKey))
+	sum := sha256.Sum256(der)
+	return write(t, filepath.Join(dir, name), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// TestPushPins: -push lists the project's push service by its pin, the
+// old and the new key side by side while it changes, and -drop takes one
+// out by its pin; a signer's key with two halves is no push service's.
+func TestPushPins(t *testing.T) {
+	g := newFakeGitHub(t)
+	k := testKeys(t)
+	keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+	dir := t.TempDir()
+	first, firstPin := p256Pub(t, dir, "push.pem")
+	second, _ := p256Pub(t, dir, "push-2.pem")
+	g.draft("v0.6.0")
+	if _, err := keyArg("cbb.tools:8767="+k.channelPub, release.UsePush); err == nil {
+		t.Error("took a key with two halves as the push service's pin")
+	}
+	if keys, err := keyArg("cbb.tools:8767="+first, release.UsePush); err != nil || len(keys) != 1 || keys[0].Use != release.UsePush {
+		t.Errorf("the push service's pin: %+v, %v", keys, err)
+	}
+	if err := publish(append(keyFlags, "-version", "0.6.0", "-push", "cbb.tools:8767="+first)); err != nil {
+		t.Fatal(err)
+	}
+	if err := renew(append(keyFlags, "-push", "cbb.tools:8767="+second)); err != nil {
+		t.Fatal(err)
+	}
+	var ks release.Keys
+	g.file(g.channel(), "keys.json", &ks)
+	if got := ks.Pushes("cbb.tools:8767"); len(got) != 2 {
+		t.Fatalf("keys.json lists %d push pins: %+v", len(got), ks)
+	}
+	if err := renew(append(keyFlags, "-drop", firstPin)); err != nil {
+		t.Fatal(err)
+	}
+	g.file(g.channel(), "keys.json", &ks)
+	if got := ks.Pushes("cbb.tools:8767"); len(got) != 1 {
+		t.Errorf("after -drop keys.json lists %d push pins", len(got))
 	}
 }

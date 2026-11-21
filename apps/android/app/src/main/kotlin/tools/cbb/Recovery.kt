@@ -156,9 +156,10 @@ internal fun RecoverySection(model: AppModel) {
  * The recovery sheet, shown once and kept out of screenshots and the recent
  * apps: its QR code and text, printing it or saving it as a PDF through
  * Android's printing, and closing it, after which the phone has no copy.
+ * Internal for the sheet of the dangerous screens (DangerousScreensTest).
  */
 @Composable
-private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: () -> Unit) {
+internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     var askingDone by remember { mutableStateOf(false) }
@@ -181,7 +182,7 @@ private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: 
         ) {
             Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
             Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
-            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(Tokens.radiusCard)))
+            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
             AccentButton(stringResource(R.string.recovery_print), onClick = {
                 failure = try {
                     printSheet(context, sheet, made)

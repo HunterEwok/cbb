@@ -59,6 +59,7 @@ HEADERS += \
     src/member.h \
     src/membership.h \
     src/platform/keystore.h \
+    src/pinrule.h \
     src/platform/osinfo.h \
     src/platform/shell.h
 
@@ -105,9 +106,12 @@ DISTFILES += \
     qml/pages/NewGroupPage.qml \
     qml/pages/AddDevicePage.qml \
     qml/pages/DevicePage.qml \
+    qml/pages/DeviceCard.qml \
     qml/pages/AlertsCard.qml \
     qml/pages/WhySection.qml \
     qml/pages/RenameDevicePage.qml \
+    qml/pages/PinDialog.qml \
+    qml/pages/ChangePinDialog.qml \
     qml/pages/RecoveryPage.qml \
     qml/pages/RestorePage.qml \
     qml/pages/DeviceTile.qml \
@@ -119,6 +123,8 @@ DISTFILES += \
     qml/pages/ArrangePage.qml \
     qml/pages/SettingsPage.qml \
     qml/pages/KeyboardPage.qml \
+    qml/pages/PastePage.qml \
+    qml/pages/PasteFilesDialog.qml \
     qml/pages/SwitchFace.qml \
     qml/pages/AwayDialog.qml \
     qml/pages/devices.js \

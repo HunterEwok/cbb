@@ -53,7 +53,7 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 		}
 	}
 	for _, r := range relays {
-		k.Keys = append(k.Keys, release.Key{Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
+		k.Keys = append(k.Keys, release.Key{Alg: release.AlgES256, Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
 	}
 	var err error
 	if set.Keys, err = release.Sign(k, s.root); err != nil {
@@ -66,17 +66,22 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 	return string(data)
 }
 
-// TestProjectRelayNewKey sets a device to the project's relay, whose key
-// the signed keys.json gives, then changes the relay's key: once a newer
-// keys.json names the new key, the device registers again by itself. Then
-// the relay moves, and entries.json says where to.
+// TestProjectRelayNewKey has the group's root choose the project's relay,
+// whose address the signed entry points and whose key the signed keys.json
+// give, then changes the relay's key: once a newer keys.json names the new
+// key, the device registers again by itself. Then the relay moves, and
+// entries.json says where to.
 func TestProjectRelayNewKey(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
-	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1")
+	// The project relay's own name resolves to nothing, as offline: when
+	// the test's relay drops the registration, the device looks the relay
+	// up again, and with a network it would reach the live relay, whose
+	// key is another.
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	group := pi.status(t).Group
+	group := pi.status(t).RelayGroup
 	serve := func(keys relay.Keys, at string) (*relay.Process, func()) {
 		return runRelay(t, keys, at, group)
 	}
@@ -90,11 +95,18 @@ func TestProjectRelayNewKey(t *testing.T) {
 	}
 	r, stop := serve(oldKeys, "127.0.0.1:0")
 	at := r.Addr().String()
+	_, port, _ := net.SplitHostPort(at)
+	// A group of 0.6 names the project's relay by its name alone: the
+	// entry points say where it is.
+	endpoints := []string{"relay.example.org:" + port}
 
-	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 1, oldKeys)); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 1, endpoints, oldKeys)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: at, RelayKey: projectRelay, Consent: true}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", RelayKey: projectRelay, Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	connected := func() bool {
@@ -111,7 +123,7 @@ func TestProjectRelayNewKey(t *testing.T) {
 		a := pi.status(t).Away
 		return a != nil && a.Relay != nil && !a.Relay.Connected && a.Relay.Error != "" && a.Relay.Detail != ""
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelayKeys(t, 2, oldKeys, newKeys)); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 2, endpoints, oldKeys, newKeys)); err != nil {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 90*time.Second, "the pi registers with the new key", connected)
@@ -123,7 +135,7 @@ func TestProjectRelayNewKey(t *testing.T) {
 	stop()
 	moved, stop := serve(newKeys, "127.0.0.1:0")
 	defer stop()
-	_, port, _ := net.SplitHostPort(moved.Addr().String())
+	_, port, _ = net.SplitHostPort(moved.Addr().String())
 	if _, err := pi.do(t, control.Header{Op: control.OpEntries}, signer.signRelay(t, 3, []string{"relay.example.org:" + port}, newKeys)); err != nil {
 		t.Fatal(err)
 	}

@@ -5,21 +5,17 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"fmt"
+	"github.com/HunterEwok/cbb/internal/release"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// The bench's release feed (docs/testbench-catalogue.md, section 0.1,
+// The bench's release feed (docs/maintainers/testbench-catalogue.md, section 0.1,
 // "feed"): releases of the build under test, in the format of the real one
 // (docs/protocol.md, section 16), signed by tools/release-sign with the
 // bench's own throwaway keys in files, never the project's. Each release is
@@ -59,21 +55,23 @@ func newFeed(ctx context.Context) (fd *feed, err error) {
 		return nil, fmt.Errorf("run the bench at the repository's top: building tools/release-sign: %v: %s", err, out)
 	}
 	for _, name := range []string{"root1", "root2", "release", "other"} {
-		k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		// Both halves of each key in its file (docs/protocol.md, section 16,
+		// "Two signatures").
+		k, err := release.GenerateSigner()
 		if err != nil {
 			return nil, err
 		}
-		der, err := x509.MarshalPKCS8PrivateKey(k)
+		data, err := release.MarshalSignerPEM(k)
 		if err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(fd.key(name), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+		if err := os.WriteFile(fd.key(name), data, 0o600); err != nil {
 			return nil, err
 		}
 	}
 	var roots []byte
 	for _, name := range []string{"root1", "root2"} {
-		pub, err := fd.sign(ctx, "public", "-key", "file:"+fd.key(name))
+		pub, err := fd.sign(ctx, "public", "-key", "file:"+fd.key(name), "-name", name)
 		if err != nil {
 			return nil, err
 		}
@@ -274,8 +272,20 @@ func (fd *feed) toDevice(ctx context.Context, d *Device, dir string) (string, er
 	if _, err := docker(ctx, "cp", dir, d.Container+":"+at); err != nil {
 		return "", err
 	}
-	_, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem")
-	return at, err
+	return at, fd.rootsTo(ctx, d)
+}
+
+// rootsTo copies the roots to /feed/roots.pem on d, root's and closed to
+// others' writing, as cbb takes CBB_RELEASE_ROOTS only from such a file.
+func (fd *feed) rootsTo(ctx context.Context, d *Device) error {
+	if _, err := Run(ctx, d, "mkdir -p /feed", ""); err != nil {
+		return err
+	}
+	if _, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem"); err != nil {
+		return err
+	}
+	_, err := Run(ctx, d, "chown 0:0 /feed/roots.pem && chmod 0644 /feed/roots.pem", "")
+	return err
 }
 
 // feedEnv is the environment that points cbb update and get.sh at the

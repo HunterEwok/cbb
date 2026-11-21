@@ -7,8 +7,9 @@
 //! owner's decisions of 2026-11-11):
 //!
 //! - The joiner's device ID is its key's hash. An ID that a kept record
-//!   names, a removed device's included, is taken for good: the device
-//!   comes back only by a new admission with a new key.
+//!   names, a removed device's included, is taken while that record is
+//!   kept: the device comes back only by a new admission, never by an old
+//!   record.
 //! - A root admits anyone. An admin with `admit` admits any device with
 //!   base rights (read and send, secrets only when its own device has
 //!   them), an ordinary leaf included; a guarded leaf only a root admits.
@@ -97,9 +98,9 @@ pub struct Choice {
 /// Whether the device with member key `admitter` may sign a first record as
 /// `signer`: a root signs as the root; an admin's device is in the records,
 /// not frozen, with an admin key that has `admit`. Nobody admits while the
-/// group is halted.
+/// group is stopped (`State::stopped`).
 pub fn may_admit(state: &State, admitter: &KeyHash, signer: Signer, root_key: &KeyHash) -> bool {
-    if state.halted() {
+    if state.stopped() {
         return false;
     }
     match signer {
@@ -146,7 +147,7 @@ pub fn joiner_record(
     // not named by a record the member keeps.
     if let Some(a) = info.admin_key() {
         let h = a.hash();
-        if a.public == key.public
+        if a.public() == key.public()
             || state.revoked.contains(&h)
             || state.id_taken(&a.device_id())
             || state.roots.contains(&h)

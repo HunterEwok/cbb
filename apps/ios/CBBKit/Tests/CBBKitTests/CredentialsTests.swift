@@ -153,6 +153,14 @@ final class CredentialsTests: XCTestCase {
         XCTAssertEqual(reg.names, [ServerCredentials.pseudonym(mine): try XCTUnwrap(g.records.devices.first).id])
         XCTAssertNotNil(try ServerCredentials.checkPresented(reg.credentials, nowMS: now).period)
         XCTAssertNil(store.registration(records: g.records, root: rootKey.publicKeyDER, mine: Data(SHA256.hash(data: SoftwareSigner().publicKeyDER))))
+        // What a hub registers with at its forwarder: the hubs' credential,
+        // only while it lists the hub and lasts.
+        let hubs = try XCTUnwrap(store.hubs)
+        let listed = try XCTUnwrap(hubs.1.hubs.first)
+        XCTAssertEqual(store.hubRegistration(root: rootKey.publicKeyDER, mine: listed, nowMS: now), [hubs.0])
+        XCTAssertNil(store.hubRegistration(root: rootKey.publicKeyDER, mine: Data(SHA256.hash(data: SoftwareSigner().publicKeyDER)), nowMS: now))
+        XCTAssertNil(store.hubRegistration(root: rootKey.publicKeyDER, mine: listed, nowMS: hubs.1.expires_ms))
+        XCTAssertNil(store.hubRegistration(root: SoftwareSigner().publicKeyDER, mine: listed, nowMS: now))
         // Nothing changed: nothing to sign, no Face ID.
         XCTAssertEqual(try CredentialRefresh.refresh(&store, records: g.records, groupCA: g.groupCA, root: g.currentRoot, member: member,
                                                      keys: keys, nowMS: now + 1000, rootSigner: root).count, 0)

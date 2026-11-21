@@ -51,7 +51,7 @@ object Member {
     }
 
     /** The ALPN protocol of member connections. */
-    const val ALPN = "cbb/3"
+    const val ALPN = "cbb/4"
 
     /** The feature of the hello (section 4, "Hello") that says the sender serves the content of media events. */
     const val FEATURE_MEDIA = "media"
@@ -268,7 +268,7 @@ object Member {
         val records: String? = null,
         /** The sender's device name. */
         val name: String? = null,
-        /** The sender's operating system: "linux", "windows", "macos", "ios", "android", "aurora", "sailfish" or "none"; shown, never trusted. */
+        /** The sender's operating system: "linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "harmonyos" or "none"; shown, never trusted. */
         val os: String? = null,
         /**
          * From a computer that is no admin yet: the SubjectPublicKeyInfo of
@@ -405,27 +405,44 @@ object Member {
          * 11, "The hub's key"); null for none.
          */
         val nextKey: ByteArray? = null,
+        /**
+         * The obfuscation settings and the way over VLESS, as JSON text, the
+         * hub serves with together with nextKey; null for the same as now.
+         */
+        val nextObfuscation: String? = null,
+        val nextVless: String? = null,
     ) {
         /**
-         * Whether it is an offer a tunnel can take, as Go checks one: keys of 32
-         * bytes that are not all zeros, at most 8 endpoints, each with a port
-         * that is not 0.
+         * Whether it is an offer a tunnel can take, as the Rust member checks
+         * one: keys of 32 bytes that are not all zeros, at most 8 endpoints,
+         * each with a port that is not 0, and settings for the next key only
+         * with that key and beside the present ones: next obfuscation
+         * settings the tunnel takes, and a next way over VLESS to the same
+         * forwarder with the path made for its user ID.
          */
         val isValid: Boolean get() =
             hubKey.size == 32 && psk.size == 32 && endpoints.size <= 8 && (nextKey == null || nextKey.size == 32) &&
-                hubKey.any { it != 0.toByte() } && psk.any { it != 0.toByte() } && endpoints.all(::hasPort)
+                hubKey.any { it != 0.toByte() } && psk.any { it != 0.toByte() } && endpoints.all(::hasPort) &&
+                (nextObfuscation == null || nextKey != null && obfuscation != null && TunnelSettings.obfuscationValid(nextObfuscation)) &&
+                (nextVless == null || nextKey != null && vless != null && TunnelSettings.isNextVless(nextVless, vless))
 
         /** The same offer with another preshared key and hub, and moved set. */
         fun with(psk: ByteArray, hub: String?, moved: Boolean = false): TunnelOffer =
-            TunnelOffer(hubKey, psk, endpoints, obfuscation, vless, hub, moved, nextKey)
+            TunnelOffer(hubKey, psk, endpoints, obfuscation, vless, hub, moved, nextKey, nextObfuscation, nextVless)
 
-        /** The offer with the next key as the hub's key, or null without one. */
-        fun withNextKey(): TunnelOffer? = nextKey?.let { TunnelOffer(it, psk, endpoints, obfuscation, vless, hub, moved) }
+        /**
+         * The offer as the hub serves it with its next key: that key, with the
+         * obfuscation settings and the way over VLESS that go with it, or the
+         * present ones from a hub that gives none; null without one.
+         */
+        fun withNextKey(): TunnelOffer? =
+            nextKey?.let { TunnelOffer(it, psk, endpoints, nextObfuscation ?: obfuscation, nextVless ?: vless, hub, moved) }
 
         override fun equals(other: Any?): Boolean =
             other is TunnelOffer && hubKey.contentEquals(other.hubKey) && psk.contentEquals(other.psk) && endpoints == other.endpoints &&
                 obfuscation == other.obfuscation && vless == other.vless && hub == other.hub && moved == other.moved &&
-                (nextKey ?: ByteArray(0)).contentEquals(other.nextKey ?: ByteArray(0))
+                (nextKey ?: ByteArray(0)).contentEquals(other.nextKey ?: ByteArray(0)) &&
+                nextObfuscation == other.nextObfuscation && nextVless == other.nextVless
 
         override fun hashCode(): Int = hubKey.contentHashCode()
 
@@ -438,6 +455,8 @@ object Member {
             "hub" to Wire.str(hub),
             "moved" to if (moved) JsonPrimitive(true) else null,
             "next_key" to nextKey?.let { Wire.bytes(it) },
+            "next_obfuscation" to nextObfuscation?.let { Json.parseToJsonElement(it) },
+            "next_vless" to nextVless?.let { Json.parseToJsonElement(it) },
         )
 
         companion object {
@@ -452,6 +471,8 @@ object Member {
                 o.optString("hub"),
                 o.optBool("moved") ?: false,
                 o.optBytes("next_key")?.takeIf { it.isNotEmpty() },
+                o.optObject("next_obfuscation")?.toString(),
+                o.optObject("next_vless")?.toString(),
             )
         }
     }
@@ -636,9 +657,6 @@ object Member {
         /** The group's server credentials the sender keeps, or new ones it passes on (section 18). */
         data class Credentials(val credentials: List<ServerCredentials.Credential>) : Message()
 
-        /** The newest signed entry points the sender holds (section 16, "Entry points"). */
-        class Entries(val set: Releases.EntriesSet) : Message()
-
         /** From the root: the receiver's admin CA, DER, for the admin key its hello offered. */
         class Admin(val adminCA: ByteArray) : Message() {
             override fun equals(other: Any?): Boolean = other is Admin && adminCA.contentEquals(other.adminCA)
@@ -722,7 +740,6 @@ object Member {
         is Message.Cert -> Wire.obj("t" to Wire.str("cert"), "cert" to Wire.bytes(m.cert), "issuer" to Wire.bytes(m.issuer))
         is Message.Records -> Wire.obj("t" to Wire.str("records"), "records" to JsonArray(m.records.map { it.toJson() }))
         is Message.Credentials -> Wire.obj("t" to Wire.str("credentials"), "credentials" to JsonArray(m.credentials.map { it.toJson() }))
-        is Message.Entries -> Wire.obj("t" to Wire.str("entries"), "entries" to m.set.toJson())
         is Message.Admin -> Wire.obj("t" to Wire.str("admin"), "admin_ca" to Wire.bytes(m.adminCA))
         is Message.Tunnel -> Wire.obj("t" to Wire.str("tunnel"), "tunnel" to m.offer?.toJson())
         is Message.Hubs -> Wire.obj("t" to Wire.str("hubs"), "hubs" to m.share.toJson())
@@ -855,7 +872,6 @@ object Member {
                         ServerCredentials.Credential.fromJson(it as? JsonObject ?: throw WireTypeException("credentials"))
                     } ?: emptyList(),
                 )
-                "entries" -> o.optObject("entries")?.let(Releases.EntriesSet::fromJson)?.let { Message.Entries(it) } ?: Message.Unknown(t)
                 "admin" -> Message.Admin(o.optBytes("admin_ca") ?: ByteArray(0))
                 "tunnel" -> Message.Tunnel(o.optObject("tunnel")?.let { TunnelOffer.fromJson(it) })
                 "hubs" -> o.optObject("hubs")?.let { Message.Hubs(HubShare.fromJson(it)) } ?: Message.Unknown(t)

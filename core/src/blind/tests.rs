@@ -64,15 +64,70 @@ fn credentials_of_the_vectors() {
     // first root and its recovery key.
     let root = period.signer.clone();
     let recovery = unhex(v["recovery"].as_str().unwrap());
+    let recovery2 = unhex(v["recovery2"].as_str().unwrap());
     let gid = period.group;
-    assert!(period.period_of_listed_group(&root, &recovery, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &root, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &recovery, &[[0; 16]]));
+    assert!(period.period_of_listed_group(&root, &recovery, &recovery2, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &root, &recovery2, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &recovery, &recovery2, &[[0; 16]]));
+    let mut other2 = recovery2.clone();
+    other2[31] ^= 1;
+    assert!(!period.period_of_listed_group(&root, &recovery, &other2, &[gid]), "K2 is in the Group ID");
+    assert!(!period.period_of_listed_group(&root, &recovery, &recovery2[..31], &[gid]));
     assert!(
-        !read[1].period_of_listed_group(&read[1].signer, &recovery, &[read[1].group]),
+        !read[1].period_of_listed_group(&read[1].signer, &recovery, &recovery2, &[read[1].group]),
         "a device's server credential is no period"
     );
     assert!(period.live(period.expires_ms - 1) && !period.live(period.expires_ms));
+}
+
+/// The writer is the reader's inverse: each credential of the vectors
+/// gives back its body's exact bytes (but for the optional zone and a second signer), and one signed anew reads back the
+/// same, with its lists padded.
+#[test]
+fn credentials_written_as_the_vectors() {
+    let v = load("credentials.json");
+    for t in v["take"].as_array().unwrap() {
+        let c = Credential::read(&unhex(t["envelope"].as_str().unwrap())).unwrap();
+        // A field of the optional zone, or a second signer, is the
+        // signer's to add; the writer makes neither, so that body differs.
+        let env = unhex(t["envelope"].as_str().unwrap());
+        let env = crate::format::Envelope::parse_limited(&env, credential::MAX_BODY).unwrap();
+        let optional =
+            env.map.as_map().unwrap().iter().any(|(k, _)| *k >= 256 || *k == crate::format::envelope::FIELD_SIGNER2);
+        assert_eq!(hex(&c.body()) == t["body"].as_str().unwrap(), !optional, "{}", t["name"]);
+        let by = k(t["name"].as_str().unwrap());
+        let again = Credential::read(&c.clone().sign(&by).unwrap()).unwrap();
+        assert_eq!(again.signer, by.public());
+        assert_eq!(
+            (again.kind, again.group, again.version, again.expires_ms),
+            (c.kind, c.group, c.version, c.expires_ms)
+        );
+        assert_eq!(
+            (&again.tag, &again.key, &again.hubs, &again.admins, &again.members),
+            (&c.tag, &c.key, &c.hubs, &c.admins, &c.members)
+        );
+    }
+    let by = k("period");
+    let short = Credential {
+        kind: credential::TYPE_MEMBERS,
+        group: [3; 16],
+        signer: Vec::new(),
+        version: 9,
+        expires_ms: 1_000,
+        tag: None,
+        key: None,
+        hubs: Vec::new(),
+        admins: Vec::new(),
+        members: vec![[5; 32]; 5],
+        id: [0; 32],
+    };
+    let read = Credential::read(&short.clone().sign(&by).unwrap()).unwrap();
+    assert_eq!(read.members.len(), 8, "padded to the next length");
+    assert_eq!(read.members[..5], [[5; 32]; 5], "real entries first");
+    let long = Credential { members: vec![[5; 32]; 257], ..short.clone() };
+    assert!(long.sign(&by).is_err(), "more members than a credential lists");
+    let no_tag = Credential { kind: credential::TYPE_PERIOD, key: Some(by.public()), ..short };
+    assert!(no_tag.sign(&by).is_err(), "a period needs its tag");
 }
 
 fn hex(b: &[u8]) -> String {
@@ -149,6 +204,22 @@ fn a_server_card() {
     assert!(c.replaced_by(&next));
     next.operator = k("someone").public();
     assert!(!c.replaced_by(&next));
+}
+
+/// A card at its bound on keys (the registry, `bounds.rs`): MAX_KEYS read,
+/// one more does not; a body over MAX_BODY is not read at all.
+#[test]
+fn a_card_at_its_bounds() {
+    let mut ks: Vec<Vec<u8>> = (0..=card::MAX_KEYS).map(|i| k(&alloc::format!("server tls {i}")).public()).collect();
+    ks.sort();
+    let mut c = card();
+    c.keys = ks[..card::MAX_KEYS].to_vec();
+    assert_eq!(Card::read(&c.sign(&k("operator")).unwrap()).unwrap(), c);
+    c.keys = ks;
+    assert_eq!(Card::read(&c.sign(&k("operator")).unwrap()).err(), Some(card::RULE_KEYS));
+    let mut wide = card();
+    wide.name = "n".repeat(card::MAX_BODY);
+    assert_eq!(Card::read(&wide.sign(&k("operator")).unwrap()).err(), Some(Rule::ENV_SIZE));
 }
 
 #[test]

@@ -57,6 +57,12 @@ type State struct {
 	// group's hubs, so that every hub uses the same one for it.
 	PSK Key
 
+	// Toward and Held are, on the records of 0.6, the preshared keys
+	// toward each hub on a client, and each client's key and preshared
+	// keys on a hub, by device ID in hex.
+	Toward map[string]Toward
+	Held   map[string]Held
+
 	// Group is the tag of the group the rest belongs to; ForGroup clears
 	// the rest when the device is in another group.
 	Group string
@@ -109,7 +115,8 @@ type State struct {
 
 	// Next, on a hub, is the key it serves with from NextAt on, which its
 	// offers give its clients ahead of time; zero for none. NextFor is the
-	// tag of its period.
+	// tag of the period it was made in. The Rust cbb rotates them
+	// (member/src/tunnel.rs); Go reads and keeps them.
 	Next    Key
 	NextFor string
 	NextAt  time.Time
@@ -230,22 +237,63 @@ type Member struct {
 	Chain        [][]byte // DER, the member certificate first
 }
 
+// optKey is a key in a file that may leave it empty: on the records of 0.6
+// a hub's offer and a hub's client carry no preshared key, which goes in
+// `toward` and `held` instead (src/tunnel.rs in cbb).
+type optKey Key
+
+func (k optKey) MarshalText() ([]byte, error) {
+	if Key(k).IsZero() {
+		return []byte{}, nil
+	}
+	return Key(k).MarshalText()
+}
+
+func (k *optKey) UnmarshalText(b []byte) error {
+	if len(b) == 0 {
+		*k = optKey{}
+		return nil
+	}
+	return (*Key)(k).UnmarshalText(b)
+}
+
+// Toward is what a client of the records of 0.6 keeps of the preshared
+// keys toward one hub: those it sent in `tunnel` with their tags, and the
+// one the hub confirmed (cbb_core::hubkey::DeviceSide).
+type Toward struct {
+	Sent       [][]byte `json:"sent,omitempty"`
+	Confirms   [][]byte `json:"confirms,omitempty"`
+	Confirmed  []byte   `json:"confirmed,omitempty"`
+	Handshaked []byte   `json:"handshaked,omitempty"`
+}
+
+// Held is what a hub of the records of 0.6 keeps of one client: its
+// WireGuard key toward the hub and the preshared keys it holds for it
+// (cbb_core::hubkey::HubSide).
+type Held struct {
+	Key        []byte   `json:"key"`
+	Received   [][]byte `json:"received,omitempty"`
+	Handshaked [][]byte `json:"handshaked,omitempty"`
+}
+
 type stateFile struct {
-	Version    int              `json:"v"`
-	Key        *Key             `json:"key,omitempty"`
-	KeyTPM     *tpmkey.Blob     `json:"key_tpm,omitempty"`
-	KeySE      json.RawMessage  `json:"key_se,omitempty"`
-	PSK        *Key             `json:"psk,omitempty"`
-	Group      string           `json:"group,omitempty"`
-	Hubs       []hubFile        `json:"hubs,omitempty"`
-	IsHub      bool             `json:"is_hub,omitempty"`
-	Retired    bool             `json:"retired,omitempty"`
-	Endpoints  []netip.AddrPort `json:"endpoints,omitempty"`
-	ListenPort int              `json:"listen_port,omitempty"`
-	Members    []memberFile     `json:"members,omitempty"`
-	KeysInFile bool             `json:"keys_in_file,omitempty"`
-	Forwarder  *forwarderFile   `json:"forwarder,omitempty"`
-	Relay      *forwarderFile   `json:"relay,omitempty"`
+	Version    int               `json:"v"`
+	Key        *Key              `json:"key,omitempty"`
+	KeyTPM     *tpmkey.Blob      `json:"key_tpm,omitempty"`
+	KeySE      json.RawMessage   `json:"key_se,omitempty"`
+	PSK        *Key              `json:"psk,omitempty"`
+	Group      string            `json:"group,omitempty"`
+	Hubs       []hubFile         `json:"hubs,omitempty"`
+	IsHub      bool              `json:"is_hub,omitempty"`
+	Retired    bool              `json:"retired,omitempty"`
+	Endpoints  []netip.AddrPort  `json:"endpoints,omitempty"`
+	ListenPort int               `json:"listen_port,omitempty"`
+	Members    []memberFile      `json:"members,omitempty"`
+	Toward     map[string]Toward `json:"toward,omitempty"`
+	Held       map[string]Held   `json:"held,omitempty"`
+	KeysInFile bool              `json:"keys_in_file,omitempty"`
+	Forwarder  *forwarderFile    `json:"forwarder,omitempty"`
+	Relay      *forwarderFile    `json:"relay,omitempty"`
 	// Obfuscation is the hub's AmneziaWG settings.
 	Obfuscation *Obfuscation `json:"obfuscation,omitempty"`
 	// The hub's key for its clients, and the next one (State.Serving and
@@ -272,7 +320,7 @@ type forwarderFile struct {
 type hubFile struct {
 	Device       string           `json:"device"`
 	PublicKey    Key              `json:"key"`
-	PresharedKey Key              `json:"psk"`
+	PresharedKey optKey           `json:"psk"`
 	Endpoints    []netip.AddrPort `json:"endpoints,omitempty"`
 	Obfuscation  *Obfuscation     `json:"obfuscation,omitempty"`
 	VLESS        *VLESS           `json:"vless,omitempty"`
@@ -282,7 +330,7 @@ type hubFile struct {
 type memberFile struct {
 	Device       string   `json:"device"`
 	PublicKey    Key      `json:"key"`
-	PresharedKey Key      `json:"psk"`
+	PresharedKey optKey   `json:"psk"`
 	Chain        [][]byte `json:"chain"`
 }
 
@@ -343,11 +391,13 @@ func LoadState(dir string) (*State, error) {
 		}
 	}
 	for _, h := range f.Hubs {
-		s.Hubs = append(s.Hubs, HubLink(h))
+		s.Hubs = append(s.Hubs, HubLink{Device: h.Device, PublicKey: h.PublicKey, PresharedKey: Key(h.PresharedKey), Endpoints: h.Endpoints,
+			Obfuscation: h.Obfuscation, VLESS: h.VLESS, Next: h.Next})
 	}
 	for _, c := range f.Members {
-		s.Members = append(s.Members, Member(c))
+		s.Members = append(s.Members, Member{Device: c.Device, PublicKey: c.PublicKey, PresharedKey: Key(c.PresharedKey), Chain: c.Chain})
 	}
+	s.Toward, s.Held = f.Toward, f.Held
 	if f.Forwarder != nil {
 		s.Forwarder = &ForwarderLink{Endpoint: f.Forwarder.Endpoint, Pin: f.Forwarder.Pin, VLESSID: f.Forwarder.VLESSID, VLESS: f.Forwarder.VLESS, Project: f.Forwarder.Project}
 	}
@@ -404,11 +454,13 @@ func (s *State) Save(dir string) error {
 		f.PSK = &s.PSK
 	}
 	for _, h := range s.Hubs {
-		f.Hubs = append(f.Hubs, hubFile(h))
+		f.Hubs = append(f.Hubs, hubFile{Device: h.Device, PublicKey: h.PublicKey, PresharedKey: optKey(h.PresharedKey), Endpoints: h.Endpoints,
+			Obfuscation: h.Obfuscation, VLESS: h.VLESS, Next: h.Next})
 	}
 	for _, c := range s.Members {
-		f.Members = append(f.Members, memberFile(c))
+		f.Members = append(f.Members, memberFile{Device: c.Device, PublicKey: c.PublicKey, PresharedKey: optKey(c.PresharedKey), Chain: c.Chain})
 	}
+	f.Toward, f.Held = s.Toward, s.Held
 	if fw := s.Forwarder; fw != nil {
 		f.Forwarder = &forwarderFile{Endpoint: fw.Endpoint, Pin: fw.Pin, VLESSID: fw.VLESSID, VLESS: fw.VLESS, Project: fw.Project}
 	}
@@ -482,32 +534,6 @@ func (s *State) ownKey(pub Key) bool {
 	return pub == s.Key.Public() || !s.Serving.IsZero() && pub == s.Serving.Public() || !s.Next.IsZero() && pub == s.Next.Public()
 }
 
-// Rotate brings the hub's key for its clients up to the period tagged
-// period (docs/protocol.md, section 11, "The hub's key"): a period it has
-// no key for yet gets the next key, which the hub serves with from
-// now+ahead on, and once that time came the next key is the one it serves
-// with. changed tells whether the state must be saved and the offers sent
-// again, and switched whether the hub must start again with the new key.
-func (s *State) Rotate(period string, now time.Time, ahead time.Duration) (changed, switched bool, err error) {
-	if !s.IsHub {
-		return false, false, nil
-	}
-	if !s.Next.IsZero() && !now.Before(s.NextAt) {
-		s.Serving, s.ServingFor = s.Next, s.NextFor
-		s.Next, s.NextFor, s.NextAt = Key{}, "", time.Time{}
-		changed, switched = true, true
-	}
-	if period == "" || period == s.ServingFor || period == s.NextFor {
-		return changed, switched, nil
-	}
-	k, err := NewPrivateKey()
-	if err != nil {
-		return changed, switched, fmt.Errorf("tunnel: making the key: %w", err)
-	}
-	s.Next, s.NextFor, s.NextAt = k, period, now.Add(ahead)
-	return true, switched, nil
-}
-
 func unsealKey(b *keyseal.Blob) (Key, error) {
 	if KeySealer == nil {
 		return Key{}, errors.New("the key is sealed by hardware that this program does not use")
@@ -571,7 +597,7 @@ func (s *State) check() error {
 	}
 	hubs := make(map[string]bool, len(s.Hubs))
 	for _, h := range s.Hubs {
-		if err := h.check(); err != nil {
+		if err := h.checkKept(); err != nil {
 			return err
 		}
 		if s.ownKey(h.PublicKey) || !h.Next.IsZero() && s.ownKey(h.Next) {
@@ -599,15 +625,23 @@ func (s *State) check() error {
 	return err
 }
 
+// check checks an offer a hub gave.
 func (h *HubLink) check() error {
+	if h.PresharedKey.IsZero() {
+		return errors.New("the hub gave no preshared key")
+	}
+	return h.checkKept()
+}
+
+// checkKept checks a hub's offer as a state keeps it: on the records of 0.6
+// it has no preshared key, since the keys toward the hub are in Toward.
+func (h *HubLink) checkKept() error {
 	if _, err := Addr(h.Device); err != nil {
 		return err
 	}
 	switch {
 	case h.PublicKey.IsZero():
 		return errors.New("the hub has no key")
-	case h.PresharedKey.IsZero():
-		return errors.New("the hub gave no preshared key")
 	case len(h.Endpoints) > maxEndpoints:
 		return errors.New("the hub gave too many endpoints")
 	}

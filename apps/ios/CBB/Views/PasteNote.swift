@@ -46,6 +46,7 @@ struct InviteSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
         NavigationStack {
@@ -60,7 +61,7 @@ struct InviteSheet: View {
                                     .scaledToFit()
                                     .frame(maxWidth: 260)
                                     .padding(Tokens.spacingMedium)
-                                    .background(Color.white, in: RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                                    .background(Color.white, in: RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                                     .frame(maxWidth: .infinity)
                                     .accessibilityLabel(Text("The invitation's QR code"))
                             }

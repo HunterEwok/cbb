@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f299825ed818 -->
+<!-- source: 071a5fc1eda6 -->
 # 远程粘贴
 
 适合想把一段文本放进另一台设备上某个应用的人：把密码输入电视的登录表单，把命令输入服务器的终端，把地址输入房间另一头的电脑。由群组的管理员发送文本，它会落到该设备当前获得焦点的地方，以粘贴或逐键输入的方式出现。
@@ -15,7 +15,7 @@
 | Windows | 在以管理员身份打开的终端中运行 `cbb paste-receive on` | 获得焦点的窗口 |
 | Mac | `sudo cbb paste-receive on`，并打开 Mac 应用，在“系统设置”、“隐私与安全性”、“辅助功能”中允许它 | 获得焦点的应用 |
 | Android 手机或电视 | 设置，“Let the group's admins paste here”，并开启应用的无障碍服务 | 另一个应用中获得焦点的文本框 |
-| 轻量成员 | `sudo cbb paste-receive on`；加上 `-console` 时还包括文本控制台 | 正在使用的 tmux 窗格 |
+| 没有桌面的小设备 | `sudo cbb paste-receive on`；加上 `-console` 时还包括文本控制台 | 正在使用的 tmux 窗格 |
 
 `-enter`（在手机上是“Let a paste press Enter”）让一次粘贴在文本之后按下 Enter。不加它的话，包含换行的文本会被拒绝，因为在不把粘贴当作一个整体接收的终端里，换行可能会把它前面的内容当作命令执行。
 

@@ -102,6 +102,11 @@ public:
                const QString &osVersion);
     void stop();
 
+    // Has the member check the admin CA of the root's admin message
+    // (ffi's take_admin_ca): for the offered admin key, naming this phone,
+    // under the group's current root. The hellos then offer the key no more.
+    bool takeAdminCa(const QByteArray &ca, Failure *failure);
+
     // Sends the clipboard's text or image when the core's rule says so:
     // neither the group's copy nor what this phone sent or took last.
     Q_INVOKABLE void sendClipboard();
@@ -110,6 +115,9 @@ public:
     // Sends images or files shared to the app (absolute paths), up to
     // maxSendBytes together.
     Q_INVOKABLE void sendFiles(const QStringList &paths);
+    // Makes a copy of images or files for a remote paste, as sendFiles
+    // would send them, and returns its event ID, or none with failure set.
+    QString copyFiles(const QStringList &paths, Failure *failure);
 
     // Keeps the group's copies out of the clipboard for minutes (0 for
     // until resume), or takes them again; the phone's own still go out.
@@ -136,6 +144,9 @@ signals:
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
+    // The root made this phone an admin: its admin message brought the
+    // admin CA for the key the hellos offer, not yet checked (takeAdminCa).
+    void adminCaArrived(const QByteArray &ca);
     // Something in the member broke (docs/core-api.md, "Panics"): details
     // say what and where. The app shows it and starts the member again.
     void panicked(const QString &details);
@@ -166,6 +177,9 @@ private:
     // clipboard too; then tells the core it took it.
     void take(const QJsonObject &copy);
     void sendImage(const QImage &image);
+    // Sends images or files as one copy, up to maxSendBytes together, and
+    // returns its event ID, or none with failure set.
+    QString copyMedia(const QStringList &paths, Failure *failure);
     // The key the core's rule compares an image by: its PNG's SHA-256.
     static QString imageKey(const QByteArray &png);
     // Reads the pause and the mute from the core's answer, or asks for it.
@@ -178,6 +192,9 @@ private:
     cbb_member *m_member = nullptr;
     QTimer m_peerTimer;
     QStringList m_peers;
+    // The connected devices whose hello says an admin muted them, by ID:
+    // pollDevices marks them muted for their tiles.
+    QStringList m_mutedPeers;
     QVariantList m_devices;
     QStringList m_recentLog;
     QVariantList m_alerts;

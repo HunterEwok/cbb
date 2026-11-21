@@ -134,7 +134,7 @@ var Caps = []string{CapAdmin, CapDials, CapHub}
 // Roles and systems a device record may name.
 var (
 	roles = map[string]bool{RoleMember: true, RolePhone: true, RoleWatch: true}
-	oses  = map[string]bool{"linux": true, "windows": true, "macos": true, "ios": true, "android": true, "aurora": true, "sailfish": true, "watchos": true, "wearos": true, "none": true}
+	oses  = map[string]bool{"linux": true, "windows": true, "macos": true, "ios": true, "android": true, "aurora": true, "sailfish": true, "harmonyos": true, "watchos": true, "wearos": true, "none": true}
 )
 
 // Hash is a key hash (SHA-256 of a SubjectPublicKeyInfo) or a record ID (SHA-256 of a body). In JSON it is standard base64

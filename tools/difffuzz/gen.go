@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -416,7 +417,117 @@ func writeSeeds(dir, out string) error {
 			return err
 		}
 	}
+	if err := writeFormatSeeds(filepath.Join(filepath.Dir(dir), "format"), out); err != nil {
+		return err
+	}
 	return writeAPISeeds(dir, filepath.Join(out, "api"), base)
+}
+
+// writeFormatSeeds writes the seeds of the 0.6 readers' targets from the
+// vectors of testdata/format: sheet (each sheet's text and QR code, and the
+// inputs read and refused), yubikey_object (the objects sealed and
+// refused), welcome_fields (the Welcome a good tag covers) and
+// welcome_parts (that Welcome with its length in front, then the `records`
+// frame of frames.json once for each part it announces, each with a step
+// of one second and its length; the target tries them in both orders).
+func writeFormatSeeds(dir string, out string) error {
+	load := func(name string, v any) error {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(b, v)
+	}
+	var sheet struct {
+		Take []struct {
+			Text string `json:"text"`
+			QR   string `json:"qr"`
+		} `json:"take"`
+		Read   []struct{ Input string } `json:"read"`
+		Refuse []struct{ Input string } `json:"refuse"`
+		Yubi   struct {
+			Take   []struct{ Object string } `json:"take"`
+			Refuse []struct{ Object string } `json:"refuse"`
+		} `json:"yubikey"`
+	}
+	var msgs struct {
+		Parts struct {
+			Tag []struct{ Welcome string } `json:"tag"`
+		} `json:"welcome_parts"`
+	}
+	var frames struct {
+		Take []struct {
+			Name  string `json:"name"`
+			Frame string `json:"frame"`
+		} `json:"take"`
+	}
+	for name, v := range map[string]any{"sheet.json": &sheet, "messages3.json": &msgs, "frames.json": &frames} {
+		if err := load(name, v); err != nil {
+			return err
+		}
+	}
+	seeds := map[string][][]byte{}
+	add := func(target string, b []byte) { seeds[target] = append(seeds[target], b) }
+	for _, t := range sheet.Take {
+		add("sheet", []byte(t.Text))
+		add("sheet", []byte(t.QR))
+	}
+	for _, t := range sheet.Read {
+		add("sheet", []byte(t.Input))
+	}
+	for _, t := range sheet.Refuse {
+		add("sheet", []byte(t.Input))
+	}
+	for _, o := range append(sheet.Yubi.Take, sheet.Yubi.Refuse...) {
+		b, err := hex.DecodeString(o.Object)
+		if err != nil {
+			return err
+		}
+		add("yubikey_object", b)
+	}
+	var part []byte
+	for _, f := range frames.Take {
+		if f.Name == "records" {
+			b, err := hex.DecodeString(f.Frame)
+			if err != nil {
+				return err
+			}
+			part = b
+		}
+	}
+	if part == nil {
+		return errors.New("frames.json has no records frame")
+	}
+	for _, t := range msgs.Parts.Tag {
+		if t.Welcome == "" {
+			continue
+		}
+		w, err := hex.DecodeString(t.Welcome)
+		if err != nil {
+			return err
+		}
+		add("welcome_fields", w)
+		for n := 0; n <= 3; n++ {
+			b := []byte{byte(len(w) >> 8), byte(len(w))}
+			b = append(b, w...)
+			for range n {
+				b = append(b, 1, byte(len(part)>>16), byte(len(part)>>8), byte(len(part)))
+				b = append(b, part...)
+			}
+			add("welcome_parts", b)
+		}
+	}
+	for target, list := range seeds {
+		if err := os.MkdirAll(filepath.Join(out, target), 0o755); err != nil {
+			return err
+		}
+		for i, b := range list {
+			if err := os.WriteFile(filepath.Join(out, target, fmt.Sprint(i+1)), b, 0o644); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // writeAPISeeds writes the seeds of the cargo fuzz target api, requests to

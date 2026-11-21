@@ -54,6 +54,8 @@ Un ordenador que no está en casa se une con una invitación del hub ([Fuera de 
 - **SSH** a la raíz o a un administrador: en el ordenador nuevo ejecuta `ssh -N -L 18764:localhost:8764 user@that-machine`, luego `sudo cbb pair` allí (en otra sesión SSH) y `sudo cbb pair -code 127.0.0.1:18764` aquí.
 - **Tu propia VPN** que dé direcciones privadas a ambas máquinas: `sudo cbb pair` en la raíz o en un administrador, y luego `sudo cbb pair -code ITS-VPN-ADDRESS:8764` aquí. En Linux, ejecuta el instalador de nuevo tras configurar la VPN, para que sus reglas de cortafuegos permitan la red de la VPN.
 
+En los dos casos, escribe la línea que `cbb pair` imprime bajo el código (`cbb://pair?...`) en lugar de los seis dígitos: los dígitos solos no nombran ninguna ventana donde mDNS no llega, y la línea la nombra, con el mismo código dentro.
+
 El código nunca viaja en claro: el emparejamiento se hace dentro de SSH o de tu VPN, y dentro de TLS. El ordenador nuevo se sincroniza por ese camino hasta que su servicio se reinicia; para seguir sincronizando después, activa la [sincronización fuera de casa](away-from-home.md) en ambos antes de cerrar la conexión.
 
 ## Un grupo anterior a la 0.6

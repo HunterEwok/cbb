@@ -25,7 +25,7 @@ import (
 )
 
 // The ZX Spectrum Next's files: the release's archive of them, and the
-// most a file in it may hold (docs/maintaining.md, "The ZX Spectrum
+// most a file in it may hold (docs/maintainers/maintaining.md, "The ZX Spectrum
 // Next's files").
 const (
 	zxnextArchive = "cbb-zxnext.tar.gz"

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0ee54fa655f3 -->
+<!-- source: 1abdaa297166 -->
 # 离家使用
 
 在家时，你的设备会自动同步。要让笔记本或手机在别处也能继续同步，需要让家里的一台电脑成为群组的**中枢**，外出的设备通过群组自己的加密隧道连接到它。各种情形的图示见[工作原理](how-it-works.md#away-from-home-the-hub)。
@@ -44,7 +44,7 @@ sudo cbb global hub 203.0.113.7:8764      # the address the internet reaches you
 
 - **电脑**：`sudo cbb global on`（在 Windows 上，在管理员终端中）。
 - **手机**：在应用中，设置，**Sync away from home**。然后在家里让应用保持打开片刻，让它与中枢碰面。iPhone 只在应用打开时才进行离家同步；Android 在后台也可以。在手机上创建的群组中，这部手机一开始就是中枢，等它不再是中枢时才会出现这个开关：在 **Move the hub to a computer** 下把电脑设为中枢（先在手机上保存转发器），或关闭 **This phone as the hub**。
-- **轻量成员**：在该设备上运行 `sudo cbb global on`（[轻量成员](../../member/README.md#sync-away-from-home)）。
+- **小设备**（路由器、Raspberry Pi）：在该设备上运行 `sudo cbb global on`（[小设备](../../member/README.md#sync-away-from-home)）。
 
 ## 4. 检查
 

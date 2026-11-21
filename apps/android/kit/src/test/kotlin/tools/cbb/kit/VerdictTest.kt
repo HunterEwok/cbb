@@ -60,13 +60,8 @@ class VerdictTest {
             }
             "manifest" -> if (Media.Manifest.parse(body) != null) "taken" else "refused"
             "keys", "release", "channel", "attest-status" -> refused {
-                if (body.size > Releases.MAX_BODY) throw Releases.Refused("too large")
-                when (kind) {
-                    "keys" -> Releases.decodeKeys(body)
-                    "release" -> Releases.decodeRelease(body)
-                    "channel" -> Releases.decodeChannel(body)
-                    else -> Releases.decodeStatus(body)
-                }
+                // The core reads release files for the kit (docs/core-api.md).
+                Core.bodyRefusal(kind, body)?.let { throw Releases.Refused(it) }
                 "taken"
             }
             else -> error("unknown kind $kind")

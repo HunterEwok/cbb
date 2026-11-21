@@ -18,8 +18,11 @@ use cbb_core::records::body::{
     AdminKind, Device, Head, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Removal, Seen,
 };
 use cbb_core::records::eval::{ChangeState, ConflictKind, Stop};
+use cbb_core::records::pq::PqKey;
 use cbb_core::records::set::Written;
-use cbb_core::records::{Body, GroupId, Key, KeyHash, Kind, List, Record, RecordId, RecordSet, State, group_id};
+use cbb_core::records::{
+    Body, GroupId, Key, KeyHash, Kind, List, Record, RecordId, RecordSet, Recovery, State, group_id,
+};
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
@@ -32,7 +35,7 @@ struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> cbb_core::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
@@ -45,6 +48,18 @@ fn k(name: &str) -> K {
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }
+}
+
+/// The recovery key's second half, of fixed seeds; signed heads are kept,
+/// as signing is slow and deterministic.
+fn k2() -> &'static PqKey {
+    static K2: std::sync::OnceLock<PqKey> = std::sync::OnceLock::new();
+    K2.get_or_init(|| PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]))
+}
+
+/// The model's recovery key: K and k2.
+fn recovery() -> Recovery {
+    Recovery { k1: k("K").key, k2: k2().key() }
 }
 
 /// The model's group: R made A a phone admin, C a computer admin and W a
@@ -75,7 +90,7 @@ impl Group {
     }
 
     fn group(&self) -> GroupId {
-        group_id(&self.root.key, &k("K").key)
+        group_id(&self.root.key, &recovery())
     }
 
     /// What the signer's device holds: here, every record so far.
@@ -94,11 +109,22 @@ impl Group {
     }
 
     fn sign(&mut self, by: &str, kind: Kind) -> Record {
+        let roots: Vec<KeyHash> = ["R", "NK", "NA"].iter().map(|r| k(r).hash).collect();
         let by = k(by);
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // roots' heads it holds, so what it signs stands on its grant line.
+        let mut kind = kind;
+        if seq == 1 && !roots.contains(&by.hash) {
+            let add: Vec<Seen> = roots
+                .iter()
+                .filter_map(|r| self.heads.get(r).map(|(s, id)| Seen { key: *r, seq: *s, id: *id }))
+                .collect();
+            add_seen(&mut kind, &add);
+        }
         let body = Body { group: self.group(), signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         self.push(Record::sign(body, &by).unwrap())
     }
@@ -161,7 +187,7 @@ impl Group {
     /// their heads name, then the records again (a new root's records wait
     /// for the head's list).
     fn member(&self, recs: &[&Record]) -> RecordSet {
-        let mut set = RecordSet::new(self.root.key.clone(), k("K").key);
+        let mut set = RecordSet::new(self.root.key.clone(), recovery());
         take(&mut set, recs, &self.lists);
         set
     }
@@ -170,12 +196,12 @@ impl Group {
     /// only `from`: the writer's first records of the new root, its head
     /// and its list join the group. It unticks `remove`.
     fn change_from(&mut self, from: &[&Record], new_root: &str, remove: &[&str]) -> Written {
-        let set = self.member(from);
+        let mut set = self.member(from);
         let st = set.state();
         let mut d = Device::new(k(&format!("{new_root} phone")).key, "new phone", ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND;
         let remove: Vec<KeyHash> = remove.iter().map(|r| k(r).hash).collect();
-        let w = set.write_change(&st, &k("K"), &k(new_root), d, &remove, false, 0).unwrap();
+        let w = set.write_change(&st, &k("K"), k2(), &k(new_root), d, &remove, false, 0).unwrap();
         for r in &w.first {
             self.push(r.clone());
         }
@@ -192,12 +218,37 @@ impl Group {
 
     /// A head the recovery key signs at seq naming root, with prev the
     /// chain's record before it (or none) and the given list, whatever
-    /// the chain holds: for twins, old roots and edited lists.
+    /// the chain holds: for twins, old roots and edited lists. It names a
+    /// first checkpoint nobody signed, so it never applies by itself.
     fn head_at(&mut self, seq: u64, root: &str, list: &List) -> Record {
+        self.head_naming(seq, root, list, RecordId([0xf1; 32]))
+    }
+
+    /// The same, after root signs its first checkpoint (keeping the whole
+    /// list, naming the first root's head), which the head names: one
+    /// that applies. Returns the head and the checkpoint.
+    fn head_applying(&mut self, seq: u64, root: &str, list: &List) -> (Record, Record) {
+        let (rs, rid) = self.heads[&k("R").hash];
+        // As write_change: its own head when root has a record (rule
+        // `records/checkpoint/own-prev`), its records before it kept.
+        let mut heads = vec![Head { key: k("R").hash, seq: rs, id: rid }];
+        let mut keep = list.0.clone();
+        if let Some(&(s, id)) = self.heads.get(&k(root).hash) {
+            heads.push(Head { key: k(root).hash, seq: s, id });
+            heads.sort_by_key(|h| h.key);
+            keep.extend(self.recs.iter().filter(|r| r.body().signer == k(root).hash && r.id() != id).map(Record::id));
+            keep.sort();
+            keep.dedup();
+        }
+        let first = self.sign(root, Kind::Checkpoint { heads, keep });
+        (self.head_naming(seq, root, list, first.id()), first)
+    }
+
+    fn head_naming(&mut self, seq: u64, root: &str, list: &List, first: RecordId) -> Record {
         let prev = self.recs.iter().find(|r| r.body().signer == k("K").hash && r.body().seq + 1 == seq).map(|r| r.id());
-        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0 };
+        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0, first, signer2: k2().key().hash() };
         let body = Body { group: self.group(), signer: k("K").hash, seq, prev, time_ms: 0, kind, held: false };
-        let r = Record::sign(body, &k("K")).unwrap();
+        let r = Record::sign_head(body, &k("K"), k2()).unwrap();
         self.lists.push(list.encode());
         self.push(r)
     }
@@ -227,20 +278,22 @@ fn stopped_for_good(s: &State) -> bool {
         && ["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash))
 }
 
-/// recoveryChangesRootTest: the recovery key changes the root; a member
-/// that holds the head and its list follows it at once, and the admins
-/// the first root named stay.
+/// recoveryChangesRootTest, under L: the recovery key changes the root; a
+/// member that holds the head and the new root's first records follows it
+/// at once. The change names no list; the admins' devices stay as plain
+/// devices, and the admin keys, which published no spare, command no more.
 #[test]
 fn the_recovery_key_changes_the_root() {
     let mut g = Group::new();
     let w = g.change("NK");
-    assert_eq!(w.list.0.len(), 3);
+    assert!(w.list.0.is_empty());
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
     assert_eq!(s.changes.len(), 1);
     assert_eq!(s.changes[0].state, ChangeState::Effective);
-    assert!(["A", "C", "W", "NK"].iter().all(|n| s.may_command(&k(n).hash)));
-    assert!(!s.may_command(&k("R").hash));
+    assert!(s.may_command(&k("NK").hash));
+    assert!(["A", "C", "W", "R"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(["A phone", "C computer", "W watch"].iter().all(|m| has(&s, m)));
 }
 
 /// recoveryUntouchableTest: neither the root's removal nor the phone
@@ -347,10 +400,13 @@ fn a_removed_admins_thief_gains_nothing() {
     };
     check(&g.member(&g.all()).state());
     g.change("NK");
+    // L: after the change no admin of the first root commands, and what
+    // the removed key signed is not carried.
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
-    assert!(s.revoked.contains(&k("A").hash));
-    check(&s);
+    assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(!has(&s, "D"));
+    assert!(!s.devices.iter().any(|d| d.frozen));
 }
 
 /// oldRootResolveStaysTest: what the old root resolved stays resolved after
@@ -434,26 +490,22 @@ fn a_key_a_root_off_the_path_names_teaches_nothing() {
         ids.sort();
         ids
     });
-    let head = g.head_at(1, "NA", &list);
-    take(&mut m, &[&head, &named, &x], &g.lists);
+    let (head, first) = g.head_applying(1, "NA", &list);
+    take(&mut m, &[&head, &first, &named, &x], &g.lists);
     let s = m.state();
     assert_eq!(s.roots, roots(&["R", "NA"]));
     assert!(s.may_command(&k("X").hash) && has(&s, "D"));
 }
 
 /// checkpointTest: the root's checkpoint gives the state on a member that
-/// compacted on it.
+/// holds it, which compacted on it as it came.
 #[test]
 fn the_roots_checkpoint_gives_the_state() {
     let mut g = Group::new();
     g.device("R");
     let s = g.member(&g.all()).state();
     let cp = g.checkpoint("R", &s);
-    let mut m = g.member(&g.all());
-    let s = m.state();
-    assert_eq!(s.checkpoint, Some(cp.id()));
-    assert!(has(&s, "D"));
-    m.compact(&s);
+    let m = g.member(&g.all());
     let s = m.state();
     assert_eq!(s.checkpoint, Some(cp.id()));
     assert!(has(&s, "D") && s.may_command(&k("A").hash));
@@ -500,8 +552,10 @@ fn a_second_change_of_root() {
     assert_eq!(s.roots, roots(&["R"]));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK", "NA"]));
-    assert!(has(&s, "D") && s.may_command(&k("A").hash));
-    assert!(w.list.0.len() > first.list.0.len());
+    // L: NA carries what NK counted (D), and the first root's admins
+    // command no more; neither change names a list.
+    assert!(has(&s, "D") && !s.may_command(&k("A").hash));
+    assert!(w.list.0.is_empty() && first.list.0.is_empty());
 }
 
 /// recoveryTwinStopsTest: two heads at one seq stop every member that
@@ -521,9 +575,8 @@ fn two_heads_at_one_seq_stop_the_group_for_good() {
 /// After a fork nothing commands and nothing acts, at seq 1 (where the
 /// path before the fork ends at the first root) and at depth: no root, no
 /// admin, no admission; a record the old root signs after does not make
-/// it command. The state shows the chain below the fork and what the list
-/// applied there names: at depth the first root's listed devices, at seq 1
-/// the first root alone.
+/// it command. The state counts the recovery chain below the fork and
+/// nothing else: it names the roots and no device.
 #[test]
 fn after_a_fork_nobody_commands() {
     use cbb_core::join::decide::{Signer, may_admit};
@@ -541,9 +594,7 @@ fn after_a_fork_nobody_commands() {
         }
         assert!(!may_admit(&s, &k(last).hash, Signer::Root, &k(last).hash), "depth {depth}");
         assert!(!may_admit(&s, &k("A phone").hash, Signer::Admin, &k(last).hash), "depth {depth}");
-        let shown = has(&s, "A phone") && has(&s, "C computer") && has(&s, "W watch");
-        assert_eq!(shown, depth == 2, "depth {depth}");
-        assert!(!has(&s, "D"), "depth {depth}");
+        assert!(s.devices.is_empty(), "depth {depth}");
     }
 }
 
@@ -588,20 +639,28 @@ fn a_member_that_took_the_thiefs_removal_follows_the_head() {
     assert!(has(&s, "D"));
 }
 
-/// untickTest: the owner unticks the computer admin: the new root signs
-/// its removal in the same act. The root's earlier removal of the watch
-/// admin is on the list and stays.
+/// untickTest, under L: the owner leaves out the computer admin: the new
+/// root does not re-issue its device and writes no removal. No admin of
+/// the first root commands after the change.
 #[test]
 fn the_owner_unticks_an_admin() {
     let mut g = Group::new();
     g.revoke("R", "W");
     let all: Vec<Record> = g.recs.clone();
-    g.change_from(&all.iter().collect::<Vec<_>>(), "NK", &["C"]);
+    let w = g.change_from(&all.iter().collect::<Vec<_>>(), "NK", &["C"]);
+    // The change removes the first root's admin keys (11-15 rule: an
+    // admin key is new after a change), never a device key.
+    let admin_keys: Vec<KeyHash> = ["A", "C", "W"].iter().map(|n| k(n).hash).collect();
+    assert!(w.first.iter().all(|r| match &r.body().kind {
+        Kind::Revoke(rm) => rm.keys.iter().all(|h| admin_keys.contains(h)),
+        _ => true,
+    }));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
-    assert!(s.may_command(&k("A").hash));
-    assert!(!s.may_command(&k("C").hash) && !s.may_command(&k("W").hash));
-    assert!(s.revoked.contains(&k("W").hash));
+    assert!(!has(&s, "C computer") && has(&s, "A phone"));
+    assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(s.revoked.iter().all(|h| admin_keys.contains(h)), "only admin keys are removed");
+    assert!(["A", "C"].iter().all(|n| s.revoked.contains(&k(n).hash)), "the old admin keys are removed");
 }
 
 /// literalListTest: why the list holds what the writer counts of every
@@ -613,7 +672,7 @@ fn a_list_of_the_replaced_root_alone_drops_the_first_roots_admins() {
     g.change("NK");
     let mut nk: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == k("NK").hash).map(|r| r.id()).collect();
     nk.sort();
-    g.head_at(2, "NA", &List(nk));
+    g.head_applying(2, "NA", &List(nk));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK", "NA"]));
     assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
@@ -695,10 +754,12 @@ fn any_order_gives_one_state() {
     }
 }
 
-/// compactedAgree's trace, by the room: two members take the same records,
-/// one compacts on the new root's newest checkpoint and one does not; the
-/// newest checkpoint prunes an older one of the same root. As the new root
-/// fills its room, both keep the same records and have the same state.
+/// compactedAgree's trace, by the room: in the model one member compacts
+/// on the new root's newest checkpoint and one does not; here a counting
+/// checkpoint compacts as it comes, so two members that take the same
+/// records hold the same, and the newest checkpoint prunes an older one
+/// of the same root. As the new root fills its room, both keep the same
+/// records and have the same state.
 #[test]
 fn compacting_on_the_roots_checkpoint_changes_nothing() {
     let mut g = Group::new();
@@ -714,10 +775,15 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
     let mut b = g.member(&g.all());
     let st = a.state();
     assert_eq!(st.checkpoint, Some(newest.id()));
-    a.compact(&st);
-    assert!(!a.contains(&older.id()) && b.contains(&older.id()), "only one member compacted");
+    // The newest checkpoint compacted both when it came.
+    assert!(!a.contains(&older.id()) && !b.contains(&older.id()), "the checkpoint compacts as it counts");
+    assert_eq!(a.digest(), b.digest());
+    // Until the root's room has turned records away for a while.
     let mut dropped = 0;
-    for i in 0..400 {
+    for i in 0..cbb_core::records::MAX_ROOT_RECORDS + 100 {
+        if dropped >= 20 {
+            break;
+        }
         let r = g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
         a.insert(r.clone()).unwrap();
         b.insert(r.clone()).unwrap();
@@ -726,4 +792,20 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
         dropped += usize::from(!a.contains(&r.id()));
     }
     assert!(dropped > 0, "the room filled");
+}
+
+/// Adds to a record's seen the entries for keys it does not name yet.
+fn add_seen(kind: &mut Kind, add: &[Seen]) {
+    let seen = match kind {
+        Kind::Revoke(r) | Kind::Freeze(r) => &mut r.seen,
+        Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => seen,
+        Kind::Device(d) => &mut d.seen,
+        _ => return,
+    };
+    for e in add {
+        if !seen.iter().any(|s| s.key == e.key) {
+            seen.push(*e);
+        }
+    }
+    seen.sort_by_key(|s| s.key);
 }

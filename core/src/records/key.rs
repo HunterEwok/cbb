@@ -26,14 +26,24 @@ pub const ALG_XWING: u64 = 2;
 /// X25519 (WireGuard); a 32-byte public key.
 pub const ALG_X25519: u64 = 3;
 
+/// SLH-DSA-SHA2-128s (FIPS 205): the recovery key's second half (E-6); a
+/// 32-byte public key. It names no record's signer: it rides in the Group
+/// ID, the Welcome and a recovery head's `signer2`.
+pub const ALG_SLH_DSA: u64 = 4;
+/// The size of an SLH-DSA-SHA2-128s public key.
+pub const SLH_DSA_PUBLIC: usize = 32;
+
 /// The size of an X-Wing public key.
 pub const XWING_PUBLIC: usize = 1216;
 
 /// A key as the format writes it: `[alg, pub]`.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Key {
-    pub alg: u64,
-    pub public: Vec<u8>,
+    alg: u64,
+    public: Vec<u8>,
+    /// SHA-256 over the key's encoding, taken once when the key is made:
+    /// the fields are private and never change, so it cannot go stale.
+    hash: KeyHash,
 }
 
 /// What reading a key found.
@@ -47,14 +57,31 @@ pub enum KeyCheck {
 }
 
 impl Key {
+    /// The key of algorithm `alg` with public bytes `public`; its hash is
+    /// taken here, once.
+    pub fn new(alg: u64, public: Vec<u8>) -> Key {
+        let hash = fkey::Key::new(Alg::from_number(alg), &public).hash();
+        Key { alg, public, hash }
+    }
+
     pub fn es256(public: Vec<u8>) -> Key {
-        Key { alg: ALG_ES256, public }
+        Key::new(ALG_ES256, public)
     }
 
     /// The key a reader found in a body.
     pub fn read(v: &Value<'_>) -> Result<Key, Rule> {
         let k = fkey::Key::from_value(v)?;
-        Ok(Key { alg: k.alg.number(), public: k.public.to_vec() })
+        Ok(Key::new(k.alg.number(), k.public.to_vec()))
+    }
+
+    /// The key's algorithm number.
+    pub fn alg(&self) -> u64 {
+        self.alg
+    }
+
+    /// The key's public bytes.
+    pub fn public(&self) -> &[u8] {
+        &self.public
     }
 
     /// The format's view of the key.
@@ -72,9 +99,9 @@ impl Key {
         self.format().encode()
     }
 
-    /// SHA-256 over the key's encoding.
+    /// SHA-256 over the key's encoding, taken when the key was made.
     pub fn hash(&self) -> KeyHash {
-        self.format().hash()
+        self.hash
     }
 
     /// The first 16 bytes of the key's hash: a device ID.
@@ -162,19 +189,54 @@ impl DeviceId {
     }
 }
 
+/// The group's recovery key (E-6): a pair, K1 (ES256) and K2
+/// (SLH-DSA-SHA2-128s), both fixed in the Group ID. A recovery head carries
+/// both signatures and both are required; everywhere else the recovery key
+/// is named by K1's hash.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Recovery {
+    pub k1: Key,
+    pub k2: Key,
+}
+
+impl Recovery {
+    /// The pair, when K1 is an ES256 key and K2 an SLH-DSA-SHA2-128s key of
+    /// the right sizes.
+    pub fn new(k1: Key, k2: Key) -> Option<Recovery> {
+        let ok = k1.check().is_ok_and(|c| c == KeyCheck::Good)
+            && k1.alg == ALG_ES256
+            && k2.alg == ALG_SLH_DSA
+            && k2.public.len() == SLH_DSA_PUBLIC;
+        ok.then_some(Recovery { k1, k2 })
+    }
+
+    /// K1's hash: the recovery key's name as a signer.
+    pub fn hash(&self) -> KeyHash {
+        self.k1.hash()
+    }
+
+    /// K2's hash: a recovery head's `signer2`.
+    pub fn hash2(&self) -> KeyHash {
+        self.k2.hash()
+    }
+}
+
 /// The label of the Group ID's hash.
 pub const LABEL_GROUP: &str = "cbb group v3";
 
 /// The Group ID: the first 16 bytes of SHA-256 over the label, a zero
-/// byte, and the encodings of the group's first root key and its recovery
-/// key (rule 33). It commits to both: a recovery key that is not the
-/// group's gives another Group ID, so no admitter can pin a false one.
-pub fn group_id(root: &Key, recovery: &Key) -> GroupId {
+/// byte, and the encodings of the group's first root key and the two
+/// halves of its recovery key (rule 33, E-6). It commits to all three: a
+/// recovery key that is not the group's gives another Group ID, so no
+/// admitter can pin a false one. Each key is one self-delimiting item, so
+/// the three cannot be cut another way; a second preimage costs 2^128.
+pub fn group_id(root: &Key, recovery: &Recovery) -> GroupId {
     let mut m = Vec::new();
     m.extend_from_slice(LABEL_GROUP.as_bytes());
     m.push(0);
     m.extend_from_slice(&root.encode());
-    m.extend_from_slice(&recovery.encode());
+    m.extend_from_slice(&recovery.k1.encode());
+    m.extend_from_slice(&recovery.k2.encode());
     DeviceId::of(&KeyHash(sha256(&m)))
 }
 
@@ -234,5 +296,31 @@ pub mod tests_hook {
         for b in id.iter_mut().skip(n) {
             *b = 0;
         }
+    }
+}
+
+#[cfg(test)]
+mod hash_tests {
+    use super::*;
+
+    /// The hash a key keeps is the hash of its encoding, however the key
+    /// was made: by its parts, as ES256, read from a body, or cloned.
+    #[test]
+    fn a_keys_kept_hash_is_its_encodings_hash() {
+        let es = crate::testkit::k("some key").key;
+        let keys = [
+            es.clone(),
+            Key::new(ALG_XWING, alloc::vec![3; XWING_PUBLIC]),
+            Key::new(ALG_SLH_DSA, alloc::vec![9; SLH_DSA_PUBLIC]),
+            Key::new(77, alloc::vec![1, 2, 3]),
+            Key::read(&crate::format::cbor::decode(&es.encode()).unwrap()).unwrap(),
+            Key::es256(es.public().to_vec()),
+        ];
+        for k in keys.iter().chain(keys.clone().iter()) {
+            assert_eq!(k.hash(), KeyHash(crate::certs::sha256(&k.encode())));
+            assert_eq!(k.hash(), k.format().hash());
+        }
+        assert_eq!(keys[0], keys[4]);
+        assert_eq!(keys[0], keys[5]);
     }
 }

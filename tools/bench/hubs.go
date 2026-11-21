@@ -17,7 +17,7 @@ import (
 // again, and the admin serves while the root's service is stopped and gives
 // way when it is back (P36).
 func hubCases(ctx context.Context, r *Report, g *benchGroup, fwd *Host, joined []*Device, timeout time.Duration) {
-	// The admin computer: the Mac, as in docs/testbench-cases.md, or else
+	// The admin computer: the Mac, as in docs/maintainers/testbench-cases.md, or else
 	// a Linux member at home.
 	var admin *Device
 	for _, d := range g.members[1:] {
@@ -56,10 +56,10 @@ func hubCases(ctx context.Context, r *Report, g *benchGroup, fwd *Host, joined [
 		return
 	}
 
-	// P37: the lite member and the container cannot be the hub; the admin
-	// computer can, and the away devices follow it.
+	// P37: the container and a build without the tunnel (MIPS) cannot be
+	// the hub; the admin computer can, and the away devices follow it.
 	for _, d := range g.members[1:] {
-		if d.OS != "linux-lite" && d.OS != "docker" {
+		if d.OS != "docker" && !noTunnel(ctx, d) {
 			continue
 		}
 		r.Do("away/P37/move-"+d.Name+"/refused", func() error {

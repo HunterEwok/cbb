@@ -19,7 +19,7 @@ use crate::authority::Record;
 use crate::error::{Error, Result};
 use crate::group::ClaimTime;
 use crate::identity::Identity;
-use crate::pair::{self, Exchange, Failure, Joiner, MAX_FRAME, Refusal};
+use crate::pair::{self, Exchange, Failure, Joiner, MAX_FRAME};
 use crate::tls::{self, Clock, Exporter, Session};
 use crate::wire;
 
@@ -66,8 +66,9 @@ pub struct Attempt {
     exporter: Arc<Exporter>,
     joiner: Joiner,
     code: Zeroizing<String>,
-    /// A remote invitation's secret, in place of the code.
-    secret: Option<Zeroizing<Vec<u8>>>,
+    /// A remote invitation's secret, in place of the code, and the group
+    /// it names.
+    secret: Option<(Zeroizing<Vec<u8>>, String)>,
     plain: Vec<u8>,
     state: State,
 }
@@ -96,8 +97,9 @@ impl Attempt {
     /// invitation, through its guest tunnel, with the invitation's secret in
     /// place of a code (docs/protocol.md, section 12): the first step's
     /// send is the TLS client hello, and the hub's admin confirms the
-    /// device before the Welcome comes.
-    pub fn dialing_secret(joiner: &Joiner, secret: &[u8], clock: &Clock) -> Result<Attempt> {
+    /// device before the Welcome comes. group is the invitation's group
+    /// tag, which the member must be of.
+    pub fn dialing_secret(joiner: &Joiner, secret: &[u8], group: &str, clock: &Clock) -> Result<Attempt> {
         if secret.len() < pair::MIN_SECRET {
             return Err(Error::msg("the invitation's secret is too short"));
         }
@@ -110,7 +112,7 @@ impl Attempt {
             exporter,
             joiner: joiner.clone(),
             code: Zeroizing::new(String::new()),
-            secret: Some(Zeroizing::new(secret.to_vec())),
+            secret: Some((Zeroizing::new(secret.to_vec()), group.to_string())),
             plain: Vec::new(),
             state: State::Handshake,
         })
@@ -154,7 +156,7 @@ impl Attempt {
             if self.session.is_handshaking() {
                 return Ok(Outcome::Pending);
             }
-            if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+            if !crate::alpn::is_pair(self.session.alpn_protocol()) {
                 return Err(Error::msg("the device does not offer pairing"));
             }
             let member_der = self
@@ -168,7 +170,7 @@ impl Attempt {
                 .export(pair::EXPORTER_LABEL, &[], &mut sid)
                 .map_err(|e| Error::msg(alloc::format!("cannot bind the pairing to TLS: {e}")))?;
             let (ex, first) = match &self.secret {
-                Some(secret) => self.joiner.start_secret(secret, &member_der, &sid)?,
+                Some((secret, group)) => self.joiner.start_secret(secret, group, &member_der, &sid)?,
                 None => self.joiner.start(&self.code, &member_der, &sid, true)?,
             };
             self.session.write(&first)?;
@@ -193,7 +195,7 @@ impl Attempt {
                         if let Some(f) = send {
                             let _ = self.session.write(&f);
                         }
-                        let wrong_code = error.details().contains(Refusal::WrongCode.message());
+                        let wrong_code = pair::is_wrong_code(&error);
                         return Ok(Outcome::Failed { error, wrong_code });
                     }
                 },

@@ -8,6 +8,20 @@ import XCTest
 final class CBBMacTests: XCTestCase {
     /// A message goes out as the Go service reads it: a JSON line with the
     /// payload's length, then the payload.
+    /// A file fetched for a remote paste carries the quarantine mark, as
+    /// cbb's own files do.
+    func testFetchedFileIsQuarantined() throws {
+        XCTAssertEqual(FetchedCopy.quarantine(at: Date(timeIntervalSince1970: 0x654321ab)), "0083;654321ab;CBB;")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-mark-\(UUID().uuidString)")
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data("x".utf8)))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try FetchedCopy.markDownloaded(url)
+        var buf = [CChar](repeating: 0, count: 64)
+        let n = url.withUnsafeFileSystemRepresentation { getxattr($0!, "com.apple.quarantine", &buf, buf.count, 0, 0) }
+        XCTAssertGreaterThan(n, 0)
+        XCTAssertTrue(String(cString: Array(buf[0..<max(0, n)]) + [0]).hasPrefix("0083;"))
+    }
+
     func testEncode() throws {
         let data = try Control.encode(.init(op: "copy"), payload: Data("hi".utf8))
         let text = String(decoding: data, as: UTF8.self)
@@ -79,6 +93,13 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(alerts.count, 1)
         XCTAssertTrue(alerts[0].unmute)
         XCTAssertTrue(GroupAlerts.lines(Control.Status(device: "me", group: "g", role: "member", version: "dev")).isEmpty)
+        // This Mac itself is unmuted on the plain socket, without the
+        // password; another device takes the administrator.
+        let own = try XCTUnwrap(MacModel.ownMute("me", on: false, me: "me"))
+        XCTAssertEqual(String(decoding: try Control.encode(own), as: UTF8.self), "{\"args\":{\"device\":\"me\"},\"len\":0,\"op\":\"unmute\"}\n")
+        XCTAssertEqual(MacModel.ownMute("me", on: true, forMS: 60000, me: "me")?.forMS, 60000)
+        XCTAssertNil(MacModel.ownMute("ab12", on: false, me: "me"))
+        XCTAssertNil(MacModel.ownMute("me", on: false, me: nil))
     }
 
     /// What cbb pair -app writes reads as the join's code, and its QR code
@@ -162,6 +183,22 @@ final class CBBMacTests: XCTestCase {
         )
     }
 
+    /// cbb runs as the user, with macOS's confirmation, except where it
+    /// needs root itself; its exit codes say a cancelled prompt and an
+    /// action only the administrator may take.
+    func testAdminAsUser() throws {
+        XCTAssertTrue(Admin.needsRoot(["update"]))
+        XCTAssertTrue(Admin.needsRoot(["pair", "-app", "/tmp/x.json"]))
+        XCTAssertFalse(Admin.needsRoot(["pair", "-qr"]))
+        XCTAssertFalse(Admin.needsRoot(["remove", "ab12"]))
+        XCTAssertEqual(try Admin.userResult(0, printed: "Removed.\n", stderr: ""), .done("Removed."))
+        XCTAssertEqual(try Admin.userResult(77, printed: "", stderr: "cbb: only the administrator"), .needsAdmin)
+        XCTAssertThrowsError(try Admin.userResult(75, printed: "", stderr: "")) { XCTAssertEqual($0 as? Admin.Failure, .cancelled) }
+        XCTAssertThrowsError(try Admin.userResult(1, printed: "", stderr: "cbb: no device \"x\" in the group\n")) {
+            XCTAssertEqual($0 as? Admin.Failure, .failed("no device \"x\" in the group", detail: "cbb: no device \"x\" in the group"))
+        }
+    }
+
     func testKind() {
         var phone = Control.Device(id: "1", name: "phone", role: "phone", os: "ios")
         XCTAssertEqual(phone.kind, .phone)
@@ -224,5 +261,39 @@ final class CBBMacTests: XCTestCase {
         h.arrange = try JSONDecoder().decode(Control.Change.self, from: Arrangement.Op.move(.device("a"), before: .collection("c1")).data)
         let text = String(decoding: try Control.encode(h), as: UTF8.self)
         XCTAssertEqual(text, #"{"args":{"arrange":{"before":{"collection":"c1"},"item":{"device":"a"},"op":"move"}},"len":0,"op":"arrange"}"# + "\n")
+    }
+
+    /// Settings fit their sheet: no row reaches past its edges (the language
+    /// menu, sized to fit with its label, once widened every row to 608
+    /// points and cut the rows' ends off). Laid out with a build's long
+    /// version in a window that is never shown.
+    @MainActor
+    func testSettingsFit() throws {
+        let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-settings-test")))
+        let version = "cbb v0.5.1-0.20261109114050-97499ee40fb3 darwin/arm64 with a longer tail"
+        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: version), view: Control.View())
+        let host = NSHostingView(rootView: SettingsView().environmentObject(model).modifier(Themed()))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        host.frame = NSRect(origin: .zero, size: host.fittingSize)
+        host.layoutSubtreeIfNeeded()
+        // Lists lay their rows out a turn later.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        host.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(host.fittingSize.width, 460.5)
+        var views: [NSView] = [host]
+        var checked = 0
+        while let v = views.popLast() {
+            views += v.subviews
+            guard !v.isHidden, v !== host, v.frame.width > 0 else { continue }
+            let f = v.convert(v.bounds, to: host)
+            XCTAssertGreaterThanOrEqual(f.minX, -0.5, "\(type(of: v)) starts left of Settings at \(f)")
+            XCTAssertLessThanOrEqual(f.maxX, host.bounds.width + 0.5, "\(type(of: v)) ends right of Settings at \(f)")
+            checked += 1
+        }
+        XCTAssertGreaterThan(checked, 3, "Settings laid out no views")
+        window.contentView = nil
+        window.close()
     }
 }

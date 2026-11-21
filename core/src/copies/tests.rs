@@ -167,19 +167,21 @@ fn every_member_checks_the_origin_before_passing_a_copy_on() {
     let _ = &w.desktop;
 }
 
-/// A copy whose header commits to another key than the one its wraps
-/// carry: signed by the origin, so only the reader's check finds it.
-#[test]
-fn the_copy_key_is_bound_to_its_header() {
-    let w = World::new();
-    let state = w.g.state();
-    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[], None);
-    let (k1, k2) = ([1u8; 32], [2u8; 32]);
+/// A copy sealed by hand: K under the header's `commit` of `commit_to`,
+/// each reader's wrap from `wrap` (given the reader, `h` and K), signed by
+/// the phone over what the wraps hash to.
+fn hand_sealed(
+    w: &World,
+    rs: &[Reader],
+    k1: &[u8; 32],
+    commit_to: &[u8; 32],
+    wrap: impl Fn(&Reader, &[u8; 32], &[u8; 32]) -> Vec<u8>,
+) -> Vec<u8> {
     let plain = Content::text("x", false).write().unwrap();
     let entries: Vec<Value<'_>> =
         rs.iter().map(|r| Value::Array(vec![Value::Bytes(&r.id.0), Value::Uint(r.epoch)])).collect();
     let origin = w.id("phone");
-    let commit = fcopy::commit(&k2);
+    let commit = fcopy::commit(commit_to);
     let hdr = Value::Map(vec![
         (1, Value::Bytes(&[9; 16])),
         (2, Value::Bytes(&origin.0)),
@@ -190,8 +192,8 @@ fn the_copy_key_is_bound_to_its_header() {
     .encode();
     let h = fcopy::header_hash(&hdr);
     let payload =
-        aead(&fcopy::payload_key(&k1, &h)).encrypt(&Nonce::default(), Payload { msg: &plain, aad: &h }).unwrap();
-    let wraps: Vec<Vec<u8>> = rs.iter().map(|r| crate::seal::seal(&r.seal, &h, &k1).unwrap()).collect();
+        aead(&fcopy::payload_key(k1, &h)).encrypt(&Nonce::default(), Payload { msg: &plain, aad: &h }).unwrap();
+    let wraps: Vec<Vec<u8>> = rs.iter().map(|r| wrap(r, &h, k1)).collect();
     let hashes: Vec<[u8; 32]> = wraps.iter().map(|x| sha256(&[x])).collect();
     let s = rkey::sign_es256(
         &w.phone,
@@ -199,18 +201,68 @@ fn the_copy_key_is_bound_to_its_header() {
         &fcopy::signed(&h, &fcopy::wraps_digest(&hashes), &sha256(&[&payload])),
     )
     .unwrap();
-    let v = Value::Map(vec![
+    Value::Map(vec![
         (1, Value::Bytes(&hdr)),
         (3, Value::Array(wraps.iter().map(|x| Value::Bytes(x)).collect())),
         (4, Value::Bytes(&payload)),
         (6, Value::Bytes(&s)),
-    ]);
+    ])
+    .encode()
+}
+
+/// A group that moves to another sealing algorithm device by device: one
+/// copy holds wraps of two lengths. Every member checks and passes it on,
+/// the X-Wing reader opens its own wrap, the leaf gets it reduced, and only
+/// the reader whose own wrap is not of its algorithm's length refuses it.
+#[test]
+fn a_copy_may_hold_wraps_of_several_algorithms() {
+    let w = World::new();
+    let state = w.g.state();
+    let kettle = w.id("kettle");
+    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[kettle], None);
+    let later = w.id("desktop");
+    assert!(rs.iter().any(|r| r.id == later));
+    let k1 = [1u8; 32];
+    let copy = hand_sealed(&w, &rs, &k1, &k1, |r, h, k| {
+        if r.id == later { vec![7; 1500] } else { crate::seal::seal(&r.seal, h, k).unwrap() }
+    });
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    assert_eq!(opened(open(&c, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()).text.as_deref(), Some("x"));
+    assert_eq!(open(&c, &later, &w.stores["desktop"], &state), Err(fcopy::RULE_SHAPE));
+    let reduced = reduce(&c.copy, &c.readers, &kettle).unwrap();
+    let rv = cbor::decode(&reduced).unwrap();
+    let rc = check(&rv, &state).unwrap();
+    assert_eq!(opened(open(&rc, &kettle, &w.stores["kettle"], &state).unwrap()).text.as_deref(), Some("x"));
+    // A wrap too short to hold K and its tag, other than a hash, is no wrap.
+    for n in [0, 31, 33, fcopy::MIN_WRAP - 1] {
+        let copy = hand_sealed(&w, &rs, &k1, &k1, |r, h, k| {
+            if r.id == later { vec![7; n] } else { crate::seal::seal(&r.seal, h, k).unwrap() }
+        });
+        assert_eq!(check(&cbor::decode(&copy).unwrap(), &state).err(), Some(fcopy::RULE_SHAPE), "{n}");
+    }
+}
+
+/// A copy whose header commits to another key than the one its wraps
+/// carry: signed by the origin, so only the reader's check finds it.
+#[test]
+fn the_copy_key_is_bound_to_its_header() {
+    let w = World::new();
+    let state = w.g.state();
+    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[], None);
+    let (k1, k2) = ([1u8; 32], [2u8; 32]);
+    let copy = hand_sealed(&w, &rs, &k1, &k2, |r, h, k| crate::seal::seal(&r.seal, h, k).unwrap());
+    let v = cbor::decode(&copy).unwrap();
     let c = check(&v, &state).unwrap();
     assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &state), Err(fcopy::RULE_COMMIT));
     // One K under two headers gives two payload keys (A-75).
+    let h = c.copy.h;
     let h2 = fcopy::header_hash(b"another header");
     assert_ne!(fcopy::payload_key(&k1, &h), fcopy::payload_key(&k1, &h2));
-    assert_ne!(fcopy::blob_key(&k1, &h), fcopy::blob_key(&k1, &h2));
+    // The blob key is K's alone, and none of the others.
+    assert_ne!(fcopy::blob_key(&k1), fcopy::blob_key(&k2));
+    assert_ne!(fcopy::blob_key(&k1), fcopy::payload_key(&k1, &h));
+    assert_ne!(fcopy::blob_key(&k1), fcopy::commit(&k1));
 }
 
 #[test]
@@ -320,6 +372,17 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     assert_eq!(reseal(&w.phone, &mut kept, &halted, &s, &ask("laptop", 3)).err(), Some(RULE_RESEAL_HALTED));
     assert!(readers(&halted, &s, &content, &w.id("phone"), &[], None).is_empty());
     assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &halted).unwrap(), Opened::Halted);
+    // Two histories of the current root stop it alike (`State::stopped`).
+    let mut forked = state.clone();
+    let root = *forked.roots.last().unwrap();
+    forked.conflicts.push(crate::records::eval::Conflict {
+        kind: crate::records::eval::ConflictKind::TwoHistories,
+        records: Vec::new(),
+        signers: vec![root],
+    });
+    assert_eq!(reseal(&w.phone, &mut kept, &forked, &s, &ask("laptop", 3)).err(), Some(RULE_RESEAL_HALTED));
+    assert!(readers(&forked, &s, &content, &w.id("phone"), &[], None).is_empty());
+    assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &forked).unwrap(), Opened::Halted);
     let again = reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 3)).unwrap();
     let v = cbor::decode(&again).unwrap();
     let c2 = check(&v, &state).unwrap();
@@ -680,4 +743,125 @@ fn a_leaf_checks_a_copy_by_the_origins_it_knows() {
     let mut wrong = OriginMap::default();
     wrong.insert(w.laptop.key.clone(), RIGHT_SEND, false);
     assert_eq!(check(&v, &wrong).err(), Some(RULE_ORIGIN));
+}
+
+/// Marks keep at most MAX_ORIGINS origins (the registry, `bounds.rs`): the
+/// oldest gives way, and saved marks with one more are not read back.
+#[test]
+fn marks_keep_at_most_max_origins() {
+    let mut m = Marks::default();
+    for i in 0..=fresh::MAX_ORIGINS as u64 {
+        let mut o = [0u8; 16];
+        o[..8].copy_from_slice(&i.to_be_bytes());
+        m.wrote(&crate::records::key::DeviceId(o), Timestamp { wall: (T0 + i) as i64, logical: 0 });
+    }
+    assert_eq!(m.written.len(), fresh::MAX_ORIGINS);
+    assert!(!m.written.contains_key(&crate::records::key::DeviceId([0; 16])));
+    let back = Marks::decode(&m.encode()).unwrap();
+    assert_eq!(back.written.len(), fresh::MAX_ORIGINS);
+    let mut wide = m.clone();
+    wide.written.insert(crate::records::key::DeviceId([0xff; 16]), Timestamp { wall: T0 as i64, logical: 0 });
+    assert!(Marks::decode(&wide.encode()).is_err());
+}
+
+/// Freshness against the vectors (`testdata/format/copy.json`, "fresh"),
+/// which gen.py computes on its own: a copy past ALLOWANCE_MS ahead of the
+/// reader's clock, or past MAX_WALL, is ahead; the age a reader uses.
+#[test]
+fn freshness_matches_its_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/copy.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let cases = v["fresh"].as_array().unwrap();
+    assert!(cases.len() >= 7);
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let signed = crate::hlc::Timestamp { wall: c["wall"].as_i64().unwrap(), logical: 0 };
+        let now = c["now_ms"].as_u64();
+        let ahead = fresh::ahead(signed, now);
+        assert_eq!(if ahead { "ahead" } else { "new" }, c["verdict"].as_str().unwrap(), "{name}");
+        if let Some(want) = c["effective_age_ms"].as_u64() {
+            let got = fresh::effective_age(c["age_ms"].as_u64().unwrap(), signed, c["ttl_ms"].as_u64(), now);
+            assert_eq!(got, want, "{name}");
+        }
+    }
+}
+
+#[test]
+fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
+    use crate::content::TYPE_MEDIA;
+    use crate::media::{Manifest, Part};
+    let w = World::new();
+    let state = w.g.state();
+    // A little over two segments, so the last one is padded.
+    let parts: Vec<u8> = (0..2 * blob::SEGMENT + 100).map(|i| (i % 251) as u8).collect();
+    let n = parts.len() as i64;
+    let manifest = Manifest {
+        size: n,
+        parts: vec![Part {
+            kind: "image/png".into(),
+            size: n,
+            sha256: Some(sha256(&[&parts]).to_vec()),
+            ..Default::default()
+        }],
+    };
+    let content = Content { kind: TYPE_MEDIA, manifest: Some(manifest), ..Content::default() };
+    let rs = readers(&state, &w.sealing(), &content, &w.id("phone"), &[], None);
+    let SealedMedia { copy, blob: sealed, mut kept } = seal_media(&w.phone, &rs, &made(1), &content, &parts).unwrap();
+    assert_eq!(sealed.len() as u64, blob::sealed_size(parts.len() as u64));
+    assert_eq!(blob::segments(sealed.len() as u64), Some(3));
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    // Field 5 is signed: the blob's size and hash as sealed.
+    let header = c.blob().unwrap();
+    assert_eq!(header, (sealed.len() as u64, sha256(&[&sealed])));
+    let Opened::Content { content: got, blob_key } = open(&c, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()
+    else {
+        panic!("not opened")
+    };
+    assert_eq!(got, content);
+    let key = blob_key.unwrap();
+    assert_eq!(blob::open(&key, header, n as u64, &sealed).unwrap(), parts);
+    // Each segment opens alone, as a fetch gets it.
+    let first = blob::open_segment(&key, 0, false, &sealed[..blob::SEALED_SEGMENT]).unwrap();
+    assert_eq!(first, parts[..blob::SEGMENT]);
+    // A changed byte, a segment out of place, a blob cut short or a wrong
+    // key do not open.
+    let mut bad = sealed.clone();
+    bad[10] ^= 1;
+    assert!(blob::open(&key, (header.0, sha256(&[&bad])), n as u64, &bad).is_err());
+    assert!(blob::open_segment(&key, 1, false, &sealed[..blob::SEALED_SEGMENT]).is_err());
+    let cut = &sealed[..2 * blob::SEALED_SEGMENT];
+    assert!(blob::open(&key, (cut.len() as u64, sha256(&[cut])), 2 * blob::SEGMENT as u64, cut).is_err());
+    assert!(blob::open(&[9; 32], header, n as u64, &sealed).is_err());
+    assert!(blob::open(&key, header, n as u64 - 1 - blob::SEGMENT as u64 * 2, &sealed).is_err());
+    // Sealed again, it keeps its copy key: the same blob opens.
+    let ask = Ask { asker: w.id("laptop"), epoch: 1, leaves: &[], now_ms: Some(T0), group_ttl_ms: DAY };
+    let again = reseal(&w.phone, &mut kept, &state, &w.sealing(), &ask).unwrap();
+    let av = cbor::decode(&again).unwrap();
+    let ac = check(&av, &state).unwrap();
+    assert_eq!(ac.blob(), Some(header));
+    let Opened::Content { blob_key: again_key, .. } = open(&ac, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()
+    else {
+        panic!("not opened")
+    };
+    assert_eq!(again_key, Some(key));
+    // A text copy has no blob.
+    let text = seal(&w.phone, &rs, &made(2), &Content::text("x", false)).unwrap();
+    let tv = cbor::decode(&text).unwrap();
+    let tc = check(&tv, &state).unwrap();
+    assert_eq!(tc.blob(), None);
+    // The parts must be what the manifest says.
+    assert!(seal_media(&w.phone, &rs, &made(3), &content, &parts[1..]).is_err());
+}
+
+#[test]
+fn a_blob_holds_at_most_max_segments() {
+    let key = [3; 32];
+    let last = blob::MAX_SEGMENTS - 1;
+    assert!(blob::seal_segment(&key, last, true, b"end").is_ok());
+    assert!(blob::seal_segment(&key, blob::MAX_SEGMENTS, true, b"past").is_err());
+    let full = blob::MAX_SEGMENTS * blob::SEALED_SEGMENT as u64;
+    assert_eq!(blob::segments(full), Some(blob::MAX_SEGMENTS));
+    assert_eq!(blob::segments(full + blob::SEALED_SEGMENT as u64), None);
+    assert_eq!(blob::segments(full - 1), None);
 }

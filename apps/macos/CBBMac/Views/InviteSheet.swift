@@ -40,7 +40,7 @@ struct InviteSheet: View {
                                 .background(.white, in: RoundedRectangle(cornerRadius: 8))
                                 .accessibilityLabel(Text("The invitation's QR code"))
                         }
-                        Text("On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.")
+                        Text("On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.")
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                         DisclosureGroup {

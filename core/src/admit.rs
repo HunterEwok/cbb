@@ -49,7 +49,7 @@ pub const SEAL_KEY_SIZE: usize = 1216;
 
 /// The systems of a phone with the app, which joins as a phone and may
 /// become an admin.
-pub const PHONE_SYSTEMS: [&str; 4] = ["ios", "android", "aurora", "sailfish"];
+pub const PHONE_SYSTEMS: [&str; 5] = ["ios", "android", "aurora", "sailfish", "harmonyos"];
 
 /// The joiner's description, its CPace associated data.
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -193,13 +193,15 @@ impl Admitter {
 }
 
 /// What the group's records give the exchange: the records and claim times
-/// for the Welcome, the devices already in the group, and every admin key
-/// the records name.
+/// for the Welcome, the devices already in the group, and every key the
+/// records name, which a new admin key must not be.
 #[derive(Clone, Default)]
 pub struct GroupView {
     pub records: Vec<Record>,
     pub claim_times: Vec<ClaimTime>,
     pub devices: BTreeSet<String>,
+    /// The admin keys, the devices' keys, the roots' keys and the recovery
+    /// key (docs/protocol.md, section 6).
     pub admin_keys: BTreeSet<KeyHash>,
 }
 
@@ -207,10 +209,15 @@ impl GroupView {
     /// The view of a set of records.
     pub fn of(rs: &Records) -> GroupView {
         let devices = rs.devices();
+        let mut keys: BTreeSet<KeyHash> = devices.iter().filter_map(|d| d.admin_key).collect();
+        keys.extend(devices.iter().flat_map(|d| d.keys.iter().copied()));
+        // Every root on the path, the group CA first.
+        keys.extend(rs.path_certs().iter().map(Cert::key_hash));
+        keys.extend(rs.state().recovery.map(|h| h.0));
         GroupView {
             records: rs.all(),
             claim_times: rs.claim_times(),
-            admin_keys: devices.iter().filter_map(|d| d.admin_key).collect(),
+            admin_keys: keys,
             devices: devices.into_iter().map(|d| d.id).collect(),
         }
     }
@@ -488,7 +495,7 @@ impl Admission {
     /// pairing protocol, exactly one certificate, the QR code's
     /// fingerprint, a P-256 key and a device ID other than this one's.
     fn handshake_done(&mut self) -> Result<()> {
-        if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+        if !crate::alpn::is_pair(self.session.alpn_protocol()) {
             return Err(Error::msg("the device does not offer pairing"));
         }
         let certs_in = self.session.peer_certificates().unwrap_or_default();
@@ -662,7 +669,11 @@ impl Admission {
             w.claim_times.clear();
         }
         let tag = if self.member_first { None } else { st.tag() };
-        self.send(&Out { welcome: Some(w), tag, ..Default::default() });
+        // A Welcome that cannot go out admits no one: the device record
+        // is made only for a device that got its certificate.
+        let out = wire::json_frame(&Out { welcome: Some(w), tag, ..Default::default() }, MAX_FRAME)
+            .map_err(|_| Error::msg("the group's records and roots do not fit in a Welcome"))?;
+        self.session.write(&out)?;
         self.state = State::Done;
         Ok(Outcome::Admitted(Box::new(Admitted { device: joiner.device, info: joiner.info, cert, admin_ca })))
     }

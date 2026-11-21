@@ -25,10 +25,12 @@ pub const MAX_PARTS: usize = 10000;
 /// The most parts of clipboard data, one per type.
 pub const MAX_TYPES: usize = 8;
 /// The most bytes of all the paths of a manifest.
-pub const MAX_PATHS: usize = 512 << 10;
-/// The longest path, and the longest name in it.
-pub const MAX_PATH: usize = 4096;
-pub const MAX_NAME: usize = 255;
+pub const MAX_PATHS: usize = 2 << 20;
+/// The longest path, and the longest name in it: 255 characters of three
+/// bytes each in a name (format 20.6). A name past what the receiver's
+/// file system takes is shortened when it is saved, not refused.
+pub const MAX_PATH: usize = 16 << 10;
+pub const MAX_NAME: usize = 765;
 /// The largest plain-text alternative of a media event.
 pub const MAX_ALT_TEXT: usize = 256 << 10;
 
@@ -194,7 +196,7 @@ pub fn check_path(path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Checks one name of a path as Go's clip.CheckName does: 1 to 255 bytes,
+/// Checks one name of a path as Go's clip.CheckName does: 1 to 765 bytes,
 /// as a receiver writes it too (save_name), not "." or "..", no control characters, separators or characters
 /// Windows does not allow, no dot or space at the end, no name Windows
 /// reserves.

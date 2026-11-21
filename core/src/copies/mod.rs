@@ -8,10 +8,12 @@
 //! slept through a key change.
 //!
 //! - The origin picks a copy key K for each copy and binds it to the
-//!   header: `commit` in the header is derived from K, and the payload and
-//!   blob keys are derived from K under the header's hash `h` (A-5, A-75).
-//!   So a K used twice still gives other keys under another header, and a
-//!   reader refuses a copy whose `commit` does not match the K it opened.
+//!   header: `commit` in the header is derived from K, and the payload key
+//!   is derived from K under the header's hash `h` (A-5, A-75), so a K used
+//!   twice still gives another payload key under another header. The blob
+//!   key comes from K alone, since `h` covers the sealed blob's size and
+//!   hash ([`blob`]). A reader refuses a copy whose `commit` does not match
+//!   the K it opened.
 //! - K is sealed to each reader's sealing key of the epoch the header names,
 //!   taken from that device's own keys statement. Root and admin keys open
 //!   nothing: a copy is sealed to device keys only.
@@ -27,6 +29,7 @@
 //! This is the new path beside the old one (`crate::copy`); the service and
 //! the phones switch to it in wave 5.
 
+pub mod blob;
 pub mod fresh;
 
 #[cfg(test)]
@@ -79,7 +82,7 @@ pub const RULE_RESEAL_EPOCH: Rule = Rule::field("reseal/not-current");
 pub const RULE_RESEAL_EXPIRED: Rule = Rule::field("reseal/expired");
 /// The asker already had this copy sealed again [`MAX_RESEALS`] times.
 pub const RULE_RESEAL_LIMIT: Rule = Rule::field("reseal/limit");
-/// A request to seal again while the group is halted (`State::halted`).
+/// A request to seal again while the group is stopped (`State::stopped`).
 pub const RULE_RESEAL_HALTED: Rule = Rule::field("reseal/halted");
 
 /// How many times the origin seals one copy again for one asker.
@@ -117,7 +120,7 @@ pub const STATEMENT_MAX_AGE_MS: u64 = 35 * 86_400_000;
 /// device without a clock, has no age); the origin itself is left out. A
 /// leaf is a reader only when the origin names it in `leaves` (the leaves
 /// whose grants name the origin). At most 256, in the order of their IDs.
-/// None while the group is halted (`State::halted`).
+/// None while the group is stopped (`State::stopped`).
 pub fn readers(
     state: &State,
     sealing: &BTreeMap<DeviceId, Sealing>,
@@ -129,7 +132,7 @@ pub fn readers(
     let secret = content.is_secret();
     let skip_bit = content.kind.checked_sub(1).filter(|b| *b < 64).map_or(0, |b| 1u64 << b);
     let mut out = Vec::new();
-    if state.halted() {
+    if state.stopped() {
         return out;
     }
     for d in &state.devices {
@@ -150,7 +153,7 @@ pub fn readers(
         if body.time_ms != 0 && now_ms.is_some_and(|now| now.saturating_sub(body.time_ms) > STATEMENT_MAX_AGE_MS) {
             continue;
         }
-        out.push(Reader { id: d.id, epoch: body.epoch, seal: body.seal.public.clone() });
+        out.push(Reader { id: d.id, epoch: body.epoch, seal: body.seal.public().to_vec() });
         if out.len() == fcopy::MAX_READERS {
             break;
         }
@@ -176,6 +179,78 @@ pub fn seal(origin: &dyn ExternalKey, readers: &[Reader], made: &Made, content: 
         seeds.push(random::<32>()?);
     }
     seal_with(origin, readers, made, content, &random::<32>()?, &seeds)
+}
+
+/// A new copy key K, for a copy with a blob: the origin seals the blob
+/// under `format::copy::blob_key(K)` first, then the copy under K
+/// ([`seal_keyed`]).
+pub fn new_key() -> Result<[u8; 32], Error> {
+    random::<32>()
+}
+
+/// [`seal`] under a copy key the origin chose: a copy with a blob, whose
+/// blob is sealed under that key's blob key, or such a copy sealed again.
+pub fn seal_keyed(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    k: &[u8; 32],
+) -> Result<Vec<u8>, Error> {
+    let mut seeds = Vec::with_capacity(readers.len());
+    for _ in readers {
+        seeds.push(random::<32>()?);
+    }
+    seal_with(origin, readers, made, content, k, &seeds)
+}
+
+/// A copy with a blob, sealed in memory.
+pub struct SealedMedia {
+    /// The copy's map, as message `copy` carries it.
+    pub copy: Vec<u8>,
+    /// The sealed blob.
+    pub blob: Vec<u8>,
+    /// What the origin keeps to seal it again.
+    pub kept: Kept,
+}
+
+/// Seals content with images or files and their bytes in memory: the
+/// copy's map and the sealed blob, `made.blob` filled from it.
+pub fn seal_media(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    parts: &[u8],
+) -> Result<SealedMedia, Error> {
+    let k = new_key()?;
+    let mut seeds = Vec::with_capacity(readers.len());
+    for _ in readers {
+        seeds.push(random::<32>()?);
+    }
+    let (copy, blob) = seal_media_with(origin, readers, made, content, parts, &k, &seeds)?;
+    let made = Made { blob: Some((blob.len() as u64, sha256(&[&blob]))), ..*made };
+    Ok(SealedMedia { copy, blob, kept: Kept::keyed(made, content.clone(), readers, k) })
+}
+
+/// [`seal_media`] with K and the seals' randomness given: for the tests only.
+#[doc(hidden)]
+pub fn seal_media_with(
+    origin: &dyn ExternalKey,
+    readers: &[Reader],
+    made: &Made,
+    content: &Content,
+    parts: &[u8],
+    k: &[u8; 32],
+    seeds: &[[u8; 32]],
+) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    let size = content.manifest.as_ref().map_or(0, |m| m.size);
+    if u64::try_from(size).ok() != Some(parts.len() as u64) {
+        return Err(Error::msg("the parts' bytes do not match the manifest's size"));
+    }
+    let sealed = blob::seal(&fcopy::blob_key(k), parts)?;
+    let made = Made { blob: Some((sealed.len() as u64, sha256(&[&sealed]))), ..*made };
+    Ok((seal_with(origin, readers, &made, content, k, seeds)?, sealed))
 }
 
 /// [`seal`] with K and the seals' randomness given: for the tests only.
@@ -271,6 +346,17 @@ pub struct Origin<'a> {
     pub frozen: bool,
 }
 
+impl Checked<'_> {
+    /// The sealed blob's size and SHA-256 (header field 5), when the copy
+    /// has one.
+    pub fn blob(&self) -> Option<(u64, [u8; 32])> {
+        match self.copy.header.get(5)?.as_array()? {
+            [Value::Uint(size), Value::Bytes(h)] => Some((*size, (*h).try_into().ok()?)),
+            _ => None,
+        }
+    }
+}
+
 /// Finds a copy's origin by its device ID. The records' state is one; a
 /// leaf, which builds no state, fills an [`OriginMap`] from its grant.
 pub trait Origins {
@@ -337,7 +423,7 @@ pub fn check<'a>(v: &Value<'a>, origins: &dyn Origins) -> Result<Checked<'a>, Ru
     if d.rights & RIGHT_SEND == 0 || d.frozen {
         return Err(RULE_SEND);
     }
-    copy.verify(&d.key.public)?;
+    copy.verify(d.key.public())?;
     Ok(Checked { copy, id, origin, time, readers })
 }
 
@@ -357,7 +443,7 @@ pub enum Opened {
     /// A secret while this device's rules are too old for the group
     /// (format 3.3): opened only to learn that, then dropped.
     TooOld,
-    /// The group is halted here (`State::halted`): no copy is opened.
+    /// The group is stopped here (`State::stopped`): no copy is opened.
     Halted,
 }
 
@@ -365,14 +451,16 @@ pub enum Opened {
 /// secret of the wrap's epoch, then `commit` against K before anything
 /// else, then the payload under `h`, then the content's rows. A secret is
 /// never given while the state says this device's rules are too old, and
-/// nothing is opened while the group is halted.
+/// nothing is opened while the group is stopped.
 pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State) -> Result<Opened, Rule> {
-    if state.halted() {
+    if state.stopped() {
         return Ok(Opened::Halted);
     }
     let Some(i) = c.readers.iter().position(|(d, _)| d == me) else { return Ok(Opened::NotForMe) };
     let (_, epoch) = c.readers.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
     let wrap = c.copy.wraps.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
+    // A reader checks its own wrap's length only, by the algorithm of its
+    // own statement key: X-Wing, the only one of 0.6.
     if wrap.len() != fcopy::WRAP_SIZE {
         return Err(fcopy::RULE_SHAPE);
     }
@@ -388,7 +476,7 @@ pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State)
     if content.is_secret() && state.too_old {
         return Ok(Opened::TooOld);
     }
-    let blob_key = c.copy.header.get(5).map(|_| fcopy::blob_key(&k, &c.copy.h));
+    let blob_key = c.copy.header.get(5).map(|_| fcopy::blob_key(&k));
     Ok(Opened::Content { content, blob_key })
 }
 
@@ -470,12 +558,20 @@ pub struct Kept {
     pub readers: Vec<DeviceId>,
     /// How many times it was sealed again for each asker.
     pub resealed: BTreeMap<DeviceId, u8>,
+    /// The copy key of a copy with a blob: sealed again, it keeps K, so
+    /// that its blob, sealed once under K's blob key, still opens.
+    pub k: Option<[u8; 32]>,
 }
 
 impl Kept {
     /// What the origin keeps of a copy it just sealed to readers.
     pub fn new(made: Made, content: Content, readers: &[Reader]) -> Kept {
-        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new() }
+        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new(), k: None }
+    }
+
+    /// What the origin keeps of a copy with a blob it sealed under K.
+    pub fn keyed(made: Made, content: Content, readers: &[Reader], k: [u8; 32]) -> Kept {
+        Kept { k: Some(k), ..Kept::new(made, content, readers) }
     }
 
     /// The copy's lifetime: its own `ttl`, or for a secret the group's.
@@ -501,7 +597,7 @@ pub struct Ask<'a> {
 }
 
 /// Seals a kept copy again for the asker at its epoch (message `reseal`),
-/// never while the group is halted ([`RULE_RESEAL_HALTED`]):
+/// never while the group is stopped ([`RULE_RESEAL_HALTED`]):
 /// only for a device that was one of the copy's readers
 /// ([`RULE_RESEAL_READER`]), whose statement that counts is of that epoch
 /// ([`RULE_RESEAL_EPOCH`]), and that would still be sealed this copy by the
@@ -518,7 +614,7 @@ pub fn reseal(
     sealing: &BTreeMap<DeviceId, Sealing>,
     ask: &Ask<'_>,
 ) -> Result<Vec<u8>, Rule> {
-    if state.halted() {
+    if state.stopped() {
         return Err(RULE_RESEAL_HALTED);
     }
     if !kept.readers.contains(&ask.asker) {
@@ -541,7 +637,11 @@ pub fn reseal(
     if r.epoch != ask.epoch {
         return Err(RULE_RESEAL_EPOCH);
     }
-    let sealed = seal(origin, &[r], &kept.made, &kept.content).map_err(|_| fcopy::RULE_SHAPE)?;
+    let sealed = match &kept.k {
+        Some(k) => seal_keyed(origin, &[r], &kept.made, &kept.content, k),
+        None => seal(origin, &[r], &kept.made, &kept.content),
+    }
+    .map_err(|_| fcopy::RULE_SHAPE)?;
     kept.resealed.insert(ask.asker, done.saturating_add(1));
     Ok(sealed)
 }

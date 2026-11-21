@@ -11,7 +11,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::key::{DeviceId, GroupId, Key, KeyCheck, KeyHash, RecordId};
-use super::{MAX_ROOT_RECORDS, MAX_SEQ, Rule};
+use super::{LIST_MAX, MAX_SEQ, Rule};
 use crate::format::cbor::{MAX_INT, Value};
 
 /// Record types (section 4).
@@ -26,6 +26,10 @@ pub const TYPE_CHECKPOINT: u64 = 9;
 pub const TYPE_HUBS: u64 = 10;
 /// A change of root, signed by the group's recovery key (rule 33).
 pub const TYPE_RECOVERY: u64 = 13;
+/// An admin key's acknowledgement of what it holds of other keys: `seen`
+/// (field 10), the heads it has; the root's checkpoint lets a removal go
+/// only once every live admin key has acknowledged it (section 10).
+pub const TYPE_ACK: u64 = 14;
 
 /// Types of earlier drafts that 0.6 refuses (`records/retired`): 5, the
 /// claim that waited a delay; 11, a root's record naming a recovery admin
@@ -33,8 +37,9 @@ pub const TYPE_RECOVERY: u64 = 13;
 /// recovery key (rule 33).
 pub const RETIRED_TYPES: &[u64] = &[5, 11, 12];
 
-/// The most recovery records a group ever has: a 17th is refused.
-pub const MAX_RECOVERY: u64 = 16;
+/// The most recovery records a group ever has: a 65th is refused (the
+/// owner, 2026-11-12).
+pub const MAX_RECOVERY: u64 = 64;
 
 /// Roles of a device record.
 pub const ROLE_MEMBER: u64 = 1;
@@ -184,16 +189,30 @@ pub enum Kind {
         hubs: Vec<DeviceId>,
         seen: Vec<Seen>,
     },
+    /// An admin key's acknowledgement: the heads it holds (`TYPE_ACK`),
+    /// and optionally a spare admin key its device made and signs nothing
+    /// with (field 11; read, checked and kept, used by no rule yet).
+    Ack {
+        seen: Vec<Seen>,
+        spare: Option<Key>,
+    },
     /// A change of root, signed by the group's recovery key (rule 33):
     /// the new root, the hash of the list of earlier roots' records that
     /// stay (`List`), which rides beside the record, and `from`, the seq at
     /// which the new root's own records start: 0 (absent) for a fresh key;
     /// for a key that signed before (an admin's), its records below `from`
-    /// count only if the list names them.
+    /// count only if the list names them. `first` (field 13) names the
+    /// new root's first checkpoint: the head applies only once the device
+    /// holds its list and that checkpoint, verified with `root`, so the
+    /// new root never shows without its phone and the owner's choice.
+    /// `signer2` (the common field 8) is the hash of the recovery key's
+    /// second half, K2 (E-6): every head carries both signatures.
     Recovery {
         root: Key,
         list: [u8; 32],
         from: u64,
+        first: RecordId,
+        signer2: KeyHash,
     },
     /// A type of a later version: held.
     Unknown(u64),
@@ -326,16 +345,22 @@ pub struct Settings {
     pub servers: Vec<Server>,
 }
 
-/// A server of the group's list.
+/// A server of the group's list, which the root signs (D-61, D-121): its
+/// kind, its address and the pin of its TLS key (SHA-256 of the key's
+/// SubjectPublicKeyInfo), each kind and address once.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Server {
     pub kind: u64,
     pub endpoint: String,
-    pub key: Key,
+    pub pin: [u8; 32],
 }
 
+/// The kinds of a server. 0.6 writes relays alone: the forwarders come
+/// in the hub order (D-121), and the push service is reserved (format
+/// 20.4). A reader keeps a kind it does not know and passes over it.
 pub const SERVER_FORWARDER: u64 = 1;
 pub const SERVER_RELAY: u64 = 2;
+pub const SERVER_PUSH: u64 = 3;
 
 impl Kind {
     /// A device record's kind.
@@ -359,6 +384,7 @@ impl Kind {
             Kind::Copies { .. } => TYPE_COPIES,
             Kind::Checkpoint { .. } => TYPE_CHECKPOINT,
             Kind::Hubs { .. } => TYPE_HUBS,
+            Kind::Ack { .. } => TYPE_ACK,
             Kind::Recovery { .. } => TYPE_RECOVERY,
             Kind::Unknown(t) => *t,
         }
@@ -386,6 +412,7 @@ fn type_name(t: u64) -> &'static str {
         TYPE_COPIES => "copies",
         TYPE_CHECKPOINT => "checkpoint",
         TYPE_HUBS => "hubs",
+        TYPE_ACK => "ack",
         TYPE_RECOVERY => "recovery",
         _ => "unknown",
     }
@@ -475,6 +502,19 @@ impl Body {
                 if !strictly_sorted(keep) {
                     return Err(field(t, "keep"));
                 }
+                // Its own key's head is the record just below it, its prev:
+                // present exactly when seq > 1, so a checkpoint always
+                // settles its own key's records below it, and no newer one
+                // takes back what an older one settled of it.
+                let own = heads.iter().find(|h| h.key == self.signer);
+                let follows = match (own, self.prev) {
+                    (Some(h), Some(prev)) => h.seq.checked_add(1) == Some(self.seq) && h.id == prev,
+                    (None, None) => self.seq == 1,
+                    _ => false,
+                };
+                if !follows {
+                    return Err(field(t, "own-prev"));
+                }
             }
             Kind::Hubs { hubs, seen } => {
                 let mut sorted = hubs.clone();
@@ -485,11 +525,23 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
-            Kind::Recovery { root, from, .. } => {
+            Kind::Ack { seen, spare } => {
+                if seen.is_empty() {
+                    return Err(field(t, "seen"));
+                }
+                check_seen(seen, t)?;
+                if let Some(sp) = spare {
+                    held |= signer_key(sp, t, "spare")?;
+                }
+            }
+            Kind::Recovery { root, from, signer2, .. } => {
                 held |= signer_key(root, t, "root")?;
                 // A root that is the recovery key ends the ranks.
-                if root.hash() == self.signer {
+                if root.hash() == self.signer || root.hash() == *signer2 {
                     return Err(field(t, "root"));
+                }
+                if *signer2 == self.signer {
+                    return Err(field(t, "signer2"));
                 }
                 if self.seq > MAX_RECOVERY {
                     return Err(field(t, "seq"));
@@ -561,12 +613,20 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
-            Kind::Recovery { root, list, from } => {
+            Kind::Ack { seen: s, spare } => {
+                m.push((10, seen(s)));
+                if let Some(sp) = spare {
+                    m.push((11, sp.to_value()));
+                }
+            }
+            Kind::Recovery { root, list, from, first, signer2 } => {
+                m.push((8, Value::Bytes(&signer2.0)));
                 m.push((10, root.to_value()));
                 m.push((11, Value::Bytes(list)));
                 if *from != 0 {
                     m.push((12, Value::Uint(*from)));
                 }
+                m.push((13, Value::Bytes(&first.0)));
             }
             Kind::Unknown(_) => {}
         }
@@ -635,11 +695,21 @@ impl Body {
                 let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
                 (Kind::Hubs { hubs, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
             }
+            TYPE_ACK => {
+                let seen = r.need_list(10, f("seen"), seen_entry_of)?;
+                let spare = match r.get(11) {
+                    Some(v) => Some(Key::read(v)?),
+                    None => None,
+                };
+                (Kind::Ack { seen, spare }, &[10, 11], &[])
+            }
             TYPE_RECOVERY => {
                 let root = Key::read(r.need(10, f("root"))?)?;
                 let list = r.need(11, f("list"))?.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok());
                 let from = r.opt_uint(12, 0, f("from"))?;
-                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from }, &[10, 11, 12], &[])
+                let first = r.need(13, f("first"))?.as_bytes().and_then(RecordId::from_slice).ok_or(f("first"))?;
+                let signer2 = r.need(8, f("signer2"))?.as_bytes().and_then(KeyHash::from_slice).ok_or(f("signer2"))?;
+                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from, first, signer2 }, &[8, 10, 11, 12, 13], &[])
             }
             n if RETIRED_TYPES.contains(&n) => return Err(Rule::new("records/retired")),
             n => (Kind::Unknown(n), &[], &[]),
@@ -800,8 +870,8 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
         (_, n) => n,
     };
     let servers = r.opt_list(15, f("servers"), |v| match v.as_array() {
-        Some([Value::Uint(kind), Value::Text(endpoint), key]) => {
-            Some(Server { kind: *kind, endpoint: String::from(*endpoint), key: Key::read(key).ok()? })
+        Some([Value::Uint(kind), Value::Text(endpoint), Value::Bytes(pin)]) => {
+            Some(Server { kind: *kind, endpoint: String::from(*endpoint), pin: (*pin).try_into().ok()? })
         }
         _ => None,
     })?;
@@ -907,12 +977,13 @@ fn check_settings(s: &Settings) -> Result<bool, Rule> {
         return Err(field(t, "min_rules"));
     }
     if s.servers.len() > MAX_SERVERS
-        || s.servers.iter().any(|v| {
-            !(SERVER_FORWARDER..=SERVER_RELAY).contains(&v.kind)
+        || s.servers.iter().enumerate().any(|(i, v)| {
+            v.kind == 0
+                || v.kind > MAX_INT
                 || v.endpoint.is_empty()
                 || v.endpoint.len() > 255
                 || !plain_text(&v.endpoint)
-                || !matches!(v.key.check(), Ok(KeyCheck::Good))
+                || s.servers.iter().take(i).any(|o| o.kind == v.kind && o.endpoint == v.endpoint)
         })
     {
         return Err(field(t, "servers"));
@@ -934,7 +1005,7 @@ fn encode_settings<'a>(m: &mut Vec<(u16, Value<'a>)>, s: &'a Settings) {
         let servers = s
             .servers
             .iter()
-            .map(|v| Value::Array(vec![Value::Uint(v.kind), Value::Text(&v.endpoint), v.key.to_value()]));
+            .map(|v| Value::Array(vec![Value::Uint(v.kind), Value::Text(&v.endpoint), Value::Bytes(&v.pin)]));
         m.push((15, Value::Array(servers.collect())));
     }
 }
@@ -978,14 +1049,14 @@ impl List {
     }
 
     /// Reads a list from its bytes: the profile's encoding, at most
-    /// MAX_ROOT_RECORDS IDs, sorted strictly (`records/list`).
+    /// LIST_MAX IDs, sorted strictly (`records/list`).
     pub fn decode(b: &[u8]) -> Result<List, Rule> {
         let bad = Rule::new("records/list");
         let v = crate::format::cbor::decode(b).map_err(|_| bad)?;
         let items = v.as_array().ok_or(bad)?;
         let list: Vec<RecordId> =
             items.iter().map(|i| i.as_bytes().and_then(RecordId::from_slice)).collect::<Option<_>>().ok_or(bad)?;
-        if list.len() > MAX_ROOT_RECORDS || !strictly_sorted(&list) {
+        if list.len() > LIST_MAX || !strictly_sorted(&list) {
             return Err(bad);
         }
         Ok(List(list))

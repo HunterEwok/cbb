@@ -11,9 +11,9 @@ public enum Media {
     public static let maxMedia: Int64 = 1 << 30
     public static let maxParts = 10_000
     public static let maxTypes = 8
-    public static let maxPaths = 512 << 10
-    public static let maxPath = 4096
-    public static let maxName = 255
+    public static let maxPaths = 2 << 20
+    public static let maxPath = 16 << 10
+    public static let maxName = 765
     /// The largest plain-text alternative of a media event, in bytes of UTF-8.
     public static let maxAltText = 256 << 10
     public static let types: Set<String> = ["image/png", "image/jpeg", "image/gif", "text/html"]
@@ -137,7 +137,7 @@ public enum Media {
     }
 
     /// Whether a name of a path is one every system can hold, as Go's
-    /// clip.CheckName decides: 1 to 255 bytes, as a receiver writes it too
+    /// clip.CheckName decides: 1 to 765 bytes, as a receiver writes it too
     /// (saveName), not "." or "..", no control
     /// characters, separators or characters Windows does not allow, no dot
     /// or space at the end, no name Windows reserves.

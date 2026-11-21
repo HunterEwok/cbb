@@ -39,14 +39,10 @@ use rustls::time_provider::TimeProvider;
 use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
 pub use session::Session;
 
+use crate::alpn;
 use crate::certs::{self, Cert, DeviceId, Usage};
 use crate::error::{Error, Result};
 use crate::identity::Identity;
-
-/// The ALPN protocol of member connections.
-pub const MEMBER_PROTOCOL: &[u8] = b"cbb/3";
-/// The ALPN protocol of pairing connections.
-pub const PAIR_PROTOCOL: &[u8] = b"cbb-pair/2";
 
 /// The clock of the TLS configurations.
 pub type Clock = Arc<dyn TimeProvider>;
@@ -224,7 +220,7 @@ fn server_builder(clock: &Clock) -> Result<rustls::ConfigBuilder<rustls::ServerC
 }
 
 /// The client configuration for dialing a member: TLS 1.3 only, ALPN
-/// cbb/3, this member's certificate with its issuer, and the
+/// cbb/4, this member's certificate with its issuer, and the
 /// server checked against the group's roots and records. peer is the
 /// device that discovery found, when known.
 pub fn member_client(
@@ -245,7 +241,7 @@ pub fn member_client(
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(verifier))
         .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
-    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::MEMBERS);
     cfg.resumption = rustls::client::Resumption::disabled();
     Ok(cfg)
 }
@@ -387,7 +383,7 @@ impl ClientCertVerifier for MemberClientVerifier {
 
 /// The server configuration for members that dial this one (phones, Macs
 /// and other members with a lower device ID): TLS 1.3 only, ALPN
-/// cbb/3, this member's certificate with its issuer, a client
+/// cbb/4, this member's certificate with its issuer, a client
 /// certificate of the group required, no session tickets.
 pub fn member_server(id: &Identity, refused: Refused, clock: &Clock) -> Result<rustls::ServerConfig> {
     let verifier = MemberClientVerifier {
@@ -400,7 +396,7 @@ pub fn member_server(id: &Identity, refused: Refused, clock: &Clock) -> Result<r
     let mut cfg = server_builder(clock)?
         .with_client_cert_verifier(Arc::new(verifier))
         .with_cert_resolver(Arc::new(OneCert(certified)));
-    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::MEMBERS);
     cfg.send_tls13_tickets = 0;
     Ok(cfg)
 }
@@ -464,7 +460,7 @@ impl ClientCertVerifier for MemberOrJoiner {
 
 /// The server configuration of an admin's member port, which takes
 /// joiners too, as Go's member port does: member_server's, with the ALPN
-/// protocols cbb/3 and cbb-pair/2 and any single P-256 certificate taken
+/// protocols cbb/4 and cbb-pair/3 and any single P-256 certificate taken
 /// as a joiner's. The program checks the negotiated protocol after the
 /// handshake: a member's chain again with check_member, a joiner through
 /// the pairing exchange (admit::Admission::accept), whose sid the Exporter
@@ -484,7 +480,11 @@ pub fn member_or_pair_server(
     let mut cfg = server_builder(clock)?
         .with_client_cert_verifier(Arc::new(verifier))
         .with_cert_resolver(Arc::new(OneCert(certified)));
-    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec(), PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = {
+        let mut all = alpn::offer(alpn::MEMBERS);
+        all.extend(alpn::offer(alpn::PAIRS));
+        all
+    };
     cfg.send_tls13_tickets = 0;
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
@@ -574,7 +574,7 @@ fn pair_identity(cert: &[u8], key: &[u8]) -> (Vec<CertificateDer<'static>>, Priv
 }
 
 /// The joiner's server configuration, for a member that dials it: TLS 1.3,
-/// ALPN cbb-pair/2, its self-signed certificate, any client
+/// ALPN cbb-pair/3, its self-signed certificate, any client
 /// certificate required, no session tickets. Use a new one for each
 /// connection: its Exporter gives the pairing's sid.
 pub fn pair_server(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::ServerConfig, Arc<Exporter>)> {
@@ -583,7 +583,7 @@ pub fn pair_server(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Se
         .with_client_cert_verifier(Arc::new(AnyPeer))
         .with_single_cert(chain, key)
         .map_err(|e| Error::with("cannot use the pairing certificate", TlsError(e)))?;
-    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::PAIRS);
     cfg.send_tls13_tickets = 0;
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
@@ -617,7 +617,7 @@ pub fn pair_server_external(
     let mut cfg = server_builder(clock)?
         .with_client_cert_verifier(Arc::new(AnyPeer))
         .with_cert_resolver(Arc::new(OneCert(certified)));
-    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::PAIRS);
     cfg.send_tls13_tickets = 0;
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
@@ -644,7 +644,7 @@ pub fn pair_client(cert: &[u8], key: &[u8], clock: &Clock) -> Result<(rustls::Cl
         .with_custom_certificate_verifier(Arc::new(AnyPeer))
         .with_client_auth_cert(chain, key)
         .map_err(|e| Error::with("cannot use the pairing certificate", TlsError(e)))?;
-    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::PAIRS);
     cfg.resumption = rustls::client::Resumption::disabled();
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
@@ -664,7 +664,7 @@ pub fn pair_client_external(
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(AnyPeer))
         .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
-    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::PAIRS);
     cfg.resumption = rustls::client::Resumption::disabled();
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();
@@ -673,7 +673,7 @@ pub fn pair_client_external(
 
 /// The client configuration of a new phone that restores a group with its
 /// recovery key (docs/protocol.md, section 10, "The recovery key"): ALPN
-/// cbb/3, chain (its member certificate, then the recovery key's admin CA)
+/// cbb/4, chain (its member certificate, then the recovery key's admin CA)
 /// with key signing the handshake, and any server certificate, which the
 /// program checks against the records the member sends once they came.
 pub fn restore_client(
@@ -688,7 +688,7 @@ pub fn restore_client(
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(AnyPeer))
         .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
-    cfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::MEMBERS);
     cfg.resumption = rustls::client::Resumption::disabled();
     Ok(cfg)
 }
@@ -705,7 +705,7 @@ pub fn pair_admitter(id: &Identity, clock: &Clock) -> Result<(rustls::ClientConf
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(AnyPeer))
         .with_client_cert_resolver(Arc::new(OneClientCert(certified)));
-    cfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    cfg.alpn_protocols = alpn::offer(alpn::PAIRS);
     cfg.resumption = rustls::client::Resumption::disabled();
     let exporter = Arc::new(Exporter::default());
     cfg.key_log = exporter.clone();

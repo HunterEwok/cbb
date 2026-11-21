@@ -50,8 +50,6 @@ pub fn facts(st: &Status, devs: &[Device]) -> Facts {
         in_group: !st.group.is_empty(),
         removed: st.removed,
         frozen: st.frozen,
-        taken_over_by: st.taken_over_by.clone(),
-        cert_ends_ms: st.cert_ends_ms,
         stop: st.stop.clone(),
         sync_off: st.mode == "own",
         sync_until_ms: if st.mode == "own" { st.sync_until_ms } else { 0 },
@@ -73,6 +71,7 @@ pub fn facts(st: &Status, devs: &[Device]) -> Facts {
         quiet: st.quiet.clone(),
         unreached: st.unreached.iter().map(|id| name(id)).collect(),
         away,
+        ..Facts::default()
     }
 }
 

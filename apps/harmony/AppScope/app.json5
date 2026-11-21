@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+{
+  "app": {
+    "bundleName": "tools.cbb.harmony",
+    "vendor": "cbb",
+    "versionCode": 1,
+    "versionName": "0.6.0",
+    "icon": "$media:app_icon",
+    "label": "$string:app_name"
+  }
+}

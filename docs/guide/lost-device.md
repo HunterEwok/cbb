@@ -36,8 +36,9 @@ other device stays in the group:
 
 - with phones: on the other phone, which is an admin, remove the lost one; the app takes the
   group over in the same step;
-- with computers: on an admin computer, `sudo cbb takeover NAME`, where NAME is the lost
-  root.
+- with computers: on another computer of the group, `sudo cbb recovery` with the group's
+  recovery sheet; on the records of 0.6 the root changes only with the recovery key, so an
+  admin computer no longer takes the group over by itself.
 
 If someone else holds a removed admin's device, they can stop the group for a while by
 signing claims of their own: the devices say the group is stopped. Then the old root ends it,
@@ -69,7 +70,7 @@ It depends on where the device kept its keys ([keys and attestation](keys.md)):
   only on that device, and a phone's root and admin keys sign only after your face,
   fingerprint or passcode.
 - **Keys in a file** (Intel Macs without the T2 chip, Windows PCs and Linux computers
-  without a TPM, the lite member): whoever copies the file can act as that device until you remove it. Encrypt the
+  without a TPM, small devices): whoever copies the file can act as that device until you remove it. Encrypt the
   disk (FileVault, BitLocker, LUKS) so a stolen device gives nothing away.
 
 The clipboard's history is not kept on the devices, and a secret is gone 60 seconds after it

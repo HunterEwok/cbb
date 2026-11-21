@@ -14,7 +14,7 @@ with a public address will do: a virtual server with 1 CPU and 512 MB of memory 
 
 | | Forwarder | Blind relay |
 |---|---|---|
-| Command | `cbb forward` | `cbb relay -group TAG` |
+| Command | `cbb forward` | `cbb relay -group GROUP` |
 | Serves | any hub that registers with it | only the groups you list |
 | Devices connect with | the hub's `-forwarder ADDRESS -forwarder-key KEY` | `cbb global relay ADDRESS -key KEY` on each computer; Settings on the phones |
 | Ports | UDP and TCP 8764; TCP 443 with VLESS | UDP and TCP 8764 |
@@ -177,11 +177,13 @@ location /PATH-FROM-THE-LOG {
 
 ## A blind relay
 
-A relay serves only the groups you list. Find your group's tag with `cbb status` on any of
-its computers, then set it up on the server:
+A relay serves only the groups you list, each by its root key and recovery key (public keys:
+the relay takes the group's period from that root alone). Print the line with
+`cbb status -relay` on any of the group's computers (one line, `ROOT:RECOVERY:RECOVERY2`),
+then set it up on the server with that line:
 
 ```sh
-echo 'CBB_RELAY_FLAGS=-group 0123456789abcdef' | sudo tee /etc/cbb/relay.env   # several: -group TAG1,TAG2
+echo 'CBB_RELAY_FLAGS=-group ROOT:RECOVERY:RECOVERY2' | sudo tee /etc/cbb/relay.env   # several: -group G1,G2
 sudo install -m 644 cbb/packaging/linux/cbb-relay.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now cbb-relay
@@ -204,6 +206,14 @@ sudo cbb global relay 198.51.100.9:8764 -key <key>
 It says what the relay learns and asks you to type yes. On a phone, give the same address
 and key under **Blind relay** in Settings; the app says the same and asks before it meets the
 group there.
+
+In a group of 0.6 the relay is a setting of the group, not of each device: run the command
+once on the group's root (the computer that created the group), which signs the address and
+the key's pin in the group's settings, and every device takes it from there
+([protocol](../protocol.md), section 10, the `settings` record's `servers`). Only the root sets it:
+on an admin computer the command says to run it on the root. The root may name several relays, up to
+16: `sudo cbb global relay 198.51.100.9:8764 -key <key> 203.0.113.5:8764 -key <other key>`. `sudo cbb global relay default` on the root
+takes the group's own relay away, and the group meets at the project's alone.
 
 The devices then meet at the relay whenever they are not on one network. Both must be
 online at once, since the relay stores nothing. It speaks plain WireGuard only.

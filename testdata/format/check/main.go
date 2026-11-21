@@ -48,8 +48,8 @@ func init() {
 		IndefLength:      cbor.IndefLengthForbidden,
 		TagsMd:           cbor.TagsForbidden,
 		MaxNestedLevels:  9, // our own walk enforces 8
-		MaxArrayElements: 4096,
-		MaxMapPairs:      4096,
+		MaxArrayElements: 65535,
+		MaxMapPairs:      65535,
 		UTF8:             cbor.UTF8RejectInvalid,
 		IntDec:           cbor.IntDecConvertNone,
 		DefaultMapType:   nil,
@@ -170,6 +170,9 @@ type keyRow struct {
 
 var byHash = map[string][]byte{} // key hash hex -> pub
 
+// recovery2ByHash holds the recovery key's K2 (SLH-DSA) by its key hash.
+var recovery2ByHash = map[string][]byte{}
+
 func keyHash(k any) ([]byte, []byte, error) {
 	a, ok := k.([]any)
 	if !ok || len(a) != 2 {
@@ -199,14 +202,6 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if !ok1 || !ok2 {
 		return nil, nil, errors.New("env/shape")
 	}
-	if len(a) == 3 {
-		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB.
-		if s2, ok := a[2].([]byte); !ok {
-			return nil, nil, errors.New("env/shape")
-		} else if len(s2) > 4096 {
-			return nil, nil, errors.New("env/sig2")
-		}
-	}
 	bv, err := strict(body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("body cbor: %w", err)
@@ -214,6 +209,24 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	m, ok := bv.(map[any]any)
 	if !ok {
 		return nil, nil, errors.New("body not a map")
+	}
+	// A recovery head (record type 13) carries K2's SLH-DSA signature.
+	head := label == "cbb record v3" && m[uint64(1)] == uint64(13)
+	var sig2 []byte
+	if len(a) == 3 {
+		// sig2 is not fixed: a later algorithm's signature, up to 8 KiB, a
+		// recovery head's up to 32 KiB.
+		max := maxSig2
+		if head {
+			max = maxSig2Head
+		}
+		if s2, ok := a[2].([]byte); !ok {
+			return nil, nil, errors.New("env/shape")
+		} else if len(s2) > max {
+			return nil, nil, errors.New("env/sig2")
+		} else {
+			sig2 = s2
+		}
 	}
 	_, hasSigner2 := m[uint64(8)]
 	if (len(a) == 3) != hasSigner2 {
@@ -223,8 +236,26 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := es256(pub, label, body, sig); err != nil {
+	signed := body
+	if sig2 != nil {
+		// Beside a second signature the first covers the body and the
+		// second's SHA-256 (audit Q-1), for every kind.
+		d := sha256.Sum256(sig2)
+		signed = append(bytes.Clone(body), d[:]...)
+	}
+	if err := es256(pub, label, signed, sig); err != nil {
+		if sig2 != nil && err.Error() == "verify" {
+			return nil, nil, errors.New("env/damaged")
+		}
 		return nil, nil, fmt.Errorf("sig: %w", err)
+	}
+	if head && sig2 != nil {
+		// E-6: both halves sign every head. K2 signs the body.
+		h2, _ := m[uint64(8)].([]byte)
+		k2, ok := recovery2ByHash[hex.EncodeToString(h2)]
+		if !ok || !slhVerify(k2, body, sig2, []byte("cbb record v3")) {
+			return nil, nil, errors.New("sig: sig/verify (K2)")
+		}
 	}
 	return m, body, nil
 }
@@ -273,12 +304,22 @@ func formatRule(rule string) bool {
 	return false
 }
 
+// overCeiling gives env/size for a body past its kind's ceiling where the
+// envelope reader does not check it itself: a server credential's 16 KiB.
+func overCeiling(label string, body []byte, err error) error {
+	if err == nil && label == "cbb credential v2" && len(body) > 16384 {
+		return errors.New("env/size")
+	}
+	return err
+}
+
 func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 	var f signedFile
 	load(dir, file, &f)
 	ok, skipped := 0, 0
 	for _, t := range f.Take {
 		m, body, err := envelope(unhex(t.Envelope), f.Label, sk)
+		err = overCeiling(f.Label, body, err)
 		if t.Verdict == "hold" && err != nil && strings.Contains(err.Error(), "env/shape") {
 			// a body naming signer2 with two elements: held by the rules, refused here only by shape
 		}
@@ -294,6 +335,12 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		}
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
 			fail("%s / %s: its name is refused", file, t.Name)
+		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 7 && !serversOK(m[uint64(15)]) {
+			fail("%s / %s: its servers are refused", file, t.Name)
+		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadIsPrev(m) {
+			fail("%s / %s: its own head is not its prev", file, t.Name)
 		}
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadBefore(m) {
 			fail("%s / %s: it names its own key at or above its seq", file, t.Name)
@@ -327,10 +374,28 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		ok++
 	}
 	for _, r := range f.Refuse {
-		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		m, rbody, err := envelope(unhex(r.Envelope), f.Label, sk)
+		err = overCeiling(f.Label, rbody, err)
+		if r.Rule == "records/checkpoint/own-prev" {
+			if err != nil || !ownHeadBefore(m) || ownHeadIsPrev(m) {
+				fail("%s / %s: its own head holds", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if r.Rule == "records/checkpoint/own-head" {
 			if err != nil || ownHeadBefore(m) {
 				fail("%s / %s: its heads hold", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
+		if r.Rule == "records/settings/servers" {
+			// the group's servers: checked here by themselves
+			if err != nil || serversOK(m[uint64(15)]) {
+				fail("%s / %s: its servers hold", file, r.Name)
 			} else {
 				ok++
 			}
@@ -348,6 +413,8 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if formatRule(r.Rule) {
 			if err == nil {
 				fail("%s / %s: taken, want refused (%s)", file, r.Name, r.Rule)
+			} else if r.Rule == "env/damaged" && err.Error() != r.Rule {
+				fail("%s / %s: %v, want %s", file, r.Name, err, r.Rule)
 			} else {
 				ok++
 			}
@@ -359,13 +426,28 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "slhdsa-sign" {
+		slhSign()
+		return
+	}
 	dir := os.Args[1]
 
 	var keys struct {
-		GroupID string   `json:"group_id"`
-		Keys    []keyRow `json:"keys"`
+		GroupID   string   `json:"group_id"`
+		Keys      []keyRow `json:"keys"`
+		Recovery2 keyRow   `json:"recovery2"`
 	}
 	load(dir, "keys.json", &keys)
+	{
+		v, err := strict(unhex(keys.Recovery2.Key))
+		must(err)
+		h, pub, err := keyHash(v)
+		must(err)
+		if a := v.([]any); a[0] != uint64(4) || len(pub) != 32 || hex.EncodeToString(h) != keys.Recovery2.KeyHash {
+			fail("keys.json recovery2: not an SLH-DSA key of its hash")
+		}
+		recovery2ByHash[keys.Recovery2.KeyHash] = pub
+	}
 	for _, k := range keys.Keys {
 		v, err := strict(unhex(k.Key))
 		must(err)
@@ -377,11 +459,13 @@ func main() {
 		byHash[k.KeyHash] = pub
 		keyOf[k.Name] = unhex(k.Key)
 	}
-	// The Group ID commits to the first root key and the recovery key
-	// (rule 33).
-	gid := sha256.Sum256(append(append([]byte("cbb group v3\x00"), keyOf["root"]...), keyOf["recovery"]...))
+	// The Group ID commits to the first root key and both halves of the
+	// recovery key (rule 33, E-6).
+	pre := append([]byte("cbb group v3\x00"), keyOf["root"]...)
+	pre = append(append(pre, keyOf["recovery"]...), unhex(keys.Recovery2.Key)...)
+	gid := sha256.Sum256(pre)
 	if hex.EncodeToString(gid[:16]) != keys.GroupID {
-		fail("group id is not that of the root key and the recovery key")
+		fail("group id is not that of the root key and the recovery key's two halves")
 	}
 
 	var prof struct {
@@ -403,6 +487,7 @@ func main() {
 		}
 	}
 	fmt.Printf("%-18s %d checked\n", "profile.json", len(prof.Vectors))
+	checkSLHDSA(dir)
 
 	checkSigned(dir, "records.json", bySignerHash)
 	// os numbers: one this version does not name is taken and shown as unknown
@@ -475,7 +560,9 @@ func main() {
 	// after taking it. A kept grant of a lower recovery seq counts as
 	// none, but a guarded leaf stays guarded.
 	group := unhex(g.Group)
-	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true}
+	// 8, signer2: a second signer of a later version, taken on the first
+	// signature alone.
+	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true, 8: true}
 	for k := uint64(10); k <= 19; k++ {
 		allowed[k] = true
 	}
@@ -521,7 +608,7 @@ func main() {
 							}
 							madeAfter = n
 						}
-						if madeAfter != recovery || recovery > 16 || st != nil && st.recovery > recovery {
+						if madeAfter != recovery || recovery > 64 || st != nil && st.recovery > recovery {
 							return nil, errors.New("grants/recovery")
 						}
 						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {
@@ -576,6 +663,9 @@ func main() {
 		body, gbody, err := envelope(envb, "cbb grant v1", signerKey)
 		if err != nil {
 			return nil, err
+		}
+		if len(gbody) > 4096 {
+			return nil, errors.New("env/size")
 		}
 		counter, _ := body[uint64(4)].(uint64)
 		madeUnder, named := body[uint64(17)].(uint64)
@@ -807,12 +897,14 @@ func main() {
 		var w []byte
 		for _, x := range m[uint64(3)].([]any) {
 			xb := x.([]byte)
-			switch len(xb) {
-			case 1168:
+			// A wrap's length follows its reader's algorithm: any whole
+			// wrap (over 48 bytes) is hashed, 32 bytes are a hash already.
+			switch {
+			case len(xb) == 32:
+				w = append(w, xb...)
+			case len(xb) >= minWrap:
 				s := sha256.Sum256(xb)
 				w = append(w, s[:]...)
-			case 32:
-				w = append(w, xb...)
 			default:
 				fail("copy %s: wrap size %d", name, len(xb))
 			}
@@ -832,6 +924,7 @@ func main() {
 	}
 	checkCopy("full", unhex(c["copy"]))
 	checkCopy("reduced", unhex(c["reduced_copy_for_board"]))
+	checkCopy("mixed", unhex(c["mixed_copy"]))
 	if cv, err := strict(unhex(c["content_plaintext"])); err != nil || len(c["content_plaintext"]) != 2048 {
 		fail("copy content: %v", err)
 	} else {
@@ -1018,8 +1111,13 @@ func main() {
 	fmt.Printf("%-18s checked\n", "container.json")
 
 	checkSets(dir)
+	checkSheet(dir)
+	checkBounds(dir)
 	checkMessages(dir)
 	checkWave4(dir)
+	checkMember(dir)
+	checkFuture(dir)
+	checkPush(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)
@@ -1127,11 +1225,11 @@ func onceSet(a []any) bool {
 	return true
 }
 
-// grantSets checks a grant body's lists: commanders by key hash, at most 8;
-// readers sorted, at most 4; neighbors sorted, at most 8.
+// grantSets checks a grant body's lists: commanders by key hash, at most 16;
+// readers sorted, at most 16; neighbors sorted, at most 8.
 func grantSets(body map[any]any) error {
 	cs, _ := body[uint64(12)].([]any)
-	if len(cs) > 8 {
+	if len(cs) > 16 {
 		return errors.New("grants/commanders")
 	}
 	for i := 1; i < len(cs); i++ {
@@ -1147,7 +1245,7 @@ func grantSets(body map[any]any) error {
 			return errors.New("grants/readers")
 		}
 	}
-	if len(rs) > 4 || !sortedSet(rs) {
+	if len(rs) > 16 || !sortedSet(rs) {
 		return errors.New("grants/readers")
 	}
 	for _, r := range rs {
@@ -1391,8 +1489,17 @@ func copyRule(c []byte) string {
 	if !ok || len(ws) != len(rs) {
 		return "copy/shape"
 	}
+	for _, x := range ws {
+		if b, ok := x.([]byte); !ok || (len(b) != 32 && len(b) < minWrap) {
+			return "copy/shape"
+		}
+	}
 	return ""
 }
+
+// minWrap is the shortest whole wrap: K and its tag after an encapsulation
+// of at least one byte.
+const minWrap = 32 + 16 + 1
 
 // checkSets reads every set the vectors hold and checks its order by
 // itself, apart from gen.py's own.
@@ -1564,6 +1671,67 @@ func ownHeadBefore(m map[any]any) bool {
 		if bytes.Equal(k, signer) && n >= seq {
 			return false
 		}
+	}
+	return true
+}
+
+// ownHeadIsPrev: a checkpoint names its own key's head exactly when its
+// seq is above 1, at seq-1 and with its prev's ID.
+func ownHeadIsPrev(m map[any]any) bool {
+	signer, _ := m[uint64(3)].([]byte)
+	seq, _ := m[uint64(4)].(uint64)
+	prev, hasPrev := m[uint64(5)].([]byte)
+	heads, _ := m[uint64(10)].([]any)
+	for _, h := range heads {
+		e, _ := h.([]any)
+		if len(e) != 3 {
+			continue
+		}
+		k, _ := e[0].([]byte)
+		if !bytes.Equal(k, signer) {
+			continue
+		}
+		n, _ := e[1].(uint64)
+		id, _ := e[2].([]byte)
+		return hasPrev && n+1 == seq && bytes.Equal(id, prev)
+	}
+	return !hasPrev && seq == 1
+}
+
+// serversOK checks a settings record's servers (field 15), absent or at
+// most 16 entries of [kind, endpoint, pin]: kind 1 or more (a kind this
+// version does not know is kept), endpoint text of 1 to 255 bytes without
+// a control character, pin 32 bytes, each kind and endpoint once.
+func serversOK(v any) bool {
+	if v == nil {
+		return true
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 || len(list) > 16 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, e := range list {
+		a, ok := e.([]any)
+		if !ok || len(a) != 3 {
+			return false
+		}
+		kind, ok1 := a[0].(uint64)
+		ep, ok2 := a[1].(string)
+		pin, ok3 := a[2].([]byte)
+		if !ok1 || !ok2 || !ok3 || kind == 0 || len(ep) == 0 || len(ep) > 255 || len(pin) != 32 {
+			return false
+		}
+		for _, r := range ep {
+			if r < 0x20 || r == 0x7f {
+				return false
+			}
+		}
+		k := fmt.Sprintf("%d %s", kind, ep)
+		if seen[k] {
+			return false
+		}
+		seen[k] = true
 	}
 	return true
 }

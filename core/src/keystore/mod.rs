@@ -42,6 +42,10 @@ pub struct Epoch {
     pub epoch: u64,
     pub made_ms: u64,
     pub statement: Vec<u8>,
+    /// On the newest epoch of a device with a wall clock: the first time
+    /// [`rotate`] saw the clock more than [`AHEAD_MS`] behind `made_ms`,
+    /// while it stays behind; None otherwise.
+    pub behind_since_ms: Option<u64>,
 }
 
 /// Where a device keeps its keys. A platform implements it over its own
@@ -77,9 +81,20 @@ pub struct Rotated {
 /// when it has none, a new one when the newest is a week old, and erases
 /// every epoch but the newest once the newest has been the newest for a
 /// week (the previous one is kept that long). Time going back a little
-/// changes nothing; a newest epoch made more than [`AHEAD_MS`] ahead of now
-/// (a clock that was once far ahead) is due at once, so such a clock never
-/// stops the weekly change.
+/// changes nothing.
+///
+/// A newest epoch made more than [`AHEAD_MS`] ahead of now is either a
+/// clock that is wrong now (a default date after a restart, a clock moved
+/// back) or one that was wrong when the epoch was made. With a wall clock
+/// the call makes nothing and erases nothing then: it notes when it first
+/// saw the clock behind, and only once the clock has stayed behind a whole
+/// week by its own count is the epoch due, so a clock once far ahead never
+/// stops the weekly change, and a clock moved back and forth makes no
+/// more than one epoch a week. A leaf on its running time, which goes back
+/// only at a restart, makes its new epoch at once: the epoch is then made at
+/// the start of the run, and the next restarts do not rotate.
+///
+/// The caller should call it once the device's clock is set.
 ///
 /// A new statement's `time_ms` is `wall_ms`, the device's wall clock, and
 /// only that: a device without one (a leaf counting on its running time)
@@ -89,23 +104,46 @@ pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64, wall_ms: O
     let mut epochs = store.epochs();
     epochs.sort_by_key(|e| e.epoch);
     let newest = epochs.last().map(|e| (e.epoch, e.made_ms));
-    let due = match newest {
+    let due = match epochs.last() {
         None => true,
-        Some((_, made)) => now_ms >= made.saturating_add(WEEK_MS) || made > now_ms.saturating_add(AHEAD_MS),
+        Some(e) if e.made_ms > now_ms.saturating_add(AHEAD_MS) => {
+            if wall_ms.is_none() {
+                true
+            } else {
+                // The clock is behind the newest epoch: count a week from
+                // the first call that saw it so (or from now, if the clock
+                // went back further since).
+                let since = e.behind_since_ms.filter(|t| *t <= now_ms);
+                match since {
+                    Some(t) if now_ms >= t.saturating_add(WEEK_MS) => true,
+                    Some(_) => return Ok(out),
+                    None => {
+                        mark_behind(store, e, Some(now_ms))?;
+                        return Ok(out);
+                    }
+                }
+            }
+        }
+        Some(e) => {
+            if e.behind_since_ms.is_some() {
+                mark_behind(store, e, None)?;
+            }
+            now_ms >= e.made_ms.saturating_add(WEEK_MS)
+        }
     };
     let mut newest_made = newest.map(|(_, m)| m);
     if due {
         let epoch = newest.map_or(Some(1), |(e, _)| e.checked_add(1)).ok_or_else(|| Error::msg("no epoch is left"))?;
         let secret = crate::seal::generate_secret()?;
-        let seal = Key { alg: ALG_XWING, public: crate::seal::public_key(&secret)? };
+        let seal = Key::new(ALG_XWING, crate::seal::public_key(&secret)?);
         let signer = Key::es256(store.member().public()).hash();
         let body = Body { group: *group, signer, epoch, time_ms: wall_ms.unwrap_or(0), seal, held: false };
         let st = Statement::sign(body, store.member())?;
         let env = statement_envelope(&st);
-        store.put(Epoch { epoch, made_ms: now_ms, statement: env.clone() }, secret)?;
+        store.put(Epoch { epoch, made_ms: now_ms, statement: env.clone(), behind_since_ms: None }, secret)?;
         out.made = Some(env);
         newest_made = Some(now_ms);
-        epochs.push(Epoch { epoch, made_ms: now_ms, statement: Vec::new() });
+        epochs.push(Epoch { epoch, made_ms: now_ms, statement: Vec::new(), behind_since_ms: None });
     }
     let last = epochs.last().map(|e| e.epoch);
     if let (Some(made), Some(last)) = (newest_made, last) {
@@ -119,6 +157,12 @@ pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64, wall_ms: O
         }
     }
     Ok(out)
+}
+
+/// Keeps an epoch again with its note of a clock behind it changed.
+fn mark_behind(store: &mut dyn KeyStore, e: &Epoch, since: Option<u64>) -> Result<()> {
+    let secret = store.sealing(e.epoch).ok_or_else(|| Error::msg("an epoch without its secret"))?;
+    store.put(Epoch { behind_since_ms: since, ..e.clone() }, secret)
 }
 
 /// A statement's envelope `[body, sig]`.
@@ -142,7 +186,7 @@ pub enum ReadStatement {
 const STATEMENT_FIELDS: [u16; 6] = [1, 2, 3, 4, 6, 10];
 
 /// Reads a keys statement from its envelope (format section 5): its size
-/// (2 KiB of body), the envelope and the profile, the fields' rows, and the
+/// (32 KiB of body), the envelope and the profile, the fields' rows, and the
 /// signature's form. The signature is checked with the device's member key
 /// once the reader knows the device.
 pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Rule> {
@@ -158,9 +202,15 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
     let signer =
         KeyHash::from_slice(bytes(3, 32, Rule::field("statements/signer"))?).ok_or(Rule::field("statements/signer"))?;
     let epoch = m.get(4).and_then(Value::as_uint).filter(|e| *e >= 1).ok_or(Rule::field("statements/epoch"))?;
-    let unknown_field = m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !STATEMENT_FIELDS.contains(k));
+    let unknown_field = m
+        .as_map()
+        .unwrap_or(&[])
+        .iter()
+        .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !STATEMENT_FIELDS.contains(k));
     let held = || ReadStatement::Held { id: e.id(), envelope: envelope.to_vec() };
-    if typ != 1 || unknown_field || e.sig2.is_some() {
+    // A second signature is taken on the first alone, which covers it.
+    crate::format::envelope::signer2(m, Rule::field("statements/signer2"))?;
+    if typ != 1 || unknown_field {
         return Ok(held());
     }
     let time_ms = match m.get(6) {
@@ -178,9 +228,8 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
     if seal.alg != crate::format::Alg::XWing || seal.public.len() != XWING_PUBLIC {
         return Err(Rule::KEYS_XWING);
     }
-    let body =
-        Body { group, signer, epoch, time_ms, seal: Key { alg: ALG_XWING, public: seal.public.to_vec() }, held: false };
-    Ok(ReadStatement::Take(Statement::from_read(e.body.to_vec(), e.sig.to_vec(), body)))
+    let body = Body { group, signer, epoch, time_ms, seal: Key::new(ALG_XWING, seal.public.to_vec()), held: false };
+    Ok(ReadStatement::Take(Statement::from_read(e.body.to_vec(), e.sig.to_vec(), e.sig2.map(<[u8]>::to_vec), body)))
 }
 
 /// A key store in memory: for the tests and for a device that keeps its

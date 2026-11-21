@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e3cc41b050a0 -->
+<!-- source: 29c68a9ea0e4 -->
 # Programu
 
 Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
@@ -20,13 +20,13 @@ Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za
 
 1. [Sakinisha](install.md) Copy Beyond Borders kwenye kompyuta na uendeshe `sudo cbb pair` hapo. Huonyesha msimbo wa QR.
 2. Fungua programu na ugonge **Connect a new device**, kisha changanua msimbo. Programu huunda ufunguo wa kikundi ndani ya chipu ya usalama ya simu (Secure Enclave kwenye iPhone, Keystore kwenye Android), huongeza kompyuta na kufungua Mwanzo.
-3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Mwanachama mwepesi hujiunga vivyo hivyo (`sudo -u cbb cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
+3. Ongeza kila kompyuta nyingine kwa **+** kwenye Mwanzo. Kifaa kidogo hujiunga vivyo hivyo (`sudo -u cbb cbb pair` kwenye kifaa hicho huonyesha msimbo wake).
 
 Kamera isipoweza kutumika: kwenye iPhone, andika tarakimu sita ambazo kompyuta inaonyesha; kwenye Android, bandika maandishi ya msimbo wa QR, ambayo `cbb pair` pia huyachapisha.
 
 ### Kila siku
 
-- **Mwanzo** huonyesha kila kifaa cha kikundi, kama vigae au orodha, na kitone kinachoonyesha kama kiko mtandaoni. Kitufe kikubwa hutuma kile ambacho simu inashikilia, au huleta nakala ya karibuni ya kompyuta kama ilifanywa muda mfupi uliopita.
+- **Mwanzo** huonyesha kila kifaa cha kikundi, kama vigae au orodha, na kitone kinachoonyesha kama kiko mtandaoni. Kitufe kikubwa huchukua nakala kutoka kifaa kingine kama bado ni hai (dakika moja kwa chaguo-msingi; msimamizi huibadilisha kwenye Mipangilio), na vinginevyo hutuma kile ambacho simu inashikilia.
 - **iPhone**: iOS huruhusu programu kutumia ubao wa kunakili ikiwa mbele tu, kwa hiyo iPhone husawazisha kwa ishara moja: kitendo cha "Sync clipboard" kwenye Back Tap au kitufe cha Action, kidhibiti cha Kituo cha Udhibiti, au wijeti ya skrini ya kwanza. Shiriki, Copy Beyond Borders hutuma maandishi au kiungo mara moja.
 - **Android**: nakala kutoka kwenye kompyuta hufika zenyewe. Ili nakala za simu nazo zitumwe zenyewe, washa **Send my copies by themselves** (huduma ya ufikivu; programu hueleza inachosoma). Bila hiyo, mguso mmoja: kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, Send kwenye arifa, wijeti ya skrini ya kwanza, au Shiriki na uteuzi wa maandishi, Copy Beyond Borders.
 - **Arifa** husema kifaa kinapojiunga au kuondolewa, kinapokuwa msimamizi, au kitovu kisipojibu ukiwa mbali na nyumbani. Kila aina ina swichi yake kwenye Mipangilio.

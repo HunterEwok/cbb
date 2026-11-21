@@ -4,7 +4,8 @@
 // Package catalog turns the apps' strings, apps/l10n/<language>.json, into
 // the files each app's platform reads: the String Catalogs of the iPhone,
 // Watch and Mac apps, the Android app's and the watch's res/values*/strings.xml,
-// the Aurora app's Qt translations and the tray app's frontend/l10n.
+// the Aurora app's Qt translations, the HarmonyOS app's
+// resources/*/element/string.json and the tray app's frontend/l10n.
 //
 // apps/l10n/en.json lists every string once: its ID (the English text, or the
 // text with the first place in brackets where the same English needs another
@@ -13,14 +14,15 @@
 // other language's file holds the translation of every string under its ID.
 // A place is one of
 //
-//	ios, ios-share, ios-watch, ios-widgets, ios-shortcuts, mac   the String Catalogs, keyed by the English
-//	ios-plist:KEY                                                 the iPhone app's InfoPlist catalog, keyed by KEY
-//	tray                                                          the tray app, keyed by the English
-//	aurora:CONTEXT                                                the Aurora app's Qt context, keyed by the English
-//	android:NAME, wear:NAME                                       the Android app's and the watch's resource NAME
+//	ios, ios-share, ios-push, ios-watch, ios-widgets, ios-shortcuts, mac   the String Catalogs, keyed by the English
+//	ios-plist:KEY                                                          the iPhone app's InfoPlist catalog, keyed by KEY
+//	tray                                                                   the tray app, keyed by the English
+//	aurora:CONTEXT                                                         the Aurora app's Qt context, keyed by the English
+//	android:NAME, wear:NAME                                                the Android app's and the watch's resource NAME
+//	harmony:NAME, harmony-wear:NAME                                        the HarmonyOS app's and its watch's string NAME
 //
-// Every text is plain: Generate escapes it for Android's resources and the
-// XML of Qt's files.
+// Every text is plain: Generate escapes it for Android's resources, the
+// XML of Qt's files and the HarmonyOS app's JSON.
 package catalog
 
 import (
@@ -66,6 +68,7 @@ var catalogs = map[string]string{
 	"ios-shortcuts": "apps/ios/CBB/Resources/AppShortcuts.xcstrings",
 	"ios-plist":     "apps/ios/CBB/Resources/InfoPlist.xcstrings",
 	"ios-share":     "apps/ios/ShareExtension/Localizable.xcstrings",
+	"ios-push":      "apps/ios/NotificationService/Localizable.xcstrings",
 	"ios-watch":     "apps/ios/Watch/Localizable.xcstrings",
 	"ios-widgets":   "apps/ios/Widgets/Localizable.xcstrings",
 	"mac":           "apps/macos/CBBMac/Resources/Localizable.xcstrings",
@@ -77,10 +80,18 @@ var androidRes = map[string]string{
 	"wear":    "apps/android/wear/src/main/res",
 }
 
+// harmonyRes is the HarmonyOS app's resource folder, by its place's kind:
+// the phone's module and the watch's.
+var harmonyRes = map[string]string{
+	"harmony":      "apps/harmony/entry/src/main/resources",
+	"harmony-wear": "apps/harmony/wearable/src/main/resources",
+}
+
 // Each platform's names for the languages.
 var (
 	xcLang      = map[string]string{"zh": "zh-Hans"}
 	androidLang = map[string]string{"he": "iw"}
+	harmonyLang = map[string]string{"zh": "zh_CN"}
 	qtLang      = map[string]string{"es": "es_ES", "he": "he_IL", "hi": "hi_IN", "ru": "ru_RU", "zh": "zh_CN"}
 )
 
@@ -98,7 +109,7 @@ var androidName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 func place(p string) (kind, key string, err error) {
 	kind, key, _ = strings.Cut(p, ":")
 	switch kind {
-	case "ios", "ios-shortcuts", "ios-share", "ios-watch", "ios-widgets", "mac", "tray":
+	case "ios", "ios-shortcuts", "ios-share", "ios-push", "ios-watch", "ios-widgets", "mac", "tray":
 		if key != "" {
 			return "", "", fmt.Errorf("place %q takes no key", p)
 		}
@@ -106,7 +117,7 @@ func place(p string) (kind, key string, err error) {
 		if key == "" {
 			return "", "", fmt.Errorf("place %q needs a key after the colon", p)
 		}
-	case "android", "wear":
+	case "android", "wear", "harmony", "harmony-wear":
 		if !androidName.MatchString(key) {
 			return "", "", fmt.Errorf("place %q needs a resource name after the colon", p)
 		}
@@ -244,6 +255,12 @@ func (src Source) Generate() map[string][]byte {
 	for _, l := range Languages {
 		out["apps/desktop/frontend/l10n/"+l+".json"] = src.tray(l)
 		out["apps/silica/translations/cbb-"+l+".ts"] = src.qt(l)
+	}
+	for kind, res := range harmonyRes {
+		out[res+"/base/element/string.json"] = src.harmony(kind, "")
+		for _, l := range Languages {
+			out[res+"/"+lang(harmonyLang, l)+"/element/string.json"] = src.harmony(kind, l)
+		}
 	}
 	for kind, res := range androidRes {
 		out[res+"/values/strings.xml"] = src.android(kind, "")
@@ -434,6 +451,23 @@ func (src Source) android(kind, l string) []byte {
 	}
 	b.WriteString("</resources>\n")
 	return b.Bytes()
+}
+
+// harmony writes the strings of a HarmonyOS module (kind harmony or
+// harmony-wear): English ("") with the names that stay as they are, or a
+// language's translations. JSON takes no comment, so the note that the
+// file is generated is not in it.
+func (src Source) harmony(kind, l string) []byte {
+	var lines []string
+	for _, k := range src.at(kind) {
+		switch {
+		case l == "":
+			lines = append(lines, `    {"name": "`+k.key+`", "value": `+quote(k.s.EN)+`}`)
+		case !k.s.Fixed:
+			lines = append(lines, `    {"name": "`+k.key+`", "value": `+quote(k.s.Texts[l])+`}`)
+		}
+	}
+	return []byte("{\n  \"string\": [\n" + strings.Join(lines, ",\n") + "\n  ]\n}\n")
 }
 
 // xmlText escapes a text for an XML element.

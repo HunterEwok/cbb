@@ -68,9 +68,17 @@ pub fn install(dir: &Path) {
         let details = describe(info);
         let log: Vec<String> = RECENT.try_lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
         let body = json!({ "details": details, "log": log, "at_ms": crate::uptime::wall_ms() });
-        let _ = std::fs::write(dir.join(PANIC_FILE), body.to_string());
+        write_panic(&dir, &body);
         earlier(info);
     }));
+}
+
+/// Writes panic.json in dir whole or not at all (write_atomic takes no lock,
+/// so a panic hook may call it), for the service's user alone: its log lines
+/// are not filtered yet. A power cut while the service dies leaves the report
+/// before, never half of one.
+fn write_panic(dir: &Path, body: &Value) {
+    let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o600);
 }
 
 /// The computer's side of the bug reports, in the service's state folder.
@@ -294,6 +302,45 @@ fn wait(child: std::process::Child, time: Duration) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
+    /// The panic's file, with its unfiltered log, is the service user's
+    /// alone.
+    #[cfg(unix)]
+    #[test]
+    fn the_panic_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("cbb-panic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        write_panic(&dir, &json!({"details": "panic: x", "log": ["a line"]}));
+        let mode = std::fs::metadata(dir.join(PANIC_FILE)).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// panic.json cut at every step: the report before stays whole.
+    #[test]
+    fn a_panic_report_cut_short_leaves_the_one_before() {
+        use crate::files::faults::{self, How};
+        let dir = std::env::temp_dir().join(format!("cbb-panic-cut-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_panic(&dir, &json!({"details": "panic: first", "log": []}));
+        let before = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+        for step in 0..200 {
+            for how in [How::Dies, How::Fails] {
+                faults::at(step, how);
+                write_panic(&dir, &json!({"details": "panic: second", "log": ["a line"]}));
+                let now = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+                assert!(now == before || serde_json::from_slice::<Value>(&now).is_ok(), "step {step}: a torn report");
+                if now != before {
+                    // Renamed: the new report, whole.
+                    assert!(String::from_utf8_lossy(&now).contains("panic: second"));
+                    std::fs::write(dir.join(PANIC_FILE), &before).unwrap();
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_panic_waits_until_the_user_answers() {
         let dir = std::env::temp_dir().join(format!("cbb-bugs-{}", std::process::id()));
@@ -326,5 +373,119 @@ mod tests {
         remember("a line");
         assert!(RECENT.lock().unwrap().iter().any(|l| l == "a line"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn fresh(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("cbb-bugs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn remember_keeps_the_last_lines_cut_at_a_character() {
+        let long = "\u{e9}".repeat(cbb_core::bug::MAX_LINE);
+        remember(&long);
+        {
+            let r = RECENT.lock().unwrap();
+            let kept = r.iter().find(|l| l.starts_with('\u{e9}')).unwrap();
+            assert!(kept.len() <= cbb_core::bug::MAX_LINE && kept.chars().all(|c| c == '\u{e9}'));
+        }
+        for i in 0..LINES + 3 {
+            remember(&format!("line {i}"));
+        }
+        let r = RECENT.lock().unwrap();
+        assert!(r.len() <= LINES);
+        assert!(r.iter().any(|l| l == &format!("line {}", LINES + 2)));
+        assert!(!r.iter().any(|l| l == "line 0"));
+    }
+
+    #[test]
+    fn the_hook_writes_what_broke_and_where() {
+        let dir = fresh("hook");
+        remember("before the panic");
+        install(&dir);
+        let r = std::thread::Builder::new()
+            .name("breaker".into())
+            .spawn(|| std::panic::panic_any(String::from("the test breaks")))
+            .unwrap()
+            .join();
+        let _ = std::panic::take_hook();
+        assert!(r.is_err());
+        let v: Value = serde_json::from_slice(&std::fs::read(dir.join(PANIC_FILE)).unwrap()).unwrap();
+        let details = v["details"].as_str().unwrap();
+        assert!(details.starts_with("panic: the test breaks at "), "{details}");
+        assert!(details.ends_with(" in thread breaker"), "{details}");
+        assert!(v["log"].as_array().unwrap().iter().any(|l| l == "before the panic"), "{v}");
+        let b = Bugs::new(&dir);
+        assert!(b.waiting());
+        let (d, _) = b.pending().unwrap();
+        assert_eq!(d, details);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_report_that_cannot_go_waits_and_goes_again_at_the_start() {
+        let dir = fresh("queue");
+        let b = Bugs::new(&dir);
+        // An address that refuses: curl fails, and the report waits.
+        b.send("fp", "0.6.0", "{\"sealed\":1}", "https://127.0.0.1:1/");
+        let st = b.state();
+        assert_eq!(st["queue"][0]["fingerprint"], "fp", "{st}");
+        // A panic this build cannot seal is skipped at the start, and the
+        // waiting report is tried again and still waits.
+        std::fs::write(dir.join(PANIC_FILE), r#"{"details":"panic: at the start"}"#).unwrap();
+        let lines = Mutex::new(Vec::<String>::new());
+        b.start(&[], &|l: &str| lines.lock().unwrap().push(l.to_string()));
+        assert!(!b.waiting());
+        assert!(lines.lock().unwrap().iter().any(|l| l.contains("reported for this version before")));
+        assert_eq!(b.state()["queue"][0]["fingerprint"], "fp");
+        // An empty post is not sent at all.
+        b.send("other", "0.6.0", "", "https://127.0.0.1:1/");
+        assert_eq!(b.state()["queue"].as_array().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_broken_state_or_panic_file_reads_as_none() {
+        let dir = fresh("broken");
+        let b = Bugs::new(&dir);
+        std::fs::write(dir.join(STATE_FILE), "not json").unwrap();
+        assert_eq!(b.state(), json!({}));
+        std::fs::write(dir.join(PANIC_FILE), "{").unwrap();
+        assert!(b.waiting() && b.pending().is_none());
+        std::fs::write(dir.join(PANIC_FILE), r#"{"log":["x"]}"#).unwrap();
+        assert!(b.pending().is_none());
+        std::fs::write(dir.join(PANIC_FILE), r#"{"details":"d","log":[1,"x"]}"#).unwrap();
+        assert_eq!(b.pending().unwrap().1, vec!["x".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_report_goes_only_over_https() {
+        let e = post("http://127.0.0.1:1/", b"{}").unwrap_err();
+        assert!(e.to_string().contains("only over https"), "{e}");
+        let e = post("https://127.0.0.1:1/", b"{}").unwrap_err();
+        assert!(e.to_string().contains("did not go"), "{e}");
+    }
+
+    #[test]
+    fn the_core_refusal_reads_as_an_error() {
+        let e = Bugs::core("no_such_op", json!({})).unwrap_err();
+        assert!(!e.to_string().is_empty());
+    }
+
+    /// The recent lines stay within their bounds however many come: a
+    /// service up for months keeps at most LINES lines of MAX_LINE bytes.
+    #[test]
+    fn the_recent_lines_stay_bounded() {
+        let long = "\u{2}\u{436}\"".repeat(cbb_core::bug::MAX_LINE);
+        for i in 0..LINES * 4 {
+            remember(&format!("{i} {long}"));
+        }
+        let r = RECENT.lock().unwrap();
+        assert!(r.len() <= LINES, "{} lines", r.len());
+        assert!(r.iter().all(|l| l.len() <= cbb_core::bug::MAX_LINE));
+        assert!(r.iter().map(String::len).sum::<usize>() <= LINES * cbb_core::bug::MAX_LINE);
     }
 }

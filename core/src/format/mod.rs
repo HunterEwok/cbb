@@ -77,7 +77,8 @@ impl Rule {
     pub const ENV_SHAPE: Rule = Rule("env/shape");
     /// A body over its kind's ceiling (section 13).
     pub const ENV_SIZE: Rule = Rule("env/size");
-    /// A second signature over its ceiling of 4 KiB.
+    /// A second signature over its ceiling (`envelope::MAX_SIG2`, or
+    /// `envelope::MAX_SIG2_HEAD` for a recovery head).
     pub const ENV_SIG2: Rule = Rule("env/sig2");
     /// A signature that is not 64 bytes.
     pub const SIG_SIZE: Rule = Rule("sig/size");
@@ -87,6 +88,11 @@ impl Rule {
     pub const SIG_LOW_S: Rule = Rule("sig/low-s");
     /// A signature that does not verify.
     pub const SIG_VERIFY: Rule = Rule("sig/verify");
+    /// An envelope with a second signature whose first signature does not
+    /// verify over the body and that second signature's SHA-256 (audit
+    /// Q-1): a damaged copy, dropped, not stored, not passed on, its ID
+    /// neither had nor refused.
+    pub const ENV_DAMAGED: Rule = Rule("env/damaged");
 
     /// An ES256 key of the wrong size, not uncompressed, or off the curve.
     pub const KEYS_ES256: Rule = Rule("keys/es256");
@@ -94,6 +100,8 @@ impl Rule {
     pub const KEYS_XWING: Rule = Rule("keys/xwing");
     /// An X25519 key of the wrong size.
     pub const KEYS_X25519: Rule = Rule("keys/x25519");
+    /// An SLH-DSA-SHA2-128s key that is not 32 bytes.
+    pub const KEYS_SLH_DSA: Rule = Rule("keys/slh-dsa");
     /// A Key that is not `[alg, pub]`.
     pub const KEYS_SHAPE: Rule = Rule("keys/shape");
 

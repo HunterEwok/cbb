@@ -2,11 +2,11 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The copy's wire form and signature (format section 10): the header
-//! hashed into `h`, the copy key K bound by `commit`, the payload and blob
-//! keys derived from K under `h`, and the origin's signature over `h`, the
-//! digest of the wraps `W` and the payload's hash `P`. A reduced copy (for a
-//! leaf) carries the other readers' wraps and the payload as their hashes,
-//! and verifies the same.
+//! hashed into `h`, the copy key K bound by `commit`, the payload key
+//! derived from K under `h` and the blob key from K alone, and the
+//! origin's signature over `h`, the digest of the wraps `W` and the
+//! payload's hash `P`. A reduced copy (for a leaf) carries the other
+//! readers' wraps and the payload as their hashes, and verifies the same.
 //!
 //! The content inside the payload is a map padded to one of the content
 //! steps (1 KiB to 4 MiB).
@@ -33,8 +33,16 @@ pub const FIELD_PAYLOAD_HASH: u16 = 5;
 /// The origin's signature.
 pub const FIELD_SIG: u16 = 6;
 
-/// The size of a whole wrap: X-Wing's encapsulated key, K and its tag.
+/// The size of a whole wrap to an X-Wing key: its encapsulated key, K and
+/// its tag. A wrap's length follows the algorithm of its reader's
+/// statement key, so one copy may hold wraps of several algorithms; a
+/// reader checks its own wrap's length only (`copies::open`).
 pub const WRAP_SIZE: usize = 1168;
+
+/// The shortest whole wrap: K and its tag after an encapsulation of at
+/// least one byte. Any longer one is hashed into `W` whatever its
+/// algorithm; others' wraps are bounded by the frame alone.
+pub const MIN_WRAP: usize = 32 + 16 + 1;
 
 /// The rule a copy of the wrong form breaks.
 pub const RULE_SHAPE: Rule = Rule::field("copy/shape");
@@ -107,17 +115,21 @@ pub fn payload_key(k: &[u8; 32], h: &[u8; 32]) -> [u8; 32] {
     hkdf(k, h, sig::LABEL_COPY_PAYLOAD)
 }
 
-/// The blob key under header hash h.
-pub fn blob_key(k: &[u8; 32], h: &[u8; 32]) -> [u8; 32] {
-    hkdf(k, h, sig::LABEL_COPY_BLOB)
+/// The blob key: HKDF(K, salt empty, info `cbb copy blob v2`). Not under
+/// the header hash, which covers the sealed blob's size and SHA-256 (field
+/// 5): the origin seals the blob before it can know h. K is random for each
+/// copy, and field 5 binds the blob to the signed header.
+pub fn blob_key(k: &[u8; 32]) -> [u8; 32] {
+    hkdf(k, &[], sig::LABEL_COPY_BLOB)
 }
 
-/// The hash of one wrap as `W` takes it: a whole wrap is hashed, a 32-byte
-/// element of a reduced copy is the hash already.
+/// The hash of one wrap as `W` takes it: a whole wrap, of whatever
+/// algorithm, is hashed; a 32-byte element of a reduced copy is the hash
+/// already; anything between is no wrap.
 fn wrap_hash(w: &[u8]) -> Result<[u8; 32], Rule> {
     match w.len() {
-        WRAP_SIZE => Ok(sha256(&[w])),
         32 => w.try_into().map_err(|_| RULE_SHAPE),
+        n if n >= MIN_WRAP => Ok(sha256(&[w])),
         _ => Err(RULE_SHAPE),
     }
 }
@@ -261,4 +273,38 @@ pub fn read_content(b: &[u8]) -> Result<Value<'_>, Rule> {
         return Err(RULE_CONTENT_PAD);
     }
     Ok(v)
+}
+
+#[cfg(test)]
+mod bound_tests {
+    use alloc::vec;
+
+    use super::*;
+
+    /// A header names at most MAX_READERS readers (the registry,
+    /// `bounds.rs`); one more is `copy/readers`.
+    #[test]
+    fn a_header_reads_at_most_max_readers() {
+        let ids: Vec<[u8; 16]> = (0..=MAX_READERS as u32)
+            .map(|i| {
+                let mut id = [0u8; 16];
+                id[12..].copy_from_slice(&i.to_be_bytes());
+                id
+            })
+            .collect();
+        let header = |n: usize| {
+            let readers = ids[..n].iter().map(|id| Value::Array(vec![Value::Bytes(id), Value::Uint(1)])).collect();
+            Value::Map(vec![
+                (1, Value::Bytes(&[1; 16])),
+                (2, Value::Bytes(&[2; 16])),
+                (3, Value::Array(vec![Value::Uint(5), Value::Uint(0)])),
+                (HDR_READERS, Value::Array(readers)),
+                (6, Value::Bytes(&[6; 32])),
+            ])
+            .encode()
+        };
+        let read = |b: &[u8]| check_header(&cbor::decode(b).unwrap());
+        assert_eq!(read(&header(MAX_READERS)), Ok(MAX_READERS));
+        assert_eq!(read(&header(MAX_READERS + 1)), Err(RULE_READERS));
+    }
 }

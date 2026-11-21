@@ -19,9 +19,10 @@
 # cbb-helper (cbb-helper.exe), when it was built beside the binary, goes
 # beside cbb, where the Rust cbb looks for it (docs/design.md, "The service
 # and its helper"); so do cbb-forward and cbb-relay, the servers that cbb
-# forward and cbb relay run. Each Go program packed adds its modules' notices.
+# forward and cbb relay run, and on Linux cbb-push, the push service. Each Go
+# program packed adds its modules' notices.
 # The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
-# of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
+# of the Rust cbb's crates (packaging/notices.sh TARGET) come first.
 set -eu
 
 if [ $# -ne 4 ]; then
@@ -98,13 +99,15 @@ exe=
 [ ! -f "$(dirname "$bin")/cbb-helper$exe" ] || helper=$(dirname "$bin")/cbb-helper$exe
 # The servers, when they were built beside the binary.
 servers=
-for server in cbb-forward cbb-relay; do
+for server in cbb-forward cbb-relay cbb-push; do
 	[ ! -f "$(dirname "$bin")/$server$exe" ] || servers="$servers $server"
 done
 # The Go programs packed, by their folders, for their modules' notices.
 goprograms=
 [ -z "$helper" ] || goprograms="$goprograms cmd/cbb-helper"
-for server in $servers; do goprograms="$goprograms cmd/$server"; done
+for server in $servers; do
+	[ ! -d "$root/cmd/$server" ] || goprograms="$goprograms cmd/$server"
+done
 [ -z "$desktop" ] || goprograms="$goprograms apps/desktop"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -147,6 +150,13 @@ fi
 if [ "$os" = linux ]; then
 	cp -R "$root/packaging/openwrt" "$work/cbb/packaging/"
 fi
-# No AppleDouble files from macOS tar.
-COPYFILE_DISABLE=1 tar -czf "$out/cbb-$os-$name.tar.gz" -C "$work" cbb
+# No AppleDouble files from macOS tar; every file root's, not the uid of
+# the computer that packs it.
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+	owner="--owner=0 --group=0 --numeric-owner"
+else
+	owner="--uid 0 --gid 0"
+fi
+# shellcheck disable=SC2086 # $owner is several words
+COPYFILE_DISABLE=1 tar $owner -czf "$out/cbb-$os-$name.tar.gz" -C "$work" cbb
 echo "$out/cbb-$os-$name.tar.gz"

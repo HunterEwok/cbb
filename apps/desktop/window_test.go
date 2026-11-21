@@ -30,7 +30,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// The window's tests (docs/testbench-catalogue.md, A5, A8, A9, A15, A16,
+// The window's tests (docs/maintainers/testbench-catalogue.md, A5, A8, A9, A15, A16,
 // U12) run frontend/ in a headless Chrome or Edge, as WebView2 runs it on
 // Windows, against the real Desk: a stand-in for Wails' runtime passes each
 // call to Desk's method over HTTP, a stand-in service answers on the
@@ -53,6 +53,12 @@ func TestWindow(t *testing.T) {
 	exe := findBrowser(t)
 	svc := newFakeService(t)
 	w := &window{t: t, svc: svc}
+	dir, err := os.MkdirTemp("", "cbbui-desk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	w.dir = dir
 	srv := httptest.NewServer(w.handler())
 	t.Cleanup(srv.Close)
 	w.page = startBrowser(t, exe)
@@ -60,12 +66,17 @@ func TestWindow(t *testing.T) {
 
 	t.Run("themes", w.themes)
 	t.Run("collections", w.collections)
-	t.Run("russian", w.russian)
+	t.Run("languages", w.languages)
+	t.Run("contrast", w.contrast)
+	t.Run("large text", w.largeText)
+	t.Run("keyboard", w.keyboard)
+	t.Run("screenshots", w.screenshots)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
 	t.Run("switches", w.switches)
 	t.Run("add", w.add)
 	t.Run("join", w.joinGroup)
+	t.Run("dangerous screens", w.dangerous)
 }
 
 // window is the page under test and what stands around it.
@@ -75,6 +86,11 @@ type window struct {
 	page *cdpPage
 	url  string
 	desk atomic.Pointer[Desk]
+	// dir holds each Desk's desktop.json. It is not a subtest's TempDir:
+	// a Desk may still be saving its settings when the subtest ends,
+	// which Windows refuses to remove under it.
+	dir   string
+	desks atomic.Int32
 	// ran lists what adminRun was asked to run; fail is its next answer.
 	mu   sync.Mutex
 	ran  [][]string
@@ -140,8 +156,8 @@ func callDesk(d *Desk, name string, body io.Reader) ([]byte, error) {
 // picture.
 func (w *window) open(lang string) *Desk {
 	d := &Desk{socket: w.svc.path, lang: lang, tr: translations(lang),
-		settings:     Settings{Color: "terminal", Appearance: "system", Layout: "tiles"},
-		settingsPath: filepath.Join(w.t.TempDir(), "desktop.json")}
+		settings:     Settings{Appearance: "system", Layout: "tiles"},
+		settingsPath: filepath.Join(w.dir, fmt.Sprintf("desktop-%d.json", w.desks.Add(1)))}
 	w.desk.Store(d)
 	// Each window starts from the group's order, as a fresh member would.
 	w.svc.mu.Lock()
@@ -206,20 +222,20 @@ func (w *window) themes(t *testing.T) {
 	}
 
 	type pair struct{ Background, Accent string }
-	type color struct {
+	type theme struct {
 		Name        string
 		Dark, Light pair
 	}
-	var colors []color
-	w.eval(`import("./tokens.js").then((m) => m.colors)`, &colors)
-	if len(colors) != 10 {
-		t.Fatalf("Settings offers %d colours, not ten", len(colors))
+	var themes []theme
+	w.eval(`import("./tokens.js").then((m) => m.themes)`, &themes)
+	if len(themes) != 11 || themes[0].Name != "board" {
+		t.Fatalf("Settings offers %d themes, not eleven with the chalkboard first", len(themes))
 	}
 	w.eval(`$click("#settings")`, nil)
 	for _, look := range []string{"dark", "light"} {
 		w.eval(fmt.Sprintf(`$click('[data-appearance="%s"]')`, look), nil)
-		for _, c := range colors {
-			w.eval(fmt.Sprintf(`$click('[data-color="%s"]')`, c.Name), nil)
+		for _, c := range themes {
+			w.eval(fmt.Sprintf(`$click('[data-theme="%s"]')`, c.Name), nil)
 			want := c.Dark
 			if look == "light" {
 				want = c.Light
@@ -233,17 +249,17 @@ func (w *window) themes(t *testing.T) {
 		}
 	}
 	// System follows the system's choice.
-	w.eval(`$click('[data-appearance="system"]'); $click('[data-color="terminal"]')`, nil)
+	w.eval(fmt.Sprintf(`$click('[data-appearance="system"]'); $click('[data-theme=%q]')`, themes[0].Name), nil)
 	for _, look := range []string{"dark", "light"} {
 		w.page.call(t, "Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": look}}}, nil)
-		want := colors[0].Dark.Background
+		want := themes[0].Dark.Background
 		if look == "light" {
-			want = colors[0].Light.Background
+			want = themes[0].Light.Background
 		}
 		w.wait(fmt.Sprintf(`$css("--background") === %q`, strings.ToUpper(want)))
 	}
 	w.eval(`$click('#settings-dialog menu button')`, nil)
-	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Color == "terminal" })
+	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Theme == themes[0].Name })
 
 	w.eval(`$click('[data-layout="list"]')`, nil)
 	w.wait(`$all("#devices .list .row").length === 14`)
@@ -728,6 +744,21 @@ func (w *window) switches(t *testing.T) {
 	w.eval(`$click("#sync")`, nil)
 	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true" && $q("#message").textContent.startsWith("Sync is on here")`)
 
+	// The button in the corner of this computer's tile is the house too.
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "true" && $q('.tile[data-id="self"]').classList.contains("muted") && $q("#message").textContent.startsWith("Sync is off here")`)
+	if h := w.svc.lastSync(); h.On == nil || *h.On || h.ForMS != 0 {
+		t.Errorf("the tile's corner sent %+v", h)
+	}
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "false" && $q("#message").textContent.startsWith("Sync is on here")`)
+	// On another device's tile, held, it asks how long the admin mutes it
+	// for the group, and opens no tile menu.
+	w.eval(`$q('.mute-corner[data-mute="mac"]').dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); true`, nil)
+	w.wait(`$q("#mute-dialog").open && !$q("#tile-menu")?.open`)
+	w.eval(`$clickText("#mute-dialog .menu-items button", "For 15 minutes")`, nil)
+	w.wait(`$q("#message").textContent.startsWith("It is muted") && $all("#devices .tile").length === 14`)
+
 	// The globe asks first; Cancel runs nothing.
 	w.eval(`$click("#away")`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-title").textContent === "Turn Everywhere on?"`)
@@ -740,8 +771,8 @@ func (w *window) switches(t *testing.T) {
 	ranMu.Lock()
 	got := ran
 	ranMu.Unlock()
-	if !reflect.DeepEqual(got, [][]string{{"global", "on"}}) {
-		t.Errorf("the globe ran %q", got)
+	if !reflect.DeepEqual(got, [][]string{{"mute", "-on", "mac", "-for", "900000ms"}, {"global", "on"}}) {
+		t.Errorf("the corner and the globe ran %q", got)
 	}
 }
 
@@ -1049,6 +1080,9 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 		// Chrome on Windows logs nothing to stderr unless asked: its log
 		// says why it would not listen.
 		"--enable-logging=stderr",
+		// Its detailed log, so that a start that gives no address (seen
+		// rarely on Windows and Linux runners, 2026-11) shows where it stood.
+		"--v=1",
 		"--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -1070,7 +1104,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			line := sc.Text()
 			errMu.Lock()
 			errTail = append(errTail, line)
-			if len(errTail) > 60 {
+			if len(errTail) > 200 {
 				errTail = errTail[1:]
 			}
 			errMu.Unlock()
@@ -1110,7 +1144,8 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	// rights and ends, so its stderr never names the address; the profile's
 	// DevToolsActivePort does in both cases.
 	var host string
-	deadline := time.Now().Add(30 * time.Second)
+	started := time.Now()
+	deadline := started.Add(30 * time.Second)
 	for host == "" {
 		select {
 		case ws := <-found:
@@ -1135,6 +1170,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			}
 		}
 	}
+	logBrowserStart(t, exe, time.Since(started))
 	req, _ := http.NewRequest(http.MethodPut, "http://"+host+"/json/new?about:blank", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1154,6 +1190,25 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	c.SetReadLimit(64 << 20)
 	page = &cdpPage{c: c}
 	return page
+}
+
+// logBrowserStart notes how long the browser took to give its DevTools
+// address, in the test's log and, in CI, in the job's summary, which a
+// passing package's log does not reach: how close a start comes to the
+// 30 seconds the test waits.
+func logBrowserStart(t *testing.T, exe string, took time.Duration) {
+	t.Logf("%s gave its DevTools address in %s", exe, took.Round(time.Millisecond))
+	summary := os.Getenv("GITHUB_STEP_SUMMARY")
+	if summary == "" {
+		return
+	}
+	f, err := os.OpenFile(summary, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Logf("the job's summary: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "TestWindow: %s gave its DevTools address in %s\n", filepath.Base(exe), took.Round(time.Millisecond))
 }
 
 // call sends one DevTools command and decodes its result into out.

@@ -50,11 +50,11 @@ pub struct Proven {
 
 /// The credential the root sent a device, and what it expects back.
 #[derive(Deserialize)]
-struct Challenge {
-    evidence: Value,
+pub(crate) struct Challenge {
+    pub evidence: Value,
     #[serde(with = "b64")]
-    value: Vec<u8>,
-    proof: String,
+    pub value: Vec<u8>,
+    pub proof: String,
 }
 
 struct Pending {
@@ -68,6 +68,23 @@ struct Kept {
     keys: File,
     status: File,
     seen: Seen,
+}
+
+/// The revocations of a kept list under roots at now_ms, and why it is not
+/// current when it is not: a list that checked out when it was signed
+/// still counts once it has run out, since no list would revoke nothing.
+fn kept_revocations(k: &Kept, roots: &[release::Key], now_ms: i64) -> Option<(Vec<String>, Option<String>)> {
+    match release::check_status(&k.keys, &k.status, roots, now_ms, &Seen::default()) {
+        Ok((st, _)) => Some((st.android_revoked, None)),
+        Err(e) => {
+            let at = serde_json::from_slice::<Value>(&k.status.body)
+                .ok()
+                .and_then(|v| v.get("time_ms").and_then(Value::as_i64))
+                .filter(|&t| t > 0 && t <= now_ms)?;
+            let (st, _) = release::check_status(&k.keys, &k.status, roots, at, &Seen::default()).ok()?;
+            Some((st.android_revoked, Some(e.message().to_string())))
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -91,13 +108,13 @@ pub struct Attestations {
 }
 
 /// Bytes as a JSON string in base64, as Go's []byte.
-fn b64_value(b: &[u8]) -> Value {
+pub(crate) fn b64_value(b: &[u8]) -> Value {
     #[derive(Serialize)]
     struct W<'a>(#[serde(with = "b64")] &'a [u8]);
     serde_json::to_value(W(b)).unwrap_or_default()
 }
 
-fn call(op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
+pub(crate) fn call(op: &str, req: &impl Serialize) -> Result<Vec<u8>> {
     let helper = crate::helper::shared().ok_or_else(|| Error::msg("attestations need cbb-helper beside cbb"))?;
     let payload = serde_json::to_vec(req).context("cannot encode an attestation request")?;
     Ok(helper.call(Header { op: op.into(), ..Default::default() }, payload, HELPER_TIME)?.payload)
@@ -267,23 +284,52 @@ impl Attestations {
     }
 
     /// Takes the list kept in the state directory, when it still checks
-    /// out: it is checked again from scratch, as the one seen last.
+    /// out: it is checked again from scratch, as the one seen last. A list
+    /// that has run out still counts, as at its signing, until a newer one
+    /// comes: a restart while the mirror cannot be reached drops no
+    /// revocation.
     fn load_status(&self) {
         let Ok(data) = std::fs::read(self.dir.join(STATUS_FILE)) else { return };
         let Ok(k) = serde_json::from_slice::<Kept>(&data) else { return };
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
-        if let Ok((st, _)) =
-            release::check_status(&k.keys, &k.status, &roots, crate::update::now_ms(), &Seen::default())
-        {
-            *self.revoked.lock().unwrap() = st.android_revoked;
+        if let Some((revoked, stale)) = kept_revocations(&k, &roots, crate::update::now_ms()) {
+            if let Some(why) = stale {
+                eprintln!(
+                    "cbb: the kept revocation list of Android attestations is not current ({why}); it counts until a newer one comes"
+                );
+            }
+            *self.revoked.lock().unwrap() = revoked;
         }
+    }
+
+    /// The serial numbers the revocation list taken last revokes.
+    pub fn revoked(&self) -> Vec<String> {
+        self.revoked.lock().unwrap().clone()
     }
 
     /// Fetches the mirror's list, takes it when it checks out and is not
     /// older than the kept one, and checks the peers' evidence again when
     /// it changed.
     fn fetch_status(&self, node: &Node) -> Result<()> {
+        if !self.fetch_status_with(&|s| node.logf(s))? {
+            return Ok(());
+        }
+        let peers: Vec<(DeviceId, (Vec<Cert>, Value))> =
+            self.last.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        for (id, (chain, e)) in peers {
+            if let Some(leaf) = chain.first()
+                && let Err(err) = self.android(node, &id, leaf, &e)
+            {
+                node.logf(&format!("cbb: checking the attestation of {id} again: {}", err.for_log()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Fetches the mirror's list and takes it when it checks out and is
+    /// not older than the kept one; whether it changed, for the caller to
+    /// check the peers' evidence again.
+    pub fn fetch_status_with(&self, log: &dyn Fn(&str)) -> Result<bool> {
         let path = self.dir.join(STATUS_FILE);
         let kept_seen = std::fs::read(&path)
             .ok()
@@ -298,30 +344,20 @@ impl Attestations {
         let f: Files = serde_json::from_slice(&call("attest-status", &serde_json::json!({}))?)
             .context("the revocation list's files do not decode")?;
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         let (st, seen) = release::check_status(&f.keys, &f.status, &roots, crate::update::now_ms(), &kept_seen)?;
         if seen == kept_seen {
-            return Ok(()); // the same list
+            return Ok(false); // the same list
         }
         let data =
             serde_json::to_vec(&Kept { keys: f.keys, status: f.status, seen }).context("cannot encode the list")?;
         write_atomic(&path, &data, 0o600)?;
         let n = st.android_revoked.len();
         *self.revoked.lock().unwrap() = st.android_revoked;
-        node.logf(&format!(
+        log(&format!(
             "cbb: took the revocation list of Android attestations of {}, {n} certificates",
             crate::node::date(st.time_ms / 1000)
         ));
-        let peers: Vec<(DeviceId, (Vec<Cert>, Value))> =
-            self.last.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        for (id, (chain, e)) in peers {
-            if let Some(leaf) = chain.first()
-                && let Err(err) = self.android(node, &id, leaf, &e)
-            {
-                node.logf(&format!("cbb: checking the attestation of {id} again: {}", err.for_log()));
-            }
-        }
-        Ok(())
+        Ok(true)
     }
 
     /// Keeps the revocation list current on the group's root: it fetches
@@ -333,8 +369,7 @@ impl Attestations {
         if crate::update::release_roots().is_empty() || crate::helper::shared().is_none() {
             return;
         }
-        let every = std::env::var("CBB_TEST_STATUS_EVERY")
-            .ok()
+        let every = crate::testbuild::env("CBB_TEST_STATUS_EVERY")
             .and_then(|v| v.parse().ok())
             .map_or(Duration::from_secs(24 * 3600), Duration::from_millis);
         let a = self.clone();
@@ -362,7 +397,40 @@ impl Attestations {
 mod tests {
     use std::sync::atomic::AtomicBool;
 
-    use super::Opening;
+    use super::{Kept, Opening, kept_revocations};
+    use cbb_core::release::Seen;
+    use cbb_core::release::testing::TestKey;
+
+    /// A kept list counts after it ran out, as at its signing, so a restart
+    /// without the mirror drops no revocation; one that never checked out
+    /// counts not at all.
+    #[test]
+    fn an_old_list_still_revokes() {
+        let (root, status) = (TestKey::new(1), TestKey::new(2));
+        let sign = |k: &TestKey, v: serde_json::Value| k.sign(&serde_json::to_vec(&v).unwrap());
+        let at: i64 = 1_800_000_000_000;
+        let day = 86_400_000;
+        let keys = sign(
+            &root,
+            serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": at, "expires_ms": at + 90 * day,
+                "keys": status.keys("status", "status")}),
+        );
+        let list = sign(
+            &status,
+            serde_json::json!({"v": 1, "type": "attest-status", "seq": 1, "time_ms": at, "expires_ms": at + 7 * day,
+                "android_revoked": ["1f", "2a"]}),
+        );
+        let k = Kept { keys, status: list, seen: Seen::default() };
+        let roots = root.root("root-1");
+        let (now, stale) = kept_revocations(&k, &roots, at + day).unwrap();
+        assert_eq!(now, ["1f", "2a"]);
+        assert!(stale.is_none());
+        let (later, stale) = kept_revocations(&k, &roots, at + 30 * day).unwrap();
+        assert_eq!(later, ["1f", "2a"]);
+        assert!(stale.is_some());
+        // Not under other roots.
+        assert!(kept_revocations(&k, &status.root("root-2"), at + day).is_none());
+    }
 
     /// The TPM opens one credential at a time: a second waits for none,
     /// and the next starts once the first ends.

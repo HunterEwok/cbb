@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 7d035f243dba -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Copy Beyond Borders. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -45,7 +45,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## Nano ESP32 kama kibodi ya USB au ya Bluetooth
 
-Bodi hii ni mwanachama mwepesi wa kikundi chako. Kwenye kiweko chake:
+Bodi hii ni mwanachama wa kikundi chako. Kwenye kiweko chake:
 
 - `usb keyboard` hufanya mlango wake wa USB kuwa kibodi, na kiweko kama mlango wa pili wa serial kando yake; ichomeke kwenye kifaa. Hufanya kazi kabla mfumo wowote haujaanza: kwenye BIOS, mipangilio ya UEFI au ombi la usimbaji fiche wa diski.
 - `ble on`, kisha `ble pair`, huifanya kibodi ya Bluetooth LE; ongeza "CBB Nano ESP32" kwenye kifaa ndani ya dakika mbili. Hukumbuka hadi vifaa vinne; `ble forget` huvisahau.
@@ -62,14 +62,14 @@ Android TV au Google TV huoanishwa mara moja:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 Apple TV huoanishwa vivyo hivyo, kwa PIN ya tarakimu nne inayoonyesha. Kwanza kwenye Apple TV, weka Settings, AirPlay and HomeKit, Allow Access kuwa "Everyone on the Same Network": ikiwa "Only People Sharing This Home" inakataa kila uoanishaji.
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 Roku haina uoanishaji wala usimbaji fiche: maandishi hupita kwenye mtandao wako wa nyumbani kama HTTP wazi, kwa hivyo huongezwa tu unaposema hivyo kwa `-consent`. Kwenye Roku, kwanza weka Mipangilio, Mfumo, Mipangilio ya hali ya juu ya mfumo, Udhibiti kwa programu za simu kuwa Imewezeshwa au Ruhusu.

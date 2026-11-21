@@ -6,8 +6,10 @@
 //! profile of the device it admits, and one-time values only.
 //!
 //! - **One form, several paths** (A-41): the home network, the hub's guest
-//!   tunnel, the way around a block. A QR code carries the same invitation;
-//!   its long secret replaces the six digits, which stay for typing by hand.
+//!   tunnel, the way around a block. A QR code carries the same invitation.
+//!   A home window ([`Invitation::home`]) has six digits instead of a long
+//!   secret: its QR code carries them with its ID, and they stay for
+//!   typing by hand.
 //! - **The profile** (A-42) says what the device may be: its role, its
 //!   rights, whether it may be a hub, and whether it may join only from
 //!   home. The device cannot ask for more.
@@ -29,12 +31,13 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use zeroize::Zeroize;
 
-use crate::format::{Alg, Rule, Value, cbor};
+use crate::format::grant::{Binding, Kept};
+use crate::format::{Alg, DeviceId, KeyHash, Rule, Value, cbor};
 use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
-use super::PairError;
 use super::info::Info;
+use super::{PairError, PairExporter};
 
 /// The start of an invitation's text.
 pub const PREFIX: &str = "cbb://join#";
@@ -95,12 +98,43 @@ pub struct Profile {
     pub guarded: bool,
 }
 
+/// A profile's role that admits any role but a leaf's: a home window's,
+/// where the device says what it is and the admitter gives the rights of
+/// that role. It is never encoded: a home window is not written as an
+/// invitation's text.
+pub const ROLE_ANY: u64 = 0;
+
 impl Profile {
     /// The profile of a small device without a screen (a kettle, a lamp):
     /// a leaf that reads and sends nothing by default, home only.
     pub fn small_device() -> Profile {
         Profile { role: ROLE_LEAF, rights: 0, home_only: true, guarded: false }
     }
+
+    /// A home window's profile: a computer, a phone or a watch that joins
+    /// from the home network, with at most the rights a pairing at home
+    /// gives (read, send, secrets, and hub for a member with the cap).
+    pub fn home() -> Profile {
+        Profile {
+            role: ROLE_ANY,
+            rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
+            home_only: true,
+            guarded: false,
+        }
+    }
+}
+
+/// The label of a home window's secret, from its six digits.
+pub const HOME_CODE_LABEL: &[u8] = b"cbb pair home code v1\0";
+/// How many digits a home window's code has.
+pub const HOME_DIGITS: usize = 6;
+
+/// A home window's secret, CPace's password, from its six ASCII digits:
+/// SHA-256(`cbb pair home code v1` 0x00 ‖ digits). None for anything but
+/// six digits.
+pub fn home_secret(digits: &str) -> Option<[u8; SECRET]> {
+    (digits.len() == HOME_DIGITS && digits.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| crate::format::sha256(&[HOME_CODE_LABEL, digits.as_bytes()]))
 }
 
 /// An invitation.
@@ -120,12 +154,6 @@ impl Drop for Invitation {
     }
 }
 
-impl Drop for JoinerCode {
-    fn drop(&mut self) {
-        self.nonce.zeroize();
-    }
-}
-
 impl core::fmt::Debug for Invitation {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Invitation")
@@ -138,9 +166,49 @@ impl core::fmt::Debug for Invitation {
 }
 
 impl Invitation {
-    /// A new invitation with fresh one-time values.
+    /// A new invitation: its ID and secret drawn here, never all zero
+    /// bytes, which readers refuse (`invite/shape`).
     pub fn new(paths: Vec<Path>, profile: Profile) -> Invitation {
-        Invitation { id: crate::certs::random_bytes(), secret: crate::certs::random_bytes(), paths, profile }
+        Invitation {
+            id: not_zero(crate::certs::random_bytes),
+            secret: not_zero(crate::certs::random_bytes),
+            paths,
+            profile,
+        }
+    }
+
+    /// A home window (owner, 11-20): a new ID, never all zero bytes, and
+    /// six new digits, from which its secret comes ([`home_secret`]), with
+    /// the home profile ([`Profile::home`]) and the home path. The window
+    /// shows the digits and its QR code carries them with the ID; the
+    /// joiner derives the same secret ([`Invitation::typed`]). Gives the
+    /// invitation and its digits.
+    pub fn home() -> (Invitation, String) {
+        let id = not_zero(crate::certs::random_bytes);
+        let digits = loop {
+            // 10^6 divides 2^32 unevenly: draws from the top are taken
+            // again, so every code is as likely.
+            let n = u32::from_be_bytes(crate::certs::random_bytes::<4>());
+            if n < u32::MAX - u32::MAX % 1_000_000 {
+                break alloc::format!("{:06}", n % 1_000_000);
+            }
+        };
+        #[allow(clippy::expect_used, reason = "six digits always give a secret")]
+        let inv = Invitation::typed(id, &digits).expect("six digits");
+        (inv, digits)
+    }
+
+    /// The home window a joiner names by its ID (from the window's QR code
+    /// or its mDNS announcement) and its six digits (from the QR code, or
+    /// typed by the person). None for an ID of zero bytes or anything but
+    /// six digits.
+    pub fn typed(id: [u8; 16], digits: &str) -> Option<Invitation> {
+        if id == [0; 16] {
+            return None;
+        }
+        let secret = home_secret(digits)?;
+        let home = Path { kind: PathKind::Home, endpoints: Vec::new(), hub_key: None, guest: None, obfuscation: None };
+        Some(Invitation { id, secret, paths: alloc::vec![home], profile: Profile::home() })
     }
 
     /// The encoding.
@@ -202,10 +270,12 @@ impl Invitation {
         Invitation::decode(&b)
     }
 
-    /// Reads the encoding and checks every field.
+    /// Reads the encoding and checks every field, as a reader of this
+    /// version does (`crate::msg::read_map`): unknown rights bits are
+    /// ignored, and a path whose settings this version cannot read is
+    /// unusable and skipped; an invitation with no usable path is refused.
     pub fn decode(b: &[u8]) -> Result<Invitation, Rule> {
-        let v = cbor::decode(b)?;
-        crate::msg::check_map(&crate::msg::tables::INVITE, &v)?;
+        let v = crate::msg::read_map(&crate::msg::tables::INVITE, &cbor::decode(b)?)?;
         let bytes_n = |k: u16, n: usize| -> Result<Vec<u8>, Rule> {
             v.get(k).and_then(Value::as_bytes).filter(|b| b.len() == n).map(<[u8]>::to_vec).ok_or(RULE_SHAPE)
         };
@@ -278,9 +348,14 @@ impl Invitation {
             let obfuscation = match p.get(6) {
                 None => None,
                 Some(_) if kind == PathKind::Home => return Err(RULE_OBFUSCATION),
+                // Settings of a later version: this way is unusable.
+                Some(o) if crate::msg::later::unusable(o) => continue,
                 Some(o) => Some(crate::msg::Obfuscation::read(o, "invite/obfuscation")?),
             };
             paths.push(Path { kind, endpoints, hub_key, guest, obfuscation });
+        }
+        if paths.is_empty() {
+            return Err(RULE_PATH);
         }
         let pv = v.get(4).ok_or(RULE_PROFILE)?;
         let role = pv.get(1).and_then(Value::as_uint).filter(|r| (1..=4).contains(r)).ok_or(RULE_PROFILE)?;
@@ -338,12 +413,9 @@ pub struct Open {
     pub next_attempt: u64,
 }
 
-/// The longest the machine's steps of one attempt may take, at each end:
-/// from `pair/start` to the opening of the joiner's nonce.
+/// The longest one attempt may take at the member: from `pair/start` to
+/// `pair/done`. No person answers in between: the secret approves.
 pub const ATTEMPT_MS: u64 = 30_000;
-/// The longest the person may take to compare the two codes and answer,
-/// once both are shown; the attempt stays the one open attempt meanwhile.
-pub const ANSWER_MS: u64 = 600_000;
 
 /// An attempt in progress on an open invitation, at the member.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -351,21 +423,12 @@ pub struct Attempt {
     /// Its number, from [`Open::begin`]; the later steps name it.
     pub number: u64,
     pub since_ms: u64,
-    /// The joiner's commitment and the member's nonce, once the member
-    /// sent `pair/reply`.
-    pub replied: Option<([u8; 32], [u8; 32])>,
-    /// When the member's code was shown, waiting for the person's answer.
-    pub shown_ms: Option<u64>,
 }
 
 impl Attempt {
-    /// Whether the attempt is still open at `now_ms`: within the machine's
-    /// time until the code is shown, then within the person's.
+    /// Whether the attempt is still open at `now_ms`.
     fn open_at(&self, now_ms: u64) -> bool {
-        match self.shown_ms {
-            None => now_ms.saturating_sub(self.since_ms) < ATTEMPT_MS,
-            Some(t) => now_ms.saturating_sub(t) < ANSWER_MS,
-        }
+        now_ms.saturating_sub(self.since_ms) < ATTEMPT_MS
     }
 }
 
@@ -398,7 +461,8 @@ impl Open {
     /// own, or the hub's capability without hub rights.
     pub fn asks_more(&self, info: &Info) -> bool {
         let p = self.invitation.profile;
-        info.role != p.role || (info.caps & CAP_HUB != 0 && p.rights & RIGHT_HUB == 0)
+        let role = if p.role == ROLE_ANY { info.role == ROLE_LEAF } else { info.role != p.role };
+        role || (info.caps & CAP_HUB != 0 && p.rights & RIGHT_HUB == 0)
     }
 }
 
@@ -487,92 +551,109 @@ fn within_one(a: &[char], b: &[char]) -> bool {
     }
 }
 
-/// The short code both screens show, for a device with a screen and no
-/// camera (A-43): six digits from the pairing session's exporter and two
-/// nonces, one from each end, each new for the session and drawn by the
-/// core ([`JoinerAttempts::start`], [`Open::reply`]); no caller passes one
-/// in.
-/// The joiner sends the hash of its nonce in `pair/start`, the member
-/// answers with its own nonce in `pair/reply`, and the joiner opens its
-/// nonce in `pair/confirm`. Neither end can choose its part after it has
-/// seen the other's, so the codes of two sessions match by chance only
-/// (one in a million). Each attempt counts as failed once the member has
-/// sent `pair/reply`, unless it ends in a Welcome, and an invitation takes
-/// one attempt at a time; the joiner counts its sessions too
-/// ([`JoinerAttempts`]): three attempts give three chances in a million.
-/// The machine's steps have [`ATTEMPT_MS`]; the person's comparison and
-/// answer have [`ANSWER_MS`] of their own.
-/// The user answers "they match".
-fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
-    let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
-    let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
-    alloc::format!("{n:06}")
+/// What draw gives that is not all zero bytes, drawn again until it is.
+pub(crate) fn not_zero<const N: usize>(mut draw: impl FnMut() -> [u8; N]) -> [u8; N] {
+    loop {
+        let b = draw();
+        if b != [0; N] {
+            return b;
+        }
+    }
 }
 
-/// The hash of the joiner's nonce that `pair/start` carries.
-fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
-    crate::format::sha256(&[b"cbb short code commitment v1\0", joiner_nonce])
+/// A joiner's pairing session at a home window (an invitation whose
+/// profile is home only, [`Invitation::home`]) in which the joiner
+/// verified the member's `Tb` under the window's secret: the member proved
+/// it holds the secret the window shows, in this session. It is the only
+/// source of a guarded leaf's binding ([`Proven::binding`]). It lives with
+/// that session alone: it is neither cloned nor kept, and a restart has
+/// none. Only the joiner's session makes one
+/// (`session::JoinerSession::proven`).
+#[derive(Debug)]
+pub struct Proven {
+    local: DeviceId,
+    /// The session's mark (`grant::session_mark` of its exporter): the
+    /// proof names that session and serves no other.
+    session: [u8; 32],
+    /// The hash of the member's key the session's handshake proved: the
+    /// proof is of that member and no other.
+    member: KeyHash,
 }
 
-/// The joiner's side of the short code, for one session: its nonce, drawn
-/// here, used once. Only [`JoinerAttempts::start`] makes one.
-pub struct JoinerCode {
-    nonce: [u8; 32],
+impl Proven {
+    /// The proof of the session with this exporter, in which the joiner's
+    /// own key has the device ID `local` and the member's handshake proved
+    /// `member`. Only for a home window: None for an invitation whose
+    /// profile is not home only.
+    pub(crate) fn new(
+        invitation: &Invitation,
+        local: DeviceId,
+        exporter: &PairExporter,
+        member: &[u8; 65],
+    ) -> Option<Proven> {
+        invitation.profile.home_only.then(|| Proven {
+            local,
+            session: crate::format::grant::session_mark(exporter.bytes()),
+            member: crate::format::Key::new(Alg::Es256, member).hash(),
+        })
+    }
+
+    /// A guarded leaf's binding in person (`grant::read_bound`): the grant
+    /// this session brings, and only it, binds the leaf to the root it
+    /// waits for; `kept` and `head` are what the leaf stored
+    /// (`Kept::start`). None when the leaf waits for no binding. What a
+    /// binding names comes from the leaf's own state and this session's
+    /// own key, never from the peer. `exporter` is the current session's:
+    /// none for a proof from another session. It takes the proof by value:
+    /// one proof serves one grant.
+    pub fn binding(self, kept: &Kept, head: Option<(KeyHash, u64)>, exporter: &PairExporter) -> Option<Binding> {
+        if !self.of(exporter) {
+            return None;
+        }
+        Binding::matched(kept, head, self.local, self.session)
+    }
+
+    /// Whether the proof was made in the session with this exporter.
+    pub(crate) fn of(&self, exporter: &PairExporter) -> bool {
+        crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter.bytes()))
+    }
+
+    /// Whether the proof is of the member with this key: the one a grant
+    /// it reads came from.
+    pub fn to(&self, member: &[u8; 65]) -> bool {
+        crate::format::Key::new(Alg::Es256, member).hash() == self.member
+    }
 }
 
 /// The joiner's sessions with one invitation (kept across restarts): at
 /// most [`MAX_FAILURES`] in all, each started only by the person's action
 /// (the app asks "start again?" and never starts a session by itself, nor
-/// reconnects on its own); a code once shown stays until the person
-/// answers, and the core never replaces it with another. A session that
-/// ends before the person answered counts.
+/// reconnects on its own).
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct JoinerAttempts {
     pub started: u32,
-    /// A code is shown and waits for the person's answer.
-    pub showing: bool,
 }
 
 impl JoinerAttempts {
-    /// The person started a session: a new nonce for it, and the commitment
-    /// `pair/start` carries. Refused while a code waits for the person's
-    /// answer ([`PairError::Busy`]) and after [`MAX_FAILURES`] sessions
-    /// ([`PairError::TooMany`]).
-    pub fn start(&mut self) -> Result<(JoinerCode, [u8; 32]), PairError> {
-        if self.showing {
-            return Err(PairError::Busy);
-        }
+    /// The person started a session; refused after [`MAX_FAILURES`]
+    /// sessions ([`PairError::TooMany`]).
+    pub fn start(&mut self) -> Result<(), PairError> {
         if self.started >= MAX_FAILURES {
             return Err(PairError::TooMany);
         }
         self.started = self.started.saturating_add(1);
-        let nonce = crate::certs::random_bytes();
-        let c = code_commitment(&nonce);
-        Ok((JoinerCode { nonce }, c))
-    }
-
-    /// The code to show once `pair/reply` brought the member's nonce, and
-    /// the nonce that `pair/confirm` opens. It takes the session by value:
-    /// a nonce serves one session. The code stays shown until
-    /// [`JoinerAttempts::answered`].
-    pub fn open(&mut self, code: JoinerCode, exporter: &[u8], member_nonce: &[u8; 32]) -> (String, [u8; 32]) {
-        self.showing = true;
-        (short_code(exporter, &code.nonce, member_nonce), code.nonce)
-    }
-
-    /// The person answered the shown code (they match, they do not, or
-    /// give up): only now may the person start another session.
-    pub fn answered(&mut self) {
-        self.showing = false;
+        Ok(())
     }
 }
 
 impl Open {
     /// A joiner starts an attempt at `now_ms`: refused while another is in
-    /// progress ([`PairError::Busy`]), until it ends or its time is over
-    /// ([`ATTEMPT_MS`] for the machine's steps, then [`ANSWER_MS`] for the
-    /// person's answer).
-    /// Returns the attempt's number, which the later steps name.
+    /// progress ([`PairError::Busy`]), until it ends or [`ATTEMPT_MS`] is
+    /// over, and when the invitation may not be used ([`Open::may_use`]).
+    /// The attempt counts as failed from here, unless it ends in a Welcome
+    /// ([`Open::end`]): a joiner that does not hold the secret, or that
+    /// goes away, spends one of the [`MAX_FAILURES`]. Returns the attempt's
+    /// number, which the later steps name.
     pub fn begin(&mut self, network: Network, now_ms: u64) -> Result<u64, PairError> {
         if let Some(a) = &self.attempt
             && a.open_at(now_ms)
@@ -583,65 +664,149 @@ impl Open {
         self.may_use(network, now_ms)?;
         let number = self.next_attempt;
         self.next_attempt = self.next_attempt.saturating_add(1);
-        self.attempt = Some(Attempt { number, since_ms: now_ms, replied: None, shown_ms: None });
+        self.failures = self.failures.saturating_add(1);
+        self.attempt = Some(Attempt { number, since_ms: now_ms });
         Ok(number)
     }
 
-    /// The member answers `pair/start` with `pair/reply`: its own nonce,
-    /// new for this attempt, which it returns. From here the attempt counts
-    /// as failed unless it ends in a Welcome. A message of another attempt
-    /// than the open one changes nothing.
-    pub fn reply(&mut self, number: u64, commitment: [u8; 32], now_ms: u64) -> Result<[u8; 32], PairError> {
-        let Some(a) = self.attempt.as_mut().filter(|a| a.number == number && a.replied.is_none() && a.open_at(now_ms))
-        else {
-            return Err(PairError::Closed);
-        };
-        let nonce = crate::certs::random_bytes();
-        a.replied = Some((commitment, nonce));
-        self.failures = self.failures.saturating_add(1);
-        Ok(nonce)
-    }
-
-    /// The member's short code once the joiner opened its nonce in
-    /// `pair/confirm`; [`PairError::WrongCode`] when the nonce does not
-    /// open the commitment, which ends the attempt. From here the person
-    /// has [`ANSWER_MS`] to answer.
-    pub fn short_code(
-        &mut self,
-        number: u64,
-        exporter: &[u8],
-        joiner_nonce: &[u8; 32],
-        now_ms: u64,
-    ) -> Result<String, PairError> {
-        if self.attempt.as_ref().is_none_or(|a| a.number != number) {
-            return Err(PairError::Closed);
-        }
-        let Some((commitment, nonce)) =
-            self.attempt.as_ref().filter(|a| a.shown_ms.is_none() && a.open_at(now_ms)).and_then(|a| a.replied)
-        else {
-            self.attempt = None;
-            return Err(PairError::Closed);
-        };
-        if !crate::secret::ct_eq(&code_commitment(joiner_nonce), &commitment) {
-            self.attempt = None;
-            return Err(PairError::WrongCode);
-        }
-        if let Some(a) = self.attempt.as_mut() {
-            a.shown_ms = Some(now_ms);
-        }
-        Ok(short_code(exporter, joiner_nonce, &nonce))
-    }
-
     /// The attempt ended at `now_ms`: `welcomed` when the joiner got its
-    /// Welcome, which takes back the failure counted at the reply; an
-    /// answer after the person's time is over takes nothing back.
+    /// Welcome, which closes the invitation (one success each) and, on
+    /// the attempt still open, takes back the failure counted at the
+    /// start. Otherwise an attempt of another number than the open one
+    /// changes nothing.
     pub fn end(&mut self, number: u64, welcomed: bool, now_ms: u64) {
+        if welcomed {
+            self.used = true;
+        }
         if self.attempt.as_ref().is_none_or(|a| a.number != number) {
             return;
         }
-        if welcomed && self.attempt.as_ref().is_some_and(|a| a.replied.is_some() && a.open_at(now_ms)) {
+        if welcomed && self.attempt.as_ref().is_some_and(|a| a.open_at(now_ms)) {
             self.failures = self.failures.saturating_sub(1);
         }
         self.attempt = None;
     }
+}
+
+/// The start of a home window's QR code text.
+pub const WINDOW_PREFIX: &str = "cbb://pair?";
+/// The longest text a reader of a window's QR code takes.
+pub const MAX_WINDOW_TEXT: usize = 512;
+/// The most addresses a window's QR code carries.
+pub const MAX_WINDOW_ADDRS: usize = 4;
+
+/// What a home window's QR code carries (owner, 11-20):
+/// `cbb://pair?addr=…&fp=…&i=<ID hex>&c=<digits>`, an `addr` for each of
+/// the member's addresses (host:port), `fp` the hex of its TLS key's hash,
+/// `i` the window's ID and `c` its six digits. The window's mDNS
+/// announcement carries the ID and the hash, never the digits.
+#[derive(Clone, PartialEq, Eq)]
+pub struct WindowLink {
+    pub addrs: Vec<String>,
+    pub fp: KeyHash,
+    pub id: [u8; 16],
+    pub digits: String,
+}
+
+impl core::fmt::Debug for WindowLink {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("WindowLink")
+            .field("addrs", &self.addrs)
+            .field("fp", &self.fp)
+            .field("id", &self.id)
+            .field("digits", &crate::secret::Redacted(self.digits.len()))
+            .finish()
+    }
+}
+
+impl Drop for WindowLink {
+    fn drop(&mut self) {
+        self.digits.zeroize();
+    }
+}
+
+impl WindowLink {
+    /// The QR code's text.
+    pub fn text(&self) -> String {
+        let mut t = String::from(WINDOW_PREFIX);
+        for a in &self.addrs {
+            t.push_str("addr=");
+            for b in a.bytes() {
+                if b.is_ascii_alphanumeric() || b"-._~:[]".contains(&b) {
+                    t.push(char::from(b));
+                } else {
+                    t.push_str(&alloc::format!("%{b:02X}"));
+                }
+            }
+            t.push('&');
+        }
+        t.push_str(&alloc::format!(
+            "fp={}&i={}&c={}",
+            crate::certs::hex(&self.fp.0),
+            crate::certs::hex(&self.id),
+            self.digits
+        ));
+        t
+    }
+
+    /// Reads a window's QR code text: at least one and at most
+    /// [`MAX_WINDOW_ADDRS`] addresses, the key hash, an ID that is not all
+    /// zero and six digits, each once. None for anything else.
+    pub fn parse(text: &str) -> Option<WindowLink> {
+        if text.len() > MAX_WINDOW_TEXT {
+            return None;
+        }
+        let query = text.trim().strip_prefix(WINDOW_PREFIX)?;
+        let (mut addrs, mut fp, mut id, mut digits) = (Vec::new(), None, None, None);
+        for item in query.split('&') {
+            let (k, v) = item.split_once('=')?;
+            match k {
+                "addr" if addrs.len() < MAX_WINDOW_ADDRS => addrs.push(unescape(v)?),
+                "addr" => return None,
+                "fp" if fp.is_none() => fp = Some(KeyHash(hex_bytes(v)?)),
+                "i" if id.is_none() => id = Some(hex_bytes::<16>(v).filter(|i| i != &[0; 16])?),
+                "c" if digits.is_none() => digits = home_secret(v).map(|_| v.to_string()),
+                // A key this version does not know is skipped.
+                "fp" | "i" | "c" => return None,
+                _ => {}
+            }
+        }
+        if addrs.is_empty() || addrs.iter().any(String::is_empty) {
+            return None;
+        }
+        Some(WindowLink { addrs, fp: fp?, id: id?, digits: digits? })
+    }
+
+    /// The joiner's invitation from the link ([`Invitation::typed`]).
+    pub fn invitation(&self) -> Option<Invitation> {
+        Invitation::typed(self.id, &self.digits)
+    }
+}
+
+/// The %XX escapes of a QR code's value decoded; None for a bad escape or
+/// text that is not UTF-8.
+fn unescape(s: &str) -> Option<String> {
+    let mut out = Vec::with_capacity(s.len());
+    let mut bytes = s.bytes();
+    while let Some(b) = bytes.next() {
+        if b == b'%' {
+            let hex = [bytes.next()?, bytes.next()?];
+            out.push(u8::from_str_radix(core::str::from_utf8(&hex).ok()?, 16).ok()?);
+        } else {
+            out.push(b);
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// N bytes from their lower-case hex, as the link and mDNS write them.
+pub fn hex_bytes<const N: usize>(s: &str) -> Option<[u8; N]> {
+    if s.len() != N.saturating_mul(2) || !s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return None;
+    }
+    let mut out = [0u8; N];
+    for (o, pair) in out.iter_mut().zip(s.as_bytes().chunks(2)) {
+        *o = u8::from_str_radix(core::str::from_utf8(pair).ok()?, 16).ok()?;
+    }
+    Some(out)
 }

@@ -8,10 +8,10 @@
 // on as before; the list never limits who may use the server.
 //
 // The file has one group tag a line, 16 hex characters as cbb status shows
-// them; a line may also name a period's tag as "period <tag>", for a group
-// that registers with credentials. Blank lines and lines that begin with #
-// are skipped, and so is anything after a tag on its line, such as the date
-// of the report.
+// them; a line may also name a period's tag as "period <tag>", 32 hex
+// characters, for a group that registers with credentials. Blank lines and
+// lines that begin with # are skipped, and so is anything after a tag on its
+// line, such as the date of the report.
 package refused
 
 import (
@@ -41,6 +41,11 @@ type List struct {
 	tags map[string]bool
 	mod  time.Time
 	size int64
+	// missing: the file was missing at the last Reload. Only a second
+	// Reload that finds it missing empties the list, so that an editor
+	// that saves the file by moving it aside lets no refused group back in
+	// meanwhile.
+	missing bool
 }
 
 // Load reads the list at path. A file that does not exist yet is an empty
@@ -91,7 +96,8 @@ func (l *List) Len() int {
 
 // Reload reads the file again when it changed, and tells whether the list
 // did. A file that cannot be read or parsed keeps the list as it was: a
-// typo in the file never lets a refused group back in.
+// typo in the file never lets a refused group back in. A file missing at
+// two Reloads in a row empties the list.
 func (l *List) Reload() (bool, error) {
 	if l == nil {
 		return false, nil
@@ -100,14 +106,19 @@ func (l *List) Reload() (bool, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		l.mu.Lock()
 		defer l.mu.Unlock()
+		if !l.missing && len(l.tags) > 0 {
+			l.missing = true
+			return false, nil
+		}
 		changed := len(l.tags) > 0
-		l.tags, l.mod, l.size = map[string]bool{}, time.Time{}, 0
+		l.tags, l.mod, l.size, l.missing = map[string]bool{}, time.Time{}, 0, true
 		return changed, nil
 	}
 	if err != nil {
 		return false, fmt.Errorf("refused: %w", err)
 	}
 	l.mu.Lock()
+	l.missing = false
 	same := fi.ModTime().Equal(l.mod) && fi.Size() == l.size
 	l.mu.Unlock()
 	if same {
@@ -132,7 +143,7 @@ func (l *List) Reload() (bool, error) {
 			changed = true
 		}
 	}
-	l.tags, l.mod, l.size = tags, fi.ModTime(), fi.Size()
+	l.tags, l.mod, l.size, l.missing = tags, fi.ModTime(), fi.Size(), false
 	return changed, nil
 }
 
@@ -147,11 +158,11 @@ func Parse(b []byte) (map[string]bool, error) {
 		}
 		tag := f[0]
 		if tag == "period" {
-			if len(f) < 2 || !isTag(f[1]) {
-				return nil, fmt.Errorf("line %d: \"period\" without a tag of 16 hex characters", n)
+			if len(f) < 2 || !isHex(f[1], 32) {
+				return nil, fmt.Errorf("line %d: \"period\" without a period's tag of 32 hex characters", n)
 			}
 			tag = "period " + f[1]
-		} else if !isTag(tag) {
+		} else if !isHex(tag, 16) {
 			return nil, fmt.Errorf("line %d: %q is not a group tag of 16 hex characters", n, tag)
 		}
 		tags[tag] = true
@@ -162,8 +173,9 @@ func Parse(b []byte) (map[string]bool, error) {
 	return tags, nil
 }
 
-func isTag(s string) bool {
-	if len(s) != 16 {
+// isHex tells whether s is n lower-case hex characters.
+func isHex(s string, n int) bool {
+	if len(s) != n {
 		return false
 	}
 	for _, c := range s {

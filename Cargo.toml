@@ -6,7 +6,7 @@
 # stand-in (ring-shim/). The ESP32 firmware
 # (esp32/) and the fuzz targets (core/fuzz/) are workspaces of their own.
 [workspace]
-members = ["core", "embassy", "ffi", "member", "ring-shim"]
+members = ["core", "embassy", "ffi", "member", "ring-shim", "tools/size"]
 exclude = ["esp32", "core/fuzz", "member/fuzz"]
 # A cargo build or run without -p or --workspace means the program cbb.
 default-members = ["member"]
@@ -30,3 +30,10 @@ strip = true
 # workspace still build as the tests want them, with overflow checks.
 [profile.dev.package."*"]
 opt-level = 2
+
+# The core's generic signature code (SLH-DSA, whose parameter set the core
+# picks, so it is built in the core) is many times slower unoptimized: the
+# recovery heads' signatures took the core's tests from about a minute and
+# a half to eight. Level 1 keeps debug assertions and overflow checks.
+[profile.dev.package.cbb-core]
+opt-level = 1

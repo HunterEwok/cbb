@@ -66,11 +66,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -79,11 +81,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -106,7 +111,7 @@ private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
 fun Root(model: AppModel) {
-    AppTheme(model.color, model.appearance) {
+    AppTheme(model.theme, model.appearance) {
         AppBackground {
             LocalNetworkPermission(model)
             BugDialog(model)
@@ -199,14 +204,38 @@ private fun StartScreen(model: AppModel) {
         }
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         AccentButton(stringResource(R.string.create_group), onClick = { adding = true }, modifier = Modifier.widthIn(max = 480.dp))
+        MainKeyNote(model)
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
-        QuietButton(stringResource(R.string.join_admin), onClick = { model.startJoining(admin = true) })
         QuietButton(stringResource(R.string.invitation_join), onClick = { invited = true })
         TextButton(onClick = { restoring = true }) {
             Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
         }
         model.message?.let { NoteText(it) }
     }
+}
+
+/**
+ * Under Create a group (docs/apps.md, "Big screens"): the device that makes
+ * the group holds its main key. One that guards its keys less well than a
+ * phone says so; a tablet that guards them well says which device is best.
+ */
+@Composable
+internal fun MainKeyNote(model: AppModel, hint: Boolean = true) {
+    LaunchedEffect(Unit) { model.checkKeys() }
+    val palette = LocalPalette.current
+    val tablet = LocalConfiguration.current.smallestScreenWidthDp >= 600
+    val text = when {
+        model.guardsLikeAPhone == false -> R.string.key_guard_weak
+        hint && tablet && model.guardsLikeAPhone == true -> R.string.create_group_main_hint
+        else -> return
+    }
+    Text(
+        stringResource(text),
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (text == R.string.key_guard_weak) palette.danger else palette.textDim,
+        modifier = Modifier.widthIn(max = 480.dp),
+    )
 }
 
 /** The language menu across from the gear: the system's language or one of the translations. */
@@ -247,7 +276,7 @@ private fun JoinScreen(model: AppModel) {
     ) {
         Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
         Text(
-            stringResource(if (model.joinAsAdmin) R.string.join_admin_title else R.string.join_title),
+            stringResource(R.string.join_title),
             style = MaterialTheme.typography.headlineMedium,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
@@ -259,7 +288,7 @@ private fun JoinScreen(model: AppModel) {
             QrCode(
                 code.qrText,
                 Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                    .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
+                    .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                     .semantics { contentDescription = label },
             )
             Text(
@@ -269,11 +298,7 @@ private fun JoinScreen(model: AppModel) {
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
             )
-            val hint = when {
-                model.isTv -> R.string.join_hint_tv
-                model.joinAsAdmin -> R.string.join_admin_hint
-                else -> R.string.join_hint
-            }
+            val hint = if (model.isTv) R.string.join_hint_tv else R.string.join_hint
             Text(stringResource(hint), textAlign = TextAlign.Center, color = palette.textDim)
         } else if (model.message == null) {
             CircularProgressIndicator(color = palette.accent)
@@ -365,7 +390,7 @@ private fun InvitationScreen(model: AppModel, close: () -> Unit) {
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> read(text) },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
                 onError = { cameraError = it },
             )
             Text(stringResource(R.string.invitation_scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -543,10 +568,12 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
     // recent apps' preview.
     if (restore) SecureWindow()
     Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
+        // Restoring makes this device the group's root, as making the group does.
+        if (restore) MainKeyNote(model, hint = false)
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
                 onError = { cameraError = it },
             )
             Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -614,19 +641,35 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
  */
 @Composable
 internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
+    BackHandler { back() }
+    Page(stringResource(R.string.settings), back) { SettingsContent(model, null) }
+}
+
+/**
+ * Settings' sections: all of them on their page, or one part of them,
+ * which a big screen opens beside its sidebar (docs/apps.md, "Big
+ * screens"); a part shows its sections whether the advanced ones are on or
+ * not.
+ */
+@Composable
+internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
     val palette = LocalPalette.current
     val context = LocalContext.current
     val home = model.phase == AppModel.Phase.HOME
     var advanced by remember { mutableStateOf(model.settings.advanced) }
-    BackHandler { back() }
-    Page(stringResource(R.string.settings), back) {
-        Section(stringResource(R.string.appearance)) { Appearance(model) }
-        if (home) Notifications(model.notifier)
-        // A TV sends no copies of its own: the service there is only the paste target.
-        if (home && !model.isTv) AutoSend()
-        if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
-        if (home && model.isRoot) RecoverySection(model)
-        if (home) {
+    fun shows(p: SettingsPart) = part == null || part == p
+    // An advanced section: on the page while the switch is on, or in its part.
+    fun more(p: SettingsPart) = if (part == null) home && advanced else part == p
+    run {
+        if (shows(SettingsPart.LOOK)) Section(stringResource(R.string.appearance)) { Appearance(model) }
+        if (shows(SettingsPart.NOTIFICATIONS)) {
+            if (home) Notifications(model.notifier)
+            // A TV sends no copies of its own: the service there is only the paste target.
+            if (home && !model.isTv) AutoSend()
+            if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
+        }
+        if (shows(SettingsPart.RECOVERY) && home && model.isRoot) RecoverySection(model)
+        if (part == null && home) {
             Row(
                 Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {
                     advanced = !advanced
@@ -638,26 +681,31 @@ internal fun SettingsScreen(model: AppModel, back: () -> Unit) {
                 Switch(checked = advanced, onCheckedChange = null)
             }
         }
-        if (home && advanced) {
-            WhySection(model, model.settings.showsErrorDetails)
+        if (more(SettingsPart.WHY)) WhySection(model, model.settings.showsErrorDetails)
+        if (more(SettingsPart.AWAY)) {
             model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
+        }
+        if (more(SettingsPart.PASTE)) {
             if (!model.isTv) ShareAsk(model)
             RemotePasteSection(model.group.pastes, model.isTv)
+        }
+        if (more(SettingsPart.GROUP)) {
             model.incomingMS?.let { IncomingSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
-            // The lab: what works but is no promise of 1.0 (docs/apps.md,
-            // "The lab"). A TV has nothing near it to type into.
-            if (!model.isTv) {
-                Text(
-                    stringResource(R.string.lab),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.semantics { heading() }.testTag("lab"),
-                )
-                KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
-            }
         }
-        if (home) LeaveSection(model)
+        // The lab: what works but is no promise of 1.0 (docs/apps.md,
+        // "The lab"). A TV has nothing near it to type into.
+        if (more(SettingsPart.PASTE) && !model.isTv) {
+            Text(
+                stringResource(R.string.lab),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() }.testTag("lab"),
+            )
+            KeyboardSection(model.group.keyboard, model.settings.showsErrorDetails)
+        }
+        if (home && (part == null || part == SettingsPart.GROUP)) LeaveSection(model)
+        if (!shows(SettingsPart.ABOUT)) return@run
         UpdateSection(model)
         Section(stringResource(R.string.about)) {
             val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "" }
@@ -1176,31 +1224,40 @@ private fun InviteFromAfar(model: AppModel) {
         QrCode(
             invite.text,
             Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
+                .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                 .semantics { contentDescription = label },
         )
         Text(stringResource(R.string.invite_open_until, until), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
         QuietButton(stringResource(R.string.invite_share), onClick = { context.startActivity(Invitations.share(context, invite.file)) })
         QuietButton(stringResource(R.string.invite_cancel), onClick = model::cancelInvite)
-        invite.request?.let { req ->
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.invite_ask_title, req.info.name)) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-                        Text(stringResource(R.string.invite_ask_body, req.info.os))
-                        Text(req.fingerprint, fontFamily = FontFamily.Monospace, color = palette.text)
-                    }
-                },
-                confirmButton = { TextButton(onClick = { model.answer(true) }) { Text(stringResource(R.string.invite_admit), color = palette.accent) } },
-                dismissButton = { TextButton(onClick = { model.answer(false) }) { Text(stringResource(R.string.invite_decline)) } },
-                containerColor = palette.surface,
-                titleContentColor = palette.text,
-                textContentColor = palette.textDim,
-            )
-        }
+        invite.request?.let { req -> InviteAsk(req.info.name, req.info.os, req.fingerprint, model::answer) }
     }
     model.inviteNote?.let { NoteText(it) }
+}
+
+/**
+ * The device that used the invitation, admitted only if it shows the same
+ * fingerprint. Apart from the invitation so that the sheet of the dangerous
+ * screens (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun InviteAsk(name: String, os: String, fingerprint: String, answer: (Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.invite_ask_title, name)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+                Text(stringResource(R.string.invite_ask_body, os))
+                Text(fingerprint, fontFamily = FontFamily.Monospace, color = palette.text)
+            }
+        },
+        confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.invite_admit), color = palette.accent) } },
+        dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.invite_decline)) } },
+        containerColor = palette.surface,
+        titleContentColor = palette.text,
+        textContentColor = palette.textDim,
+    )
 }
 
 @Composable
@@ -1227,7 +1284,8 @@ internal fun Choice(title: String, selected: Boolean, select: () -> Unit) {
 internal fun Page(title: String, back: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconText("←", stringResource(R.string.back)) { back() }
+            // Back points the way the screen came from: right in Arabic and Hebrew.
+            IconText(if (LocalLayoutDirection.current == LayoutDirection.Rtl) "→" else "←", stringResource(R.string.back)) { back() }
             Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Tokens.spacingMedium))
         }
         content()
@@ -1243,8 +1301,19 @@ internal fun IconText(symbol: String, label: String, small: Boolean = false, onC
             .focusRing(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(symbol, color = if (small) palette.textDim else palette.text, style = MaterialTheme.typography.titleMedium)
+        Text(symbol, color = if (small) palette.textDim else palette.text, style = glyph(if (small) 16.dp else 18.dp))
     }
+}
+
+/**
+ * A symbol's style in a round button of a fixed size: its size does not
+ * follow the font scale, which would push it out of its circle, and the
+ * button's name for TalkBack carries the meaning.
+ */
+@Composable
+internal fun glyph(size: Dp): TextStyle {
+    val sp = with(LocalDensity.current) { size.toSp() }
+    return MaterialTheme.typography.titleMedium.copy(fontSize = sp, lineHeight = sp)
 }
 
 /**
@@ -1260,7 +1329,7 @@ internal fun Tip(@StringRes text: Int, modifier: Modifier = Modifier) {
     if (closed) return
     val palette = LocalPalette.current
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(Tokens.radiusCard)).background(palette.accent.copy(alpha = 0.10f)).padding(Tokens.spacingSmall),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(palette.accent.copy(alpha = 0.10f)).padding(Tokens.spacingSmall),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
     ) {
@@ -1300,7 +1369,7 @@ private fun Appearance(model: AppModel) {
             Box {
                 val chosen = model.settings.language
                 TextButton(onClick = { open = true }) {
-                    Text("🌐 " + (chosen.ownName ?: stringResource(R.string.language_system)), color = palette.text)
+                    Text("文A " + (chosen.ownName ?: stringResource(R.string.language_system)), color = palette.text)
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     for (l in LanguageChoice.entries) {
@@ -1315,7 +1384,7 @@ private fun Appearance(model: AppModel) {
                 }
             }
         }
-        ColorSwatches(model.color) { model.choose(it) }
+        ThemeSwatches(model.theme) { model.choose(it) }
     }
 }
 
@@ -1330,21 +1399,25 @@ internal fun NoteText(note: AppModel.Note, dim: Boolean = false) {
     }
 }
 
-/** The colours as round swatches, five a row, the chosen one ringed and ticked; Material You as a swatch of the wallpaper's colours. */
+/**
+ * The themes as swatches, five a row: each its background and its accent,
+ * the chosen one ringed and ticked; Material You as a swatch of the
+ * themes' accents.
+ */
 @Composable
-private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
+private fun ThemeSwatches(selection: String, choose: (String) -> Unit) {
     val palette = LocalPalette.current
     Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        for (row in ColorChoice.offered.chunked(5)) {
+        for (row in ThemeChoice.offered.chunked(5)) {
             Row(Modifier.fillMaxWidth()) {
                 for (name in row) {
                     val chosen = name == selection
-                    val pair = paletteNamed(name)
-                    val swatch = if (palette.dark) pair.dark else pair.light
-                    val fill = if (name == ColorChoice.MATERIAL) {
-                        Brush.sweepGradient(Tokens.colors.map { (if (palette.dark) it.dark else it.light).accent })
+                    val theme = themeNamed(name)
+                    val swatch = if (palette.dark) theme.dark else theme.light
+                    val fill = if (name == ThemeChoice.MATERIAL) {
+                        Brush.sweepGradient(Tokens.themes.map { (if (palette.dark) it.dark else it.light).accent })
                     } else {
-                        SolidColor(swatch.accent)
+                        Brush.linearGradient(0.5f to swatch.background, 0.5f to swatch.accent)
                     }
                     Column(
                         Modifier.weight(1f).focusRing().clickable(role = Role.RadioButton) { choose(name) }
@@ -1353,13 +1426,14 @@ private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Box(
-                            Modifier.size(42.dp).border(2.dp, if (chosen) swatch.accent else Color.Transparent, CircleShape).padding(3.dp)
+                            Modifier.size(42.dp).border(2.dp, if (chosen) palette.accent else palette.line, CircleShape).padding(3.dp)
                                 .clip(CircleShape).background(fill),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (chosen) Text("✓", color = swatch.onAccent, fontWeight = FontWeight.Bold)
+                            if (chosen) Text("✓", color = if (name == ThemeChoice.MATERIAL) swatch.onAccent else swatch.text, fontWeight = FontWeight.Bold, style = glyph(16.dp))
                         }
-                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, maxLines = 1, color = palette.textDim)
+                        // As many lines as it takes: "Material You", the longer names in Spanish and Swahili, and large text.
+                        Text(stringResource(ThemeChoice.title(name)), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, color = palette.textDim)
                     }
                 }
                 repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -1387,8 +1461,38 @@ private fun Notifications(notifier: Notifier) {
                 Switch(checked = on, onCheckedChange = null)
             }
         }
+        PushSwitch()
     }
     Tip(R.string.notifications_body)
+}
+
+/** Push while the app is closed (PushSetup), where this build can get it. */
+@Composable
+private fun PushSwitch() {
+    val context = LocalContext.current
+    if (!PushPlatform.available(context)) return
+    val palette = LocalPalette.current
+    var on by remember { mutableStateOf(PushSetup.on(context)) }
+    HorizontalDivider(color = palette.line)
+    Row(
+        Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) {
+            on = !on
+            PushSetup.set(context, on)
+        }.padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.push_switch), modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
+    }
+    Text(
+        stringResource(R.string.push_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = palette.textDim,
+        modifier = Modifier.padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall),
+    )
+    PushSetup.problem?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = palette.danger, modifier = Modifier.padding(horizontal = Tokens.spacingMedium))
+    }
 }
 
 /** Keeps the activity's window out of screenshots and the recent apps' preview while shown. */

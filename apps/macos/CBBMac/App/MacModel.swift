@@ -22,6 +22,10 @@ final class MacModel: ObservableObject {
     @Published private(set) var problem: String?
     /// The outcome of the last action, for a line under it.
     @Published var message: String?
+    /// The mutes asked for and not yet answered, by device (this Mac's
+    /// own sync by its id too): the tile shows the new state at once and
+    /// goes back only when the change is refused.
+    @Published private(set) var pendingMute: [String: Bool] = [:]
     @Published private(set) var busy = false
     /// Whether a join of a phone's group runs (JoinSheet), and its QR code
     /// once cbb wrote it.
@@ -30,6 +34,8 @@ final class MacModel: ObservableObject {
     /// The window asks before Everywhere turns on (D-82); the menu bar's
     /// item sets it and opens the window.
     @Published var askingAway = false
+    /// Settings, a sheet on the window, which the menu bar item opens too.
+    @Published var settingsShown = false
     private var joinFile: URL?
     private var joinCancelled = false
     /// The bug report the window asks about (BugSheet), in release mode.
@@ -372,6 +378,25 @@ final class MacModel: ObservableObject {
     var muted: Bool { status?.muted == true }
     var mutedUntil: Date? { Self.date(ms: status?.mutedUntilMS) }
 
+    /// Whether a device's tile shows it muted: the answer still awaited,
+    /// else its mute; for this Mac, its sync turned off.
+    func shownMuted(_ d: Control.Device) -> Bool {
+        if let p = pendingMute[d.id] { return p }
+        return d.isSelf ? syncOff : d.muted
+    }
+
+    /// Whether this Mac may mute the device from its tile: its own sync
+    /// always, another device only as an admin.
+    func mayMute(_ d: Control.Device) -> Bool { d.isSelf || isAdmin }
+
+    /// Turns this Mac's sync off, or on, from its tile, showing the new
+    /// state while the service answers.
+    func turnSyncFromTile(_ id: String, on: Bool, forMS: Int64 = 0) async {
+        pendingMute[id] = !on
+        defer { pendingMute[id] = nil }
+        await turnSync(on, forMS: forMS)
+    }
+
     nonisolated static func date(ms: Int64?) -> Date? {
         guard let ms, ms > 0 else { return nil }
         return Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
@@ -393,14 +418,45 @@ final class MacModel: ObservableObject {
     /// On an admin: mutes a device for the whole group, for forMS
     /// milliseconds, 0 for until an admin unmutes it; its copies then stay
     /// its own.
+    /// This Mac itself goes over the plain socket, which the service takes
+    /// for muting or unmuting its own device, so no password is asked.
     func mute(_ id: String, forMS: Int64 = 0) async {
+        pendingMute[id] = true
+        defer { pendingMute[id] = nil }
+        let done = String(localized: "Muted: its copies do not reach the group.")
+        if let h = Self.ownMute(id, on: true, forMS: forMS, me: status?.device) {
+            return await plain(h, done: done)
+        }
         var arguments = ["mute", "-on", id]
         if forMS > 0 { arguments += ["-for", "\(forMS)ms"] }
-        await admin(arguments, done: String(localized: "Muted: its copies do not reach the group."))
+        await admin(arguments, done: done)
     }
 
     func unmute(_ id: String) async {
-        await admin(["unmute", "-on", id], done: String(localized: "Unmuted: its copies reach the group again."))
+        pendingMute[id] = false
+        defer { pendingMute[id] = nil }
+        let done = String(localized: "Unmuted: its copies reach the group again.")
+        if let h = Self.ownMute(id, on: false, me: status?.device) {
+            return await plain(h, done: done)
+        }
+        await admin(["unmute", "-on", id], done: done)
+    }
+
+    /// The request that mutes or unmutes this Mac itself on the plain
+    /// socket; nil for another device, which takes the administrator.
+    nonisolated static func ownMute(_ id: String, on: Bool, forMS: Int64 = 0, me: String?) -> Control.Header? {
+        guard let me, !me.isEmpty, id == me else { return nil }
+        var h = Control.Header(op: on ? "mute" : "unmute")
+        h.device = id
+        if on, forMS > 0 { h.forMS = forMS }
+        return h
+    }
+
+    private func plain(_ h: Control.Header, done: String) async {
+        await act {
+            _ = try await self.client.request(h)
+            return done
+        }
     }
 
     /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait

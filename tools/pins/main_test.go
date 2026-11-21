@@ -69,6 +69,63 @@ func TestPinsFound(t *testing.T) {
 	if f, err := scan(nightlyRe, paths); err != nil || len(f) == 0 {
 		t.Errorf("nightly Rust: no pin found (%v)", err)
 	}
+	for _, m := range modulePins {
+		if f, err := scanAny(m.re, paths); err != nil || len(f) != 1 {
+			t.Errorf("%s: pins found %v (%v), want one", m.name, f, err)
+		}
+	}
+	if f, err := scan(espRe, paths); err != nil || len(f) != 1 {
+		t.Errorf("esp-hal: pins found %v (%v), want one", f, err)
+	}
+}
+
+// TestModuleLag checks the rule for a module pinned at a commit: behind
+// only when a newer version is more than the days newer and out for the
+// cooldown. gVisor's pin of January 2026 was behind August's fix.
+func TestModuleLag(t *testing.T) {
+	day := func(m, d int) time.Time { return time.Date(2026, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
+	pinned := modInfo{"v0.0.0-20260122175437-89a5d21be8f0", day(1, 22)}
+	for _, c := range []struct {
+		latest modInfo
+		cutoff time.Time
+		behind bool
+	}{
+		{modInfo{"v0.0.0-20260823000000-1b2946c4fa59", day(8, 23)}, day(11, 5), true},
+		{modInfo{"v0.0.0-20260210000000-aaaaaaaaaaaa", day(2, 10)}, day(11, 5), false},  // 19 days newer
+		{modInfo{"v0.0.0-20261110000000-bbbbbbbbbbbb", day(11, 10)}, day(11, 5), false}, // in its cooldown
+		{pinned, day(11, 5), false},
+	} {
+		if behind, lag := lagging(pinned, c.latest, c.cutoff, 30); behind != c.behind {
+			t.Errorf("latest %s: behind %v (lag %d), want %v", c.latest.Version, behind, lag, c.behind)
+		}
+	}
+	// amneziawg-go: the pin is a commit after its newest tag.
+	awg := modInfo{"v0.2.20-0.20260724121833-457d920a1a7d", day(7, 24)}
+	if behind, _ := lagging(awg, modInfo{"v0.2.19", day(6, 17)}, day(11, 5), 30); behind {
+		t.Error("a pin newer than the newest tag is behind")
+	}
+	if got := escapeModule("github.com/BurntSushi/toml"); got != "github.com/!burnt!sushi/toml" {
+		t.Errorf("escapeModule = %s", got)
+	}
+}
+
+// TestCopiesPins checks that the copies' READMEs give their versions.
+func TestCopiesPins(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "README.md")
+	text := "copied from\nv0.2.20-0.20260724121833-457d920a1a7d (module checksum\n" +
+		"github.com/gballet/go-libpcsclite at v0.0.0-20250918194357-1ec6f2e601c6. The BSD\n" +
+		"[`rsc.io/cmd/mote`](https://pkg.go.dev/rsc.io/cmd/mote) v0.1.3\n"
+	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"v0.2.20-0.20260724121833-457d920a1a7d", "v0.0.0-20250918194357-1ec6f2e601c6", "v0.1.3"}
+	for i, m := range modulePins[1:] {
+		f, err := scanAny(m.re, []string{p})
+		if err != nil || len(f) != 1 || f[want[i]] == nil {
+			t.Errorf("%s: %v (%v), want %s", m.name, f, err, want[i])
+		}
+	}
 }
 
 // TestXrayPin checks that the Xray-core pin reads the tag from go.mod's

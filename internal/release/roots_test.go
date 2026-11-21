@@ -113,10 +113,11 @@ var yubikeys = []int64{36667388, 36667392}
 // in slot 82, with the PIN and a touch for every signature
 // (roots/README.md).
 func TestRootsAttested(t *testing.T) {
-	if len(Roots) != 2 {
-		t.Fatalf("%d roots, want 2", len(Roots))
+	es := es256Roots()
+	if len(es) != 2 {
+		t.Fatalf("%d roots, want 2", len(es))
 	}
-	for i, spki := range Roots {
+	for i, spki := range es {
 		checkAttested(t, "root-"+strconv.Itoa(i+1)+".pem", spki, "82", yubikeys[i])
 	}
 }
@@ -129,7 +130,10 @@ func TestReleaseKeysAttested(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := parseRoots(data)
+	var keys [][]byte
+	for b, rest := pem.Decode(data); b != nil; b, rest = pem.Decode(rest) {
+		keys = append(keys, b.Bytes)
+	}
 	if len(keys) != 2 {
 		t.Fatalf("%d release keys, want 2", len(keys))
 	}
@@ -138,8 +142,8 @@ func TestReleaseKeysAttested(t *testing.T) {
 	}
 }
 
-// TestRootCopies checks the copies of the roots that the installers, the
-// Rust cbb and the phone kits carry.
+// TestRootCopies checks the copies of the roots that the installers carry
+// and that the Rust core reads.
 func TestRootCopies(t *testing.T) {
 	read := func(p string) string {
 		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(p)))
@@ -153,10 +157,9 @@ func TestRootCopies(t *testing.T) {
 		t.Error("packaging/get.sh: release_roots is not roots/roots.pem")
 	}
 	b64 := regexp.MustCompile(`"(MF[A-Za-z0-9+/=]{100,})"|'(MF[A-Za-z0-9+/=]{100,})'`)
+	// The phone kits ask the core and carry no copy.
 	for _, p := range []string{
 		"packaging/windows/get.ps1",
-		"apps/android/kit/src/main/kotlin/tools/cbb/kit/Releases.kt",
-		"apps/ios/CBBKit/Sources/CBBKit/Releases.swift",
 	} {
 		var got [][]byte
 		for _, m := range b64.FindAllStringSubmatch(read(p), -1) {
@@ -170,34 +173,101 @@ func TestRootCopies(t *testing.T) {
 			t.Errorf("%s: the roots are not roots/roots.pem", p)
 		}
 	}
-	rust := read("member/src/update.rs")
-	_, rest, ok := strings.Cut(rust, "pub const ROOTS: &[&[u8]] = &[")
-	body, _, ok2 := strings.Cut(rest, "\n];")
-	if !ok || !ok2 {
-		t.Fatal("member/src/update.rs: no ROOTS")
-	}
-	var got [][]byte
-	for _, block := range strings.Split(body, "&[")[1:] {
-		var der []byte
-		for _, h := range regexp.MustCompile(`0x([0-9a-f]{2})`).FindAllStringSubmatch(block, -1) {
-			v, _ := strconv.ParseUint(h[1], 16, 8)
-			der = append(der, byte(v))
-		}
-		got = append(got, der)
-	}
-	if !sameRoots(got) {
-		t.Error("member/src/update.rs: ROOTS are not roots/roots.pem")
+	// The Rust core reads roots/roots.pem itself (include_str!), for the
+	// Rust cbb and for the phone kits through its release calls.
+	if !strings.Contains(read("core/src/release.rs"), `include_str!("../../internal/release/roots/roots.pem")`) {
+		t.Error("core/src/release.rs does not read roots/roots.pem")
 	}
 }
 
+func es256Roots() [][]byte {
+	var out [][]byte
+	for _, r := range Roots {
+		if r.Alg == AlgES256 {
+			out = append(out, r.Key)
+		}
+	}
+	return out
+}
+
 func sameRoots(got [][]byte) bool {
-	if len(got) != len(Roots) {
+	es := es256Roots()
+	if len(got) != len(es) {
 		return false
 	}
 	for i := range got {
-		if !bytes.Equal(got[i], Roots[i]) {
+		if !bytes.Equal(got[i], es[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func TestCompleteRoots(t *testing.T) {
+	var keys [3][]Key
+	for i := range keys {
+		s, err := GenerateSigner()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if keys[i], err = s.Keys("root-"+strconv.Itoa(i+1), UseRoot); err != nil {
+			t.Fatal(err)
+		}
+	}
+	two := append(append([]Key{}, keys[0]...), keys[1]...)
+	if err := CompleteRoots(two); err != nil {
+		t.Fatalf("two whole roots: %v", err)
+	}
+	classicalOnly := func(k []Key) []Key {
+		var out []Key
+		for _, h := range k {
+			if h.Alg == AlgES256 {
+				out = append(out, h)
+			}
+		}
+		return out
+	}
+	for name, roots := range map[string][]Key{
+		"one root":              keys[0],
+		"none":                  nil,
+		"classical halves only": append(classicalOnly(keys[0]), classicalOnly(keys[1])...),
+		"one root half missing": append(append([]Key{}, keys[0]...), classicalOnly(keys[1])...),
+		"a half twice":          append(append([]Key{}, two...), keys[1][0]),
+		"another root's half under its name": append(append([]Key{}, two...),
+			Key{Alg: keys[2][0].Alg, Key: keys[2][0].Key, Name: "root-1", Use: UseRoot}),
+	} {
+		if CompleteRoots(roots) == nil {
+			t.Errorf("%s: complete", name)
+		}
+	}
+}
+
+// TestPinnedRootsComplete runs in the release workflow before anything
+// is built (CBB_RELEASE_TAG set): a release whose pinned roots lack a half
+// would build devices that take no keys.json.
+func TestPinnedRootsComplete(t *testing.T) {
+	if os.Getenv("CBB_RELEASE_TAG") == "" {
+		t.Skip("only for a release tag (CBB_RELEASE_TAG)")
+	}
+	if err := CompleteRoots(Roots); err != nil {
+		t.Fatalf("roots/roots.pem: %v", err)
+	}
+}
+
+// A root is its halves under one Name, one of each algorithm.
+func TestParseRootsOneHalfEach(t *testing.T) {
+	a, b := newSigner(t), newSigner(t)
+	pem := func(s signer, name string) []byte {
+		p, err := PublicPEM(s.key, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if r, err := ParseRoots(append(pem(a, "root-1"), pem(b, "root-2")...)); err != nil || len(r) != 4 {
+		t.Fatalf("two roots: %d, %v", len(r), err)
+	}
+	if _, err := ParseRoots(append(pem(a, "root-1"), pem(b, "root-1")...)); err == nil {
+		t.Error("two roots under one Name were read")
+	}
 }

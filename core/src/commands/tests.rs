@@ -35,7 +35,7 @@ impl World {
         g.admin("desk", "desk admin", AdminKind::Computer);
         g.admin("watch", "watch admin", AdminKind::Watch);
         let (laptop_store, st) = store("laptop", &g.gid);
-        let seal = (st.body().epoch, st.body().seal.public.clone());
+        let seal = (st.body().epoch, st.body().seal.public().to_vec());
         World { g, laptop, laptop_store, seal }
     }
 
@@ -97,7 +97,7 @@ fn a_member_obeys_the_root_and_its_admins_by_their_commands() {
     assert_eq!(w.take(&make(&d, &k("root")).unwrap(), &mut ctr, Some(T0)), Err(RULE_GROUP));
     // Expired on a receiver with a clock; a leaf without one decides by n.
     let env = make(&w.draft(COMMAND_PASTE_OFF, 10, None), &k("root")).unwrap();
-    assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
+    assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 + WRITE_LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
     assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 - SKEW_MS - 1)), Err(RULE_LATE));
     assert_eq!(w.take(&env, &mut ctr, None), Ok(None));
 }
@@ -126,7 +126,7 @@ fn a_late_command_is_refused_back_with_its_rule() {
     let w = World::new();
     let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
     let c = Command::read(&env).unwrap();
-    let r = w.accept(&c, &mut Counters::default(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
+    let r = w.accept(&c, &mut Counters::default(), Some(T0 + WRITE_LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
     assert_eq!(r, Refusal { rule: RULE_LATE, answer: true });
     let me = w.laptop.key.device_id();
     let r = refusal(&c.id, &me, r).unwrap();
@@ -255,11 +255,12 @@ fn the_form_and_its_rules_between_fields() {
         body(f)
     };
     assert!(Command::read(&full(COMMAND_PASTE_OFF, vec![])).is_ok());
+    assert!(Command::read(&full(COMMAND_PASTE_OFF, vec![(7, Value::Uint(T0 + 600_000))])).is_ok());
     assert!(Command::read(&full(COMMAND_MODE, vec![(14, Value::Uint(1)), (15, Value::Bytes(&sealed))])).is_ok());
     let cases: Vec<(&str, Vec<u8>, Rule)> = vec![
         ("type 0", full(0, vec![]), RULE_TYPE),
         ("type 11", full(11, vec![]), RULE_TYPE),
-        ("lifetime 30 s and 1 ms", full(4, vec![(7, Value::Uint(T0 + 30_001))]), RULE_EXPIRES),
+        ("lifetime 600 s and 1 ms", full(4, vec![(7, Value::Uint(T0 + 600_001))]), RULE_EXPIRES),
         ("expires at time", full(4, vec![(7, Value::Uint(T0))]), RULE_EXPIRES),
         ("n 0", full(4, vec![(4, Value::Uint(0))]), RULE_N),
         ("nonce of 15 bytes", full(4, vec![(13, Value::Bytes(&[0; 15]))]), RULE_NONCE),
@@ -284,6 +285,38 @@ fn the_form_and_its_rules_between_fields() {
     assert!(Command::read(&full(4, vec![(300, Value::Uint(1))])).is_ok());
 }
 
+/// A reader takes a life of up to 600 s, so a later writer may give more
+/// than 30 s; every 0.6 writer gives exactly 30 s. The replay guard is the
+/// per-signer counter, not the life.
+#[test]
+fn a_reader_takes_up_to_600_s_and_our_writer_gives_30_s() {
+    assert_eq!((MAX_LIFETIME_MS, WRITE_LIFETIME_MS), (600_000, 30_000));
+    let w = World::new();
+    let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
+    let c = Command::read(&env).unwrap();
+    assert_eq!(c.expires_ms - c.time_ms, WRITE_LIFETIME_MS, "our writer");
+    let m = cbor::decode(c.envelope.body).unwrap();
+    let fields = |life: u64| -> Vec<u8> {
+        let f: Vec<(u16, Value<'_>)> = m
+            .as_map()
+            .unwrap()
+            .iter()
+            .map(|(n, v)| (*n, if *n == 7 { Value::Uint(T0 + life) } else { v.clone() }))
+            .collect();
+        body(f)
+    };
+    // Signed by the root with a life of 600 s: taken at its end, with the skew.
+    let long = fields(MAX_LIFETIME_MS);
+    let mut ctr = Counters::default();
+    assert_eq!(w.take(&long, &mut ctr.clone(), Some(T0 + MAX_LIFETIME_MS + SKEW_MS)), Ok(None));
+    assert_eq!(w.take(&long, &mut ctr.clone(), Some(T0 + MAX_LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
+    assert_eq!(w.take(&long, &mut ctr, Some(T0)), Ok(None));
+    // Taken once: the counter, not the life, refuses it again.
+    assert_eq!(w.take(&long, &mut ctr, Some(T0)), Err(RULE_COUNTER));
+    // One millisecond more: refused by its form.
+    assert_eq!(Command::read(&fields(MAX_LIFETIME_MS + 1)).err(), Some(RULE_EXPIRES));
+}
+
 #[test]
 fn orders_of_each_type() {
     let ok: Vec<(u64, Vec<u8>)> = vec![
@@ -298,7 +331,21 @@ fn orders_of_each_type() {
         (COMMAND_MUTE, orders(vec![(10, Value::Uint(60_000))])),
         (COMMAND_DEVICE, orders(vec![(10, Value::Text("heat")), (11, Value::Bytes(&[0xa1, 0x01, 0x18, 0x5a]))])),
         (COMMAND_HUB, orders(vec![(13, Value::Uint(1))])),
-        (COMMAND_HUB, orders(vec![(11, Value::Array(vec![Value::Text("[2001:db8::1]:443")]))])),
+        // Field 10, the hub's address away from home and the hash of its
+        // member key: the format takes any hash, one of no member's
+        // included; the receiver refuses a command that names another
+        // device as the hub (member/src/service/on_live/orders.rs).
+        (
+            COMMAND_HUB,
+            orders(vec![(10, Value::Array(vec![Value::Text("192.0.2.7:51820"), Value::Bytes(&[0xee; 32])]))]),
+        ),
+        (
+            COMMAND_HUB,
+            orders(vec![(
+                11,
+                Value::Array(vec![Value::Array(vec![Value::Text("[2001:db8::1]:443"), Value::Bytes(&[7; 32])])]),
+            )]),
+        ),
     ];
     for (t, o) in ok {
         assert_eq!(orders::check(t, &o), Ok(()), "{t}");
@@ -334,6 +381,18 @@ fn orders_of_each_type() {
             orders::RULE_HUB,
         ),
         (COMMAND_HUB, orders(vec![]), orders::RULE_HUB),
+        (COMMAND_HUB, orders(vec![(11, Value::Array(vec![Value::Text("[2001:db8::1]:443")]))]), orders::RULE_HUB),
+        (
+            COMMAND_HUB,
+            orders(vec![(
+                11,
+                Value::Array(vec![
+                    Value::Array(vec![Value::Text("a:1"), Value::Bytes(&[7; 32])]),
+                    Value::Array(vec![Value::Text("a:1"), Value::Bytes(&[8; 32])]),
+                ]),
+            )]),
+            orders::RULE_HUB,
+        ),
     ];
     for (t, o, rule) in bad {
         assert_eq!(orders::check(t, &o), Err(rule), "{t} {o:02x?}");
@@ -349,7 +408,7 @@ fn a_leaf_obeys_its_grant() {
     let (kettle_store, kst) = store("kettle", &g.gid);
     let kettle = k("kettle").key.device_id();
     let phone = k("phone");
-    let point = |x: &K| -> [u8; 65] { x.key.public.clone().try_into().unwrap() };
+    let point = |x: &K| -> [u8; 65] { x.key.public().to_vec().try_into().unwrap() };
     let mut kept = Kept { commanders: vec![(phone.hash, point(&phone))], ..Kept::default() };
     let heat = orders(vec![(10, Value::Text("heat"))]);
     let draft = |n, nonce| Draft {
@@ -360,11 +419,11 @@ fn a_leaf_obeys_its_grant() {
         time_ms: T0,
         nonce,
         orders: Some(&heat),
-        seal_to: Some((kst.body().epoch, &kst.body().seal.public)),
+        seal_to: Some((kst.body().epoch, kst.body().seal.public())),
     };
     let take = |env: &[u8], kept: &Kept, stale: bool, ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env)?;
-        let at = Leaf { me: kettle, group: g.gid, kept, stale, now_ms: None };
+        let at = Leaf { me: kettle, group: g.gid, kept, recovery: kept.recovery, stale, now_ms: None };
         accept_leaf(&c, &at, ctr, nonces, &kettle_store).map_err(|r| r.rule)
     };
     let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
@@ -403,6 +462,39 @@ fn a_leaf_obeys_its_grant() {
     assert!(!stale(true, None, DEFAULT_LIFE_MS - 1));
     assert!(!stale(false, None, u64::MAX));
     assert_eq!(take(&env, &kept, true, &mut ctr, &mut nonces), Err(RULE_STALE));
+    // A leaf that holds a fork of its root obeys nobody.
+    let n6 = nonces.issue(&phone.hash).unwrap();
+    let env = make(&draft(11, Some(n6)), &phone).unwrap();
+    let held = Kept { forked: true, ..kept.clone() };
+    assert_eq!(take(&env, &held, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // Nor one that waits to be bound again after a change of root.
+    let waiting = Kept { rebind: Some((phone.hash, 1)), ..kept.clone() };
+    assert_eq!(take(&env, &waiting, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // Nor one whose kept grant is of a lower recovery seq than the newest
+    // it knows, whatever its kept state remembers: the head was stored
+    // and the kept state was not, before a restart.
+    assert!(kept.guarded && kept.recovery == 0);
+    let take_at = |env: &[u8], kept: &Kept, recovery, ctr: &mut Counters, nonces: &mut Nonces| {
+        let c = Command::read(env)?;
+        let at = Leaf { me: kettle, group: g.gid, kept, recovery, stale: false, now_ms: None };
+        accept_leaf(&c, &at, ctr, nonces, &kettle_store).map_err(|r| r.rule)
+    };
+    assert_eq!(take_at(&env, &kept, 1, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    let started = kept.start(Some((k("new root").hash, 1)));
+    assert!(started.rebind.is_some() && started.commanders.is_empty());
+    assert_eq!(take_at(&env, &started, 1, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // The same across a restart through the stored bytes: the head stored
+    // with the kept state not yet changed by it.
+    let bytes = crate::format::grant::Stored::new(
+        crate::format::grant::Kept { grant_hash: [5; 32], ..kept.clone() },
+        Some((k("new root").hash, 1)),
+        None,
+    )
+    .encode();
+    let (back, recovery) = crate::format::grant::Stored::decode(&bytes).unwrap().start();
+    assert_eq!((&back, recovery), (&started, 1));
+    assert_eq!(take_at(&env, &back, recovery, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    assert_eq!(take(&env, &kept, false, &mut ctr, &mut nonces), Ok(Some(heat.clone())));
     // Message nonce: from the leaf with a number, to it without.
     let nm = nonce_message(Some(&n5));
     let m = frame::read(&nm, frame::LIMIT_LEAF).unwrap();
@@ -420,7 +512,7 @@ fn an_old_command_sent_again_leaves_the_number() {
     let (lock_store, lst) = store("lock", &g.gid);
     let lock = k("lock").key.device_id();
     let phone = k("phone");
-    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
     let kept = Kept { commanders: vec![(phone.hash, point)], guarded: true, ..Kept::default() };
     let open = orders(vec![(10, Value::Text("open"))]);
     let draft = |n, nonce| Draft {
@@ -431,11 +523,11 @@ fn an_old_command_sent_again_leaves_the_number() {
         time_ms: T0,
         nonce,
         orders: Some(&open),
-        seal_to: Some((lst.body().epoch, &lst.body().seal.public)),
+        seal_to: Some((lst.body().epoch, lst.body().seal.public())),
     };
     let take = |env: &[u8], ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env).unwrap();
-        let at = Leaf { me: lock, group: g.gid, kept: &kept, stale: false, now_ms: None };
+        let at = Leaf { me: lock, group: g.gid, kept: &kept, recovery: 0, stale: false, now_ms: None };
         accept_leaf(&c, &at, ctr, nonces, &lock_store)
     };
     let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
@@ -498,6 +590,12 @@ fn command_vectors() {
         let rule: String = r["rule"].as_str().unwrap().into();
         match Command::read(&env) {
             Err(e) => assert_eq!(e.name(), rule, "{}", r["name"]),
+            // A second signature swapped on the way: the form reads, the
+            // first signature, which covers it, does not hold.
+            Ok(c) if rule == "env/damaged" => {
+                let signer = unhex(r["signer"].as_str().unwrap());
+                assert_eq!(c.envelope.verify(&signer, sig::LABEL_COMMAND), Err(Rule::ENV_DAMAGED), "{}", r["name"]);
+            }
             Ok(c) => {
                 assert_eq!(rule, "commands/nonce", "{}", r["name"]);
                 assert!(c.nonce.is_none());
@@ -516,4 +614,33 @@ fn a_signer_is_found_by_its_key_hash() {
         assert_eq!(keys.get(&k(who).hash), Some(&k(who).key), "{who}");
     }
     assert!(keys.get(&k("stranger").hash).is_none());
+}
+
+/// The orders at their bounds (the registry, `bounds.rs`): a paste's text
+/// and a device command's arguments at the limit read, one byte more does
+/// not; a guarded leaf keeps at most MAX_NONCES numbers out.
+#[test]
+fn orders_and_nonces_at_their_bounds() {
+    let paste = |n: usize| {
+        let t = "x".repeat(n);
+        orders::check(COMMAND_PASTE, &orders(vec![(10, Value::Uint(1)), (12, Value::Uint(1)), (13, Value::Text(&t))]))
+    };
+    assert_eq!(paste(orders::MAX_PASTE_TEXT), Ok(()));
+    assert_eq!(paste(orders::MAX_PASTE_TEXT + 1), Err(orders::RULE_PASTE));
+    // One CBOR item of n bytes: a byte string's head and its bytes.
+    let args = |n: usize| {
+        let item = Value::Bytes(&vec![7u8; n - 3]).encode();
+        assert_eq!(item.len(), n);
+        orders::check(COMMAND_DEVICE, &orders(vec![(10, Value::Text("heat")), (11, Value::Bytes(&item))]))
+    };
+    assert_eq!(args(orders::MAX_ARGS), Ok(()));
+    assert_eq!(args(orders::MAX_ARGS + 1), Err(orders::RULE_DEVICE));
+    let mut nonces = crate::commands::Nonces::default();
+    let peers: Vec<crate::format::KeyHash> = (0..=MAX_NONCES as u8).map(|i| crate::format::KeyHash([i; 32])).collect();
+    let issued: Vec<[u8; 16]> = peers.iter().map(|p| nonces.issue(p).unwrap()).collect();
+    // The oldest gave way to the newest; the other MAX_NONCES are still out.
+    assert!(!nonces.take(&peers[0], &issued[0]));
+    for (p, n) in peers.iter().zip(&issued).skip(1) {
+        assert!(nonces.take(p, n));
+    }
 }

@@ -48,9 +48,10 @@ func TestHubDialsItsForwarder(t *testing.T) {
 // its refusal is the one reported.
 func TestHubRegistrationRefused(t *testing.T) {
 	cfg := HubConfig{
-		Link:    Link{Endpoint: netip.MustParseAddrPort("127.0.0.1:9")},
-		Cert:    func() tls.Certificate { return tls.Certificate{} },
-		Allowed: func(netip.Addr) bool { return false },
+		Link:        Link{Endpoint: netip.MustParseAddrPort("127.0.0.1:9")},
+		Credentials: func() [][]byte { return [][]byte{{0}} },
+		HubCert:     func() (tls.Certificate, error) { return tls.Certificate{}, nil },
+		Allowed:     func(netip.Addr) bool { return false },
 	}
 	if err := registerOnce(context.Background(), cfg, func(Report) {}); !errors.Is(err, netguard.ErrOutside) {
 		t.Fatalf("registration: %v, want the address refused", err)

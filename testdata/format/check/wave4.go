@@ -235,7 +235,6 @@ func (m *manifest) files() bool { return len(m.parts) > 0 && m.parts[0].path != 
 // maps of 1 type 1..4, 2 path, 3 dir 1, 4 size, 5 sha256 of 32 bytes).
 func readManifest(x any) (*manifest, string) {
 	const bad = "content/manifest"
-	const maxInt = 1<<63 - 1
 	m, ok := x.(map[any]any)
 	if !ok || !only(m, 1, 2) {
 		return nil, bad
@@ -310,7 +309,6 @@ func readManifest(x any) (*manifest, string) {
 // whole is at most 1 GiB.
 func (m *manifest) validate() string {
 	const bad = "manifest"
-	const maxMedia = 1 << 30
 	files := m.files()
 	if len(m.parts) == 0 || len(m.parts) > 10000 || (!files && len(m.parts) > 8) {
 		return bad
@@ -347,7 +345,7 @@ func (m *manifest) validate() string {
 		}
 		sum += p.size
 	}
-	if paths > 512<<10 || sum != m.size || sum > maxMedia {
+	if paths > 2<<20 || sum != m.size || sum > maxMedia {
 		return bad
 	}
 	if files {
@@ -566,7 +564,7 @@ func savePath(path string) string {
 }
 
 func fileNameOK(name string) bool {
-	if name == "" || len(name) > 255 || len(saveName(name)) > 255 || name == "." || name == ".." ||
+	if name == "" || len(name) > 765 || len(saveName(name)) > 765 || name == "." || name == ".." ||
 		strings.ContainsAny(name, "/\\:*?\"<>|") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") ||
 		reserved(name) {
 		return false
@@ -580,7 +578,7 @@ func fileNameOK(name string) bool {
 }
 
 func pathOK(path string) bool {
-	if path == "" || len(path) > 4096 || len(savePath(path)) > 4096 {
+	if path == "" || len(path) > 16384 || len(savePath(path)) > 16384 {
 		return false
 	}
 	for _, n := range strings.Split(path, "/") {
@@ -628,7 +626,7 @@ func commandVerdict(body []byte, m map[any]any) string {
 	if !ok {
 		return "commands/time"
 	}
-	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 30000 {
+	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 600000 {
 		return "commands/expires"
 	}
 	if !bs(m, 10, 16) {
@@ -740,9 +738,9 @@ func ordersVerdict(t uint64, b []byte) string {
 			return "take"
 		}
 		txt, ok := o[uint64(13)].(string)
-		limit := 1 << 20
+		limit := maxPasteText
 		if way == 2 {
-			limit = 4096
+			limit = maxTypedText
 		}
 		if !ok || hasCopy || len(txt) < 1 || len(txt) > limit {
 			return "orders/paste"
@@ -785,8 +783,9 @@ func ordersVerdict(t uint64, b []byte) string {
 }
 
 // hubOrders: 13 `off` (flag, alone), or any of 10 the hub to use
-// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 texts, each once),
-// 12 its clients (a set of 1 to 256 [ID 16, key 32, psk 32]); not empty.
+// [endpoint, key of 32 bytes], 11 forwarders (1 to 8 [address, pin of 32
+// bytes], each address once); 12 (the clients) is retired and refused;
+// not empty.
 func hubOrders(o map[any]any) string {
 	const bad = "orders/hub"
 	if x, there := o[uint64(13)]; there {
@@ -811,28 +810,20 @@ func hubOrders(o map[any]any) string {
 		}
 		once := map[string]bool{}
 		for _, e := range a {
-			if !plainText(e, 255) || once[e.(string)] {
+			f, ok := e.([]any)
+			if !ok || len(f) != 2 || !plainText(f[0], 255) || once[f[0].(string)] {
 				return bad
 			}
-			once[e.(string)] = true
+			if pin, ok := f[1].([]byte); !ok || len(pin) != 32 {
+				return bad
+			}
+			once[f[0].(string)] = true
 		}
 	}
-	if x, there := o[uint64(12)]; there {
-		a, ok := x.([]any)
-		if !ok || len(a) == 0 || len(a) > 256 || !sortedSet(a) {
-			return bad
-		}
-		for _, e := range a {
-			c, ok := e.([]any)
-			if !ok || len(c) != 3 {
-				return bad
-			}
-			for i, n := range []int{16, 32, 32} {
-				if b, ok := c[i].([]byte); !ok || len(b) != n {
-					return bad
-				}
-			}
-		}
+	// 12, the clients with their pre-shared keys, is retired: a client
+	// sends its key by `tunnel`, and the pre-shared key is never sent.
+	if _, there := o[uint64(12)]; there {
+		return bad
 	}
 	if only(o) {
 		return bad
@@ -842,11 +833,12 @@ func hubOrders(o map[any]any) string {
 
 // statementVerdict: a keys statement (section 5). What every type has is
 // read first; a later type, a critical field this version does not define
-// or a second signer is held ("hold", passed on as it is, never used), and
-// so is a sealing key of a later algorithm; an algorithm this version
-// knows that is not X-Wing is refused.
-func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
-	if len(body) > 2048 {
+// is held ("hold", passed on as it is, never used), and so is a sealing key
+// of a later algorithm; an algorithm this version knows that is not X-Wing
+// is refused. A second signer of a later version is taken on the first
+// signature alone.
+func statementVerdict(body []byte, m map[any]any) string {
+	if len(body) > 32768 {
 		return "env/size"
 	}
 	if t, ok := u(m, 1); !ok || t < 1 {
@@ -861,7 +853,10 @@ func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
 	if e, ok := u(m, 4); !ok || e < 1 {
 		return "statements/epoch"
 	}
-	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 10) || sig2 {
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "statements/signer2"
+	}
+	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 8, 10) {
 		return "hold"
 	}
 	if x, there := m[uint64(6)]; there {
@@ -911,8 +906,11 @@ func beaconVerdict(body []byte, m map[any]any) string {
 	if len(body) > 512 {
 		return "env/size"
 	}
-	if !only(m, 1, 2, 3, 4, 6, 10, 11) {
+	if !only(m, 1, 2, 3, 4, 6, 8, 10, 11) {
 		return "form/critical"
+	}
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "beacons/signer2"
 	}
 	if t, _ := u(m, 1); t != 1 {
 		return "beacons/type"
@@ -932,7 +930,7 @@ func beaconVerdict(body []byte, m map[any]any) string {
 	if !bs(m, 10, 32) {
 		return "beacons/digest"
 	}
-	if c, ok := u(m, 11); !ok || c < 1 || c > 4096 {
+	if c, ok := u(m, 11); !ok || c < 1 || c > 7168 {
 		return "beacons/count"
 	}
 	return "take"
@@ -971,7 +969,7 @@ func checkWave4(dir string) {
 			fail("wave4 statements %s: %v", h.Name, err)
 			continue
 		}
-		if got := statementVerdict(body, m, false); got != h.Verdict {
+		if got := statementVerdict(body, m); got != h.Verdict {
 			fail("wave4 statements %s: %q, want %q", h.Name, got, h.Verdict)
 		}
 		count++
@@ -979,7 +977,12 @@ func checkWave4(dir string) {
 	for _, b := range f.Beacons {
 		m, body, err := envelope(unhex(b.Envelope), f.Labels["beacon"], bySignerHash)
 		if err != nil {
-			fail("wave4 beacons %s: %v", b.Name, err)
+			// The envelope's own rules (a second signature over its
+			// ceiling) come before the beacon's.
+			if err.Error() != b.Verdict {
+				fail("wave4 beacons %s: %v", b.Name, err)
+			}
+			count++
 			continue
 		}
 		if got := beaconVerdict(body, m); got != b.Verdict {
@@ -1133,7 +1136,7 @@ func checkMutants(dir string, f *wave4File) {
 			case "commands":
 				return commandVerdict(body, m)
 			case "statements":
-				return statementVerdict(body, m, len(env) == 3)
+				return statementVerdict(body, m)
 			case "beacons":
 				return beaconVerdict(body, m)
 			}

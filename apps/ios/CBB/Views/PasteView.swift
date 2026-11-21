@@ -115,7 +115,7 @@ struct PasteView: View {
 
     /// The picture as the group carries it: its own bytes when they are
     /// PNG, JPEG or GIF, else converted.
-    private static func image(_ data: Data, _ image: UIImage) -> Images.Copied? {
+    static func image(_ data: Data, _ image: UIImage) -> Images.Copied? {
         if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return Images.Copied(type: "image/png", data: data) }
         if data.starts(with: [0xFF, 0xD8, 0xFF]) { return Images.Copied(type: "image/jpeg", data: data) }
         if data.starts(with: Array("GIF8".utf8)) { return Images.Copied(type: "image/gif", data: data) }

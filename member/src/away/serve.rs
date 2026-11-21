@@ -31,7 +31,7 @@ const MOVE_LINGER: Duration = Duration::from_secs(1);
 
 /// The pins of the project's forwarder's key this release knows, as Go's
 /// forward.projectPins, and what stands for them in a hub request.
-const PROJECT_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
+pub(super) const PROJECT_PINS: &[&str] = crate::faces::PROJECT_FORWARDER_PINS;
 const PROJECT_KEY: &str = "default";
 
 /// The hub while it serves.
@@ -154,9 +154,7 @@ impl Away {
                 cur.as_ref().filter(|s| s.is_hub).ok_or_else(|| Error::msg("this device is no hub of the group"))?;
             let next = st.hubs_to_try(&order).into_iter().find(|h| h.device != self.me.as_str());
             if next.is_none() && !anyway {
-                return Err(Error::msg(
-                    "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes",
-                ));
+                return Err(Error::msg(super::NO_OTHER_HUB));
             }
             let psks: Vec<(String, Vec<u8>)> = st
                 .members
@@ -274,6 +272,14 @@ impl Away {
         if self.serving.lock().unwrap().is_some() {
             return;
         }
+        // The keys for the server credentials' periods are made before the
+        // hub listens: made just after, at the run loop's first check,
+        // rotate_hub_key would end the first clients' connections to give
+        // them the new offer, and a client tries the hubs above this one,
+        // which may be off, before this one again.
+        self.rotate_hub_key(node);
+        let fresh = self.st.lock().unwrap().clone();
+        let st = fresh.as_ref().unwrap_or(st);
         match self.start_hub(node, st) {
             Ok(s) => {
                 *self.serving.lock().unwrap() = Some(s);
@@ -338,30 +344,21 @@ impl Away {
         Ok(Serving { forwarding, hub, since: Instant::now() })
     }
 
-    /// Keeps the hub registered with its forwarder while it serves, as Go's
-    /// registerForwarderLocked: with its member certificate, the roots and
-    /// the group's records, which show the forwarder it is the root or an
-    /// admin, and hellos from its WireGuard port.
-    fn register(&self, node: &Arc<Node>, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
-        let super::meet::Shown { key, chain } = super::meet::shown(node)?;
-        let records = super::meet::node_records(node);
+    /// Keeps the hub registered with its forwarder while it serves. The
+    /// forwarder takes a hub of 0.6 alone (`cbb-forward/3`, by the hubs'
+    /// credential of its face): a hub of a group of 0.5 shows the waiting
+    /// status ([`forward::NOT_LISTED`]) until its group is set up on 0.6.
+    fn register(&self, _node: &Arc<Node>, st: &State, f: &Forwarder, hub: &Hub) -> Result<Forwarding> {
         let pins =
             if f.project { PROJECT_PINS.iter().map(|p| pin_bytes(p)).collect() } else { vec![pin_bytes(&f.pin)] };
         let cfg = forward::Config {
             endpoint: f.endpoint,
             pins: pins.into_iter().collect::<Result<_>>()?,
-            chain,
-            key,
             wg_key: st.serving_key()?,
             obfuscation: st.obfuscation.clone(),
             vless_id: Some(f.vless_id.clone()).filter(|id| !id.is_empty()),
-            records: Arc::new(Mutex::new(records)),
             send: hub.sender(),
-            credential: self.credentials.lock().unwrap().clone().map(|c| {
-                let n = Arc::downgrade(node);
-                let f: forward::CredentialFn = Arc::new(move || c.hub(&*n.upgrade()?));
-                f
-            }),
+            credential: None,
             ways: Default::default(),
             learned: Default::default(),
         };
@@ -376,11 +373,15 @@ impl Away {
     /// registered the hub without VLESS has none: the hub then offers UDP
     /// alone rather than wait for settings that never come.
     pub(super) fn vless_learned(&self, node: &Node) {
-        let (registered, got) = {
+        let (registered, got, error) = {
             let serving = self.serving.lock().unwrap();
             let report = serving.as_ref().and_then(|s| s.forwarding.as_ref()).map(|f| f.report.lock().unwrap().clone());
-            report.map_or((false, None), |r| (r.registered, r.vless))
+            report.map_or((false, None, None), |r| (r.registered, r.vless, r.error))
         };
+        if error.is_some_and(|e| e.contains(forward::VLESS_ID_TAKEN)) {
+            self.vless_id_taken(node);
+            return;
+        }
         let Some(v) = got else {
             if registered {
                 self.no_vless(node);
@@ -407,6 +408,30 @@ impl Away {
         node.reconnect();
     }
 
+    /// Takes a new VLESS user ID when the forwarder holds the hub's for
+    /// another group, so that the hub keeps its way over VLESS for the period
+    /// rather than ask for that one again: it registers again with the new
+    /// one and the members connect again for the offer with it.
+    fn vless_id_taken(&self, node: &Node) {
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return };
+        let mut next = st.clone();
+        if !next.new_vless_id() {
+            return;
+        }
+        self.stop_serving();
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return;
+        }
+        *st = next;
+        drop(cur);
+        (self.log)(
+            "cbb: sync away from home: the forwarder holds the hub's VLESS user ID for another group; the hub takes a new one",
+        );
+        node.reconnect();
+    }
+
     /// Forgets the VLESS user ID of a forwarder that has no VLESS, so that
     /// the hub's offer goes out without it.
     fn no_vless(&self, node: &Node) {
@@ -429,12 +454,12 @@ impl Away {
         node.reconnect();
     }
 
-    /// Gives the hub a new WireGuard key for its clients in each period of
-    /// the group's server credentials (docs/protocol.md, section 11, "The
-    /// hub's key"), as Go's rotateHubKey: when a period starts, the next
-    /// key, which its offers carry from then on, and hub_key_ahead later
-    /// that key in place of the old one, with which the hub starts again
-    /// and registers again on its forwarder.
+    /// Gives the hub a new WireGuard key, AmneziaWG settings and VLESS user
+    /// ID for its clients in each period of the group's server credentials
+    /// (docs/protocol.md, section 11, "The hub's key"): the next ones, which
+    /// its offers carry ahead of time, take over when a new period comes
+    /// (at least hub_key_ahead after they were made), and the hub starts
+    /// again with them and registers again on its forwarder.
     pub(super) fn rotate_hub_key(&self, node: &Node) {
         let creds = self.credentials.lock().unwrap().clone();
         let period = creds.and_then(|c| c.period_tag(node)).unwrap_or_default();
@@ -442,6 +467,8 @@ impl Away {
         let mut cur = self.st.lock().unwrap();
         let Some(st) = cur.as_mut() else { return };
         let mut next = st.clone();
+        // Only a hub that serves has clients to give the new offer to.
+        let serving = self.serving.lock().unwrap().is_some();
         let (changed, switched) = match next.rotate(&period, crate::uptime::wall_ms(), ahead) {
             Ok(r) => r,
             Err(e) => {
@@ -455,8 +482,8 @@ impl Away {
         // The hub starts again with the new key before the state says so, so
         // a state on disk never names a key the hub does not serve with yet;
         // a hub that stops in between switches again at its next check.
-        if switched && self.serving.lock().unwrap().is_some() {
-            (self.log)("cbb: the hub serves with its key for the new period from now on");
+        if switched && serving {
+            (self.log)("cbb: the hub serves with its key and settings for the new period from now on");
             self.stop_serving();
         }
         if let Err(e) = next.save(&self.dir) {
@@ -466,7 +493,41 @@ impl Away {
         *st = next;
         drop(cur);
         // The clients take the new offer as they connect again.
-        node.reconnect();
+        if serving {
+            node.reconnect();
+        }
+    }
+
+    /// The hub of 0.6 at the period of its forwarder's face (`period`, the
+    /// face's tag in hex; docs/protocol.md, section 11, "The hub's key"):
+    /// it holds the next key and settings, and serves with them once due
+    /// (`State::rotate`). Gives whether they changed, for the clients to
+    /// take the new offer, and whether the hub serves with the next key now,
+    /// for its tunnel to start again.
+    pub fn rotate_live(&self, period: &str) -> (bool, bool) {
+        let ahead = i64::try_from(hub_key_ahead().as_millis()).unwrap_or(i64::MAX);
+        let mut cur = self.st.lock().unwrap();
+        let Some(st) = cur.as_mut() else { return (false, false) };
+        let mut next = st.clone();
+        let (changed, switched) = match next.rotate(period, crate::uptime::wall_ms(), ahead) {
+            Ok(r) => r,
+            Err(e) => {
+                (self.log)(&format!("cbb: {}", e.for_log()));
+                return (false, false);
+            }
+        };
+        if !changed {
+            return (false, false);
+        }
+        if let Err(e) = next.save(&self.dir) {
+            (self.log)(&format!("cbb: saving the tunnel state: {}", e.for_log()));
+            return (false, false);
+        }
+        if switched {
+            (self.log)("cbb: the hub serves with its key and settings for the new period from now on");
+        }
+        *st = next;
+        (true, switched)
     }
 
     /// Stops the hub, with every connection through it.
@@ -507,6 +568,29 @@ impl Away {
                 .map(|f| control::Forwarder { endpoint: f.endpoint.to_string(), ..Default::default() }),
         };
     }
+}
+
+/// The credential a hub that serves with its key for the period serving_for
+/// registers with, while the period now is that of the credential `now` gives:
+/// that one while they agree (or before the hub's first period), which it
+/// keeps in held; once they differ, the one it kept, so that it stays under
+/// its period until it switches. A hub that started again meanwhile kept none
+/// and takes the new period's. The hub on a group of 0.6 takes its hubs'
+/// credential through it once away from home runs on that group (wave 5,
+/// item D); until then a hub registers with none and waits.
+#[allow(dead_code)]
+fn credential_for<T: Clone>(
+    serving_for: &str,
+    period: Option<&str>,
+    held: &Mutex<Option<T>>,
+    now: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    if serving_for.is_empty() || period == Some(serving_for) {
+        let now = now();
+        held.lock().unwrap().clone_from(&now);
+        return now;
+    }
+    held.lock().unwrap().clone().or_else(now)
 }
 
 /// The tunnel address the connection from the loopback port from_port came
@@ -577,6 +661,8 @@ pub(super) fn own_offer(st: &State, psk: &[u8]) -> Option<TunnelOffer> {
         obfuscation: st.obfuscation.clone(),
         vless: st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty()).and_then(|f| f.vless.clone()),
         next_key: st.next_public(),
+        next_obfuscation: st.next_obfuscation(),
+        next_vless: st.next_vless(),
         ..Default::default()
     })
 }
@@ -589,6 +675,8 @@ pub(super) fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
         obfuscation: h.obfuscation.clone(),
         vless: h.vless.clone(),
         next_key: h.next.clone(),
+        next_obfuscation: h.next_obfuscation.clone(),
+        next_vless: h.next_vless.clone(),
         ..Default::default()
     }
 }
@@ -616,7 +704,7 @@ pub(super) fn hub_addrs(addrs: &[String], forwarder: bool) -> Result<Vec<SocketA
 /// Whether a hub that could not register with its forwarder (failed)
 /// should be told its list of entry points is out of date: the forwarder
 /// is the project's and this device holds no list that has not expired.
-fn entries_stale(project: bool, failed: bool, entries_held: bool) -> bool {
+pub(super) fn entries_stale(project: bool, failed: bool, entries_held: bool) -> bool {
     failed && project && !entries_held
 }
 
@@ -667,7 +755,7 @@ fn vless_for(f: &mut Forwarder, vless: bool, old: Option<&Forwarder>) {
 }
 
 /// A forwarder's pin: SHA-256 of its key, 44 characters of base64.
-fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
+pub(super) fn pin_bytes(pin: &str) -> Result<[u8; 32]> {
     use base64::Engine as _;
     let e = base64::engine::general_purpose::STANDARD;
     e.decode(pin).ok().filter(|b| e.encode(b) == pin).and_then(|b| <[u8; 32]>::try_from(b).ok()).ok_or_else(|| {
@@ -688,9 +776,11 @@ pub(super) fn unmapped(ep: SocketAddr) -> SocketAddr {
 
 /// A short message for status of why the hub is not registered, as Go's
 /// forwarderProblem; the whole error goes to the detail.
-fn forwarder_problem(detail: &str) -> String {
+pub(super) fn forwarder_problem(detail: &str) -> String {
     if detail.is_empty() {
         String::new()
+    } else if detail.contains(forward::NOT_LISTED) {
+        forward::NOT_LISTED.to_string()
     } else if let Some(i) = detail.find("the forwarder refused the registration") {
         detail[i..].to_string()
     } else if detail.contains("pin") {
@@ -700,14 +790,13 @@ fn forwarder_problem(detail: &str) -> String {
     }
 }
 
-/// How long before the hub serves with its key for a new period its offers
-/// give its clients that key, as Go's hubKeyAhead: three days, or
-/// CBB_HUB_KEY_AHEAD seconds, which tests set shorter.
+/// How long before the hub serves with its key and settings for a new
+/// period its offers give its clients them, as Go's hubKeyAhead: three days,
+/// or CBB_TEST_HUB_KEY_AHEAD seconds, which tests set shorter.
 fn hub_key_ahead() -> Duration {
     static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *AHEAD.get_or_init(|| {
-        let s = std::env::var("CBB_HUB_KEY_AHEAD")
-            .ok()
+        let s = crate::testbuild::env("CBB_TEST_HUB_KEY_AHEAD")
             .and_then(|v| v.parse().ok())
             .unwrap_or(cbb_core::benchtime::d(3 * 24 * 3600) as u64);
         Duration::from_secs(s)
@@ -717,6 +806,25 @@ fn hub_key_ahead() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The hub stays under the period it serves with until it switches;
+    /// one that started again in between has kept nothing and takes the
+    /// new period's credential.
+    #[test]
+    fn registers_under_the_period_it_serves() {
+        let held = Mutex::new(None);
+        assert_eq!(credential_for("", Some("p1"), &held, || Some("c1")), Some("c1"), "before the first period");
+        assert_eq!(credential_for("p1", Some("p1"), &held, || Some("c1v2")), Some("c1v2"), "a newer one of the period");
+        assert_eq!(
+            credential_for("p1", Some("p2"), &held, || Some("c2")),
+            Some("c1v2"),
+            "a new period, not switched yet"
+        );
+        assert_eq!(credential_for("p2", Some("p2"), &held, || Some("c2")), Some("c2"), "switched");
+        let restarted = Mutex::new(None);
+        assert_eq!(credential_for("p2", Some("p3"), &restarted, || Some("c3")), Some("c3"), "started again in between");
+        assert_eq!(credential_for::<&str>("p2", None, &Mutex::new(None), || None), None);
+    }
 
     /// The project's forwarder: the command line sends its resolved address
     /// and "default", and the hub takes the first pin it knows; a pin of it

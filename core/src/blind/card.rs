@@ -87,15 +87,14 @@ impl Card {
     /// key in it.
     pub fn read(b: &[u8]) -> Result<Card, Rule> {
         let env = Envelope::parse_limited(b, MAX_BODY)?;
-        if env.sig2.is_some() {
-            return Err(Rule::FORM_CRITICAL);
-        }
         let m = &env.map;
         for (k, _) in m.as_map().unwrap_or(&[]) {
-            if !matches!(k, 1 | 3 | 4 | 7 | 10..=14) && *k < 256 {
+            if !matches!(k, 1 | 3 | 4 | 7 | 8 | 10..=14) && *k < 256 {
                 return Err(Rule::FORM_CRITICAL);
             }
         }
+        // A second signature is taken on the first alone, which covers it.
+        crate::format::envelope::signer2(m, Rule::field("card/signer2"))?;
         if m.get(1).and_then(Value::as_uint) != Some(1) {
             return Err(RULE_SHAPE);
         }
@@ -127,15 +126,21 @@ impl Card {
             }
             keys.push(k.public.to_vec());
         }
-        let kinds = m.get(13).and_then(Value::as_uint).ok_or(RULE_KINDS)?;
-        if kinds == 0 || kinds & !(KIND_FORWARDER | KIND_RELAY) != 0 {
+        // Bits this version does not know are ignored and grant nothing; a
+        // card with no kind this version knows is of no use to it.
+        let kinds = m.get(13).and_then(Value::as_uint).filter(|k| *k != 0).ok_or(RULE_KINDS)?;
+        let kinds = kinds & (KIND_FORWARDER | KIND_RELAY);
+        if kinds == 0 {
             return Err(RULE_KINDS);
         }
         let paths = match m.get(14) {
             None => 0,
+            // Ways given, none this version knows: refused, never read as
+            // "not said".
             Some(p) => p
                 .as_uint()
-                .filter(|p| *p != 0 && p & !(PATH_WIREGUARD | PATH_AMNEZIAWG | PATH_VLESS) == 0)
+                .map(|p| p & (PATH_WIREGUARD | PATH_AMNEZIAWG | PATH_VLESS))
+                .filter(|p| *p != 0)
                 .ok_or(RULE_PATHS)?,
         };
         env.verify(op.public, LABEL_SERVER_CARD)?;
@@ -199,12 +204,15 @@ fn valid_endpoint(t: &str) -> bool {
 
 /// Whether an IPv4 address may stand in a card: none of this network
 /// (0/8), private (10/8, 172.16/12, 192.168/16), shared (100.64/10),
-/// loopback (127/8), link-local (169.254/16), multicast (224/4) or
-/// reserved (240/4).
+/// loopback (127/8), link-local (169.254/16), IETF protocol assignments
+/// (192.0.0/24), benchmarking (198.18/15), multicast (224/4) or reserved
+/// (240/4).
 fn public_v4(a: core::net::Ipv4Addr) -> bool {
-    let [x, y, ..] = a.octets();
+    let [x, y, z, _] = a.octets();
     !(x == 0
         || x == 10
+        || (x == 192 && y == 0 && z == 0)
+        || (x == 198 && (y == 18 || y == 19))
         || x == 127
         || x >= 224
         || (x == 172 && (16..32).contains(&y))
@@ -213,13 +221,15 @@ fn public_v4(a: core::net::Ipv4Addr) -> bool {
         || (x == 169 && y == 254))
 }
 
-/// Whether an address may stand in a card, which is for a public server:
-/// a public IPv4 address ([`public_v4`]), or an IPv6 address that is not
-/// loopback, unspecified, multicast, link-local, site-local (fec0::/10) or
-/// unique-local (fc00::/7), nor carries a refused IPv4 address in a
-/// translated (::ffff:0:0/96), NAT64 (64:ff9b::/96) or 6to4 (2002::/16)
-/// form.
-fn public_ip(ip: core::net::IpAddr) -> bool {
+/// Whether an address may stand in a card, which is for a public server
+/// (and is the rule of the address the push service dials): a public IPv4
+/// address ([`public_v4`]), or an IPv6 address that is not loopback,
+/// unspecified, multicast, link-local, site-local (fec0::/10),
+/// unique-local (fc00::/7), IPv4-compatible (::/96), NAT64 of local use
+/// (64:ff9b:1::/48) or Teredo (2001::/32), nor carries a refused IPv4
+/// address in a mapped (::ffff:0:0/96), translated (::ffff:0:0:0/96),
+/// NAT64 (64:ff9b::/96) or 6to4 (2002::/16) form.
+pub fn public_ip(ip: core::net::IpAddr) -> bool {
     match ip {
         core::net::IpAddr::V4(v4) => public_v4(v4),
         core::net::IpAddr::V6(v6) => {
@@ -234,6 +244,10 @@ fn public_ip(ip: core::net::IpAddr) -> bool {
                 || (first & 0xffc0) == 0xfe80
                 || (first & 0xffc0) == 0xfec0
                 || (first & 0xfe00) == 0xfc00
+                || s.get(..6) == Some(&[0, 0, 0, 0, 0, 0][..])
+                || s.get(..3) == Some(&[0x64, 0xff9b, 1][..])
+                || s.get(..2) == Some(&[0x2001, 0][..])
+                || (s.get(..6) == Some(&[0, 0, 0, 0, 0, 0xffff][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0, 0, 0, 0, 0xffff, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0x64, 0xff9b, 0, 0, 0, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (first == 0x2002 && !embedded(o.get(2..6).unwrap_or_default())))

@@ -1,6 +1,6 @@
 {
  "draft": "format-0.6-bytes.md, draft of 2026-11-11",
- "group_id": "045aa3345b2827e30d23ee5d5c1c5db3",
+ "group_id": "89cb7e6367ac75d7c5f7dc4322205bb9",
  "keys": [
   {
    "name": "root",
@@ -87,6 +87,13 @@
    "id16": "6e6f342f90285c4e933569c66d921e2f"
   }
  ],
- "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery)) (rule 33)",
- "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1"
+ "recovery2": {
+  "name": "recovery 2",
+  "seeds": "abfc82e4f73320826ad925b9fd0b5dc1be6c0e48cf1afc678c61dcfd2a82a75517245c9abc1458d111a022ad8d0bcd32",
+  "key": "8204582017245c9abc1458d111a022ad8d0bcd320f846e7ecf39a94272a69ba2483316d8",
+  "key_hash": "12baa30471beeb5d67b328e381baa9e02a7ca0b09663e050016bfa98b2c79e21",
+  "id16": "12baa30471beeb5d67b328e381baa9e0"
+ },
+ "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery) key(recovery2)) (rule 33, E-6)",
+ "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1; recovery2's seeds (sk_seed, sk_prf, pk_seed) = the first 48 bytes of SHA-512('cbb test key ' + name)"
 }

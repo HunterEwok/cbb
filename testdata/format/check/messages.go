@@ -6,13 +6,20 @@ package main
 import (
 	"bytes"
 	"crypto/elliptic"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // The messages wave 3 numbers (messages3.json): each read by the profile,
@@ -63,6 +70,10 @@ func tyOK(ty string, v any) bool {
 		}
 		n, _ := strconv.Atoi(w[1])
 		return len(b) == n
+	case "id":
+		b, ok := v.([]byte)
+		n, _ := strconv.Atoi(w[1])
+		return ok && len(b) == n && !bytes.Equal(b, make([]byte, n))
 	case "text":
 		s, ok := v.(string)
 		_, hi := upTo(w[1])
@@ -100,6 +111,27 @@ func tyOK(ty string, v any) bool {
 			return len(pub) == 32
 		}
 		return true
+	case "signer":
+		// A key where a signature key is wanted: ES256 checked, a key
+		// exchange's algorithm refused, an unknown one held.
+		a, ok := v.([]any)
+		if !ok || len(a) != 2 {
+			return false
+		}
+		alg, ok1 := a[0].(uint64)
+		pub, ok2 := a[1].([]byte)
+		_, hi := upTo(w[1])
+		if !ok1 || !ok2 || len(pub) == 0 || uint64(len(pub)) > hi {
+			return false
+		}
+		switch alg {
+		case 1:
+			x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+			return x != nil
+		case 0, 2, 3:
+			return false
+		}
+		return true
 	case "envelope":
 		a, ok := v.([]any)
 		if !ok || (len(a) != 2 && len(a) != 3) {
@@ -114,8 +146,14 @@ func tyOK(ty string, v any) bool {
 		if err != nil {
 			return false
 		}
-		_, ok = body.(map[any]any)
-		return ok
+		bm, ok := body.(map[any]any)
+		if !ok {
+			return false
+		}
+		// A second signature goes with signer2 (key 8) and only with it
+		// (section 3.1), at most 4096 bytes.
+		_, signer2 := bm[uint64(8)]
+		return signer2 == (len(a) == 3) && (len(a) == 2 || len(a[2].([]byte)) <= 4096)
 	case "array", "once", "set":
 		_, hi := upTo(w[1])
 		inner := strings.TrimPrefix(w[2], "of ")
@@ -151,6 +189,8 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
+	case "copy":
+		return copyRule([]byte(encOf(v))) == ""
 	}
 	panic("type " + ty)
 }
@@ -177,6 +217,12 @@ func checkTable(name string, v any) string {
 			return r.Rule
 		}
 	}
+	return betweenRule(name, m)
+}
+
+// betweenRule returns the rule between fields m breaks, its fields each in
+// range, or "".
+func betweenRule(name string, m map[any]any) string {
 	// The rules between fields of a map: AmneziaWG's junk sizes, and below
 	// the retired fields of a Welcome.
 	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {
@@ -198,9 +244,56 @@ func checkTable(name string, v any) string {
 			seen[e] = true
 		}
 	}
+	// The next key's settings and way go with that key and with the
+	// present ones.
+	if name == "offer" {
+		has := func(n uint64) bool { _, ok := m[n]; return ok }
+		if has(10) && (!has(7) || !has(3)) {
+			return "offer/next-obfuscation"
+		}
+		if has(11) && (!has(7) || !has(4)) {
+			return "offer/next-vless"
+		}
+	}
+	// A want asks for something.
+	if _, ids := m[uint64(2)]; name == "want" && !ids && m[uint64(3)] == nil {
+		return "want/empty"
+	}
+	// A root's fork is two records.
+	if fork, ok := m[uint64(3)].([]any); ok && name == "roots" && len(fork) != 2 {
+		return "roots/fork"
+	}
+	// The short code's commitment and nonces of earlier drafts.
+	for _, r := range []struct {
+		table string
+		n     uint64
+	}{{"pair/start", 4}, {"pair/reply", 4}, {"pair/confirm", 3}} {
+		if _, ok := m[r.n]; name == r.table && ok {
+			return r.table + "/retired"
+		}
+	}
 	// Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
 	if _, three := m[uint64(3)]; name == "welcome" && (three || m[uint64(8)] != nil) {
 		return "welcome/retired"
+	}
+	has := func(k uint64) bool { _, ok := m[k]; return ok }
+	// A Welcome's records ride in it or in parts, never both; a leaf's
+	// (with a grant) has neither digest nor parts, every other a digest.
+	if name == "welcome" {
+		switch {
+		case has(13) && (has(2) || has(10)):
+			return "welcome/parts"
+		case !has(13) && !has(2):
+			return "welcome/shape"
+		case has(6) && has(13):
+			return "welcome/parts"
+		case has(6) == has(12):
+			return "welcome/digest"
+		}
+	}
+	// A records message carries records, lists, or both.
+	if name == "records" && !has(2) && !has(3) {
+		return "records/shape"
 	}
 	return ""
 }
@@ -294,6 +387,30 @@ func checkMessages(dir string) {
 			} `json:"refuse"`
 		} `json:"invitations"`
 		Cards signedFile `json:"cards"`
+		Codes struct {
+			Label  string `json:"home_code_label"`
+			Prefix string `json:"channel_prefix"`
+			Home   []struct {
+				Name, Digits, Secret, Error string
+			} `json:"home_secret"`
+			Channel []struct {
+				Name, Member, Joiner, Invitation, Ci string
+			} `json:"channel_id"`
+		} `json:"codes"`
+		WelcomeParts struct {
+			DigestLabel string `json:"digest_label"`
+			KeyLabel    string `json:"tag_key_label"`
+			TagLabel    string `json:"tag_label"`
+			Digest      []struct {
+				Name      string   `json:"name"`
+				SetDigest string   `json:"set_digest"`
+				Lists     []string `json:"lists"`
+				Digest    string   `json:"digest"`
+			} `json:"digest"`
+			Tag []struct {
+				Name, Isk, Message, Welcome, Rule string
+			} `json:"tag"`
+		} `json:"welcome_parts"`
 	}
 	load(dir, "messages3.json", &f)
 	msgTables = f.Tables
@@ -395,8 +512,15 @@ func checkMessages(dir string) {
 				return "card/endpoints"
 			}
 		}
-		if k, ok := m[uint64(13)].(uint64); !ok || k == 0 || k&^3 != 0 {
+		// Bits of a later version are ignored; none this version knows
+		// refuses.
+		if k, ok := m[uint64(13)].(uint64); !ok || k == 0 || k&3 == 0 {
 			return "card/kinds"
+		}
+		if p, there := m[uint64(14)]; there {
+			if p, ok := p.(uint64); !ok || p&7 == 0 {
+				return "card/paths"
+			}
 		}
 		return ""
 	}
@@ -412,7 +536,91 @@ func checkMessages(dir string) {
 		}
 		count++
 	}
+	count += checkCodes(f.Codes.Label, f.Codes.Prefix, len(f.Codes.Home), func(i int) (string, string, string, string) {
+		c := f.Codes.Home[i]
+		return c.Name, c.Digits, c.Secret, c.Error
+	}, len(f.Codes.Channel), func(i int) (string, []byte, string) {
+		c := f.Codes.Channel[i]
+		ci := append([]byte("cbb pair channel v3\x00"), unhex(c.Member)...)
+		ci = append(ci, unhex(c.Joiner)...)
+		ci = append(ci, unhex(c.Invitation)...)
+		return c.Name, unhex(c.Invitation), hex.EncodeToString(ci) + "|" + c.Ci
+	})
+	count += checkWelcomeParts(f.WelcomeParts.DigestLabel, f.WelcomeParts.KeyLabel, f.WelcomeParts.TagLabel,
+		len(f.WelcomeParts.Digest), func(i int) (string, []byte, [][]byte, string) {
+			c := f.WelcomeParts.Digest[i]
+			var lists [][]byte
+			for _, l := range c.Lists {
+				lists = append(lists, unhex(l))
+			}
+			return c.Name, unhex(c.SetDigest), lists, c.Digest
+		}, len(f.WelcomeParts.Tag), func(i int) (string, []byte, []byte, string, string) {
+			c := f.WelcomeParts.Tag[i]
+			return c.Name, unhex(c.Isk), unhex(c.Message), c.Welcome, c.Rule
+		})
 	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
+}
+
+// checkCodes checks a home window's secret, from its six digits (owner,
+// 11-20), and CPace's channel identifier (11.1), each computed here from
+// its inputs. Six ASCII digits give SHA-256 of the label, a zero byte and
+// the digits; anything else gives no secret. The channel identifier takes
+// the invitation ID, 16 bytes; every case gives a value of its own. Each
+// home case returns its name, digits, secret and error; each channel case
+// its name, its ID and "computed|vector".
+func checkCodes(label, prefix string, nHome int, home func(int) (string, string, string, string),
+	nChannel int, channel func(int) (string, []byte, string)) int {
+	if label != "cbb pair home code v1" || prefix != "cbb pair channel v3" {
+		fail("codes: label %q, prefix %q", label, prefix)
+	}
+	n := 0
+	if nHome < 4 {
+		fail("codes: %d home cases", nHome)
+	}
+	seen := map[string]string{}
+	for i := 0; i < nHome; i++ {
+		name, digits, secret, errText := home(i)
+		six := len(digits) == 6
+		for _, b := range []byte(digits) {
+			six = six && b >= '0' && b <= '9'
+		}
+		if !six {
+			if secret != "" || errText != "not six digits" {
+				fail("codes %s: want no secret for %q", name, digits)
+			}
+			n++
+			continue
+		}
+		d := sha256.Sum256(append([]byte(label+"\x00"), digits...))
+		if got := hex.EncodeToString(d[:]); got != secret || errText != "" {
+			fail("codes %s: %s, want %s", name, got, secret)
+		}
+		if other, ok := seen[secret]; ok {
+			fail("codes %s: the same secret as %s", name, other)
+		}
+		seen[secret] = name
+		n++
+	}
+	if nChannel < 3 {
+		fail("codes: %d channel cases", nChannel)
+	}
+	seen = map[string]string{}
+	for i := 0; i < nChannel; i++ {
+		name, id, both := channel(i)
+		got, want, _ := strings.Cut(both, "|")
+		if len(id) != 16 {
+			fail("codes %s: an invitation ID of %d bytes", name, len(id))
+		}
+		if got != want {
+			fail("codes %s: %s, want %s", name, got, want)
+		}
+		if other, ok := seen[got]; ok {
+			fail("codes %s: the same value as %s", name, other)
+		}
+		seen[got] = name
+		n++
+	}
+	return n
 }
 
 // addrOK reports whether s is an addr in its one canonical text (RFC 5952
@@ -453,17 +661,18 @@ func endpointOK(s string) bool {
 }
 
 // publicV4 reports whether an IPv4 address is none of this network, private,
-// shared, loopback, link-local, multicast or reserved.
+// shared, loopback, link-local, IETF protocol assignments, benchmarking,
+// multicast or reserved.
 func publicV4(b [4]byte) bool {
-	x, y := b[0], b[1]
-	return !(x == 0 || x == 10 || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
+	x, y, z := b[0], b[1], b[2]
+	return !(x == 0 || x == 10 || (x == 192 && y == 0 && z == 0) || (x == 198 && (y == 18 || y == 19)) || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
 		(x == 192 && y == 168) || (x == 100 && y >= 64 && y < 128) || (x == 169 && y == 254))
 }
 
 // publicIP reports whether a card may name the address: a public IPv4
 // address, or an IPv6 address that is not loopback, unspecified, multicast,
 // link-local, site-local or unique-local, nor a refused IPv4 address in a
-// translated, NAT64 or 6to4 form.
+// mapped, translated, NAT64 or 6to4 form.
 func publicIP(a netip.Addr) bool {
 	if a.Is4() {
 		return publicV4(a.As4())
@@ -476,6 +685,11 @@ func publicIP(a netip.Addr) bool {
 		return false
 	case first&0xffc0 == 0xfe80, first&0xffc0 == 0xfec0, first&0xfe00 == 0xfc00:
 		return false
+	// IPv4-compatible, NAT64 of local use, Teredo.
+	case bytes.Equal(p[:12], make([]byte, 12)), bytes.Equal(p[:6], []byte{0, 0x64, 0xff, 0x9b, 0, 1}), bytes.Equal(p[:4], []byte{0x20, 0x01, 0, 0}):
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}) && !v4(p[12:]):
+		return false
 	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0}) && !v4(p[12:]):
 		return false
 	case bytes.Equal(p[:12], []byte{0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0}) && !v4(p[12:]):
@@ -484,4 +698,71 @@ func publicIP(a netip.Addr) bool {
 		return false
 	}
 	return true
+}
+
+// checkWelcomeParts checks the Welcome's digest and its tag Tw
+// (plans/second-builder/welcome-in-parts.md), each computed here: the
+// digest over a set's digest, the count of its lists and their hashes,
+// sorted; Tw = HMAC-SHA-512(HMAC-SHA-512(ISK, key label 0x00), tag label
+// 0x00 ‖ field 3's bytes as they stand in message 67).
+func checkWelcomeParts(digestLabel, keyLabel, tagLabel string, nDigest int,
+	digest func(int) (string, []byte, [][]byte, string), nTag int,
+	tag func(int) (string, []byte, []byte, string, string)) int {
+	if digestLabel != "cbb welcome digest v1" || keyLabel != "cbb welcome key v1" || tagLabel != "cbb welcome v1" {
+		fail("welcome parts: labels %q %q %q", digestLabel, keyLabel, tagLabel)
+	}
+	n := 0
+	if nDigest < 3 || nTag < 6 {
+		fail("welcome parts: %d digests, %d tags", nDigest, nTag)
+	}
+	for i := 0; i < nDigest; i++ {
+		name, set, lists, want := digest(i)
+		var hs [][]byte
+		for _, l := range lists {
+			h := sha256.Sum256(append([]byte("cbb recovery list v3\x00"), l...))
+			hs = append(hs, h[:])
+		}
+		sort.Slice(hs, func(a, b int) bool { return bytes.Compare(hs[a], hs[b]) < 0 })
+		h := sha256.New()
+		h.Write([]byte(digestLabel + "\x00"))
+		h.Write(set)
+		var count [4]byte
+		binary.BigEndian.PutUint32(count[:], uint32(len(hs)))
+		h.Write(count[:])
+		for _, x := range hs {
+			h.Write(x)
+		}
+		if got := hex.EncodeToString(h.Sum(nil)); got != want {
+			fail("welcome digest %s: %s, want %s", name, got, want)
+		}
+		n++
+	}
+	for i := 0; i < nTag; i++ {
+		name, isk, msg, welcome, rule := tag(i)
+		var m map[uint64]cbor.RawMessage
+		if err := cbor.Unmarshal(msg, &m); err != nil {
+			fail("welcome tag %s: %v", name, err)
+			continue
+		}
+		got := ""
+		w, tw := []byte(m[3]), []byte(nil)
+		if raw, ok := m[4]; ok {
+			if err := cbor.Unmarshal(raw, &tw); err != nil {
+				got = "pair/welcome/tw"
+			}
+		}
+		k := hmac.New(sha512.New, isk)
+		k.Write([]byte(keyLabel + "\x00"))
+		t := hmac.New(sha512.New, k.Sum(nil))
+		t.Write([]byte(tagLabel + "\x00"))
+		t.Write(w)
+		if got == "" && (tw == nil || !hmac.Equal(tw, t.Sum(nil))) {
+			got = "pair/welcome/tw"
+		}
+		if got != rule || (rule == "" && hex.EncodeToString(w) != welcome) {
+			fail("welcome tag %s: %q, want %q", name, got, rule)
+		}
+		n++
+	}
+	return n
 }

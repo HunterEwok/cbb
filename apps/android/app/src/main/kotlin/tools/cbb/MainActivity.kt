@@ -15,6 +15,12 @@ import kotlinx.coroutines.launch
 /** The app: one model for every screen, and later for the service and the tile. */
 class CBBApp : Application() {
     val model: AppModel by lazy { AppModel(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Push while the app is closed: the platform's token, when on.
+        runCatching { PushSetup.start(this) }.onFailure { PushSetup.failed(this, it) }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -28,7 +34,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // adb shell am start -n tools.cbb/tools.cbb.MainActivity --ez ShowErrorDetails true
-        if (intent.hasExtra(Settings.ERROR_DETAILS)) model.settings.showsErrorDetails = intent.getBooleanExtra(Settings.ERROR_DETAILS, false)
+        // Any app can start this activity with extras, so a release build
+        // takes the switch in Settings only.
+        if (model.settings.takesErrorDetailsExtra && intent.hasExtra(Settings.ERROR_DETAILS)) {
+            model.settings.showsErrorDetails = intent.getBooleanExtra(Settings.ERROR_DETAILS, false)
+        }
         enableEdgeToEdge()
         setContent { Root(model) }
     }

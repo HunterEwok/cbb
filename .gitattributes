@@ -1,3 +1,5 @@
 # Tests compare these files byte for byte, also in a Windows checkout,
 # where Git would otherwise turn their line ends into CR LF.
 testdata/** -text
+# The core's bounds test reads protocol.md's table and writes it back.
+docs/protocol.md -text

@@ -16,13 +16,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
-
 use super::Away;
 use crate::certs::DeviceId;
 use crate::control::{self, Header};
 use crate::error::{Context, Error, Result};
-use crate::identity::ExternalKey;
 use crate::node::{Admit, Node};
 use crate::relay::{self, Relay, Report};
 use crate::tunnel::{Forwarder, State};
@@ -30,10 +27,10 @@ use crate::tunnel::{Forwarder, State};
 /// What stands for the project's relay in cbb global relay, and its
 /// address.
 pub(super) const PROJECT_KEY: &str = "default";
-const PROJECT_HOST: &str = "cbb.tools:8765";
+pub(super) const PROJECT_HOST: &str = crate::faces::PROJECT_RELAY;
 /// The pins of the project's relay's key this release knows; keys.json may
 /// name others, which take their place (docs/protocol.md, section 16).
-const PROJECT_PINS: &[&str] = &["hnHvkm6ZrTMmfPEP4Bo0s38nlnNKeyXEdhQNKYt2Pzw="];
+pub(super) const PROJECT_PINS: &[&str] = crate::faces::PROJECT_RELAY_PINS;
 
 /// How long a call waits for the relay to say whose it is, and the most
 /// calls kept.
@@ -42,6 +39,12 @@ const CALLER_WAIT: Duration = Duration::from_secs(5);
 /// again, as Go's relayRefetch, and looks for another address after the
 /// same error.
 const REFETCH: Duration = Duration::from_secs(600);
+
+/// REFETCH, or what the service's tests shorten it to with
+/// CBB_TEST_REFETCH_EVERY (milliseconds), a test hook a release ignores.
+pub(crate) fn refetch_every() -> Duration {
+    crate::testbuild::env("CBB_TEST_REFETCH_EVERY").and_then(|v| v.parse().ok()).map_or(REFETCH, Duration::from_millis)
+}
 const MOVE_AGAIN: Duration = Duration::from_secs(60);
 const MAX_CALLS: usize = 16;
 
@@ -52,12 +55,6 @@ pub(super) struct Meeting {
     /// Dropped first: the link stops before its listener.
     _relay: Relay,
     report: Arc<Mutex<Report>>,
-    records: Arc<Mutex<Vec<Value>>>,
-    /// What it registers with in place of the member certificate once the
-    /// group's credentials list this device, and the credentials' changes
-    /// it was made at.
-    credentials: Arc<Mutex<Option<Arc<relay::Credentialed>>>>,
-    credentials_at: usize,
     /// The pins it started with, and for the project's relay the error it
     /// last looked for another address after, and when.
     pins: Vec<String>,
@@ -137,7 +134,7 @@ impl relay::Events for Events {
 
 /// The check of the relay's port: the call is served only when its
 /// certificate names the device the relay said calls from that port.
-fn caller_check(calls: Arc<Mutex<VecDeque<(u16, String)>>>) -> Admit {
+pub(crate) fn caller_check(calls: Arc<Mutex<VecDeque<(u16, String)>>>) -> Admit {
     Arc::new(move |port: u16, id: &DeviceId| {
         // The relay names the caller right after it connects, which can be
         // after the handshake on a busy machine.
@@ -210,24 +207,15 @@ impl Away {
     /// group's records as they are now, and stops it when the state names
     /// none; reports whether the device meets the group at a relay.
     pub(super) fn meet(&self, node: &Arc<Node>, st: Option<&State>) -> bool {
-        let Some((st, at)) = st.and_then(|s| s.relay.clone().map(|r| (s, r))) else {
+        let Some(at) = st.and_then(|s| s.relay.clone()) else {
             self.meeting.lock().unwrap().take();
             return false;
         };
-        let records = node_records(node);
-        let creds = self.credentials.lock().unwrap().clone();
         let mut m = self.meeting.lock().unwrap();
         // The project's relay is known by the newest keys.json: a new one
         // with other pins starts the link again.
         let pins = if at.project { project_pins(node) } else { vec![at.pin.clone()] };
         if let Some(cur) = m.as_mut().filter(|cur| cur.at == at && cur.pins == pins) {
-            *cur.records.lock().unwrap() = records;
-            // The group's credentials changed: it registers with them when
-            // they list this device.
-            if let Some(c) = creds.filter(|c| c.changes() != cur.credentials_at) {
-                cur.credentials_at = c.changes();
-                *cur.credentials.lock().unwrap() = c.relay(node).map(Arc::new);
-            }
             let error = cur.report.lock().unwrap().error.clone();
             let mut failed = None;
             match error {
@@ -250,39 +238,25 @@ impl Away {
             (self.log)("cbb: sync away from home: the project's relay's keys changed; registering with it again");
         }
         m.take();
-        match self.start_meeting(node, st, at, pins, records) {
+        match self.start_meeting(node, at, pins) {
             Ok(started) => *m = Some(started),
             Err(e) => self.fail(&e),
         }
         true
     }
 
-    fn start_meeting(
-        &self,
-        node: &Arc<Node>,
-        st: &State,
-        at: Forwarder,
-        pins: Vec<String>,
-        records: Vec<Value>,
-    ) -> Result<Meeting> {
-        let Shown { key, chain } = shown(node)?;
+    fn start_meeting(&self, node: &Arc<Node>, at: Forwarder, pins: Vec<String>) -> Result<Meeting> {
         let calls = Arc::new(Mutex::new(VecDeque::new()));
         let listener = self.listen(node, caller_check(calls.clone()))?;
         let report = Arc::new(Mutex::new(Report::default()));
-        let records = Arc::new(Mutex::new(records));
-        let creds = self.credentials.lock().unwrap().clone();
-        let credentials_at = creds.as_ref().map_or(0, |c| c.changes());
-        let credentials = Arc::new(Mutex::new(creds.and_then(|c| c.relay(node)).map(Arc::new)));
+        // A relay of 0.6 takes a device by the period's server credentials
+        // alone, which a group on the records of 0.5 does not have: the
+        // link waits, and says so.
         let cfg = relay::Config {
             endpoint: at.endpoint,
             pins: pins.iter().map(|p| pin_of(p)).collect::<Result<_>>()?,
-            chain,
-            key,
-            device: self.me.to_string(),
-            wg_key: st.private_key()?,
-            records: records.clone(),
             member_port: listener.addr.port(),
-            credentials: credentials.clone(),
+            credentials: Arc::new(Mutex::new(None)),
         };
         let events = Arc::new(Events {
             node: node.clone(),
@@ -292,17 +266,7 @@ impl Away {
             log: self.log.clone(),
         });
         let relay = Relay::start(cfg, events);
-        Ok(Meeting {
-            at,
-            _relay: relay,
-            report,
-            records,
-            credentials,
-            credentials_at,
-            pins,
-            tried: None,
-            _listener: listener,
-        })
+        Ok(Meeting { at, _relay: relay, report, pins, tried: None, _listener: listener })
     }
 
     /// After the link to the project's relay failed, as Go's
@@ -312,7 +276,7 @@ impl Away {
     /// key this device does not know), keeps the next address it is reached
     /// at in the state, which starts the link there.
     fn project_relay_failed(&self, node: &Arc<Node>, at: &Forwarder, err: &str) {
-        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= REFETCH);
+        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= refetch_every());
         if due && !self.fetching.swap(true, Ordering::SeqCst) {
             *self.refetched.lock().unwrap() = Some(Instant::now());
             let (node, log, dir, ip) = (node.clone(), self.log.clone(), self.dir.clone(), at.endpoint.ip());
@@ -399,38 +363,6 @@ impl Away {
     }
 }
 
-/// What the device shows a forwarder or a relay it registers with, as
-/// Go's ForwarderCertificate: the key of its member certificate, and the
-/// certificate with its issuer and the group's roots, which the group's
-/// records show it a member, the root or an admin by.
-pub(super) struct Shown {
-    pub key: Arc<dyn ExternalKey>,
-    pub chain: Vec<Vec<u8>>,
-}
-
-pub(super) fn shown(node: &Node) -> Result<Shown> {
-    let ident = node.identity();
-    let key: Arc<dyn ExternalKey> = match &ident.external {
-        Some(k) => k.clone(),
-        None => Arc::new(cbb_core::identity::FileKey::new(&ident.key)?),
-    };
-    let roots = node.records().lock().unwrap().roots();
-    let mut chain = ident.chain();
-    for c in std::iter::once(ident.group_ca.clone()).chain(roots) {
-        if !chain.contains(&c.der) {
-            chain.push(c.der);
-        }
-    }
-    Ok(Shown { key, chain })
-}
-
-/// The group's records as a forwarder or a relay takes them.
-pub(super) fn node_records(node: &Node) -> Vec<Value> {
-    let rs = node.records();
-    let rs = rs.lock().unwrap();
-    rs.all().iter().filter_map(|r| serde_json::to_value(r).ok()).collect()
-}
-
 /// The pins this device accepts from the project's relay: those of the
 /// keys the newest keys.json it holds names for it, else the built-in ones,
 /// as Go's projectRelayPins.
@@ -455,7 +387,9 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
     let mut out = Vec::new();
     for name in names {
         if let Some(a) = test_resolve(&name) {
-            if !out.contains(&a) {
+            if let Some(a) = a
+                && !out.contains(&a)
+            {
                 out.push(a);
             }
             continue;
@@ -476,14 +410,22 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
 
 /// The address CBB_TEST_RESOLVE gives a relay's name, as Go's tests set
 /// lookupIP: "host=ip" pairs separated by commas, for the tests only, since
-/// entries.json names a relay only by a host name.
-fn test_resolve(name: &str) -> Option<SocketAddr> {
-    let v = std::env::var("CBB_TEST_RESOLVE").ok()?;
+/// entries.json names a relay only by a host name. "host=none" is a name
+/// that does not resolve (Some(None)); None is a name the variable leaves
+/// to the system.
+pub(crate) fn test_resolve(name: &str) -> Option<Option<SocketAddr>> {
+    let v = crate::testbuild::env("CBB_TEST_RESOLVE")?;
     let (host, port) = name.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;
     v.split(',').find_map(|pair| {
         let (h, ip) = pair.trim().split_once('=')?;
-        (h == host).then(|| ip.parse::<std::net::IpAddr>().ok()).flatten().map(|ip| SocketAddr::new(ip, port))
+        if h != host {
+            return None;
+        }
+        if ip == "none" {
+            return Some(None);
+        }
+        ip.parse::<std::net::IpAddr>().ok().map(|ip| Some(SocketAddr::new(ip, port)))
     })
 }
 
@@ -498,8 +440,8 @@ fn pin_of(pin: &str) -> Result<[u8; 32]> {
 
 /// A short message for status of why the device is not connected to its
 /// relay, as Go's relayProblem; the whole error goes to the detail.
-fn problem(msg: &str, project: bool) -> String {
-    if msg.contains("refused the registration") {
+pub(crate) fn problem(msg: &str, project: bool) -> String {
+    if msg.contains("refused the registration") || msg.contains("do not list this device") {
         msg.to_string()
     } else if project && msg.contains("not the one given") {
         "the project's relay has a key this device does not know yet; a newer signed list brings it".to_string()
@@ -513,3 +455,7 @@ fn problem(msg: &str, project: bool) -> String {
         "the connection to the relay failed".to_string()
     }
 }
+
+#[cfg(test)]
+#[path = "../nettest/away_meet.rs"]
+mod net_tests;

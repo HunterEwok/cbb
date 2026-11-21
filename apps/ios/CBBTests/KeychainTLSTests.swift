@@ -49,17 +49,28 @@ final class KeychainTLSTests: XCTestCase {
         try await handshake(server: server, client: client)
     }
 
+    /// A failure that names the side it came from, so that a timeout says
+    /// whether the listener got no connection, or which handshake hung.
+    struct Side: Error, CustomStringConvertible {
+        let side: String
+        let error: Error
+        var description: String { "\(side): \(error)" }
+    }
+
     private func handshake(server: SecIdentity, client: SecIdentity) async throws {
         let listener = try TLSListener(alpn: "cbb-test", identity: server) { _ in true }
         let port = try await listener.start()
         defer { listener.stop() }
         let accepted = Task {
-            guard let t = await listener.next() else { throw TLSTransport.Failure.closed }
-            try await t.start()
+            guard let t = await listener.next() else { throw Side(side: "listener", error: TLSTransport.Failure.closed) }
+            do { try await t.start() } catch { throw Side(side: "the accepted connection's handshake", error: error) }
             return t.peerCertificate
         }
         let t = TLSTransport(host: "127.0.0.1", port: port, alpn: "cbb-test", identity: client) { _ in true }
-        try await t.start()
+        do { try await t.start() } catch {
+            accepted.cancel()
+            throw Side(side: "the client's handshake", error: error)
+        }
         defer { t.close() }
         let seen = try await accepted.value
         XCTAssertNotNil(seen, "the listener got no client certificate")

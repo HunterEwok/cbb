@@ -28,7 +28,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-paste on|on-enter|off] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code [-window id -fp hash]] [-paste on|on-enter|off] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -728,12 +728,12 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
         return;
     }
     // A phone (the library inside its app) never sets the clock.
-    #[cfg(target_os = "ios")]
+    #[cfg(any(target_os = "ios", target_env = "ohos"))]
     let set = {
         let _ = secs;
         false
     };
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_env = "ohos")))]
     let set = {
         let ts = libc::timespec { tv_sec: secs as libc::time_t, tv_nsec: 0 };
         // SAFETY: clock_settime only reads the timespec passed to it.
@@ -783,12 +783,40 @@ impl crate::pastehelper::Target for NextKeys {
 
 /// Runs the link on standard input and output until the driver quits or
 /// the UART closes; it takes remote pastes through the service at socket.
+/// Joins, over sock, which the Next's ESP carries to the computer at -to:
+/// a group of 0.6 by its home window, whose ID (and member key) the Next
+/// found by mDNS and the six digits the person typed (`.cbb pair CODE`);
+/// without the ID, an old group's window by its code. Gives what the log
+/// says.
+fn join_window(
+    g: &crate::Global,
+    sock: TcpStream,
+    code: &str,
+    window: Option<[u8; 16]>,
+    fp: Option<cbb_core::format::KeyHash>,
+) -> Result<String> {
+    let Some(id) = window else {
+        let id = crate::join_with_code(g, sock, code)?;
+        return Ok(format!("joined the group {} as {}", id.tag(), id.id));
+    };
+    // The Next shows a code as 123-456 and takes it so.
+    let digits: String = code.chars().filter(|c| *c != '-' && !c.is_whitespace()).collect();
+    let invitation = cbb_core::join::invitation::Invitation::typed(id, &digits)
+        .ok_or_else(|| Error::msg("type the six digits the pairing window shows (.cbb pair 123456)"))?;
+    let name = crate::host_name();
+    let me =
+        crate::joining::Me { name: &name, os: cbb_core::format::print::os_number(crate::admin::os_name()), caps: 0 };
+    crate::joining::over(&g.state, sock, "the computer", &me, invitation, fp)?;
+    Ok(format!("joined a group of 0.6 as {name}"))
+}
+
 pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let socket: &Path = &g.socket;
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
     let mut udp = None;
     let mut join = None;
+    let (mut window, mut fp) = (None, None);
     let mut paste = None;
     let mut i = 0;
     while i < args.len() {
@@ -812,6 +840,20 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                 ));
             }
             Some("join") => join = Some(value()?),
+            // The home window that the Next found by mDNS: its ID (TXT i)
+            // and the hash of its member's key (TXT f).
+            Some("window") => {
+                window = Some(
+                    cbb_core::join::invitation::hex_bytes::<16>(&value()?)
+                        .ok_or_else(|| Error::msg("-window is the window's ID, 32 hex digits"))?,
+                )
+            }
+            Some("fp") => {
+                fp = Some(cbb_core::format::KeyHash(
+                    cbb_core::join::invitation::hex_bytes::<32>(&value()?)
+                        .ok_or_else(|| Error::msg("-fp is the hash of the window's member key, 64 hex digits"))?,
+                ))
+            }
             Some("paste") => {
                 paste = Some(match value()?.as_str() {
                     "on" => (true, false),
@@ -987,9 +1029,9 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             std::thread::spawn(move || {
                 let res = TcpStream::connect(("127.0.0.1", port))
                     .context("cannot reach the link's port")
-                    .and_then(|s| crate::join_with_code(&g, s, &code));
+                    .and_then(|s| join_window(&g, s, &code, window, fp));
                 let line = match &res {
-                    Ok(id) => format!("joined the group {} as {}", id.tag(), id.id),
+                    Ok(joined) => joined.clone(),
                     Err(e) => format!("cannot join: {}", e.for_user()),
                 };
                 log.send(Msg::Log(line)).ok();
@@ -1103,6 +1145,52 @@ mod tests {
     use super::*;
     use crate::nextlink::frame::{Frame, encode};
 
+    /// `.cbb pair 123-456`: the link joins a home window of 0.6 by the ID
+    /// and member key the Next found by mDNS, over a connection the ESP
+    /// would carry; wrong digits and another key are refused.
+    #[test]
+    fn the_link_joins_a_home_window() {
+        use std::sync::Mutex;
+        let desk = crate::admitting::tests_support::root_mesh("nextlink");
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = ln.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let d2 = desk.clone();
+        let (open, digits) =
+            crate::admitting::home_window(crate::admitting::home_window_ms(), Duration::from_secs(300));
+        let id = open.invitation.id;
+        let open = Mutex::new(open);
+        desk.on_pair(Some(Box::new(move |sock, s, x| {
+            let got = crate::admitting::at_home(&d2, sock, s, x, &mut open.lock().unwrap());
+            let _ = tx.lock().unwrap().send(got.map(|i| i.name));
+        })));
+        let d3 = desk.clone();
+        std::thread::spawn(move || {
+            for sock in ln.incoming().take(4).flatten() {
+                let _ = d3.accept_port(sock);
+            }
+        });
+        let state = std::env::temp_dir().join(format!("cbb-nextlink-pi-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&state);
+        let g = crate::Global { state: state.clone(), socket: state.join("sock") };
+        let dial = || TcpStream::connect(addr).unwrap();
+        let code = format!("{}-{}", &digits[..3], &digits[3..]);
+        let e = join_window(&g, dial(), &code, Some(id), Some(cbb_core::format::KeyHash([7; 32]))).unwrap_err();
+        assert!(e.message().contains("the computer is not the window's member"), "{e:?}");
+        assert!(rx.recv_timeout(Duration::from_secs(10)).unwrap().is_err(), "the member admitted no one");
+        let wrong = if digits == "000000" { "000-001" } else { "000-000" };
+        assert!(join_window(&g, dial(), wrong, Some(id), None).is_err());
+        assert!(rx.recv_timeout(Duration::from_secs(10)).unwrap().is_err());
+        assert!(join_window(&g, dial(), "12345", Some(id), None).unwrap_err().message().contains("six digits"));
+        let said = join_window(&g, dial(), &code, Some(id), Some(desk.own().hash())).unwrap();
+        assert!(said.starts_with("joined a group of 0.6 as "), "{said}");
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap(), crate::host_name());
+        assert!(crate::set::load(&state, &crate::set::local_key(&state).unwrap()).unwrap().is_some());
+        desk.close();
+        let _ = std::fs::remove_dir_all(&state);
+    }
+
     #[test]
     fn away_the_home_peer_is_dialled_rarely() {
         let mut w = Duration::ZERO;
@@ -1118,6 +1206,54 @@ mod tests {
         assert_eq!(w, DIAL_BACKOFF_AWAY);
         // Back home the wait comes down to the home one.
         assert_eq!(next_dial_wait(w, false), DIAL_BACKOFF.1);
+    }
+
+    #[test]
+    fn zones_peers_and_commands() {
+        assert_eq!(zone("+05:30").unwrap(), 5 * 3600 + 30 * 60);
+        assert_eq!(zone("-01:00").unwrap(), -3600);
+        for bad in ["05:30", "+5", "+15:00", "+01:60", "+a:00", "+01:b", ""] {
+            assert!(zone(bad).is_err(), "{bad}");
+        }
+        assert_eq!(host_port("[fd00::1]:8769").unwrap(), ("fd00::1".to_string(), 8769));
+        assert_eq!(host_port("pi.local:1").unwrap(), ("pi.local".to_string(), 1));
+        assert!(host_port("pi.local").is_err());
+        assert!(host_port("pi.local:x").is_err());
+        assert_eq!(command_args("cbb -debug next paste -max 3").unwrap(), ["-debug", "next", "paste", "-max", "3"]);
+        assert_eq!(command_args("cbb next image -mode lo").unwrap(), ["next", "image", "-mode", "lo"]);
+        for not in ["", "rm -rf /", "cbb status", "cbb next link", "cbb -debug"] {
+            assert!(command_args(not).is_none(), "{not}");
+        }
+        // 2026-11-12 03:04:06: the date and the time in MS-DOS's form.
+        let date: u16 = ((2026 - 1980) << 9) | (11 << 5) | 12;
+        let time: u16 = (3 << 11) | (4 << 5) | 3;
+        let mut r = date.to_le_bytes().to_vec();
+        r.extend(time.to_le_bytes());
+        assert_eq!(msdos_time(&r), Some(1_794_452_646));
+        assert_eq!(msdos_time(&r[..3]), None);
+        assert_eq!(msdos_time(&[0, 0, 0, 0]), None, "month 0");
+        // A clock within the slack is left alone.
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mut logged = Vec::new();
+        set_clock(now, &mut |l| logged.push(l.to_string()));
+        assert!(logged.is_empty(), "{logged:?}");
+    }
+
+    #[test]
+    fn remote_pastes_become_keys() {
+        use crate::pastehelper::{Fail, Target};
+        let (tx, rx) = mpsc::channel();
+        let k = NextKeys(tx);
+        assert_eq!(k.name(), crate::service::NEXT);
+        assert!(k.images());
+        k.image();
+        assert!(matches!(rx.try_recv(), Ok(Msg::Image)));
+        k.inject("hi", "paste", true, false).unwrap();
+        let Ok(Msg::Keys(keys)) = rx.try_recv() else { panic!("no keys") };
+        assert_eq!(keys, b"hi\r");
+        assert!(matches!(k.inject("", "type", false, false), Err(Fail::Refused(_))));
+        drop(rx);
+        assert!(matches!(k.inject("x", "paste", false, false), Err(Fail::Failed(_))));
     }
 
     #[test]

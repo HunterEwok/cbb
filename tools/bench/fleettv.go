@@ -73,11 +73,11 @@ func tvRemote(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		}); err != nil {
 			return err
 		}
-		return succeeds(ctx, m, "cbb remote code "+code, "", "Lounge (Android TV) at "+atvIP)
+		return succeeds(ctx, m, "cbb remote code", code+"\n", "Lounge (Android TV) at "+atvIP)
 	}) != nil {
 		return
 	}
-	fails(ctx, r, "fleet/T17-wrong-code", m, errorCase{cmd: "cbb remote code 000000", want: []string{"no TV is pairing"}})
+	fails(ctx, r, "fleet/T17-wrong-code", m, errorCase{cmd: "cbb remote code", stdin: "000000\n", want: []string{"no TV is pairing"}})
 	r.Do("fleet/T17-type", func() error {
 		text := "cbb-bench " + g.run + " on the TV"
 		if err := succeeds(ctx, m, "cbb remote type "+shellQuote(text), "", "Typed."); err != nil {

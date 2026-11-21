@@ -501,14 +501,14 @@ func manifestKinds() []genKind {
 	}
 	fileParts := []genValue{
 		ok("of one file", file(`"f"`)),
-		ok("of a name of 255 bytes", file(`"`+strings.Repeat("a", 255)+`"`)),
+		ok("of a name of 765 bytes", file(`"`+strings.Repeat("a", 765)+`"`)),
 		ok("of a name with a dot inside", file(`"a.b"`)),
 		ok("of a name in another script", file("\"\u0444\u0430\u0439\u043b\"")),
 		ok("of a name like a reserved one", file(`"CONSOLE"`)),
 		ok("of a file that is not a folder", list(pt(genMember{"path", `"f"`}, genMember{"dir", "false"}, genMember{"size", "3"}, genMember{"sha256", h}))),
 		bad("of a folder with a null hash", list(folder(genMember{"sha256", "null"}), fileOf(`"d/f"`, "3"))),
 		bad("of a folder with a null size", list(folder(genMember{"size", "null"}), fileOf(`"d/f"`, "3"))),
-		bad("of a name of 256 bytes", file(`"`+strings.Repeat("a", 256)+`"`)),
+		bad("of a name of 766 bytes", file(`"`+strings.Repeat("a", 766)+`"`)),
 		bad("of an empty path", file(`""`)),
 		bad("of an empty name", file(`"d//f"`)),
 		bad("of a path starting with a slash", file(`"/f"`)),
@@ -539,7 +539,7 @@ func manifestKinds() []genKind {
 		bad("of a file and clipboard data", list(fileOf(`"f"`, "3"), typed(`"image/png"`, "0"))),
 		bad("of a folder as a string", list(pt(genMember{"path", `"d"`}, genMember{"dir", `"true"`}), fileOf(`"d/f"`, "3"))),
 		bad("of a path as a number", list(pt(genMember{"path", "1"}, genMember{"size", "3"}, genMember{"sha256", h}))),
-		bad("of a path of 4097 bytes", file(`"`+strings.Repeat(strings.Repeat("a", 255)+"/", 16)+"a"+`"`)),
+		bad("of a path of 16385 bytes", file(`"`+strings.Repeat(strings.Repeat("a", 255)+"/", 64)+"a"+`"`)),
 	}
 	return []genKind{
 		{section: "manifests", name: "clipboard data", base: data, strict: true, canonical: true, fields: []genField{

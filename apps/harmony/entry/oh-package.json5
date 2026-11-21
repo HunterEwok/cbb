@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+{
+  "name": "entry",
+  "version": "0.6.0",
+  "description": "CBB for HarmonyOS",
+  "main": "",
+  "author": "HunterEwok",
+  "license": "AGPL-3.0-only",
+  "dependencies": {
+    "libcbb_napi.so": "file:./src/main/cpp/types/libcbb_napi"
+  }
+}

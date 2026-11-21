@@ -75,6 +75,10 @@ fn rule(kind: u64, field: &str) -> Rule {
     })
 }
 
+fn hash_list(l: &[[u8; 32]]) -> Value<'_> {
+    Value::Array(l.iter().map(|h| Value::Bytes(h)).collect())
+}
+
 fn hashes(v: &Value<'_>, lengths: &[usize], r: Rule) -> Result<Vec<[u8; 32]>, Rule> {
     let a = v.as_array().ok_or(r)?;
     if !lengths.contains(&a.len()) {
@@ -88,10 +92,9 @@ impl Credential {
     /// row, then its signature by the Key in it.
     pub fn read(b: &[u8]) -> Result<Credential, Rule> {
         let env = Envelope::parse_limited(b, MAX_BODY)?;
-        if env.sig2.is_some() {
-            return Err(Rule::FORM_CRITICAL);
-        }
         let m = &env.map;
+        // A second signature is taken on the first alone, which covers it.
+        crate::format::envelope::signer2(m, Rule::field("credentials/signer2"))?;
         let kind = m.get(1).and_then(Value::as_uint).ok_or(rule(0, "type"))?;
         if !(TYPE_PERIOD..=TYPE_MEMBERS).contains(&kind) {
             return Err(rule(kind, "type"));
@@ -103,7 +106,7 @@ impl Credential {
         };
         for (k, _) in m.as_map().unwrap_or(&[]) {
             // The optional zone (format 3.3): skipped, the signature covers it.
-            if *k >= 256 {
+            if *k >= 256 || *k == crate::format::envelope::FIELD_SIGNER2 {
                 continue;
             }
             if !allowed.contains(k) {
@@ -169,6 +172,59 @@ impl Credential {
         })
     }
 
+    /// The body's encoding, as its signer signs it: the fields as they
+    /// are, the lists already padded ([`pad`]). The reader's inverse: a
+    /// credential read gives back its body's exact bytes.
+    pub fn body(&self) -> Vec<u8> {
+        let es = Alg::Es256.number();
+        let mut m: Vec<(u16, Value<'_>)> = alloc::vec![
+            (1, Value::Uint(self.kind)),
+            (2, Value::Bytes(&self.group)),
+            (3, Value::Array(alloc::vec![Value::Uint(es), Value::Bytes(&self.signer)])),
+            (4, Value::Uint(self.version)),
+            (7, Value::Uint(self.expires_ms)),
+        ];
+        match self.kind {
+            TYPE_PERIOD | TYPE_SERVER => {
+                if let Some(t) = &self.tag {
+                    m.push((10, Value::Bytes(t)));
+                }
+                if let Some(k) = &self.key {
+                    m.push((11, Value::Array(alloc::vec![Value::Uint(es), Value::Bytes(k)])));
+                }
+            }
+            TYPE_HUBS => {
+                m.push((12, hash_list(&self.hubs)));
+                m.push((13, hash_list(&self.admins)));
+            }
+            _ => m.push((14, hash_list(&self.members))),
+        }
+        Value::Map(m).encode()
+    }
+
+    /// Signs a new credential with `by`, whose point becomes its signer;
+    /// the lists are padded to their lengths first. Gives the envelope,
+    /// which [`Credential::read`] takes; an error when a list is too long
+    /// or the fields do not make a credential of the kind.
+    pub fn sign(mut self, by: &dyn crate::identity::ExternalKey) -> crate::error::Result<Vec<u8>> {
+        let long = || crate::error::Error::msg("a credential's list is longer than it may be");
+        self.signer = by.public();
+        match self.kind {
+            TYPE_HUBS => {
+                self.hubs = pad(&self.hubs, HUBS_LENGTHS).ok_or_else(long)?;
+                self.admins = pad(&self.admins, ADMINS_LENGTHS).ok_or_else(long)?;
+            }
+            TYPE_MEMBERS => self.members = pad(&self.members, MEMBERS_LENGTHS).ok_or_else(long)?,
+            _ => {}
+        }
+        let body = self.body();
+        let sig = crate::records::key::sign_es256(by, LABEL_CREDENTIAL, &body)?;
+        let env = crate::format::envelope::write(&body, &sig, None);
+        Credential::read(&env)
+            .map_err(|r| crate::error::Error::msg(alloc::format!("the new credential breaks {r}")))?;
+        Ok(env)
+    }
+
     /// The signer's key hash.
     pub fn signer_hash(&self) -> KeyHash {
         Key::new(Alg::Es256, &self.signer).hash()
@@ -181,13 +237,15 @@ impl Credential {
     }
 
     /// A relay with a fixed list of groups: the period is signed by the
-    /// group's first root key, whose Group ID with the group's recovery key
-    /// is on the list. Only the root signs periods in 0.6.
-    pub fn period_of_listed_group(&self, root: &[u8], recovery: &[u8], listed: &[[u8; 16]]) -> bool {
-        let gid = crate::records::group_id(
-            &crate::records::Key::es256(root.to_vec()),
-            &crate::records::Key::es256(recovery.to_vec()),
-        );
+    /// group's first root key, whose Group ID with the two halves of the
+    /// group's recovery key (K1 a P-256 point, K2 an SLH-DSA key) is on the
+    /// list. Only the root signs periods in 0.6.
+    pub fn period_of_listed_group(&self, root: &[u8], recovery: &[u8], recovery2: &[u8], listed: &[[u8; 16]]) -> bool {
+        use crate::records::{Key, Recovery, group_id, key::ALG_SLH_DSA};
+        let Some(rec) = Recovery::new(Key::es256(recovery.to_vec()), Key::new(ALG_SLH_DSA, recovery2.to_vec())) else {
+            return false;
+        };
+        let gid = group_id(&Key::es256(root.to_vec()), &rec);
         self.kind == TYPE_PERIOD && self.signer == root && self.group == gid.0 && listed.contains(&self.group)
     }
 }

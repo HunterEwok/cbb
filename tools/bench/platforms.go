@@ -6,14 +6,14 @@ package main
 import "strings"
 
 // The bench reaches an OpenWrt router as root, which has no sudo; on
-// FreeBSD, as on Linux, it runs sudo without a password (docs/testbench.md,
+// FreeBSD, as on Linux, it runs sudo without a password (docs/maintainers/testbench.md,
 // section 13).
 
 // serviceCmd is the command that stops, starts or restarts the device's
 // service (action: stop, start, restart), or "" where the bench has none.
 func serviceCmd(d *Device, action string) string {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "sudo -n systemctl " + action + " cbb"
 	case "openwrt":
 		return "/etc/init.d/cbb " + action

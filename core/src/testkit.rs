@@ -31,11 +31,30 @@ pub struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> crate::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
         Ok(sig.to_der().as_bytes().to_vec())
+    }
+}
+
+/// The tests' recovery key's second half, of fixed seeds.
+pub fn rk2() -> &'static crate::records::pq::PqKey {
+    static K2: std::sync::OnceLock<crate::records::pq::PqKey> = std::sync::OnceLock::new();
+    K2.get_or_init(|| crate::records::pq::PqKey::from_seeds(&[0x21; 16], &[0x22; 16], &[0x23; 16]))
+}
+
+/// The tests' recovery key: `k("recovery")` and [`rk2`].
+pub fn recovery() -> crate::records::Recovery {
+    crate::records::Recovery { k1: k("recovery").key, k2: rk2().key() }
+}
+
+/// Signs body with by: a recovery head with by and [`rk2`].
+pub fn sign_by(body: crate::records::body::Body, by: &dyn ExternalKey) -> Record {
+    match body.kind {
+        crate::records::body::Kind::Recovery { .. } => Record::sign_head(body, by, rk2()).unwrap(),
+        _ => Record::sign(body, by).unwrap(),
     }
 }
 
@@ -56,10 +75,10 @@ pub struct G {
 
 impl G {
     pub fn new() -> G {
-        let (root, recovery) = (k("root"), k("recovery"));
+        let (root, rec) = (k("root"), recovery());
         G {
-            gid: crate::records::group_id(&root.key, &recovery.key),
-            set: RecordSet::new(root.key.clone(), recovery.key.clone()),
+            gid: crate::records::group_id(&root.key, &rec),
+            set: RecordSet::new(root.key.clone(), rec),
             heads: BTreeMap::new(),
         }
     }
@@ -70,6 +89,15 @@ impl G {
 
     /// A record signed at time_ms.
     pub fn rec_at(&mut self, by: &K, kind: Kind, time_ms: u64) -> Record {
+        // An ordinary record goes through the core's writer, as a kit's
+        // does; a checkpoint or a change of root is signed as given.
+        if !matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
+            let st = self.set.state();
+            let r = self.set.write_record(&st, by, kind, time_ms).unwrap().pop().unwrap();
+            self.heads.insert(by.hash, (r.body().seq, r.id()));
+            closed(&self.set);
+            return r;
+        }
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
@@ -78,6 +106,7 @@ impl G {
         let r = Record::sign(body, by).unwrap();
         self.heads.insert(by.hash, (seq, r.id()));
         self.set.insert(r.clone()).unwrap();
+        closed(&self.set);
         r
     }
 
@@ -141,6 +170,16 @@ impl G {
     pub fn state(&self) -> State {
         self.set.state()
     }
+
+    /// Each signer's head, as a removal or a claim names them.
+    pub fn seen(&self) -> Vec<Seen> {
+        self.heads.iter().map(|(k, (s, id))| Seen { key: *k, seq: *s, id: *id }).collect()
+    }
+
+    /// The set's records in the order a sender sends them.
+    pub fn records(&self) -> Vec<Record> {
+        self.set.in_dependency_order().into_iter().cloned().collect()
+    }
 }
 
 /// A device's key store with its first epoch made at T0.
@@ -160,4 +199,43 @@ pub fn statement_of(env: &[u8]) -> Statement {
 /// The statements that count for the state's devices.
 pub fn sealing(state: &State, statements: &[&Statement]) -> BTreeMap<crate::records::DeviceId, Sealing> {
     statement::choose(state, statements.iter().copied())
+}
+
+/// What a set keeps is closed: restored from its own records and lists,
+/// in dependency order, reversed and shuffled, it is the same set, and a
+/// fresh member fed what it gives each device of the group, in each of
+/// those orders, reaches its state.
+pub fn closed(set: &RecordSet) {
+    let st = set.state();
+    let orders = |recs: Vec<Record>| -> [Vec<Record>; 3] {
+        let mut reversed = recs.clone();
+        reversed.reverse();
+        let mut shuffled = recs.clone();
+        shuffled.sort_by_key(|r| sha256(&[r.id().0.as_slice(), b"closed"].concat()));
+        [recs, reversed, shuffled]
+    };
+    let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+    let own: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    for (i, recs) in orders(own).iter().enumerate() {
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), recs, &lists);
+        assert_eq!(back.state(), st, "a set restored from its own records is the same set (order {i})");
+    }
+    let mut fed: alloc::collections::BTreeSet<(Vec<RecordId>, Vec<Vec<u8>>)> = alloc::collections::BTreeSet::new();
+    for d in &st.devices {
+        let peer = d.key.hash();
+        let given: Vec<Record> = set.for_peer(&st, &peer).into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists_for_peer(&st, &peer).into_iter().map(<[u8]>::to_vec).collect();
+        if !fed.insert((given.iter().map(Record::id).collect(), lists.clone())) {
+            continue;
+        }
+        for (i, recs) in orders(given).iter().enumerate() {
+            let fresh = RecordSet::restore(set.root().clone(), set.recovery().clone(), recs, &lists);
+            assert_eq!(
+                fresh.state(),
+                st,
+                "a fresh member fed what the set gives {} reaches its state (order {i})",
+                d.name
+            );
+        }
+    }
 }

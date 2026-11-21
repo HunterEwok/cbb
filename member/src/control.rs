@@ -39,6 +39,11 @@ pub struct Header {
     /// cbb global on: the user agreed to what the warning says.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub consent: bool,
+    /// An admin request on the control socket: what confirms that the user
+    /// at the screen asked for it (confirm.rs): on a Mac the external form
+    /// of the caller's authorization, on Windows a Windows Hello signature.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     /// mode: the device whose mode an admin sets; this device if empty.
@@ -135,6 +140,11 @@ pub struct Header {
     pub expires: i64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub address: String,
+    /// In join: the capabilities cbb pair -caps gave, in place of the
+    /// service's (name, if not empty, is cbb pair -name's in place of the
+    /// service's -name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caps: Option<Vec<String>>,
     /// In join: wait for a member to dial this device, rather than dial
     /// the member whose code it was given.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -153,6 +163,11 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away relay: the relays after the first, each its address and its
+    /// key's pin with a space between, which only the root of a group of
+    /// 0.6 takes (cbb global relay with several).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
     /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
     /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -170,6 +185,10 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In recover: the devices that do not stay in the group, names or
+    /// device IDs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leave: Vec<String>,
     /// In an inject to a desktop session, the grant its desktop connector
     /// hands the uinput helper, which asks with keys whether it may press
     /// the paste's keys.
@@ -236,6 +255,7 @@ impl core::fmt::Debug for Header {
             .field("below", &self.below)
             .field("code", &cbb_core::secret::Redacted(self.code.len()))
             .field("addrs", &self.addrs)
+            .field("leave", &self.leave)
             .field("fingerprint", &self.fingerprint)
             .field("admins", &self.admins)
             .field("expires", &self.expires)
@@ -316,6 +336,11 @@ pub struct Status {
     pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
+    /// The group as a blind relay of the owner's lists it: its root key and
+    /// the two halves of its recovery key in hex, separated by colons, the
+    /// value of `cbb relay -group` (cbb status -relay); empty in no group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_group: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
@@ -626,6 +651,11 @@ pub struct Device {
     /// hub, or a hub whose offer it keeps.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hub: bool,
+    /// Its place in the group's order of hubs, from 1, which every member
+    /// derives from the records alone (docs/protocol.md, section 11,
+    /// "Several hubs"); 0 when it may not serve.
+    #[serde(default, skip_serializing_if = "is_zero_us")]
+    pub hub_rank: usize,
 }
 
 /// A header and its payload.
@@ -773,7 +803,6 @@ pub fn reply(header: Header, payload: Vec<u8>) -> Message {
 }
 
 /// An answer to a request that more answers follow: op reply, not done.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub fn partial(header: Header) -> Message {
     Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
 }
@@ -781,6 +810,20 @@ pub fn partial(header: Header) -> Message {
 /// A failed request.
 pub fn failure(e: &Error) -> Message {
     reply(Header { error: e.message().to_string(), details: e.details(), ..Default::default() }, Vec::new())
+}
+
+/// The names of the operations that the service dispatches on and that
+/// the user confirms each time on the control socket (confirm.rs): one
+/// list for both, so that a renamed operation cannot fall out of its tier.
+pub mod op {
+    pub const NEW: &str = "new";
+    pub const LEAVE: &str = "leave";
+    pub const TAKE_OVER: &str = "take_over";
+    pub const RECOVER: &str = "recover";
+    pub const HAND_OVER: &str = "hand_over";
+    pub const KEY_LEVEL: &str = "key_level";
+    pub const TAKEOVER_DELAY: &str = "takeover_delay";
+    pub const MAKE_ADMIN: &str = "make_admin";
 }
 
 /// Whether an operation changes the group or this device's place in it, so
@@ -820,6 +863,8 @@ pub fn is_admin(op: &str) -> bool {
             | "release_held"
             | "entries"
             | "entries_get"
+            // The challenge that confirms an admin action (confirm.rs).
+            | "confirm"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"
@@ -836,6 +881,13 @@ pub fn is_admin(op: &str) -> bool {
 /// "Sync on or off").
 pub fn needs_admin(h: &Header) -> bool {
     !(h.op == "sync" && h.device.is_empty()) && is_admin(&h.op)
+}
+
+/// Whether op, done on this device itself, is one the service also takes
+/// on its control socket (Service::own_device_op): muting it or ending its
+/// mute.
+pub fn is_own_device_op(op: &str) -> bool {
+    matches!(op, "mute" | "unmute")
 }
 
 /// The admin socket next to the control socket at `socket`.

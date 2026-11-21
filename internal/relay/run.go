@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
+// Package relay runs the blind relay, the Rust cbb-relay, for the Go tests
+// of the service: its keys, its process and how a device reaches it. The
+// relay's own tests, with a device's side of cbb-relay/3, are Rust's
+// (member/src/relayd, member/src/relay.rs).
 package relay
 
 import (
@@ -17,20 +21,34 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/testhook"
 )
+
+// Link is how a device reaches a relay: its address, the same for UDP and
+// TCP, and the pin of its key.
+type Link struct {
+	Endpoint netip.AddrPort
+	Pin      string
+}
 
 // Config says how Start runs cbb-relay.
 type Config struct {
 	Listen string // the address of its port, the same for UDP and TCP; 127.0.0.1:0 when empty
 	Keys   Keys   // its keys; new ones when zero
 
-	// Groups are the tags of the groups the relay serves (-group). Open
+	// Groups are the groups of 0.6 the relay serves (-group), each its
+	// root key and the two halves of its recovery key in hex, separated by
+	// colons. Open
 	// serves any group that registers in their place (-open), within
 	// Limits.
 	Groups []string
 	Open   bool
 	Limits Limits
+	// Refused is the list of refused groups (-refused); none when empty.
+	Refused string
 
 	Logf    func(format string, args ...any) // its log lines; none when nil
 	Verbose bool                             // CBB_DEBUG=1
@@ -40,14 +58,13 @@ type Config struct {
 // CBB_RELAY_LIMITS; a zero field keeps the relay's default
 // (member/src/relayd/limits.rs).
 type Limits struct {
-	Groups           int     `json:"groups"`
-	PerAddress       int     `json:"per_address"`
-	PerNetwork       int     `json:"per_network"`
-	PerWide          int     `json:"per_wide"`
-	PerProvider      int     `json:"per_provider"`
-	ByteRate         float64 `json:"byte_rate"`
-	GroupRecordBytes int     `json:"group_record_bytes"`
-	RecordBytes      int     `json:"record_bytes"`
+	Groups      int     `json:"groups"`
+	PerAddress  int     `json:"per_address"`
+	PerNetwork  int     `json:"per_network"`
+	PerWide     int     `json:"per_wide"`
+	PerProvider int     `json:"per_provider"`
+	ByteRate    float64 `json:"byte_rate"`
+	Streams     int     `json:"streams"`
 }
 
 // StatsInterval is how often a relay that Start runs logs its counts.
@@ -57,7 +74,7 @@ const StatsInterval = 20 * time.Millisecond
 // one beside the cbb of CBB_TEST_ALONE or CBB_TEST_RUST_SERVICE, or "" when
 // there is none.
 func Binary() string {
-	if bin := os.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
+	if bin := testhook.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
 		return bin
 	}
 	name := "cbb-relay"
@@ -65,7 +82,7 @@ func Binary() string {
 		name += ".exe"
 	}
 	for _, env := range []string{"CBB_TEST_ALONE", "CBB_TEST_RUST_SERVICE"} {
-		if cbb := os.Getenv(env); cbb != "" {
+		if cbb := testhook.Getenv(env); cbb != "" {
 			bin := filepath.Join(filepath.Dir(cbb), name)
 			if _, err := os.Stat(bin); err == nil {
 				return bin
@@ -112,7 +129,11 @@ func Start(bin string, cfg Config) (*Process, error) {
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:0"
 	}
-	args := []string{"-listen", cfg.Listen, "-key", key}
+	list := cfg.Refused
+	if list == "" {
+		list = "none"
+	}
+	args := []string{"-listen", cfg.Listen, "-key", key, "-refused", list}
 	if cfg.Open {
 		args = append(args, "-open")
 	}
@@ -230,7 +251,17 @@ func (p *Process) Exited() bool {
 
 // Close stops the relay and waits for it.
 func (p *Process) Close() {
-	_ = p.cmd.Process.Kill()
-	<-p.done
+	// SIGTERM first, which cbb-relay takes as an exit, so that a build with
+	// instrument-coverage writes what it ran; a kill if it does not end, or
+	// where there is no SIGTERM (Windows).
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = p.cmd.Process.Kill()
+	}
+	select {
+	case <-p.done:
+	case <-time.After(5 * time.Second):
+		_ = p.cmd.Process.Kill()
+		<-p.done
+	}
 	_ = p.cmd.Wait()
 }

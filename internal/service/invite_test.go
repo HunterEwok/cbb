@@ -4,6 +4,8 @@
 package service
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,7 +17,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/invite"
 )
 
 // inviteHub makes the pi a group's hub on the loopback address, on
@@ -37,6 +38,24 @@ func inviteHub(t *testing.T, h *hub, pi *testService) (inv *control.Client, text
 	return inv, m.Invite
 }
 
+// joinInvitation reads an invitation of 0.6 as far as a test needs: the
+// text is cbb://join# and base64url of its CBOR, in which each endpoint
+// is a text of its own. The core reads the rest, and its tests check the
+// paths and the profile (member/src/service/on_live/tests.rs,
+// a_computer_joins_from_afar_with_an_invitation).
+func joinInvitation(t *testing.T, text string) []byte {
+	t.Helper()
+	rest, ok := strings.CutPrefix(strings.TrimSpace(text), "cbb://join#")
+	if !ok {
+		t.Fatalf("not an invitation of 0.6: %q", text)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(rest)
+	if err != nil {
+		t.Fatalf("the invitation's body: %v", err)
+	}
+	return raw
+}
+
 // makeHub makes the pi a group's hub on the loopback address, on another
 // network than the other test services.
 func makeHub(t *testing.T, h *hub, pi *testService) {
@@ -47,6 +66,10 @@ func makeHub(t *testing.T, h *hub, pi *testService) {
 		t.Errorf("an invitation from a member that is not the hub: %v", err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// On the records of 0.6 the root names its hubs.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{pi.name}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	port := freeUDP(t)
@@ -140,12 +163,8 @@ func TestInvite(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	inv, text := inviteHub(t, &h, pi)
-	in, err := invite.Parse(text)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if in.Hub != pi.status(t).Device || len(in.Secret) != 16 {
-		t.Errorf("the invitation %+v", in)
+	if raw := joinInvitation(t, text); !bytes.Contains(raw, []byte("127.0.0.1:")) {
+		t.Errorf("the invitation names no endpoint of the hub: %x", raw)
 	}
 
 	if _, err := deck.do(t, control.Header{Op: control.OpJoin, Invite: text}, ""); err == nil || !strings.Contains(err.Error(), "consent") {
@@ -237,7 +256,7 @@ func TestInviteDeclined(t *testing.T) {
 	if err := inv.Send(&control.Message{Header: control.Header{Op: control.OpAnswer}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := j.Receive(); err == nil || !strings.Contains(err.Error(), "did not confirm") {
+	if _, err := j.Receive(); err == nil || !strings.Contains(err.Error(), "did not admit it") {
 		t.Errorf("the declined join ended with %v", err)
 	}
 	if st := stranger.status(t); st.Group != "" {
@@ -256,14 +275,7 @@ func TestInviteThroughHub(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	desk := startService(t, &h, "desk")
 	deck := startService(t, &h, "deck")
-	c, code := openWindow(t, pi)
-	if _, err := desk.do(t, control.Header{Op: control.OpJoin, Code: code, Address: pi.addr()}, ""); err != nil {
-		t.Fatalf("the desk joins: %v", err)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "desk" {
-		t.Fatalf("pair on the pi ended with %+v, %v", m, err)
-	}
-	c.Close()
+	pairWith(t, pi, desk)
 	piID := pi.status(t).Device
 
 	// Not an admin yet, and with no hub.
@@ -279,6 +291,10 @@ func TestInviteThroughHub(t *testing.T) {
 		return strings.Contains(err.Error(), "no hub")
 	})
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// On the records of 0.6 the root names its hubs.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	port := freeUDP(t)
@@ -302,12 +318,8 @@ func TestInviteThroughHub(t *testing.T) {
 		return err == nil
 	})
 	defer inv.Close()
-	in, err := invite.Parse(m.Invite)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if in.Hub != piID || len(in.Endpoints) != 1 || in.Endpoints[0].Port() != uint16(port) {
-		t.Errorf("the invitation through the pi: %+v", in)
+	if raw := joinInvitation(t, m.Invite); !bytes.Contains(raw, []byte(fmt.Sprintf("127.0.0.1:%d", port))) {
+		t.Errorf("the invitation through the pi names not its endpoint: %x", raw)
 	}
 	if !pi.logged("is open through this hub") {
 		t.Error("the pi did not log the invitation it carries")

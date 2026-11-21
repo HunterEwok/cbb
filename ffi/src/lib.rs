@@ -3,10 +3,9 @@
 
 //! The Rust core's one entry point as C functions (docs/core-api.md), for
 //! every program that links the core: `cbb_call`, `cbb_free` and `cbb_abi`,
-//! declared in `include/cbb_core.h`. Go links them through cgo, the Swift
-//! kit through that header and the Kotlin kit through JNA, so the phones
-//! do not write the group's rules again and none of them needs generated
-//! bindings. A request and its answer are JSON bytes, so the binding stays
+//! declared in `include/cbb_core.h`. The Swift kit links them through that
+//! header and the Kotlin kit through JNA, so the phones do not write the
+//! group's rules again and none of them needs generated bindings. A request and its answer are JSON bytes, so the binding stays
 //! one function wide and each caller decodes with its own JSON reader.
 
 // As in the core: nothing outside the tests may panic, since a panic here is
@@ -149,12 +148,16 @@ pub mod invite;
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "member")]
+pub mod piv;
 #[cfg(feature = "join")]
 pub mod qr;
 #[cfg(feature = "member")]
 pub mod restore;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
+#[cfg(feature = "member")]
+pub mod watch;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -189,7 +192,11 @@ pub unsafe extern "C" fn cbb_qr_read(
     if gray.is_null() {
         return core::ptr::null_mut();
     }
-    let len = stride.saturating_mul(height.saturating_sub(1)).saturating_add(width);
+    // The length is checked before a slice is made of gray: one that
+    // overflows, or passes what a slice can hold, is refused here.
+    let Some(len) = qr::frame_len(width, height, stride) else {
+        return to_c(guard::answer(qr::refused), answer_len);
+    };
     // SAFETY: the caller gives that many readable bytes at gray.
     let frame = unsafe { core::slice::from_raw_parts(gray, len) };
     to_c(guard::answer(|| qr::read(frame, width, height, stride)), answer_len)
@@ -372,7 +379,7 @@ pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32
 pub unsafe extern "C" fn cbb_join_answered(j: *const join::Join) -> i32 {
     // SAFETY: as the function's contract says.
     let Some(j) = (unsafe { j.as_ref() }) else { return 0 };
-    i32::from(j.answered())
+    i32::from(guard::or(|| false, || j.answered()))
 }
 
 /// Frees a joiner; null does nothing.
@@ -447,7 +454,33 @@ pub unsafe extern "C" fn cbb_restore(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(restore::restore(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| restore::restore(req, sign, ctx as usize)), answer_len)
+}
+
+/// Runs one step with the group's recovery key on a YubiKey (src/piv.rs):
+/// `request` is `{"op", ...}` (make, put, issue or sign) and `transmit`
+/// with `ctx` carries each APDU to the card during this call only. Returns
+/// the answer, `{"ok"}` or `{"error"}`, with its length in `answer_len`.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes, `answer_len` must be
+/// writable, and `transmit` must be callable with `ctx` until it returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_piv(
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::run(req, transmit, ctx as usize)), answer_len)
 }
 
 /// Asks the member: `request` is `{"op", "args"}` (src/member.rs,
@@ -477,9 +510,36 @@ pub unsafe extern "C" fn cbb_member_call(
     to_c(guard::answer(|| m.call(req)), answer_len)
 }
 
+/// Makes the member keep the group's server credentials and serve as one
+/// of the group's hubs or meet it at a blind relay, as the service does
+/// (src/member.rs, servers), with the app's keys for the servers behind
+/// `keys` (member::KeysFn), which must work with `ctx` from any thread for
+/// the rest of the process. The answer is `{"ok"}` or `{"error"}`.
+///
+/// # Safety
+///
+/// `m` must be a member of `cbb_member_start`, not stopped, and
+/// `answer_len` writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_servers(
+    m: *const member::Member,
+    keys: member::KeysFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    to_c(guard::answer(|| m.servers(keys, ctx as usize)), answer_len)
+}
+
 /// Signs an admin's change to a device of the group, or a command for it
 /// (src/member.rs, manage): `request` is `{"action", "device", "name",
-/// "for_ms", "public", "admin_ca", "timeout_ms"}` and `sign` with `ctx`
+/// "for_ms", "text", "mode", "kind", "enter", "public", "admin_ca",
+/// "timeout_ms"}` and `sign` with `ctx`
 /// signs with the key `public` names, during this call only. A command
 /// waits for its result, so the app calls it off its main thread.
 ///
@@ -506,6 +566,65 @@ pub unsafe extern "C" fn cbb_member_manage(
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| m.manage(req, sign, ctx as usize)), answer_len)
+}
+
+/// Signs a manage request as `cbb_member_manage` does, with a slot's key on
+/// the app's YubiKey (src/piv.rs): `request` adds `pin` and `slot` to
+/// manage's fields, `public` the slot's key point, and `transmit` with
+/// `ctx` carries each APDU to the card during this call only.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `transmit` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_card(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::manage(m, req, transmit, ctx as usize)), answer_len)
+}
+
+/// Does what the app's watch asked from the wrist (src/watch.rs): as
+/// `cbb_member_manage`, signed by the watch's admin key, which `sign_body`
+/// with `ctx` reaches over the app's link to the watch and which is shown
+/// each record or command whole. `request` is
+/// `{"action","device","watch","public","admin_ca","name"}`.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `sign_body` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_watch(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign_body: watch::SignBodyFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| m.manage_watch(req, sign_body, ctx as usize)), answer_len)
 }
 
 /// Starts admitting a device by its QR code, as an admin of the group
@@ -635,7 +754,7 @@ pub unsafe extern "C" fn cbb_invite_new(
     let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (i, ans) = m.invite(req, sign, ctx as usize);
+    let (i, ans) = guard::or(|| (None, guard::panicked()), || m.invite(req, sign, ctx as usize));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     i.map_or(core::ptr::null_mut(), |i| Box::into_raw(Box::new(i)))
@@ -661,7 +780,7 @@ pub unsafe extern "C" fn cbb_invite_next(
 ) -> *mut u8 {
     // SAFETY: as the function's contract says.
     let Some(i) = (unsafe { i.as_ref() }) else { return core::ptr::null_mut() };
-    to_c(i.next(version, timeout_ms), answer_len)
+    to_c(guard::answer(|| i.next(version, timeout_ms)), answer_len)
 }
 
 /// Answers whether to admit the device the state's `joining` names: `yes`
@@ -675,7 +794,7 @@ pub unsafe extern "C" fn cbb_invite_next(
 pub unsafe extern "C" fn cbb_invite_answer(i: *const invite::Invite, yes: i32) {
     // SAFETY: as the function's contract says.
     if let Some(i) = unsafe { i.as_ref() } {
-        i.answer(yes != 0);
+        guard::or(|| (), || i.answer(yes != 0));
     }
 }
 
@@ -692,7 +811,7 @@ pub unsafe extern "C" fn cbb_invite_answer(i: *const invite::Invite, yes: i32) {
 pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
     if !i.is_null() {
         // SAFETY: i is a box cbb_invite_new let go of.
-        drop(unsafe { Box::from_raw(i) });
+        guard::or(|| (), || drop(unsafe { Box::from_raw(i) }));
     }
 }
 
@@ -740,14 +859,13 @@ pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: 
 }
 
 /// Registers a hub of `cbb_tunnel` with the group's forwarder (src/tunnel.rs
-/// tells the request), signing its TLS with the app's member key through
-/// `sign` and `ctx`, as `cbb_member_start` does; the answer is as
-/// `cbb_tunnel`'s.
+/// tells the request; `cbb-forward/3`); the hub signs only with the server
+/// key `cbb_tunnel_hub_credentials` gives, so `sign` is not called. The
+/// answer is as `cbb_tunnel`'s.
 ///
 /// # Safety
 ///
-/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
-/// until the hub stops or registers again.
+/// As `cbb_tunnel`.
 #[cfg(feature = "tunnel")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_tunnel_register(
@@ -766,14 +884,15 @@ pub unsafe extern "C" fn cbb_tunnel_register(
 }
 
 /// Links the phone to the group's blind relay (src/tunnel.rs tells the
-/// request and the events), signing its TLS with the member key through
-/// `sign` and telling the app through `event`, both with `ctx`; the answer
-/// is as `cbb_tunnel`'s, `{"id"}` for the `relay_...` requests.
+/// request and the events), telling the app through `event` with `ctx`;
+/// the link signs only with the server key `cbb_tunnel_relay_credentials`
+/// gives, so `sign` is not called. The answer is as `cbb_tunnel`'s,
+/// `{"id"}` for the `relay_...` requests.
 ///
 /// # Safety
 ///
-/// As `cbb_tunnel`; `sign` and `event` must stay callable with `ctx`, from
-/// any thread, until `relay_stop` returns.
+/// As `cbb_tunnel`; `event` must stay callable with `ctx`, from any
+/// thread, until `relay_stop` returns.
 #[cfg(feature = "tunnel")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_tunnel_relay(
@@ -792,8 +911,8 @@ pub unsafe extern "C" fn cbb_tunnel_relay(
     to_c(guard::answer(|| tunnel::relay_start(req, sign, event, ctx as usize)), answer_len)
 }
 
-/// Makes a relay link of `cbb_tunnel_relay` register with the group's
-/// server credentials (src/tunnel.rs tells the request), signing with the
+/// Gives a relay link of `cbb_tunnel_relay` the group's server credentials
+/// it registers with (src/tunnel.rs tells the request), signing with the
 /// period's server key through `sign` and `ctx`; the answer is as
 /// `cbb_tunnel`'s.
 ///
@@ -816,6 +935,32 @@ pub unsafe extern "C" fn cbb_tunnel_relay_credentials(
     // SAFETY: the caller gives len readable bytes at request, not null.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| tunnel::relay_credentials(req, sign, ctx as usize)), answer_len)
+}
+
+/// Gives a hub of `cbb_tunnel` what it registers with at the forwarder,
+/// the hubs' credential of the forwarder's face
+/// (src/tunnel.rs tells the request), signing with the face's server key
+/// through `sign` and `ctx`; the answer is as `cbb_tunnel`'s.
+///
+/// # Safety
+///
+/// As `cbb_tunnel`; `sign` must stay callable with `ctx`, from any thread,
+/// until the hub stops or is given other credentials.
+#[cfg(feature = "tunnel")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_tunnel_hub_credentials(
+    request: *const u8,
+    len: usize,
+    sign: join::SignFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request, not null.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| tunnel::hub_credentials(req, sign, ctx as usize)), answer_len)
 }
 
 #[cfg(test)]
@@ -891,6 +1036,12 @@ mod tests {
             assert!(cbb_qr_read(frame.as_ptr(), w, h, stride, core::ptr::null_mut()).is_null());
             // A stride narrower than the width is refused, not read.
             let got = error(cbb_qr_read(frame.as_ptr(), w, 1, w - 1, &mut n), n);
+            assert!(got.get("error").is_some(), "{got}");
+            // A size whose length overflows is refused before a slice is
+            // made of the pointer, so no byte of it is read.
+            let got = error(cbb_qr_read(frame.as_ptr(), w, h, usize::MAX, &mut n), n);
+            assert!(got.get("error").is_some(), "{got}");
+            let got = error(cbb_qr_read(frame.as_ptr(), w, 2, isize::MAX as usize, &mut n), n);
             assert!(got.get("error").is_some(), "{got}");
         }
         let req = b"{not json";

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Command bench runs the hardware test bench of docs/testbench.md: it drives
+// Command bench runs the hardware test bench of docs/maintainers/testbench.md: it drives
 // real devices over SSH from the bench's controller and reports what passed.
 //
 //	go run ./tools/bench [-inventory FILE] [-report DIR] [-only a,b] check|smoke|full|away|relay
@@ -16,7 +16,7 @@
 // cases on top; away adds the devices away from home by invitation through
 // the hub and its forwarder (with -stop-forwarder also F7, which stops the
 // forwarder); relay meets the group at the blind relay. The inventory lives on the controller, never in the repository
-// (docs/testbench.md, section 13). Devices must be in no group before smoke;
+// (docs/maintainers/testbench.md, section 13). Devices must be in no group before smoke;
 // the bench never removes a group it did not make.
 //
 // CBB_DEBUG=1 adds each command's output to the messages of failed steps;
@@ -54,7 +54,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	cbbTime := fs.String("cbb-time", "", "time, all: the same cbb built with the feature benchtime, whose long times run 100000 times faster")
 	fleetSize := fs.Int("fleet-size", 16, "fleet: the members of the many-members case (E3)")
 	scenarioList := fs.String("scenario", "", "fleet, time: comma-separated scenarios to run instead of all, such as T2-tmux or K6-clock")
-	docs := fs.String("docs", "docs", "coverage, all: the directory with testbench-catalogue.md and testbench-functions.md")
+	docs := fs.String("docs", "docs/maintainers", "coverage, all: the directory with testbench-catalogue.md and testbench-functions.md")
 	fs.DurationVar(&fuzzFor, "fuzz-for", fuzzFor, "fleet: how long the fuzzing case (S20) sends each kind of frame; a release's full run takes 1h")
 	fs.BoolVar(&disruptive, "disruptive", false, "desktop: also lock, put to sleep and restart the computers (Q3, I18, H7, H8); only on the owner's word")
 	fs.DurationVar(&soakFor, "soak-for", 0, "fleet: how long the soak (E10) runs, 24h for a release; 0 leaves it out")
@@ -62,7 +62,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	repeat := fs.Int("repeat", 1, "fleet, time, phone: run the suite this many times and list the cases that both passed and failed (flaky.txt beside the report)")
 	baseline := fs.String("baseline", "", "fleet, time, all: an earlier run's metrics.json; a metric worse than it by more than -baseline-slack fails the run")
 	baselineSlack := fs.Float64("baseline-slack", 0.25, "how much worse than -baseline a metric may be, as a fraction (0.25 is a quarter), beyond its unit's noise")
-	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb-helper built with -cover or a cbb built with instrument-coverage, the directory where every container writes its coverage (docs/testbench.md, \"Code coverage\")")
+	coverDir := fs.String("coverdir", "", "fleet, time, all: with a cbb-helper built with -cover or a cbb built with instrument-coverage, the directory where every container writes its coverage (docs/maintainers/testbench.md, \"Code coverage\")")
 	if fs.Parse(args) != nil {
 		return 2
 	}

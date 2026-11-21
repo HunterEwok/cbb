@@ -40,7 +40,7 @@ func globalShows(ctx context.Context, d *Device, want string, timeout time.Durat
 	})
 }
 
-// Away runs sync away from home (docs/testbench-cases.md): the hub serves
+// Away runs sync away from home (docs/maintainers/testbench-cases.md): the hub serves
 // through the forwarder, each away device joins by invitation (P11) and
 // syncs both ways, also after cbb global off and on; with the hub's service
 // stopped it says so and sends nothing another way (F6). Then the hub moves
@@ -325,9 +325,9 @@ func Relay(ctx context.Context, r *Report, inv *Inventory, devices []*Device, ti
 	defer g.end(ctx, r)
 	var met []*Device
 	for _, d := range g.members {
-		// The lite member and the container have no sync away from home
-		// without keys in files.
-		if d.OS == "linux-lite" || d.OS == "docker" {
+		// The container has no sync away from home without keys in files,
+		// and a build without the tunnel (MIPS) has none at all.
+		if d.OS == "docker" || noTunnel(ctx, d) {
 			continue
 		}
 		if r.Do("relay/P12/"+d.Name+"/on", func() error {

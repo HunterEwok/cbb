@@ -887,15 +887,39 @@ static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=1", "AT+CIPCL
                                         "AT+CIPSTART=4,\"UDP\",\"224.0.0.251\",5353,5354,2"};
 static const char ipd[] = "+IPD,";
 static char net_to[32];
+// " -window ID -fp HASH" for .cbb pair CODE: the window's ID (TXT i, 32
+// hex digits) and its member key's hash (TXT f, 64), by which the Pi's
+// cbb joins a group of 0.6 with the six digits. It keeps text[]'s last
+// bytes, which an ESP's answer (a UDP datagram, under 1500 bytes) never
+// reaches, from net_find() until the link's line is sent.
+#define NET_WINDOW 112
+#define net_window ((char *)text + MAX_TEXT - NET_WINDOW)
 
-// Whether the n bytes at p hold s.
-static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
+// Where the n bytes at p hold s, or 0.
+static const uint8_t *holds(const uint8_t *p, uint16_t n, const char *s)
 {
     uint8_t k = strlen(s);
     for (; n >= k; n--, p++) {
-        if (memcmp(p, s, k) == 0) return 1;
+        if (memcmp(p, s, k) == 0) return p;
     }
     return 0;
+}
+
+// The value of the TXT string key (its length byte, then "k=") in the
+// answer of n bytes in text[]: len lowercase hex digits, into out. Only
+// hex digits go on to the Pi's shell. A value cut off by the answer's
+// end reads on into text[]'s older bytes, which at worst make an ID that
+// no window has, and the window refuses it.
+static uint8_t txt_hex(uint16_t n, const char *key, uint8_t len, char *out)
+{
+    const uint8_t *v = holds(text, n, key);
+    if (!v) return 0;
+    memcpy(out, v + 3, len);
+    out[len] = 0;
+    while (len) {
+        if (!strchr("0123456789abcdef", out[--len])) return 0;
+    }
+    return 1;
 }
 
 // The end of the name at i in the answer of n bytes.
@@ -943,7 +967,7 @@ static uint8_t mdns_answer(void)
     p = strchr(head, ',');
     if (!p) return 2;
     for (n = 0, p++; *p >= '0' && *p <= '9'; p++) n = n * 10 + *p - '0';
-    if (n > sizeof text) return 2;
+    if (n > sizeof text - NET_WINDOW) return 2;
     for (i = 0; i < n; i++) {
         if (link_recv(text + i, 3)) return 2;
     }
@@ -961,6 +985,12 @@ static uint8_t mdns_answer(void)
     // open (TXT p=1).
     if (pair_code && !holds(text, n, "p=1")) return 1;
     sprintf(net_to, "-to %s:%u ", ip, srv_port(n));
+    // A window of 0.6 names its ID, and the code's six digits are a
+    // password only with it (net_cmd() emptied net_window).
+    if (pair_code && txt_hex(n, "\x22i=", 32, net_window + 9)) {
+        memcpy(net_window, " -window ", 9);
+        if (txt_hex(n, "\x42" "f=", 64, net_window + 46)) memcpy(net_window + 41, " -fp ", 5);
+    }
     return 0;
 }
 
@@ -1126,6 +1156,7 @@ static int net_start(int argc, char **argv)
     // Without -to, a computer is found each time: its address may change.
     // Just after power-on the ESP may not be on the Wi-Fi network yet.
     net_to[0] = 0;
+    net_window[0] = 0;
     if (booting) {
         for (i = 0; i < 20 && !esp_address(line, sizeof line); i++) {
             n = FRAMES_LO;
@@ -1153,6 +1184,7 @@ static int net_start(int argc, char **argv)
     if (pair_code) {
         start_send(" -join ");
         start_send(pair_code);
+        start_send(net_window);
     }
     if (paste_load()) {
         start_send(" -paste ");

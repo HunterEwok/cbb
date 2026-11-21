@@ -6,8 +6,12 @@
 package agent
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -31,5 +35,28 @@ func TestLockAgent(t *testing.T) {
 		t.Error("a second agent got the lock too")
 	} else if e, ok := err.(*exec.ExitError); !ok || e.ExitCode() != 3 {
 		t.Errorf("the second agent: %v", err)
+	}
+}
+
+// TestRunEnds: the agent ends with its context, and stays out of a
+// session another agent links already.
+func TestRunEnds(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var logs []string
+	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
+	if err := Run(ctx, "/nonexistent", logf); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { agentLockFile.Close(); agentLockFile = nil }()
+	if err := runDesktop(context.Background(), "/nonexistent", logf); err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], "another agent") {
+		t.Errorf("logged %q", logs)
+	}
+	if dir := ReceivedFiles(); dir != "" && filepath.Base(dir) != "received" {
+		t.Errorf("received files in %s", dir)
 	}
 }

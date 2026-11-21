@@ -20,3 +20,21 @@ Three readers check them:
 - `gen.py`'s own strict reader, as it writes them.
 
 Field-level refusals (`records/…`, `form/default`) are for the readers of each kind.
+
+`push.json` (push to a phone whose app is closed, format section 20.4: message `push`, the push
+service's messages, the sealed body with its derived nonce, the send key's signatures and the
+UnifiedPush token) is written apart by
+`push_gen.py` (`python3 -I testdata/format/push_gen.py`), which borrows `gen.py`'s encoder and
+table checks and writes only that file; the core (`cargo test -p cbb-core --lib push::`) and
+`check/push.go` (Go's ChaCha20-Poly1305, HKDF and HMAC) read it.
+
+## The freeze
+
+`FROZEN` lists every vector with its SHA-256, the state (`draft` until the owner declares the
+freeze, then `frozen`) and the format breaks counted since. `go run ./tools/formatfreeze
+-write` writes it again; CI's `format` job runs `formatfreeze -check -since BASE`, `gen.py`
+into a scratch directory (it must write the same bytes) and the Go reader, on every pull
+request. Once frozen, a vector may be added, but a listed one changes only in a commit that
+counts a break (`formatfreeze -write -break REASON`), and before 1.0 the count stops at one:
+a second break means changing `tools/formatfreeze` itself. The freeze is declared with
+`formatfreeze -write -freeze`.

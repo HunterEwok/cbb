@@ -27,26 +27,23 @@ A source address pays at each of its levels, and all sources together at one mor
 
 A charge goes to all the levels of its source at once, and is refused when any level would
 pass its cap; a refusal charges nothing. Besides the sources, some state is charged to the
-group (its devices, its records) or to a VLESS user ID (the handshakes of its clients).
-State that is held (registrations, entries, records) is counted by `budget.Count`; work that
-is done (setups, record checks) is paid for by the second, with a burst, by `budget.Rates`.
+group (its devices) or to a VLESS user ID (the handshakes of its clients).
+State that is held (registrations, entries) is counted by `budget.Count`; work that
+is done (setups, credential checks) is paid for by the second, with a burst, by `budget.Rates`.
 
 ## Rules
 
-1. **Refuse the new.** When a cap is full, the new registration, entry or record is refused.
-   Nothing a source or a group holds is taken from it to make room for another. The one
-   exception is memory nobody holds: the records the forwarder remembers of groups that are
-   not registered now, which are forgotten once 32 MiB are held, from the provider that
-   holds the most of them.
+1. **Refuse the new.** When a cap is full, the new registration or entry is refused.
+   Nothing a source or a group holds is taken from it to make room for another.
 2. **A refusal leaves the server as it was.** A refused registration, for any reason, keeps
-   nothing of the refused group: no period, version, record or count; the devices and groups
+   nothing of the refused group: no period, version or count; the devices and groups
    registered before stay as they were.
 3. **Every cap has a payer that cannot be spread thin.** A stranger who wants more needs more
    wide networks, not more addresses inside one; and over IPv6 more providers, not more /48s
    inside one /32, which a provider has by the ten thousand. Every cap of a wide network has
    a cap of the IPv6 provider above it.
 4. **What a stranger leaves behind ends.** Registrations end with their connections; a
-   group's records and period on the relay go with its last device; the forwarder's versions
+   group's period on the relay goes with its last device; the forwarder's versions
    go when their credential expires, at most 35 days after they were kept.
 
 ## The relay
@@ -55,13 +52,14 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 |---|---|---|---|---|---|---|
 | Registration being set up | a goroutine and a TLS handshake, about 50 KiB; one ECDH | 15 s at most | address, network, wide network, provider | 16, 64, 128, 128 | 256 | the connection is closed |
 | Setup, paid by the second | 4 units | | address, network, wide network, provider | 64, 256, 1024, 2048 units a second; bursts of 1536, 4096, 8192, 16384 | | the connection is closed |
-| Registered device (open relay) | a tunnel peer and its entry, about 2 KiB | while its connection lasts | address, network, wide network, provider; group | 16, 64, 256, 1024; 64 devices of a group | 4096 groups | refused |
-| A group's authority records | their bytes; one ECDSA check each, once | until the group's last device leaves | the group; the network, wide network and provider that brought them | 256 KiB a group; 1 MiB a network, 4 MiB a wide network, 16 MiB a provider | 128 MiB | refused, none of them kept |
-| Record check | about 45 µs | | address, network, wide network, provider | 1 unit each, from the same allowance as setups | | refused |
-| Period (registration with credentials) | the period key, versions and members' list | until the group's last device leaves | the group | one per period tag | 4096 groups | refused |
+| Registered device (open relay) | a tunnel peer and its entry, about 2 KiB | while its connection lasts | address, network, wide network, provider; group | 16, 64, 256, 1024; 64 devices of a group | 4096 groups; 4096 devices, so that each device's watch has its connection | refused |
+| Period | the period key, versions and members' list | until the group's last device leaves | the group | one per period tag | 4096 groups | refused |
 | Request being read in a tunnel | a goroutine | 5 s at most | device, group; address, network, wide network, provider the device registered from | 16, 32; 32, 64, 64, 128 | 256 | the connection is closed |
 | Call waiting for an answer | a ticket | 10 s at most | the called device | 16 | | refused |
 | Joined connections | two copies | while both last | the group | 256 | | refused |
+| Connection of a call, waiting or joined (open relay) | a socket in the tunnel, two 64 KiB buffers | while it lasts | the group; address, network, wide network, provider each end registered from | 512 a group; 128, 256, 1024, 2048 | 4096, half of the tunnel's connections | refused |
+| Connection in the tunnel, being opened or open | a socket in the tunnel, two 64 KiB buffers; three open files | being opened: 5 s at most; once the relay ended it, 10 s for the device to take the rest and close its half | the device; past its first 2, the address, network, wide network, provider the device registered from, and being opened also by them | 80: its watch, a call with each other device of its group, its requests; its first 2 whatever the others hold; 4 being opened; past the first 2, 296, 592, 2368, 4736; being opened, 8, 32, 128, 256 | 9472 (the watches, the calls, the requests and the openings), and the first 2 of each device besides; 1024 being opened | the device's new connection is ignored |
+| WireGuard handshake initiation | one Diffie-Hellman, about 50 µs | | the network, wide network and provider of its source; from an address a client last spoke from, that address and its network | none checked without a valid mac1; past 512 Diffie-Hellmans a second, a cookie for each initiation from an address no client last spoke from, which needs the source's own address; 32, 128, 512 a second; from a client's address 4 and 32 a second | 1536 a second for strangers, 512 more for clients' addresses | dropped |
 | Copying | bandwidth | | the group | 1 MiB a second, two seconds' burst | | slowed down |
 | Note to a device | a queued line | until sent | the watching device | 32 | | the watch is closed |
 | Allowance of a source | about 150 bytes for each of its payers | until full again: under 30 s | itself | | forgotten past 4096 sources when full | |
@@ -69,12 +67,10 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 What the relay guarantees:
 
 - **A device registered before cannot be pushed out** by any number of strangers: nothing
-  they register removes another group's devices, records or period.
+  they register removes another group's devices or period.
 - **A new group from elsewhere finds room** unless strangers hold 4096 groups, which takes at
   least 16 wide networks (4096 / 256) holding their registrations open, and over IPv6 at
-  least 4 providers (4096 / 1024), or 128 MiB of records, which takes at least 32 wide
-  networks (128 MiB / 4 MiB), over IPv6 in at least 8 providers (128 MiB / 16 MiB)
-  (`TestRegistrationsBoundByProvider`).
+  least 4 providers (4096 / 1024).
 - **Requests**: strangers in fewer than 4 wide networks (256 / 64), or over IPv6 in fewer
   than 2 providers (256 / 128), cannot take every request slot, and each slot is free again
   within 5 s.
@@ -82,9 +78,48 @@ What the relay guarantees:
   than 2 providers, cannot take every setup slot, and each is free again within 15 s. One
   provider may hold half of the setups and half of the requests being read: these slots are
   short-lived and refilled in seconds, so this is the accepted bound; the state that lasts
-  (registrations, records) takes at least 4 providers.
+  (registrations) takes at least 4 providers.
+- **The tunnel**: each registered device has its watch's connection, since the relay
+  registers no more devices than half its tunnel's connections; the other half is for calls,
+  and strangers in one address hold 128 of them (1/32), in one network 256, in one wide
+  network 1024 and in one IPv6 provider 2048, so taking them all needs at least 4 wide
+  networks or 2 providers. Connections being opened, which no device has acknowledged yet
+  and so reach none of the counts above, are 4 a device and 1024 in all, of which one
+  network holds 32, one wide network 128 and one provider 256, for 5 s at most; and each
+  device's first 2 connections are taken whatever the others hold, so a device keeps its
+  watch and a call even while the tunnel is full. Past those 2, a device's open connections
+  count against its source too: an address holds 296, a network 592, a wide network 2368 and
+  a provider 4736, more than its watches, calls and requests may take, so the rest of the
+  tunnel takes at least 4 wide networks or 2 providers. A connection the relay ended is cut
+  10 s after the device last took anything of it, even if the device never closes its half
+  and answers every keep-alive (`a_closed_connection_is_not_held_open`,
+  `open_connections_are_shared_by_source`, `call_connections_bound_by_source_and_group`,
+  `registrations_bound_by_the_tunnel`, the hub's `connections_are_held_per_client`,
+  `half_open_connections_hold_a_client_s_share_only` and
+  `a_full_hub_still_takes_each_client_s_few`, Go's `TestManyDevicesThroughRelay`). The worst
+  case is (9472 + 2 × 4096) sockets of two 64 KiB buffers, about 2.2 GiB, and as much again
+  in the bridges' queues. Each connection costs three open files, about 57,600 in all with
+  the registrations: the relay raises its limit to the system's hard limit at start
+  (`LimitNOFILE=65536` in its unit, `ulimits` in the compose file), logs what it got, and with
+  fewer holds fewer tunnel connections and registers fewer devices to match
+  (`limits_fit_the_open_files`). A connection to the
+  tunnel's loopback port that the hub did not make waits 100 ms beside the others, at most
+  256 at once, and is closed (`stream_port_knows_only_the_hub_s_connections`).
+- **Handshakes**: a WireGuard initiation costs the relay a Diffie-Hellman only once its mac1,
+  under the relay's key, holds, so packets without one cost a hash and never put it under
+  load; past 512 Diffie-Hellmans a second, an initiation from an address no client last spoke
+  from costs one only once its cookie, which the relay sends to its source address, holds
+  too. Strangers get 32 a second a network, 128 a wide network, 512 a provider and 1536 in
+  all, and 512 more are kept for the addresses the clients last spoke from, 4 a second an
+  address and 32 a network, so a client that rekeys goes on while strangers spend the rest,
+  and one device cannot spend what is kept for the others. The address is the source of an
+  unauthenticated packet: someone who sends from a client's address, or fakes it, spends
+  that address's 4 and its network's 32, and no more; all of it on the thread that carries every
+  group's data (`initiations_are_checked_before_the_hub_pays_for_them`,
+  `handshakes_are_shared_by_source`, `garbage_does_not_put_the_hub_under_load`). A device's
+  hub does the same; an AmneziaWG hub, which sends no cookies, has the same shares.
 - After strangers register and leave, the relay keeps nothing of them but their sources'
-  allowances, which it forgets once full again (`TestOpenRelayForgetsStrangers`).
+  allowances, which it forgets once full again (`open_relay_forgets_strangers`).
 
 A relay for the user's own groups (`-group`) has the limits of every relay (setups, requests,
 calls, members) and serves no stranger's group at all.
@@ -97,7 +132,6 @@ calls, members) and serves no stranger's group at all.
 | A group's clients | an entry per address, handshake and session | 10 s a handshake, 200 s a session | the group | 16 addresses, 64 handshakes waiting | | dropped |
 | A group's packets | forwarding | | the group | 1000 packets and 2 MiB a second | | dropped |
 | Credential version (a period's entry) | about 400 bytes in memory, 200 on disk | until the last credential it saw expires, 35 days at most | the network, wide network and provider it came from | 256, 1024, 4096 | 100,000 | refused |
-| Remembered records (hubs from before the credentials) | their bytes | while the group is registered; after, until 32 MiB of the groups that are away are held | the group; the network, wide network and provider that brought them; while the group is away, the provider that brought most of them | 256 KiB a group; 1 MiB a network, 4 MiB a wide network, 16 MiB a provider | 32 MiB and 100,000 groups that are away; the groups registered now are not counted | refused; of the groups that are away, the provider that holds the most forgets its oldest |
 | VLESS user ID | a user of the VLESS server | with its registration | the registration | one per group | as registrations | refused |
 | Handshake to a group not known for its address | one keyed BLAKE2s per registered group | | the source address; its network; all | 10 handshakes a second; 1/16 of all; 500,000 checks a second | | dropped |
 | Handshake over VLESS | one check, against the group of its user ID | | the VLESS user ID | 10 handshakes a second | | dropped |
@@ -107,7 +141,8 @@ calls, members) and serves no stranger's group at all.
 What the forwarder guarantees:
 
 - **A group that registered before cannot be pushed out**: nothing strangers do removes a
-  registration, a credential's version or a registered group's records.
+  registration or a credential's version. The forwarder keeps nothing else of a group: no
+  list of its devices and no records, whatever a hub sends (`TestRegistrationKeepsNoRecords`).
 - **A group that renews on time finds room** for its new period unless the table holds
   100,000 versions, which takes at least 98 wide networks (100,000 / 1024) keeping them for
   their whole lifetime, over IPv6 in at least 25 providers (100,000 / 4096); a network of
@@ -122,14 +157,7 @@ What the forwarder guarantees:
   can spend from anywhere; a network gets a sixteenth of it, and the client's own retries
   every 5 s get through once the flood pauses. This is the accepted bound.
 - The memory that strangers leave is bounded by the table's numbers: 100,000 versions of
-  about 400 bytes (`TestVersionsMemoryBounded`), 32 MiB of remembered records.
-- **The records of a group that is away stay** while strangers register groups with records,
-  however many: the groups registered now are not counted against the 32 MiB. Once strangers'
-  groups are away too, the forwarder forgets from the provider (an IPv6 /32, an IPv4 /16)
-  that holds the most of them, so a genuine group's few kilobytes go only once every other
-  provider holds no more than that: for 10 KiB of records, over 3000 providers (32 MiB /
-  10 KiB), unless the strangers are in the group's own provider
-  (`TestMemoryKeepsGroupsThatAreAway`).
+  about 400 bytes (`TestVersionsMemoryBounded`).
 
 ### XHTTP
 
@@ -182,7 +210,7 @@ of that threshold, watched from outside:
 - `cbb-traffic.timer` on the server (site/README.md, "The server", step 8) samples the
   network interface every 15 minutes and publishes the totals of the last 24 hours, and
   nothing about a group, a device or an address, at `https://cbb.tools/status/traffic.json`;
-- the `monitor` workflow (docs/maintaining.md, "Watching cbb.tools") fails, which mails the
+- the `monitor` workflow (docs/maintainers/maintaining.md, "Watching cbb.tools") fails, which mails the
   maintainer, when those 24 hours pass 1 TB, half of the threshold, or when the file is more
   than two hours old.
 
@@ -204,11 +232,12 @@ Reports go to `abuse@cbb.tools` (the [terms](https://cbb.tools/terms.html), "Rep
 changes"). The servers see no content, keep no logs and hold no names, so the one answer
 decided in advance is to refuse the group the report names, by its tag, and nothing broader:
 
-- `cbb forward` reads a list of refused groups (the relay in Rust does not yet), `refused-groups` next to
-  its key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
+- `cbb forward` and `cbb relay` read a list of refused groups, `refused-groups` next to
+  their key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
   characters a line, as `cbb status` shows it; `#` begins a comment, and anything after a
   tag on its line is skipped, such as the date of the report. A line `period TAG` names a
-  period's tag, for a group that registers with credentials (protocol.md, section 18).
+  period's tag, 32 hex characters, for a group that registers with credentials
+  (protocol.md, section 18).
 - They read it again within ten seconds of a change, without a restart. A group on it is
   refused at registration with a message that names the operator's terms, and its devices
   already registered are dropped; every other group goes on as before. A file that cannot be
@@ -222,25 +251,27 @@ decided in advance is to refuse the group the report names, by its tag, and noth
   groups that ask for that.
 - The tags on the list and the reports stay with the maintainer, never in the repository.
 
-Tested by `TestRefusedGroups` (forwarder) and the
-package's own tests (`internal/refused`).
+Tested by `TestRefusedGroups` (forwarder), `refused_groups` (relay, `member/src/relayd/tests.rs`)
+and the lists' own tests (`internal/refused`, `member/src/relayd/refused.rs`). A file that is
+missing at one reading and again at the next empties the list; missing once, as when an editor
+moves it aside to save it, keeps the list as it was. A registration that passed the list just
+before it changed is refused when it is added, or dropped with the others.
 
 ## Tests
 
-The guarantees above are tested, in Go:
+The guarantees above are tested, the forwarder's in Go and the relay's in Rust
+(`member/src/relayd/tests.rs`, `member/src/nettest/relayd.rs`):
 
 - a refused registration, for each reason, leaves the server as it was:
-  `TestRefusedRegistrationLeavesState` (relay), `TestRefusedRegistrationLeavesForwarder`;
+  `a_refused_registration_leaves_nothing` (relay), `TestRefusedRegistrationLeavesForwarder`;
 - for each payer, sources at their cap leave room for a group from elsewhere and never push
   out one that came before, with random sources, groups and orders under a fixed seed:
-  `TestCountProperty`, `TestOpenRelayBudgetProperty`, `TestVersionsBudgetProperty`;
-- what strangers leave behind is bounded and measured: `TestOpenRelayForgetsStrangers`,
-  `TestVersionsMemoryBounded`;
+  `TestCountProperty`, `open_relay_budget_property`, `TestVersionsBudgetProperty`;
+- what strangers leave behind is bounded and measured: `open_relay_forgets_strangers`,
+  `TestVersionsMemoryBounded`, `TestRegistrationKeepsNoRecords`;
 - the payers of each kind: `TestCountProvider`, `TestVersionsWideNetworkLeavesRoom`,
-  `TestVersionsProviderLeavesRoom`, `TestRegistrationsBoundByProvider`,
-  `TestMemoryChargesTheSource`,
-  `TestMemoryKeepsGroupsThatAreAway`,
-  `TestRecordBytesChargedToTheSource`, `TestRequestsBoundByWideNetwork`,
+  `TestVersionsProviderLeavesRoom`, `registrations_bound_by_provider`,
+  `TestRegistrationsBoundByEveryLevel`, `requests_bound_by_wide_network`,
   `TestVLESSUsersLeaveTheScanBudget`, `TestKnownClientKeepsItsGroup`;
 - XHTTP takes no upload over its limit and queues no more than its limit for a session
   that no client opened: `TestXHTTPHoldsLittleForStrangers`.

@@ -4,7 +4,7 @@
 For engineers and security reviewers: what Copy Beyond Borders protects, from whom, where the
 trust boundaries are, and which defence answers each threat, with the code that holds it.
 It describes the version in this repository; what is not built yet is marked **open**. The
-plan of the security audit is in [security-audit.md](security-audit.md), the wire format in
+plan of the security audit is in [security-audit.md](maintainers/security-audit.md), the wire format in
 the [protocol](protocol.md), and how to report a vulnerability in
 [SECURITY.md](../SECURITY.md).
 
@@ -41,7 +41,11 @@ clipboards, which any program of the signed-in user may read.
 
 1. **The device.** The service runs as its own user; the admin socket admits only the
    computer's administrators, the control socket root and the `cbb` group. A
-   phone's keys are behind its secure hardware and biometrics.
+   phone's keys are behind its secure hardware and biometrics; on Aurora OS the root or
+   admin key is behind a PIN of the app's own, which the TEE checks (D-94). Aurora gives an
+   app no trusted input, so the PIN passes through the app's memory on its way to the TEE and
+   is wiped at once; code that runs inside the app, as root or a forged build, could see it,
+   but could as well show a false PIN dialog. The PIN stops whoever holds the unlocked phone.
 2. **The home network.** Every connection between members is mutual TLS 1.3 under the
    group's certificates, on the member port, which takes only private, unique-local and
    link-local addresses (and on routers only the home zones' interfaces).
@@ -65,14 +69,14 @@ of service, **E**levation of privilege.
 | 2 | home network | S | a device poses as a member, for example by answering mDNS | mutual TLS: members dial discovered addresses and check the peer's certificate against the group's CAs, the device records and the revocations | `core/src/tls`, `core/src/group.rs` |
 | 3 | home network | S | someone guesses or intercepts a pairing code | CPace inside TLS, bound to the TLS exporter: one online guess per attempt, three per window of 5 minutes, no offline attack; the code never on the command line | `core/src/pair.rs`, `core/src/admit` |
 | 4 | home network | S | a man in the middle during a phone's QR pairing | the QR code carries the pairing code, which the phone spends on CPace inside TLS as in threat 3, so a device in the middle learns nothing it can use | the kits' `Pairing*` |
-| 5 | home network | D | a flood of connections or mDNS packets | limits on handshakes, mDNS cache entries and peers; the member port drops other addresses | `internal/service`, `internal/mdns` |
+| 5 | home network | D | a flood of connections or mDNS packets | limits on handshakes, in all and per source, with a short wait for the first bytes; a refused pairing reads one small frame; frames of a connection that carries records only are small; commands per connection are bounded; the mDNS cache is checked ten times a second (a daemon past 1024 records, or too busy to answer, starts again empty, after a longer pause each time while floods go on) and found members are capped; a goodbye by mDNS stops dialing no device the records name; a pairing attempt that proves nothing gives way to the next; the member port drops other addresses. Residual (Low): a device on the home network that uses several addresses can still fill the handshake slots and delay pairing for a while, holding a listening joiner or a pairing window, but it cannot pair or learn the code | `member/src/discovery.rs`, `member/src/node.rs`, `member/src/window.rs` |
 | 6 | internet | I, T | someone on the way reads or changes the traffic away from home | the member TLS inside the group's WireGuard tunnel, a preshared key per client, chunk frames padded to 16 KiB; **open**: padding text frames and cover traffic | `internal/tunnel` |
 | 7 | internet | S, D | packets to the hub's port from outside the group | WireGuard drops every packet without a key that a member offered in its authenticated hello, or an invitation's guest key | `internal/tunnel` |
 | 8 | internet | I | a censor detects and blocks the tunnel | AmneziaWG's obfuscation, VLESS over XHTTP behind the forwarder's site | `internal/tunnel`, `internal/vless` |
-| 9 | internet | I | a forwarder or relay learns who the devices are | short server credentials per period instead of the group's records: no device ID, name, system or role (D-67, D-75); the forwarder routes by `mac1` and keeps no group files | `internal/forward`, `member/src/relayd`, `internal/group/credential.go` |
+| 9 | internet | I | a forwarder or relay learns who the devices are | short server credentials per period instead of the group's records: no device ID, name, system or role (D-67, D-75, D-106); a hub shows the forwarder its hubs' credential alone, never the period credential with the Group ID and the root; the forwarder routes by `mac1` and keeps no group files | `internal/forward`, `internal/blind`, `member/src/relayd`, `core/src/blind/credential.rs` |
 | 10 | internet | I | a relay learns who talks to whom and when | **accepted, told to the user**: the relay sees which devices are online, from where, and how much they send; `cbb global relay` and the apps say so and ask before it is used | `member/src/global_cli.rs` |
 | 11 | internet | D | a group, or a few hosts, fill a shared server | limits per group, per address and per network on the forwarder and an open relay | `internal/forward`, `member/src/relayd/limits.rs` |
-| 12 | device | I | a thief copies the keys from a disk | keys in hardware where the device has it (phones, Linux with a TPM), the files readable only by the service; **open**: the Secure Enclave on Macs and the TPM on Windows | `internal/tpmkey`, `internal/group/keys.go` |
+| 12 | device | I | a thief copies the keys from a disk | keys in hardware where the device has it (phones, Linux and Windows with a TPM 2.0, Macs with a Secure Enclave), the files readable only by the service | `internal/tpmkey`, `internal/group/keys.go` |
 | 13 | device | E | a thief uses a phone's root or admin key | the key signs only after the user's face, fingerprint or passcode; on Android the Keystore checks it for each signature, through the prompt's CryptoObject | the kits' `SecKeySigner`, Keystore (`Keys`, `Authenticator`) |
 | 14 | group | S | a removed device keeps acting | revocation records reach every member, which then refuse its certificate; the hub drops its tunnel key | `internal/group/records.go` |
 | 15 | group | E | a stolen admin computer signs records | any admin freezes it (nothing it signs counts from then on); only the root or an admin phone removes an admin; file-key admins need the user's explicit consent (key levels) | `internal/group`, `member/src/devices_cli.rs` |
@@ -81,16 +85,19 @@ of service, **E**levation of privilege.
 | 18 | group | T, R | a replayed or forged command (paste, action, mode) | commands are signed by an admin, expire 30 s after signing, are checked against the revocations and a replay cache, and each device logs who sent what | `internal/group/command.go`, `internal/remotepaste`, `internal/actions` |
 | 19 | device control | E | an admin types into a device or restarts it against its user's will | every remote paste target and quick action is off until the device's own user turns it on there; Enter, the console and reboot are separate consents; any admin turns them off everywhere; never on a lock or login screen | `internal/remotepaste`, `internal/actions`, `internal/lockcheck` |
 | 20 | device control | E | a pasted text runs as a command | control characters removed; a text with a line break is refused on every target of a computer unless the user turned Enter on | `internal/remotepaste` |
-| 21 | device control | E | a user's own action becomes a shell | the program runs by its full path with fixed arguments, no shell, as the signed-in user, for at most 15 s | `internal/actions` |
+| 21 | device control | E | a user's own action becomes a shell | the program runs by its full path with fixed arguments, no shell, as the signed-in user, for at most 15 s, and only as that user set it (`own-actions.json` in the user's settings), so the service's account cannot name another | `internal/actions` (`own.go`), `internal/connector` |
 | 22 | device | I | another local user reads the clipboard through the service | the control socket admits only root and the `cbb` group; changes to the group only on the admin socket | `internal/control`, `internal/service/control_windows.go` |
 | 23 | device | E | a bug in the network code takes over the computer | memory-safe languages; the service unprivileged in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, no capabilities, restricted address families and system calls) | `packaging/linux/cbb.service` |
 | 24 | device | I | a secret outlives its minute | secrets are kept in memory only, never on disk, and gone 60 s after the copy; their formatting is never read | `internal/clip` |
-| 25 | device | E | a received file is opened as a program | received files are never executable, carry the quarantine mark on a Mac and the Mark of the Web on Windows, and names are made safe | `internal/mediafile` |
+| 25 | device | E | a received file is opened as a program | received files are never executable, carry the quarantine mark on a Mac and the Mark of the Web on Windows, and names are made safe | `internal/mediafile`, `member/src/files.rs` (`mark_download`), the Mac app's `PasteTarget` |
 | 26 | release | T | a changed program reaches users | release builds only in CI, pinned actions, `SHA256SUMS`, build provenance attestations; release files signed outside CI with the project's keys: roots on two YubiKeys, the release key in a Mac's Secure Enclave, a channel key on cbb.tools that only renews `stable.json` (D-69); every installer and updater checks them against the pinned roots | `.github/workflows/release.yml`, `internal/release`, `packaging/get.sh`, `tools/release-sign` |
 | 27 | release | T | a vulnerable dependency | few dependencies, `govulncheck` for Go and OSV-Scanner for the Rust crates, the Android libraries and the tray app in CI | `.github/workflows/ci.yml` |
 | 28 | members in between | I, T, S | a hub or another member that passes a copy on reads it, changes it, or makes a copy in another device's name | each copy sealed to its readers (X-Wing for each reader's key, ChaCha20-Poly1305 for the copy and its blob in segments) and signed by the origin's member key; every member checks the certificate and the signature before it passes a copy on, and no member takes a copy in the open; a hub may only pass copies on and read none (D-84) | `internal/clip`, `core/src/copy.rs` |
 | 29 | members in between | I | a member in between learns what the copies are | the kind, the text, file names and their number travel inside the seal; sizes show only in steps, an attachment only to 64 KiB; **accepted**: which device sent a copy, when and to which devices | `internal/clip` |
 | 30 | release | T | someone on the network changes the ZX Spectrum Next's files, which NextZXOS fetches over plain HTTP | each `CBB` installs only the overlay, driver and Pi `cbb` whose SHA-256 it carries; `.cbb update` takes a newer `CBB` only from `zxnext.json`, signed by a release key, which the Pi's `cbb` checks against its pinned roots and refuses for a release older than its own; **accepted**: the first `CBB`, which `.http` fetches, is as trustworthy as the network (residual risks) | `apps/zxnext/src/cbb.c`, `member/src/next.rs`, `internal/release/zxnext.go` |
+| 31 | internet | I | a push platform (APNs, FCM, a UnifiedPush server, Push Kit) or CBB's push service reads what reaches a closed app | each body sealed under the group's push key of the phone, all bodies one size, the notification's words from the app's translations; only the phone opens it; **accepted**: the platform and the service see when a phone is notified (residual risks) | `core/src/push.rs`, `member/src/pushd` |
+| 32 | device | I, E | a bug in the notification extension, which runs whenever a push arrives, gives its keys away | the extension's keychain group holds what opens a body and a copy (the push keys, the send key, the sealing secrets of the epochs in the group's window, the origins and the window) and nothing that signs a record: no member, admin or root key and no recovery secret, which stay in the app's own group, named in every keychain query of the app's; its app group is push's own (the IDs it showed and the hints-only marks), never the app's with the group's file and the servers' credentials; a group the phone leaves takes its push keys and secrets with it; the app is to write the epochs on every rotation and remove those that left the window (none yet: until the switch to the core's key store, copies show only as hints) | `apps/ios/CBBKit/Sources/CBBKit/PushVault.swift`, `apps/ios/NotificationService` |
+| 33 | internet | D, S | a stranger registers the phone's token first and so silences or impersonates the phone at the push service | the service binds a token to the key that answers its challenge, which only the token's holder receives; the challenge is computed from the service's secret, the token, the key, the binding's generation and its period, never kept, so no other key pushes it out; while no key is confirmed any key passes, within a small rate per group and one ceiling per token, past which a group's send carries its challenge alone, so the phone confirms whatever others send; what goes to a token is budgeted per group, so no group spends the phone's; a replayed, foreign or older challenge confirms nothing | `member/src/pushd/binding.rs`, `member/src/pushd/mod.rs` |
 
 ## Residual risks
 
@@ -98,9 +105,11 @@ of service, **E**levation of privilege.
   are sealed to reads every copy from then on, and whoever holds the root's or an admin's key
   can add such a device. Keep the group to devices you control, and the root's and admins'
   keys in hardware; a hub that only passes copies on reads none.
-- Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
+- Keys in a file (computers without a TPM 2.0 or a Secure Enclave, small devices) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
+- A push platform and CBB's push service see when a phone is notified, and the platform which
+  app on which phone (threat 31); turn push off in the app's settings to avoid it.
 - On the ZX Spectrum Next, the first `.http -h cbb.tools -u /zxnext -f CBB` trusts the
   network it runs over: neither `.http` nor the ESP has TLS, and nothing on the Next can
   check the `CBB` it fetches. Whoever changes that download controls what the Next installs,

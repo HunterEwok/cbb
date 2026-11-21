@@ -213,14 +213,18 @@ fi
 
 install -d -m 0755 "${cbb%/*}"
 install -m 0755 "$bin" "$cbb"
+# The polkit actions that confirm an admin action of a user at the screen
+# (docs/design.md, "Confirming admin actions"): the service, as cbb, cannot
+# write them, and they let it ask polkit about the user's process.
+"$cbb" confirm-setup cbb || note install.sh "the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead"
 # cbb-helper goes beside cbb, where cbb looks for it; root owns both, as
 # cbb requires of its helper's program and folder.
 if [ "$helper" = yes ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper"
 fi
 # The servers, which cbb forward and cbb relay run, and their systemd units
-# (cbb-forward.service, cbb-relay.service) start by themselves.
-for server in cbb-forward cbb-relay; do
+# (cbb-forward.service, cbb-relay.service, cbb-push.service) start by themselves.
+for server in cbb-forward cbb-relay cbb-push; do
 	if [ -f "$(dirname "$bin")/$server" ]; then
 		install -m 0755 "$(dirname "$bin")/$server" "${cbb%/*}/$server"
 	fi

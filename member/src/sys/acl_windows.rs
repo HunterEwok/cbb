@@ -103,6 +103,31 @@ impl Drop for Descriptor {
     }
 }
 
+/// Narrows the access list of the file at path to its owner and the
+/// system, protected from its folder's: a file only its owner may read,
+/// as mode 0600 on Unix.
+pub fn owner_only(path: &Path) -> Result<()> {
+    let sd = Descriptor::new("D:P(A;;FA;;;OW)(A;;FA;;;SY)")?;
+    let dacl = sd.dacl()?;
+    let w = wide(&path.to_string_lossy());
+    // SAFETY: w is NUL-ended; dacl lives as long as sd.
+    let r = unsafe {
+        SetNamedSecurityInfoW(
+            w.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            dacl,
+            std::ptr::null(),
+        )
+    };
+    if r != 0 {
+        return Err(Error::with(format!("narrowing {}", path.display()), std::io::Error::from_raw_os_error(r as i32)));
+    }
+    Ok(())
+}
+
 /// Listens on the control socket at path, its folder narrowed first.
 pub fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
     let dir = path.parent().unwrap_or(Path::new("."));

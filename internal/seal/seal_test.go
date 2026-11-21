@@ -5,6 +5,7 @@ package seal
 
 import (
 	"bytes"
+	"crypto/hpke"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -198,5 +199,68 @@ func TestVectors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestDraftVector checks the suite against the vector of the standard's
+// draft, from outside the project (testdata/interop/xwing-hpke-pq.json):
+// the public key of its secret and every message and exported value
+// opened from its encapsulated key. The Rust core checks the same file.
+func TestDraftVector(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "xwing-hpke-pq.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		KEM         int    `json:"kem_id"`
+		KDF         int    `json:"kdf_id"`
+		AEAD        int    `json:"aead_id"`
+		Info        string `json:"info"`
+		SkRm        string `json:"skRm"`
+		PkRm        string `json:"pkRm"`
+		Enc         string `json:"enc"`
+		Encryptions []struct {
+			AAD string `json:"aad"`
+			CT  string `json:"ct"`
+			PT  string `json:"pt"`
+		} `json:"encryptions"`
+		Exports []struct {
+			Context string `json:"exporter_context"`
+			L       int    `json:"L"`
+			Value   string `json:"exported_value"`
+		} `json:"exports"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.KEM != 0x647a || v.KDF != 1 || v.AEAD != 3 || len(v.Encryptions) == 0 {
+		t.Fatalf("the vector is for %#x, %d, %d with %d messages", v.KEM, v.KDF, v.AEAD, len(v.Encryptions))
+	}
+	pub, err := PublicKey(unhex(t, v.SkRm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(pub, unhex(t, v.PkRm)) {
+		t.Error("the public key differs from the draft's")
+	}
+	sk, err := privateKey(unhex(t, v.SkRm))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := hpke.NewRecipient(unhex(t, v.Enc), sk, kdf, aead, unhex(t, v.Info))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, e := range v.Encryptions {
+		pt, err := r.Open(unhex(t, e.AAD), unhex(t, e.CT))
+		if err != nil || !bytes.Equal(pt, unhex(t, e.PT)) {
+			t.Fatalf("message %d: %q, %v", i, pt, err)
+		}
+	}
+	for i, e := range v.Exports {
+		got, err := r.Export(string(unhex(t, e.Context)), e.L)
+		if err != nil || hex.EncodeToString(got) != e.Value {
+			t.Errorf("export %d: %x, %v", i, got, err)
+		}
 	}
 }

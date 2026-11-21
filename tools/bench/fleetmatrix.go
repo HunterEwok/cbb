@@ -15,7 +15,7 @@ import (
 // across subnets with -peer), and a member on another subnet syncs through
 // -peer; each new member syncs both ways, is removed by its admitter, and
 // is then refused. The invitation's path is the away cases' (W4, G13); the
-// phones, the lite member and the other systems are the real devices'.
+// phones, small devices and the other systems are the real devices..
 func joinMatrix(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/G41-matrix/"
 	g := fleetGroup(ctx, r, f, "fleet/G41-matrix", 3)

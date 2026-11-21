@@ -12,8 +12,12 @@ const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
 }
 
 const ID16: Ty = Ty::Bytes(16);
+/// An invitation's ID in a message: never the zero ID, the one spelling of
+/// "no invitation" is the field left out.
+const INVITE_ID: Ty = Ty::Id(16);
 const B32: Ty = Ty::Bytes(32);
-const TEXT64: Ty = Ty::Text(64);
+/// A name: 1 to 128 bytes of UTF-8 (format 20.6).
+const NAME: Ty = Ty::Text(128);
 const REASON: Ty = Ty::Text(256);
 const WG_KEY: Ty = Ty::Key(Alg::X25519);
 const MEMBER_KEY: Ty = Ty::Key(Alg::Es256);
@@ -32,33 +36,32 @@ pub static ADB: Table = Table {
     fields: &[
         f(1, "pair/adb/group", ID16, true),
         f(2, "pair/adb/device", ID16, true),
-        f(3, "pair/adb/name", TEXT64, true),
+        f(3, "pair/adb/name", NAME, true),
     ],
 };
 
+/// Messages 64, 65 and 66 carry CPace alone: the short code's commitment
+/// and nonces of earlier drafts (64 field 4, 65 field 4, 66 field 3) are
+/// retired, never given again, and refused (`msg::check`).
 pub static PAIR_START: Table = Table {
     shape: "pair/start/shape",
-    fields: &[
-        f(2, "pair/start/ya", Ty::BytesUpTo(256), true),
-        f(3, "pair/start/ada", Ty::BytesUpTo(16384), true),
-        f(4, "pair/start/commitment", B32, true),
-    ],
+    fields: &[f(2, "pair/start/ya", Ty::BytesUpTo(256), true), f(3, "pair/start/ada", Ty::BytesUpTo(16384), true)],
 };
 pub static PAIR_REPLY: Table = Table {
     shape: "pair/reply/shape",
-    fields: &[
-        f(2, "pair/reply/yb", Ty::BytesUpTo(256), true),
-        f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true),
-        f(4, "pair/reply/nonce", B32, true),
-    ],
+    fields: &[f(2, "pair/reply/yb", Ty::BytesUpTo(256), true), f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true)],
 };
-pub static PAIR_CONFIRM: Table = Table {
-    shape: "pair/confirm/shape",
-    fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true), f(3, "pair/confirm/nonce", B32, true)],
-};
+pub static PAIR_CONFIRM: Table =
+    Table { shape: "pair/confirm/shape", fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true)] };
+/// Message 67: CPace's Tb, the Welcome, and `Tw`, the Welcome's tag from
+/// the session's ISK over field 3's bytes (`join::welcome::tag`).
 pub static PAIR_WELCOME: Table = Table {
     shape: "pair/welcome/shape",
-    fields: &[f(2, "pair/welcome/tb", Ty::BytesUpTo(64), true), f(3, "pair/welcome/welcome", Ty::Map(&WELCOME), true)],
+    fields: &[
+        f(2, "pair/welcome/tb", Ty::BytesUpTo(64), true),
+        f(3, "pair/welcome/welcome", Ty::Map(&WELCOME), true),
+        f(4, "pair/welcome/tw", Ty::Bytes(64), true),
+    ],
 };
 pub static PAIR_DONE: Table = Table { shape: "pair/done/shape", fields: &[] };
 pub static PAIR_ERROR: Table =
@@ -70,13 +73,31 @@ pub static WELCOME: Table = Table {
     shape: "welcome/shape",
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
-        f(2, "welcome/records", Ty::Array { of: &ENV, max: 4096 }, true),
+        f(2, "welcome/records", Ty::Array { of: &ENV, max: 8192 }, false),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
         f(9, "welcome/recovery", MEMBER_KEY, true),
-        f(10, "welcome/list", Ty::BytesUpTo(4 + 34 * 1024), false),
+        f(10, "welcome/list", LIST, false),
+        f(11, "welcome/recovery2", Ty::Key(Alg::SlhDsa), true),
+        f(12, "welcome/digest", B32, false),
+        f(13, "welcome/parts", Ty::Uint { min: 1, max: crate::join::welcome::MAX_PARTS }, false),
+    ],
+};
+
+/// A change of root's list in a message: its count and up to
+/// [`crate::records::LIST_MAX`] IDs of 34 bytes each.
+const LIST: Ty = Ty::BytesUpTo(crate::bounds::LIST_FIELD);
+
+/// Message `records` (t 5, format 9.2): record envelopes in the order a
+/// receiver takes them, and the lists the recovery records among them name
+/// (`records::sync::Part`): a part of sync, or of a Welcome.
+pub static RECORDS: Table = Table {
+    shape: "records/shape",
+    fields: &[
+        f(2, "records/records", Ty::Array { of: &ENV, max: crate::records::sync::PART_RECORDS }, false),
+        f(3, "records/lists", Ty::Array { of: &LIST, max: crate::records::body::MAX_RECOVERY as usize }, false),
     ],
 };
 
@@ -139,7 +160,7 @@ pub static OBFUSCATION: Table = Table {
         f(1, "obfuscation/jc", Ty::Uint { min: 1, max: 128 }, true),
         f(2, "obfuscation/jmin", Ty::Uint { min: 0, max: 1280 }, true),
         f(3, "obfuscation/jmax", Ty::Uint { min: 1, max: 1280 }, true),
-        f(4, "obfuscation/s", Ty::Array { of: &Ty::Uint { min: 0, max: 64 }, max: 4 }, true),
+        f(4, "obfuscation/s", Ty::Array { of: &Ty::Uint { min: 0, max: 1280 }, max: 4 }, true),
         f(5, "obfuscation/h", Ty::Array { of: &Ty::Array { of: &U32, max: 2 }, max: 4 }, true),
         f(6, "obfuscation/key", B32, false),
     ],
@@ -172,6 +193,8 @@ pub static OFFER: Table = Table {
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
         f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
+        f(10, "offer/next-obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(11, "offer/next-vless", Ty::Map(&VLESS), false),
     ],
 };
 
@@ -217,9 +240,9 @@ pub static GUEST: Table = Table {
         f(6, "guest/offer", Ty::Map(&OFFER), false),
         f(7, "guest/reason", REASON, false),
         f(8, "guest/conn", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
-        f(9, "guest/data", Ty::BytesUpTo(16384), false),
+        f(9, "guest/data", Ty::BytesUpTo(crate::join::guest::MAX_DATA), false),
         f(10, "guest/device", ID16, false),
-        f(11, "guest/invite", ID16, false),
+        f(11, "guest/invite", INVITE_ID, false),
     ],
 };
 
@@ -227,12 +250,17 @@ pub static GUEST: Table = Table {
 /// and in field 3 room for the group's AmneziaWG settings to change with
 /// the period in a later version. Only members get this message, so a
 /// server never sees the settings. No 0.6 writer sets field 3; a 0.6
-/// reader checks its shape and does not apply it.
+/// reader checks its shape and does not apply it. Fields 4 and 5 name the
+/// server these credentials are for (A-55, a face for each server): its
+/// pin, the hash of its key, always, and its address. There is no face
+/// for all servers, so that no two servers see the same one.
 pub static CREDENTIALS: Table = Table {
     shape: "member-credentials/shape",
     fields: &[
         f(2, "member-credentials/list", Ty::Array { of: &ENV, max: 259 }, true),
         f(3, "member-credentials/obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(4, "member-credentials/server", B32, true),
+        f(5, "member-credentials/address", Ty::Text(261), false),
     ],
 };
 
@@ -242,7 +270,7 @@ pub static CREDENTIALS: Table = Table {
 pub static REQUEST: Table = Table {
     shape: "waiting/request/shape",
     fields: &[
-        f(1, "waiting/request/invite", ID16, true),
+        f(1, "waiting/request/invite", INVITE_ID, true),
         f(2, "waiting/request/key", MEMBER_KEY, true),
         f(3, "waiting/request/info", Ty::Map(&INFO), true),
         f(4, "waiting/request/network", Ty::Uint { min: 1, max: 3 }, true),
@@ -255,15 +283,15 @@ pub static REQUEST: Table = Table {
 pub static INFO: Table = Table {
     shape: "pair/info/shape",
     fields: &[
-        f(1, "pair/info/name", TEXT64, true),
+        f(1, "pair/info/name", NAME, true),
         f(2, "pair/info/os", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
         f(3, "pair/info/caps", Ty::Uint { min: 1, max: 7 }, false),
         f(4, "pair/info/role", Ty::Uint { min: 1, max: 4 }, true),
         f(5, "pair/info/admin", MEMBER_KEY, false),
-        f(6, "pair/info/admin-pop", Ty::Bytes(64), false),
+        f(6, "pair/info/admin-pop", Ty::BytesUpTo(8192), false),
         f(7, "pair/info/keys", ENV, false),
         f(8, "pair/info/device", Ty::Map(&INFO_DEVICE), false),
-        f(9, "pair/info/invite", ID16, false),
+        f(9, "pair/info/invite", INVITE_ID, false),
     ],
 };
 
@@ -281,8 +309,10 @@ pub static WAITING: Table = Table {
 
 /// `dismiss` (t 27): from that admin to the holder: drop the requests of
 /// this invitation, or of this key.
-pub static DISMISS: Table =
-    Table { shape: "dismiss/shape", fields: &[f(2, "dismiss/invite", ID16, true), f(3, "dismiss/key", B32, false)] };
+pub static DISMISS: Table = Table {
+    shape: "dismiss/shape",
+    fields: &[f(2, "dismiss/invite", INVITE_ID, true), f(3, "dismiss/key", B32, false)],
+};
 
 // ---------------------------------------------------------------- servers
 
@@ -331,7 +361,7 @@ pub static RELAY_REGISTERED: Table = Table {
     fields: &[
         f(2, "relay/registered/key", WG_KEY, true),
         f(3, "relay/registered/psk", B32, true),
-        f(4, "relay/registered/addr", Ty::Text(64), true),
+        f(4, "relay/registered/addr", Ty::Text(261), true),
     ],
 };
 pub static RELAY_WATCH: Table = Table { shape: "relay/watch/shape", fields: &[] };
@@ -393,6 +423,7 @@ pub static ALL: &[&Table] = &[
     &PAIR_DONE,
     &PAIR_ERROR,
     &WELCOME,
+    &RECORDS,
     &GRANT,
     &INFO,
     &INFO_DEVICE,
@@ -437,6 +468,7 @@ pub fn of(t: u64) -> Option<&'static Table> {
         T_GUEST => &GUEST,
         T_WAITING => &WAITING,
         T_DISMISS => &DISMISS,
+        5 => &RECORDS,
         64 => &PAIR_START,
         65 => &PAIR_REPLY,
         66 => &PAIR_CONFIRM,

@@ -9,7 +9,10 @@
 //! at home (`listen`), and in the background it pauses. Away from home it
 //! reaches the group's hub through the same tunnel as cbb
 //! (`crate::away`, in a build with the feature `tunnel`), once the user
-//! turns sync away from home on.
+//! turns sync away from home on. With `serve_servers` (the apps that sign
+//! through the core) the member does the rest as the service does: the
+//! group's server credentials, the phone as one of the group's hubs with
+//! its forwarder, and the blind relay.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -18,7 +21,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use cbb_core::admit::{self, Admitted, Admitter, GroupView};
-use cbb_core::certs::DeviceId;
+use cbb_core::certs::{Cert, DeviceId};
 use cbb_core::clip::{Engine, Event, Kind, Via};
 use cbb_core::identity::Identity;
 use cbb_core::manage::{self, Change, Order, Signer};
@@ -34,6 +37,9 @@ use crate::error::{Error, Result};
 pub use crate::inviter::Invite;
 use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
+/// A remote paste's text as it may go in, as the computers clean it, for
+/// the paste commands the phone signs.
+pub use crate::remotepaste::clean as clean_paste;
 pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;
@@ -55,6 +61,10 @@ pub struct Config {
     /// Where the phone's key lives, as its hello says: `hardware` (a TEE)
     /// or `file`.
     pub key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root's "Make it an admin"
+    /// (docs/protocol.md, section 10); empty for none.
+    pub admin_key: Vec<u8>,
     /// Where the records, the clock's mark and the entries are kept.
     pub state_dir: PathBuf,
     /// Members to dial at these addresses besides those mDNS finds.
@@ -129,7 +139,17 @@ pub struct Member {
     admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
     /// The user's order of the tiles (crate::view).
     tiles: crate::view::Tiles,
+    /// The group's server credentials once serve_servers ran.
+    servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>>,
+    /// What gets the messages the member does not take itself: the app's.
+    app_messages: Arc<RwLock<Option<OnMessage>>>,
+    #[cfg(feature = "tunnel")]
+    attest: Arc<crate::phone_attest::Attestations>,
 }
+
+/// How often the server credentials are looked at when nothing changed,
+/// as the service's credential_check.
+const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);
 
 /// What a member port a phone opens is for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -191,6 +211,7 @@ impl Member {
             log(&format!("cbb: sync on or off: {}; sync is on", e.for_log()));
         }
         let state_dir = cfg.state_dir.clone();
+        let admin_key = cfg.admin_key;
         let node = Node::new(ident, &cfg.name, engine.clone(), records, cfg.state_dir, cfg.on_write, log.clone())
             .presenting(Presence {
                 role: "phone".into(),
@@ -199,7 +220,7 @@ impl Member {
                 os: cfg.os,
                 key_store: cfg.key_store,
                 device,
-                admin_key: Default::default(),
+                admin_key: Arc::new(RwLock::new((!admin_key.is_empty()).then_some(admin_key))),
             })
             .keeping_identity(cfg.keep_identity)
             .with_content();
@@ -238,6 +259,40 @@ impl Member {
             let (away, node) = (away.clone(), node.clone());
             std::thread::spawn(move || away.run(node));
         }
+        // The credentials and what the group's hubs share go to the member
+        // itself once it serves the servers, the rest to the app.
+        let servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>> = Arc::default();
+        let app_messages: Arc<RwLock<Option<OnMessage>>> = Arc::default();
+        #[cfg(feature = "tunnel")]
+        let attest = Arc::new(crate::phone_attest::Attestations::new(&state_dir));
+        {
+            let (servers, app, away, n) = (servers.clone(), app_messages.clone(), away.clone(), Arc::downgrade(&node));
+            #[cfg(feature = "tunnel")]
+            let attest = attest.clone();
+            node.on_message(Box::new(move |from, m| {
+                // The evidence an Android peer sends waits for the root key
+                // (src/phone_attest.rs); the app sees it too.
+                #[cfg(feature = "tunnel")]
+                if let (Some(v), "evidence", Some(node)) = (m.evidence.as_ref(), m.kind.as_str(), n.upgrade())
+                    && let Some(leaf) = node.chain_of(from).into_iter().next()
+                {
+                    attest.received(from, leaf, v);
+                }
+                if let (Some(creds), Some(node)) = (servers.get(), n.upgrade()) {
+                    if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
+                        creds.received(&node, from, v);
+                        return;
+                    }
+                    if let (Some(v), "hubs") = (m.hubs.as_ref(), m.kind.as_str()) {
+                        away.hubs_shared(&node, from, &node.chain_of(from), v);
+                        return;
+                    }
+                }
+                if let Some(f) = app.read().unwrap().as_ref() {
+                    f(from, m);
+                }
+            }));
+        }
         Ok(Member {
             node,
             dialers: Dialers::default(),
@@ -250,7 +305,138 @@ impl Member {
             admin_cas: Mutex::new(std::collections::BTreeMap::new()),
             tiles: crate::view::Tiles::new(&state_dir),
             state_dir,
+            servers,
+            app_messages,
+            #[cfg(feature = "tunnel")]
+            attest,
         })
+    }
+
+    /// Makes the member do what the service does for the servers, for an
+    /// app that signs through the core: it keeps the group's server
+    /// credentials (docs/protocol.md, section 18) with its keys for the
+    /// servers where the app holds them, takes and passes on those its
+    /// peers send, and brings them up to date when the records or the
+    /// credentials change and twice a day; as one of the group's hubs it
+    /// admits the tunnel keys the hellos offer and takes what the other hubs
+    /// share. Once per member.
+    pub fn serve_servers(&self, held: Arc<dyn crate::credentials::HeldKeys>) -> Result<()> {
+        if self.servers.get().is_some() {
+            return Ok(());
+        }
+        let creds = crate::credentials::Credentials::load_held(&self.state_dir, &self.node, held, self.log.clone());
+        self.away.set_credentials(creds.clone());
+        if self.servers.set(creds.clone()).is_err() {
+            return Ok(());
+        }
+        {
+            let (away, n, creds) = (self.away.clone(), Arc::downgrade(&self.node), creds.clone());
+            self.node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
+                Some(node) => {
+                    let mut out = away.hello(&node, from, peer, chain);
+                    out.extend(creds.message());
+                    out
+                }
+                None => Vec::new(),
+            }));
+        }
+        {
+            let away = self.away.clone();
+            self.node.on_guest(Box::new(move |node, from, chain, g| away.guest_message(node, from, chain, g)));
+        }
+        let (away, node) = (self.away.clone(), self.node.clone());
+        std::thread::spawn(move || {
+            let (mut seen, mut at) = ((String::new(), usize::MAX), std::time::Instant::now());
+            while !node.is_closed() {
+                let now = (node.records().lock().unwrap().digest(), creds.changes());
+                if now != seen || at.elapsed() >= CREDENTIAL_CHECK {
+                    creds.refresh(&node);
+                    seen = (node.records().lock().unwrap().digest(), creds.changes());
+                    at = std::time::Instant::now();
+                }
+                // A hub drops the clients the records now refuse, and every
+                // member the offers of devices that may no longer be hubs.
+                away.prune(&node);
+                node.records_nap(Duration::from_secs(30));
+            }
+        });
+        Ok(())
+    }
+
+    fn credentials(&self) -> Result<&Arc<crate::credentials::Credentials>> {
+        self.servers.get().ok_or_else(|| Error::msg("the member does not serve the servers"))
+    }
+
+    /// Whether this phone holds the root and the next period of the
+    /// server credentials waits for the app to sign it (sign_period).
+    pub fn period_due(&self) -> bool {
+        self.servers.get().is_some_and(|c| c.period_due())
+    }
+
+    /// Signs the next period of the server credentials with the root key
+    /// the app hands in for this call, after asking the user, when one is
+    /// due.
+    pub fn sign_period(&self, key: Arc<dyn cbb_core::identity::ExternalKey>) -> Result<()> {
+        self.credentials()?.sign_period(&self.node, key)
+    }
+
+    /// Makes this phone one of the group's hubs (docs/protocol.md, section
+    /// 11), reached away from home through the forwarder at forwarder
+    /// (`host:port`), whose key's pin is key, or `default` for the
+    /// project's; with AmneziaWG unless obfuscate_off, and VLESS at the
+    /// forwarder unless vless_off. Sync away from home goes on with it.
+    /// Only the group's root or an admin is a hub.
+    pub fn hub_on(&self, forwarder: &str, key: &str, obfuscate_off: bool, vless_off: bool) -> Result<()> {
+        self.credentials()?;
+        let me = self.node.identity().id.to_string();
+        if !self.node.records().lock().unwrap().may_host(&me) {
+            return Err(Error::msg(
+                "only the group's root or an admin can be its hub, since the members take the hub's offer from them only",
+            ));
+        }
+        let h = crate::control::Header {
+            name: "hub".into(),
+            forwarder: resolve(forwarder)?,
+            forwarder_key: key.to_string(),
+            obfuscate_off,
+            vless_off,
+            consent: true,
+            ..Default::default()
+        };
+        self.node.set_tunnel_key(Some(self.away.make_hub(&h)?));
+        self.away.serve_if_first(&self.node);
+        // The members connected get the hub's offer without connecting
+        // again (docs/protocol.md, section 4, "Presence").
+        self.node.announce(true);
+        Ok(())
+    }
+
+    /// Makes this phone, a hub, stop being one; without anyway it refuses
+    /// while the group has no other hub. Sync away from home stays on.
+    pub fn hub_off(&self, anyway: bool) -> Result<()> {
+        self.away.stop_hub(&self.node, anyway)
+    }
+
+    /// Meets the group at the blind relay at relay (`host:port`), whose
+    /// key's pin is key, or `default` for the project's, in place of the
+    /// group's hubs, once the user read what a relay learns
+    /// (docs/protocol.md, section 14); with relay empty it leaves the relay
+    /// and turns sync away from home on again with new keys.
+    pub fn relay(&self, relay: &str, key: &str) -> Result<()> {
+        self.credentials()?;
+        if relay.is_empty() {
+            self.away_off()?;
+            return self.away_on();
+        }
+        let h = crate::control::Header {
+            name: "relay".into(),
+            relay: resolve(relay)?,
+            relay_key: key.to_string(),
+            consent: true,
+            ..Default::default()
+        };
+        self.node.set_tunnel_key(Some(self.away.meet_at(&self.node, &h)?));
+        Ok(())
     }
 
     /// The tiles to draw for devices, the group's devices as the app's
@@ -437,7 +623,7 @@ impl Member {
 
     /// Stops dialing the member the app lost.
     pub fn lost(&self, key: &str) {
-        self.dialers.lost(&self.node, key);
+        self.dialers.lost(&*self.node, key);
     }
 
     /// Opens a member port for what: on the home network (every address)
@@ -515,7 +701,43 @@ impl Member {
         self.node.send_to(to, wire::cert(cert, issuer))
     }
 
-    /// Sends a full member the admin CA for the admin key its hello offered.
+    /// Sets the admin key the hellos offer from the next connection on:
+    /// the phone's while it is no admin, None once it is one.
+    pub fn offer_admin_key(&self, spki: Option<Vec<u8>>) {
+        self.node.offer_admin_key(spki.filter(|k| !k.is_empty()));
+    }
+
+    /// Checks the admin CA that came in the root's admin message, as
+    /// docs/protocol.md section 10 ("Admins") says a member MUST: it is for
+    /// the admin key the hellos offer, names this phone and stands under the
+    /// group's current root, and the records do not refuse it. Then the
+    /// hellos offer the key no more; the app keeps the CA and signs with it.
+    pub fn take_admin_ca(&self, ca: &[u8]) -> Result<()> {
+        let offered = self.node.offered_admin_key().ok_or_else(|| Error::msg("this phone offers no admin key"))?;
+        let cert = Cert::parse(ca)?;
+        let ident = self.node.identity();
+        let point = cbb_core::certs::p256_spki(&offered)
+            .map(|k| k.to_sec1_point(false).as_bytes().to_vec())
+            .ok_or_else(|| Error::msg("the offered admin key is no P-256 key"))?;
+        let mut roots = self.node.records().lock().unwrap().roots();
+        if roots.is_empty() {
+            roots.push(ident.root().clone());
+        }
+        let root = roots.last().unwrap_or(ident.root());
+        if cert.public_key() != point.as_slice()
+            || cert.common_name.as_deref() != Some(format!("cbb admin {}", ident.id).as_str())
+        {
+            return Err(Error::msg("the admin CA is not for this phone's admin key"));
+        }
+        cbb_core::certs::check_admin_ca(&cert, root).map_err(|e| e.context("the admin CA"))?;
+        if let Some(why) = self.node.records().lock().unwrap().refused_admin_ca(&cert) {
+            return Err(Error::msg(format!("the group's records refuse the admin CA: {why:?}")));
+        }
+        self.node.offer_admin_key(None);
+        Ok(())
+    }
+
+    /// Sends a member the admin CA for the admin key its hello offered.
     pub fn send_admin_ca(&self, to: &DeviceId, ca: &[u8]) -> bool {
         self.node.send_to(to, wire::admin(ca))
     }
@@ -560,9 +782,10 @@ impl Member {
     }
 
     /// Sets what gets the admin, hubs, credentials and evidence messages
-    /// peers send.
+    /// peers send; once the member serves the servers it takes the hubs
+    /// and credentials messages itself.
     pub fn on_message(&self, f: OnMessage) {
-        self.node.on_message(f);
+        *self.app_messages.write().unwrap() = Some(f);
     }
 
     /// Sets what gets each peer once its hello is taken: an admin's app
@@ -781,6 +1004,42 @@ impl Member {
         Ok(())
     }
 
+    /// Takes the revocation list of Android attestations the app fetched
+    /// from the mirror (keys.json and attest-status.json), when it checks
+    /// out; it answers how many certificates it revokes.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_status(&self, keys: cbb_core::release::File, status: cbb_core::release::File) -> Result<usize> {
+        self.attest.take_status(keys, status, &|line| self.node.logf(line))
+    }
+
+    /// How many Android peers' evidence waits for the root key.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_pending(&self) -> usize {
+        self.attest.pending()
+    }
+
+    /// Records, as the root that s signs for, what the evidence that waits
+    /// shows; it answers how many records it signed.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_record(&self, s: &Signer) -> Result<usize> {
+        self.attest.record(&self.node, s)
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_status(&self, _: cbb_core::release::File, _: cbb_core::release::File) -> Result<usize> {
+        Err(Error::msg("this library checks no attestations"))
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_pending(&self) -> usize {
+        0
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_record(&self, _: &Signer) -> Result<usize> {
+        Err(Error::msg("this library checks no attestations"))
+    }
+
     /// Claims the group for new_root (DER), a root CA for a new key of the
     /// phone that the app keeps before it calls this (src/takeover.rs).
     pub fn claim(&self, s: &Signer, how: How, new_root: &[u8]) -> Result<()> {
@@ -838,18 +1097,18 @@ impl Member {
         self.node.command(&r, timeout)
     }
 
-    /// Makes the computer device an admin as the group's root: the admin CA
-    /// for the admin key its hello offers, its device record again, added
-    /// and sent, and the admin message with the CA. The computer must be
-    /// connected, since the key comes from its hello.
+    /// Makes device, a phone or a computer, an admin as the group's root:
+    /// the admin CA for the admin key its hello offers, its device record
+    /// again, added and sent, and the admin message with the CA. The device
+    /// must be connected, since the key comes from its hello.
     pub fn make_admin(&self, s: &Signer, device: &str, allow_file_key: bool) -> Result<()> {
         let p = self
             .node
             .peers()
             .into_iter()
             .find(|p| p.id.as_str() == device)
-            .ok_or_else(|| Error::msg("the computer is not connected; it offers its admin key when it is"))?;
-        let key = p.admin_key.ok_or_else(|| Error::msg("the computer offers no admin key"))?;
+            .ok_or_else(|| Error::msg("the device is not connected; it offers its admin key when it is"))?;
+        let key = p.admin_key.ok_or_else(|| Error::msg("the device offers no admin key: it runs an older CBB"))?;
         let records = self.node.records();
         let made = manage::make_admin(
             &records.lock().unwrap(),
@@ -862,12 +1121,33 @@ impl Member {
         )?;
         self.node.add_own_records(std::slice::from_ref(&made.record));
         if !records.lock().unwrap().devices().iter().any(|d| d.id == device && d.admin) {
-            return Err(Error::msg("the group's records did not take the computer as an admin; the log says why"));
+            return Err(Error::msg("the group's records did not take the device as an admin; the log says why"));
         }
         if !self.node.send_to(&p.id, wire::admin(&made.admin_ca)) {
-            return Err(Error::msg("the computer is an admin now, but it went away before it got its admin CA"));
+            return Err(Error::msg("the device is an admin now, but it went away before it got its admin CA"));
         }
         Ok(())
+    }
+
+    /// Makes a watch an admin of the group as its root (cbb_core::manage::
+    /// add_watch): its record, added and passed to the group, and the admin
+    /// CA for the key point the watch made and the group's tag, which this
+    /// answers for the app to hand to the watch.
+    pub fn add_watch(&self, s: &Signer, device: &str, name: &str, os: &str, point: &[u8]) -> Result<(Vec<u8>, String)> {
+        let records = self.node.records();
+        let made = manage::add_watch(&records.lock().unwrap(), s, device, name, os, point, uptime::wall_ms())?;
+        self.node.add_own_records(std::slice::from_ref(&made.record));
+        if !records.lock().unwrap().devices().iter().any(|d| d.id == device && d.admin) {
+            return Err(Error::msg("the group's records did not take the watch as an admin; the log says why"));
+        }
+        let tag = records.lock().unwrap().tag().to_string();
+        Ok((made.admin_ca, tag))
+    }
+
+    /// What a watch may do to device from the wrist (cbb_core::manage::
+    /// watch_actions).
+    pub fn watch_actions(&self, device: &str) -> Vec<&'static str> {
+        manage::watch_actions(&self.node.records().lock().unwrap(), device)
     }
 
     /// Renews the member certificates that are due, as an admin: each
@@ -1005,7 +1285,7 @@ impl Commands {
         } else {
             node.engine.unmute();
         }
-        mute::save(&self.state_dir, &node.engine)?;
+        mute::save(&self.state_dir, &node.engine, by)?;
         (self.log)(&match (on, until) {
             (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
@@ -1028,6 +1308,24 @@ fn sync_of(mode: &str) -> String {
     .to_string()
 }
 
+/// A server's address as the hub and the relay take it, `ip:port`, from
+/// `host:port`, its name looked up now, IPv4 first; empty stays empty.
+fn resolve(s: &str) -> Result<String> {
+    use std::net::ToSocketAddrs as _;
+    let s = s.trim();
+    if s.is_empty() || s.parse::<SocketAddr>().is_ok() {
+        return Ok(s.to_string());
+    }
+    let addrs: Vec<SocketAddr> =
+        s.to_socket_addrs().map_err(|e| Error::with(format!("cannot look up {s}"), e))?.collect();
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4())
+        .or(addrs.first())
+        .map(SocketAddr::to_string)
+        .ok_or_else(|| Error::msg(format!("{s} has no address")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::sync_of;
@@ -1040,5 +1338,82 @@ mod tests {
         assert_eq!(sync_of("own"), "off");
         assert_eq!(sync_of("receive"), "");
         assert_eq!(sync_of(""), "");
+    }
+
+    /// A phone's member alone in its group: what the app reads of it, its
+    /// sync and mute, a copy, its ports, and why it does not sync.
+    #[test]
+    fn a_member_alone() {
+        use super::*;
+        let base = std::env::temp_dir().join(format!("cbb-phone-alone-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (group_dir, state_dir) = (base.join("group"), base.join("phone"));
+        std::fs::create_dir_all(&group_dir).unwrap();
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let (identity, _) = crate::admin::new_group(&group_dir, "root").unwrap();
+        let records = crate::records::FILE_NAME;
+        std::fs::copy(group_dir.join(records), state_dir.join(records)).unwrap();
+        let lines = Arc::new(Mutex::new(Vec::<String>::new()));
+        let l = lines.clone();
+        let m = Member::start(Config {
+            identity: identity.clone(),
+            name: "phone".into(),
+            os: "aurora".into(),
+            os_version: "5".into(),
+            version: "0.6.0".into(),
+            key_store: "hardware".into(),
+            admin_key: Vec::new(),
+            state_dir: state_dir.clone(),
+            peers: Vec::new(),
+            mdns: false,
+            seal_secret: cbb_core::seal::generate_secret().unwrap().to_vec(),
+            on_write: Box::new(|_| {}),
+            keep_identity: Box::new(|_| Ok(())),
+            on_mute: Box::new(|_, _| {}),
+            log: Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string())),
+        })
+        .unwrap();
+        assert!(lines.lock().unwrap().iter().any(|s| s.contains(&identity.tag())));
+        assert_eq!(m.identity().id, identity.id);
+        assert!(m.peers().is_empty() && m.all_peers().is_empty());
+        assert!(m.current().is_none() && m.waiting().is_none());
+        let views = m.device_views();
+        assert!(views.iter().any(|d| d.this), "{views:?}");
+        assert!(!m.why(None).is_empty());
+        let facts = cbb_core::why::AwayFacts { hub_device: identity.id.to_string(), ..Default::default() };
+        let _ = m.why(Some(facts));
+        let _ = m.group_view();
+        assert!(!m.records().is_empty());
+        let _ = m.devices();
+        let _ = m.alerts();
+        let _ = m.root_view();
+        let _ = m.below_level("hardware");
+        assert!(m.claim_state(&[4; 65]).is_none());
+        let _ = m.away_status();
+        assert!(m.check_command(&cbb_core::authority::Record::new(vec![1], vec![2], None)).is_err());
+
+        m.set_sync(false, 60_000).unwrap();
+        assert!(m.muted().sync_off);
+        m.set_sync(true, 0).unwrap();
+        assert!(!m.muted().sync_off);
+        m.set_mute(Some(0));
+        m.set_mute(None);
+        m.copy("hello", false, false).unwrap();
+        let _ = m.sends("");
+
+        let port = m.listen(Listen::Tunnel, 0, None).unwrap();
+        assert_ne!(port, 0);
+        m.unlisten(Some(Listen::Tunnel));
+        m.unlisten(None);
+        m.pause();
+        m.resume();
+        assert!(!m.wait_connected(Duration::from_millis(10)));
+        m.found("k", vec!["127.0.0.1:9".parse().unwrap()], None);
+        m.lost("k");
+        assert!(!m.send_cert(&DeviceId::random(), &[1], None));
+        assert!(!m.send_admin_ca(&DeviceId::random(), &[1]));
+        assert!(m.send_hubs(&serde_json::json!({}), None).is_empty());
+        m.disconnect(&DeviceId::random());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

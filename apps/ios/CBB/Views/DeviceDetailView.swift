@@ -71,7 +71,9 @@ struct DeviceDetailView: View {
                 Task { await model.makeAdmin(id) }
             } label: { Text("Make it an admin") }
         } message: {
-            if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
+            if device?.role == "phone" {
+                Text("It can then add and remove devices, and take the group over if this phone is lost.")
+            } else if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
                     + Text(verbatim: " ")
                     + Text("The group then lets keys in files be admins and hubs (Settings, Admin keys).")
@@ -137,7 +139,29 @@ struct DeviceDetailView: View {
         }
     }
 
+    /// The name, badges and line, with the admin's menu; in a pane the
+    /// menu and the cross stand on a row of their own above, so that the
+    /// name has the pane's width.
     private func header(_ d: AppModel.Computer) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+            if let close {
+                HStack(spacing: Tokens.spacingSmall) {
+                    Spacer()
+                    if model.isAdmin { menu(d) }
+                    Button(action: close) {
+                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
+                    }
+                    .accessibilityLabel(Text("Close"))
+                    .accessibilityIdentifier("padCardClose")
+                    // Escape on an iPad's keyboard closes the pane.
+                    .keyboardShortcut(.cancelAction)
+                }
+            }
+            title(d)
+        }
+    }
+
+    private func title(_ d: AppModel.Computer) -> some View {
         HStack(alignment: .top, spacing: Tokens.spacingMedium) {
             DeviceIcon(device: d, size: 64)
             VStack(alignment: .leading, spacing: 4) {
@@ -164,16 +188,9 @@ struct DeviceDetailView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            .layoutPriority(1)
             Spacer()
-            if model.isAdmin { menu(d) }
-            if let close {
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
-                }
-                .accessibilityLabel(Text("Close"))
-                // Escape on an iPad's keyboard closes the pane.
-                .keyboardShortcut(.cancelAction)
-            }
+            if close == nil, model.isAdmin { menu(d) }
         }
     }
 
@@ -201,7 +218,7 @@ struct DeviceDetailView: View {
             .tint(palette.accent)
             .disabled(!mayTurn || model.busy)
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
         }
     }
 
@@ -210,8 +227,7 @@ struct DeviceDetailView: View {
     @ViewBuilder private func iconRow(_ d: AppModel.Computer) -> some View {
         if model.isAdmin {
             HStack(spacing: Tokens.spacingSmall) {
-                // Members and Android phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "member" || (d.role == "phone" && d.os == "android") {
+                if d.takesPaste {
                     Button { pasting = true } label: { IconLabel(symbol: "keyboard", title: Text("Paste")) }
                         .buttonStyle(.plain)
                 }
@@ -284,7 +300,7 @@ struct DeviceDetailView: View {
             Divider().overlay(palette.line)
             row(Text("Device ID"), Text(verbatim: d.id).monospaced())
         }
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
     }
 
     private func row(_ label: Text, _ value: Text) -> some View {
@@ -389,7 +405,7 @@ private struct IconLabel: View {
         }
         .frame(maxWidth: .infinity, minHeight: 64)
         .padding(.vertical, Tokens.spacingSmall)
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
         .contentShape(Rectangle())
     }
 }

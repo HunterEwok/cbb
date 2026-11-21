@@ -923,20 +923,66 @@ fn pair_with_a_code() {
     run_cases(
         "pair-code",
         vec![
+            // The window's six digits from standard input, never the
+            // command line; the service finds the window.
             Case {
                 name: "pair -code",
                 args: &["pair", "-code"],
                 stdin: "123 456\n",
-                sent: Some(("join", Some(|s| s.s("code") == "123456"))),
+                sent: Some(("join", Some(|s| s.s("code") == "123456" && s.s("address").is_empty()))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // With the service running, it joins, at the address, and
+            // takes the service's -name and -caps unless cbb pair gives them.
+            Case {
+                name: "pair -code ADDRESS",
+                args: &["pair", "-code", "127.0.0.1:1"],
+                stdin: "123456\n",
+                sent: Some((
+                    "join",
+                    Some(|s| {
+                        s.s("code") == "123456"
+                            && s.s("address") == "127.0.0.1:1"
+                            && s.s("name").is_empty()
+                            && s.h.get("caps").is_none()
+                    }),
+                )),
                 stdout: "Joined the group",
                 ..Case::default()
             },
             Case {
-                name: "pair -code ADDRESS",
-                args: &["pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                name: "pair -name -caps -code ADDRESS",
+                args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
+                stdin: "123456\n",
+                sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -caps none -code",
+                args: &["pair", "-caps", "none", "-code"],
+                stdin: "123456\n",
+                sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // The window's QR code text goes as it is.
+            Case {
+                name: "pair -code with the QR code's text",
+                args: &["pair", "-code"],
+                stdin: WINDOW_LINK,
+                sent: Some(("join", Some(|s| s.s("code") == WINDOW_LINK.trim()))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // Without a service, cbb joins by itself.
+            Case {
+                name: "pair -code ADDRESS, no service",
+                args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
+                stdin: WINDOW_LINK,
                 code: 1,
-                stderr: "cannot connect to 127.0.0.1:1",
+                stderr: "cannot reach 127.0.0.1:1",
                 ..Case::default()
             },
             Case {
@@ -967,19 +1013,27 @@ fn pair_with_a_code() {
                 stderr: "usage",
                 ..Case::default()
             },
-            // A bad code fails before the service is asked or the address
-            // dialed.
+            // The invitation is a secret: never on the command line, where
+            // other users and the system's log see it.
             Case {
-                name: "five digits",
-                args: &["pair", "-code"],
-                stdin: "12345\n",
+                name: "an invitation's text as an argument",
+                args: &["pair", "-invite", "cbb://invite#abc"],
                 code: 1,
-                stderr: "six digits",
+                stderr: "never on the command line",
                 ..Case::default()
             },
             Case {
-                name: "five digits with an address",
-                args: &["pair", "-code", "127.0.0.1:1"],
+                name: "an invitation on standard input",
+                args: &["pair", "-invite", "-"],
+                stdin: "cbb://invite#not-one\n",
+                code: 1,
+                stderr: "invitation",
+                ..Case::default()
+            },
+            // Not six digits: refused here, before the service hears of it.
+            Case {
+                name: "five digits on standard input",
+                args: &["pair", "-code"],
                 stdin: "12345\n",
                 code: 1,
                 stderr: "six digits",
@@ -989,12 +1043,54 @@ fn pair_with_a_code() {
     );
 }
 
+/// A home window's QR code text, as standard input gives it.
+const WINDOW_LINK: &str = "cbb://pair?addr=192.168.1.5:8764&fp=1111111111111111111111111111111111111111111111111111111111111111&i=22222222222222222222222222222222&c=123456\n";
+
+/// A join of 0.6 needs no answer: the six digits are CPace's password. A
+/// home window shows its digits, its address, each failed try, and the
+/// device's name.
+#[test]
+fn pairing_by_a_home_window() {
+    let dir = tempdir("compare");
+    let r = run_with(&dir, &["pair", "-code"], "123456\n", group_then("", |_| vec![done(json!({}))]), &[]);
+    want("join", &r, 0, "Joined the group", "");
+    assert!(!r.sent.iter().any(|s| s.op() == "answer"), "nothing to answer");
+    let window = group_then("g1", |s| match s.op() {
+        "pair" => vec![
+            (
+                json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                       "invite": WINDOW_LINK.trim()}),
+                Vec::new(),
+            ),
+            (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
+            done(json!({"name": "laptop"})),
+        ],
+        "devices" => vec![done(json!({}))],
+        _ => Vec::new(),
+    });
+    let r = run_with(&dir, &["pair"], "", window, &[]);
+    want("window", &r, 0, "cbb pair -code 192.168.1.5:8764", "");
+    for part in ["Pairing code: 654 321", "scan this QR code", "A device did not pair", "laptop joined the group"] {
+        assert!(r.stdout.contains(part), "{part}: {:?}", r.stdout);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn new_group() {
     let dir = tempdir("new");
     let r = run_with(&dir, &["new"], "", group_then("g1", |_| vec![done(status(json!({"group": "g1"})))]), &[]);
     want("new", &r, 0, "group g1", "");
     assert!(ops(&r).contains(&"new"), "new sent {:?}", ops(&r));
+    // The recovery sheet shows, once, as the service gives it.
+    let sheet = json!({"sheet": "AAAA BBBB CCCC DDDD\nEEEE FFFF GGGG HHHH", "qr": "CBBR1XYZ"}).to_string();
+    let with_sheet = group_then("g1", move |_| {
+        let (h, _) = done(status(json!({"group": "g1", "key_level": "hardware"})));
+        vec![(h, sheet.clone().into_bytes())]
+    });
+    let r = run_with(&dir, &["new"], "", with_sheet, &[]);
+    want("new with its sheet", &r, 0, "EEEE FFFF GGGG HHHH", "");
+    assert!(r.stdout.contains("recovery key") && !r.stdout.contains("root key is a file"), "{:?}", r.stdout);
     let r = run_in(&dir, &["new", "x"], "", json!({}), b"");
     want("new with an argument", &r, 2, "", "");
     let _ = std::fs::remove_dir_all(&dir);
@@ -1298,7 +1394,8 @@ fn remote_commands() {
             },
             Case {
                 name: "code",
-                args: &["remote", "code", "A1B2C3"],
+                args: &["remote", "code"],
+                stdin: "A1B2C3\n",
                 sent: Some(("remote", Some(|s| s.s("name") == "code" && s.s("code") == "A1B2C3"))),
                 ..Case::default()
             },
@@ -1337,7 +1434,8 @@ fn remote_commands() {
             },
             Case {
                 name: "refused",
-                args: &["remote", "code", "000000"],
+                args: &["remote", "code"],
+                stdin: "000000\n",
                 answer: err("the TV took no code"),
                 sent: Some(("remote", None)),
                 code: 1,
@@ -1373,6 +1471,7 @@ fn remote_commands() {
                 ..Case::default()
             },
             Case { name: "code without one", args: &["remote", "code"], code: 2, ..Case::default() },
+            Case { name: "code on the command line", args: &["remote", "code", "A1B2C3"], code: 2, ..Case::default() },
             Case { name: "cancel with an argument", args: &["remote", "cancel", "x"], code: 2, ..Case::default() },
             Case { name: "remove without a TV", args: &["remote", "remove"], code: 2, ..Case::default() },
             Case { name: "type with two texts", args: &["remote", "type", "a", "b"], code: 2, ..Case::default() },
@@ -1975,6 +2074,12 @@ fn global_commands() {
                 name: "relay without a key",
                 args: &["global", "relay", "198.51.100.9:8765"],
                 code: 2,
+                ..Case::default()
+            },
+            Case {
+                name: "relay off",
+                args: &["global", "relay", "off"],
+                sent: Some(("away", Some(|s| s.s("relay") == "off" && !s.b("consent")))),
                 ..Case::default()
             },
             Case {
@@ -2627,4 +2732,385 @@ fn pair_waits_on_the_service_port() {
     let _ = std::fs::remove_dir_all(&dir);
     let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
     assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
+}
+
+/// cbb own-command writes the user's own command in the user's settings
+/// folder, refuses a link there, and under sudo writes only as the user
+/// who ran it: what that user cannot write stays unwritten.
+#[test]
+fn own_command_as_the_user() {
+    let dir = tempdir("own-command");
+    let config = dir.join(".config");
+    let env = [("XDG_CONFIG_HOME", config.to_str().unwrap())];
+    let none = || always(json!({}), b"");
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/local/bin/backup", "--quick"], "", none(), &env);
+    want("own-command", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert_eq!(raw["backup"], json!(["/usr/local/bin/backup", "--quick"]));
+    let r = run_with(&dir, &["own-command", "backup", "--"], "", none(), &env);
+    want("own-command removing", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert!(raw.get("backup").is_none());
+    let r = run_with(&dir, &["own-command", "backup"], "", none(), &env);
+    assert_eq!(r.code, 2, "{}", r.stderr);
+
+    // A link in place of the folder is not followed.
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let linked = dir.join("linked");
+    std::fs::create_dir_all(&linked).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, linked.join("cbb")).unwrap();
+    let env = [("XDG_CONFIG_HOME", linked.to_str().unwrap())];
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+    assert_ne!(r.code, 0);
+    assert!(!elsewhere.join("own-actions.json").exists());
+
+    // As root under sudo, the write is the other user's: nobody cannot
+    // create a folder in its own (missing) home, and root does not either.
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        let home = Path::new("/nonexistent");
+        if !home.exists() {
+            let env = [("SUDO_USER", "nobody"), ("SUDO_UID", "65534"), ("SUDO_GID", "65534")];
+            let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+            assert_ne!(r.code, 0, "{}", r.stderr);
+            assert!(!home.exists());
+        }
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The ZX Spectrum Next's commands (member/README.md, "ZX Spectrum Next"):
+/// each answer ends in one status line, CBBOK or CBBERR.
+#[test]
+fn next_commands() {
+    run_cases(
+        "next",
+        vec![
+            Case {
+                name: "next paste",
+                args: &["next", "paste"],
+                payload: b"Hi",
+                sent: Some(("paste", None)),
+                stdout: "CBB1 2 4d170e0e\rHi\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste -max",
+                args: &["next", "paste", "-max", "1"],
+                payload: b"Hi",
+                sent: Some(("paste", None)),
+                stdout: "CBB1 1 ",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste -max not a number",
+                args: &["next", "paste", "-max", "x"],
+                code: 1,
+                stdout: "CBBERR the -max value is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste refused",
+                args: &["next", "paste"],
+                answer: err("no text yet\nsecond line"),
+                sent: Some(("paste", None)),
+                code: 1,
+                stdout: "CBBERR no text yet; second line\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy",
+                args: &["next", "copy", "5", "3610a686"],
+                stdin: "hello",
+                sent: Some(("copy", Some(|s| s.payload == b"hello" && s.s("kind").is_empty()))),
+                stdout: "CBBGO\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy -secret",
+                args: &["next", "copy", "-secret", "5", "3610a686"],
+                stdin: "hello",
+                sent: Some(("copy", Some(|s| s.s("kind") == "secret"))),
+                stdout: "CBBOK",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy damaged",
+                args: &["next", "copy", "5", "00000000"],
+                stdin: "hello",
+                code: 1,
+                stdout: "CBBERR the text arrived damaged",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy cut short",
+                args: &["next", "copy", "5", "3610a686"],
+                stdin: "he",
+                code: 1,
+                stdout: "CBBERR the Next sent 2 of 5 bytes and stopped",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy too long",
+                args: &["next", "copy", "999999999", "3610a686"],
+                code: 1,
+                stdout: "CBBERR the text is too long",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy bad CRC",
+                args: &["next", "copy", "5", "xyz"],
+                code: 1,
+                stdout: "CBBERR the CRC-32 is 8 hex digits",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy bad length",
+                args: &["next", "copy", "five", "3610a686"],
+                code: 1,
+                stdout: "CBBERR the length is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy usage",
+                args: &["next", "copy"],
+                code: 1,
+                stdout: "CBBERR usage: cbb next",
+                ..Case::default()
+            },
+            Case { name: "next alone", args: &["next"], code: 1, stdout: "CBBERR usage", ..Case::default() },
+            Case {
+                name: "next speed",
+                args: &["next", "speed", "115200", "4"],
+                stdout: "CBBS 115200 4 ",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed of no such baud",
+                args: &["next", "speed", "1200", "4"],
+                code: 1,
+                stdout: "CBBERR the Pi's line takes no such speed",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed too long",
+                args: &["next", "speed", "115200", "2000000"],
+                code: 1,
+                stdout: "CBBERR at most 1 MiB",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed not numbers",
+                args: &["next", "speed", "fast", "4"],
+                code: 1,
+                stdout: "CBBERR the speed is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed bad length",
+                args: &["next", "speed", "115200", "many"],
+                code: 1,
+                stdout: "CBBERR the length is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed-in",
+                args: &["next", "speed-in", "115200", "4"],
+                stdin: "abcd",
+                stdout: "CBBGO\r\nCBBR 4 ed82cd11\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed-in short",
+                args: &["next", "speed-in", "115200", "8"],
+                stdin: "abcd",
+                stdout: "CBBR 4 ed82cd11\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next check-list of no file",
+                args: &["next", "check-list", "no-such-list"],
+                code: 1,
+                stdout: "CBBERR cannot read no-such-list",
+                ..Case::default()
+            },
+            Case {
+                name: "next check-list usage",
+                args: &["next", "check-list"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+            Case {
+                name: "next image bad mode",
+                args: &["next", "image", "-mode", "huge"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+            Case {
+                name: "next image bad flag",
+                args: &["next", "image", "-big"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+        ],
+    );
+}
+
+/// A PNG of w × h pixels in one colour.
+fn png(w: u32, h: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut e = png::Encoder::new(&mut out, w, h);
+        e.set_color(png::ColorType::Rgb);
+        e.set_depth(png::BitDepth::Eight);
+        let mut wr = e.write_header().unwrap();
+        wr.write_image_data(&vec![0x40; (w * h * 3) as usize]).unwrap();
+    }
+    out
+}
+
+/// cbb next image: the latest copy's first PNG or JPEG, for Layer 2, sent
+/// once the Next asks with a byte.
+#[test]
+fn next_image() {
+    let dir = tempdir("next-image");
+    let img: &'static [u8] = Box::leak(png(8, 8).into_boxed_slice());
+    let serve = |parts: Vec<(Value, &'static [u8])>| {
+        handler(move |s| {
+            if s.op() != "paste_media" {
+                return vec![];
+            }
+            let mut a = vec![(json!({}), Vec::new())];
+            for (h, b) in &parts {
+                a.push((h.clone(), b.to_vec()));
+            }
+            a.push(done(json!({})));
+            a
+        })
+    };
+    let part = |p: Value| (json!({ "part": p }), &b""[..]);
+    let data = |b: &'static [u8]| (json!({}), b);
+    let n = img.len() as i64;
+    for (mode, letter) in [("lo", "L"), ("hi", "H"), ("auto", "")] {
+        let r = run_with(
+            &dir,
+            &["next", "image", "-mode", mode],
+            "g",
+            serve(vec![
+                part(json!({"path": "a.txt", "size": 1})),
+                data(b"a"),
+                part(json!({"type": "image/png", "size": n})),
+                data(img),
+            ]),
+            &[],
+        );
+        want(&format!("next image -mode {mode}"), &r, 0, &format!("CBBI {letter}"), "");
+        assert!(r.stdout.ends_with("\rCBBOK\r"), "{:?}", &r.stdout[r.stdout.len().saturating_sub(20)..]);
+    }
+    // The Next never asks.
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "",
+        serve(vec![part(json!({"type": "image/png", "size": n})), data(img)]),
+        &[],
+    );
+    want("next image unasked", &r, 1, "CBBERR the Next did not ask for the image", "");
+    // No image in the copy, an image that is not one, and parts that do
+    // not come as said.
+    let r =
+        run_with(&dir, &["next", "image"], "g", serve(vec![part(json!({"path": "a", "size": 1})), data(b"a")]), &[]);
+    want("next image of files", &r, 1, "CBBERR the latest copy has no PNG or JPEG image", "");
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "g",
+        serve(vec![part(json!({"type": "image/png", "size": 3})), data(b"abc")]),
+        &[],
+    );
+    want("next image broken", &r, 1, "CBBERR", "");
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "g",
+        serve(vec![part(json!({"type": "image/png", "size": 2})), data(b"abc")]),
+        &[],
+    );
+    want("next image too long a part", &r, 1, "CBBERR the copy's parts did not come as said", "");
+    let r = run_with(&dir, &["next", "image"], "g", serve(vec![data(b"abc")]), &[]);
+    want("next image without a part", &r, 1, "CBBERR the copy's parts did not come as said", "");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// cbb global entries: the signed entry points shown, given as a string
+/// or a QR code, and taken from one.
+#[test]
+fn global_entries() {
+    const HELD: &[u8] = br#"{"entries":{"body":"eyJzZXEiOiAzLCAiZXhwaXJlc19tcyI6IDE4OTM0NTYwMDAwMDAsICJmb3J3YXJkZXJzIjogW3sibmFtZSI6ICJmdzEiLCAidmxlc3MiOiBbeyJzZXJ2ZXJfbmFtZSI6ICJzLmV4YW1wbGUiLCAicG9ydCI6IDQ0MywgInBhdGgiOiAiL3AifV19XX0="}}"#;
+    // The string of HELD, as export gives it.
+    let dir = tempdir("entries");
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), HELD);
+    want("entries", &r, 0, "Signed entry points 3, valid until 2030-01-01", "");
+    assert!(r.stdout.contains("  the forwarder fw1\n    over VLESS: XHTTP at s.example, port 443, /p"), "{}", r.stdout);
+    let r = run_in(&dir, &["global", "entries", "export"], "", json!({}), HELD);
+    want("entries export", &r, 0, "cbb-entries:", "");
+    let s = r.stdout.trim().to_string();
+    let r = run_in(&dir, &["global", "entries", "export", "-qr"], "", json!({}), HELD);
+    assert_eq!(r.code, 0, "{}", r.stderr);
+    assert!(r.stdout.lines().count() > 10, "{}", r.stdout);
+    let r = run_in(&dir, &["global", "entries", "import", &s], "", json!({}), b"");
+    want("entries import", &r, 0, "The signed entry points check out", "");
+    let imported = r.sent.iter().find(|m| m.op() == "entries").expect("no entries request");
+    let v: Value = serde_json::from_slice(&imported.payload).unwrap();
+    assert_eq!(v, serde_json::from_slice::<Value>(HELD).unwrap());
+    for (bad, why) in [
+        ("entries:abc", "that is not a string of signed entry points"),
+        ("cbb-entries:!!!", "is damaged"),
+        ("cbb-entries:WzFd", "is damaged"), // [1], not an object
+    ] {
+        let r = run_in(&dir, &["global", "entries", "import", bad], "", json!({}), b"");
+        want(bad, &r, 1, "", why);
+    }
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), b"not json");
+    want("entries undecodable", &r, 1, "", "do not decode");
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), br#"{"entries":{"body":"e30="}}"#);
+    want("entries without fields", &r, 0, "Signed entry points 0", "");
+    let r = run_in(&dir, &["global", "entries", "nonsense"], "", json!({}), b"");
+    want("entries usage", &r, 2, "", "cbb global entries export");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// cbb update's settings in a rootless install, whose user owns the
+/// updater's folder: where updates come from, and what installed this copy.
+#[test]
+fn update_settings_rootless() {
+    let dir = tempdir("update-rootless");
+    let state = dir.join("xdg-state");
+    let env = [("CBB_ROOTLESS", "1"), ("XDG_STATE_HOME", state.to_str().unwrap())];
+    let run = |args: &[&str]| run_with(&dir, args, "", always(json!({}), b""), &env);
+    let r = run(&["update", "-mirror"]);
+    want("-mirror", &r, 0, "Updates come from GitHub, or https://dl.cbb.tools when GitHub does not answer.", "");
+    let r = run(&["update", "-mirror", "https://example.org/cbb/"]);
+    want("-mirror URL", &r, 0, "", "");
+    let r = run(&["update", "-mirror"]);
+    want("-mirror after", &r, 0, "Updates come from https://example.org/cbb.", "");
+    let r = run(&["update", "-mirror", "http://example.org/cbb"]);
+    want("-mirror http", &r, 1, "", "");
+    let r = run(&["update", "-mirror", "default"]);
+    want("-mirror default", &r, 0, "", "");
+    let r = run(&["update", "-mirror"]);
+    want("-mirror back", &r, 0, "Updates come from GitHub", "");
+    let r = run(&["update", "-auto"]);
+    want("-auto unset", &r, 0, "unset", "");
+    let r = run(&["update", "-installed-by", "brew"]);
+    want("-installed-by brew", &r, 0, "", "");
+    let r = run(&["update", "-auto", "on"]);
+    want("-auto on from brew", &r, 1, "", "this copy came from brew, which updates it");
+    let saved = std::fs::read_to_string(state.join("cbb-update/update.json")).unwrap();
+    assert!(saved.contains("\"brew\""), "{saved}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

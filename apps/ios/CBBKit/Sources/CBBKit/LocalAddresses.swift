@@ -61,17 +61,68 @@ public enum LocalAddresses {
         #endif
     }
 
-    /// Whether an IPv4 address is a private one (RFC 1918).
+    /// Whether an IPv4 address is a private one (RFC 1918). Only an address
+    /// in its one spelling is judged (`octets`).
     static func isHome(ipv4 s: String) -> Bool {
-        let b = s.split(separator: ".").compactMap { UInt8($0) }
-        guard b.count == 4 else { return false }
+        guard let b = octets(s) else { return false }
         return b[0] == 10 || (b[0] == 172 && (16...31).contains(b[1])) || (b[0] == 192 && b[1] == 168)
     }
 
     /// Whether an IPv6 address is a unique local one (fc00::/7), without a
-    /// zone.
+    /// zone. The text is read as an address first (`bytes(ipv6:)`); an
+    /// IPv4 address written as IPv6 (::ffff:a.b.c.d) is not one of these, as
+    /// the format's `addr` has no such spelling.
     static func isHome(ipv6 s: String) -> Bool {
-        let l = s.lowercased()
-        return !l.contains("%") && (l.hasPrefix("fc") || l.hasPrefix("fd"))
+        guard let b = bytes(ipv6: s) else { return false }
+        return b[0] & 0xfe == 0xfc
+    }
+
+    /// The four numbers of an IPv4 address in its one spelling: four parts
+    /// of one to three decimal digits, none above 255, without a sign or a
+    /// leading zero. Nil for a name and for every other spelling.
+    static func octets(_ s: String) -> [UInt8]? {
+        let parts = s.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var out: [UInt8] = []
+        for p in parts {
+            let u = Array(p.utf8)
+            guard (1...3).contains(u.count), u.allSatisfy({ (0x30...0x39).contains($0) }), u.count == 1 || u[0] != 0x30,
+                  let b = UInt8(p) else { return nil }
+            out.append(b)
+        }
+        return out
+    }
+
+    /// The 16 bytes of an IPv6 address written as text (RFC 4291: groups of
+    /// one to four hex digits, "::" once at most, an IPv4 tail), without a
+    /// zone. Nil for a name and for anything else.
+    static func bytes(ipv6 s: String) -> [UInt8]? {
+        guard !s.isEmpty, s.utf8.count <= 45 else { return nil }
+        let halves = s.components(separatedBy: "::")
+        guard halves.count <= 2 else { return nil }
+        func groups(_ t: String, last: Bool) -> [UInt8]? {
+            if t.isEmpty { return [] }
+            var out: [UInt8] = []
+            let parts = t.split(separator: ":", omittingEmptySubsequences: false)
+            for (i, p) in parts.enumerated() {
+                if last, i == parts.count - 1, p.contains(".") {
+                    guard let v4 = octets(String(p)) else { return nil }
+                    out += v4
+                    continue
+                }
+                let u = Array(p.utf8)
+                let hex = u.allSatisfy { (0x30...0x39).contains($0) || (0x41...0x46).contains($0) || (0x61...0x66).contains($0) }
+                guard (1...4).contains(u.count), hex, let g = UInt16(p, radix: 16) else { return nil }
+                out += [UInt8(g >> 8), UInt8(g & 0xff)]
+            }
+            return out
+        }
+        if halves.count == 1 {
+            guard let all = groups(halves[0], last: true), all.count == 16 else { return nil }
+            return all
+        }
+        guard let head = groups(halves[0], last: false), let tail = groups(halves[1], last: true),
+              head.count + tail.count <= 14 else { return nil }
+        return head + [UInt8](repeating: 0, count: 16 - head.count - tail.count) + tail
     }
 }

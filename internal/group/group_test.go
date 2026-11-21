@@ -226,6 +226,7 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 	otherCAKey, _ := x509.MarshalPKCS8PrivateKey(other.GroupCA.Key)
 	p384, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	p384DER, _ := x509.MarshalPKCS8PrivateKey(p384)
+	junk := []byte("junk")
 	tests := []struct {
 		name   string
 		change func(f *identityFile)
@@ -240,6 +241,20 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 		{"another group CA", func(f *identityFile) { f.GroupCA = other.GroupCA.Cert.Raw }},
 		{"the key of another CA", func(f *identityFile) { f.GroupCAKey = otherCAKey }},
 		{"a member certificate as the group CA", func(f *identityFile) { f.GroupCA, f.GroupCAKey = f.Cert, nil }},
+		// Each certificate and key that does not read.
+		{"a corrupt certificate", func(f *identityFile) { f.Cert = junk }},
+		{"a corrupt issuer", func(f *identityFile) { f.Issuer = junk }},
+		{"a corrupt group CA", func(f *identityFile) { f.GroupCA = junk }},
+		{"a corrupt group CA key", func(f *identityFile) { f.GroupCAKey = junk }},
+		{"a corrupt root", func(f *identityFile) { f.Roots = [][]byte{junk} }},
+		{"a corrupt root key", func(f *identityFile) { f.RootKey = junk }},
+		{"a corrupt admin key", func(f *identityFile) { f.AdminKey, f.AdminKeyTPM, f.AdminKeySE = junk, nil, nil }},
+		{"a corrupt admin CA", func(f *identityFile) { f.AdminCA = junk }},
+		{"a corrupt previous certificate", func(f *identityFile) { f.PrevCert = junk }},
+		{"a corrupt previous issuer", func(f *identityFile) { f.PrevIssuer = junk }},
+		{"a corrupt claim", func(f *identityFile) { f.Claim = junk }},
+		{"a claim's key without the claim", func(f *identityFile) { f.ClaimKey = junk }},
+		{"a corrupt claim key", func(f *identityFile) { f.Claim, f.ClaimKey = f.GroupCA, junk }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

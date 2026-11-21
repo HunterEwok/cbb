@@ -6,12 +6,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,10 +28,13 @@ const (
 )
 
 // When the channel workflow opens an issue: keys.json needs the YubiKey,
-// the channel file only fails to be renewed.
+// the channel file and the entry points only fail to be renewed. A channel
+// file renewed twice a week has at least 10 days left before its next
+// renewal, so 5 means renewals were missed.
 const (
 	keysDue    = 21 * 24 * time.Hour
-	channelDue = 10 * 24 * time.Hour
+	channelDue = 5 * 24 * time.Hour
+	entriesDue = 10 * 24 * time.Hour
 )
 
 // fetch reads a file from an https:// address, or from a path for the
@@ -57,7 +58,7 @@ func fetch(src string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", src, resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 2*release.MaxBody))
+	return release.ReadAll(resp.Body)
 }
 
 func fetchFile(src string) (release.File, error) {
@@ -99,11 +100,11 @@ func current(from, releases string) (keys, ch, rel release.File, c release.Chann
 
 // extend signs the current channel file again with the channel key, a
 // higher number and a new expiry and the same release, and writes it and
-// keys.json to a directory: on cbb.tools, from a weekly timer
-// (docs/maintaining.md, "Signed releases").
+// keys.json to a directory: on cbb.tools, from a timer twice a week
+// (docs/maintainers/maintaining.md, "Signed releases").
 func extend(args []string) error {
 	fs := flag.NewFlagSet("extend", flag.ExitOnError)
-	key := fs.String("key", "", "the channel key: file:KEY.pem")
+	key := fs.String("key", "", "the channel key: file:KEY.pem+slh:PQ.pem, its two halves")
 	out := fs.String("out", "", "the directory the files go to, served at https://cbb.tools/channel/")
 	from := fs.String("from", channelFiles, "where the current keys.json and channel file are")
 	releases := fs.String("releases", releaseFiles, "where each release's files are, under vX.Y.Z")
@@ -119,15 +120,21 @@ func extend(args []string) error {
 	if err != nil {
 		return err
 	}
-	spki, err := x509.MarshalPKIXPublicKey(k.Public())
+	pubs, err := k.PublicKeys()
 	if err != nil {
 		return err
 	}
 	var ks release.Keys
 	json.Unmarshal(keys.Body, &ks)
-	certified := false
+	halves := map[string]int{}
 	for _, key := range ks.Keys {
-		certified = certified || (key.Use == release.UseChannel && bytes.Equal(key.Key, spki))
+		if key.Use == release.UseChannel && bytes.Equal(key.Key, pubs[key.Alg]) {
+			halves[key.Name]++
+		}
+	}
+	certified := false
+	for _, n := range halves {
+		certified = certified || n == len(release.Required)
 	}
 	if !certified {
 		return errors.New("keys.json does not certify this channel key; release-sign publish -channel adds it")
@@ -213,7 +220,7 @@ func take(args []string) error {
 
 // due prints what in a checkout of the branch channel needs the
 // maintainer soon: keys.json within keysDue of its expiry, the channel
-// file within channelDue. The channel workflow opens an issue with it.
+// file within channelDue, the entry points within entriesDue. The channel workflow opens an issue with it.
 func due(args []string) error {
 	fs := flag.NewFlagSet("due", flag.ExitOnError)
 	fs.Parse(args)
@@ -227,7 +234,7 @@ func due(args []string) error {
 	}{
 		{"keys.json", "sign it again with a YubiKey: release-sign renew -new-keys", keysDue},
 		{stableChannel + ".json", "check the timer on cbb.tools, or sign it by hand: release-sign renew", channelDue},
-		{entriesName, "check the timer on cbb.tools, or sign it by hand: release-sign entries", channelDue},
+		{entriesName, "check the timer on cbb.tools, or sign it by hand: release-sign entries", entriesDue},
 	} {
 		f, err := readFile(filepath.Join(dir, c.name))
 		if c.name == entriesName && errors.Is(err, os.ErrNotExist) {

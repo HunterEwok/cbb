@@ -41,20 +41,23 @@ public final class CoreMember: @unchecked Sendable {
         /// Whether the core finds the members by mDNS itself; the apps find
         /// them with their own browsers and hand them in.
         public var mdns: Bool
+        /// The SubjectPublicKeyInfo of the phone's admin key, which the
+        /// hellos offer while it is no admin, for the root to make it one.
+        public var adminKey: Data?
 
         enum CodingKeys: String, CodingKey {
             case dir, name, os, osVersion = "os_version", version, keyStore = "key_store", device, publicKey = "public", seal, cert, issuer
-            case groupCA = "group_ca", roots, peers, mdns
+            case groupCA = "group_ca", roots, peers, mdns, adminKey = "admin_key"
         }
 
         /// publicKeyDER is the member key's SubjectPublicKeyInfo, as
         /// CertificateSigner gives it.
         public init(dir: URL, name: String, os: String = "ios", osVersion: String = "", version: String = "", keyStore: String = "hardware",
                     device: String, publicKeyDER: Data, seal: Data, cert: Data, issuer: Data?, groupCA: Data, roots: [Data],
-                    peers: [String] = [], mdns: Bool = false) throws {
+                    peers: [String] = [], mdns: Bool = false, adminKey: Data? = nil) throws {
             (self.dir, self.name, self.os, self.osVersion, self.version, self.keyStore) = (dir.path, name, os, osVersion, version, keyStore)
             (self.device, self.seal, self.cert, self.issuer, self.groupCA, self.roots) = (device, seal, cert, issuer, groupCA, roots)
-            (self.peers, self.mdns) = (peers, mdns)
+            (self.peers, self.mdns, self.adminKey) = (peers, mdns, adminKey)
             publicKey = try P256.Signing.PublicKey(derRepresentation: publicKeyDER).x963Representation
         }
     }

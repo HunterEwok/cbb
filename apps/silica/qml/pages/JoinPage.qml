@@ -5,13 +5,13 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // The phone's QR code, which the group's phone or computer scans to admit
-// it (docs/protocol.md, section 6, "The joiner listens"). With admin, the
-// phone asks to be an admin, which only the group's root admits. With
+// it (docs/protocol.md, section 6, "The joiner listens"). The phone joins
+// as a member; the group's root may make it an admin later, with the admin
+// key its hellos offer, which joining makes behind the admin PIN. With
 // invite, an invitation the user accepted (section 12): the phone dials
 // the invitation's hub and shows the words the inviting admin compares.
 Page {
     id: page
-    property bool admin: false
     property string invite: ""
     readonly property bool byInvite: invite !== ""
 
@@ -19,11 +19,19 @@ Page {
         if (byInvite)
             app.startJoinByInvite(invite)
         else
-            app.startJoin(admin)
+            app.startJoin()
     }
 
-    Component.onCompleted: start()
-    Component.onDestruction: if (app.join.state !== "joined") app.join.stop()
+    // Started once the page is in place: it may ask for the PIN first, and
+    // the page stack takes no dialog while this page is still being pushed.
+    property bool started: false
+    onStatusChanged: {
+        if (status === PageStatus.Active && !started) {
+            started = true
+            start()
+        }
+    }
+    Component.onDestruction: if (app.join.state !== "joined") app.stopJoin()
 
     SilicaFlickable {
         anchors.fill: parent
@@ -34,7 +42,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: page.byInvite ? qsTr("Join with an invitation") : page.admin ? qsTr("Join as an admin") : qsTr("Join a group") }
+            PageHeader { title: page.byInvite ? qsTr("Join with an invitation") : qsTr("Join a group") }
 
             Label {
                 x: Theme.horizontalPageMargin
@@ -46,7 +54,10 @@ Page {
                     : app.join.state === "failed" ? ""
                     : page.byInvite ? qsTr("Whoever invited you sees these words on their device and admits this phone if they match. Keep this screen open.")
                     : app.busy ? qsTr("Making the admin key…")
-                    : page.admin ? qsTr("On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.")
+                    // Shown with the code only: before it, the PIN dialog
+                    // may cover the page at once, and a text that flashes
+                    // by can't be read.
+                    : app.join.state !== "listening" ? ""
                     : qsTr("On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.")
             }
 

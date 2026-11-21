@@ -1,0 +1,266 @@
+{
+ "draft": "format-0.6-bytes.md, draft of 2026-11-11",
+ "note": "the group of every check is `group` with the recovery keys k1, k2 of 'a random secret'",
+ "take": [
+  {
+   "name": "all zero",
+   "secret": "0000000000000000000000000000000000000000000000000000000000000000",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "04592268d64b6838a8e9f73a719a411567182d912fd25f7da8fa892453d67c47fbdffd40da10eb32da626dc0ea9638337fd192c4522e2abfd393b2b333acab8e89",
+   "k2": "b1b2b09da3052f4583e1fa590b433c78fba697b0651f51096beb4cc2ba92c293",
+   "text": "1000 0000 0000 001X\n0000 0000 0000 00BW\n0000 0000 0000 00AW\n0000 0000 0005 J5ZM",
+   "qr": "CBBR10000000000000000000000000000000000000000000000000000FRZRR1XS2XCX0HG18FH57BFVC"
+  },
+  {
+   "name": "all 0xff",
+   "secret": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "0466ddf756b59f907815b309ffaeee14ca098bd8afd496069795e4bf3d15172e0c8c2fa4340683de88b021b507f2a2bab5b677112de7a41a645cfad25278ac1b0d",
+   "k2": "a19c9cfd60c346ae3643dbfb713ff27cf39beb781eb02cd8c19f8e3eb13366ac",
+   "text": "1ZZZ ZZZZ ZZZZ ZZR5\nZZZZ ZZZZ ZZZZ ZZJ0\nZZZZ ZZZZ ZZZZ ZZA0\nZZZZ ZZZZ ZZGE P91C",
+   "qr": "CBBR1ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZGFRZRR1XS2XCX0HG18FH57BFVC"
+  },
+  {
+   "name": "a random secret",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "0448747b4993fc197b2349f51c5889f9e3ef5ec8aa9d7ceefe43462d53eab058970dfd37a5c6ab58231a5375e695a46839936076c5889b9c0c8be3e22e57066871",
+   "k2": "4f02b04bdfe0241b7a2a02ae8b7f6ddb8adcb8f8b32b033ae793de7b0930c5a6",
+   "text": "15A8 R7Y9 JZ3E CE09\nAZHG 93C3 XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D",
+   "qr": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVC"
+  }
+ ],
+ "read": [
+  {
+   "name": "lower case with I, L and O for 1, 1 and 0",
+   "input": "l5a8 r7y9 jz3e ceo9\nazhg 93c3 xxax o2gw\nm42x jz6m vpdx ed7k\nr7qd h8jc 6ogd a63d",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": null
+  },
+  {
+   "name": "a QR code in lower case",
+   "input": "cbbr15a8r7y9jz3eceazhg93c3xxax02m42xjz6mvpdxedr7qdh8jc60gfrzrr1xs2xcx0hg18fh57bfvc",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": "07e3f8c07b91759d0460143e253adfb6"
+  }
+ ],
+ "refuse": [
+  {
+   "name": "a mistyped character in line 3",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJY6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "lines:4"
+  },
+  {
+   "name": "two groups swapped in line 2",
+   "input": "15A8 R7Y9 JZ3E CE09\n93C3 AZHG XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D",
+   "reason": "lines:2"
+  },
+  {
+   "name": "lines 2 and 3 swapped",
+   "input": "15A8R7Y9JZ3ECE09\nM42XJZ6MVPDXED7K\nAZHG93C3XXAX02GW\nR7QDH8JC60GDA63D",
+   "reason": "lines:6"
+  },
+  {
+   "name": "a mistake line 2's check misses",
+   "input": "15A8R7Y9JZ3ECE09\nAZ1G93K3XRAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "whole"
+  },
+  {
+   "name": "padding bits that are not zero",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60HDA6CA",
+   "reason": "padding"
+  },
+  {
+   "name": "63 characters",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63",
+   "reason": "length"
+  },
+  {
+   "name": "version 2",
+   "input": "25A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "newer"
+  },
+  {
+   "name": "a character outside the alphabet",
+   "input": "15A8R7Y9JZ3ECE09\nAZH*93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "damaged"
+  },
+  {
+   "name": "words",
+   "input": "https://example.com/",
+   "reason": "not_sheet"
+  },
+  {
+   "name": "a valid sheet past 512 characters",
+   "input": "15A8 R7Y9 JZ3E CE09\nAZHG 93C3 XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D                                                                                                                                                                                                                                                                                                                                                                                                                                                  ",
+   "reason": "not_sheet"
+  },
+  {
+   "name": "a sheet of 0.5 (56 characters)",
+   "input": "5A8R-7Y9J-Z3EC-EAZH-G93C-3XXA-X02M-42XJ-Z6MV-PDXE-DR7Q-DH8J-C60G-ABCD",
+   "reason": "earlier"
+  },
+  {
+   "name": "a QR code of 0.5",
+   "input": "cbb://recover?g=0011223344556677&k=AA&c=BB",
+   "reason": "earlier"
+  },
+  {
+   "name": "a QR code of version 2",
+   "input": "CBBR25A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVC",
+   "reason": "newer"
+  },
+  {
+   "name": "a QR code one character short",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFV",
+   "reason": "length"
+  },
+  {
+   "name": "a QR code with its spare bit set",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVD",
+   "reason": "padding"
+  }
+ ],
+ "check": [
+  {
+   "name": "a QR code of another group",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60T5EFW5JW4KARH2XG4815831G4W",
+   "reason": "other_group"
+  },
+  {
+   "name": "a QR code of this group with keys that are not its",
+   "input": "CBBR10000000000000000000000000000000000000000000000000000FRZRR1XS2XCX0HG18FH57BFVC",
+   "reason": "damaged"
+  },
+  {
+   "name": "a text whose keys are not the group's",
+   "input": "1000 0000 0000 001X\n0000 0000 0000 00BW\n0000 0000 0000 00AW\n0000 0000 0005 J5ZM",
+   "reason": "other_group"
+  }
+ ],
+ "yubikey": {
+  "note": "each object is opened with z, what the card with card_scalar gives for the object's E; the check of an opened secret is the sheet's",
+  "take": [
+   {
+    "name": "all zero",
+    "secret": "0000000000000000000000000000000000000000000000000000000000000000",
+    "card_scalar": "102caec2acab28aec495f843f3ed5e60c484a05463af21bdd8aaf220c9b426e4",
+    "card": "0472d89d598fd57054e0a000a0f83a70308dbd3ec9acccafa01770a2f9aee110b2bacc385668c01f5b96d1db8747162175211d5e45548ff19480adaf03fa7f42dc",
+    "e_scalar": "71564f7ed9495bc405136c7990090a2d1f0fb25ba7593aba61fe57d290abe0a5",
+    "z": "85df286787a4903aed4a0801ba0715be89fbdb7767212b4897d7c32282d9d8a0",
+    "object": "434242520104055fd29e3d5261957fcc8e1e347a0eb5d6ec77e17656802cd92ffbdea2ab5e323bbfe44106fada8a498892adeeb3065737590a6baee5f61c37fccfa5b6fb555d1d0ceba8300c067022b712afddc4450b2d2e6315d93fd728cdc36ce6c3352711ef80331f4dd4bc489a287091653bfbead6"
+   },
+   {
+    "name": "all 0xff",
+    "secret": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "card_scalar": "db23f0aa9f8f0ef1c3c5d5d8cfa58df5bb94dd119d7fb741e49c9ac97bece673",
+    "card": "04a03e9b8e3d5c8e4515746069de7c441777cf903c714e745672b2a2a5989533a9d76f164f67407bbb9a1298df35bb181a3cb968b22ca9cf95e440867bbc243ef5",
+    "e_scalar": "9e18cd714542898e2d64917d094ba1080654b8f9d36d467c854f12265c1ab858",
+    "z": "66bc83d7d999e0f88162be5427dea6d73cbe0ef5ac972d7b0abbf5d49afd873a",
+    "object": "434242520104accc76d751f3d1d597117e2c14fa14205949f9ca54b3a732cb967408d13703879567139b663abe4f92f8785eccb710dc293c1642073665c3f16bd14f69ffe99db22885e456ddbedee5940fcd75e2c65c28bb6db1e58b84f9f6d5fff675dbeef898cade60fee8ac55730d2d845b692c6a03"
+   },
+   {
+    "name": "a random secret",
+    "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+    "card_scalar": "7942bb5c1d110a902b729df52ac5906a8401defc0fb7f6f9c1672702dcb4fb2d",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "e_scalar": "70414acb3f585ed7a9c254695f8503913cc04a2cfa833f17f1ac4132296c80fe",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb"
+   }
+  ],
+  "refuse": [
+   {
+    "name": "an empty object",
+    "object": "",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "not_cbb"
+   },
+   {
+    "name": "another program's object",
+    "object": "3082000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "not_cbb"
+   },
+   {
+    "name": "a prefix of another letter",
+    "object": "434242510104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "not_cbb"
+   },
+   {
+    "name": "version 2",
+    "object": "434242520204cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "newer"
+   },
+   {
+    "name": "version 2, short",
+    "object": "4342425202",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "newer"
+   },
+   {
+    "name": "the prefix alone",
+    "object": "43424252",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "damaged"
+   },
+   {
+    "name": "one byte short",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fb",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "damaged"
+   },
+   {
+    "name": "one byte over",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb00",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "damaged"
+   },
+   {
+    "name": "E not on the curve",
+    "object": "4342425201049e27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "damaged"
+   },
+   {
+    "name": "a changed ciphertext",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfa",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "other_key"
+   },
+   {
+    "name": "the Z of another card",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "0417f2cee017b82e9ab8d018370a599b5d03019802f240fa5ee0d8994af3d0e548c199e2da9a84efc5906d8ee78811e624fdb3105f23a35e090ecd6f27e1d04fc4",
+    "z": "32a8e935a4bbd7332a8635aa071b23dbb1f0fc1838ddd12b73312d82610fab9d",
+    "reason": "other_key"
+   },
+   {
+    "name": "another card's point",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "043d99c65833ff9f1e62d8770df8cb4cb95b295819c428f90f947700dc4d344b2b4c583bf9313a950852ecfe1528a4055799a0a96cbcd1347b9a68d0c9ac03c3c5",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "other_key"
+   },
+   {
+    "name": "a card point that is not a point",
+    "object": "434242520104cb27dc1b4f75e952049f2591f62d9baa3e22ba31e844dce7ccebe297b6761c9bbd6dd86351fdee6b6f002ef033d320280eef68c7600291ccab3e479a52f53ab2d6d0d679b73d47e5d6c66797d200cbd22a5f29e7d9a136ec332babef9cfa690791ac66c32f26852444b3360ffbfa65fbfb",
+    "card": "0400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "z": "7e233fd22199fd7bbeb762c25dff7864edb372f94d0dec6d1f824c9fe222bcd4",
+    "reason": "card_key"
+   }
+  ]
+ }
+}

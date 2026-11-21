@@ -2,20 +2,20 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A member's link to the group's blind relay (docs/protocol.md, section
-//! 14), as Go's relay.Join makes it: the registration over TLS to the relay
-//! known by its pin, with the member certificate and the proof of the
-//! WireGuard key, then the tunnel to the relay (`tunnel::Link`), the watch
-//! that hears which devices of the group are on the relay and who calls,
-//! and the connections the relay joins end to end: the device with the
-//! lower name dials, the other answers. The member protocol's TLS runs
-//! over them between the two devices; here they are only passed to the
+//! 14; `cbb-relay/3`, format section 9.4): the registration over TLS to the
+//! relay known by its pin, with the certificate of the device's server key
+//! for the period alone, the proof of a WireGuard key made for this
+//! registration and the period's credentials (`Credentialed`), then the
+//! tunnel to the relay (`tunnel::Link`), the watch that hears which devices
+//! of the group are on the relay and who calls, and the connections the
+//! relay joins end to end: the device with the lower name dials, the other
+//! answers. The relay knows a device only by its pseudonym, the hash of its
+//! server key; the link names the other devices to the app by the device
+//! IDs their pseudonyms stand for. The member protocol's TLS runs over the
+//! connections between the two devices; here they are only passed to the
 //! app's own ports. The phones' kits (ffi/) use it.
-//!
-//! Once the period's members' credential lists the device's server key,
-//! it registers with the group's credentials (section 18) in place of the
-//! member certificate and the records (`Credentialed`): the relay then
-//! knows it by its pseudonym, and the link names the other devices to the
-//! app by the device IDs their pseudonyms stand for.
+
+pub(crate) mod v3;
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -25,18 +25,17 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::Serialize;
 
-use cbb_core::credential::{self, Credential};
-
-use crate::certs::{self, b64};
+use crate::certs;
 use crate::error::{Error, Result};
 use crate::forward::{Registrar, prove};
+use crate::identity::ExternalKey;
+use crate::relayd::wire3::Register;
 use crate::tunnel::{self, Link, State};
 
-/// The registration's protocol and the label of its proof key.
-pub const PROTOCOL: &[u8] = b"cbb-relay/2";
+/// The registration's protocol.
+pub use crate::relayd::wire3::PROTOCOL;
 const PROOF_LABEL: &[u8] = b"cbb relay key";
 /// The relay's own address inside the tunnels.
 pub const RELAY_ADDR: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0cbb, 0, 0, 0, 0, 0, 1);
@@ -52,14 +51,12 @@ const CALL_TIMEOUT: Duration = Duration::from_secs(10);
 const DIAL_WAIT: Duration = Duration::from_secs(10);
 const MAX_MEMBERS: usize = 64;
 const MAX_CALLS: usize = 16;
-const MAX_RECORDS: usize = 1024;
-/// The most roots a device shows a relay that serves a fixed list of
-/// groups, and the most pseudonyms the app names.
-const MAX_ROOTS: usize = 8;
+/// The most pseudonyms the app names.
 const MAX_NAMES: usize = 1024;
 /// How often a registered link looks whether its credentials changed.
 const CREDENTIAL_CHECK: Duration = Duration::from_secs(1);
-const MAX_LINE: usize = 64 << 10;
+/// The largest frame in the tunnel.
+const MAX_NOTE: usize = 16 << 10;
 const TICK: Duration = Duration::from_millis(100);
 
 /// What the app does for the link: whether to connect to a device through
@@ -84,36 +81,27 @@ pub struct Config {
     /// may have.
     pub endpoint: SocketAddr,
     pub pins: Vec<certs::KeyHash>,
-    /// The member certificate chain and its key, and the device's ID.
-    pub chain: Vec<Vec<u8>>,
-    pub key: Arc<dyn crate::identity::ExternalKey>,
-    pub device: String,
-    /// The device's WireGuard private key.
-    pub wg_key: [u8; 32],
-    /// The group's authority records, which the relay keeps to refuse the
-    /// devices the group removed; each registration takes them as they are.
-    pub records: Arc<Mutex<Vec<Value>>>,
     /// The app's member listener on the loopback address.
     pub member_port: u16,
-    /// What the device registers with in place of the member certificate
-    /// and the records, when set; each registration takes it as it is, and
-    /// a change ends the registration, so that the next one uses it.
+    /// What the device registers with; None until the period's members'
+    /// credential lists its server key, and the link waits. Each
+    /// registration takes it as it is, and a change ends the registration,
+    /// so that the next one uses it.
     pub credentials: Arc<Mutex<Option<Arc<Credentialed>>>>,
 }
 
-/// What a device registers with when the period's members' credential
-/// lists its server key (docs/protocol.md, section 18), as Go's
-/// relay.Credentialed.
+/// What a device registers with: its server key for the period and the
+/// period's credentials (`cbb_core::blind::credential`).
 pub struct Credentialed {
-    /// The certificate of the server key (`certs::server_cert_by`).
+    /// The certificate of the server key, which the relay reads it from.
     cert: Vec<u8>,
-    key: Arc<dyn crate::identity::ExternalKey>,
-    /// The period's hubs' and members' credentials.
-    creds: Vec<Credential>,
-    /// The period credential and the group's roots, the group CA first,
-    /// shown only to a relay that asks for them.
-    period: Option<Credential>,
-    roots: Vec<Vec<u8>>,
+    key: Arc<dyn ExternalKey>,
+    /// The hubs' and the members' credentials, as envelopes.
+    creds: Vec<Vec<u8>>,
+    /// The period credential and the root's key that signed it, shown only
+    /// to a relay that serves a list of groups.
+    period: Vec<u8>,
+    root: Vec<u8>,
     /// The device's pseudonym, and the device each pseudonym of the
     /// group's other devices stands for.
     name: String,
@@ -122,53 +110,50 @@ pub struct Credentialed {
 
 impl Credentialed {
     /// Takes the device's server key for the period, the period's hubs'
-    /// and members' credentials, which must list the key, with the period
-    /// credential if the app has it, the group's roots, DER, and the
-    /// pseudonyms of the group's other devices with their device IDs.
+    /// and members' credentials, which must list the key, the period
+    /// credential, the root's key that signed it, and the pseudonyms of the
+    /// group's other devices with their device IDs; checked as the relay
+    /// checks them, at now_ms.
     pub fn new(
-        key: Arc<dyn crate::identity::ExternalKey>,
-        creds: Vec<Credential>,
-        roots: Vec<Vec<u8>>,
+        key: Arc<dyn ExternalKey>,
+        creds: Vec<Vec<u8>>,
+        period: Vec<u8>,
+        root: Vec<u8>,
         names: HashMap<String, String>,
-        now_ms: i64,
+        now_ms: u64,
     ) -> Result<Credentialed> {
-        let spki = certs::p256_spki_of(&key.public());
-        if certs::p256_spki(&spki).is_none() {
+        let point = key.public();
+        if point.len() != 65 || certs::p256_spki(&certs::p256_spki_of(&point)).is_none() {
             return Err(Error::msg("the server key is not a P-256 key"));
         }
-        let hash = certs::sha256(&spki);
-        let (mut listed, mut period) = (Vec::new(), None);
-        for c in creds {
-            if c.open()?.kind == credential::PERIOD {
-                period = Some(c);
-            } else {
-                listed.push(c);
-            }
-        }
-        let p = credential::check_presented(&listed, now_ms)?;
-        if !p.members.as_ref().is_some_and(|m| m.members.contains(&hash)) {
-            return Err(Error::msg("the members' credential does not list the server key"));
-        }
-        if roots.len() > MAX_ROOTS || names.len() > MAX_NAMES {
-            return Err(Error::msg("too many roots or pseudonyms"));
+        let leaf = cbb_core::records::key::Key::es256(point.clone()).hash().0;
+        let mut all = creds.clone();
+        all.push(period.clone());
+        crate::relayd::register3::check(&all, &leaf, Some(&root), None, now_ms).map_err(Error::msg)?;
+        if names.len() > MAX_NAMES {
+            return Err(Error::msg("too many pseudonyms"));
         }
         if !names.iter().all(|(n, d)| valid_name(n) && certs::is_id(d)) {
             return Err(Error::msg("a pseudonym or its device ID is not valid"));
         }
-        let cert = certs::server_cert_by(&key.public(), &mut |tbs| crate::identity::sign_external(&*key, tbs))?;
-        Ok(Credentialed { cert, key, creds: listed, period, roots, name: credential::pseudonym(&hash), names })
+        let cert = certs::server_cert_by(&point, &mut |tbs| crate::identity::sign_external(&*key, tbs))?;
+        Ok(Credentialed { cert, key, creds, period, root, name: b64(&leaf), names })
     }
 
-    /// What it registers with: the name and the credentials' IDs. Only a
+    /// What it registers with: the name and the credentials' hashes. Only a
     /// change of these makes the link register again.
     fn id(&self) -> String {
         let mut k = self.name.clone();
-        for c in &self.creds {
+        for c in self.creds.iter().chain([&self.period]) {
             k.push(' ');
-            k.push_str(&certs::hex(&certs::sha256(&c.body)));
+            k.push_str(&certs::hex(&certs::sha256(c)));
         }
         k
     }
+}
+
+fn b64(b: &[u8]) -> String {
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
 }
 
 /// How the link stands.
@@ -221,11 +206,25 @@ fn pause(d: Duration, stop: &[&AtomicBool]) {
     }
 }
 
+/// Why the link waits: the device has nothing to register with yet.
+const NOT_LISTED: &str = "the group's credentials do not list this device yet";
+
 fn run(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) {
     let mut backoff = MIN_BACKOFF;
+    let mut waiting = false;
     while !stop.load(Ordering::SeqCst) {
+        let Some(cred) = cfg.credentials.lock().ok().and_then(|c| c.clone()) else {
+            if !waiting {
+                waiting = true;
+                events.log(&format!("cbb: sync away from home: the relay: {NOT_LISTED}"));
+                events.changed(&Report { error: Some(NOT_LISTED.into()), ..Report::default() });
+            }
+            pause(CREDENTIAL_CHECK, &[stop]);
+            continue;
+        };
+        waiting = false;
         let start = Instant::now();
-        let err = match once(cfg, events, stop) {
+        let err = match once(cfg, &cred, events, stop) {
             Ok(false) => return,
             Ok(true) => {
                 events
@@ -249,118 +248,59 @@ fn run(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) {
     }
 }
 
-#[derive(Deserialize)]
-struct Challenge {
-    #[serde(with = "b64")]
-    e: Vec<u8>,
-    #[serde(default)]
-    roots: bool,
-}
-
-#[derive(Serialize)]
-struct Claim {
-    #[serde(with = "b64")]
-    key: Vec<u8>,
-    #[serde(with = "b64")]
-    proof: Vec<u8>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    records: Vec<Value>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    credentials: Vec<Credential>,
-    #[serde(with = "b64::list", skip_serializing_if = "Vec::is_empty")]
-    roots: Vec<Vec<u8>>,
-}
-
-#[derive(Deserialize, Default)]
-struct Welcome {
-    #[serde(default)]
-    error: String,
-    #[serde(with = "certs::b64::opt", default)]
-    key: Option<Vec<u8>>,
-    #[serde(with = "certs::b64::opt", default)]
-    psk: Option<Vec<u8>>,
-    #[serde(default)]
-    addr: String,
-}
-
-#[derive(Serialize, Default)]
-struct Request<'a> {
-    #[serde(skip_serializing_if = "core::ops::Not::not")]
+/// A request in the tunnel: the watch, a dial of a device's name at the
+/// relay, or the answer of a call's ticket (base64, as the link keeps
+/// them).
+#[derive(Default)]
+pub(crate) struct Request<'a> {
     watch: bool,
-    #[serde(skip_serializing_if = "str::is_empty")]
     dial: &'a str,
-    #[serde(skip_serializing_if = "str::is_empty")]
     answer: &'a str,
 }
 
-#[derive(Deserialize, Default)]
-struct Note {
-    #[serde(default)]
-    online: Option<Vec<String>>,
-    #[serde(default)]
-    call: String,
-    #[serde(default)]
-    ticket: String,
-    #[serde(default)]
-    ok: bool,
-    #[serde(default)]
-    error: String,
+/// A note of the relay in the tunnel.
+#[derive(Default, Debug)]
+pub(crate) struct Note {
+    pub(crate) online: Option<Vec<String>>,
+    pub(crate) call: String,
+    pub(crate) ticket: String,
+    pub(crate) ok: bool,
+    pub(crate) error: String,
 }
 
 /// One registration with its tunnel and watch, until it ends or stop
 /// (false), or until the credentials change (true).
-fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> Result<bool> {
-    let cred = cfg.credentials.lock().ok().and_then(|c| c.clone());
-    // With credentials the relay gets a fresh WireGuard key at each
-    // registration, so the key links no two of them.
-    let wg_key: [u8; 32] = match &cred {
-        Some(_) => tunnel::new_key()?.try_into().map_err(|_| Error::msg("a bad WireGuard key"))?,
-        None => cfg.wg_key,
-    };
-    let (chain, key) = match &cred {
-        Some(c) => (core::slice::from_ref(&c.cert), &c.key),
-        None => (cfg.chain.as_slice(), &cfg.key),
-    };
-    let mut reg = Registrar::connect(cfg.endpoint, &cfg.pins, chain, key, PROTOCOL, "relay")?;
+fn once(cfg: &Arc<Config>, cred: &Credentialed, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> Result<bool> {
+    // The relay gets a fresh WireGuard key at each registration, so the
+    // key links no two of them.
+    let wg_key: [u8; 32] = tunnel::new_key()?.try_into().map_err(|_| Error::msg("a bad WireGuard key"))?;
+    let mut reg =
+        Registrar::connect(cfg.endpoint, &cfg.pins, core::slice::from_ref(&cred.cert), &cred.key, PROTOCOL, "relay")?;
     let proof_key = reg.export(PROOF_LABEL)?;
-    let ch: Challenge = reg.read(stop)?;
+    let stopped = || Error::msg("registering with the relay: stopped");
+    let (e, wants_root) = v3::challenge(&reg.next_frame(stop)?.ok_or_else(stopped)?)?;
     let (public, proof) =
-        prove(&wg_key, &ch.e, &proof_key).ok_or_else(|| Error::msg("registering with the relay: a bad challenge"))?;
-    let mut claim =
-        Claim { key: public.to_vec(), proof, records: Vec::new(), credentials: Vec::new(), roots: Vec::new() };
-    match &cred {
-        Some(c) => {
-            claim.credentials = c.creds.clone();
-            if ch.roots {
-                // A relay that serves a fixed list of groups knows them by
-                // their roots.
-                claim.credentials.extend(c.period.clone());
-                claim.roots = c.roots.clone();
-            }
-        }
-        None => {
-            claim.records = cfg.records.lock().map(|r| r.clone()).unwrap_or_default();
-            claim.records.truncate(MAX_RECORDS);
-        }
+        prove(&wg_key, &e, &proof_key).ok_or_else(|| Error::msg("registering with the relay: a bad challenge"))?;
+    let proof: [u8; 32] = proof.try_into().map_err(|_| Error::msg("registering with the relay: a bad proof"))?;
+    let mut credentials = cred.creds.clone();
+    if wants_root {
+        // A relay that serves a list of groups knows them by their roots.
+        credentials.push(cred.period.clone());
     }
-    reg.write(&claim)?;
-    let w: Welcome = reg.read(stop)?;
-    if !w.error.is_empty() {
-        return Err(Error::msg(format!("the relay refused the registration: {}", w.error)));
-    }
-    let own: Ipv6Addr = w.addr.parse().map_err(|_| Error::msg("the relay gave a bad tunnel address"))?;
-    let (Some(key), Some(psk)) = (w.key.filter(|k| k.len() == 32), w.psk.filter(|k| k.len() == 32)) else {
-        return Err(Error::msg("the relay's keys are not 32 bytes"));
-    };
+    let root = wants_root.then(|| cred.root.clone());
+    reg.send(&Register { key: public, proof, credentials, root }.write())?;
+    let (key, psk, addr) = v3::welcome(&reg.next_frame(stop)?.ok_or_else(stopped)?)?;
+    let own: Ipv6Addr = addr.parse().map_err(|_| Error::msg("the relay gave a bad tunnel address"))?;
     reg.set_waiting()?;
     let hub = tunnel::Hub {
         device: "relay".into(),
-        key,
-        psk,
+        key: key.to_vec(),
+        psk: psk.to_vec(),
         endpoints: vec![cfg.endpoint],
         next: Vec::new(),
         obfuscation: None,
         vless: None,
+        ..Default::default()
     };
     let log = {
         let events = events.clone();
@@ -369,9 +309,9 @@ fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> 
     let link = Link::start_at(&State::with_key(&wg_key)?, &hub, own, RELAY_ADDR, log)?;
     let s = Arc::new(Session {
         cfg: cfg.clone(),
-        name: cred.as_ref().map_or_else(|| cfg.device.clone(), |c| c.name.clone()),
-        names: cred.as_ref().map(|c| c.names.clone()).unwrap_or_default(),
-        was: cred.as_ref().map(|c| c.id()),
+        name: cred.name.clone(),
+        names: cred.names.clone(),
+        was: cred.id(),
         events: events.clone(),
         at: link.local(),
         stop: AtomicBool::new(false),
@@ -400,7 +340,7 @@ struct Session {
     /// stands for, and what the registration was made with.
     name: String,
     names: HashMap<String, String>,
-    was: Option<String>,
+    was: String,
     events: Arc<dyn Events>,
     /// The tunnel's loopback port to the relay's member port.
     at: SocketAddr,
@@ -418,7 +358,7 @@ impl Session {
         let mut w = TcpStream::connect_timeout(&self.at, SETUP_TIMEOUT)
             .map_err(|e| Error::msg(format!("the relay's tunnel does not answer: {e}")))?;
         w.set_write_timeout(Some(SETUP_TIMEOUT)).map_err(io_err)?;
-        w.write_all(&crate::wire::json_frame(&Request { watch: true, ..Request::default() }, MAX_LINE)?)
+        w.write_all(&v3::request(&Request { watch: true, ..Request::default() })?)
             .map_err(|e| Error::msg(format!("the relay's tunnel does not answer: {e}")))?;
         w.set_read_timeout(Some(Duration::from_millis(250))).map_err(io_err)?;
         let started = Instant::now();
@@ -441,8 +381,7 @@ impl Session {
             }
             while let Some(f) = take_frame(&mut inbox)? {
                 heard = true;
-                let n: Note = serde_json::from_slice(&f).unwrap_or_default();
-                self.note(n)?;
+                self.note(v3::note(&f)?)?;
             }
             if !heard && !link.answered() && started.elapsed() > SETUP_TIMEOUT {
                 return Err(Error::msg("the relay's tunnel does not answer"));
@@ -460,7 +399,7 @@ impl Session {
     /// registration.
     fn credentials_changed(&self) -> bool {
         let Ok(c) = self.cfg.credentials.lock() else { return false };
-        c.as_ref().map(|c| c.id()) != self.was
+        c.as_ref().map(|c| c.id()) != Some(self.was.clone())
     }
 
     /// The device a name at the relay stands for: the device of a pseudonym
@@ -472,7 +411,7 @@ impl Session {
     fn note(self: &Arc<Self>, n: Note) -> Result<()> {
         if let Some(online) = n.online {
             // The relay holds at most MAX_MEMBERS devices of a group and
-            // names them by device ID or pseudonym; a relay that says
+            // names them by pseudonym; a relay that says
             // otherwise is not one to trust.
             if online.len() > MAX_MEMBERS || !online.iter().all(|p| valid_name(p)) {
                 return Err(Error::msg("the relay's watch sent a list of devices that is not valid"));
@@ -602,14 +541,14 @@ impl Session {
         let id = self.hold(&c)?;
         let r = (|| {
             c.set_write_timeout(Some(SETUP_TIMEOUT)).map_err(io_err)?;
-            c.write_all(&crate::wire::json_frame(req, MAX_LINE)?).map_err(io_err)?;
+            c.write_all(&v3::request(req)?).map_err(io_err)?;
             c.set_read_timeout(Some(CALL_TIMEOUT + SETUP_TIMEOUT)).map_err(io_err)?;
             // Exactly one frame: the member protocol follows it.
             let mut head = [0u8; 4];
             c.read_exact(&mut head).map_err(io_err)?;
-            let mut f = vec![0u8; crate::wire::frame_len(head, MAX_LINE)?];
+            let mut f = vec![0u8; v3::length(head, MAX_NOTE)?];
             c.read_exact(&mut f).map_err(io_err)?;
-            let n: Note = serde_json::from_slice(&f).map_err(|_| Error::msg("the relay sent a bad answer"))?;
+            let n = v3::note(&f)?;
             if !n.ok {
                 let why = if n.error.is_empty() { "no answer".to_string() } else { n.error };
                 return Err(Error::msg(format!("the relay: {why}")));
@@ -649,10 +588,8 @@ impl Session {
         self.events.dial(&self.device(peer), ln.local_addr().map_err(io_err)?.port());
         let until = Instant::now() + DIAL_WAIT;
         let k = loop {
-            match ln.accept() {
-                Ok((k, _)) => break k,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => return Err(io_err(e)),
+            if let Some(k) = accept_own(&ln, crate::tunnel::tcp_table).map_err(io_err)? {
+                break k;
             }
             if Instant::now() >= until || self.stop.load(Ordering::SeqCst) {
                 return Err(Error::msg(format!("the app did not take the connection to {}", self.device(peer))));
@@ -733,18 +670,15 @@ fn io_err(e: io::Error) -> Error {
 /// A whole frame from the front of inbox, if one is there.
 fn take_frame(inbox: &mut Vec<u8>) -> Result<Option<Vec<u8>>> {
     let Some(head) = inbox.get(..4).and_then(|h| <[u8; 4]>::try_from(h).ok()) else { return Ok(None) };
-    let n = crate::wire::frame_len(head, MAX_LINE)?;
+    let n = v3::length(head, MAX_NOTE)?;
     let Some(f) = inbox.get(4..4 + n).map(<[u8]>::to_vec) else { return Ok(None) };
     inbox.drain(..4 + n);
     Ok(Some(f))
 }
 
-/// Whether s is a device's name at the relay: its device ID, 32 lowercase
-/// hex characters, or its pseudonym, 32 bytes in standard base64.
+/// Whether s is a device's name at the relay: its pseudonym, 32 bytes in
+/// standard base64.
 pub fn valid_name(s: &str) -> bool {
-    if s.len() == 32 {
-        return s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-    }
     canonical_b64(s, 32)
 }
 
@@ -759,21 +693,86 @@ fn canonical_b64(s: &str, len: usize) -> bool {
     e.decode(s).is_ok_and(|b| b.len() == len && e.encode(&b) == s)
 }
 
+/// Takes a connection to ln, a loopback listener that does not block, when
+/// one of this process's user is waiting: the port is on the loopback, where
+/// every local user may connect, and another's connection is closed, so it
+/// neither takes the call nor ends the wait for the app's. table gives the
+/// kernel's tables of TCP sockets.
+fn accept_own(ln: &TcpListener, table: impl Fn() -> String) -> io::Result<Option<TcpStream>> {
+    let to = ln.local_addr().ok();
+    loop {
+        match ln.accept() {
+            Ok((k, from)) if crate::tunnel::own_user(&table(), from, to) => return Ok(Some(k)),
+            Ok((k, _)) => drop(k),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Ok(None),
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The app's port for a dialed call takes this user's connection only.
+    #[test]
+    fn dialed_port_takes_its_own_user() {
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        ln.set_nonblocking(true).unwrap();
+        assert!(accept_own(&ln, crate::tunnel::tcp_table).unwrap().is_none());
+        let c = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        // Another user's connection, as the kernel's table would show it.
+        let hex = |a: SocketAddr| match a {
+            SocketAddr::V4(a) => format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port()),
+            _ => unreachable!(),
+        };
+        let (from, to) = (c.local_addr().unwrap(), ln.local_addr().unwrap());
+        let other = crate::sys::euid() + 1;
+        let table = move || {
+            format!(
+                "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {other:5} 0 1 1\n",
+                hex(from),
+                hex(to)
+            )
+        };
+        // The stranger's connection is closed, never taken, and the wait goes on.
+        c.set_read_timeout(Some(Duration::from_millis(20))).unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            assert!(accept_own(&ln, table).unwrap().is_none(), "a stranger's connection took the call");
+            if matches!((&c).read(&mut [0u8; 1]), Ok(0)) {
+                break;
+            }
+            assert!(Instant::now() < until, "a stranger's connection was not closed");
+        }
+        let _c2 = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            if accept_own(&ln, crate::tunnel::tcp_table).unwrap().is_some() {
+                break;
+            }
+            assert!(Instant::now() < until, "this user's connection was not taken");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     #[test]
     fn names_and_tickets() {
-        assert!(valid_name("00112233445566778899aabbccddeeff"));
-        assert!(!valid_name("00112233445566778899AABBCCDDEEFF"));
+        // A device ID is no name at the relay: it names devices by pseudonym.
+        assert!(!valid_name("00112233445566778899aabbccddeeff"));
         assert!(valid_name(&("A".repeat(43) + "=")));
         assert!(!valid_name("relay"));
         assert!(valid_ticket("AAAAAAAAAAAAAAAAAAAAAA=="));
         assert!(!valid_ticket("AAAAAAAAAAAAAAAAAAAAAA"));
-        let mut inbox = vec![0, 0, 0, 2, b'{', b'}', 0, 0];
-        assert_eq!(take_frame(&mut inbox).unwrap(), Some(b"{}".to_vec()));
+        let ok = v3::request(&Request { watch: true, ..Request::default() }).unwrap();
+        let mut inbox = ok.clone();
+        inbox.extend_from_slice(&[0, 0]);
+        assert_eq!(take_frame(&mut inbox).unwrap(), Some(ok[4..].to_vec()));
         assert_eq!(take_frame(&mut inbox).unwrap(), None);
         assert_eq!(inbox, vec![0, 0]);
     }
 }
+
+#[cfg(test)]
+#[path = "nettest/relay.rs"]
+mod net_tests;
