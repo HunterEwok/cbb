@@ -2988,24 +2988,17 @@ records; in random orders beyond) and check the same bytes.
   member keeps such a connection while the state stops the exchange with the peer, so that
   the root's decision reaches it; in the other cases `cbb` and the phones refuse the peer
   and take the records from the others.
-- After adding records that refuse a certificate a member first queues the new records for
-  its peers, then closes every connection whose peer certificate is now refused
-  ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
-  then on. So a revoked member that is connected gets the record that revokes it. One that
-  was not connected gets it on its next connection with any member: a peer whose own key
-  (its certificate's) the records revoke or freeze passes the TLS check, and its connection
-  carries records only; the member sends its records when the digests in the hellos differ,
-  takes nothing from the peer, and closes the connection after them and a `bye`. On a
-  connection that carries records only, a frame MUST NOT exceed 2 MiB, the hello's
-  included. Either side
-  dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
-  device costs one handshake now and then. A member
-  that learns that its own key is revoked logs that it was removed from the group, and its
-  status says so (`removed`); an admin computer whose admin key is frozen says that instead
-  (`frozen`); the others refuse it. A member MUST close a connection, and refuse new ones,
-  whose peer certificate the records refuse, as soon as it holds the record. When the state
-  stops the exchange ("Stopping the exchange"), a member applies it to every connection at
-  once.
+- After adding records that refuse a peer's key (removed, frozen, or an ID that is not its
+  own: `standing` in `core/src/peer.rs`), a member first closes every connection with a peer
+  the records now refuse, and only then sends the new records and its hello to the others;
+  the TLS check refuses the key from then on. A refused peer gets no records: not the record
+  that refuses it, and not the device list. A removed device need not learn that it was
+  removed, and the group refuses it wherever it connects. A frozen device learns nothing
+  while it is frozen: once a `thaw` lifts the freeze, the TLS check lets it in again, and it
+  takes the records, the thaw among them, when it connects again. A member MUST close a
+  connection, and refuse new ones, whose peer key the records refuse, as soon as it holds the
+  record. When the state stops the exchange ("Stopping the exchange"), a member applies it to
+  every connection at once.
 - A member that holds the root's key records every device it admits (its name and `os` from
   the pairing Info, role `member` and its `caps`), and itself and every connected peer that has no
   record yet, with the name and `os` from the peer's hello (or the role and the first 8

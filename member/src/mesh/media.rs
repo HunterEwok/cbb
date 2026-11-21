@@ -151,11 +151,12 @@ impl Mesh {
             blob,
         )?;
         let Some((frame, kept)) = made else { return Ok(out) };
-        self.see(&kept.made.id);
-        out.id = Some(kept.made.id);
-        self.kept.lock().unwrap().insert(kept.made.id, kept);
+        let id = kept.made.id;
+        self.see(&id);
+        out.id = Some(id);
+        self.kept.lock().unwrap().insert(id, kept);
         if !content.is_secret() {
-            self.set_current(made_time, &frame);
+            self.set_current(made_time, id, &frame);
         }
         self.broadcast(&frame, None);
         out.sent = true;

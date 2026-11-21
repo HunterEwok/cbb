@@ -526,7 +526,11 @@ impl Service {
                 // A computer freezes only admins: an ordinary device is
                 // removed. A device a change of root carried over frozen,
                 // an admin no more, the new root thaws (docs/protocol.md,
-                // section 10, "Re-issue").
+                // section 10, "Re-issue"): a `thaw` record signed by the
+                // root's own key, which the core's records rules count
+                // whatever the frozen key ("Who signs what": `thaw` by "a
+                // root's own key"; core records/eval.rs `collect` leaves out
+                // a freeze that a counting thaw names).
                 let st = live.mesh.state();
                 let on = h.op == "freeze";
                 if let Ok(d) = writers::find(&st, &h.device)

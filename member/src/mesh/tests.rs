@@ -249,6 +249,37 @@ fn the_current_copy_reaches_a_peer_that_connects_later() {
 }
 
 #[test]
+fn a_current_copy_older_than_one_the_peer_holds_is_dropped() {
+    let (a, b) = two("current-old");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send(c.content.clone());
+    }));
+    let earlier = b.clock.now();
+    connect(&a, &b);
+    until("the statements", || {
+        let st = b.state();
+        b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+    });
+    let newer = Content::text("newer", false);
+    assert!(b.copy(&newer).unwrap());
+    assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), newer);
+    b.close_connections();
+    until("the connection gone", || a.connected().is_empty() && b.connected().is_empty());
+    // b's current copy becomes one signed before the copy a holds, as
+    // after a restart that lost the newer one: a has not seen it, and
+    // drops it as older.
+    *b.current.lock().unwrap() = None;
+    assert!(b.copy_at(&Content::text("older", false), earlier).unwrap());
+    connect(&a, &b);
+    until("connected again", || !a.connected().is_empty());
+    assert!(rx.recv_timeout(Duration::from_millis(500)).is_err(), "the older copy was taken");
+    a.close();
+    b.close();
+}
+
+#[test]
 fn a_copy_with_images_brings_its_blob_and_it_opens() {
     use cbb_core::content::TYPE_MEDIA;
     let (a, b) = two("media");

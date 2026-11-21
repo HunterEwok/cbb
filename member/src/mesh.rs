@@ -123,11 +123,12 @@ pub struct Mesh {
     /// once a reader's statement arrives, as the hello of 0.5 carried the
     /// current copy to the members that came later.
     unsent: Mutex<Option<(Content, Timestamp)>>,
-    /// The frame of the newest copy, not a secret, that this device made or
-    /// took, by the time it was signed: sent to each peer as its
-    /// connection opens, so that a pair that meets later converges, as the
-    /// hello's current copy (docs/protocol.md, section 4, "The member protocol in 0.6").
-    current: Mutex<Option<(Timestamp, Vec<u8>)>>,
+    /// The newest copy, not a secret, that this device made or took, by
+    /// the time it was signed, with its ID and frame: sent to each peer as
+    /// its connection opens, so that a pair that meets later converges, as
+    /// the hello's current copy (docs/protocol.md, section 4, "The member
+    /// protocol in 0.6").
+    current: Mutex<Option<Current>>,
     seen: Mutex<Seen>,
     /// The sealed blobs this member made or fetched, which it serves.
     content: Arc<Store>,
@@ -754,8 +755,10 @@ impl Mesh {
         self.push_events(&set);
         let hello = self.hello_frame(&set);
         drop(set);
-        self.broadcast(&hello, None);
+        // The peers the records refuse now go first: they get nothing more,
+        // not even the hello that would draw the new records.
         self.drop_refused();
+        self.broadcast(&hello, None);
         Ok(())
     }
 
@@ -907,13 +910,29 @@ impl Mesh {
         }
     }
 
-    /// Keeps frame as the current copy when it was signed after the one
-    /// kept.
-    pub(crate) fn set_current(&self, time: Timestamp, frame: &[u8]) {
+    /// Keeps the copy id, in frame, as the current copy when it was signed
+    /// after the one kept.
+    pub(crate) fn set_current(&self, time: Timestamp, id: [u8; 16], frame: &[u8]) {
         let mut c = self.current.lock().unwrap();
-        if c.as_ref().is_none_or(|(t, _)| time > *t) {
-            *c = Some((time, frame.to_vec()));
+        if c.as_ref().is_none_or(|(t, _, _)| time > *t) {
+            *c = Some((time, id, frame.to_vec()));
         }
+    }
+
+    /// The current copy for a peer whose connection just opened. One this
+    /// device made is sealed again to the peer alone, by the records and
+    /// statements as they are now: nothing when the peer reads it no more
+    /// (`resealed`). One taken from another member goes as its maker
+    /// sealed it, to its readers then; a peer not among them cannot open
+    /// it and asks the maker, which seals it again as here. A peer the
+    /// records refuse, removed or frozen, never gets this far: the TLS
+    /// handshake refuses it (`judge`), and `drop_refused` ends a
+    /// connection open when the records come to refuse it. The peer judges
+    /// the copy as any other (`copies::fresh`): one older than a copy it
+    /// holds, or one it has seen, it drops.
+    fn current_for(&self, peer: &DeviceId) -> Option<Vec<u8>> {
+        let (_, id, f) = self.current.lock().unwrap().clone()?;
+        if self.kept.lock().unwrap().contains_key(&id) { self.resealed(&id, peer) } else { Some(f) }
     }
 
     /// Seals content, copied at time, to the group's readers and sends it:
@@ -923,10 +942,11 @@ impl Mesh {
         let now = crate::uptime::wall_ms().max(0) as u64;
         let made = sealed::make(&*self.own.member, &state, &self.statements.lock().unwrap(), content, time, Some(now))?;
         let Some((frame, kept)) = made else { return Ok(false) };
-        self.see(&kept.made.id);
-        self.kept.lock().unwrap().insert(kept.made.id, kept);
+        let kept_id = kept.made.id;
+        self.see(&kept_id);
+        self.kept.lock().unwrap().insert(kept_id, kept);
         if !content.is_secret() {
-            self.set_current(time, &frame);
+            self.set_current(time, kept_id, &frame);
         }
         self.broadcast(&frame, None);
         if let Ok(msg) = frame::read(&frame, frame::LIMIT_MEMBER) {
@@ -1182,7 +1202,7 @@ impl Mesh {
         }
         // The current copy, after the statements, which a peer that reads
         // it may need first; one it has seen it drops.
-        if let Some((_, f)) = self.current.lock().unwrap().clone() {
+        if let Some(f) = self.current_for(&peer) {
             let _ = conn.tx.try_send(f);
         }
         for f in self.faces.all_messages() {
@@ -1247,13 +1267,20 @@ impl Mesh {
                 hex(&ours)
             ));
         }
-        for f in out.send {
-            let _ = conn.tx.try_send(f);
+        // The peers that the new records refuse, this one among them, go
+        // first: they get nothing more, neither records nor the hello that
+        // would draw them.
+        if out.changed {
+            self.drop_refused();
+        }
+        if !conn.closed.load(Ordering::SeqCst) {
+            for f in out.send {
+                let _ = conn.tx.try_send(f);
+            }
         }
         if out.changed {
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
-            self.drop_refused();
         }
         match out.other {
             None => {
@@ -1370,7 +1397,7 @@ impl Mesh {
         match taken {
             Taken::New { id, content, origin, signed, age_ms, blob } => {
                 if !content.is_secret() {
-                    self.set_current(signed, &f);
+                    self.set_current(signed, id, &f);
                 }
                 if let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) {
                     self.push_copy(&v, self.push_role_received());
@@ -1397,22 +1424,36 @@ impl Mesh {
         let Some(id) = v.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()) else {
             return Ok(());
         };
-        let Some(kept) = self.kept.lock().unwrap().get(&id).cloned() else { return Ok(()) };
-        // Sealed again to the asker's current statement only, when it was
-        // a reader and still reads.
+        if let Some(f) = self.resealed(&id, &conn.peer) {
+            let _ = conn.tx.try_send(f);
+        }
+        Ok(())
+    }
+
+    /// The copy id this device made and keeps, sealed again to the peer's
+    /// current statement only, when the peer was a reader and still reads:
+    /// nothing otherwise.
+    fn resealed(&self, id: &[u8; 16], peer: &DeviceId) -> Option<Vec<u8>> {
+        let kept = self.kept.lock().unwrap().get(id).cloned()?;
         let state = self.state();
         let sealing = self.statements.lock().unwrap().sealing(&state);
         let readers = copies::readers(&state, &sealing, &kept.content, &self.device(), &[], None);
-        let Some(r) = readers.into_iter().find(|r| r.id == conn.peer) else { return Ok(()) };
+        let r = readers.into_iter().find(|r| r.id == *peer)?;
         // A copy with a blob keeps its copy key, so that its blob opens.
         let copy = match &kept.k {
             Some(k) => copies::seal_keyed(&*self.own.member, &[r], &kept.made, &kept.content, k),
             None => copies::seal(&*self.own.member, &[r], &kept.made, &kept.content),
+        };
+        let made = copy
+            .map_err(|e| e.context("cannot seal the copy again"))
+            .and_then(|c| copies::message(&c).map_err(|r| Error::msg(format!("the copy breaks {r}"))));
+        match made {
+            Ok(f) => Some(f),
+            Err(e) => {
+                self.logf(&format!("cbb: {}", e.details()));
+                None
+            }
         }
-        .map_err(|e| e.context("cannot seal the copy again"))?;
-        let f = copies::message(&copy).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
-        let _ = conn.tx.try_send(f);
-        Ok(())
     }
 
     fn take_command(&self, conn: &Conn, msg: &[u8]) -> Result<()> {
@@ -1551,6 +1592,9 @@ fn command_id(f: &[u8]) -> Option<[u8; 16]> {
 }
 
 /// A copy's ID from message `copy` (its body), as its header names it.
+/// A current copy: when it was signed, its ID and its frame.
+type Current = (Timestamp, [u8; 16], Vec<u8>);
+
 fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
     let (_, v, _) = cbb_core::msg::read_noted(msg).ok()?;
     let c = cbb_core::format::copy::Copy::from_value(v.get(2)?).ok()?;

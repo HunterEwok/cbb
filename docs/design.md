@@ -745,8 +745,10 @@ sync away from home, the admins, and remote paste.
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
   settings stay. The group's root leaves only alone; otherwise it hands the group over
-  first. A removed device (`cbb status` says so) and one whose group file is damaged leave
-  the same way. `cbb leave` does it through the service, or by
+  first. A removed device and one whose group file is damaged leave the same way; a removed
+  device need not learn that it was removed, since the group refuses it and gives it no
+  records (protocol section 10, "Exchange in the member protocol").
+  `cbb leave` does it through the service, or by
   itself when the service does not run. The phones, the tray app and the Mac app have a
   "Leave the group" button (docs/apps.md), and a phone's watch forgets its admin key with
   it. The group keeps the device's entry until an admin removes it.
@@ -2115,7 +2117,8 @@ fingerprint. So the question is what an admin computer may do to another admin.
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
 another admin, and hands the group over only from a lost root computer (below). Instead, **any admin freezes another admin
 computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
-counts beyond the records it signed before, its connections are refused, and it cannot
+counts beyond the records it signed before, its connections are refused, it gets no records
+and so learns nothing of the group until it is unfrozen and connects again, and it cannot
 paste. The root or an admin phone then decides: Unfreeze in the apps (`cbb unfreeze` on a
 root computer) makes it an admin again, Remove takes it out for good. Nobody freezes the
 root or an admin phone. How the records say it is in protocol section 10, "Removals and freezes keep what the author saw".

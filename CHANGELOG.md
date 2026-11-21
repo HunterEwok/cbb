@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 the copy a member sends as a connection opens is one it made sealed
+  again to that peer by the records as they are then, and a member that takes records refusing
+  a peer, removed or frozen, ends that connection before it sends anything more, so a refused
+  device gets no records at all.
 - On the records of 0.6 a copy made while no other member was connected, or before a new device
   knew any reader's keys, reaches the others once they meet, as on 0.5: each member sends its
   current copy as a connection opens. The new root thaws a device that a change of root carried
