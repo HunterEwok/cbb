@@ -742,11 +742,6 @@ impl Member {
         self.node.send_to(to, wire::admin(ca))
     }
 
-    /// Sends the member to this hub's offer for its tunnel key.
-    pub fn send_tunnel(&self, to: &DeviceId, offer: &serde_json::Value) -> bool {
-        self.node.send_to(to, wire::tunnel(offer))
-    }
-
     /// Sends what this hub shares to the group's other hubs connected, the
     /// full members among the root and the admins, or to the member to
     /// only; returns those it went to.
@@ -808,13 +803,6 @@ impl Member {
     /// passes on.
     pub fn on_command(&self, f: OnCommand) {
         *self.others.write().unwrap() = Some(f);
-    }
-
-    /// Sets the tunnel key and preshared key the hellos offer the group's
-    /// hubs, None while sync away from home is off, and connects to the
-    /// full members again so that they get them.
-    pub fn set_tunnel_key(&self, key: Option<(Vec<u8>, Vec<u8>)>) {
-        self.node.set_tunnel_key(key);
     }
 
     /// Sets the attestations of the phone's keys every peer gets after its

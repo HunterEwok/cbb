@@ -257,8 +257,6 @@ struct ToArgs {
     issuer: Option<Vec<u8>>,
     #[serde(with = "certs::b64::opt", default)]
     ca: Option<Vec<u8>>,
-    #[serde(default)]
-    offer: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -917,23 +915,6 @@ impl Old {
                 let c: Record = args(arg(&a, "command").clone())?;
                 n.check_command(&c).map_err(|e| e.context("The command is refused."))
             }
-            "tunnel_key" => {
-                #[derive(Deserialize)]
-                struct K {
-                    #[serde(with = "certs::b64::opt", default)]
-                    key: Option<Vec<u8>>,
-                    #[serde(with = "certs::b64::opt", default)]
-                    psk: Option<Vec<u8>>,
-                }
-                let k: K = args(a)?;
-                let keys = match (k.key, k.psk) {
-                    (Some(key), Some(psk)) if key.len() == 32 && psk.len() == 32 => Some((key, psk)),
-                    (None, None) => None,
-                    _ => return Err(Error::msg("a tunnel key and its preshared key are 32 bytes each")),
-                };
-                n.set_tunnel_key(keys);
-                done()
-            }
             "evidence" => {
                 let list = arg(&a, "evidence").as_array().cloned().unwrap_or_default();
                 n.set_evidence(list);
@@ -1049,11 +1030,6 @@ impl Old {
                 let a: OfferArgs = args(a)?;
                 n.take_admin_ca(&a.key.ok_or_else(|| Error::msg("take_admin_ca needs the admin CA"))?)?;
                 done()
-            }
-            "send_tunnel" => {
-                let a: ToArgs = args(a)?;
-                let offer = a.offer.ok_or_else(|| Error::msg("send_tunnel needs the offer"))?;
-                Ok(json!({ "sent": n.send_tunnel(&device(&a.to)?, &offer) }))
             }
             "send_hubs" => {
                 let only = arg(&a, "to").as_str().map(device).transpose()?;

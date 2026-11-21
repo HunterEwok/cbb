@@ -557,10 +557,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun sendAdminCA(to: String, ca: ByteArray): Boolean =
         call("send_admin_ca", Wire.obj("to" to Wire.str(to), "ca" to Wire.bytes(ca))).optBool("sent") ?: false
 
-    /** Sends the member to this hub's offer for its tunnel key. */
-    fun sendTunnel(to: String, offer: Member.TunnelOffer): Boolean =
-        call("send_tunnel", Wire.obj("to" to Wire.str(to), "offer" to offer.toJson())).optBool("sent") ?: false
-
     /**
      * Sends the group's server credentials to the member [to] only (a peer that just connected), or to every member but [except]
      * (the one that sent them); those they went to.
@@ -580,11 +576,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** Answers a [Event.Command] with the result its sender gets. */
     fun answer(token: Long, result: Member.CommandResult) {
         call("answer", Wire.obj("token" to JsonPrimitive(token), "status" to Wire.str(result.status), "reason" to Wire.str(result.reason ?: "")))
-    }
-
-    /** Sets the tunnel key and preshared key the hellos offer the group's hubs, or none; the phone connects to the full members again. */
-    fun setTunnelKey(keys: Pair<ByteArray, ByteArray>?) {
-        call("tunnel_key", Wire.obj("key" to Wire.bytes(keys?.first), "psk" to Wire.bytes(keys?.second)))
     }
 
     /** Sets the attestations of the phone's keys, which every peer gets after its hello. */

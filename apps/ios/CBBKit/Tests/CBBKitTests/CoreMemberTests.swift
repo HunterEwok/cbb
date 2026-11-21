@@ -51,10 +51,6 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(r.id, Commands.id(of: c))
         XCTAssertThrowsError(try b.member.answer(token, result: .init(id: "", status: "done")), "a second answer finds no command")
 
-        // A tunnel key goes into the hellos; one of the wrong size does not.
-        try b.member.setTunnelKey(Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32))
-        try b.member.setTunnelKey(nil, psk: nil)
-        XCTAssertThrowsError(try b.member.setTunnelKey(Data(repeating: 1, count: 3), psk: Data(repeating: 2, count: 32)))
         try b.member.setEvidence([])
         XCTAssertFalse(try a.member.records().isEmpty)
         // A device let go is dialed again.

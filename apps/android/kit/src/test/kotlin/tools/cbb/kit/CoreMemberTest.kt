@@ -172,9 +172,6 @@ class CoreMemberTest {
         assertEquals(g.device, m.by)
         assertTrue(eventsB.none { it is CoreMember.Event.Command && Commands.idOf(it.command) == Commands.idOf(mute) }, "the app got the mute")
 
-        b.setTunnelKey(ByteArray(32) { 1 } to ByteArray(32) { 2 })
-        assertFailsWith<Core.Refusal> { b.setTunnelKey(ByteArray(3) to ByteArray(32)) }
-        b.setTunnelKey(null)
         b.lost("a")
     }
 

@@ -2910,7 +2910,9 @@ made with 0.5 is set up again once. The details follow.
   invitation window, and moving the hub to a computer or making one a hub from a phone go
   with it. In a group of 0.6 the Live member runs sync away from home, the hub and the relay
   on the phones as before. The forwarder's check from a network that blocks WireGuard is
-  `TestAwayThroughRealForwarder`, between two Rust `cbb`.
+  `TestAwayThroughRealForwarder`, between two Rust `cbb`. The kits' `sendTunnel` and
+  `setTunnelKey` and the 0.5 member's `send_tunnel` and `tunnel_key` in ffi, which no app
+  called after that, are gone too.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;

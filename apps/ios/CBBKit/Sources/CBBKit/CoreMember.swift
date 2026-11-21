@@ -850,14 +850,6 @@ public final class CoreMember: @unchecked Sendable {
         return try run("send_admin_ca", A(to: to, ca: ca), as: Sent.self).sent
     }
 
-    /// Sends the member to a tunnel offer of this hub's, or of another it
-    /// passes on.
-    @discardableResult
-    public func sendTunnel(to: String, offer: Member.TunnelOffer) throws -> Bool {
-        struct A: Encodable { var to: String, offer: Member.TunnelOffer }
-        return try run("send_tunnel", A(to: to, offer: offer), as: Sent.self).sent
-    }
-
     /// Sends the group's server credentials to the member to only (a peer
     /// that just connected), or to every member but except (the one that
     /// sent them); those it went to.
@@ -872,13 +864,6 @@ public final class CoreMember: @unchecked Sendable {
     public func answer(_ token: UInt64, result: Member.CommandResult) throws {
         struct A: Encodable { var token: UInt64, status: String, reason: String }
         try run("answer", A(token: token, status: result.status, reason: result.reason ?? ""))
-    }
-
-    /// Sets the tunnel key and preshared key the hellos offer the group's
-    /// hubs, nil while sync away from home is off.
-    public func setTunnelKey(_ key: Data?, psk: Data?) throws {
-        struct A: Encodable { var key: Data?, psk: Data? }
-        try run("tunnel_key", key == nil || psk == nil ? A(key: nil, psk: nil) : A(key: key, psk: psk))
     }
 
     /// Sets the attestations of the phone's keys every peer gets after its

@@ -57,28 +57,6 @@ class EngineTest {
         assertTrue(admin.adminCA.contentEquals(byteArrayOf(7, 7)))
     }
 
-    /** The phone's hello offers the tunnel key the app set, and the root's offer for it reaches the app; one turned off is offered no more. */
-    @Test
-    fun nodeOffersTheTunnelKeyAndKeepsTheOffer() = CoreGroup().use { t ->
-        val (hub, phone) = t.phones
-        val key = ByteArray(32) { 1 }
-        val psk = ByteArray(32) { 4 }
-        phone.member.setTunnelKey(key to psk)
-        t.connect(1, 0)
-        val p = hub.peer(phone.device)
-        assertTrue(p.tunnelKey!!.contentEquals(key))
-        assertTrue(p.tunnelPSK!!.contentEquals(psk))
-        val good = Member.TunnelOffer(ByteArray(32) { 2 }, ByteArray(32) { 3 }, listOf("192.0.2.1:8764"))
-        assertTrue(hub.member.sendTunnel(phone.device, good))
-        val got = phone.next("the offer") { it as? CoreMember.Event.Tunnel }
-        assertEquals(hub.device, got.from)
-        assertTrue(got.offer.hubKey.contentEquals(good.hubKey))
-        assertEquals(good.endpoints, got.offer.endpoints)
-        phone.member.setTunnelKey(null)
-        phone.member.disconnect(hub.device)
-        hub.until("a hello without the key") { hub.member.peers().any { it.device == phone.device && it.tunnelKey == null } }
-    }
-
     /** The credentials go to the one peer named, and the ones a peer sends reach the app, which passes new ones on to the others. */
     @Test
     fun nodeSendsAndTakesCredentials() = CoreGroup(3).use { t ->
