@@ -127,8 +127,6 @@ protocol GroupController: AnyObject {
     func hubStatus() async -> AppModel.Hub?
     /// Makes this phone the group's hub, or stops it being the hub.
     func setPhoneHub(_ on: Bool) async throws
-    /// Sets the hub's forwarder; both empty for the project's.
-    func setForwarder(address: String, pin: String) async throws
     /// Sets how the hub's tunnel hides.
     func setHubDisguise(_ d: HubOnPhone.Disguise) async throws
     /// Remembers the network the phone is on as a home network of the hub.
@@ -140,14 +138,11 @@ protocol GroupController: AnyObject {
     /// One pass of the background refresh begins (true) or ends: the
     /// member connects for it, and lets go again after.
     func backgroundPass(_ running: Bool)
-    /// Opens a remote invitation on this phone, the hub, for a device far
-    /// away; ask asks the user about the device that uses it, ended gets
+    /// Opens a remote invitation through a hub of the group, for a device
+    /// far away; ask asks the user about the device that uses it, ended gets
     /// its name or why it ended without one.
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation
-    func moveHub(to id: String) async throws
-    /// Makes a connected admin computer a hub of the group as well.
-    func makeHub(_ id: String, forwardOnly: Bool) async throws
     /// The phone at a blind relay; nil without a group.
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
@@ -238,7 +233,6 @@ extension GroupController {
     func setAwayFromHome(_ on: Bool) async throws {}
     func hubStatus() async -> AppModel.Hub? { nil }
     func setPhoneHub(_ on: Bool) async throws {}
-    func setForwarder(address: String, pin: String) async throws {}
     func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {}
     func addHomeNetwork() async throws {}
     func setForeground(_ on: Bool) {}
@@ -246,10 +240,8 @@ extension GroupController {
     func backgroundPass(_ running: Bool) {}
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
-        throw HubOnPhone.Failure.notRunning
+        throw CoreMember.Failure.notConnected
     }
-    func moveHub(to id: String) async throws { throw HubOnPhone.Failure.notRunning }
-    func makeHub(_ id: String, forwardOnly: Bool) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
     func why() async -> [WhyReason] { hasGroup ? [] : [WhyReason(code: "not_in_group", level: "stop")] }
@@ -515,20 +507,6 @@ final class AppModel: ObservableObject {
         var clients = 0
         /// How its tunnel hides.
         var disguise = HubOnPhone.Disguise.plain
-        /// The connected computers the hub can move to: admins, or
-        /// computers the root can make admins.
-        var computers: [Target] = []
-        /// The computer that is always on which the app suggests as the
-        /// hub, unless the user chose to keep the phone.
-        var suggested: Target?
-        /// The forwarder is the group's root's setting (a group of 0.6),
-        /// which Settings shows and does not edit.
-        var forwarderByRoot = false
-
-        struct Target: Equatable, Identifiable {
-            let id: String
-            let name: String
-        }
     }
 
     @Published private(set) var hub: Hub?
@@ -1126,7 +1104,7 @@ final class AppModel: ObservableObject {
             Island.end(.away)
         }
         // The last failure only while it is still trying; once connected or
-        // at home it is old news. AwayFromHome logs each failure itself.
+        // at home it is old news. The member logs each failure itself.
         let failing = a.status == .connecting ? a.error : nil
         if notifies { Notifier.shared.away(trying: a.on && failing != nil) }
         away = Away(on: a.on, status: a.status, error: failing.map {
@@ -1172,54 +1150,8 @@ final class AppModel: ObservableObject {
     /// Makes this phone the group's hub, or stops it being the hub.
     func setHub(_ on: Bool) async { await hubChange { try await self.group.setPhoneHub(on) } }
 
-    /// Makes a connected computer the hub in place of this phone
-    /// (docs/protocol.md, section 11, "Moving the hub").
-    func moveHub(to id: String) async {
-        do {
-            try await group.moveHub(to: id)
-            hubNote = String(localized: "The computer is the hub now; this phone reaches it from afar.", bundle: .app)
-        } catch HubOnPhone.Failure.notRunning {
-            hubNote = Self.describe(HubOnPhone.Failure.notRunning,
-                                    summary: String(localized: "The hub can move only while it runs with a forwarder.", bundle: .app))
-        } catch {
-            hubNote = Self.describe(error)
-        }
-        await refreshHub()
-    }
-
-    /// Makes a connected computer a hub of the group as well
-    /// (docs/protocol.md, section 11, "Several hubs"): one that reads the
-    /// copies, an admin, or one that only passes them on.
-    func makeHub(_ id: String, forwardOnly: Bool = false) async {
-        do {
-            try await group.makeHub(id, forwardOnly: forwardOnly)
-            message = forwardOnly
-                ? String(localized: "It is a hub now that only passes the copies on: your devices reach the group through it when they are away from home, and it reads none of them.", bundle: .app)
-                : String(localized: "It is a hub now: your devices reach the group through it when they are away from home.", bundle: .app)
-        } catch {
-            message = Self.describe(error)
-        }
-        devices = group.devices
-        await refreshHub()
-    }
-
     /// Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS.
     func setHubDisguise(_ d: HubOnPhone.Disguise) async { await hubChange { try await self.group.setHubDisguise(d) } }
-
-    /// Keeps this phone as the hub: the app no longer suggests a computer.
-    func keepPhoneHub() async {
-        UserDefaults.standard.set(true, forKey: LiveGroup.keepsPhoneHubKey)
-        await refreshHub()
-    }
-
-    /// Sets the hub's forwarder; both empty for the project's.
-    func setForwarder(address: String, pin: String) async {
-        await hubChange {
-            let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
-            guard a.isEmpty == p.isEmpty, p.isEmpty || HubState.validPin(p) else { throw HubOnPhone.Failure.badForwarder }
-            try await self.group.setForwarder(address: a, pin: p)
-        }
-    }
 
     /// Remembers the network the phone is on as home.
     func addHomeNetwork() async { await hubChange { try await self.group.addHomeNetwork() } }
@@ -1228,10 +1160,6 @@ final class AppModel: ObservableObject {
         do {
             try await f()
             hubNote = nil
-        } catch HubOnPhone.Failure.badForwarder {
-            hubNote = Self.describe(HubOnPhone.Failure.badForwarder, summary: String(
-                localized: "Give the forwarder's address with its port and its key, as cbb forward prints them, or leave both empty.",
-                bundle: .app))
         } catch {
             hubNote = Self.describe(error)
         }
@@ -1249,9 +1177,6 @@ final class AppModel: ObservableObject {
             }, ended: { [weak self] r in self?.inviteEnded(r) })
             let file = try Self.inviteFile(inv.text)
             (invitation, invite, inviteNote) = (inv, Invite(text: inv.text, expires: inv.expires, file: file), nil)
-        } catch HubOnPhone.Failure.notRunning {
-            inviteNote = Self.describe(HubOnPhone.Failure.notRunning, summary: String(
-                localized: "An invitation needs the hub registered with its forwarder. Check the forwarder above.", bundle: .app))
         } catch {
             inviteNote = Self.describe(error)
         }
@@ -1299,12 +1224,6 @@ final class AppModel: ObservableObject {
         case .success:
             inviteNote = String(localized: "The device joined the group; it appears in the list once it connects.", bundle: .app)
             Task { await refresh() }
-        case .failure(InvitationWindow.Ended.cancelled):
-            inviteNote = nil
-        case .failure(InvitationWindow.Ended.expired):
-            inviteNote = String(localized: "The invitation expired without being used.", bundle: .app)
-        case .failure(InvitationWindow.Ended.tooManyAttempts):
-            inviteNote = String(localized: "The invitation closed after three failed attempts. Make a new one.", bundle: .app)
         case .failure(let e):
             inviteNote = Self.describe(e)
         }

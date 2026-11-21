@@ -24,32 +24,6 @@ final class CommandTests: XCTestCase {
         XCTAssertThrowsError(try Commands.mode(to: pc, mode: "everything", group: "tag", by: "by", now: now, signer: root))
     }
 
-    /// A hub command carries the forwarder and the clients; a result
-    /// carries the new hub's offer, which the old hub passes on.
-    func testHubCommand() throws {
-        let root = SoftwareSigner()
-        let client = PhoneHub.Client(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", key: Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32))
-        let c = try Commands.hub(to: pc, forwarder: ("203.0.113.9:8764", "AAAA"), clients: [client], group: "tag", by: "by",
-                                 now: now, signer: root)
-        let b = try JSONDecoder().decode(Commands.Body.self, from: c.body)
-        XCTAssertEqual(b.type, "hub")
-        XCTAssertNil(b.mode)
-        XCTAssertEqual(b.hub?.forwarder?.endpoint, "203.0.113.9:8764")
-        XCTAssertEqual(b.hub?.clients, [client])
-        XCTAssertThrowsError(try Commands.hub(to: pc, forwarder: nil, clients: [client], group: "tag", by: "by", now: now, signer: root))
-        let m = try Member.decode(body: Data(
-            #"{"t":"result","result":{"id":"ab","status":"done","tunnel":{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","endpoints":["203.0.113.9:8764"]}}}"#.utf8))
-        guard case let .result(r) = m, let offer = r.tunnel else { return XCTFail("no result with an offer") }
-        XCTAssertEqual(offer.endpoints, ["203.0.113.9:8764"])
-        let hub = PhoneHub(publicKey: Data(repeating: 9, count: 32), clients: [client])
-        let moved = try XCTUnwrap(hub.movedOffer(device: client.device, newHub: pc, offer: offer))
-        XCTAssertEqual(moved.hub, pc)
-        XCTAssertTrue(moved.moved)
-        XCTAssertEqual(moved.psk, client.psk)
-        XCTAssertNil(hub.movedOffer(device: pc, newHub: pc, offer: offer))
-        XCTAssertEqual(try Member.decode(body: Data(Member.encode(.tunnel(moved)).dropFirst(4))), .tunnel(moved))
-    }
-
     /// A command and its result through the frames, as Go sends and reads them.
     func testMessages() throws {
         let c = Member.Record(body: Data("{}".utf8), sig: Data([1, 2]), chain: [Data([3])])
@@ -267,10 +241,6 @@ final class CommandTests: XCTestCase {
         let out = Out(group_ca: ca, records: set.records, to: pc, commands: [
             try Commands.mode(to: pc, mode: "receive", group: tag, by: by, now: now, signer: root),
             try Commands.mode(to: pc, mode: "receive", group: tag, by: adminBy, now: now, signer: admin, adminCA: adminCA),
-            try Commands.hub(to: pc, forwarder: ("203.0.113.9:8764", "AAAA"),
-                             clients: [PhoneHub.Client(device: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", key: Data(repeating: 1, count: 32),
-                                                       psk: Data(repeating: 2, count: 32))],
-                             group: tag, by: by, now: now, signer: root),
             try Commands.paste(to: pc, text: "echo <ok> & \"done\"\n", method: "type", enter: true, group: tag, by: adminBy, now: now,
                                signer: admin, adminCA: adminCA),
             try Commands.pasteOff(to: pc, group: tag, by: by, now: now, signer: root),
@@ -283,8 +253,8 @@ final class CommandTests: XCTestCase {
             try Commands.paste(to: pc, text: "00112233445566778899aabbccddeeff", kind: "media", group: tag, by: adminBy, now: now,
                                signer: admin, adminCA: adminCA),
         ])
-        // The eighth is sealed, for Go to open: a phone opens none.
-        for (i, c) in out.commands.enumerated() where i != 7 {
+        // The seventh is sealed, for Go to open: a phone opens none.
+        for (i, c) in out.commands.enumerated() where i != 6 {
             XCTAssertNoThrow(try Commands.verify(c, records: set, me: pc, nowMS: Records.ms(now)))
         }
         let enc = JSONEncoder()
@@ -439,23 +409,13 @@ final class CommandTests: XCTestCase {
         XCTAssertEqual(mute.type, "mute")
         XCTAssertEqual(mute.for_ms, 60_000)
         XCTAssertEqual(try open(t.g.unmuteCommand(to: to, caSigner: t.ca, now: Date())).type, "unmute")
-        // A hub command goes only to a device of the hub order: not to a
-        // plain phone, but to a computer the root marked forward-only, which
-        // is left out of its own clients.
+        // A computer the root marked forward-only may be a hub.
         let pc = Member.newID(), pcKey = SoftwareSigner()
         _ = try t.g.record(device: pc, name: "pi", role: "member", caps: Records.caps, os: "linux", key: Records.keyHash(spki: pcKey.publicKeyDER),
                            store: Records.file, seal: try Core.sealPublic(CoreGroup.seal), caSigner: t.ca, now: Date())
-        let clients = [PhoneHub.Client(device: pc, key: Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32)),
-                       PhoneHub.Client(device: to, key: Data(repeating: 3, count: 32), psk: Data(repeating: 4, count: 32))]
-        XCTAssertThrowsError(try t.g.hubCommand(to: to, forwarder: nil, clients: clients, caSigner: t.ca, now: Date()))
-        XCTAssertThrowsError(try t.g.hubCommand(to: pc, forwarder: nil, clients: clients, caSigner: t.ca, now: Date()))
+        XCTAssertFalse(t.g.records.mayHost(pc))
         XCTAssertNotNil(try t.g.markForwardOnly(device: pc, caSigner: t.ca, now: Date()))
         XCTAssertTrue(t.g.records.mayHost(pc))
-        let hub = try open(t.g.hubCommand(to: pc, forwarder: ("203.0.113.9:8764", "AAAA"), clients: clients, caSigner: t.ca, now: Date()), me: pc)
-        XCTAssertEqual(hub.type, "hub")
-        XCTAssertEqual(hub.hub?.clients, [clients[1]])
-        XCTAssertEqual(hub.hub?.forwarder?.endpoint, "203.0.113.9:8764")
-        XCTAssertThrowsError(try t.g.hubCommand(to: Member.newID(), forwarder: nil, clients: [], caSigner: t.ca, now: Date()))
     }
 
     /// A computer the core admitted is noted once, with its home addresses;

@@ -42,44 +42,6 @@ enum KeychainData {
     }
 }
 
-/// The state of sync away from home in the keychain.
-enum AwayKeychain {
-    static let service = "tools.cbb.away"
-
-    static func load() -> AwayState? { KeychainData.load(service).flatMap(AwayState.decode) }
-
-    /// Keeps s; nil deletes it.
-    static func save(_ s: AwayState?) throws { try KeychainData.save(service, try s.map { try $0.encoded() }) }
-}
-
-/// The remote invitation this phone joined by, until the hub's offer came
-/// (docs/protocol.md, section 12): its text, its hub and when the phone
-/// joined. Through its guest tunnel the phone offers its own tunnel key.
-struct InviteGuest: Codable, Equatable {
-    var invite: String
-    var hub: String
-    var joined: Date
-}
-
-enum InviteKeychain {
-    static let service = "tools.cbb.invite"
-
-    static func load() -> InviteGuest? { KeychainData.load(service).flatMap { try? JSONDecoder().decode(InviteGuest.self, from: $0) } }
-
-    /// Keeps g; nil deletes it.
-    static func save(_ g: InviteGuest?) throws { try KeychainData.save(service, try g.map { try JSONEncoder().encode($0) }) }
-}
-
-/// The phone's state as the group's hub in the keychain.
-enum HubKeychain {
-    static let service = "tools.cbb.hub"
-
-    static func load() -> HubState? { KeychainData.load(service).flatMap(HubState.decode) }
-
-    /// Keeps s; nil deletes it.
-    static func save(_ s: HubState?) throws { try KeychainData.save(service, try s.map { try $0.encoded() }) }
-}
-
 /// What the user chose for the hub on a group of 0.6 (AwayOn06.Prefs) in
 /// the keychain; the Live member keeps the hub's keys and clients itself.
 enum Hub06Keychain {
@@ -89,14 +51,4 @@ enum Hub06Keychain {
 
     /// Keeps p; nil deletes it.
     static func save(_ p: AwayOn06.Prefs?) throws { try KeychainData.save(service, try p.map { try $0.encoded() }) }
-}
-
-/// The phone's settings for a blind relay in the keychain.
-enum RelayKeychain {
-    static let service = "tools.cbb.relay"
-
-    static func load() -> RelaySettings? { KeychainData.load(service).flatMap(RelaySettings.decode) }
-
-    /// Keeps s; nil deletes it.
-    static func save(_ s: RelaySettings?) throws { try KeychainData.save(service, try s.map { try $0.encoded() }) }
 }

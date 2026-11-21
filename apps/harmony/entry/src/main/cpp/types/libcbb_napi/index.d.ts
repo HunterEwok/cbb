@@ -61,7 +61,3 @@ export const windowFree: (window: Handle) => Promise<void>;
 export const joinerNew: (request: string) => Promise<Made>;
 export const joinerNext: (joiner: Handle, version: number, timeoutMs: number) => Promise<string>;
 export const joinerFree: (joiner: Handle) => Promise<void>;
-
-export const tunnel: (request: string) => Promise<string>;
-export const tunnelRegister: (request: string) => Promise<string>;
-export const tunnelRelay: (request: string, onEvent: (event: string) => void) => Promise<string>;

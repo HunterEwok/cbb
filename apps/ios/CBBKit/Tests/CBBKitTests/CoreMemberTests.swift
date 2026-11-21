@@ -137,24 +137,6 @@ final class CoreMemberTests: XCTestCase {
         }
     }
 
-    /// A hub share goes to the one peer the app names; from a device that
-    /// may not be a hub, the member drops it.
-    func testSendsAHubShareToOnePeer() async throws {
-        let t = try CoreGroup(3, test: self)
-        let (root, b, c) = (t.phones[0], t.phones[1], t.phones[2])
-        try await t.connect(1, to: 0)
-        try await t.connect(2, to: 0)
-        let share = Member.HubShare(serving: true)
-        XCTAssertEqual(try root.member.sendHubs(share, to: b.device), [b.device])
-        _ = try await b.next("the share") { if case let .message(_, .hubs(h)) = $0 { return h }; return nil }
-        // C, no hub, sends one to the root, which drops it.
-        XCTAssertEqual(try c.member.sendHubs(share, to: root.device), [root.device])
-        try c.member.copy("after the share")
-        _ = try await root.copy("after the share")
-        XCTAssertTrue(root.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty)
-        XCTAssertTrue(c.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty, "C was not named")
-    }
-
     /// A mode change connects again so the hellos say it, and the member
     /// dials its peer again at once, however many changes come in a row.
     func testReconnectsAtOnceAfterAModeChange() async throws {

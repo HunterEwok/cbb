@@ -207,27 +207,20 @@ they look, so both apps are built to the same plan.
    home"); Settings show where it stands: waiting for the
    hub's answer, which comes on the next connection at home; at home, syncing directly;
    connecting; connected through the tunnel. Turning it off forgets the phone's tunnel key.
-   On Android the WireGuard key sits in the app's files, encrypted with a Keystore key that
-   needs no unlock, so the foreground service syncs away from home as it does at home; the
-   tunnel runs in the app's process (the Rust core's, `ffi/src/tunnel.rs`) and opens a loopback port that the kit
-   dials with its own member TLS, checking that the peer is the hub. On the iPhone the key
-   and the hub's offer sit in the keychain, readable after the first unlock and on this
-   device only; the same tunnel (in the core's library) runs while the app does, and the
-   kit's `AwayFromHome` drives it in both the app and its tests. When the group's hub is
-   obfuscated, its offer carries the AmneziaWG settings, and when it has its clients come
-   over VLESS, the way there; both apps keep them with the offer and give them to the
-   tunnel, which then tries the hub's endpoints in AmneziaWG over UDP first and VLESS after
-   them, in turn, keeping to the way that works. Nothing changes on the screen.
+   The Live member keeps the phone's tunnel key and the hubs' offers itself and runs the
+   tunnel in the app's process, in user space: it tries a hub's endpoints in AmneziaWG over
+   UDP first and VLESS after them, in turn, keeping to the way that works. Nothing changes
+   on the screen. A phone in a group made before 0.6 syncs at home only and shows no card
+   for sync away from home, the hub or the relay (D-123).
    On a root or admin phone, "This phone as the hub" comes first (docs/design.md, "The
    phone as the hub"): a switch, on from the start in a group the phone made; where it
    stands (at home only without a forwarder, registering, registered, or why the forwarder
    refuses it, with the error underneath when details are on); whether the network the
    phone is on is one of the hub's home networks, with "This is my home network" when it
-   is not; the forwarder's address and key, as `cbb forward` prints them; how the hub's
-   tunnel hides (WireGuard, AmneziaWG, or VLESS to a forwarder that takes it, which comes
-   with AmneziaWG: the phone makes the AmneziaWG settings and the VLESS user ID with the tunnel's `new_obfuscation` and
-   `new_vless_id` and keeps them while that choice stays, and the clients get them the next
-   time they meet the hub at home); and on Android
+   is not; the forwarder the group's root set; how the hub's tunnel hides (WireGuard,
+   AmneziaWG, or VLESS to a forwarder that takes it, which comes with AmneziaWG: the Live
+   member makes the AmneziaWG settings and the VLESS user ID and keeps them while that
+   choice stays, and the clients get them the next time they meet the hub at home); and on Android
    "Keep the hub running in the background", which lets the foreground service keep it.
    The switch stays in Settings, and the phone's own page in the device list has no "Make it
    a hub", unlike the computers' apps: a phone is the hub only while its app is open (on
@@ -235,15 +228,9 @@ they look, so both apps are built to the same plan.
    on is the better hub, and the apps do not put the phone forward for it.
    While the phone is the hub, the switch for its own sync away from home is hidden: a hub
    is nobody's client. Home says "This phone is the hub: sync works while the app is open".
-   The hub's WireGuard key, its forwarder, its home networks and its clients sit with the
-   away state (Android: a file sealed by a Keystore key; iPhone: the keychain). The phone's
-   member in the Rust core listens on the member port (`listen`), the kits' `PhoneHub`
-   answers the clients' tunnel keys from the member's `peer` events, the Android app's
-   `HubOnPhone` and the Swift kit's `HubOnPhone` drive the tunnel's hub, the tunnel's connections
-   come to a member port on the loopback address, and on a home network the hub takes members
-   on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3).
-   In a group of 0.6 the Live member runs all of it in the app's process, in user space as
-   before: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
+   On a home network the hub takes members on a port on every address, which it publishes
+   with `r=phone` (docs/protocol.md, section 3).
+   The Live member runs all of it in the app's process, in user space: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
    port and the addresses, and how its tunnel hides) and the link to the group's relay, and
    it keeps their keys and the hub's clients itself; the cards read where they stand from
    `away_status` (docs/core-api.md). The hub's forwarder is the root's setting: the root names
@@ -268,8 +255,7 @@ they look, so both apps are built to the same plan.
    devices show where their link to it stands, with "The group's root sets the relay for
    every device".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
-   (docs/protocol.md, section 12): on this phone while it is the group's registered hub,
-   else through a hub of the group it is connected to. The phone shows the invitation's QR
+   (docs/protocol.md, section 12) through a hub of the group it is connected to. The phone shows the invitation's QR
    code, which a new phone scans in Join with an invitation, and shares the file
    `cbb.cbbinvite` as the fallback, for `cbb pair -invite` on a computer; it asks "Admit …?"
    with the device's fingerprint, which the device shows too, and on yes unlocks the

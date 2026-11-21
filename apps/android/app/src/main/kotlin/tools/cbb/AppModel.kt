@@ -23,7 +23,6 @@ import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
-import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.CorePairing
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
@@ -205,14 +204,8 @@ class AppModel(private val app: Context) {
         val clients: Int = 0,
         /** How its tunnel hides. */
         val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.PLAIN,
-        /** The connected computers the hub can move to: admins, or computers the root can make admins; by ID, with their names. */
-        val computers: List<Pair<String, String>> = emptyList(),
-        /** The computer that is always on which the app suggests as the hub, unless the user chose to keep the phone. */
-        val suggested: Pair<String, String>? = null,
         /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
         val entriesStale: Boolean = false,
-        /** The forwarder is the group's root's setting (a group of 0.6), which the screen shows and does not edit. */
-        val forwarderByRoot: Boolean = false,
     )
 
     var hub by mutableStateOf<Hub?>(null)
@@ -654,56 +647,17 @@ class AppModel(private val app: Context) {
             WatchLink.update(app, this)
             return
         }
-        away = group.awayFromHome?.let { a ->
-            // The last failure only while it is still trying; once connected or at home it is old news.
-            val e = (a.lastError as? Exception)?.takeIf { a.status == AwayFromHome.Status.CONNECTING }
-            notifier.away(a.isOn && e != null)
-            // AwayFromHome logs each failure itself.
-            Away(a.isOn, a.status, e?.let { describe(it, R.string.away_error, log = false) })
-        }
-        hub = withContext(Dispatchers.IO) {
-            group.phoneHub?.let { h ->
-                val (status, error) = h.status(paused = !group.inForeground && !h.background)
-                if (error != hubError) {
-                    hubError = error
-                    if (error != null) Log.w(TAG, "the hub: $error")
-                }
-                Hub(
-                    h.isOn, status,
-                    error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                    h.forwarder, h.background, group.onHomeNetwork, h.clients.size,
-                    computers = if (h.isOn) {
-                        group.computers.filter { it.online && !it.throughHub && it.can("hub") && (it.admin || it.canMakeAdmin) }.map { it.id to it.name }
-                    } else {
-                        emptyList()
-                    },
-                    suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
-                    disguise = h.disguise,
-                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && group.entriesStale,
-                )
-            }
-        }
-        blindRelay = withContext(Dispatchers.IO) {
-            group.blindRelay?.let { r ->
-                val (status, report, error) = r.status(paused = false)
-                if (error != relayError) {
-                    relayError = error
-                    if (error != null) Log.w(TAG, "the relay: $error")
-                }
-                BlindRelay(
-                    status,
-                    error?.let { Note(R.string.relay_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                    r.relay, report.online.size, report.through,
-                )
-            }
-        }
+        // A phone of a group of 0.5 syncs at home only (D-123).
+        away = null
+        hub = null
+        blindRelay = null
         WatchLink.update(app, this)
     }
 
     /**
      * Away from home, the hub and the relay on a group of 0.6, as the Live
-     * member runs them (AwayOn06): the same cards as on 0.5, from where the
-     * member says they stand. The relay is the group's, which the root sets.
+     * member runs them (AwayOn06), from where the member says they stand.
+     * The relay is the group's, which the root sets.
      */
     private suspend fun update06(root: Boolean) {
         val (a, prefs) = withContext(Dispatchers.IO) { group.awayState06 to group.hub06 }
@@ -725,7 +679,6 @@ class AppModel(private val app: Context) {
                 byRoot?.let { HubState.Forwarder(it.endpoint, it.key) }, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
                 disguise = p.disguise,
                 entriesStale = status == HubOnPhone.Status.FAILED && a?.forwarder?.entriesStale == true,
-                forwarderByRoot = true,
             )
         }
         val (relayStatus, relayErr) = AwayOn06.relayStatus(a)
@@ -752,7 +705,7 @@ class AppModel(private val app: Context) {
         relayNote = try {
             if (address.isBlank() != pin.isBlank()) throw IllegalArgumentException("both or neither")
             if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
-            if (group.isV06) group.setGroupRelay(address, pin) else withContext(Dispatchers.IO) { group.setRelay(address, pin) }
+            group.setGroupRelay(address, pin)
             null
         } catch (e: CancellationException) {
             throw e
@@ -766,43 +719,6 @@ class AppModel(private val app: Context) {
 
     /** Makes this phone the group's hub, or stops it being the hub. */
     suspend fun setHub(on: Boolean) = hubChange { group.setPhoneHub(on) }
-
-    /**
-     * Makes a connected computer the hub in place of this phone
-     * (docs/protocol.md, section 11, "Moving the hub"); the reason it
-     * refused, if it does, shows under the message.
-     */
-    suspend fun moveHub(id: String) {
-        hubNote = try {
-            group.moveHub(id)
-            Note(R.string.hub_moved)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: LiveGroup.CommandRefused) {
-            Log.e(TAG, app.getString(R.string.hub_move_refused), e)
-            Note(R.string.hub_move_refused, e.reason, error = true)
-        } catch (e: HubOnPhone.NotRunning) {
-            describe(e, R.string.hub_move_not_running)
-        } catch (e: LiveGroup.NotConnected) {
-            describe(e, R.string.error_no_answer)
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
-    /** Keeps this phone as the hub: the app no longer suggests a computer. */
-    suspend fun keepPhoneHub() {
-        settings.keepsPhoneHub = true
-        update()
-    }
-
-    /** Sets the hub's forwarder; both empty for a hub at home only. */
-    suspend fun setForwarder(address: String, pin: String) = hubChange {
-        if ((address.isBlank() || pin.isBlank()) && !(address.isBlank() && pin.isBlank())) throw IllegalArgumentException("both or neither")
-        if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
-        group.setForwarder(address, pin)
-    }
 
     /** Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS. */
     suspend fun setHubDisguise(d: HubOnPhone.Disguise) = hubChange { group.setHubDisguise(d) }
@@ -849,8 +765,6 @@ class AppModel(private val app: Context) {
             null
         } catch (e: CancellationException) {
             throw e
-        } catch (e: HubOnPhone.NotRunning) {
-            describe(e, R.string.invite_no_hub)
         } catch (e: Exception) {
             describe(e)
         }
@@ -883,18 +797,7 @@ class AppModel(private val app: Context) {
         invitation = null
         answer?.complete(false)
         answer = null
-        inviteNote = r.fold(
-            { Note(R.string.invite_admitted) },
-            { e ->
-                val code = (e as? InvitationWindow.Ended)?.code
-                when (code) {
-                    Pairing.ErrorCode.CLOSED -> null
-                    Pairing.ErrorCode.EXPIRED -> Note(R.string.invite_expired)
-                    Pairing.ErrorCode.TOO_MANY -> Note(R.string.invite_too_many, error = true)
-                    else -> describe(e as? Exception ?: Exception(e))
-                }
-            },
-        )
+        inviteNote = r.fold({ Note(R.string.invite_admitted) }, { e -> describe(e as? Exception ?: Exception(e)) })
     }
 
     /** Turns sync away from home on or off; the hub's answer comes on the next connection at home. */
@@ -1342,29 +1245,6 @@ class AppModel(private val app: Context) {
             Note(R.string.made_admin)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
-    /**
-     * Makes a connected computer a hub of the group as well
-     * (docs/protocol.md, section 11, "Several hubs"): one that reads the
-     * copies, an admin, or one that only passes them on; the reason it
-     * refused, if it does, shows under the message.
-     */
-    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
-        message = try {
-            group.makeHub(id, forwardOnly)
-            Note(if (forwardOnly) R.string.made_hub_forward_only else R.string.made_hub)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: LiveGroup.CommandRefused) {
-            Log.e(TAG, app.getString(R.string.make_hub_refused), e)
-            Note(R.string.make_hub_refused, e.reason, error = true)
-        } catch (e: LiveGroup.NotConnected) {
-            describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
         }

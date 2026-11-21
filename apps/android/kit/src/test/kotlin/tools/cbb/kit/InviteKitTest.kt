@@ -6,8 +6,6 @@ package tools.cbb.kit
 import java.io.File
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.ServerSocket
-import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
@@ -15,15 +13,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 
 /**
  * Remote invitations in the kit (docs/protocol.md, section 12): reading one, a phone that joins by one of 0.6 through
- * its guest tunnel to an admin phone that serves as the hub, the guest tunnel of one, and an admin phone that has no
- * hub to invite through. A phone that joins through a computer hub and one that invites through a computer hub are
+ * its guest tunnel to an admin phone that serves as the hub, and an admin phone that has no hub to invite through. A phone that joins through a computer hub and one that invites through a computer hub are
  * tested in Go (internal/service, TestFFIJoinInvite, TestFFIInviteThroughHub).
  */
 class InviteKitTest {
@@ -38,31 +38,14 @@ class InviteKitTest {
         top.deleteRecursively()
     }
 
-    /** A hub on the loopback address whose guests reach member, and an invitation it opened toward it. */
-    private fun <T> withInvitation(member: ServerSocket, f: (RustTunnel.Guest) -> T): T {
-        val hub = RustTunnel.startHub(RustTunnel.newKey(), hubID, member.localPort, "", "[]")
-        try {
-            val g = hub.invite(tag, "[\"127.0.0.1:${hub.udpPort()}\"]", 600, member.localPort)
-            try {
-                return f(g)
-            } finally {
-                g.close()
-            }
-        } finally {
-            hub.close()
-        }
-    }
-
     @Test
     fun readsAnInvitationAndRefusesOthers() {
-        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { member ->
-            withInvitation(member) { g ->
-                val read = assertIs<Core.InviteReading.Read>(Core.readInvite(g.text))
-                assertEquals(tag, read.invitation.group)
-                assertEquals(hubID, read.invitation.hub)
-                assertTrue(read.invitation.expires > Instant.now().epochSecond, "it expires later")
-            }
-        }
+        // testdata/interop/invites.json, which the core reads as Go wrote it.
+        val v = Interop.read("invites.json").jsonObject.getValue("valid").jsonArray.first().jsonObject
+        val read = assertIs<Core.InviteReading.Read>(Core.readInvite(v.getValue("text").jsonPrimitive.content))
+        assertEquals(v.getValue("group").jsonPrimitive.content, read.invitation.group)
+        assertEquals(v.getValue("hub").jsonPrimitive.content, read.invitation.hub)
+        assertEquals(v.getValue("expires").jsonPrimitive.long, read.invitation.expires)
         val refused = assertIs<Core.InviteReading.Refused>(Core.readInvite("cbb://invite#{}"))
         assertTrue(refused.reason.isNotEmpty())
         assertTrue(refused.message.isNotEmpty())
@@ -165,21 +148,6 @@ class InviteKitTest {
                 CorePairing.Joiner(File(top, "far").path, "", "Far phone", "android", key.publicKeyDER, key::signDigest, invite = text).close()
             }
         }
-    }
-
-    @Test
-    fun theGuestTunnelOfAnInvitation() {
-        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { member ->
-            withInvitation(member) { g ->
-                val t = RustTunnel.guest(g.text)
-                try {
-                    assertNotEquals(0, t.port)
-                } finally {
-                    t.close()
-                }
-            }
-        }
-        assertFailsWith<RustTunnel.Failure> { RustTunnel.guest("cbb://invite#{}") }
     }
 
     /** A root phone that is no hub, with no hub connected: its invitation has nowhere to open and says so. */

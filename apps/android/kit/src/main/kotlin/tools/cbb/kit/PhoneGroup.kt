@@ -521,24 +521,6 @@ class PhoneGroup internal constructor(
     }
 
     /**
-     * A hub command that makes the admin computer to the group's hub in
-     * place of this phone (docs/protocol.md, section 11, "Moving the hub"),
-     * signed with this phone's root or admin key, with the hub's clients
-     * and its forwarder ("ip:port" and the pin of its key).
-     */
-    fun hubCommand(
-        to: String,
-        forwarder: Pair<String, String>?,
-        clients: List<PhoneHub.Client>,
-        caSigner: CertificateSigner,
-        now: Instant,
-    ): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        if (!records.mayHost(to)) throw Failure("only the group's root or an admin can be its hub")
-        return Commands.hub(to, forwarder, emptyList(), clients.filter { it.device != to }, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
      * Unfreezes an admin computer that another admin froze (section 10,
      * rule 4): a thaw record that ends every freeze of it. The root and the
      * admin phones do it; Remove takes the computer out for good instead.

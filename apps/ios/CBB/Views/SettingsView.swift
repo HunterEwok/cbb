@@ -8,8 +8,7 @@ import UIKit
 /// The basic settings first: the look (theme, colour, language) as icons
 /// without a heading, notifications, the watch, the recovery key on the
 /// root, the switch for the advanced ones, leaving the group, about. The
-/// advanced ones: away from home (the hub, moving it to a computer, the
-/// relay) and, for admins, the group (copy lifetime, security level). No
+/// advanced ones: away from home (the hub, the relay) and, for admins, the group (copy lifetime, security level). No
 /// long texts under the items: a hard one has a tip, shown until closed.
 struct SettingsView: View {
     /// One part, as a big screen's sidebar opens it; nil for them all, as
@@ -21,10 +20,7 @@ struct SettingsView: View {
     @Environment(\.palette) private var palette
     @EnvironmentObject private var model: AppModel
     @State private var switching = false
-    @State private var moving: AppModel.Hub.Target?
     @State private var disguiseTo: HubOnPhone.Disguise?
-    @State private var forwarderAddress = ""
-    @State private var forwarderKey = ""
     @State private var relayAddress = ""
     @State private var relayKey = ""
     /// Whether the question about what a relay learns is showing.
@@ -86,9 +82,6 @@ struct SettingsView: View {
             if part == nil ? advanced : part == .away {
                 if let hub = model.hub {
                     hubSection(hub)
-                    if !hub.computers.isEmpty {
-                        moveHubSection(hub)
-                    }
                 }
                 if let away = model.away, model.hub?.on != true {
                     awaySection(away)
@@ -227,44 +220,6 @@ struct SettingsView: View {
         return choices.contains(current) ? choices : (choices + [current]).sorted()
     }
 
-    /// Moving the hub to a computer (docs/design.md, "Moving the hub to a
-    /// computer"): the suggestion of one that is always on, once, and a
-    /// button for each computer the hub can move to, each asking first.
-    private func moveHubSection(_ hub: AppModel.Hub) -> some View {
-        Section {
-            if hub.forwarder == nil {
-                Text("Save a forwarder above first: away from home, the devices reach the new hub through it.")
-                    .foregroundStyle(palette.textDim)
-            }
-            if let s = hub.suggested {
-                Text("\(s.name) is always on. Make it the hub, so that sync away from home works while this app is closed?")
-                Button { moving = s } label: { Text("Make it the hub") }
-                    .disabled(hub.forwarder == nil)
-                Button { Task { await model.keepPhoneHub() } } label: { Text("Keep this phone") }
-            }
-            ForEach(hub.computers.filter { $0 != hub.suggested }) { c in
-                Button { moving = c } label: { Text("Make \(c.name) the hub") }
-                    .disabled(hub.forwarder == nil)
-            }
-        } header: {
-            Text("Move the hub to a computer")
-        }
-        .listRowBackground(palette.surface)
-        .alert(Text("Make \(moving?.name ?? "") the hub?"), isPresented: Binding(
-            get: { moving != nil }, set: { if !$0 { moving = nil } }
-        )) {
-            Button {
-                if let c = moving {
-                    Task { await model.moveHub(to: c.id) }
-                }
-                moving = nil
-            } label: { Text("Move the hub") }
-            Button(role: .cancel) { moving = nil } label: { Text("Cancel") }
-        } message: {
-            Text("The devices that reach this phone from afar move to \(moving?.name ?? ""), and this phone becomes its client. Sync away from home must be on there (cbb global on).")
-        }
-    }
-
     /// The phone as the group's hub: the switch, where it stands, the
     /// forwarder and the home networks.
     private func hubSection(_ hub: AppModel.Hub) -> some View {
@@ -301,47 +256,17 @@ struct SettingsView: View {
                 if !hub.home {
                     Button { Task { await model.addHomeNetwork() } } label: { Text("This is my home network") }
                 }
-                // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
-                if hub.forwarderByRoot {
-                    Text(hub.forwarder != nil
-                         ? "The group's root sets this hub's forwarder; devices away from home reach this phone through it."
-                         : "The group's root set no forwarder for this phone, so it serves as the hub at home only.")
-                        .font(.footnote)
+                // The forwarder is the group's root's setting: shown, not edited.
+                Text(hub.forwarder != nil
+                     ? "The group's root sets this hub's forwarder; devices away from home reach this phone through it."
+                     : "The group's root set no forwarder for this phone, so it serves as the hub at home only.")
+                    .font(.footnote)
+                    .foregroundStyle(palette.textDim)
+                if let fw = hub.forwarder {
+                    Text(verbatim: fw.endpoint)
+                    Text(verbatim: fw.pin)
+                        .font(.system(.footnote, design: .monospaced))
                         .foregroundStyle(palette.textDim)
-                    if let fw = hub.forwarder {
-                        Text(verbatim: fw.endpoint)
-                        Text(verbatim: fw.pin)
-                            .font(.system(.footnote, design: .monospaced))
-                            .foregroundStyle(palette.textDim)
-                    }
-                } else {
-                    Text(hub.forwarder?.isProject == true
-                         ? "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key."
-                         : "To go back to the project's forwarder, empty both fields and save.")
-                        .font(.footnote)
-                        .foregroundStyle(palette.textDim)
-                    if hub.forwarder?.isProject == true {
-                        Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
-                            .font(.footnote)
-                    }
-                    TextField(text: $forwarderAddress) { Text("Forwarder address, such as 198.51.100.9:8764") }
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.numbersAndPunctuation)
-                    TextField(text: $forwarderKey) { Text("Forwarder key, 44 characters") }
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.system(.body, design: .monospaced))
-                    Button {
-                        switching = true
-                        Task {
-                            await model.setForwarder(address: forwarderAddress, pin: forwarderKey)
-                            switching = false
-                        }
-                    } label: {
-                        Text("Save the forwarder")
-                    }
-                    .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
                 }
                 // Strict networks: AmneziaWG for networks that block VPNs,
                 // and VLESS over it for those that let only the web through.
@@ -362,10 +287,6 @@ struct SettingsView: View {
             Text("Away from home: hub")
         }
         .listRowBackground(palette.surface)
-        .onAppear {
-            forwarderAddress = ownForwarder(hub)?.endpoint ?? ""
-            forwarderKey = ownForwarder(hub)?.pin ?? ""
-        }
         .alert(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { disguiseTo != nil }, set: { if !$0 { disguiseTo = nil } })) {
             Button {
                 if let d = disguiseTo {
@@ -380,12 +301,6 @@ struct SettingsView: View {
         } message: {
             Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
         }
-    }
-
-    /// The user's own forwarder, which the fields show; the project's
-    /// leaves them empty.
-    private func ownForwarder(_ hub: AppModel.Hub) -> HubState.Forwarder? {
-        hub.forwarder?.isProject == true ? nil : hub.forwarder
     }
 
     private func hubStatus(_ hub: AppModel.Hub) -> Text {
@@ -593,7 +508,7 @@ extension SettingsView {
 
 /// A part of the settings, as a big screen's sidebar lists them: the look,
 /// notifications (and the watch), the recovery key on the root, away from
-/// home (the hub, moving it, Everywhere, the relay), the group's rules for
+/// home (the hub, Everywhere, the relay), the group's rules for
 /// admins, why it does not sync, and about (leaving the group too).
 enum SettingsPart: String, CaseIterable, Hashable {
     case look, notifications, recovery, away, group, why, about

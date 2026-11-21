@@ -29,14 +29,6 @@
 // phone with an admin key, and prints the group CA and then the admin CA
 // the root issued, each in base64 on a line.
 //
-//   cbb-interop invite-window SECRET yes|no   (macOS)
-//
-// opens a remote invitation's pairing window (InvitationWindow) with SECRET
-// (base64), as the phone that is the hub does, and prints "port N"; for the device
-// that proves it knows the secret it prints "fingerprint F" and admits it or
-// not; then it prints the group CA in base64, or fails with the first failed
-// attempt. Test use only.
-//
 //   cbb-interop restore-tls HOST PORT KEY CERT GROUP   (macOS)
 //
 // restores the group of the member at HOST:PORT on a new phone with the
@@ -220,61 +212,9 @@ func restoreTLS(host: String, port: UInt16, key: Data, cert: Data, tag: String) 
     print(r.device)
     print(newRoot.base64EncodedString())
 }
-
-/// The group the window's attempts change.
-final class GroupBox: @unchecked Sendable {
-    var group: PhoneGroup
-    init(_ g: PhoneGroup) { group = g }
-}
-
-func inviteWindow(secret: Data, yes: Bool) async throws {
-    let now = Date()
-    let caSigner = SoftwareSigner()
-    let label = "cbb-interop-hub-\(Member.newID())"
-    let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
-    let box = GroupBox(try PhoneGroup.create(caSigner: caSigner, memberKey: signer.publicKeyDER, now: now))
-    let identity = try KeychainIdentity.identity(certificate: box.group.memberCert, key: signer.key, label: label, storeKey: false)
-    let invitation = PairingMember.Invitation(secret: secret) { req in
-        print("fingerprint \(req.fingerprint)")
-        fflush(stdout)
-        return yes
-    }
-    let (ended, cont) = AsyncStream<Result<PairingMember.Admitted, Error>>.makeStream()
-    // Go's joiner dials the window itself, without a hub in between.
-    let window = try InvitationWindow(identity: identity, expires: now.addingTimeInterval(60), fromGuest: { _ in true }, admit: { t, joinerCert, sid in
-        var g = box.group
-        let a = try await g.admit(over: t, code: "", joinerCert: joinerCert, sessionID: sid, caSigner: caSigner, invitation: invitation, now: Date())
-        box.group = g
-        return a
-    }, onEnd: { cont.yield($0) }, onError: { cont.yield(.failure($0)) })
-    let port = try await window.start()
-    print("port \(port)")
-    fflush(stdout)
-    var it = ended.makeAsyncIterator()
-    guard let result = await it.next() else { throw TLSTransport.Failure.closed }
-    let admitted = try result.get()
-    guard admitted.confirmed, box.group.computers.map(\.device) == [admitted.device] else {
-        throw TLSTransport.Failure.notReady("the joiner did not confirm")
-    }
-    print(box.group.groupCA.base64EncodedString())
-}
 #endif
 
 let args = CommandLine.arguments
-if args.count == 4, args[1] == "invite-window", let secret = Data(base64Encoded: args[2]) {
-    #if canImport(Network)
-    do {
-        try await inviteWindow(secret: secret, yes: args[3] == "yes")
-        exit(0)
-    } catch {
-        FileHandle.standardError.write("cbb-interop: \(error)\n".data(using: .utf8)!)
-        exit(1)
-    }
-    #else
-    FileHandle.standardError.write("invite-window needs Network.framework\n".data(using: .utf8)!)
-    exit(2)
-    #endif
-}
 if args.count == 7, args[1] == "restore-tls", let port = UInt16(args[3]), let key = Data(base64Encoded: args[4]),
    let cert = Data(base64Encoded: args[5]) {
     #if canImport(Network)

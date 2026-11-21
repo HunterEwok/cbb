@@ -105,35 +105,6 @@ final class CredentialBox: @unchecked Sendable {
         return fresh
     }
 
-    /// What the phone registers with at a blind relay once the members'
-    /// credential lists its server key, so the relay knows it only by a
-    /// pseudonym; nil until then.
-    func relayCredentials(keys: PhoneKeys) -> RelayOnPhone.Credentials? {
-        lock.withLock {
-            guard let root = try? CertificateInfo(der: _group.currentRoot).publicKey,
-                  let tag = store.period(root: root)?.1.tag, keys.has(PeriodKeyKind.serverKey, tag: tag),
-                  let k = (try? keys.get(PeriodKeyKind.serverKey, tag: tag)) as? SecKeySigner,
-                  let reg = store.registration(records: _group.records, root: root, mine: Data(SHA256.hash(data: k.publicKeyDER)))
-            else { return nil }
-            return RelayOnPhone.Credentials(serverKey: k.publicKeyDER, sign: { try k.signature(digest: $0) }, registration: reg)
-        }
-    }
-
-    /// What the phone's hub registers with at its forwarder, once the
-    /// period's hubs' credential lists this phone's server key; nil until
-    /// then, and the hub registers with its member certificate.
-    func hubCredentials(keys: PhoneKeys) -> HubOnPhone.Credentials? {
-        lock.withLock {
-            guard let root = try? CertificateInfo(der: _group.currentRoot).publicKey,
-                  let tag = store.period(root: root)?.1.tag, keys.has(PeriodKeyKind.serverKey, tag: tag),
-                  let k = (try? keys.get(PeriodKeyKind.serverKey, tag: tag)) as? SecKeySigner,
-                  let creds = store.hubRegistration(root: root, mine: Data(SHA256.hash(data: k.publicKeyDER)),
-                                                    nowMS: Int64(Date().timeIntervalSince1970 * 1000))
-            else { return nil }
-            return HubOnPhone.Credentials(serverKey: k.publicKeyDER, sign: { try k.signature(digest: $0) }, credentials: creds)
-        }
-    }
-
     /// Brings the credentials up to date as far as this phone can
     /// (CredentialRefresh) and returns what it signed, for the peers.
     func refresh(member: CertificateSigner, keys: PeriodKeys, rootSigner: (() -> CertificateSigner?)?) -> [ServerCredentials.Credential] {

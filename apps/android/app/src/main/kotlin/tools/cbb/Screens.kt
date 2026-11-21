@@ -106,7 +106,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The terms of the project's forwarder and relay, in the reader's language. */
-private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
 
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
@@ -1026,60 +1025,17 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     color = palette.textDim,
                 )
                 if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
-                if (hub.forwarderByRoot) {
-                    Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
-                    val fw = hub.forwarder
-                    Text(
-                        stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.textDim,
-                    )
-                    if (fw != null) {
-                        Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
-                        Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
-                    }
-                } else {
-                    // The fields show the user's own forwarder; the project's leaves them empty.
-                    val own = hub.forwarder?.takeUnless { it.isProject }
-                    var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
-                    var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
-                    Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
-                    Text(
-                        stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.textDim,
-                    )
-                    if (hub.forwarder?.isProject == true) {
-                        val context = LocalContext.current
-                        Text(
-                            stringResource(R.string.project_terms),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.accent,
-                            modifier = Modifier.focusRing().clickable(role = Role.Button) {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_TERMS)))
-                            },
-                        )
-                    }
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = { address = it },
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.hub_forwarder_address)) },
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = pin,
-                        onValueChange = { pin = it },
-                        singleLine = true,
-                        label = { Text(stringResource(R.string.hub_forwarder_key)) },
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
-                    AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
+                // The forwarder is the group's root's setting: shown, not edited.
+                Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                val fw = hub.forwarder
+                Text(
+                    stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = palette.textDim,
+                )
+                if (fw != null) {
+                    Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
+                    Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
                 }
                 Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
                 // Strict networks: AmneziaWG for networks that block VPNs,
@@ -1111,7 +1067,6 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     Text(stringResource(R.string.hub_background), modifier = Modifier.weight(1f))
                     Switch(checked = hub.background, onCheckedChange = null, enabled = !busy)
                 }
-                if (hub.computers.isNotEmpty()) MoveHub(model, hub)
             }
             model.hubNote?.let { NoteText(it) }
             Tip(R.string.hub_body)
@@ -1128,47 +1083,6 @@ private fun StrictSwitch(label: String, on: Boolean, enabled: Boolean, flip: () 
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = on, onCheckedChange = null, enabled = enabled)
-    }
-}
-
-/**
- * Moving the hub to a computer (docs/design.md, "Moving the hub to a
- * computer"): the suggestion of one that is always on, once, and a button
- * for each computer the hub can move to, each asking first.
- */
-@Composable
-private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var asking by remember { mutableStateOf<Pair<String, String>?>(null) }
-    val ready = hub.forwarder != null
-    Text(stringResource(R.string.hub_move_title), fontWeight = FontWeight.SemiBold)
-    if (!ready) Text(stringResource(R.string.hub_move_needs_forwarder), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
-    hub.suggested?.let { s ->
-        Text(stringResource(R.string.hub_suggest, s.second), style = MaterialTheme.typography.bodyMedium)
-        AccentButton(stringResource(R.string.hub_suggest_yes), enabled = ready, onClick = { asking = s })
-        QuietButton(stringResource(R.string.hub_suggest_keep), onClick = { scope.launch { model.keepPhoneHub() } })
-    }
-    Tip(R.string.hub_move_body)
-    for (c in hub.computers.filter { it != hub.suggested }) {
-        QuietButton(stringResource(R.string.hub_move_to, c.second), enabled = ready, onClick = { asking = c })
-    }
-    asking?.let { c ->
-        AlertDialog(
-            onDismissRequest = { asking = null },
-            title = { Text(stringResource(R.string.hub_move_confirm_title, c.second)) },
-            text = { Text(stringResource(R.string.hub_move_confirm_body, c.second)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    asking = null
-                    scope.launch { model.moveHub(c.first) }
-                }) { Text(stringResource(R.string.hub_move_confirm), color = palette.accent) }
-            },
-            dismissButton = { TextButton(onClick = { asking = null }) { Text(stringResource(R.string.cancel)) } },
-            containerColor = palette.surface,
-            titleContentColor = palette.text,
-            textContentColor = palette.textDim,
-        )
     }
 }
 

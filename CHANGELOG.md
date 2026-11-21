@@ -2866,6 +2866,13 @@ made with 0.5 is set up again once. The details follow.
   -on` drops the connection through the tunnel, `-tunnel-via` is followed, and `status`
   shows a hub standing by. Its tests are the 0.6 ones in `member/tests/away_live.rs` and
   `away_hubs.rs`.
+- The phone apps' own tunnel, hub and relay link for a group made before 0.6 (D-123): such a
+  phone syncs at home only and invites through a hub of the group; the phones' tunnel library
+  (`cbb_tunnel*` and the example `tunnel-on-linux`), the kits' tunnel, phone hub and
+  invitation window, and moving the hub to a computer or making one a hub from a phone go
+  with it. In a group of 0.6 the Live member runs sync away from home, the hub and the relay
+  on the phones as before. The forwarder's check from a network that blocks WireGuard is
+  `TestAwayThroughRealForwarder`, between two Rust `cbb`.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;

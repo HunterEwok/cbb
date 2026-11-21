@@ -2561,12 +2561,11 @@ jobs:
           cargo test --locked --release -p cbb-member --features testhooks --no-run --message-format=json |
             jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
           cargo test --locked --release -p cbb-member --features testhooks
-      - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
+      - name: the Rust cbb, the phone's member on Linux, cbb-helper, and the Go tests' binaries
         run: |
           # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
           cargo build --locked --release -p cbb-member --features testhooks
           cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
-          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           # Built with -cover: the Go side's coverage counts what the helper
           # does under these tests too; each part puts a script in the
           # helper's place that gives it GOCOVERDIR, since cbb hands its
@@ -2575,7 +2574,7 @@ jobs:
           # Each Go package runs as a test binary built with -cover, with
           # GOCOVERDIR for it and the helpers it starts.
           mkdir -p target/go-tests
-          for p in service connector tunnel; do
+          for p in service connector; do
             go test -c -cover -coverpkg="$COVERPKG" -o "target/go-tests/$p.test" "./internal/$p"
           done
       - name: the Rust build into this pull request's cache
@@ -2680,13 +2679,6 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
-      # The phones' tunnel, which the rust job checks from outside, counts
-      # here too: its Go tests run the same instrumented build.
-      - name: the phones' tunnel, from Go's side, for the coverage
-        if: matrix.part == 'others'
-        run: |
-          (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
-            "$GITHUB_WORKSPACE/target/go-tests/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         if: matrix.part == 'others'
         run: |
@@ -3019,11 +3011,6 @@ jobs:
           go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
             go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
-        run: |
-          cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-          CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" \
-            go test -race ./internal/tunnel -run TestRustPhone -v
   esp32:
     name: the core on the ESP32
     needs: changes

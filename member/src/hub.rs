@@ -1789,4 +1789,133 @@ mod tests {
         }
         assert_eq!(took.load(Ordering::SeqCst), held.len());
     }
+
+    /// A client that routes every address through its tunnel, by hand,
+    /// reaches only the member listener: a stream to the member port is
+    /// answered, and streams to the hub's other ports, to its loopback
+    /// address and to the internet are not, nor is UDP to any of them; none
+    /// of it reaches the device's other services.
+    #[test]
+    fn a_client_reaches_only_the_member_listener() {
+        use crate::tunnel::tests::{syn as syn_to, udp};
+        // The device's other services.
+        let host_tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+        host_tcp.set_nonblocking(true).unwrap();
+        let host_udp = UdpSocket::bind("127.0.0.1:0").unwrap();
+        host_udp.set_nonblocking(true).unwrap();
+        let (tcp_port, udp_port) = (host_tcp.local_addr().unwrap().port(), host_udp.local_addr().unwrap().port());
+
+        let (port, _) = target();
+        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
+        let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
+        let (key, psk) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let a = crate::tunnel::addr("21112233445566778899aabbccddee01").unwrap();
+        let secret = StaticSecret::from(key);
+        let peer = Peer {
+            key: *PublicKey::from(&secret).as_bytes(),
+            psk,
+            older_psks: Vec::new(),
+            addr: a,
+            until: None,
+            source: None,
+        };
+        let hub = Hub::start_at(
+            &hub_key,
+            own,
+            None,
+            vec![peer],
+            "127.0.0.1:0".parse().unwrap(),
+            Arc::new(move |_| Some(port)),
+            DEVICE_LIMITS,
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+        let ep: SocketAddr = format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap();
+
+        let u = UdpSocket::bind("127.0.0.1:0").unwrap();
+        u.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut t = Tunn::new(
+            secret.clone(),
+            hub_pub,
+            Some(psk),
+            None,
+            IndexTable::from_os_rng(),
+            Arc::new(RateLimiter::new(&PublicKey::from(&secret), HANDSHAKE_RATE_LIMIT)),
+        );
+        let init: Packet = t.format_handshake_initiation(true).unwrap().into();
+        u.send_to(init.as_ref(), ep).unwrap();
+        let mut buf = [0u8; 2048];
+        let (n, _) = u.recv_from(&mut buf).unwrap();
+        let kind = Packet::from_bytes(BytesMut::from(&buf[..n])).try_into_wg().unwrap();
+        if let TunnResult::WriteToNetwork(p) = t.handle_incoming_packet(kind) {
+            u.send_to(Packet::from(p).as_ref(), ep).unwrap();
+        }
+        let send = |t: &mut Tunn, ip: Vec<u8>| {
+            if let Some(p) = t.handle_outgoing_packet(Packet::from_bytes(BytesMut::from(&ip[..])), None) {
+                u.send_to(Packet::from(p).as_ref(), ep).unwrap();
+            }
+        };
+        // Takes what comes back through the tunnel for a moment: whether
+        // the member port's stream was answered, and whether anything else
+        // was, but a refusal (a reset, or an ICMPv6 error).
+        let mut back = |t: &mut Tunn| -> (usize, Vec<String>) {
+            u.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
+            let (mut member, mut other) = (0, Vec::new());
+            let until = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < until {
+                let Ok((n, _)) = u.recv_from(&mut buf) else { continue };
+                let Ok(kind) = Packet::from_bytes(BytesMut::from(&buf[..n])).try_into_wg() else { continue };
+                if let TunnResult::WriteToTunnel(ip) = t.handle_incoming_packet(kind) {
+                    let ip: &[u8] = ip.as_ref();
+                    if ip.len() < 48 {
+                        continue;
+                    }
+                    let sport = u16::from_be_bytes([ip[40], ip[41]]);
+                    match ip[6] {
+                        6 if ip.len() >= 54 && ip[53] & 0x12 == 0x12 && sport == MEMBER_PORT => member += 1,
+                        6 if ip.len() >= 54 && ip[53] & 0x04 != 0 => {}
+                        // An ICMPv6 error (unreachable, or a parameter problem
+                        // for a protocol the hub does not take): UDP's refusal.
+                        58 if ip[40] < 128 => {}
+                        p => other.push(format!("protocol {p} from port {sport}")),
+                    }
+                }
+            }
+            (member, other)
+        };
+
+        send(&mut t, syn_to(a, own, MEMBER_PORT));
+        let (member, other) = back(&mut t);
+        assert!(member > 0, "the member port's stream was not answered");
+        assert!(other.is_empty(), "the hub answered {other:?}");
+
+        let v4 = {
+            // An IPv4 header to the device's own TCP port.
+            let mut p = vec![0x45, 0, 0, 40, 0, 0, 0, 0, 64, 6, 0, 0, 10, 0, 0, 2, 127, 0, 0, 1];
+            p.extend_from_slice(&[0x9c, 0x40]);
+            p.extend_from_slice(&tcp_port.to_be_bytes());
+            p.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 0, 0x50, 0x02, 0xff, 0xff, 0, 0, 0, 0]);
+            p
+        };
+        for ip in [
+            syn_to(a, own, tcp_port),
+            syn_to(a, own, 22),
+            syn_to(a, Ipv6Addr::LOCALHOST, tcp_port),
+            syn_to(a, "2606:4700:4700::1111".parse().unwrap(), 443),
+            udp(a, own, udp_port),
+            udp(a, own, MEMBER_PORT),
+            udp(a, Ipv6Addr::LOCALHOST, udp_port),
+            udp(a, "2606:4700:4700::1111".parse().unwrap(), 53),
+            v4,
+        ] {
+            send(&mut t, ip);
+        }
+        let (member, other) = back(&mut t);
+        assert_eq!(member, 0, "a stream to another port was answered as the member port's");
+        assert!(other.is_empty(), "the hub answered {other:?}");
+        assert!(host_tcp.accept().is_err(), "a stream from the tunnel reached the device's other services");
+        assert!(host_udp.recv_from(&mut [0u8; 64]).is_err(), "a packet from the tunnel reached the device's other services");
+        drop(hub);
+    }
 }

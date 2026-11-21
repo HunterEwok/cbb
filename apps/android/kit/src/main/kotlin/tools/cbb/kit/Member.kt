@@ -477,35 +477,6 @@ object Member {
         }
     }
 
-    /**
-     * What a hub tells the group's other hubs (section 11, "Several hubs"):
-     * whether it serves as the hub now, its offer without a preshared key,
-     * and its clients, itself among them, with their keys.
-     */
-    class HubShare(val serving: Boolean = false, val offer: TunnelOffer? = null, val clients: List<PhoneHub.Client> = emptyList()) {
-        override fun equals(other: Any?): Boolean =
-            other is HubShare && serving == other.serving && offer == other.offer &&
-                clients.map { Triple(it.device, it.key.toList(), it.psk.toList()) } ==
-                other.clients.map { Triple(it.device, it.key.toList(), it.psk.toList()) }
-
-        override fun hashCode(): Int = clients.size
-
-        fun toJson(): JsonObject = Wire.obj(
-            "serving" to if (serving) JsonPrimitive(true) else null,
-            "offer" to offer?.toJson(),
-            "clients" to clients.takeIf { it.isNotEmpty() }?.let { l -> JsonArray(l.map { it.toJson() }) },
-        )
-
-        companion object {
-            fun fromJson(o: JsonObject): HubShare = HubShare(
-                o.optBool("serving") ?: false,
-                o.optObject("offer")?.let { TunnelOffer.fromJson(it) },
-                o.optArray("clients")?.map { PhoneHub.Client.fromJson(it as? JsonObject ?: throw WireTypeException("clients: not an object")) }
-                    ?: emptyList(),
-            )
-        }
-    }
-
     /** A signed record of the group (section 10), carried as it came. */
     class Record(val body: ByteArray, val sig: ByteArray, val chain: List<ByteArray>? = null) {
         override fun equals(other: Any?): Boolean =
@@ -667,13 +638,6 @@ object Member {
         /** From the group's hub: its offer for the tunnel key the receiver's hello carried; null when absent. */
         data class Tunnel(val offer: TunnelOffer?) : Message()
 
-        /**
-         * Between the group's hubs (section 11, "Several hubs"): whether the
-         * sender serves as the hub, its offer without a preshared key, and
-         * its clients with their keys, so any hub can take them.
-         */
-        data class Hubs(val share: HubShare) : Message()
-
         /** From an admin: a command signed for the receiver (section 15). */
         data class Command(val command: Record) : Message()
 
@@ -742,7 +706,6 @@ object Member {
         is Message.Credentials -> Wire.obj("t" to Wire.str("credentials"), "credentials" to JsonArray(m.credentials.map { it.toJson() }))
         is Message.Admin -> Wire.obj("t" to Wire.str("admin"), "admin_ca" to Wire.bytes(m.adminCA))
         is Message.Tunnel -> Wire.obj("t" to Wire.str("tunnel"), "tunnel" to m.offer?.toJson())
-        is Message.Hubs -> Wire.obj("t" to Wire.str("hubs"), "hubs" to m.share.toJson())
         is Message.Command -> Wire.obj("t" to Wire.str("command"), "command" to m.command.toJson())
         is Message.Result -> Wire.obj("t" to Wire.str("result"), "result" to m.result.toJson())
         is Message.Evidence -> Wire.obj("t" to Wire.str("evidence"), "evidence" to m.evidence.toJson())
@@ -874,7 +837,6 @@ object Member {
                 )
                 "admin" -> Message.Admin(o.optBytes("admin_ca") ?: ByteArray(0))
                 "tunnel" -> Message.Tunnel(o.optObject("tunnel")?.let { TunnelOffer.fromJson(it) })
-                "hubs" -> o.optObject("hubs")?.let { Message.Hubs(HubShare.fromJson(it)) } ?: Message.Unknown(t)
                 "command" -> o.optObject("command")?.let { Message.Command(Record.fromJson(it)) } ?: Message.Unknown(t)
                 "result" -> o.optObject("result")?.let { Message.Result(CommandResult.fromJson(it)) } ?: Message.Unknown(t)
                 "evidence" -> o.optObject("evidence")?.let { Message.Evidence(Evidence.fromJson(it)) } ?: Message.Unknown(t)

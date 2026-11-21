@@ -102,7 +102,7 @@ starts whole members that find each other by mDNS on the same network. CI splits
 parts instead, each on a machine of its own:
 
 - `service tests on the Rust cbb, the build` builds every program once, instrumented for the
-  coverage (the Rust `cbb`, `phone-on-linux`, `tunnel-on-linux`, a `cbb-helper` and the Go
+  coverage (the Rust `cbb`, `phone-on-linux`, a `cbb-helper` and the Go
   test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
   one archive.
 - `service tests on the Rust cbb (1)` to `(6)` each run a part of `internal/service`;

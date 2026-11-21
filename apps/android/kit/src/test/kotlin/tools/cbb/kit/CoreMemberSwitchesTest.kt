@@ -59,6 +59,5 @@ class CoreMemberSwitchesTest {
         // A member that is not there: the member keeps dialing it until the app lost it.
         m.found("nsd-name", listOf("127.0.0.1:9"))
         m.lost("nsd-name")
-        assertEquals(emptyList(), m.sendHubs(Member.HubShare()), "no member to share the hubs with")
     }
 }

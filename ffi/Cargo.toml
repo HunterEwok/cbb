@@ -23,10 +23,10 @@ join = ["cbb-core/tls", "dep:qrcode", "dep:rqrr", "dep:serde", "dep:serde_json"]
 # member: cbb's node inside the app, with the app's key
 # (src/member.rs); only the Aurora app's build takes it.
 member = ["join", "dep:cbb-member"]
-# tunnel: the phones' tunnel to the hub (src/tunnel.rs), WireGuard with
-# AmneziaWG and VLESS with XHTTP, in place of the Go tunnel; the iPhone's and
-# Android's builds take it.
-tunnel = ["join", "dep:cbb-member", "cbb-member/tunnel", "dep:base64"]
+# tunnel: the member's tunnel (cbb-member's `tunnel`), WireGuard with
+# AmneziaWG and VLESS with XHTTP, for sync away from home on the member
+# inside the app; the iPhone's and Android's builds take it.
+tunnel = ["join", "dep:cbb-member", "cbb-member/tunnel"]
 # testhooks: the member reads the hooks of Go's service tests (CBB_TEST_*,
 # member/src/testbuild.rs), for the example phone-on-linux in those tests;
 # never an app's build.
@@ -39,7 +39,6 @@ qrcode = { version = "0.14.1", default-features = false, optional = true }
 rqrr = { version = "0.11.0", default-features = false, optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-base64 = { version = "0.23", optional = true }
 
 [dev-dependencies]
 serde_json = "1"
@@ -53,6 +52,3 @@ aes = "0.9"
 name = "phone-on-linux"
 required-features = ["member"]
 
-[[example]]
-name = "tunnel-on-linux"
-required-features = ["tunnel"]

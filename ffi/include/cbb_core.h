@@ -295,52 +295,6 @@ cbb_joiner *cbb_joiner_new_admin(const uint8_t *request, size_t len, cbb_sign_fn
 uint8_t *cbb_joiner_next(const cbb_joiner *j, uint64_t version, uint64_t timeout_ms, size_t *answer_len);
 void cbb_joiner_free(cbb_joiner *j);
 
-/*
- * The phones' tunnel to the hub (src/tunnel.rs), only in a library built with
- * the feature tunnel (the iPhone and Android apps): request is JSON with its
- * "op" (new_key, public_key, start, status, stop, and hub_... for the phone
- * as the group's hub); the answer, given back with cbb_free, is
- * {"ok": ...} or {"error": {...}}. A started tunnel's loopback port leads
- * to the hub's member port.
- */
-uint8_t *cbb_tunnel(const uint8_t *request, size_t len, size_t *answer_len);
-
-/*
- * Registers a hub of cbb_tunnel with the group's forwarder (cbb-forward/3);
- * the hub signs only with the server key that cbb_tunnel_hub_credentials
- * gives, so sign is not called. The answer is as cbb_tunnel's.
- */
-uint8_t *cbb_tunnel_register(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
-
-/*
- * Links the phone to the group's blind relay, its events (dial, calling,
- * changed, log) given to event with ctx, which stay valid until relay_stop
- * returns; the link signs only with the server key that
- * cbb_tunnel_relay_credentials gives, so sign is not called. The answer is
- * as cbb_tunnel's, with the link's "id".
- */
-uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, cbb_event_fn event, void *ctx,
-                          size_t *answer_len);
-
-/*
- * Gives a relay link of cbb_tunnel_relay the group's server credentials it
- * registers with, signed with the period's server key through sign and ctx,
- * which stay valid until the link stops or is given other credentials; with
- * an empty "credentials" the link waits. The answer is as cbb_tunnel's.
- */
-uint8_t *cbb_tunnel_relay_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
-                                      size_t *answer_len);
-
-/*
- * Gives a hub of cbb_tunnel what it registers with at the forwarder: the
- * hubs' credential of the forwarder's face, signed with the
- * face's server key through sign and ctx, which stay valid until the hub
- * stops or is given other credentials; with an empty "credentials" the hub
- * waits. The answer is as cbb_tunnel's.
- */
-uint8_t *cbb_tunnel_hub_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
-                                    size_t *answer_len);
-
 #ifdef __cplusplus
 }
 #endif

@@ -3,7 +3,6 @@
 
 package tools.cbb.kit
 
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -60,49 +59,6 @@ object Commands {
                 "time_ms" to Wire.num(ms),
                 "expires_ms" to Wire.num(ms + LIFETIME_MS),
                 "mode" to Wire.str(mode),
-            ),
-        )
-        return finish(body, signer, adminCA, seal)
-    }
-
-    /**
-     * A hub command for the admin computer to (section 11, "Moving the
-     * hub"): it becomes the group's hub, reached through the forwarder
-     * (endpoint "ip:port" and the pin of its key) and at endpoints, and
-     * takes clients, the old hub's, with the keys they have. Signed as mode.
-     */
-    fun hub(
-        to: String,
-        forwarder: Pair<String, String>?,
-        endpoints: List<String>,
-        clients: List<PhoneHub.Client>,
-        group: String,
-        by: String,
-        now: Instant,
-        signer: CertificateSigner,
-        adminCA: ByteArray? = null,
-        id: String = newID(),
-        seal: ByteArray? = null,
-    ): Member.Record {
-        require(forwarder != null || endpoints.isNotEmpty()) { "the new hub needs a forwarder or an address" }
-        require(endpoints.size <= 8 && clients.size <= MAX_HUB_CLIENTS) { "too many addresses or clients" }
-        val ms = now.toEpochMilli()
-        val order = Wire.obj(
-            "forwarder" to forwarder?.let { (ep, pin) -> Wire.obj("endpoint" to Wire.str(ep), "key" to Wire.str(pin)) },
-            "endpoints" to endpoints.takeIf { it.isNotEmpty() }?.let { l -> JsonArray(l.map { Wire.str(it)!! }) },
-            "clients" to clients.takeIf { it.isNotEmpty() }?.let { l -> JsonArray(l.map<PhoneHub.Client, JsonElement> { it.toJson() }) },
-        )
-        val body = Wire.encode(
-            Wire.obj(
-                "v" to Wire.num(VERSION.toLong()),
-                "type" to Wire.str("hub"),
-                "group" to Wire.str(group),
-                "by" to Wire.str(by),
-                "to" to Wire.str(to),
-                "id" to Wire.str(id),
-                "time_ms" to Wire.num(ms),
-                "expires_ms" to Wire.num(ms + LIFETIME_MS),
-                "hub" to order,
             ),
         )
         return finish(body, signer, adminCA, seal)

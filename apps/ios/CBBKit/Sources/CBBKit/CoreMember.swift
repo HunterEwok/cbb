@@ -177,8 +177,6 @@ public final class CoreMember: @unchecked Sendable {
     public enum Message: Sendable {
         /// The admin CA the root issued for this phone's admin key.
         case admin(ca: Data)
-        /// What a hub shares with the group's other hubs.
-        case hubs(Member.HubShare)
         /// The group's server credentials it keeps.
         case credentials([ServerCredentials.Credential])
         /// An attestation of one of its keys.
@@ -830,14 +828,6 @@ public final class CoreMember: @unchecked Sendable {
         return try run("send_tunnel", A(to: to, offer: offer), as: Sent.self).sent
     }
 
-    /// Sends what this hub shares to the group's other hubs connected, or
-    /// to the member to only; those it went to.
-    @discardableResult
-    public func sendHubs(_ share: Member.HubShare, to: String? = nil) throws -> [String] {
-        struct A: Encodable { var share: Member.HubShare, to: String? }
-        return try run("send_hubs", A(share: share, to: to), as: To.self).to
-    }
-
     /// Sends the group's server credentials to the member to only (a peer
     /// that just connected), or to every member but except (the one that
     /// sent them); those it went to.
@@ -1162,7 +1152,6 @@ public final class CoreMember: @unchecked Sendable {
     struct WireMessage: Decodable {
         var t: String
         var admin_ca: Data?
-        var hubs: Member.HubShare?
         var credentials: [ServerCredentials.Credential]?
         var evidence: Member.Evidence?
     }
@@ -1209,7 +1198,6 @@ public final class CoreMember: @unchecked Sendable {
             guard let from = w.from, let m = w.message else { return nil }
             switch m.t {
             case "admin": return m.admin_ca.map { .message(from: from, .admin(ca: $0)) }
-            case "hubs": return m.hubs.map { .message(from: from, .hubs($0)) }
             case "credentials": return m.credentials.map { .message(from: from, .credentials($0)) }
             case "evidence": return m.evidence.map { .message(from: from, .evidence($0)) }
             default: return .message(from: from, .other(m.t))

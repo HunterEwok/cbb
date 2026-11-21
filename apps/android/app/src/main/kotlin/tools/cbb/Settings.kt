@@ -109,15 +109,6 @@ class Settings(context: Context) {
      */
     val takesErrorDetailsExtra: Boolean get() = debuggable
 
-    /**
-     * Whether the user chose to keep this phone as the hub when the app
-     * suggested a computer that is always on (docs/design.md, "Moving the
-     * hub to a computer"): the app then does not suggest it again.
-     */
-    var keepsPhoneHub: Boolean
-        get() = prefs.getBoolean("keepsPhoneHub", false)
-        set(v) = prefs.edit().putBoolean("keepsPhoneHub", v).apply()
-
     /** The bug reports' state as the core keeps it (docs/core-api.md, "Bug reports"). */
     var bugState: String?
         get() = prefs.getString("bugState", null)

@@ -3369,9 +3369,10 @@ and keeps it with its key; it learns the rest from the forwarder's answer when i
 
 ### Until the phones move to the records of 0.6
 
-The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `PhoneHub` and
-`TunnelOffer`) keeps the tunnel's messages of 0.5 until the phones move to the records of 0.6
-(D-122); a service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
+The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `TunnelOffer`)
+still reads and writes the tunnel's messages of 0.5 until the old code goes (D-122); the
+apps act on none of them, since a phone in a group of 0.5 syncs at home only (D-123), and a
+service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
 
 - Each member's hello carries `tunnel_key`, its WireGuard public key, and `tunnel_psk`, a
   preshared key of 32 random bytes it made with the key pair. A member where sync away from
@@ -3595,25 +3596,12 @@ until the hub's offer comes, as a computer that joined by an invitation does.
 
 ### On a phone that is the hub
 
-The phone makes the invitation in its app while it is registered with its forwarder; its
-`ep` is the forwarder's endpoint. The phone's hub adds the guest peer and joins each
-connection through the guest tunnel to a loopback port of the kit's pairing window
-(`InvitationWindow`), and once the window admitted the device, to the member listener, for
-the device's first hello. The window runs the exchange of section 6 as the server, with the
-secret as the password: the device confirms first, the phone asks its user to confirm the
-device by its name, system and fingerprint, then unlocks its signing key (Face ID or the
-screen lock) and sends the welcome with its own tag. It gives no CA keys and makes no admin.
-It takes one attempt at a time, ends after three failures, and the guest goes at expiry,
-when the user cancels, or as on any hub once the admitted device offered its own key.
-Other apps on the phone can reach the loopback port too, so the window takes only the
-connections the hub made for the invitation's guest (the hub knows each by the loopback port
-it dialed from, as a computer's hub does): any other is closed after the TLS handshake, before any pairing message,
-and neither counts as an attempt nor holds the window.
-An admin phone that is not the hub makes its invitation through a hub of the group, as
-"Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
-as a QR code. The invitation's file
-goes through the phone's share sheet. Go's `TestSwiftHubAdmitsInvitedGoJoiner` runs `cbb`'s
-joiner against the window of both kits.
+A phone that is a hub of a group of 0.6 is the Live member's hub, which serves the guests of
+invitations as the computers' does. An admin phone makes its invitation through a hub of the
+group, as "Through the hub" says, with the window in its member (`cbb_invite_*`), and so does
+an admin phone of a group of 0.5, which is no hub (D-123); the invitation shows as a QR code,
+and its file goes through the phone's share sheet. `TestFFIInviteThroughHub` and the Kotlin
+kit's `InviteKitTest` run it.
 
 
 ## 13. The forwarder
@@ -3883,7 +3871,7 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
 `cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), and on the
-phones through the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
+phones through the Live member in a group of 0.6. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
@@ -4847,12 +4835,11 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
-by them once the members' credential lists its server key (`CredentialStore.registration`,
-`cbb_tunnel_relay_credentials`, member/src/relay.rs,
+by them once the members' credential lists its server key (the Live member, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials. A phone that is the group's hub
 registers with its forwarder the same way once the hubs' credential lists its server key
-(`CredentialStore.hubRegistration`, `cbb_tunnel_hub_credentials`, member/src/forward.rs), and
+(the Live member, member/src/forward.rs), and
 with its member certificate and the records until then.
 
 The group lives in **periods** of about 30 days. For each, its root signs, inside the group,

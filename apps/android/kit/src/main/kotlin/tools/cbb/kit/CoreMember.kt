@@ -540,10 +540,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun sendTunnel(to: String, offer: Member.TunnelOffer): Boolean =
         call("send_tunnel", Wire.obj("to" to Wire.str(to), "offer" to offer.toJson())).optBool("sent") ?: false
 
-    /** Sends what this hub shares to the group's other hubs connected, or to the member [to] only; those it went to. */
-    fun sendHubs(share: Member.HubShare, to: String? = null): List<String> =
-        call("send_hubs", Wire.obj("share" to share.toJson(), "to" to (to?.let { Wire.str(it) } ?: JsonNull))).strings("to")
-
     /**
      * Sends the group's server credentials to the member [to] only (a peer that just connected), or to every member but [except]
      * (the one that sent them); those they went to.

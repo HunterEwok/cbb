@@ -827,44 +827,6 @@ napi_value joinerFree(napi_env env, napi_callback_info info)
     return later(env, [j]() { cbb_joiner_free(j); }, [](napi_env env) { return undefined(env); });
 }
 
-// ---- away from home ----
-
-// tunnel(request: string): Promise<string>
-napi_value tunnel(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
-        size_t len = 0;
-        return take(cbb_tunnel(reinterpret_cast<const uint8_t *>(req.data()), req.size(), &len), len);
-    });
-}
-
-// tunnelRegister(request: string): Promise<string>, signed with the member key.
-napi_value tunnelRegister(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
-        size_t len = 0;
-        return take(cbb_tunnel_register(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &len), len);
-    });
-}
-
-// tunnelRelay(request: string, onEvent): Promise<string>, signed with the
-// member key; its events go to onEvent until the link stops.
-napi_value tunnelRelay(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    Events *events = eventsOf(env, a.v[1]);
-    return laterString(env, [req, events]() {
-        size_t len = 0;
-        return take(cbb_tunnel_relay(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, onEvent, events, &len),
-                    len);
-    });
-}
-
 // ---- the module ----
 
 napi_value init(napi_env env, napi_value exports)
@@ -898,9 +860,6 @@ napi_value init(napi_env env, napi_value exports)
         {"joinerNew", nullptr, joinerNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinerNext", nullptr, joinerNext, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinerFree", nullptr, joinerFree, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnel", nullptr, tunnel, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnelRegister", nullptr, tunnelRegister, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnelRelay", nullptr, tunnelRelay, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(fns) / sizeof(fns[0]), fns);
     return exports;

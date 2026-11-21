@@ -120,32 +120,6 @@ class CommandsTest {
         assertEquals(true, b.enter)
     }
 
-    /** A hub command carries the forwarder and the clients; a result carries the new hub's offer. */
-    @Test
-    fun hubCommand() {
-        val root = SoftwareSigner()
-        val client = PhoneHub.Client("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ByteArray(32) { 1 }, ByteArray(32) { 2 })
-        val c = Commands.hub(pc, "203.0.113.9:8764" to "AAAA", emptyList(), listOf(client), "tag", "by", now, root)
-        val o = Wire.parse(c.body)!!
-        assertEquals("hub", o.optString("type"))
-        val order = o.optObject("hub")!!
-        assertEquals("203.0.113.9:8764", order.optObject("forwarder")!!.optString("endpoint"))
-        assertEquals(1, order.optArray("clients")!!.size)
-        assertFailsWith<IllegalArgumentException> { Commands.hub(pc, null, emptyList(), listOf(client), "tag", "by", now, root) }
-        val r = Member.decode(
-            """{"t":"result","result":{"id":"ab","status":"done","tunnel":{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","endpoints":["203.0.113.9:8764"]}}}""".toByteArray(),
-        ) as Member.Message.Result
-        assertEquals(listOf("203.0.113.9:8764"), r.result.tunnel?.endpoints)
-        val hub = PhoneHub(ByteArray(32) { 9 }, listOf(client))
-        val moved = hub.movedOffer(client.device, pc, r.result.tunnel!!)!!
-        assertEquals(pc, moved.hub)
-        assertTrue(moved.moved)
-        assertEquals(client.psk.toList(), moved.psk.toList())
-        assertNull(hub.movedOffer(pc, pc, r.result.tunnel!!))
-        val back = Member.decode(Member.encode(Member.Message.Tunnel(moved)).let { it.copyOfRange(4, it.size) }) as Member.Message.Tunnel
-        assertEquals(moved, back.offer)
-    }
-
     /** A command and its result through the frames, as Go sends and reads them. */
     @Test
     fun messages() {
@@ -235,16 +209,6 @@ class CommandsTest {
         val commands = listOf(
             Commands.mode(pc, "receive", tag, by, now, root),
             Commands.mode(pc, "receive", tag, adminBy, now, admin, adminCA),
-            Commands.hub(
-                pc,
-                "203.0.113.9:8764" to "AAAA",
-                emptyList(),
-                listOf(PhoneHub.Client("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ByteArray(32) { 1 }, ByteArray(32) { 2 })),
-                tag,
-                by,
-                now,
-                root,
-            ),
             Commands.paste(pc, "echo <ok> & \"done\"\n", "type", enter = true, group = tag, by = adminBy, now = now, signer = admin, adminCA = adminCA),
             Commands.pasteOff(pc, tag, by, now, root),
             Commands.action(pc, "lock", tag, adminBy, now, admin, adminCA),
@@ -254,8 +218,8 @@ class CommandsTest {
             Commands.unmute(pc, tag, by, now, root),
             Commands.paste(pc, "00112233445566778899aabbccddeeff", kind = "media", group = tag, by = adminBy, now = now, signer = admin, adminCA = adminCA),
         )
-        // The eighth is sealed, for Go to open: a phone opens none.
-        for ((i, c) in commands.withIndex()) if (i != 7) Commands.verify(c, set, pc, now.toEpochMilli())
+        // The seventh is sealed, for Go to open: a phone opens none.
+        for ((i, c) in commands.withIndex()) if (i != 6) Commands.verify(c, set, pc, now.toEpochMilli())
         val out = Wire.obj(
             "group_ca" to Wire.bytes(ca),
             "records" to JsonArray(set.records.map { it.toJson() }),

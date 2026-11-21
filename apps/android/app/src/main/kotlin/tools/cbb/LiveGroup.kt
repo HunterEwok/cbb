@@ -25,12 +25,10 @@ import tools.cbb.kit.Notice
 import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Discovery
 import tools.cbb.kit.FoundMember
-import tools.cbb.kit.FrameTransport
 import tools.cbb.kit.CredentialRefresh
 import tools.cbb.kit.CredentialStore
 import tools.cbb.kit.Commands
 import tools.cbb.kit.GroupCertificates
-import tools.cbb.kit.InvitationWindow
 import tools.cbb.kit.JoinCode
 import tools.cbb.kit.LocalAddresses
 import tools.cbb.kit.Media
@@ -38,17 +36,13 @@ import tools.cbb.kit.Member
 import tools.cbb.kit.Pairing
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
-import tools.cbb.kit.PeriodKeys
 import tools.cbb.kit.PhoneGroup
-import tools.cbb.kit.PhoneHub
 import tools.cbb.kit.Records as KitRecords
 import tools.cbb.kit.Piv
 import tools.cbb.kit.Restore
-import tools.cbb.kit.RustTunnel
 import tools.cbb.kit.ServerCredentials
 import tools.cbb.kit.SyncEngine
 import tools.cbb.kit.TLSTransport
-import tools.cbb.kit.WhyAway
 import tools.cbb.kit.WhyReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +68,6 @@ import java.io.IOException
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Signature
 import java.time.Instant
@@ -239,37 +232,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** When browsing first found each member, as System.nanoTime. */
     private var foundAt: Map<String, Long> = emptyMap()
-    private var away: AwayFromHome? = null
-    private val awayFile = AwayFile(File(file.parentFile, "away.bin"))
 
-    /**
-     * The remote invitation this phone joined by, until the hub's offer
-     * came (docs/protocol.md, section 12): its text, its hub and when the
-     * phone joined, a line each. Through its guest tunnel the phone offers
-     * its own tunnel key.
-     */
-    private val inviteFile = File(file.parentFile, "invite-guest")
-
-    /** Stops the loop that offers the tunnel key through the guest tunnel. */
-    private var guestStop: AtomicBoolean? = null
-
-    /** The phone as the group's hub: its state, and while it runs its mDNS service on a home network. */
-    private var hub: HubOnPhone? = null
-    private val hubFile = SealedFile(File(file.parentFile, "hub.bin"), "cbb.hub")
+    /** The hub's mDNS service while it runs on a home network. */
     private var publisher: NsdPublisher? = null
-
-    /** The phone at a blind relay. */
-    private var relayLink: RelayOnPhone? = null
 
     /** On a group of 0.6, what the user chose for the hub; the Live member runs away, the hub and the relay (AwayOn06). */
     private val away06 = AwayOn06(SealedFile(File(file.parentFile, "hub06.bin"), "cbb.hub")) { what, e -> Log.w(TAG, what, e) }
-    private val relayFile = SealedFile(File(file.parentFile, "relay.bin"), "cbb.relay")
-
-    /**
-     * The node's member port while the hub or the relay needs it (one port
-     * for both, as the node listens on one): whether each does; guarded by
-     * lock.
-     */
 
     /** The group's server credentials (docs/protocol.md, section 18), beside the group; read when first needed, under the lock. */
     private val credentialsFile = File(file.parentFile, "credentials.json")
@@ -428,12 +396,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val now = System.currentTimeMillis()
             val mutes = peers.mapNotNull { p -> p.mutedUntil(now)?.let { p.device to it } }.toMap()
             val root = g.records.rootDevice
-            val away = awayFromHome?.takeIf { it.isOn }
-            val (inUse, hubs) = away?.let { a ->
-                val reached = a.status == AwayFromHome.Status.CONNECTED || a.status == AwayFromHome.Status.AT_HOME
-                (if (reached) a.inUse else null) to a.hubs.toSet()
-            } ?: (null to emptySet())
-            val selfHub = phoneHub?.isOn == true
             return g.devices.map {
                 Device(
                     id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, caps = it.caps, os = it.os, isSelf = it.id == g.device,
@@ -448,12 +410,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     actions = acts[it.id].orEmpty(),
                     mayHub = g.records.mayHost(it.id),
                     forwardOnly = it.forwardOnly,
-                    hub = when {
-                        it.id == g.device -> if (selfHub) HubMark.HUB else null
-                        it.id == inUse -> HubMark.IN_USE
-                        it.id in hubs -> HubMark.HUB
-                        else -> null
-                    },
                     throughHub = it.id != g.device && it.id !in online && it.id in reached,
                     muted = Hold.of(if (it.id == g.device) mutedUntilMS else mutes[it.id]),
                     syncOff = if (it.id == g.device) syncOffUntilMS?.let(Hold::of) else null,
@@ -539,10 +495,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 val st = withContext(Dispatchers.IO) { w.next(version, 1000) }
                 version = st.version
                 when (st.state) {
-                    "done" -> {
-                        hubWork.execute(::hubRecords)
-                        return st.name
-                    }
+                    "done" -> return st.name
                     "closed" -> throw st.failure ?: Failure(Failure.Kind.TIMED_OUT)
                     "failed" -> st.failure?.let { Log.w(TAG, "a device did not join through the window", it) }
                 }
@@ -599,12 +552,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** Sync away from home on this phone: null without a group. */
-    val awayFromHome: AwayFromHome? get() = synchronized(lock) { away }
-
-    /** The phone as the group's hub: null without a group, or on a phone that is no admin, which cannot be the hub. */
-    val phoneHub: HubOnPhone? get() = synchronized(lock) { hub?.takeIf { state?.isAdmin == true } }
-
     /**
      * On a group of 0.6, sync away from home as the Live member runs it:
      * a hub, a client and its hub, the link to the group's relay; null on
@@ -643,66 +590,28 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Makes this phone the group's hub, or stops it being the hub. A hub
-     * is no client of another, so turning it on turns this phone's own
-     * sync away from home off; then it connects again, so the hellos it
-     * answers get its offers.
+     * On a group of 0.6, makes this phone a hub of the group, or stops it
+     * being one; a phone of a group of 0.5 is never a hub (D-123).
      */
     fun setPhoneHub(on: Boolean) {
-        if (isV06) {
-            if (!isAdmin) return
-            away06.setOn(on, currentNetwork())
-            if (!on) unhub06() else updateHub06(throwing = true)
-            return
-        }
-        val h = phoneHub ?: return
-        if (on) {
-            awayFromHome?.takeIf { it.isOn }?.turnOff()
-            h.turnOn(currentNetwork())
-            // Reached from afar through the project's forwarder, unless the user saved their own.
-            if (h.forwarder == null) HubState.Forwarder.project()?.let { h.setForwarder(it) }
-        } else {
-            h.turnOff()
-        }
-        restartSync()
+        if (!isV06 || !isAdmin) return
+        away06.setOn(on, currentNetwork())
+        if (!on) unhub06() else updateHub06(throwing = true)
     }
 
-    /** Sets the hub's forwarder from what the user typed, or the project's when both are empty (none when its name cannot be looked up now); on the caller's IO thread. */
-    fun setForwarder(address: String, pin: String) {
-        // On 0.6 the hub's forwarder is the root's setting, which its hub
-        // command names; the screen shows it and offers no fields.
-        if (isV06) return
-        val h = phoneHub ?: return
-        if (address.isBlank() && pin.isBlank()) {
-            h.setForwarder(HubState.Forwarder.project())
-        } else {
-            val ep = HubState.resolve(address) ?: throw IllegalArgumentException("not an address")
-            h.setForwarder(HubState.Forwarder(ep, pin.trim()))
-        }
-        refreshHub()
-    }
-
-    /** Sets how the hub's tunnel hides, then connects again, so that the clients at home get the new offer; on the caller's IO thread. */
+    /** Sets how the hub's tunnel hides, for the member of 0.6 to serve with; on the caller's IO thread. */
     fun setHubDisguise(d: HubOnPhone.Disguise) {
-        if (isV06) {
-            if (!isAdmin) return
-            away06.setDisguise(d)
-            updateHub06(throwing = true)
-            return
-        }
-        val h = phoneHub ?: return
-        h.setDisguise(d)
-        restartSync()
+        if (!isV06 || !isAdmin) return
+        away06.setDisguise(d)
+        updateHub06(throwing = true)
     }
 
     /** Lets the hub run in the foreground service while the app is in the background. */
     fun setHubInBackground(on: Boolean) {
         if (isV06 && isAdmin) away06.setBackground(on)
-        phoneHub?.setBackground(on)
         refreshHub()
     }
 
-    /** Remembers the network the phone is on as a home network, where the hub takes members and publishes itself. */
     /**
      * Remembers the network the phone is on as a home network of the hub;
      * false when the phone is on no Wi-Fi or Ethernet network with an
@@ -711,13 +620,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     fun addHomeNetwork(): Boolean {
         val n = currentNetwork() ?: return false
         if (isV06 && isAdmin) away06.addHome(n)
-        phoneHub?.addHome(n)
         refreshHub()
         return true
     }
 
     /** Whether the phone is on one of the hub's home networks now. */
-    val onHomeNetwork: Boolean get() = if (isV06) away06.isHome(currentNetwork()) else phoneHub?.isHome(currentNetwork()) == true
+    val onHomeNetwork: Boolean get() = isV06 && away06.isHome(currentNetwork())
 
     /**
      * The network the phone is on, as the hub remembers home networks
@@ -737,12 +645,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     private fun refreshHub() = hubWork.execute {
-        if (isV06) {
-            runCatching { updateHub06(throwing = false) }
-            return@execute
-        }
-        updateHub()
-        updateRelay()
+        if (isV06) runCatching { updateHub06(throwing = false) }
     }
 
     /**
@@ -823,85 +726,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * Why the phone does not sync (docs/apps.md, "Why it does not sync"):
-     * the member's reasons, with where the app's own tunnel stands, since
-     * the phone's hub, its sync away from home and its relay run here. Blocks.
+     * the member's reasons. Blocks.
      */
     fun why(): List<WhyReason> {
         val n = synchronized(lock) { node } ?: return listOf(WhyReason("not_in_group", "stop"))
-        // The member of 0.6 runs the tunnel itself and says where it stands.
-        if (isV06) return runCatching { n.why(null) }.getOrDefault(emptyList())
-        val paused = !foreground
-        val h = phoneHub?.takeIf { it.isOn }
-        val r = blindRelay?.takeIf { it.status(paused).first != RelayOnPhone.Status.OFF }
-        val a = awayFromHome?.takeIf { it.isOn }
-        val away = when {
-            h != null -> {
-                val (status, error) = h.status(paused)
-                WhyAway(
-                    hub = true,
-                    forwarder = status != HubOnPhone.Status.HOME_ONLY && status != HubOnPhone.Status.OFF,
-                    forwarderRegistered = status == HubOnPhone.Status.REGISTERED,
-                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && entriesStale,
-                    error = error ?: "",
-                )
-            }
-            r != null -> {
-                val (status, _, error) = r.status(paused)
-                WhyAway(relay = true, relayConnected = status == RelayOnPhone.Status.CONNECTED, error = error ?: "")
-            }
-            a != null -> WhyAway(
-                hubDevice = a.hub ?: "",
-                through = a.status == AwayFromHome.Status.CONNECTED,
-                hidden = a.hubHidesTunnel,
-                error = a.lastError?.message ?: "",
-            )
-            else -> null
-        }
-        return runCatching { n.why(away) }.getOrDefault(emptyList())
-    }
-
-    /** The phone at a blind relay: null without a group. */
-    val blindRelay: RelayOnPhone? get() = synchronized(lock) { relayLink }
-
-    /**
-     * Meets the group at the relay the user typed, after they read what a
-     * relay learns, or leaves it when both are empty; on the caller's IO
-     * thread, as a name is looked up.
-     */
-    fun setRelay(address: String, pin: String) {
-        if (isV06) throw IllegalStateException("on a group of 0.6 the root sets the group's relay")
-        val r = blindRelay ?: return
-        if (address.isBlank() && pin.isBlank()) {
-            r.turnOff()
-        } else {
-            val ep = HubState.resolve(address) ?: throw IllegalArgumentException("not an address")
-            r.turnOn(ep, pin.trim())
-        }
-        refreshHub()
-    }
-
-    /**
-     * Runs the link to the blind relay while it is on and the phone syncs,
-     * with the node's member port on the loopback address, which serves only
-     * the calls the relay announced and only when the certificate names the
-     * caller ([CoreMember.Event.Caller]); otherwise it stops it.
-     */
-    private fun updateRelay() {
-        val (r, n, g) = synchronized(lock) { Triple(relayLink, node, state) }
-        if (r == null || n == null || g == null || !r.isOn) {
-            stopRelay()
-            return
-        }
-        val member = runCatching { memberSigner() }.getOrNull() ?: return
-        val port = listen(n, CoreMember.Listen.RELAY) ?: return
-        // The relay takes the member chain and the group's roots after it, as a forwarder (docs/protocol.md, section 14).
-        r.start(HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords))
-        relayCredentials()
-    }
-
-    private fun stopRelay() {
-        synchronized(lock) { relayLink }?.stop()
-        unlisten(CoreMember.Listen.RELAY)
+        // The member of 0.6 runs the tunnel itself and says where it stands;
+        // a phone of a group of 0.5 syncs at home only (D-123).
+        return runCatching { n.why(null) }.getOrDefault(emptyList())
     }
 
     /**
@@ -920,73 +751,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         synchronized(lock) { node }?.let { runCatching { it.unlisten(what) } }
     }
 
-    /**
-     * Runs the hub's parts that the moment calls for: with the hub on, the
-     * app in front or the background allowed, the node's member port and
-     * the tunnel with its registration; on a home network besides, the mDNS
-     * service. Otherwise it stops them.
-     */
-    private fun updateHub() {
-        val (h, n, g) = synchronized(lock) { Triple(hub, node, state) }
-        if (h == null || n == null || g == null || !g.isAdmin || !h.isOn || !(foreground || h.background)) {
-            stopHub()
-            return
-        }
-        val member = runCatching { memberSigner() }.getOrNull() ?: return
-        val port = listen(n, CoreMember.Listen.TUNNEL) ?: return
-        Log.i(TAG, "the hub takes member connections through the tunnel on port $port")
-        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
-        h.setCredentials(hubCredentials())
-        // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
-        h.start(
-            HubOnPhone.Group(port, g.memberChain + g.trusted, member::signDigest, g.records.authorityRecords, entries.ways(HubState.Forwarder.PROJECT_HOST)),
-        )
-        if (!h.isHome(currentNetwork())) {
-            stopHome()
-            return
-        }
-        if (synchronized(lock) { publisher } != null) return
-        val home = listen(n, CoreMember.Listen.HOME) ?: return
-        val p = NsdPublisher.hub(context, g.device, g.tag, home)
-        synchronized(lock) { publisher = p }
-        p.start()
-    }
-
     private fun stopHome() {
         val p = synchronized(lock) { publisher.also { publisher = null } }
         p?.stop()
         unlisten(CoreMember.Listen.HOME)
     }
 
-    private fun stopHub() {
-        stopHome()
-        val h = synchronized(lock) { hub }
-        h?.stop()
-        unlisten(CoreMember.Listen.TUNNEL)
-    }
-
-    /** Forgets the hub's clients the records removed and hands its forwarder the new authority records. */
-    private fun hubRecords() {
-        val (h, g) = synchronized(lock) { (hub ?: return) to (state ?: return) }
-        val ids = g.devices.map { it.id }.toSet()
-        h.prune { it in ids }
-        h.setRecords(g.records.authorityRecords)
-        synchronized(lock) { relayLink }?.setRecords(g.records.authorityRecords)
-    }
-
-    /**
-     * Turns sync away from home on or off, then connects again, so the
-     * hellos offer the new key and the hub answers it.
-     */
+    /** On a group of 0.6, turns sync away from home on or off in the member; a group of 0.5 has none (D-123). */
     fun setAwayFromHome(on: Boolean) {
-        if (isV06) {
-            val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-            n.setAway(on)
-            return
-        }
-        val a = awayFromHome ?: return
-        if (on) a.turnOn() else a.turnOff()
-        restartSync()
+        if (!isV06) return
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        n.setAway(on)
     }
 
     init {
@@ -1079,9 +854,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class Invitation(val text: String, val expires: Instant, val cancel: () -> Unit)
 
     /**
-     * Opens a remote invitation on this phone, the group's hub
-     * (docs/protocol.md, section 12): a guest tunnel through the hub's
-     * forwarder and its pairing window, for one device, for lifetimeS
+     * Opens a remote invitation through a hub of the group
+     * (docs/protocol.md, section 12, "Through the hub"): the core opens the
+     * guest tunnel on a connected hub and runs the pairing window here, the
+     * hub passing the pairing's bytes, for one device, for lifetimeS
      * seconds. ask asks the user whether to admit a device that proved it
      * knows the secret, showing its name and fingerprint; on yes the user
      * unlocks the group's key. ended gets the admitted device's name, or why
@@ -1089,38 +865,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     fun invite(lifetimeS: Int, ask: suspend (PairingMember.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
         val g = synchronized(lock) { state }?.takeIf { it.isAdmin } ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        // A phone that is not the hub makes it through a hub of the group.
-        val h = phoneHub?.takeIf { it.isOn } ?: return inviteThroughHub(g, lifetimeS, ask, ended)
-        val member = memberSigner()
-        val guest = AtomicReference<HubGuest?>()
-        val window = InvitationWindow(
-            member.privateKey, g.memberCert, Instant.now().plusSeconds(lifetimeS.toLong()),
-            fromGuest = { port -> guest.get()?.dialed(port) == true },
-            admit = { t, joinerCert, sid -> admitInvited(t, joinerCert, sid, guest.get() ?: throw HubOnPhone.NotRunning(), ask) },
-            onEnd = { r ->
-                if (r.isFailure) guest.get()?.close()
-                ended(r.map { it.info.name })
-            },
-            onError = { Log.w(TAG, "an attempt with the invitation failed", it) },
-        )
-        val gt = try {
-            h.invite(g.tag, lifetimeS, window.port)
-        } catch (e: Exception) {
-            window.close()
-            throw e
-        }
-        guest.set(gt)
-        return Invitation(gt.text, Instant.ofEpochSecond(gt.expires)) { window.close() }
-    }
-
-    /**
-     * Opens a remote invitation through a hub of the group, for a phone
-     * that is not the hub (docs/protocol.md, section 12, "Through the
-     * hub"): the core opens the guest tunnel on a connected hub and runs the
-     * pairing window here, the hub passing the pairing's bytes. The key's
-     * signature asks the user, after they confirmed the device in ask.
-     */
-    private fun inviteThroughHub(g: PhoneGroup, lifetimeS: Int, ask: suspend (PairingMember.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         // Each signature asks the user, after they confirmed the device in ask.
         val ca = authorized(signingAlias(g), R.string.reason_add)
@@ -1154,28 +898,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         return Invitation(inviting.text, Instant.now().plusSeconds(inviting.expires.toLong())) { Thread { inviting.close() }.start() }
     }
 
-    /** One attempt with an invitation: the device that proves the secret and that the user confirms is admitted. */
-    private fun admitInvited(
-        t: TLSTransport,
-        joinerCert: ByteArray,
-        sid: ByteArray,
-        guest: HubGuest,
-        ask: suspend (PairingMember.Request) -> Boolean,
-    ): PairingMember.Admitted {
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val alias = signingAlias(g)
-        val invitation = PairingMember.Invitation(guest.secret) { req ->
-            // The window's thread waits for the user, up to the 5 minutes the device waits.
-            runBlocking { ask(req) && activity != null }
-        }
-        // Each signature asks the user, after they confirmed the device in ask.
-        val admitted = g.admit(t, "", joinerCert, sid, authorized(alias, R.string.reason_add), Instant.now(), invitation = invitation)
-        guest.admitted()
-        adopt(g)
-        published(g.records.records)
-        return admitted
-    }
-
     /** A deep copy of the group, to change it outside the lock and keep it only when the change works. */
     private fun copyOfState(): PhoneGroup? = synchronized(lock) { state?.let { PhoneGroup.fromJson(it.toJson()) } }
 
@@ -1197,7 +919,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         startSync()
         relay()
         refreshCredentials()
-        hubWork.execute(::hubRecords)
     }
 
     // Joining
@@ -1219,44 +940,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         shown(j.fingerprint)
         follow(j, invite = true)
-    }
-
-    /**
-     * Offers this phone's tunnel key to the hub of the invitation it joined
-     * by, through the invitation's guest tunnel, until the hub's offer comes
-     * or a day passed: the hello offers the key, and the hub answers with
-     * its offer on that connection.
-     */
-    private fun offerThroughGuest() {
-        if (!inviteFile.exists()) return
-        val stop = AtomicBoolean(false)
-        synchronized(lock) { guestStop.also { guestStop = stop } }?.set(true)
-        Thread({
-            while (!stop.get()) {
-                val lines = runCatching { inviteFile.readLines() }.getOrNull()
-                val (text, hub, at) = lines?.takeIf { it.size >= 3 } ?: return@Thread
-                val a = awayFromHome
-                if (System.currentTimeMillis() - (at.toLongOrNull() ?: 0) > GUEST_GRACE_MS || a?.hub != null) {
-                    inviteFile.delete()
-                    return@Thread
-                }
-                runCatching {
-                    val t = RustTunnel.guest(text)
-                    try {
-                        val l = link("invite", t.port, hub)
-                        try {
-                            val until = System.currentTimeMillis() + 60_000
-                            while (awayFromHome?.hub == null && System.currentTimeMillis() < until && !stop.get()) Thread.sleep(500)
-                        } finally {
-                            l.close()
-                        }
-                    } finally {
-                        t.close()
-                    }
-                }.onFailure { Log.w(TAG, "offering this phone's key through the invitation's guest tunnel", it) }
-                if (!stop.get()) Thread.sleep(15_000)
-            }
-        }, "invite guest").apply { isDaemon = true }.start()
     }
 
     /**
@@ -1476,15 +1159,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
         val others = if (g.isV06) devices.filter { !it.isSelf }.map { it.role } else g.devices.filter { it.id != g.device }.map { it.role }
         if (g.isRoot && others.any { it != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
-        synchronized(lock) { away.also { away = null } }?.stop()
-        hubWork.submit {
-            stopHub()
-            stopRelay()
-            synchronized(lock) {
-                hub = null
-                relayLink = null
-            }
-        }.get()
+        hubWork.submit { stopHome() }.get()
         val (b, n) = synchronized(lock) {
             (browser to node).also {
                 browser = null
@@ -1503,10 +1178,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         entries.remove()
         File(file.parentFile, "entries.json").delete()
         nodeDir.deleteRecursively()
-        awayFile.delete()
-        inviteFile.delete()
-        hubFile.delete()
-        relayFile.delete()
         synchronized(sealFile) { sealFile.delete() }
         File(context.filesDir, "attest-status").deleteRecursively()
         pastes.turnOff()
@@ -1565,8 +1236,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         credentialStore = null
         credentialsFile.delete()
         runCatching { Keys.PhoneKeys.clear() }
-        relayLink?.setCredentials(null)
-        synchronized(lock) { hub }?.setCredentials(null)
     }
 
     /** The current root's key and whether a key hash is a member of the group, for the credentials. lock is held. */
@@ -1639,49 +1308,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 }
             }.onFailure { Log.w(TAG, "signing the server credentials", it) }.getOrNull().orEmpty()
             if (signed.isNotEmpty()) currentNode?.let { n -> runCatching { n.sendCredentials(signed) } }
-            relayCredentials()
-            synchronized(lock) { hub }?.setCredentials(hubCredentials())
         }
     }
-
-    /**
-     * Hands the blind relay what the phone registers with there: its server
-     * key and the group's credentials once the members' credential lists
-     * that key, so the relay knows the phone only by a pseudonym.
-     */
-    private fun relayCredentials() {
-        val r = synchronized(lock) { relayLink } ?: return
-        val c = runCatching {
-            synchronized(lock) {
-                val g = state ?: return
-                val s = credentialsLocked(g)
-                val (root, _) = credentialRootLocked(g)
-                val tag = s.period(root)?.second?.tag?.takeIf { Keys.PhoneKeys.has(PeriodKeys.SERVER_KEY, it) }
-                val k = tag?.let { Keys.PhoneKeys.get(PeriodKeys.SERVER_KEY, it) } as? KeystoreSigner ?: return@synchronized null
-                val reg = s.registration(g.records, root, MessageDigest.getInstance("SHA-256").digest(k.publicKeyDER)) ?: return@synchronized null
-                RelayOnPhone.Credentials(k.publicKeyDER, k::signDigest, reg)
-            }
-        }.onFailure { Log.w(TAG, "the server credentials for the relay", it) }.getOrNull()
-        r.setCredentials(c)
-    }
-
-    /**
-     * What the phone's hub registers with at its forwarder: its server key
-     * and the hubs' credential once that lists the key; null until then,
-     * and the hub registers with its member certificate.
-     */
-    private fun hubCredentials(): HubOnPhone.Credentials? = runCatching {
-        synchronized(lock) {
-            val g = state ?: return@synchronized null
-            val s = credentialsLocked(g)
-            val (root, _) = credentialRootLocked(g)
-            val tag = s.period(root)?.second?.tag?.takeIf { Keys.PhoneKeys.has(PeriodKeys.SERVER_KEY, it) }
-            val k = tag?.let { Keys.PhoneKeys.get(PeriodKeys.SERVER_KEY, it) } as? KeystoreSigner ?: return@synchronized null
-            val creds = s.hubRegistration(root, MessageDigest.getInstance("SHA-256").digest(k.publicKeyDER), System.currentTimeMillis())
-                ?: return@synchronized null
-            HubOnPhone.Credentials(k.publicKeyDER, k::signDigest, creds)
-        }
-    }.onFailure { Log.w(TAG, "the server credentials for the hub", it) }.getOrNull()
 
     /** Sends records made on this phone to the computers, and brings the credentials up to date with them. */
     private fun published(rs: List<Member.Record>) {
@@ -1742,27 +1370,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Log.i(TAG, "${body.by} turned remote paste off")
                 return pastes.turnOff()?.copy(id = body.id) ?: Member.CommandResult(body.id, "done")
             }
-            "away-off" -> {
-                val a = awayFromHome ?: return Member.CommandResult(body.id, "done")
-                try {
-                    a.turnOff()
-                } catch (e: Exception) {
-                    Log.e(TAG, "cannot turn sync away from home off", e)
-                    return Member.CommandResult(body.id, "failed", e.message)
-                }
-                Log.i(TAG, "${body.by} turned sync away from home off")
-                // Connects again once the result has gone back on the
-                // connection that brought the command.
-                Thread {
-                    Thread.sleep(AWAY_OFF_RESTART_MS)
-                    restartSync()
-                }.apply { isDaemon = true }.start()
-                return Member.CommandResult(body.id, "done")
-            }
+            // A phone of a group of 0.5 has no sync away from home (D-123), so it stays off.
+            "away-off" -> return Member.CommandResult(body.id, "done")
             // A phone has no quick actions, so none of them stays on.
             "actions-off" -> return Member.CommandResult(body.id, "done")
             "action" -> return refused("a phone has no quick actions")
-            "hub" -> return refused("a phone does not become the hub by a command; move the hub from the phone that is the hub")
+            "hub" -> return refused("a phone does not become the hub by a command")
             "mute", "unmute" -> {
                 val on = body.type == "mute"
                 try {
@@ -1924,124 +1537,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val r = withContext(Dispatchers.IO) { command(g.actionsOffCommand(id, ca, Instant.now())) }
         if (!r.done) throw CommandRefused(r.reason ?: r.status)
     }
-
-    /**
-     * Makes a connected admin computer the group's hub in place of this
-     * phone (docs/protocol.md, section 11, "Moving the hub"): a hub command
-     * signed with this phone's root or admin key hands it the clients' keys
-     * and the forwarder; the clients connected now get its offer from this
-     * phone, which then stops being the hub and becomes its client. A
-     * computer that is no admin yet becomes one first, on the root.
-     */
-    suspend fun moveHub(id: String) {
-        val h = phoneHub?.takeIf { it.isOn } ?: throw HubOnPhone.NotRunning()
-        val fw = h.forwarder ?: throw HubOnPhone.NotRunning()
-        val n = currentNode ?: throw NotConnected("the device is not connected")
-        if (copyOfState()?.records?.mayHost(id) != true) makeAdmin(id)
-        val ca = caSigner(R.string.reason_move_hub)
-        val g = copyOfState() ?: return
-        val a = awayFromHome ?: return
-        // This phone is the new hub's client from now on, with a key of its own.
-        val wasOn = a.isOn
-        if (!wasOn) a.turnOn()
-        val (key, psk) = a.keys ?: throw HubOnPhone.NotRunning()
-        val clients = h.handover + PhoneHub.Client(g.device, key, psk)
-        val r = try {
-            withContext(Dispatchers.IO) { command(g.hubCommand(id, fw.endpoint to fw.pin, clients, ca, Instant.now()), MOVE_TIMEOUT_MS) }
-        } catch (e: Exception) {
-            if (!wasOn) a.turnOff()
-            throw e
-        }
-        val offer = r.tunnel?.takeIf { r.done }
-        if (offer == null) {
-            if (!wasOn) a.turnOff()
-            throw CommandRefused(r.reason ?: r.status)
-        }
-        val sent = withContext(Dispatchers.IO) {
-            n.peers().mapNotNull { p -> h.movedOffer(p.device, id, offer)?.takeIf { n.sendTunnel(p.device, it) }?.let { p.device } }
-        }
-        // The clients that came through the tunnel get the offer before it
-        // closes: each connection ends after the offer and a goodbye, and
-        // the last packets get a second more.
-        withContext(Dispatchers.IO) { sayGoodbye(n, sent, MOVE_GRACE_MS) }
-        delay(MOVE_LINGER_MS)
-        h.turnOff()
-        a.keep(id, offer.with(psk, null))
-        withContext(Dispatchers.IO) { restartSync() }
-    }
-
-    /**
-     * Makes a connected computer a hub of the group as well
-     * (docs/protocol.md, section 11, "Several hubs"): a hub command signed
-     * with this phone's root or admin key, reached through this phone's
-     * forwarder or else the project's. This phone stays what it is: a hub
-     * hands the computer its clients, and with sync away from home on this
-     * phone hands itself and keeps the computer's offer. The computer must
-     * have sync away from home on; only its own user turns that on. A hub
-     * that reads the copies is an admin: a computer that is no admin yet
-     * becomes one first, on the root. With forwardOnly the computer stays
-     * no admin and only passes the copies on, which no key level limits:
-     * this phone signs its record so first, and no copy is sealed to it
-     * from then on.
-     */
-    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
-        if (currentNode == null) throw NotConnected("the device is not connected")
-        val current = copyOfState()?.devices?.firstOrNull { it.id == id }
-        if (forwardOnly) {
-            if (current?.forwardOnly != true) {
-                val ca = caSigner(R.string.reason_make_hub)
-                val g = copyOfState() ?: return
-                val r = withContext(Dispatchers.IO) { g.markForwardOnly(id, ca, Instant.now()) }
-                if (r != null) {
-                    withContext(Dispatchers.IO) { adopt(g) }
-                    published(listOf(r))
-                }
-            }
-        } else if (copyOfState()?.records?.mayHost(id) != true || current?.forwardOnly == true) {
-            // A hub that reads the copies is an admin; making it one ends
-            // its passing on only.
-            makeAdmin(id)
-        }
-        val h = synchronized(lock) { hub }
-        val fw = h?.forwarder ?: withContext(Dispatchers.IO) { HubState.Forwarder.project() } ?: throw HubOnPhone.NotRunning()
-        val ca = caSigner(R.string.reason_make_hub)
-        val g = copyOfState() ?: return
-        val clients = (if (h?.isOn == true) h.handover else emptyList()).toMutableList()
-        val a = awayFromHome
-        val psk = a?.takeIf { it.isOn }?.keys?.let { (key, psk) ->
-            clients += PhoneHub.Client(g.device, key, psk)
-            psk
-        }
-        val r = withContext(Dispatchers.IO) { command(g.hubCommand(id, fw.endpoint to fw.pin, clients, ca, Instant.now()), MOVE_TIMEOUT_MS) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
-        val offer = r.tunnel
-        if (offer != null && psk != null) a?.keep(id, offer.with(psk, null))
-    }
-
-    /**
-     * Ends the connections to the devices in sent after the offers that went
-     * on them, each with a goodbye, and waits up to graceMS for them to end.
-     */
-    private fun sayGoodbye(n: CoreMember, sent: List<String>, graceMS: Long) {
-        if (sent.isEmpty()) return
-        // A moment for the offers to go out ahead of the goodbyes.
-        Thread.sleep(MOVE_LINGER_MS)
-        for (d in sent) runCatching { n.disconnect(d) }
-        val until = System.currentTimeMillis() + graceMS
-        while (System.currentTimeMillis() < until && runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device in sent }) Thread.sleep(200)
-    }
-
-    /**
-     * The connected computer this phone, the hub, suggests as the hub
-     * (docs/design.md, "Moving the hub to a computer"): one that is always
-     * on by its hello's form (a desktop, a server, a board or a router) and
-     * that is an admin or can be made one here; null without one.
-     */
-    val suggestedHub: Device?
-        get() {
-            if (phoneHub?.isOn != true) return null
-            return computers.firstOrNull { it.online && !it.throughHub && it.can("hub") && it.device?.form in ALWAYS_ON && (it.admin || it.canMakeAdmin) }
-        }
 
     /**
      * Makes a phone or a computer an admin (docs/protocol.md, section 10,
@@ -2454,9 +1949,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /**
      * Makes this phone the group's root once its claim took effect: the
      * core's member signs, with the new root key, this phone's certificate
-     * from the new root and what a new root starts with, and the phone
-     * becomes the hub when the lost phone was (docs/design.md, "Losing the
-     * phone"). A claim that was cancelled or became void is dropped; one
+     * from the new root and what a new root starts with (docs/design.md,
+     * "Losing the phone"). A claim that was cancelled or became void is dropped; one
      * that still waits stays.
      */
     suspend fun finishTakeOverIfDue() {
@@ -2495,8 +1989,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 adopt(g)
             }
             if (lost != null) runCatching { n.disconnect(lost) }
-            val wasHub = lost != null && awayFromHome?.hub == lost
-            withContext(Dispatchers.IO) { if (wasHub) setPhoneHub(true) else restartSync() }
+            withContext(Dispatchers.IO) { restartSync() }
         } catch (e: Exception) {
             Log.e(TAG, "finishing the takeover: $e")
         }
@@ -2509,124 +2002,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val b = startBrowsing() ?: return
         b.start()
         refreshCredentials()
-        awayFromHome?.start()
-        offerThroughGuest()
         relay()
         refreshHub()
     }
-
-    /**
-     * Whether browsing finds the hub on the home network now, and either
-     * found it within [NEAR_GRACE_MS] or the node is connected to it:
-     * anyone on a network can announce a member's name and the group's tag
-     * (docs/protocol.md, section 11).
-     */
-    private fun atHome(hub: String): Boolean {
-        val (at, n) = synchronized(lock) { foundAt[hub] to node }
-        if (at == null) return false
-        if ((System.nanoTime() - at) / 1_000_000 < NEAR_GRACE_MS) return true
-        return n?.let { runCatching { it.peers() }.getOrNull() }?.any { it.device == hub } == true
-    }
-
-    /**
-     * A connection the node makes to peer through the loopback port of a
-     * tunnel or a relay link, handed to it under key: it serves until the
-     * node no longer reaches the peer, or until it is closed, which takes
-     * the address back from the node.
-     */
-    private class NodeLink(private val n: CoreMember, private val key: String, private val peer: String) : FrameTransport {
-        private val closed = java.util.concurrent.CountDownLatch(1)
-
-        override fun write(data: ByteArray) = throw IOException("the node carries this connection")
-
-        override fun read(n: Int): ByteArray = throw IOException("the node carries this connection")
-
-        override fun close() {
-            runCatching { n.lost(key) }
-            closed.countDown()
-        }
-
-        private fun reached(): Boolean = runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device == peer }
-
-        /** Waits until the node reaches the peer, up to timeoutMS. */
-        fun connect(timeoutMS: Long): Boolean {
-            val until = System.currentTimeMillis() + timeoutMS
-            while (!reached()) {
-                if (System.currentTimeMillis() >= until || closed.count == 0L) return false
-                Thread.sleep(200)
-            }
-            return true
-        }
-
-        /** Runs while the node reaches the peer and the link is open. */
-        fun serve() {
-            try {
-                while (closed.count > 0 && reached()) closed.await(1, java.util.concurrent.TimeUnit.SECONDS)
-            } finally {
-                close()
-            }
-        }
-    }
-
-    /** Hands the node the loopback port to peer under key and waits for the connection; it throws when none comes. */
-    private fun link(key: String, port: Int, peer: String): FrameTransport {
-        val n = currentNode ?: throw IOException("the phone does not sync now")
-        n.found(key, listOf("127.0.0.1:$port"), peer)
-        val l = NodeLink(n, key, peer)
-        if (!l.connect(LINK_WAIT_MS)) {
-            l.close()
-            throw IOException("$peer does not answer through the loopback port")
-        }
-        return l
-    }
-
-    private fun serveLink(t: FrameTransport) = (t as? NodeLink)?.serve() ?: t.close()
 
     private fun startBrowsing(): NsdBrowser? = synchronized(lock) {
         val g = state ?: return null
         if (node != null) return null
         val member = runCatching { memberSigner() }.getOrNull() ?: return null
         // On a group of 0.6 the Live member runs sync away from home, the
-        // hub and the relay itself (AwayOn06), so none of these is made.
+        // hub and the relay itself (AwayOn06); a phone of a group of 0.5
+        // syncs at home only (D-123).
         val v06 = g.isV06
-        // Through the tunnel the node dials the hub's member port with the
-        // same TLS as at home, and only while the hub is not found here.
-        val a = if (v06) null else AwayFromHome(
-            g.device,
-            CoreTunnels,
-            load = awayFile::read,
-            save = { s -> if (s == null) awayFile.delete() else awayFile.write(s) },
-            atHome = ::atHome,
-            dial = { port, hub -> link("away", port, hub) },
-            serve = { t, _ -> serveLink(t) },
-            mayHost = { hub -> synchronized(lock) { state?.records?.mayHost(hub) == true } },
-            order = ::hubOrder,
-            log = { what, e -> Log.w(TAG, what, e) },
-            isPhone = { hub -> synchronized(lock) { state?.devices?.firstOrNull { it.id == hub }?.role == "phone" } },
-        )
-        val h = if (v06) null else HubOnPhone(
-            g.device,
-            CoreHubTunnels,
-            load = { hubFile.read()?.let(HubState::decode) },
-            save = { s -> if (s == null) hubFile.delete() else hubFile.write(s.encode()) },
-            log = { what, e -> Log.w(TAG, what, e) },
-        )
-        // At a blind relay the node dials the device the relay joined, with
-        // the same TLS as at home, while browsing does not find it here.
-        val rl = if (v06) null else RelayOnPhone(
-            g.device,
-            CoreRelayLinks,
-            load = { relayFile.read()?.let(RelaySettings::decode) },
-            save = { s -> if (s == null) relayFile.delete() else relayFile.write(s.encode()) },
-            dialPeer = { port, peer -> link("relay:$peer", port, peer) },
-            serve = { t, _ -> serveLink(t) },
-            elsewhere = { peer -> synchronized(lock) { peer in foundAt } },
-            log = { what, e -> Log.w(TAG, what, e) },
-        )
-        // The hub answers the tunnel keys of the hellos, shares its clients
-        // with the group's other hubs and passes their offers on; it is no
-        // client itself (docs/protocol.md, section 11, "Several hubs").
-        val isHub = g.isAdmin && h?.isOn == true
         val number = nodeCount + 1
         // The entry points the computers sent before the node kept them.
         val oldEntries = File(file.parentFile, "entries.json")
@@ -2648,7 +2035,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 ),
                 member::signDigest,
                 post = nodeEvents::execute,
-            ) { e -> nodeEvent(e, g.device, isHub, a, h) }
+            ) { e -> nodeEvent(e, g.device) }
         } catch (e: Exception) {
             Log.e(TAG, "the node did not start", e)
             return null
@@ -2657,7 +2044,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             n.addRecords(g.records.records)
             n.setSync(syncMode != "own", syncOffUntilMS?.takeIf { it > 0 }?.let { it - System.currentTimeMillis() }?.coerceAtLeast(1) ?: 0)
             n.setMute(mutedUntilMS)
-            if (!v06) n.setTunnelKey(if (isHub) null else a?.keys)
             n.setEvidence(ownEvidence())
         }.onFailure { Log.w(TAG, "setting up the node", it) }
         val b = NsdBrowser(context) { members ->
@@ -2675,9 +2061,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         nodeMadeBy = Throwable().stackTrace.drop(1).take(6).joinToString(" < ") { "${it.methodName}:${it.lineNumber}" }
         Log.i(TAG, "node #$nodeCount started by $nodeMadeBy")
         browser = b
-        away = a
-        hub = h
-        relayLink = rl
         // The member of 0.6 serves as the hub again if the user left it on.
         if (v06) refreshHub()
         val current = n
@@ -2692,7 +2075,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** Handles an event of the node, on the events' thread. */
-    private fun nodeEvent(e: CoreMember.Event, me: String, isHub: Boolean, a: AwayFromHome?, h: HubOnPhone?) {
+    private fun nodeEvent(e: CoreMember.Event, me: String) {
         val n = currentNode ?: return
         when (e) {
             is CoreMember.Event.Log -> {
@@ -2710,10 +2093,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             is CoreMember.Event.PeerConnected -> {
                 takeRecords(n)
-                peerConnected(n, e.peer, isHub, h)
+                peerConnected(n, e.peer)
                 syncedSoon(n, e.peer.device)
             }
-            is CoreMember.Event.Tunnel -> a?.keep(e.from, e.offer)
+            // No sync away from home on a group of 0.5 (D-123): a hub's offer is kept nowhere.
+            is CoreMember.Event.Tunnel -> {}
             is CoreMember.Event.Command -> Thread({
                 val r = command(e.from, e.command)
                 runCatching { n.answer(e.token, r) }.onFailure { Log.w(TAG, "answering a command", it) }
@@ -2729,8 +2113,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Log.i(TAG, "${e.by} turned sync ${if (e.off) "off" else "on"} on this phone")
                 onModeChanged?.invoke()
             }
-            // The device the relay said calls from that loopback port, once.
-            is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
+            // No relay link runs here (D-123): no device calls through one.
+            is CoreMember.Event.Caller -> runCatching { n.caller(e.token, null) }
             // A member that broke stops and starts again, off its own events' thread.
             is CoreMember.Event.Panic -> {
                 Log.e(TAG, "the node broke, starting it again: ${e.details}")
@@ -2761,7 +2145,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     // New ones go on to the others, not back to the sender.
                     if (fresh.isNotEmpty()) runCatching { n.sendCredentials(fresh, except = e.from) }
                 }
-                is Member.Message.Hubs -> if (a != null && h != null) hubsShared(n, e.from, m.share, isHub, a, h)
                 is Member.Message.Admin -> adminCAReceived(m.adminCA, e.from)
                 is Member.Message.Evidence -> {
                     val chain = runCatching { n.peers(all = true) }.getOrDefault(emptyList()).firstOrNull { it.device == e.from }?.chain.orEmpty()
@@ -2817,11 +2200,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /**
      * Answers a peer whose hello the node took: an admin phone notes its
      * certificate for renewal when due, the root sends a computer it made an
-     * admin its admin CA again while it still offers the key, and the hub
-     * answers its tunnel key with its offers and shares its clients with the
-     * group's other hubs; every peer gets the group's server credentials.
+     * admin its admin CA again while it still offers the key; every peer
+     * gets the group's server credentials.
      */
-    private fun peerConnected(n: CoreMember, p: CoreMember.Peer, isHub: Boolean, h: HubOnPhone?) {
+    private fun peerConnected(n: CoreMember, p: CoreMember.Peer) {
         if (p.recordsOnly) return
         renew(p.device, p.chain)
         val g = synchronized(lock) { state } ?: return
@@ -2829,42 +2211,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         // The credentials kept go to this peer, after its hello.
         val credentials = allCredentials
         if (credentials.isNotEmpty()) runCatching { n.sendCredentials(credentials, to = p.device) }
-        if (!isHub || h == null) return
-        val key = p.tunnelKey
-        if (key != null) {
-            // A client admitted now is shared with the other hubs at once, so that it reaches them when this phone is off.
-            val offers = h.offers(p.device, key, p.tunnelPSK, hubOrder()) { shareHub(n, h) }
-            for (o in offers) runCatching { n.sendTunnel(p.device, o) }
-        }
-        if (synchronized(lock) { state?.records?.mayHost(p.device, p.chain) } == true) h.share()?.let { runCatching { n.sendHubs(it, to = p.device) } }
     }
-
-    /** Sends what this hub shares to each connected peer that may be a hub, by its chain. */
-    private fun shareHub(n: CoreMember, h: HubOnPhone) {
-        val share = h.share() ?: return
-        for (p in runCatching { n.peers() }.getOrDefault(emptyList())) {
-            if (synchronized(lock) { state?.records?.mayHost(p.device, p.chain) } == true) runCatching { n.sendHubs(share, to = p.device) }
-        }
-    }
-
-    /** What a hub of the group shared: this hub takes its clients and passes the offers on; a client keeps its offer. */
-    private fun hubsShared(n: CoreMember, from: String, share: Member.HubShare, isHub: Boolean, a: AwayFromHome, h: HubOnPhone) {
-        if (synchronized(lock) { state?.records?.mayHost(from) } != true) return
-        if (isHub) {
-            val known = { d: String -> synchronized(lock) { state?.records?.knows(d) == true } }
-            if (h.shared(from, share, known)) {
-                for (p in runCatching { n.peers() }.getOrDefault(emptyList())) for (o in h.offersFor(p.device, hubOrder())) runCatching { n.sendTunnel(p.device, o) }
-            }
-        } else {
-            // A client keeps the sharing hub's offer with its own preshared key, as any hub's.
-            val psk = a.keys?.second
-            val o = share.offer
-            if (psk != null && o != null) a.keep(from, o.with(psk, null))
-        }
-    }
-
-    /** The group's hubs, highest first (RecordSet.hubOrder). */
-    private fun hubOrder(): List<String> = synchronized(lock) { state?.records?.hubOrder }.orEmpty()
 
     /** Keeps a stopped node's last log lines, for the tests' messages. */
     private fun retire() {
@@ -2898,18 +2245,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** Stops syncing and starts again, with a new certificate or new roots. */
     private fun restartSync() {
         Log.i(TAG, "connecting to the group again")
-        synchronized(lock) { guestStop.also { guestStop = null } }?.set(true)
-        val a = synchronized(lock) { away.also { away = null } }
-        a?.stop()
-        // After any change of the hub's that is still running.
-        hubWork.submit {
-            stopHub()
-            stopRelay()
-            synchronized(lock) {
-                hub = null
-                relayLink = null
-            }
-        }.get()
         val (b, n) = synchronized(lock) {
             (browser to node).also {
                 browser = null
@@ -2974,7 +2309,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (fresh.isNotEmpty()) {
             relay()
             refreshCredentials()
-            hubWork.execute(::hubRecords)
             onRecords?.invoke()
         }
         if (rooted) Thread({ restartSync() }, "restart sync").start()
@@ -3384,23 +2718,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How long after an away-off command the phone connects again, as Go's restartAfter. */
         private const val AWAY_OFF_RESTART_MS = 500L
 
-        /** The forms of devices that are always on, as their hellos state them. */
-        private val ALWAYS_ON = setOf("desktop", "server", "board", "router")
-
-        /** How long a hub command may take: the computer starts its hub before it answers. */
-        private const val MOVE_TIMEOUT_MS = 20_000L
-
         /** How long a quick action may take: an own action runs for up to 15 s before the computer answers. */
         private const val ACTION_TIMEOUT_MS = 25_000L
-
-        /** The longest the old hub waits for its clients' connections to end after it passed the new hub's offer on, as Go's moveGrace. */
-        private const val MOVE_GRACE_MS = 10_000L
-
-        /** How long it keeps its tunnel after they ended, for the last packets, as Go's moveLinger. */
-        private const val MOVE_LINGER_MS = 1_000L
-
-        /** How long the phone waits for the node to reach a peer through a loopback port. */
-        private const val LINK_WAIT_MS = 10_000L
 
         /** How often the phone takes the records the node holds, besides at each peer and copy. */
         private const val RECORDS_POLL_MS = 15_000L
@@ -3408,12 +2727,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         /** How many of the node's log lines the tests' messages keep. */
         private const val NODE_LOG_LINES = 200
         private const val TRACE_LINES = 60
-
-        /** How long a member that browsing finds counts as at home without a connection to it. */
-        private const val NEAR_GRACE_MS = 30_000L
-
-        /** How long the hub keeps the guest of the invitation this phone joined by, as the core's guest grace. */
-        const val GUEST_GRACE_MS = 24 * 3600 * 1000L
 
         /** How long joinComputer browses for a pairing window, and then for a second one. */
         const val BROWSE_MS = 10_000L

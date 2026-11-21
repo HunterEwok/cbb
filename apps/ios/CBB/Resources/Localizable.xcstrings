@@ -277,52 +277,6 @@
         }
       }
     },
-    "%@ is always on. Make it the hub, so that sync away from home works while this app is closed?": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ يعمل دائمًا. هل تجعله المحور، لتعمل المزامنة بعيدًا عن المنزل ما دام هذا التطبيق مغلقًا؟"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ está siempre encendido. ¿Convertirlo en el hub, para que la sincronización fuera de casa funcione mientras esta app está cerrada?"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ תמיד דולק. להפוך אותו לרכזת, כדי שסנכרון מחוץ לבית יעבוד כשהיישום הזה סגור?"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ हमेशा चालू रहता है। इसे हब बनाएँ, ताकि यह ऐप बंद होने पर भी घर से दूर सिंक काम करे?"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ всегда включён. Сделать его хабом, чтобы синхронизация вне дома работала, пока приложение закрыто?"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ kimewashwa daima. Ukifanye kitovu, ili kusawazisha ukiwa mbali na nyumbani kufanye kazi wakati programu hii imefungwa?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 一直开机。要让它成为中心节点，以便此应用关闭时离家同步仍能工作吗？"
-          }
-        }
-      }
-    },
     "%@ is an admin now.": {
       "localizations": {
         "ar": {
@@ -1285,144 +1239,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "有设备被冻结或解冻"
-          }
-        }
-      }
-    },
-    "A hub that only passes them on": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "محور يمرّرها فقط"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un hub que solo las reenvía"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רכזת שרק מעבירה אותן"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "केवल आगे भेजने वाला हब"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хаб, который только пересылает"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kitovu kinachozipitisha tu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "只转发副本的中心节点"
-          }
-        }
-      }
-    },
-    "A hub that reads the copies": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "محور يقرأ النسخ"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un hub que lee las copias"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רכזת שקוראת את ההעתקות"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कॉपी पढ़ने वाला हब"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хаб, который читает копии"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kitovu kinachosoma nakala"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "读取副本的中心节点"
-          }
-        }
-      }
-    },
-    "A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المحور الذي يقرأ النسخ مشرف. والمحور الذي يمرّرها فقط لا يستطيع قراءتها: فهي مختومة لأجهزتك الأخرى وحدها، لذا لا تحتاج مفاتيحه إلى عتاد."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un hub que lee las copias es administrador. Un hub que solo las reenvía no puede leerlas: van selladas solo para tus otros dispositivos, así que sus claves no necesitan hardware."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "רכזת שקוראת את ההעתקות היא מנהל. רכזת שרק מעבירה אותן לא יכולה לקרוא אותן: הן חתומות רק למכשירים האחרים שלכם, ולכן המפתחות שלה לא צריכים חומרה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कॉपी पढ़ने वाला हब एडमिन होता है। केवल आगे भेजने वाला हब उन्हें पढ़ नहीं सकता: वे केवल आपके दूसरे डिवाइसों के लिए सील होती हैं, इसलिए उसकी कुंजियों को हार्डवेयर नहीं चाहिए।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kitovu kinachosoma nakala ni msimamizi. Kitovu kinachozipitisha tu hakiwezi kuzisoma: zimefungwa kwa ajili ya vifaa vyako vingine tu, kwa hiyo funguo zake hazihitaji maunzi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "读取副本的中心节点是管理员。只转发副本的中心节点无法读取它们：副本只为你的其他设备密封，所以它的密钥不需要硬件。"
           }
         }
       }
@@ -2619,52 +2435,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "管理员会读取副本，所以它是也读取副本的中心节点，而不是只转发副本的中心节点。"
-          }
-        }
-      }
-    },
-    "An invitation needs the hub registered with its forwarder. Check the forwarder above.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحتاج الدعوة إلى محور مسجّل لدى مُعيد توجيهه. تحقق من مُعيد التوجيه أعلاه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una invitación necesita el hub registrado en su reenviador. Revisa el reenviador de arriba."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הזמנה צריכה רכזת שרשומה אצל המעביר שלה. בדקו את המעביר למעלה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आमंत्रण के लिए हब का उसके फ़ॉरवर्डर के साथ पंजीकृत होना ज़रूरी है। ऊपर फ़ॉरवर्डर जाँचें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Для приглашения хаб должен быть зарегистрирован у форвардера. Проверьте форвардер выше."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwaliko unahitaji kitovu kilichosajiliwa kwa kisambazaji chake. Angalia kisambazaji hapo juu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "邀请需要中心节点已在其转发器注册。请检查上方的转发器。"
           }
         }
       }
@@ -6950,98 +6720,6 @@
         }
       }
     },
-    "Forwarder address, such as 198.51.100.9:8764": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عنوان مُعيد التوجيه، مثل 198.51.100.9:8764"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dirección del reenviador, como 198.51.100.9:8764"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כתובת המעביר, כמו 198.51.100.9:8764"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर का पता, जैसे 198.51.100.9:8764"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Адрес форвардера, например 198.51.100.9:8764"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anwani ya kisambazaji, kama 198.51.100.9:8764"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "转发器地址，例如 198.51.100.9:8764"
-          }
-        }
-      }
-    },
-    "Forwarder key, 44 characters": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مفتاح مُعيد التوجيه، 44 حرفًا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clave del reenviador, 44 caracteres"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מפתח המעביר, 44 תווים"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर की कुंजी, 44 अक्षर"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ключ форвардера, 44 символа"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ufunguo wa kisambazaji, herufi 44"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "转发器密钥，44 个字符"
-          }
-        }
-      }
-    },
     "Game console": {
       "localizations": {
         "ar": {
@@ -7084,52 +6762,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "游戏机"
-          }
-        }
-      }
-    },
-    "Give the forwarder's address with its port and its key, as cbb forward prints them, or leave both empty.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أدخل عنوان مُعيد التوجيه مع منفذه ومفتاحه، كما يطبعهما cbb forward، أو اترك الاثنين فارغين."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indica la dirección del reenviador con su puerto y su clave, tal como los imprime cbb forward, o deja ambos vacíos."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הזינו את כתובת המעביר עם הפורט ואת המפתח שלו, כפי ש-cbb forward מדפיס אותם, או השאירו את שניהם ריקים."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर का पता उसके पोर्ट के साथ और उसकी कुंजी दें, जैसे cbb forward उन्हें छापता है, या दोनों खाली छोड़ें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Укажите адрес форвардера с портом и его ключ, как их выводит cbb forward, или оставьте оба поля пустыми."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weka anwani ya kisambazaji pamoja na lango lake na ufunguo wake, kama cbb forward inavyozichapisha, au acha zote mbili tupu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按 cbb forward 打印的格式填写转发器的地址（含端口）和密钥，或两者都留空。"
           }
         }
       }
@@ -8376,98 +8008,6 @@
         }
       }
     },
-    "It is a hub now that only passes the copies on: your devices reach the group through it when they are away from home, and it reads none of them.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أصبح الآن محورًا يمرّر النسخ فقط: تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل، ولا يقرأ أيًّا منها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahora es un hub que solo reenvía las copias: tus dispositivos llegan al grupo a través de él cuando están fuera de casa, y no lee ninguna."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "עכשיו זו רכזת שרק מעבירה את ההעתקות הלאה: המכשירים שלכם מגיעים דרכה לקבוצה כשהם מחוץ לבית, והיא לא קוראת אף אחת מהן."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अब यह ऐसा हब है जो कॉपी केवल आगे बढ़ाता है: घर से दूर होने पर आपके डिवाइस इसके ज़रिए समूह तक पहुँचते हैं, और यह उनमें से कोई नहीं पढ़ता।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Теперь это хаб, который только пересылает копии: вне дома ваши устройства связываются с группой через него, а сам он ни одной не читает."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sasa ni kitovu kinachopitisha nakala tu: vifaa vyako hufikia kikundi kupitia kitovu hiki vikiwa mbali na nyumbani, na hakisomi hata moja."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "它现在是只转发副本的中心节点：你的设备离家时通过它连接群组，而它不读取任何副本。"
-          }
-        }
-      }
-    },
-    "It is a hub now: your devices reach the group through it when they are away from home.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أصبح الآن محورًا: تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahora es un hub: tus dispositivos llegan al grupo a través de él cuando están fuera de casa."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "עכשיו זו רכזת: המכשירים שלכם מגיעים דרכה לקבוצה כשהם מחוץ לבית."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अब यह हब है: घर से दूर होने पर आपके डिवाइस इसके ज़रिए समूह तक पहुँचते हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Теперь это хаб: вне дома ваши устройства связываются с группой через него."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sasa ni kitovu: vifaa vyako hufikia kikundi kupitia kitovu hiki vikiwa mbali na nyumbani."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "它现在是中心节点：你的设备离家时通过它连接群组。"
-          }
-        }
-      }
-    },
     "It is an admin again.": {
       "localizations": {
         "ar": {
@@ -9200,52 +8740,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在更换到达前，让此设备保持开启并靠近群组的其他设备。"
-          }
-        }
-      }
-    },
-    "Keep this phone": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاحتفاظ بهذا الهاتف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conservar este teléfono"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שמירת הטלפון הזה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह फ़ोन रखें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Оставить телефон"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Baki na simu hii"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留这部手机"
           }
         }
       }
@@ -10216,52 +9710,6 @@
         }
       }
     },
-    "Make %@ a hub?": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل %@ محورًا؟"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Convertir %@ en hub?"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "להפוך את %@ לרכזת?"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ को हब बनाएँ?"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать %@ хабом?"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ufanye %@ kuwa kitovu?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让 %@ 成为中心节点？"
-          }
-        }
-      }
-    },
     "Make %@ an admin?": {
       "localizations": {
         "ar": {
@@ -10304,144 +9752,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "让 %@ 成为管理员？"
-          }
-        }
-      }
-    },
-    "Make %@ the hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل %@ المحور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convertir %@ en el hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכת %@ לרכזת הקבוצה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ को मुख्य हब बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать хабом %@"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fanya %@ kuwa kitovu cha kikundi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让 %@ 成为该中心节点"
-          }
-        }
-      }
-    },
-    "Make %@ the hub?": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل %@ المحور؟"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Convertir %@ en el hub?"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "להפוך את %@ לרכזת הקבוצה?"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ को मुख्य हब बनाएँ?"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать хабом %@?"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ufanye %@ kuwa kitovu cha kikundi?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让 %@ 成为该中心节点？"
-          }
-        }
-      }
-    },
-    "Make a computer a hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل حاسوب محورًا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convertir un ordenador en hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכת מחשב לרכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "किसी कंप्यूटर को हब बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать компьютер хабом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fanya kompyuta kuwa kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让电脑成为中心节点"
           }
         }
       }
@@ -10860,52 +10170,6 @@
         }
       }
     },
-    "Make it a hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعله محورًا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convertirlo en hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכה לרכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इसे हब बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать хабом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifanye kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设为中心节点"
-          }
-        }
-      }
-    },
     "Make it an admin": {
       "localizations": {
         "ar": {
@@ -10948,52 +10212,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "设为管理员"
-          }
-        }
-      }
-    },
-    "Make it the hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعله المحور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Convertirlo en el hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכה לרכזת הקבוצה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इसे मुख्य हब बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать хабом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kifanye kitovu cha kikundi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设为该中心节点"
           }
         }
       }
@@ -11592,98 +10810,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "把群组移到这部手机"
-          }
-        }
-      }
-    },
-    "Move the hub": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نقل المحور"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mover el hub"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "העברת הרכזת"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "हब ले जाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Перенести хаб"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hamisha kitovu"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移动中心节点"
-          }
-        }
-      }
-    },
-    "Move the hub to a computer": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نقل المحور إلى حاسوب"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mover el hub a un ordenador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "העברת הרכזת למחשב"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "हब को किसी कंप्यूटर पर ले जाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Перенести хаб на компьютер"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hamisha kitovu kwenye kompyuta"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将中心节点移到电脑上"
           }
         }
       }
@@ -15782,52 +14908,6 @@
         }
       }
     },
-    "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن الوصول إليه من بعيد عبر مُعيد التوجيه الخاص بالمشروع على cbb.tools. لاستخدام مُعيد توجيهك، أدخل عنوانه ومفتاحه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accesible desde lejos a través del reenviador del proyecto en cbb.tools. Para usar el tuyo, introduce su dirección y su clave."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "נגיש מרחוק דרך המעביר של הפרויקט ב-cbb.tools. כדי להשתמש במעביר משלכם, הזינו את הכתובת והמפתח שלו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए दूर से पहुँचा जाता है। अपना इस्तेमाल करने के लिए, उसका पता और कुंजी डालें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hufikiwa kutoka mbali kupitia kisambazaji cha mradi kwenye cbb.tools. Ili kutumia chako, weka anwani na ufunguo wake."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "通过项目在 cbb.tools 的转发器从远方访问。要使用你自己的转发器，请输入它的地址和密钥。"
-          }
-        }
-      }
-    },
     "Read": {
       "localizations": {
         "ar": {
@@ -17852,52 +16932,6 @@
         }
       }
     },
-    "Save a forwarder above first: away from home, the devices reach the new hub through it.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "احفظ مُعيد توجيه أعلاه أولًا: بعيدًا عن المنزل، تصل الأجهزة إلى المحور الجديد عبره."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Primero guarda un reenviador arriba: fuera de casa, los dispositivos llegan al hub nuevo a través de él."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שמרו קודם מעביר למעלה: מחוץ לבית, המכשירים מגיעים דרכו לרכזת החדשה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "पहले ऊपर एक फ़ॉरवर्डर सहेजें: घर से दूर, डिवाइस उसके ज़रिए नए हब तक पहुँचते हैं।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сначала сохраните форвардер выше: вне дома устройства находят новый хаб через него."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hifadhi kisambazaji hapo juu kwanza: ukiwa mbali na nyumbani, vifaa hufikia kitovu kipya kupitia kisambazaji hicho."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "请先在上方保存一个转发器：离家时，设备通过它连接到新的中心节点。"
-          }
-        }
-      }
-    },
     "Save as PDF": {
       "localizations": {
         "ar": {
@@ -17940,52 +16974,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "存为 PDF"
-          }
-        }
-      }
-    },
-    "Save the forwarder": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حفظ مُعيد التوجيه"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guardar el reenviador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שמירת המעביר"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ॉरवर्डर सहेजें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сохранить форвардер"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hifadhi kisambazaji"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存转发器"
           }
         }
       }
@@ -21026,52 +20014,6 @@
         }
       }
     },
-    "Terms of the project's servers": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "شروط خوادم المشروع"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Condiciones de los servidores del proyecto"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "תנאי השרתים של הפרויקט"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "प्रोजेक्ट के सर्वरों की शर्तें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Условия серверов проекта"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masharti ya seva za mradi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "项目服务器条款"
-          }
-        }
-      }
-    },
     "Text": {
       "localizations": {
         "ar": {
@@ -21992,52 +20934,6 @@
         }
       }
     },
-    "The computer is the hub now; this phone reaches it from afar.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أصبح الحاسوب الآن المحور؛ ويصل إليه هذا الهاتف من بعيد."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahora el ordenador es el hub; este teléfono llega a él desde lejos."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המחשב הוא עכשיו הרכזת; הטלפון הזה מגיע אליו מרחוק."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अब कंप्यूटर हब है; यह फ़ोन दूर से उस तक पहुँचता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Теперь хаб — компьютер; телефон подключается к нему издалека."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kompyuta sasa ni kitovu; simu hii huifikia kutoka mbali."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "现在电脑是中心节点；这部手机从远方连接它。"
-          }
-        }
-      }
-    },
     "The computer joined but did not confirm it. Check cbb status on it.": {
       "localizations": {
         "ar": {
@@ -22678,52 +21574,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "创建群组的设备保存群组的主密钥：最好是随身携带的设备，比如手机。"
-          }
-        }
-      }
-    },
-    "The devices that reach this phone from afar move to %@, and this phone becomes its client. Sync away from home must be on there (cbb global on).": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تنتقل الأجهزة التي تصل إلى هذا الهاتف من بعيد إلى %@، ويصبح هذا الهاتف عميلًا له. يجب أن تكون المزامنة بعيدًا عن المنزل مفعّلة هناك (cbb global on)."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los dispositivos que llegan a este teléfono desde lejos pasan a %@, y este teléfono pasa a ser su cliente. La sincronización fuera de casa debe estar activada allí (cbb global on)."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המכשירים שמגיעים לטלפון הזה מרחוק עוברים אל %@, והטלפון הזה הופך ללקוח שלו. סנכרון מחוץ לבית חייב להיות מופעל שם (cbb global on)."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "जो डिवाइस दूर से इस फ़ोन तक पहुँचते हैं वे %@ पर चले जाते हैं, और यह फ़ोन उसका क्लाइंट बन जाता है। वहाँ घर से दूर सिंक चालू होना चाहिए (cbb global on)।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Устройства, которые подключаются к этому телефону издалека, перейдут на %@, а телефон станет его клиентом. Там должна быть включена синхронизация вне дома (cbb global on)."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vifaa vinavyofikia simu hii kutoka mbali vinahamia %@, na simu hii inakuwa mteja wake. Kusawazisha ukiwa mbali na nyumbani lazima kuwashwe huko (cbb global on)."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "从远方连接这部手机的设备会转到 %@，这部手机将成为它的客户端。那里必须开启离家同步（cbb global on）。"
           }
         }
       }
@@ -24062,52 +22912,6 @@
         }
       }
     },
-    "The hub can move only while it runs with a forwarder.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يمكن نقل المحور إلا أثناء عمله مع مُعيد توجيه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El hub solo puede moverse mientras funciona con un reenviador."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אפשר להעביר את הרכזת רק כשהיא פועלת עם מעביר."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "हब तभी ले जाया जा सकता है जब वह फ़ॉरवर्डर के साथ चल रहा हो।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Хаб можно перенести, только пока он работает с форвардером."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kitovu kinaweza kuhamishwa tu kikiwa kinafanya kazi na kisambazaji."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "中心节点只有在使用转发器运行时才能移动。"
-          }
-        }
-      }
-    },
     "The hub does not answer away from home": {
       "localizations": {
         "ar": {
@@ -24242,98 +23046,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "iPhone 未连接到该设备。请在 iPhone 上打开 CBB，然后重试。"
-          }
-        }
-      }
-    },
-    "The invitation closed after three failed attempts. Make a new one.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُغلقت الدعوة بعد ثلاث محاولات فاشلة. أنشئ دعوة جديدة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La invitación se cerró tras tres intentos fallidos. Crea una nueva."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ההזמנה נסגרה אחרי שלושה ניסיונות כושלים. צרו חדשה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "तीन विफल प्रयासों के बाद आमंत्रण बंद हो गया। नया बनाएँ।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Приглашение закрыто после трёх неудачных попыток. Создайте новое."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwaliko ulifungwa baada ya majaribio matatu yaliyoshindwa. Unda mpya."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "三次尝试失败后邀请已关闭。请新建一个。"
-          }
-        }
-      }
-    },
-    "The invitation expired without being used.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انتهت صلاحية الدعوة دون استخدامها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La invitación caducó sin usarse."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ההזמנה פגה בלי שנעשה בה שימוש."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आमंत्रण बिना इस्तेमाल हुए समाप्त हो गया।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Срок приглашения истёк, им никто не воспользовался."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mwaliko uliisha muda bila kutumika."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "邀请未被使用就过期了。"
           }
         }
       }
@@ -28340,52 +27052,6 @@
         }
       }
     },
-    "To go back to the project's forwarder, empty both fields and save.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "للعودة إلى مُعيد توجيه المشروع، أفرغ الحقلين واحفظ."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para volver al reenviador del proyecto, vacía ambos campos y guarda."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כדי לחזור למעביר של הפרויקט, רוקנו את שני השדות ושמרו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "प्रोजेक्ट के फ़ॉरवर्डर पर लौटने के लिए, दोनों फ़ील्ड खाली करें और सहेजें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ili kurudi kwenye kisambazaji cha mradi, futa sehemu zote mbili na uhifadhi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要改回项目的转发器，请清空两个字段并保存。"
-          }
-        }
-      }
-    },
     "To take the group back: on a new phone, choose Restore with a recovery key and scan the code; or on a computer of the group, run cbb recovery and type the key.": {
       "localizations": {
         "ar": {
@@ -30728,52 +29394,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的设备会在下次在家遇到此中心节点时获得新设置；在那之前，它们离家时无法连接它。"
-          }
-        }
-      }
-    },
-    "Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عندها تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل، عبر مُعيد توجيه المشروع على cbb.tools. يجب أن تكون المزامنة بعيدًا عن المنزل مفعّلة هناك مسبقًا؛ ولا يشغّلها إلا مستخدمه."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entonces tus dispositivos llegan al grupo a través de él cuando están fuera de casa, por el reenviador del proyecto en cbb.tools. La sincronización fuera de casa ya debe estar activada allí; solo su propio usuario la activa."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אז המכשירים שלכם מגיעים דרכו לקבוצה כשהם מחוץ לבית, דרך המעביר של הפרויקט ב-cbb.tools. הסנכרון מחוץ לבית חייב להיות מופעל שם כבר; רק המשתמש שלו מפעיל אותו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "तब घर से दूर होने पर आपके डिवाइस cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए, इसके माध्यम से समूह तक पहुँचते हैं। वहाँ घर से दूर सिंक पहले से चालू होना चाहिए; केवल उसका अपना उपयोगकर्ता इसे चालू करता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kisha vifaa vyako hufikia kikundi kupitia hicho vikiwa mbali na nyumbani, kupitia kisambazaji cha mradi kwenye cbb.tools. Kusawazisha ukiwa mbali na nyumbani lazima kuwe kumewashwa huko tayari; mtumiaji wake pekee ndiye hukuwasha."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "之后你的设备离家时会通过它连接群组，经由项目在 cbb.tools 的转发器。那里必须已开启离家同步；只有它自己的用户才能开启。"
           }
         }
       }
