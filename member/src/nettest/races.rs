@@ -58,6 +58,7 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
     let peer = Peer {
         key: tunnel::public_key_of(&client_key).try_into().unwrap(),
         psk,
+        older_psks: Vec::new(),
         addr: client,
         until: None,
         source: None,

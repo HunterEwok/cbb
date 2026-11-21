@@ -488,7 +488,7 @@ impl RunningHub {
         let public = key32(&State::with_key(&guest_key)?.public_key())?;
         let peer = Peer {
             key: public,
-            psk: guest_psk,
+            psk: guest_psk, older_psks: Vec::new(),
             addr: hub::guest_addr(&public),
             until: Instant::now().checked_add(Duration::from_secs(lifetime)),
             source: None,
@@ -824,7 +824,7 @@ fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
             let psk =
                 c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
             let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
-            Ok(Peer { key, psk, addr, until: None, source: None })
+            Ok(Peer { key, psk, older_psks: Vec::new(), addr, until: None, source: None })
         })
         .collect()
 }

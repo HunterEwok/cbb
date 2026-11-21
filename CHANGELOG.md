@@ -81,8 +81,9 @@ made with 0.5 is set up again once. The details follow.
   hubs' own message only from a device that may be a hub. Away from home the device dials the
   hubs it met through the tunnel, under its own key toward each hub, trying the pre-shared
   keys of its connections with it one at a time (the confirmed one first) over every way of
-  the hub at once: its own key, each forwarder face's key, and its next key. The hub's side
-  is still moving.
+  the hub at once: its own key, each forwarder face's key, and its next key. A hub's tunnel
+  holds several pre-shared keys of a client (up to 6) and answers a handshake under each, the
+  client's data then showing which one fits. The rest of the hub's side is still moving.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

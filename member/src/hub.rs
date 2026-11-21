@@ -111,10 +111,15 @@ fn opening(ip: &[u8]) -> Option<u16> {
 
 /// One client of the hub: its WireGuard public key, the preshared key the
 /// hub's offer gave it, its one tunnel address, and for a guest when it goes.
+/// On the records of 0.6 the hub holds several pre-shared keys of a client
+/// (`hubkey::HubSide::accepts`): the newest in `psk`, the others in
+/// `older_psks`, and it answers a handshake under each until the client's
+/// first data shows which one fits.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Peer {
     pub key: [u8; 32],
     pub psk: [u8; 32],
+    pub older_psks: Vec<[u8; 32]>,
     pub addr: Ipv6Addr,
     pub until: Option<Instant>,
     /// Where the client came from when it registered, for the shares of a
@@ -127,6 +132,7 @@ impl core::fmt::Debug for Peer {
         f.debug_struct("Peer")
             .field("key", &self.key)
             .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("older_psks", &self.older_psks.len())
             .field("addr", &self.addr)
             .field("until", &self.until)
             .finish()
@@ -137,9 +143,18 @@ impl Peer {
     /// Whether two clients are one tunnel: the same keys and address, when
     /// they go aside.
     fn same_tunnel(&self, o: &Peer) -> bool {
-        self.key == o.key && self.psk == o.psk && self.addr == o.addr
+        self.key == o.key && self.psk == o.psk && self.older_psks == o.older_psks && self.addr == o.addr
+    }
+
+    /// Every pre-shared key held, the newest first.
+    fn psks(&self) -> impl Iterator<Item = &[u8; 32]> {
+        core::iter::once(&self.psk).chain(&self.older_psks)
     }
 }
+
+/// The most pre-shared keys the hub holds for one client: the last ones it
+/// received and the keys of its last handshakes.
+pub const MAX_PSKS: usize = cbb_core::hubkey::KEEP + cbb_core::hubkey::KEEP_HANDSHAKES;
 
 /// The tunnel address each connection the hub made to a loopback port came
 /// from, by the port it came from there, while it lasts.
@@ -321,13 +336,22 @@ impl Drop for Hub {
     }
 }
 
+/// The WireGuard message of wg once more, for each further tunnel of a
+/// client that takes it (it was checked as it came in).
+fn kind_of(wg: &[u8]) -> Option<WgKind> {
+    Packet::from_bytes(BytesMut::from(wg)).try_into_wg().ok()
+}
+
 /// Refuses clients that share a key or an address, or take the hub's.
 fn check_peers(peers: &[Peer], own: Ipv6Addr) -> Result<()> {
     let mut keys = HashSet::new();
     let mut addrs = HashSet::new();
     for p in peers {
-        if p.key == [0; 32] || p.psk == [0; 32] {
+        if p.key == [0; 32] || p.psks().any(|k| *k == [0; 32]) {
             return Err(Error::msg("a client of the hub has a key of zeros"));
+        }
+        if 1 + p.older_psks.len() > MAX_PSKS {
+            return Err(Error::msg(format!("the hub's client at {} has more than {MAX_PSKS} pre-shared keys", p.addr)));
         }
         if !keys.insert(p.key) || !addrs.insert(p.addr) || p.addr == own {
             return Err(Error::msg(format!("the hub's client at {} is there twice", p.addr)));
@@ -339,7 +363,11 @@ fn check_peers(peers: &[Peer], own: Ipv6Addr) -> Result<()> {
 /// One client's end of the tunnel.
 struct PeerState {
     peer: Peer,
-    tunn: Tunn,
+    /// One tunnel per pre-shared key held, in the order of `Peer::psks`.
+    tunns: Vec<Tunn>,
+    /// The tunnel whose key the client's data last came under, which what
+    /// goes to the client takes.
+    active: usize,
     /// Where its datagrams last came from, where the hub's go.
     endpoint: Option<SocketAddr>,
     /// AmneziaWG to this client, for a group that hides its tunnel.
@@ -415,8 +443,9 @@ struct Pump {
     udp: UdpSocket,
     own: Ipv6Addr,
     peers: HashMap<[u8; 32], PeerState>,
-    /// The hub's session indices, by the client they belong to.
-    by_index: HashMap<u32, [u8; 32]>,
+    /// The hub's session indices, by the client and the tunnel (its
+    /// pre-shared key) they belong to.
+    by_index: HashMap<u32, ([u8; 32], usize)>,
     /// The clients set_peers asked for, taken by the pump's thread.
     wanted: Arc<Mutex<Option<Vec<Peer>>>>,
     iface: Interface,
@@ -479,16 +508,21 @@ impl Pump {
                 s.peer.source = p.source;
                 continue;
             }
-            let tunn = Tunn::new(
-                self.secret.clone(),
-                PublicKey::from(p.key),
-                Some(p.psk),
-                None,
-                self.index.clone(),
-                self.limiter.clone(),
-            );
+            let tunns = p
+                .psks()
+                .map(|psk| {
+                    Tunn::new(
+                        self.secret.clone(),
+                        PublicKey::from(p.key),
+                        Some(*psk),
+                        None,
+                        self.index.clone(),
+                        self.limiter.clone(),
+                    )
+                })
+                .collect();
             let awg = self.obf.clone().map(|o| crate::awg::Awg::new(o, &p.key, self.public.as_bytes()));
-            self.peers.insert(k, PeerState { peer: p, tunn, endpoint: None, awg });
+            self.peers.insert(k, PeerState { peer: p, tunns, active: 0, endpoint: None, awg });
         }
         self.sources = self.peers.values().map(|s| (s.peer.addr, s.peer.source)).collect();
         if gone > 0 {
@@ -511,7 +545,7 @@ impl Pump {
     /// loses its connections at once), and forgets their session indices.
     fn cut_off(&mut self) {
         let peers = &self.peers;
-        self.by_index.retain(|_, k| peers.contains_key(k));
+        self.by_index.retain(|_, (k, _)| peers.contains_key(k));
         let addrs: HashSet<Ipv6Addr> = self.peers.values().map(|s| s.peer.addr).collect();
         for b in &mut self.bridges {
             let s = self.sockets.get::<tcp::Socket>(b.handle);
@@ -536,14 +570,15 @@ impl Pump {
         busy
     }
 
-    /// Sends one message of a client's tunnel to the client.
-    fn send(&mut self, key: &[u8; 32], wg: &[u8]) {
+    /// Sends one message of a client's tunnel (`tunn`, by its pre-shared
+    /// key) to the client.
+    fn send(&mut self, key: &[u8; 32], tunn: usize, wg: &[u8]) {
         // The hub's session index, which the client's answers name.
         if let (Some(&t), Some(idx)) = (wg.first(), wg.get(4..8))
             && (t == 1 || t == 2)
             && let Ok(i) = <[u8; 4]>::try_from(idx)
         {
-            self.by_index.insert(u32::from_le_bytes(i), *key);
+            self.by_index.insert(u32::from_le_bytes(i), (*key, tunn));
         }
         let Some(s) = self.peers.get_mut(key) else { return };
         let Some(ep) = s.endpoint else { return };
@@ -600,9 +635,9 @@ impl Pump {
         Some(half.peer_static_public).filter(|k| self.peers.contains_key(k))
     }
 
-    /// Which client a message from the network other than an initiation is
-    /// for: by the hub's session index.
-    fn client_of(&self, wg: &[u8]) -> Option<[u8; 32]> {
+    /// Which client, and which of its tunnels, a message from the network
+    /// other than an initiation is for: by the hub's session index.
+    fn client_of(&self, wg: &[u8]) -> Option<([u8; 32], usize)> {
         let idx = |at: usize| wg.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(u32::from_le_bytes);
         match wg.first()? {
             2 => self.by_index.get(&idx(8)?).copied(),
@@ -629,14 +664,16 @@ impl Pump {
                 },
                 None => data.to_vec(),
             };
-            let (key, packet) = if wg.first() == Some(&1) {
+            let (key, which, packet) = if wg.first() == Some(&1) {
                 // An initiation is checked, and paid for, before the hub
                 // spends a Diffie-Hellman on finding its client.
                 let Some(init) = self.admit_initiation(from, &wg) else { continue };
                 let Some(key) = self.client_of_init(&init) else { continue };
-                (key, WgKind::HandshakeInit(init))
+                // Answered under every pre-shared key held: the client
+                // takes the answer under its own.
+                (key, None, WgKind::HandshakeInit(init))
             } else {
-                let Some(key) = self.client_of(&wg) else { continue };
+                let Some((key, i)) = self.client_of(&wg) else { continue };
                 let packet = match self.limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&wg[..]))) {
                     Ok(p) => p,
                     Err(TunnResult::WriteToNetwork(p)) => {
@@ -644,27 +681,46 @@ impl Pump {
                         if let Some(s) = self.peers.get_mut(&key) {
                             s.endpoint.get_or_insert(from);
                         }
-                        self.send(&key, Packet::from(p).as_ref());
+                        self.send(&key, i, Packet::from(p).as_ref());
                         continue;
                     }
                     Err(_) => continue,
                 };
-                (key, packet)
+                (key, Some(i), packet)
             };
             let Some(s) = self.peers.get_mut(&key) else { continue };
-            let result = s.tunn.handle_incoming_packet(packet);
+            let tunns: Vec<usize> = match which {
+                Some(i) => vec![i],
+                None => (0..s.tunns.len()).collect(),
+            };
+            let mut packet = Some(packet);
+            for i in tunns {
+                let Some(p) = packet.take().or_else(|| kind_of(&wg)) else { continue };
+                self.handle(&key, i, from, p);
+            }
+        }
+    }
+
+    /// Hands a message from the client key to its tunnel i, and sends or
+    /// passes on what comes out.
+    fn handle(&mut self, key: &[u8; 32], i: usize, from: SocketAddr, packet: WgKind) {
+        let Some(s) = self.peers.get_mut(key) else { return };
+        let Some(tunn) = s.tunns.get_mut(i) else { return };
+        let result = tunn.handle_incoming_packet(packet);
+        {
             match result {
                 TunnResult::WriteToNetwork(p) => {
                     s.endpoint = Some(from);
                     let mut out = vec![Packet::from(p).as_ref().to_vec()];
                     let mut mtu = gotatun::tun::MtuWatcher::new(MTU as u16);
-                    out.extend(s.tunn.get_queued_packets(&mut mtu).map(|p| Packet::from(p).as_ref().to_vec()));
+                    out.extend(tunn.get_queued_packets(&mut mtu).map(|p| Packet::from(p).as_ref().to_vec()));
                     for p in out {
-                        self.send(&key, &p);
+                        self.send(key, i, &p);
                     }
                 }
                 TunnResult::WriteToTunnel(p) => {
                     s.endpoint = Some(from);
+                    s.active = i;
                     let ip: &[u8] = p.as_ref();
                     // Only what comes from the client's own address, as
                     // WireGuard's allowed IPs would have it, to the hub's.
@@ -690,12 +746,14 @@ impl Pump {
     fn timers(&mut self) {
         let mut out = Vec::new();
         for (k, s) in &mut self.peers {
-            if let Ok(Some(p)) = s.tunn.update_timers() {
-                out.push((*k, Packet::from(p).as_ref().to_vec()));
+            for (i, t) in s.tunns.iter_mut().enumerate() {
+                if let Ok(Some(p)) = t.update_timers() {
+                    out.push((*k, i, Packet::from(p).as_ref().to_vec()));
+                }
             }
         }
-        for (k, p) in out {
-            self.send(&k, &p);
+        for (k, i, p) in out {
+            self.send(&k, i, &p);
         }
     }
 
@@ -708,10 +766,14 @@ impl Pump {
                 continue;
             };
             let Some((k, s)) = self.peers.iter_mut().find(|(_, s)| s.peer.addr == dst) else { continue };
-            let k = *k;
-            if let Some(p) = s.tunn.handle_outgoing_packet(Packet::from_bytes(BytesMut::from(&ip[..])), None) {
+            let (k, i) = (*k, s.active);
+            if let Some(p) = s
+                .tunns
+                .get_mut(i)
+                .and_then(|t| t.handle_outgoing_packet(Packet::from_bytes(BytesMut::from(&ip[..])), None))
+            {
                 let p = Packet::from(p).as_ref().to_vec();
-                self.send(&k, &p);
+                self.send(&k, i, &p);
             }
         }
         busy
@@ -1016,6 +1078,7 @@ mod tests {
         let p = Peer {
             key: [1; 32],
             psk: [2; 32],
+            older_psks: Vec::new(),
             addr: crate::tunnel::addr("ffeeddccbbaa99887766554433221100").unwrap(),
             until: None,
             source: None,
@@ -1072,6 +1135,7 @@ mod tests {
             peers.push(Peer {
                 key: *PublicKey::from(&StaticSecret::from(k)).as_bytes(),
                 psk,
+                older_psks: Vec::new(),
                 addr,
                 until: None,
                 source: *source,
@@ -1265,8 +1329,8 @@ mod tests {
         let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
         let pubkey = |k: [u8; 32]| *PublicKey::from(&StaticSecret::from(k)).as_bytes();
         let peers = vec![
-            Peer { key: pubkey(ka), psk: pa, addr: a, until: None, source: None },
-            Peer { key: pubkey(kb), psk: pb, addr: b, until: None, source: None },
+            Peer { key: pubkey(ka), psk: pa, older_psks: Vec::new(), addr: a, until: None, source: None },
+            Peer { key: pubkey(kb), psk: pb, older_psks: Vec::new(), addr: b, until: None, source: None },
         ];
         let hub = Hub::start_at(
             &hub_key,
@@ -1464,13 +1528,13 @@ mod tests {
             let (k, psk) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
             let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x30)).unwrap();
             let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, i, 0, 0, 0, 1)));
-            peers.push(Peer { key: pubkey(k), psk, addr, until: None, source });
+            peers.push(Peer { key: pubkey(k), psk, older_psks: Vec::new(), addr, until: None, source });
             many.push((k, psk, addr));
         }
         let (kb, pb) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
         let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
         let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 1)));
-        peers.push(Peer { key: pubkey(kb), psk: pb, addr: b, until: None, source });
+        peers.push(Peer { key: pubkey(kb), psk: pb, older_psks: Vec::new(), addr: b, until: None, source });
         let limits = Limits {
             bridges: 48,
             per_client: 80,

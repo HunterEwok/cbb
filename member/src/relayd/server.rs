@@ -683,7 +683,14 @@ impl Inner {
         let peers = st
             .by_addr
             .iter()
-            .map(|(a, m)| Peer { key: m.key, psk: m.psk, addr: *a, until: None, source: m.from })
+            .map(|(a, m)| Peer {
+                key: m.key,
+                psk: m.psk,
+                older_psks: Vec::new(),
+                addr: *a,
+                until: None,
+                source: m.from,
+            })
             .collect();
         match self.hub.lock().ok().as_deref() {
             Some(Some(h)) => h.set_peers_at(peers, RELAY_ADDR),

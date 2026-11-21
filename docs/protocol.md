@@ -3041,6 +3041,17 @@ the hub serves under: its own on the endpoints no face names, each face's on its
 way over VLESS with its forwarder's face, and the same with `next-key`). The key whose
 handshake the hub answers is noted, and the member connection runs through that link.
 
+The hub's tunnel (`member/src/hub.rs`) holds, per client, every pre-shared key it accepts (at
+most 6: the last 4 received and the last 2 handshakes', `hubkey::HubSide::accepts`) as one
+WireGuard tunnel each. An initiation is answered under each of them; the client takes the
+answer under its own key, and its first data names the hub's session of that key, which
+carries what goes to the client from then on.
+
+An offer whose way over VLESS has no `vless/host` is refused: the forwarder's XHTTP front is
+checked by the system's certificate authorities under a site's name, which an address is not.
+One without `vless/path` is refused too: the path comes from the forwarder's answer to the
+hub's registration.
+
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
   by writing `tunnel.json` next to the identity

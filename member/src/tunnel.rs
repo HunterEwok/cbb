@@ -741,7 +741,7 @@ impl State {
                 if self.own_key(&key) {
                     return Err(Error::msg("a client has the hub's key"));
                 }
-                Ok(crate::hub::Peer { key, psk, addr, until: None, source: None })
+                Ok(crate::hub::Peer { key, psk, older_psks: Vec::new(), addr, until: None, source: None })
             })
             .collect()
     }
