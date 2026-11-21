@@ -14,7 +14,9 @@
 //! dialing each -peer, and takes "WINDOW", which opens its home window (at
 //! once with -window): see window_new for what it prints. -invite TEXT
 //! joins by a remote invitation of 0.6 through its guest tunnel, printing
-//! "Fingerprint <fingerprint>" first, then as -join-window does.
+//! "Fingerprint <fingerprint>" first, then as -join-window does. -resume
+//! <device> runs the member of the group it joined before in -dir again,
+//! as the app does when it opens.
 //!
 //! The member prints "WRITE <kind> <text>" for each text for the
 //! clipboard, "IDENTITY <certificate in base64>" when an admin renewed its
@@ -213,6 +215,16 @@ fn main() -> ExitCode {
         };
         return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
+    if let Some(device) = arg("-resume") {
+        // The app opened again on the group it joined before in -dir, as
+        // device.
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -resume needs -dir");
+            return ExitCode::FAILURE;
+        };
+        let admin = admin.then_some((&admin_key, admin_public.as_str()));
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
+    }
     if args.iter().any(|a| a == "-new-group") {
         // A group of its own, the admin key standing for the root key the
         // Aurora app keeps in its TEE; the phone then admits as the root.
@@ -246,7 +258,7 @@ fn main() -> ExitCode {
             None,
         );
     }
-    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite or -new-group");
+    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite, -resume or -new-group");
     ExitCode::FAILURE
 }
 

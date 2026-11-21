@@ -232,6 +232,11 @@ fn resolve(address: &str) -> Option<SocketAddr> {
     if let Some(at) = *TEST_SERVICE.lock().unwrap() {
         return Some(at);
     }
+    // The tests' push service on loopback (member/tests/phone_push.rs), in
+    // a build that reads hooks only.
+    if let Some(at) = crate::testbuild::env("CBB_TEST_PUSH_AT").and_then(|v| v.parse().ok()) {
+        return Some(at);
+    }
     address.to_socket_addrs().ok()?.next()
 }
 
@@ -328,6 +333,17 @@ impl pusher::Saved for PushSaved {
 }
 
 impl Mesh {
+    /// The group's face toward the push service in the current period (the
+    /// tag of the period's credential the group holds for the service that
+    /// keys.json names, 16 bytes), which this device's own registration
+    /// names; None while keys.json names no push service or the group holds
+    /// no period for it.
+    pub fn push_face(&self) -> Option<[u8; 16]> {
+        let now = crate::uptime::wall_ms();
+        let keys = self.entries().map(|e| e.keys_for("push", pusher::SERVICE, now)).unwrap_or_default();
+        keys.iter().find_map(|spki| self.faces.kept(&cbb_core::certs::sha256(spki)).tag())
+    }
+
     /// Message `push` (t 28) from the peer over its own connection: its
     /// registration, with its role by the records.
     pub(super) fn take_push(&self, peer: &DeviceId, msg: &[u8]) {

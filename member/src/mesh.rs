@@ -172,6 +172,13 @@ pub struct Mesh {
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
     push_saved: Arc<push::PushSaved>,
     push_faces: Arc<push::PushFaces>,
+    /// This device's own registration for push (message `push`, t 28) as
+    /// the app made it, byte for byte: sent to every member connected now
+    /// and to each one that connects later; never passed on.
+    own_push: Mutex<Option<Vec<u8>>>,
+    /// The `push-renew` messages (t 29) members sent this device, as
+    /// (slot, ahead), until the app takes them.
+    renewed: Mutex<Vec<([u8; 16], bool)>>,
     /// What was applied when the phones' events were last looked for.
     #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
     applied: Mutex<push::Applied>,
@@ -353,6 +360,8 @@ impl Mesh {
                 on_command: RwLock::new(None),
                 on_set: RwLock::new(None),
                 on_other: RwLock::new(None),
+                own_push: Mutex::new(None),
+                renewed: Mutex::new(Vec::new()),
                 on_connected: RwLock::new(Vec::new()),
                 on_evidence: RwLock::new(None),
                 on_peer_hello: RwLock::new(None),
@@ -908,6 +917,44 @@ impl Mesh {
         Ok(())
     }
 
+    /// Sets this device's own registration for push: frame is message
+    /// `push` (t 28) as the core's `push_registration` made it, sent as it
+    /// is to every member connected now and to each one that connects
+    /// later; None stops sending one. A frame members would refuse is
+    /// refused here.
+    pub fn set_own_push(&self, frame: Option<Vec<u8>>) -> Result<()> {
+        if let Some(f) = &frame {
+            let msg = cbb_core::format::frame::read(f, cbb_core::format::frame::LIMIT_MEMBER)
+                .map_err(|_| Error::msg("the push registration is no frame"))?;
+            if msg.t != cbb_core::push::T_PUSH || cbb_core::push::Registration::read(&msg.map).is_err() {
+                return Err(Error::msg("the push registration is no message push"));
+            }
+            self.broadcast(f, None);
+        }
+        *self.own_push.lock().unwrap() = frame;
+        Ok(())
+    }
+
+    /// Message `push-renew` (t 29) from a member: the push service asks
+    /// this device to register again for the slot's group.
+    fn take_renew(&self, msg: &[u8]) {
+        let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) else { return };
+        let Ok(r) = cbb_core::push::read_renew(&v) else { return };
+        let mut q = self.renewed.lock().unwrap();
+        if let Some(old) = q.iter_mut().find(|(s, _)| *s == r.0) {
+            // One per slot; `ahead` once said stays said.
+            old.1 |= r.1;
+        } else {
+            q.push(r);
+        }
+    }
+
+    /// The `push-renew` messages members sent since the last call, as
+    /// (slot, ahead), one per slot.
+    pub fn take_renewals(&self) -> Vec<([u8; 16], bool)> {
+        std::mem::take(&mut *self.renewed.lock().unwrap())
+    }
+
     fn broadcast(&self, f: &[u8], except: Option<&DeviceId>) {
         let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
         for c in conns {
@@ -1254,6 +1301,9 @@ impl Mesh {
         for (_, f) in self.push.renewals(&peer) {
             let _ = conn.tx.try_send(f);
         }
+        if let Some(f) = self.own_push.lock().unwrap().clone() {
+            let _ = conn.tx.try_send(f);
+        }
         for f in self.on_connected.read().unwrap().iter() {
             f(&peer);
         }
@@ -1341,6 +1391,10 @@ impl Mesh {
             Some(cbb_core::msg::tables::T_CREDENTIALS) => self.take_credentials(conn, msg),
             Some(cbb_core::push::T_PUSH) => {
                 self.take_push(&conn.peer, msg);
+                Ok(())
+            }
+            Some(cbb_core::push::T_RENEW) => {
+                self.take_renew(msg);
                 Ok(())
             }
             Some(t @ (m::T_RELEASE | m::T_ENTRIES)) => self.take_signed(conn, t, msg),

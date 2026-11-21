@@ -33,6 +33,11 @@ made with 0.5 is set up again once. The details follow.
   one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC. The
   Aurora app reaches a YubiKey plugged into USB-C through the system's pcscd, the core being its
   client (`cbb_piv`'s transport `pcsc`).
+- A phone's member in a group of 0.6 registers for push as a computer's member takes it:
+  it keeps the signed entry points, reads its face toward the push service from them
+  (`push_face`), sends its registration, message `push`, to every member it connects to
+  (`push`), and hands the app each `push-renew` (`push_renewals`). `member/tests/phone_push.rs`
+  runs it end to end with the phone on Linux, two computers and the push service.
 - In a group of 0.6 the root phone can add a watch with the key the watch made and a member
   key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
   signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its

@@ -110,6 +110,13 @@ key and sent over the phone's connection to it, as the service sends them (the a
 device's: `{status, reason}`), and on the root `key_level` (`level`; `{below}`) and
 `make_admin` (`device`, `allow_file_key`, with the admin key the device offered when it joined
 by this phone's window), both by the core's key level rule (`cbb_core::keylevel`).
+For push (protocol.md, section 20.4) the member keeps the signed release and entry points in
+the app's folder and passes them on, as a computer does, and takes `push_face` (`{face}`: the
+group's face toward the push service that the newest `keys.json` names, base64, 16 bytes, null
+until one does), `push` (`frame`: message `push` as `push_registration` made it, checked and
+sent to every member connected now and to each one that connects later; no `frame` stops
+sending one) and `push_renewals` (`{renewals: [{slot, ahead}]}`: the `push-renew` messages
+members sent since the last call, one per slot, which the app answers with a new registration).
 The root also names its `hubs` (1 to 16 devices, by name or device ID), which the records
 judge: a phone is a hub only with an admin key; and the group's `relay` (`relays`, each
 `address pin`, or `default` alone for the project's relay; none meets at no relay; `{relays}`:

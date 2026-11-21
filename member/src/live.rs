@@ -267,6 +267,18 @@ impl Live {
         Ok(live)
     }
 
+    /// Keeps the signed release and entry points in dir and passes them on
+    /// (docs/protocol.md, section 16), under the release roots: a phone's
+    /// member reads its face toward the push service from the keys.json
+    /// they carry, as a computer's does.
+    pub fn keep_signed(&self, dir: &Path, log: &dyn Fn(&str)) {
+        let (now, roots) = (crate::uptime::wall_ms(), crate::update::release_roots);
+        self.mesh.with_signed(
+            Arc::new(crate::releases::Releases::open(dir, roots(), now, log)),
+            Arc::new(crate::entries::Entries::open(dir, roots(), now, log)),
+        );
+    }
+
     /// Sets what gets the copies to write.
     pub fn on_write(&self, f: OnWrite) {
         *self.on_write.write().unwrap() = Some(f);

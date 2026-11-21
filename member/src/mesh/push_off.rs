@@ -83,4 +83,9 @@ impl Mesh {
     }
 
     pub(super) fn push_events(&self, _set: &cbb_core::records::RecordSet) {}
+
+    /// No face toward the push service in this build.
+    pub fn push_face(&self) -> Option<[u8; 16]> {
+        None
+    }
 }

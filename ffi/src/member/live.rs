@@ -73,6 +73,24 @@ struct CopyArgs {
     kind: String,
 }
 
+/// `push`'s argument: this phone's registration, message `push` (t 28) as
+/// the core's `push_registration` made it, base64; none stops sending one.
+#[derive(Deserialize)]
+struct PushArgs {
+    #[serde(default)]
+    frame: Option<B64>,
+}
+
+#[derive(Deserialize)]
+struct B64(#[serde(with = "certs::b64")] Vec<u8>);
+
+/// Bytes as JSON, base64.
+fn b64_value(b: &[u8]) -> Value {
+    #[derive(serde::Serialize)]
+    struct B<'a>(#[serde(with = "certs::b64")] &'a [u8]);
+    serde_json::to_value(B(b)).unwrap_or(Value::Null)
+}
+
 #[derive(Deserialize)]
 struct FoundArgs {
     key: String,
@@ -299,6 +317,9 @@ impl Phone {
         if let Err(e) = cbb_member::mute::load(&dir, &live.board) {
             log(&format!("cbb: the mute: {}; not muted", e.for_log()));
         }
+        // The signed entry points, whose keys.json names the push service
+        // the phone's face is for.
+        live.keep_signed(&dir, &*log);
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
         // The Android evidence the peers send, which the phone checks while
         // it is the group's root, when its app hands it the root key.
@@ -581,6 +602,24 @@ impl Phone {
             "hub_off" => {
                 l.stop_being_hub()?;
                 Ok(self.away_answer())
+            }
+            // Push to this phone while its app is closed (docs/core-api.md,
+            // "Push"): the group's face the registration names, the
+            // registration the members get, and the members' push-renew.
+            "push_face" => Ok(json!({ "face": l.mesh.push_face().map(|f| b64_value(&f)) })),
+            "push" => {
+                let p: PushArgs = args(a)?;
+                l.mesh.set_own_push(p.frame.map(|B64(f)| f))?;
+                done()
+            }
+            "push_renewals" => {
+                let r: Vec<Value> = l
+                    .mesh
+                    .take_renewals()
+                    .iter()
+                    .map(|(slot, ahead)| json!({ "slot": b64_value(slot), "ahead": ahead }))
+                    .collect();
+                Ok(json!({ "renewals": r }))
             }
             "away_status" => Ok(self.away_answer()),
             "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),

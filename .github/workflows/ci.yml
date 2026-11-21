@@ -2558,9 +2558,12 @@ jobs:
       - name: the Rust cbb's own tests, instrumented
         run: |
           mkdir -p target
+          # The phone's member on Linux first: tests/phone_push.rs runs it.
+          cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
           cargo test --locked --release -p cbb-member --features testhooks --no-run --message-format=json |
             jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
-          cargo test --locked --release -p cbb-member --features testhooks
+          CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
+            cargo test --locked --release -p cbb-member --features testhooks
       - name: the Rust cbb, the phone's member on Linux, cbb-helper, and the Go tests' binaries
         run: |
           # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
