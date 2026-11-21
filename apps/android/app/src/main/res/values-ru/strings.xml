@@ -471,6 +471,7 @@
     <string name="reason_paste">Вставить на устройстве</string>
     <string name="reason_period">Обновить ключи группы для синхронизации вне дома</string>
     <string name="reason_record_proof">Записать, где устройство хранит ключ</string>
+    <string name="reason_relay">Задать ретранслятор группы</string>
     <string name="reason_remove">Удалить устройство из вашей группы</string>
     <string name="reason_remove_recovery">Удалить ключ восстановления</string>
     <string name="reason_rename">Переименовать устройство</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">Встречаться на этом релее?</string>
     <string name="relay_bad">Укажите адрес релея с портом и его ключ, как их выводит cbb relay, или оставьте оба поля пустыми.</string>
     <string name="relay_body">Для группы без собственного хаба: устройства встречаются на релее, например запущенном командой cbb relay, пока приложение синхронизирует. Буфер обмена остаётся зашифрованным между устройствами, но релей узнаёт, какие из них в сети, их адреса, и какие из них общаются друг с другом, когда и сколько. Чтобы перестать, оставьте оба поля пустыми.</string>
+    <string name="relay_by_root">Ретранслятор для всех устройств задаёт корень группы; этот телефон встречает остальных там, пока включена синхронизация вне дома.</string>
     <string name="relay_connecting">Подключение к релею…</string>
     <string name="relay_failed">Релей не принимает этот телефон. Проверьте его адрес и ключ.</string>
     <string name="relay_key">Ключ релея, 44 символа</string>

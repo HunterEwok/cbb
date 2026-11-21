@@ -234,6 +234,8 @@ class AppModel(private val app: Context) {
         val relay: HubState.Forwarder? = null,
         val online: Int = 0,
         val through: Int = 0,
+        /** Whether this phone sets the relay: on a group of 0.6 only the root does, for the whole group. */
+        val editable: Boolean = true,
     )
 
     var blindRelay by mutableStateOf<BlindRelay?>(null)
@@ -643,6 +645,11 @@ class AppModel(private val app: Context) {
         // Push learns the devices as applied: a device gone or a new root draws a new push key.
         val tag = withContext(Dispatchers.IO) { group.groupTag }
         withContext(Dispatchers.IO) { PushSetup.group(app, tag, d) }
+        if (withContext(Dispatchers.IO) { group.isV06 }) {
+            update06(root)
+            WatchLink.update(app, this)
+            return
+        }
         away = group.awayFromHome?.let { a ->
             // The last failure only while it is still trying; once connected or at home it is old news.
             val e = (a.lastError as? Exception)?.takeIf { a.status == AwayFromHome.Status.CONNECTING }
@@ -690,6 +697,46 @@ class AppModel(private val app: Context) {
     }
 
     /**
+     * Away from home, the hub and the relay on a group of 0.6, as the Live
+     * member runs them (AwayOn06): the same cards as on 0.5, from where the
+     * member says they stand. The relay is the group's, which the root sets.
+     */
+    private suspend fun update06(root: Boolean) {
+        val (a, prefs) = withContext(Dispatchers.IO) { group.awayState06 to group.hub06 }
+        val awayStatus = withContext(Dispatchers.IO) { AwayOn06.awayStatus(a) { group.reaches(it) } }
+        val awayError = a?.takeIf { awayStatus == AwayFromHome.Status.CONNECTING && it.error.isNotEmpty() }?.let { Exception(if (it.detail.isEmpty()) it.error else "${it.error} (${it.detail})") }
+        notifier.away(awayError != null)
+        if (awayError != null) Log.w(TAG, "sync away from home: ${awayError.message}")
+        away = Away(a != null && !a.hub && awayStatus != AwayFromHome.Status.OFF, awayStatus, awayError?.let { describe(it, R.string.away_error, log = false) })
+        hub = prefs?.let { p ->
+            val (status, error) = AwayOn06.hubStatus(p, a, paused = !group.inForeground && !p.background)
+            if (error != hubError) {
+                hubError = error
+                if (error != null) Log.w(TAG, "the hub: $error")
+            }
+            Hub(
+                p.on, status,
+                error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
+                p.forwarder, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
+                disguise = p.disguise,
+                entriesStale = status == HubOnPhone.Status.FAILED && a?.forwarder?.entriesStale == true,
+            )
+        }
+        val (relayStatus, relayErr) = AwayOn06.relayStatus(a)
+        if (relayErr != relayError) {
+            relayError = relayErr
+            if (relayErr != null) Log.w(TAG, "the relay: $relayErr")
+        }
+        blindRelay = BlindRelay(
+            relayStatus,
+            relayErr?.let { Note(R.string.relay_failed, if (settings.showsErrorDetails) it else null, error = true) },
+            a?.relay?.endpoint?.takeIf { it.isNotEmpty() }?.let { HubState.Forwarder(it, "") },
+            a?.relay?.online?.size ?: 0,
+            editable = root,
+        )
+    }
+
+    /**
      * Meets the group at the blind relay at address with the key pin, as
      * cbb relay prints them, after the user read what it learns; both
      * empty leave it.
@@ -698,7 +745,7 @@ class AppModel(private val app: Context) {
         relayNote = try {
             if (address.isBlank() != pin.isBlank()) throw IllegalArgumentException("both or neither")
             if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
-            withContext(Dispatchers.IO) { group.setRelay(address, pin) }
+            if (group.isV06) group.setGroupRelay(address, pin) else withContext(Dispatchers.IO) { group.setRelay(address, pin) }
             null
         } catch (e: CancellationException) {
             throw e

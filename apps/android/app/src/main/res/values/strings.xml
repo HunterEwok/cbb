@@ -474,6 +474,7 @@
     <string name="reason_paste">Paste on a device</string>
     <string name="reason_period">Renew the group\'s keys for sync away from home</string>
     <string name="reason_record_proof">Record where a device keeps its key</string>
+    <string name="reason_relay">Set the group\'s relay</string>
     <string name="reason_remove">Remove a device from your group</string>
     <string name="reason_remove_recovery">Remove the recovery key</string>
     <string name="reason_rename">Rename a device</string>
@@ -516,6 +517,7 @@
     <string name="relay_ask_title">Meet at this relay?</string>
     <string name="relay_bad">Give the relay\'s address with its port and its key, as cbb relay prints them, or leave both empty.</string>
     <string name="relay_body">For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</string>
+    <string name="relay_by_root">The group\'s root sets the relay for every device; this phone meets the others there while sync away from home is on.</string>
     <string name="relay_connecting">Connecting to the relay…</string>
     <string name="relay_failed">The relay does not take this phone. Check its address and key.</string>
     <string name="relay_key">Relay key, 44 characters</string>

@@ -471,6 +471,7 @@
     <string name="reason_paste">Bandika kwenye kifaa</string>
     <string name="reason_period">Fanya upya funguo za kikundi za kusawazisha ukiwa mbali na nyumbani</string>
     <string name="reason_record_proof">Rekodi mahali kifaa kinapoweka ufunguo wake</string>
+    <string name="reason_relay">Weka relei ya kikundi</string>
     <string name="reason_remove">Ondoa kifaa kwenye kikundi chako</string>
     <string name="reason_remove_recovery">Ondoa ufunguo wa urejeshaji</string>
     <string name="reason_rename">Badilisha jina la kifaa</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">Mkutane kwenye kipitishi hiki?</string>
     <string name="relay_bad">Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu.</string>
     <string name="relay_body">Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha.</string>
+    <string name="relay_by_root">Mzizi wa kikundi huweka relei kwa kila kifaa; simu hii hukutana na vingine huko wakati usawazishaji ukiwa mbali na nyumbani umewashwa.</string>
     <string name="relay_connecting">Inaunganisha na kipitishi…</string>
     <string name="relay_failed">Kipitishi hakiikubali simu hii. Kagua anwani na ufunguo wake.</string>
     <string name="relay_key">Ufunguo wa kipitishi, herufi 44</string>

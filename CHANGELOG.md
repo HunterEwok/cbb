@@ -33,6 +33,9 @@ made with 0.5 is set up again once. The details follow.
   digits is admitted by its root or admin key under the core's admission rules and gets the
   Welcome, with nobody asked; three wrong codes close the window, one success closes it too
   (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
+- The Android app of 0.6 runs sync away from home, the phone as a hub and the link to the
+  group's relay through the Live member, with the same cards as before; the root phone sets
+  the group's relay, which every device meets at ([phone apps](docs/apps.md), "Screens").
 - A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
   (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
   proves the digits, and the checked set is kept in the app's folder before the member hears it

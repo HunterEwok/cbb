@@ -242,6 +242,17 @@ they look, so both apps are built to the same plan.
    `HubOnPhone` and the Swift kit's `HubOnPhone` drive the tunnel's hub, the tunnel's connections
    come to a member port on the loopback address, and on a home network the hub takes members
    on a port on every address, which it publishes with `r=phone` (docs/protocol.md, section 3).
+   In a group of 0.6 the Live member runs all of it in the app's process, in user space as
+   before: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
+   port and the addresses, and how its tunnel hides) and the link to the group's relay, and
+   it keeps their keys and the hub's clients itself; the cards read where they stand from
+   `away_status` (docs/core-api.md). The Android app's `AwayOn06` keeps only what the user
+   chose for the hub (on, forwarder, disguise, background, home networks), serves while the
+   app is in front or the background is allowed and stops the hub otherwise, which hands its
+   clients to the group's next hub; a hub without a forwarder is reached at the phone's
+   addresses on the home network. The relay is the group's setting: the root sets it with
+   the fingerprint, the face or the screen lock (the manage action `relay`), and the other
+   devices show where their link to it stands, with "The group's root sets the relay".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
    (docs/protocol.md, section 12): on this phone while it is the group's registered hub,
    else through a hub of the group it is connected to. The phone shows the invitation's QR

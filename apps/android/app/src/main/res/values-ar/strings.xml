@@ -471,6 +471,7 @@
     <string name="reason_paste">لصق على جهاز</string>
     <string name="reason_period">تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل</string>
     <string name="reason_record_proof">تسجيل مكان احتفاظ الجهاز بمفتاحه</string>
+    <string name="reason_relay">تعيين مُرحِّل المجموعة</string>
     <string name="reason_remove">إزالة جهاز من مجموعتك</string>
     <string name="reason_remove_recovery">إزالة مفتاح الاسترداد</string>
     <string name="reason_rename">إعادة تسمية جهاز</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">الالتقاء عند هذا المُرحِّل؟</string>
     <string name="relay_bad">أدخل عنوان المُرحِّل مع منفذه ومفتاحه، كما يطبعهما cbb relay، أو اترك الاثنين فارغين.</string>
     <string name="relay_body">لمجموعة ليس لها محور خاص بها: تلتقي الأجهزة عند مُرحِّل، مثل مُرحِّل مُعدّ باستخدام cbb relay، أثناء مزامنة التطبيق. تبقى الحافظة مشفّرة بين الأجهزة، لكن المُرحِّل يعرف أيّها متصل وعناوينها، وأيّها يتحدث مع الآخر، ومتى وبأي قدر. اترك الحقلين فارغين للإيقاف.</string>
+    <string name="relay_by_root">يعيّن جذر المجموعة المُرحِّل لكل الأجهزة؛ ويلتقي هذا الهاتف بالأجهزة الأخرى هناك ما دامت المزامنة خارج المنزل مفعّلة.</string>
     <string name="relay_connecting">جارٍ الاتصال بالمُرحِّل…</string>
     <string name="relay_failed">لا يقبل المُرحِّل هذا الهاتف. تحقق من عنوانه ومفتاحه.</string>
     <string name="relay_key">مفتاح المُرحِّل، 44 حرفًا</string>

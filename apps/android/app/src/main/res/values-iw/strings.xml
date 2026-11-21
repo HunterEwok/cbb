@@ -471,6 +471,7 @@
     <string name="reason_paste">הדבקה במכשיר</string>
     <string name="reason_period">חידוש מפתחות הקבוצה לסנכרון מחוץ לבית</string>
     <string name="reason_record_proof">רישום המקום שבו מכשיר שומר את המפתח שלו</string>
+    <string name="reason_relay">הגדרת הממסר של הקבוצה</string>
     <string name="reason_remove">הסרת מכשיר מהקבוצה שלכם</string>
     <string name="reason_remove_recovery">הסרת מפתח השחזור</string>
     <string name="reason_rename">שינוי שם של מכשיר</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">להיפגש בממסר הזה?</string>
     <string name="relay_bad">הזינו את כתובת הממסר עם הפורט ואת המפתח שלו, כפי ש-cbb relay מדפיס אותם, או השאירו את שניהם ריקים.</string>
     <string name="relay_body">לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, בזמן שהיישום מסנכרן. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק.</string>
+    <string name="relay_by_root">השורש של הקבוצה מגדיר את הממסר לכל המכשירים; הטלפון הזה פוגש שם את האחרים כל עוד הסנכרון מחוץ לבית פועל.</string>
     <string name="relay_connecting">מתחבר לממסר…</string>
     <string name="relay_failed">הממסר לא מקבל את הטלפון הזה. בדקו את הכתובת והמפתח שלו.</string>
     <string name="relay_key">מפתח הממסר, 44 תווים</string>

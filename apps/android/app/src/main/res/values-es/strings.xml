@@ -471,6 +471,7 @@
     <string name="reason_paste">Pegar en un dispositivo</string>
     <string name="reason_period">Renovar las claves del grupo para sincronizar fuera de casa</string>
     <string name="reason_record_proof">Registrar dónde guarda su clave un dispositivo</string>
+    <string name="reason_relay">Configurar el relé del grupo</string>
     <string name="reason_remove">Quitar un dispositivo de tu grupo</string>
     <string name="reason_remove_recovery">Quitar la clave de recuperación</string>
     <string name="reason_rename">Renombrar un dispositivo</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">¿Encontrarse en este relé?</string>
     <string name="relay_bad">Indica la dirección del relé con su puerto y su clave, tal como los imprime cbb relay, o deja ambos vacíos.</string>
     <string name="relay_body">Para un grupo sin hub propio: los dispositivos se encuentran en un relé, como uno montado con cbb relay, mientras la app sincroniza. El portapapeles sigue cifrado entre los dispositivos, pero el relé sabe cuáles están en línea y sus direcciones, y cuáles hablan entre sí, cuándo y cuánto. Deja ambos campos vacíos para dejar de usarlo.</string>
+    <string name="relay_by_root">La raíz del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada.</string>
     <string name="relay_connecting">Conectando con el relé…</string>
     <string name="relay_failed">El relé no acepta este teléfono. Revisa su dirección y su clave.</string>
     <string name="relay_key">Clave del relé, 44 caracteres</string>

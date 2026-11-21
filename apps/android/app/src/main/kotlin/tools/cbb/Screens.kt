@@ -939,6 +939,11 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
             Text(status, color = if (relay.status == RelayOnPhone.Status.CONNECTED) palette.accent else palette.textDim)
             // The relay's error underneath, when details are on.
             relay.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
+            // On a group of 0.6 the relay is the group's, which only the root sets.
+            if (!relay.editable) {
+                Tip(R.string.relay_by_root)
+                return@Column
+            }
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },

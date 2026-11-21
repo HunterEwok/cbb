@@ -471,6 +471,7 @@
     <string name="reason_paste">在设备上粘贴</string>
     <string name="reason_period">续订群组用于离家同步的密钥</string>
     <string name="reason_record_proof">记录设备存放密钥的位置</string>
+    <string name="reason_relay">设置群组的中继</string>
     <string name="reason_remove">从群组中移除设备</string>
     <string name="reason_remove_recovery">移除恢复密钥</string>
     <string name="reason_rename">重命名设备</string>
@@ -513,6 +514,7 @@
     <string name="relay_ask_title">在此中继相遇？</string>
     <string name="relay_bad">按 cbb relay 打印的格式填写中继的地址（含端口）和密钥，或两者都留空。</string>
     <string name="relay_body">用于没有自己中心节点的群组：应用同步时，设备在中继处相遇，例如用 cbb relay 搭建的中继。剪贴板在设备之间保持加密，但中继会知道哪些设备在线及其地址，以及哪些设备彼此通信、何时以及通信多少。两个字段都留空即可停止。</string>
+    <string name="relay_by_root">群组的根设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。</string>
     <string name="relay_connecting">正在连接中继…</string>
     <string name="relay_failed">中继不接受这部手机。请检查它的地址和密钥。</string>
     <string name="relay_key">中继密钥，44 个字符</string>

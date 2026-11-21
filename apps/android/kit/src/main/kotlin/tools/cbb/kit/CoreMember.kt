@@ -329,13 +329,96 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         call("listen", Wire.obj("port" to Wire.num(port.toLong()), "kind" to Wire.str(what.wire))).optLong("port")?.toInt()
             ?: throw Core.Mismatch("listen answered no port")
 
+    /** A hub's registration with its forwarder, as the member's sync away from home shows it. */
+    data class ForwarderState(val endpoint: String, val registered: Boolean, val seen: String, val entriesStale: Boolean, val error: String, val detail: String)
+
+    /** This phone's link to the group's blind relay. */
+    data class RelayState(val endpoint: String, val connected: Boolean, val online: List<String>, val error: String, val detail: String)
+
     /**
-     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key) on the UDP
-     * port (0: any free one), reached from afar at addrs ("ip:port"): its clients and the guests of invitations come in
-     * through its tunnel. The answer holds the phone's sync away from home (`away`).
+     * Sync away from home on a group of 0.6, as the member runs it (`away_status`, docs/core-api.md): a hub (standing
+     * by while a hub above it serves) with its port, clients, endpoints and forwarder; else the hub it reaches and
+     * whether through the tunnel now; the relay link; the last error with its detail.
      */
-    fun serveAsHub(port: Int, addrs: List<String>): JsonObject =
-        call("hub", Wire.obj("port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) })))
+    data class AwayState(
+        val hub: Boolean,
+        val standby: Boolean,
+        val port: Int,
+        val clients: Int,
+        val obfuscated: Boolean,
+        val vless: Boolean,
+        val endpoints: List<String>,
+        val hubDevice: String,
+        val through: Boolean,
+        val keysInFile: Boolean,
+        val forwarder: ForwarderState?,
+        val relay: RelayState?,
+        val error: String,
+        val detail: String,
+    ) {
+        companion object {
+            private fun strings(o: JsonObject, key: String): List<String> = o.optArray(key)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+
+            /** The answer's `away`, null while sync away from home is off and nothing failed. */
+            fun of(answer: JsonObject): AwayState? = answer.optObject("away")?.let { a ->
+                AwayState(
+                    a.optBool("hub") ?: false, a.optBool("standby") ?: false, (a.optLong("port") ?: 0).toInt(), (a.optLong("clients") ?: 0).toInt(),
+                    a.optBool("obfuscated") ?: false, a.optBool("vless") ?: false, strings(a, "endpoints"), a.optString("hub_device") ?: "",
+                    a.optBool("through") ?: false, a.optBool("keys_in_file") ?: false,
+                    a.optObject("forwarder")?.let { f ->
+                        ForwarderState(f.optString("endpoint") ?: "", f.optBool("registered") ?: false, f.optString("seen") ?: "",
+                            f.optBool("entries_stale") ?: false, f.optString("error") ?: "", f.optString("detail") ?: "")
+                    },
+                    a.optObject("relay")?.let { r ->
+                        RelayState(r.optString("endpoint") ?: "", r.optBool("connected") ?: false, strings(r, "online"),
+                            r.optString("error") ?: "", r.optString("detail") ?: "")
+                    },
+                    a.optString("error") ?: "", a.optString("detail") ?: "",
+                )
+            }
+        }
+
+        /** Sync away from home is on: the member keeps its tunnel keys; a failure while it is off shows only error. */
+        val isOn: Boolean get() = keysInFile
+    }
+
+    /** On a group of 0.6: sync away from home as the member runs it, null while it is off. */
+    fun awayStatus(): AwayState? = AwayState.of(call("away_status"))
+
+    /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
+    fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
+
+    /**
+     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key), with the
+     * computers' hub: reached away from home through the forwarder at forwarder (`host:port`, its key's pin key or
+     * `default` for the project's), or at addrs ("ip:port") on the UDP port (0: any free one), hidden as obfuscateOff
+     * and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
+     */
+    fun serveAsHub(
+        port: Int = 0,
+        addrs: List<String> = emptyList(),
+        forwarder: String = "",
+        key: String = "",
+        obfuscateOff: Boolean = false,
+        vlessOff: Boolean = false,
+    ): AwayState? = AwayState.of(
+        call(
+            "hub",
+            Wire.obj(
+                "port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
+                "forwarder" to Wire.str(forwarder), "key" to Wire.str(key),
+                "obfuscate_off" to JsonPrimitive(obfuscateOff), "vless_off" to JsonPrimitive(vlessOff),
+            ),
+        ),
+    )
+
+    /** On a group of 0.6: stops serving as a hub; its clients go to the next hub in the group's order. */
+    fun stopHub(): AwayState? = AwayState.of(call("hub_off"))
+
+    /** On the root of a group of 0.6: the group's relays, each "address pin", or "default" alone; none meets at no relay. */
+    fun setRelays(relays: List<String>, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
+        root(Wire.obj("action" to Wire.str("relay"), "relays" to JsonArray(relays.map { JsonPrimitive(it) })), public, sign)
+            .optArray("relays")?.map { (it as JsonPrimitive).content } ?: emptyList()
 
     /** Closes the port [listen] opened for [what], or every one with null. */
     fun unlisten(what: Listen? = null) {
