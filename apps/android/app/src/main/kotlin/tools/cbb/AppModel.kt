@@ -606,7 +606,7 @@ class AppModel(private val app: Context) {
         notifier.observe(d)
         // Push learns the devices as applied: a device gone or a new root draws a new push key.
         val tag = withContext(Dispatchers.IO) { group.groupTag }
-        withContext(Dispatchers.IO) { PushSetup.group(app, tag, d) }
+        withContext(Dispatchers.IO) { PushSetup.group(app, tag, d, group.pushFace) }
         if (withContext(Dispatchers.IO) { group.isV06 }) {
             update06(root)
             WatchLink.update(app, this)

@@ -40,8 +40,9 @@ import javax.crypto.spec.GCMParameterSpec
  * key, and opens each body that arrives. The vault holds what opens a body
  * and a copy in it and nothing that signs a record. A registration is made
  * again only when what it says changed or a member asks (`push-renew`). The
- * member's sync sends the saved registration to the group's members (the
- * seam in member/src/pusher.rs).
+ * 0.6 member sends the saved registration to every member it connects to
+ * ([sink], the member's `push`), gives the group's face toward the push
+ * service (`push_face`) and hands each `push-renew` to [renew].
  */
 object PushSetup {
     private const val TAG = "cbb"
@@ -65,6 +66,20 @@ object PushSetup {
     private fun settings(c: Context) = c.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     fun on(c: Context): Boolean = settings(c).getBoolean(ON, true)
+
+    /**
+     * Where the group's registration goes once it is made: the 0.6 member's
+     * `push` (LiveGroup), which sends it to every member it connects to;
+     * null while no member runs.
+     */
+    @Volatile
+    var sink: ((ByteArray?) -> Unit)? = null
+
+    /** The registration saved for the group, the frame the member sends; null when there is none. */
+    fun frame(c: Context): ByteArray? {
+        val tag = prefs(c).getString("group", null) ?: return null
+        return runCatching { vault(c).load(tag).frame }.getOrNull()
+    }
 
     fun vault(c: Context) = PushVault(SealedStore.of(c))
 
@@ -185,7 +200,9 @@ object PushSetup {
      */
     fun leaving(c: Context): ByteArray? {
         val tag = prefs(c).getString("group", null) ?: return null
-        return runCatching { vault(c).leaving(tag)?.frame }.onFailure { failed(c, it) }.getOrNull()
+        val frame = runCatching { vault(c).leaving(tag)?.frame }.onFailure { failed(c, it) }.getOrNull()
+        frame?.let { f -> runCatching { sink?.invoke(f) }.onFailure { Log.w(TAG, "push: the member did not take the registration", it) } }
+        return frame
     }
 
     /** Leaving failed: the phone stays, and push goes on as before. */
@@ -274,7 +291,12 @@ object PushSetup {
                 v.register(tag, me, null, null, null, 0, devices = devices)
             }
             // A hints-only mark whose change is now applied, with its new key in place, is spent.
-            marks(c).spend(tag, v.load(tag))
+            val now = v.load(tag)
+            marks(c).spend(tag, now)
+            // The member sends the group's registration as it is now.
+            if (tag == prefs(c).getString("group", null)) {
+                runCatching { sink?.invoke(now.frame) }.onFailure { Log.w(TAG, "push: the member did not take the registration", it) }
+            }
         } catch (e: Exception) {
             failed(c, e)
         }

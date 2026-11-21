@@ -399,6 +399,27 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
      */
     fun periods(): Pair<Boolean, Boolean> = call("away_status").let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }
 
+    /**
+     * On a group of 0.6: the group's face toward the push service that the newest keys.json the member
+     * holds names (16 bytes), which every registration names; null until one does.
+     */
+    fun pushFace(): ByteArray? = call("push_face").optBytes("face")?.takeIf { it.size == 16 }
+
+    /**
+     * On a group of 0.6: this phone's registration for push, message `push` as [Push] made it, which the
+     * member sends to every member connected now and to each one that connects later; null stops it.
+     */
+    fun setPush(frame: ByteArray?) {
+        call("push", Wire.obj("frame" to Wire.bytes(frame)))
+    }
+
+    /** On a group of 0.6: the `push-renew` messages members sent since the last call, as slot and ahead, one per slot. */
+    fun pushRenewals(): List<Pair<ByteArray, Boolean>> =
+        call("push_renewals").optArray("renewals")?.mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            o.optBytes("slot")?.let { it to (o.optBool("ahead") ?: false) }
+        } ?: emptyList()
+
     /** On the root phone of a group of 0.6: renews the group's server credentials with the root key; the periods after. */
     fun renewPeriod(public: ByteArray, sign: (ByteArray) -> ByteArray): Pair<Boolean, Boolean> =
         root(Wire.obj("action" to Wire.str("period")), public, sign).let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }

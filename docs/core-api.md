@@ -568,7 +568,10 @@ just before the service's and keep the phone's key unconfirmed for as long as it
 phone's groups then send at the unconfirmed rate, which costs function only, no more than
 membership already gives. Leaving the last group gives the token up; on FCM a deletion that
 fails is tried again at the app's next start. The Android app does the same
-(`PushVault.kt`, `PushSetup.kt`). A copy's text gets the notification's Copy button;
+(`PushVault.kt`, `PushSetup.kt`). On a group of 0.6 the app takes the group's face from the
+member's `push_face`, hands the member each registration it saves (`push`, which the member
+sends to every member it connects to) and makes a new one for each `push-renew` the member
+hands it (`push_renewals`, read a few seconds after each connection and with the records). A copy's text gets the notification's Copy button;
 the test tool's row in Settings is in debug builds only.
 
 On the members the sender is `member/src/pusher.rs`, and the project's push service is
