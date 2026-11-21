@@ -267,16 +267,18 @@ impl Live {
 fn serve_hub(w: &Weak<Live>) {
     loop {
         let Some(l) = w.upgrade() else { return };
+        let Some(away) = l.away.get().cloned() else { return };
         if l.is_closed() {
             l.hub.lock().unwrap().take();
+            away.hub_stopped();
             return;
         }
-        let Some(away) = l.away.get().cloned() else { return };
         let settings = away.hub_settings();
         let running = l.hub.lock().unwrap().as_ref().map(|r| (r.hub.clone(), r.report.clone()));
         match (settings, running) {
             (None, Some(_)) => {
                 l.hub.lock().unwrap().take();
+                away.hub_stopped();
                 l.logf("cbb: the hub stopped");
             }
             (Some(s), None) => match l.start_hub(&away, s) {

@@ -674,7 +674,7 @@ pub(super) fn hub_addrs(addrs: &[String], forwarder: bool) -> Result<Vec<SocketA
 /// Whether a hub that could not register with its forwarder (failed)
 /// should be told its list of entry points is out of date: the forwarder
 /// is the project's and this device holds no list that has not expired.
-fn entries_stale(project: bool, failed: bool, entries_held: bool) -> bool {
+pub(super) fn entries_stale(project: bool, failed: bool, entries_held: bool) -> bool {
     failed && project && !entries_held
 }
 
@@ -746,7 +746,7 @@ pub(super) fn unmapped(ep: SocketAddr) -> SocketAddr {
 
 /// A short message for status of why the hub is not registered, as Go's
 /// forwarderProblem; the whole error goes to the detail.
-fn forwarder_problem(detail: &str) -> String {
+pub(super) fn forwarder_problem(detail: &str) -> String {
     if detail.is_empty() {
         String::new()
     } else if detail.contains(forward::NOT_LISTED) {

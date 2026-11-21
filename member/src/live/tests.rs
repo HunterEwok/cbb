@@ -233,3 +233,37 @@ fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
     a.close();
     b.close();
 }
+
+/// A hub of 0.6 with a forwarder shows it in its status: where it is and
+/// that it has not registered there, while the forwarder does not answer;
+/// a hub that stops serving shows none.
+#[test]
+fn a_hub_of_0_6_shows_its_forwarder() {
+    use base64::Engine;
+    let (_, db) = two_dirs_b_hub("away-forwarder");
+    let b = open(&db);
+    let me = crate::certs::DeviceId::parse(&id_text(&b.mesh.device())).unwrap();
+    let away = Arc::new(crate::away::Away::new(db.clone(), b.tag(), me, Arc::new(|_| {})));
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let h = crate::control::Header {
+        addrs: vec![format!("127.0.0.1:{port}")],
+        port: i64::from(port),
+        forwarder: "127.0.0.1:9".into(),
+        forwarder_key: base64::engine::general_purpose::STANDARD.encode([7u8; 32]),
+        consent: true,
+        ..Default::default()
+    };
+    away.make_hub(&h).unwrap();
+    assert!(away.live_forwarder(false).is_some_and(|f| f.endpoint == "127.0.0.1:9" && !f.registered));
+    b.with_away(away.clone());
+    until("the hub serves", || b.hub.lock().unwrap().is_some());
+    let f = away.live_forwarder(false).unwrap();
+    assert_eq!(f.endpoint, "127.0.0.1:9");
+    assert!(!f.registered, "nothing answers there");
+    away.turn_off().unwrap();
+    until("the hub stops", || b.hub.lock().unwrap().is_none());
+    assert!(away.live_forwarder(false).is_none());
+    b.close();
+}

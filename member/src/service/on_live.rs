@@ -298,6 +298,7 @@ impl Service {
             port: self.port.lock().unwrap().map_or(0, i64::from),
             quiet: live.networks().map(|n| n.unknown()).unwrap_or_default(),
             bug: self.bugs.waiting(),
+            away: away_status(live),
             ..Default::default()
         };
         // The reasons: what the status says, and what the records of 0.6
@@ -518,7 +519,7 @@ impl Service {
             }
             _ => {}
         }
-        let status = Status { away: away.live_status(), ..Default::default() };
+        let status = Status { away: away_status(live), ..Default::default() };
         Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
     }
 
@@ -1032,6 +1033,16 @@ impl Service {
         }
         Err(last)
     }
+}
+
+/// Sync away from home on a group of 0.6 for status: where it stands and,
+/// on a hub, its forwarder.
+fn away_status(live: &Live) -> Option<control::Away> {
+    let away = live.away()?;
+    let mut a = away.live_status()?;
+    let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
+    a.forwarder = away.live_forwarder(entries_held);
+    Some(a)
 }
 
 #[cfg(test)]

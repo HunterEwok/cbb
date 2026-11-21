@@ -108,7 +108,11 @@ pub struct Mesh {
     own: Own,
     dir: PathBuf,
     local: [u8; 32],
+    /// Lock order: set before statements. Whoever needs both takes set
+    /// first (state() takes set: compute it before locking statements).
     set: Arc<Mutex<RecordSet>>,
+    /// Lock order: statements after set, never set while statements is
+    /// held (state() takes set).
     statements: Mutex<Statements>,
     store: Mutex<FileStore>,
     book: Mutex<Book>,

@@ -153,7 +153,37 @@ impl Away {
         drop(cur);
         let report = std::sync::Arc::new(std::sync::Mutex::new(crate::forward::Report::default()));
         let r = crate::forward::Registration::start(cfg, report.clone(), self.log.clone());
+        *self.hub_report.lock().unwrap() = Some(report.clone());
         Some(Ok((r, report)))
+    }
+
+    /// The hub of 0.6 stopped serving: its forwarder leaves its status.
+    pub fn hub_stopped(&self) {
+        self.hub_report.lock().unwrap().take();
+    }
+
+    /// The hub of 0.6's forwarder for its status, entries_held telling
+    /// whether this device holds signed entry points that have not
+    /// expired; None on a device that is no hub or has no forwarder.
+    pub fn live_forwarder(&self, entries_held: bool) -> Option<crate::control::Forwarder> {
+        let (endpoint, project) = {
+            let cur = self.st.lock().unwrap();
+            let f = cur.as_ref().filter(|s| s.is_hub)?.forwarder.as_ref()?;
+            (f.endpoint.to_string(), f.project)
+        };
+        let report = self.hub_report.lock().unwrap().clone();
+        let Some(r) = report.and_then(|r| r.lock().ok().map(|r| r.clone())) else {
+            return Some(crate::control::Forwarder { endpoint, ..Default::default() });
+        };
+        let detail = r.error.unwrap_or_default();
+        Some(crate::control::Forwarder {
+            endpoint,
+            registered: r.registered,
+            seen: r.seen.unwrap_or_default(),
+            error: super::serve::forwarder_problem(&detail),
+            entries_stale: super::serve::entries_stale(project, !detail.is_empty(), entries_held),
+            detail,
+        })
     }
 
     /// Keeps the VLESS settings the forwarder's answer gave (report), or

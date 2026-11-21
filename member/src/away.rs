@@ -111,6 +111,8 @@ pub struct Away {
     moving: AtomicBool,
     /// The guest tunnels of the open invitations, on the hub.
     guests: invite::Guests,
+    /// The hub of 0.6's registration with its forwarder, while it serves.
+    hub_report: Mutex<Option<Arc<Mutex<crate::forward::Report>>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -167,6 +169,7 @@ impl Away {
             giving_way: AtomicBool::new(false),
             moving: AtomicBool::new(false),
             guests: Default::default(),
+            hub_report: Mutex::new(None),
             log,
         }
     }
