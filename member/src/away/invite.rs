@@ -26,7 +26,7 @@ use cbb_core::invite::Invitation;
 
 use super::Away;
 use crate::certs::{Cert, DeviceId};
-use crate::error::{Context, Error, Result};
+use crate::error::{Error, Result};
 use crate::hub::{self, Hub};
 use crate::inviter::{GuestKeys, Opened};
 use crate::node::{Node, OnPairing};
@@ -443,45 +443,6 @@ const GUEST_FILE: &str = "invite-guest";
 /// How long after the join the guest tunnel is tried at most: as long as
 /// the hub keeps the guest for the admitted device.
 const GUEST_FILE_LIFE: Duration = GUEST_GRACE;
-
-/// Joins the group of a remote invitation (cbb pair -invite), as Go's
-/// joinInvite: through the guest tunnel to the hub, with the invitation's
-/// secret, once the hub's admin confirmed the device. Sync away from home
-/// goes on with the join, and the service then offers this device's own
-/// tunnel key to the hub through the guest tunnel (Away::through_guest).
-/// shown gets the device's key fingerprint, which the admin compares.
-pub fn join_invite(
-    dir: &std::path::Path,
-    joiner: &crate::pair::Joiner,
-    save: &crate::pair::Save,
-    text: &str,
-    shown: &dyn Fn(&str),
-    log: Arc<dyn Fn(&str) + Send + Sync>,
-) -> Result<crate::identity::Identity> {
-    let inv = cbb_core::invite::parse(text).map_err(|r| Error::msg(r.message()))?;
-    if inv.expired(crate::uptime::wall_ms() / 1000) {
-        return Err(Error::msg("the invitation has expired; ask for a new one"));
-    }
-    shown(&joiner.fingerprint());
-    let link = guest_link(&inv, log)?;
-    let sock = std::net::TcpStream::connect_timeout(&link.local(), Duration::from_secs(10))
-        .context("cannot reach the tunnel's local port")?;
-    let text = text.trim().to_string();
-    let save_all = |id: &crate::identity::Identity, rs: &[crate::records::Record], ts: &[crate::records::ClaimTime]| {
-        // Sync away from home is on, and the guest file there, before the
-        // identity, which a running service takes.
-        crate::tunnel::State::new(&id.tag())?.save(dir)?;
-        crate::files::write_atomic(&dir.join(GUEST_FILE), text.as_bytes(), 0o600)?;
-        save(id, rs, ts)
-    };
-    crate::pair::join_secret(joiner, sock, &inv.secret, &inv.group, &save_all).map_err(|e| {
-        if link.answered() {
-            e
-        } else {
-            e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")
-        }
-    })
-}
 
 /// Keeps the invitation a device joined with in the state directory, once
 /// sync away from home is on there: the member then offers its own tunnel

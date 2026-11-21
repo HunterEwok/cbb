@@ -129,23 +129,6 @@ impl Away {
     pub fn run(self: Arc<Self>, _node: Arc<Node>) {}
 }
 
-/// Whether a hub order is a stop order: this build is never a hub.
-pub fn is_stop(_order: &serde_json::Value) -> bool {
-    false
-}
-
-/// Joining with a remote invitation, which needs the tunnel.
-pub fn join_invite(
-    _dir: &std::path::Path,
-    _joiner: &crate::pair::Joiner,
-    _save: &crate::pair::Save,
-    _text: &str,
-    _shown: &dyn Fn(&str),
-    _log: Arc<dyn Fn(&str) + Send + Sync>,
-) -> Result<crate::identity::Identity> {
-    Err(off())
-}
-
 /// Why sync away from home is off in this build.
 fn off() -> Error {
     Error::msg("this build of cbb has no tunnel for sync away from home (MIPS); it syncs at home only")

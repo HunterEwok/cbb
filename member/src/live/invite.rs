@@ -549,6 +549,10 @@ pub fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Res
     crate::tunnel::Link::start_at(&st, &hub, own, hub::GUEST_HUB, log)
 }
 
+/// How many connections a join through the guest tunnel tries while each
+/// ends before its TLS handshake.
+const HANDSHAKE_TRIES: u32 = 5;
+
 /// Joins the group of a remote invitation of 0.6 (cbb pair -invite): through
 /// the invitation's guest tunnel to the hub, with its secret; the hub's
 /// admin confirms the device before it is admitted, so each step may wait
@@ -563,22 +567,29 @@ pub fn join(
 ) -> Result<Box<cbb_core::join::session::Admitted>> {
     let inv = Invitation::parse(text.trim()).map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
     let link = guest_link(&inv, log)?;
-    let sock = TcpStream::connect_timeout(&link.local(), Duration::from_secs(10))
-        .context("cannot reach the tunnel's local port")?;
     let text = text.trim().to_string();
     let before = |a: &cbb_core::join::session::Admitted| -> Result<()> {
         crate::tunnel::State::new(&super::tag(&a.state))?.save(dir)?;
         crate::files::write_atomic(&dir.join(GUEST_FILE), text.as_bytes(), 0o600)
     };
     let step = crate::window::CONFIRM_WAIT + Duration::from_secs(60);
-    let kept = sock.try_clone().context("cannot use the tunnel's connection")?;
-    let joined = crate::joining::over_with(dir, sock, "the hub", me, inv, None, step, &before).map_err(|e| {
-        if link.answered() {
-            e
-        } else {
-            e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")
+    // A connection that ends before its TLS handshake never reached the
+    // window, as when the hub passes it to an admin not connected just
+    // then: it counts as no attempt, and the next one goes after a pause.
+    let mut tries = 0;
+    let (joined, kept) = loop {
+        tries += 1;
+        let sock = TcpStream::connect_timeout(&link.local(), Duration::from_secs(10))
+            .context("cannot reach the tunnel's local port")?;
+        let kept = sock.try_clone().context("cannot use the tunnel's connection")?;
+        match crate::joining::over_with(dir, sock, "the hub", me, inv.clone(), None, step, &before) {
+            Err(e) if tries < HANDSHAKE_TRIES && e.message().starts_with(crate::joining::NO_HANDSHAKE) => {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            Err(e) if !link.answered() => return Err(e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")),
+            res => break (res?, kept),
         }
-    })?;
+    };
     // The last message must reach the hub before the tunnel stops: the hub
     // ends the connection once it has it.
     let _ = kept.set_read_timeout(Some(Duration::from_secs(5)));

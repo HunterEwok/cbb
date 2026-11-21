@@ -2767,6 +2767,13 @@ made with 0.5 is set up again once. The details follow.
 
 ### Removed
 
+- Sync away from home in a group made before 0.6: `cbb` refuses `away`, `hub`, `invite` from
+  afar and an invitation of such a group, and says to start a group of 0.6 (D-122). In a
+  group of 0.6 a hub that serves with new settings (a new forwarder) starts again with them,
+  a member that turns away on while connected gets the hub's offer within 15 s, `away -off
+  -on` drops the connection through the tunnel, `-tunnel-via` is followed, and `status`
+  shows a hub standing by. Its tests are the 0.6 ones in `member/tests/away_live.rs` and
+  `away_hubs.rs`.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;

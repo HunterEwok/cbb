@@ -139,6 +139,11 @@ pub struct Live {
     hub: Mutex<Option<away::HubRun>>,
     /// The hubs above this one that said they serve, while it is a hub.
     ladder: Mutex<away::Ladder>,
+    /// When this member last sent `tunnel` to each device connected that
+    /// may be a hub.
+    toward: Mutex<HashMap<DeviceId, std::time::Instant>>,
+    /// Whether this hub stands by, a hub above it serving.
+    standing_by: std::sync::atomic::AtomicBool,
     /// The link to the group's blind relay, while the device meets the
     /// group there.
     meeting: Mutex<Option<relay::Meeting>>,
@@ -193,6 +198,8 @@ impl Live {
             away: std::sync::OnceLock::new(),
             hub: Mutex::new(None),
             ladder: Mutex::new(away::Ladder::default()),
+            toward: Mutex::new(HashMap::new()),
+            standing_by: std::sync::atomic::AtomicBool::new(false),
             meeting: Mutex::new(None),
             guests: Default::default(),
             through: Default::default(),

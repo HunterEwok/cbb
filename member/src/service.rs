@@ -14,7 +14,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
 use crate::actions;
-use crate::away::Away;
 use crate::clip::{Engine, Event, Kind, Mode, Via};
 use crate::control::{self, Device, Header, Message, Status};
 use crate::copies;
@@ -65,18 +64,17 @@ pub(crate) const NEXT: &str = "next";
 /// How often a paste typed after its answer checks that it may go on.
 const TYPING_CHECK: Duration = Duration::from_millis(500);
 
-/// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
-/// more for each byte, as on a full member.
-/// The most archives a hub asks cbb update for at a time.
-const MAX_WANTED: usize = 16;
-
-/// How long a request waits for a device in a group to start.
 /// How long a copy's images or files are fetched before they are given
 /// up, and the pause before a fetch that no peer gave is tried again, as
 /// Go's fetchFor and fetchRetry.
 const FETCH_FOR: Duration = Duration::from_secs(30 * 60);
 const FETCH_RETRY: Duration = Duration::from_secs(2);
+/// Why a group made before 0.6 does nothing away from home.
+pub(crate) const AWAY_ON_0_6: &str = "sync away from home runs only in a group of 0.6; this group was made before 0.6, so start a new group (cbb new) to use it";
+/// How long a request waits for a device in a group to start.
 const START_WAIT: Duration = Duration::from_secs(10);
+/// How long a watcher may take to put a paste in; typing takes TYPE_WAIT
+/// more for each byte, as on a full member.
 const INJECT_WAIT: Duration = Duration::from_secs(5);
 /// A paste of images or files: how long its copy has to arrive and be
 /// fetched, and how long a watcher has to write it and press the keys,
@@ -192,7 +190,6 @@ struct Service {
     /// The member of 0.6, on a group kept in its records (on_live.rs); the
     /// old member does not run then.
     live: RwLock<Option<Arc<crate::live::Live>>>,
-    away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
     /// The pace of each user's confirmation prompts (confirm.rs).
     prompts: crate::confirm::Pace,
@@ -271,11 +268,6 @@ struct PairingSlot<'a> {
 
 static STOP: AtomicBool = AtomicBool::new(false);
 
-/// Whether the service is stopping.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
-pub(crate) fn stopping() -> bool {
-    STOP.load(Ordering::SeqCst)
-}
 /// An admin had the service restart: it stops with an error, after which
 /// systemd starts it again.
 static RESTART: AtomicBool = AtomicBool::new(false);
@@ -428,8 +420,6 @@ pub fn run(cfg: Config) -> Result<()> {
         Box::new(uptime::now),
     ));
     let tag = ident.tag();
-    let away =
-        Arc::new(Away::new(cfg.state_dir.clone(), tag.clone(), ident.id.clone(), log.clone()).via(cfg.tunnel_via));
     let presence = presence_of(&cfg.state_dir, &ident, &records, &cfg.name, &cfg.caps);
     // The blobs of the copies are a cache that a service starts empty, as
     // Go's: the group's current copy is fetched again when it is pasted.
@@ -467,18 +457,13 @@ pub fn run(cfg: Config) -> Result<()> {
         let svc = svc.clone();
         node.on_command(Arc::new(move |peer, c| svc.command(peer, c)));
     }
-    {
-        let svc = svc.clone();
-        node.on_relay(Box::new(move |ev| svc.relayed(ev)));
-    }
     node.set_away_limit(u64::try_from(svc.limits.lock().unwrap().away).unwrap_or(0));
     // The group's server credentials (docs/protocol.md, section 18), which
     // the relays check.
     let creds = crate::credentials::Credentials::load(&cfg.state_dir, &node, log.clone());
-    away.set_credentials(creds.clone());
     // A computer that is no admin offers an admin key for the root to
     // certify, and keeps the admin CA the root sends for it.
-    let (may_admin, may_hub) = (node.can(cbb_core::authority::CAP_ADMIN), node.can(cbb_core::authority::CAP_HUB));
+    let may_admin = node.can(cbb_core::authority::CAP_ADMIN);
     if may_admin {
         match crate::admin::admin_key_offer(&cfg.state_dir, &node.identity()) {
             Ok(offer) => node.offer_admin_key(offer),
@@ -489,8 +474,7 @@ pub fn run(cfg: Config) -> Result<()> {
         let attest = crate::evidence::Attestations::new(&cfg.state_dir);
         attest.send_own(&node);
         attest.status_loop(Arc::downgrade(&node));
-        let (dir, n, log, away, creds) =
-            (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), away.clone(), creds.clone());
+        let (dir, n, log, creds) = (cfg.state_dir.clone(), Arc::downgrade(&node), log.clone(), creds.clone());
         node.on_message(Box::new(move |from, m| {
             let Some(node) = n.upgrade() else { return };
             if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
@@ -506,11 +490,6 @@ pub fn run(cfg: Config) -> Result<()> {
             {
                 log(&format!("cbb: the admin CA from {from}: {}", e.for_log()));
             }
-            // What another of the group's hubs shares (docs/protocol.md,
-            // section 11, "Several hubs").
-            if let (Some(v), "hubs", true) = (m.hubs.as_ref(), m.kind.as_str(), may_hub) {
-                away.hubs_shared(&node, from, &node.chain_of(from), v);
-            }
         }));
     }
     {
@@ -518,31 +497,13 @@ pub fn run(cfg: Config) -> Result<()> {
         node.on_pairing(Arc::new(move |sock, session, exporter, addr| svc.pair_conn(sock, session, exporter, addr)));
     }
     node.set_actions(actions::load(&cfg.state_dir)?.on());
-    node.set_tunnel_key(away.key());
-    {
-        let away = away.clone();
-        let n = Arc::downgrade(&node);
-        node.on_tunnel(Box::new(move |from, v, may_host| {
-            if let (Some(hub), Some(node)) = (away.offered(from, v, may_host), n.upgrade()) {
-                away.retry(&node, &hub);
-            }
-        }));
-    }
-    {
-        // On the hub, the invitations other admins make through it.
-        let away = away.clone();
-        node.on_guest(Box::new(move |node, from, chain, g| away.guest_message(node, from, chain, g)));
-    }
     // The member port takes connections, and mDNS publishes this device,
     // only on the networks where it met its group (networks.rs).
     node.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
     {
-        // On a hub, a member's hello brings its tunnel key, which the hub
-        // admits, and gets the hub's offers back.
         // Every peer gets the group's server credentials after its hello.
-        let (away, n, creds, dir, log) =
-            (away.clone(), Arc::downgrade(&node), creds.clone(), cfg.state_dir.clone(), log.clone());
-        node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
+        let (n, creds, dir, log) = (Arc::downgrade(&node), creds.clone(), cfg.state_dir.clone(), log.clone());
+        node.on_hello(Box::new(move |_from, peer, _chain| match n.upgrade() {
             Some(node) => {
                 // The root records what the hello says about the device,
                 // as Go's ensureListed, away from the connection's thread.
@@ -554,9 +515,7 @@ pub fn run(cfg: Config) -> Result<()> {
                         }
                     });
                 }
-                let mut out = away.hello(&node, from, peer, chain);
-                out.extend(creds.message());
-                out
+                creds.message().into_iter().collect()
             }
             None => Vec::new(),
         }));
@@ -572,10 +531,9 @@ pub fn run(cfg: Config) -> Result<()> {
         // The claims to take the group over: one takes effect when its
         // delay ends, without a new record, and this admin's own makes it
         // the root then. A root also renews the admin CAs of the admins
-        // connected that have one from an earlier root, and a hub forgets
-        // the clients the records remove.
-        let (node, dir, name, log, away, creds) =
-            (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), away.clone(), creds.clone());
+        // connected that have one from an earlier root.
+        let (node, dir, name, log, creds) =
+            (node.clone(), cfg.state_dir.clone(), cfg.name.clone(), log.clone(), creds.clone());
         std::thread::spawn(move || {
             let (mut last, mut failed) = (String::new(), String::new());
             // The server credentials are brought up to date when the records
@@ -605,9 +563,6 @@ pub fn run(cfg: Config) -> Result<()> {
                     cred_seen = (node.records().lock().unwrap().digest(), creds.changes());
                     cred_at = std::time::Instant::now();
                 }
-                // A hub drops the clients the records now refuse, and every
-                // member the offers of devices that may no longer be hubs.
-                away.prune(&node);
                 let now = claim_states(&node);
                 if now != last {
                     last = now;
@@ -625,9 +580,8 @@ pub fn run(cfg: Config) -> Result<()> {
             }
         });
     }
-    *svc.away.write().unwrap() = Some(away.clone());
     if let Some(addr) = svc.joined_at.lock().unwrap().take() {
-        keep_joined(node.clone(), away.clone(), addr, log.clone());
+        keep_joined(node.clone(), addr, log.clone());
     }
     let port = cfg.port.and_then(|p| discovery::listen(node.clone(), p, log.clone()));
     *svc.port.lock().unwrap() = port;
@@ -635,10 +589,6 @@ pub fn run(cfg: Config) -> Result<()> {
         log(&format!("cbb: listening on port {p}"));
     }
     discovery::start(node.clone(), tag, cfg.peers.clone(), cfg.mdns, port, log.clone());
-    {
-        let node = node.clone();
-        std::thread::spawn(move || away.run(node));
-    }
 
     while !STOP.load(Ordering::SeqCst) {
         std::thread::sleep(Duration::from_millis(200));
@@ -872,7 +822,6 @@ impl Service {
         Arc::new(Service {
             node: RwLock::new(None),
             live: RwLock::new(None),
-            away: RwLock::new(None),
             watchers: Mutex::new(Vec::new()),
             prompts: crate::confirm::Pace::new(),
             grants: Mutex::new(HashMap::new()),
@@ -913,10 +862,6 @@ impl Service {
         self.started(|| self.node.read().unwrap().clone())
     }
 
-    fn away(&self) -> Result<Arc<Away>> {
-        self.started(|| self.away.read().unwrap().clone())
-    }
-
     /// What get returns once the service has started in its group: a
     /// request that comes while a device in a group is still starting, its
     /// sockets open first, waits for it rather than hearing that the device
@@ -939,51 +884,14 @@ impl Service {
         }
     }
 
-    /// cbb global: shows sync away from home, or turns it on or off. Without
-    /// the helper cbb keeps its keys in files, so turning it on needs the
-    /// user's consent.
+    /// cbb global on a group made before 0.6: sync away from home runs only
+    /// in a group of 0.6, so this shows it off and refuses the rest.
     fn global(&self, h: &Header) -> Result<Message> {
-        let (node, away) = (self.node()?, self.away()?);
-        match h.name.as_str() {
-            "" => {}
-            "on" if !h.consent => {
-                return Err(Error::msg(
-                    "this device keeps its keys in files, so sync away from home needs your consent; run cbb global on and read what it says",
-                ));
-            }
-            "on" => node.set_tunnel_key(Some(away.turn_on()?)),
-            "off" if !h.device.is_empty() => self.admin(|a| a.away_off_on(&h.device))?,
-            "off" => {
-                away.turn_off()?;
-                node.set_tunnel_key(None);
-            }
-            "hub" if !h.device.is_empty() => self.admin(|a| {
-                away.make_hub_on(a, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key), h.forward_only)
-            })?,
-            "hub-off" if !h.device.is_empty() => self.admin(|a| away.stop_hub_on(a, &h.device, h.force))?,
-            "move" if h.device.is_empty() => {
-                return Err(Error::msg("cbb global move names the device to move the hub to"));
-            }
-            "move" => self.admin(|a| away.move_hub(a, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key)))?,
-            "hub" => {
-                crate::admin::may_be_hub(&self.state_dir, &node)?;
-                node.set_tunnel_key(Some(away.make_hub(h)?));
-                away.serve_if_first(&node);
-                // The members connected get the hub's offer without
-                // connecting again (docs/protocol.md, section 4, "Presence").
-                node.announce(true);
-            }
-            "hub-off" => away.stop_hub(&node, h.force)?,
-            "relay" if !h.relays.is_empty() => {
-                return Err(Error::msg(
-                    "a device meets at one relay; several are a setting of a group of 0.6, which its root signs",
-                ));
-            }
-            "relay" => node.set_tunnel_key(Some(away.meet_at(&node, h)?)),
-            n => return Err(Error::msg(format!("unknown cbb global {n:?}"))),
+        self.node()?;
+        if !h.name.is_empty() {
+            return Err(Error::msg(AWAY_ON_0_6));
         }
-        let status = Status { away: away.status(&node), ..Default::default() };
-        Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
+        Ok(control::reply(Header { status: Some(Status::default()), ..Default::default() }, Vec::new()))
     }
 
     /// Mutes this member at the admin `by`'s order until `until` (0 for
@@ -1145,7 +1053,7 @@ impl Service {
             "paste" | "action" if node.forward_only() => {
                 return refused(&body.id, crate::node::FORWARD_ONLY.into());
             }
-            "hub" => return self.hub_command(&node, body),
+            "hub" => return self.hub_command(body),
             "paste" => return self.pasted(&node, c, body),
             "action" => return self.act(&node, c, body),
             "actions-off" => {
@@ -1174,23 +1082,8 @@ impl Service {
                     reason: String::new(),
                     tunnel: None,
                 };
-                match self.away().and_then(|a| a.turn_off()) {
-                    Ok(()) => {
-                        (self.log)(&format!("cbb: {} turned sync away from home off here", body.by));
-                        // The members learn it once the result has gone back
-                        // on the connection that brought the command.
-                        let node = node.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(500));
-                            node.set_tunnel_key(None);
-                        });
-                    }
-                    Err(e) => {
-                        (self.log)(&format!("cbb: turning sync away from home off: {}", e.for_log()));
-                        res.status = "failed".into();
-                        res.reason = e.message().to_string();
-                    }
-                }
+                (self.log)(&format!("cbb: {} asked to turn sync away from home off here: {AWAY_ON_0_6}", body.by));
+                (res.status, res.reason) = ("refused".into(), AWAY_ON_0_6.into());
                 return res;
             }
             "mute" | "unmute" => {
@@ -1252,59 +1145,10 @@ impl Service {
         }
     }
 
-    /// Carries out a hub command that verify_command took, as Go's takeHub
-    /// and hubStopped: this device, which may be a hub by the records,
-    /// becomes one, or with a stop order stops being one once the result
-    /// has gone back.
-    fn hub_command(&self, node: &Arc<Node>, body: crate::records::Command) -> wire::CommandResult {
-        let mut res = wire::CommandResult { id: body.id.clone(), status: "done".into(), ..Default::default() };
-        let order = body.hub.clone().unwrap_or_default();
-        let fail = |mut res: wire::CommandResult, status: &str, why: String| {
-            (self.log)(&format!("cbb: did not do what the hub command from {} asked: {why}", body.by));
-            (res.status, res.reason) = (status.into(), why);
-            res
-        };
-        let away = match self.away() {
-            Ok(a) => a,
-            Err(e) => return fail(res, "refused", e.message().to_string()),
-        };
-        if crate::away::is_stop(&order) {
-            if !away.is_hub() {
-                return fail(res, "refused", "this device is no hub of the group".into());
-            }
-            (self.log)(&format!("cbb: {} asked this hub to stop being one", body.by));
-            let node = node.clone();
-            std::thread::spawn(move || {
-                // Its clients' connections end, after the result went back.
-                std::thread::sleep(std::time::Duration::from_millis(500));
-                if let Err(e) = away.stop_hub(&node, true) {
-                    node.logf(&format!("cbb: stopping being the hub: {}", e.for_log()));
-                }
-            });
-            return res;
-        }
-        // A computer the admin just made a hub that only passes copies on
-        // gets the record that makes it one just before the command.
-        let me = node.identity().id.to_string();
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while !node.records().lock().unwrap().may_host(&me) {
-            if std::time::Instant::now() > until {
-                return fail(
-                    res,
-                    "refused",
-                    "this computer is no admin, and its record does not make it a hub that only passes copies on; only the group's root, an admin, or such a computer can be a hub".into(),
-                );
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        match away.take_hub(node, &body.by, &order) {
-            Ok(o) => res.tunnel = serde_json::to_value(&o).ok(),
-            Err(e) => {
-                let status = if e.message().starts_with("saving") { "failed" } else { "refused" };
-                res = fail(res, status, e.message().to_string());
-            }
-        }
-        res
+    /// A hub command on a group made before 0.6, which has no hubs: refused.
+    fn hub_command(&self, body: crate::records::Command) -> wire::CommandResult {
+        (self.log)(&format!("cbb: did not do what the hub command from {} asked: {AWAY_ON_0_6}", body.by));
+        wire::CommandResult { id: body.id, status: "refused".into(), reason: AWAY_ON_0_6.into(), ..Default::default() }
     }
 
     /// Carries out an action command that verify_command took, as a full
@@ -1987,7 +1831,6 @@ impl Service {
             muted: node.engine.mute_left().is_some(),
             muted_until_ms: node.engine.mute_left().filter(|l| *l > 0).map_or(0, |l| uptime::wall_ms() + l),
             sync_until_ms: node.engine.sync().1,
-            away: self.away()?.status(&node),
             paste: self.paste_status(),
             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
@@ -2200,38 +2043,6 @@ impl Service {
         }
     }
 
-    /// Takes an event this member passes on without writing it, as Go's
-    /// relayed: a hub fetches the blob of the group's current copy within
-    /// its limit away from home, so that the members that reach only it
-    /// can fetch it from its cache.
-    fn relayed(self: &Arc<Self>, ev: &Event) {
-        let Some(size) = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map(|b| b.size) else { return };
-        let (Ok(node), Ok(away)) = (self.node(), self.away()) else { return };
-        if !away.is_hub() || node.engine.current_copy().is_none_or(|(id, _)| id != ev.id) {
-            return;
-        }
-        let limit = self.limits.lock().unwrap().away;
-        if size > limit {
-            (self.log)(&format!(
-                "cbb: not passing a copy of {} on to the members away from home: it is over this hub's limit of {} away from home",
-                copies::size_text(size),
-                copies::size_text(limit)
-            ));
-            return;
-        }
-        let (ev, svc) = (ev.clone(), self.clone());
-        std::thread::spawn(move || {
-            // While it is the group's current copy.
-            let current = || node.engine.current_copy().is_some_and(|(id, _)| id == ev.id);
-            match Self::fetch_retrying(&node, &ev, limit, current) {
-                Ok(()) => {
-                    (svc.log)(&format!("cbb: fetched a copy of {} to pass on away from home", copies::size_text(size)))
-                }
-                Err(e) => (svc.log)(&format!("cbb: fetching a copy to pass on away from home: {}", e.for_log())),
-            }
-        });
-    }
-
     /// Sends each watcher that holds a clipboard the write pick gives it;
     /// reports whether there is such a watcher.
     fn send_writes(&self, pick: impl Fn(&Watcher) -> Option<WriteReq>) -> bool {
@@ -2396,24 +2207,8 @@ impl Service {
             return;
         }
         if m.header.op == "invite" {
-            // On the hub, the invitation's guest tunnel is its own; on
-            // another admin, it goes through a hub (docs/protocol.md,
-            // section 12, "Through the hub").
-            let res = self.admin(|a| a.admitter(false)).and_then(|admitter| {
-                let (away, node) = (self.away()?, self.node()?);
-                let hub = match m.header.device.as_str() {
-                    "" => None,
-                    d => Some(
-                        crate::certs::DeviceId::parse(d)
-                            .map_err(|_| Error::msg(format!("{d:?} is not a device ID")))?,
-                    ),
-                };
-                let group = node.identity().tag();
-                let open = |keys: &crate::inviter::GuestKeys, w: &Arc<crate::window::Window>, life: Duration| {
-                    crate::inviter::open_where(&node, &away, hub.as_ref(), keys, w, life)
-                };
-                crate::inviter::run_invite(admitter, &group, m.header.expires, r, &mut out, &*self.log, &open)
-            });
+            // An invitation from afar comes only in a group of 0.6.
+            let res = self.node().and_then(|_| Err::<(), _>(Error::msg(AWAY_ON_0_6)));
             if let Err(e) = res {
                 (self.log)(&format!("cbb: invite: {}", e.for_log()));
                 let _ = control::write(&mut out, &control::failure(&e));
@@ -2603,28 +2398,6 @@ impl Service {
         }
     }
 
-    /// On a hub, the archives of the release held that the group's members
-    /// update from and this device does not hold whole, at most
-    /// MAX_WANTED, for its cbb update to download (Go's
-    /// wantedReleaseFiles); elsewhere none.
-    fn wanted_release_files(&self) -> Result<Option<Vec<String>>> {
-        let node = self.node()?;
-        if !self.away()?.is_hub() {
-            return Ok(None);
-        }
-        let now = uptime::wall_ms();
-        let names = node.archives();
-        let wanted: Vec<String> = node
-            .releases()
-            .files(now)
-            .into_iter()
-            .filter(|a| names.contains(&a.name) && node.releases().held(&a.sha256, now).is_none())
-            .map(|a| a.name)
-            .take(MAX_WANTED)
-            .collect();
-        Ok(Some(wanted).filter(|w| !w.is_empty()))
-    }
-
     /// The folder for the parts of copies on their way, in the state
     /// folder, which only the service reads.
     fn tmp_dir(&self) -> Result<PathBuf> {
@@ -2724,13 +2497,11 @@ impl Service {
             "status" => Ok(control::reply(Header { status: Some(self.status()?), ..Default::default() }, Vec::new())),
             "devices" => {
                 let node = self.node()?;
-                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
-                Ok(control::reply(Header { devices: devices(&node, &hubs), ..Default::default() }, Vec::new()))
+                Ok(control::reply(Header { devices: devices(&node), ..Default::default() }, Vec::new()))
             }
             // The tiles to draw, and the user's change of their order.
             "view" | "arrange" => {
                 let node = self.node()?;
-                let hubs = self.away().map(|a| a.known_hubs(&node.hub_order())).unwrap_or_default();
                 let op = match (&*h.op, &h.arrange) {
                     ("arrange", Some(v)) => Some(
                         serde_json::from_value::<cbb_core::arrange::Op>(v.clone())
@@ -2739,7 +2510,7 @@ impl Service {
                     ("arrange", None) => return Err(Error::msg("arrange: which change?")),
                     _ => None,
                 };
-                let view = self.tiles.view(&node.identity().tag(), devices(&node, &hubs), op.as_ref())?;
+                let view = self.tiles.view(&node.identity().tag(), devices(&node), op.as_ref())?;
                 let view = crate::view::View { warnings: self.status().map(|s| s.why).unwrap_or_default(), ..view };
                 let view = serde_json::to_value(view).context("cannot encode the view")?;
                 Ok(control::reply(Header { view: Some(view), ..Default::default() }, Vec::new()))
@@ -2788,8 +2559,9 @@ impl Service {
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
             "release_want" => {
-                let data = serde_json::to_vec(&self.wanted_release_files()?).context("cannot encode the files")?;
-                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+                // A group made before 0.6 has no hub, which alone asks.
+                self.node()?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, b"null".to_vec()))
             }
             "release_held" => {
                 let set = self
@@ -2801,12 +2573,9 @@ impl Service {
                 Ok(control::reply(Header { done: true, ..Default::default() }, data))
             }
             "update_way" => {
-                let node = self.node()?;
-                let data = match self.away()?.update_way(&node) {
-                    Some(v) => serde_json::to_vec(&v).context("cannot encode the way")?,
-                    None => Vec::new(),
-                };
-                Ok(control::reply(Header { done: true, ..Default::default() }, data))
+                // No hub, so no way over VLESS to one.
+                self.node()?;
+                Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
             "paste_receive" => self.set_receive(h),
             "keyboard" | "remote" => {
@@ -3051,25 +2820,9 @@ impl Service {
         let joiner = joiner.as_member(crate::admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
         let log = self.log.clone();
         let id = if !h.invite.is_empty() {
-            // A remote invitation, as Go's joinInvite: sync away from home
-            // goes on with it, which a key in a file needs the user's
-            // consent for.
-            if !joiner.key.is_empty() && !h.consent {
-                return Err(Error::msg(
-                    "a device that joins with an invitation syncs away from home, and this one keeps its keys in files, so it needs your consent; run cbb pair -invite and read what it says",
-                ));
-            }
-            let shared: &UnixStream = out;
-            let shown = |fp: &str| {
-                let _ = control::write(
-                    &mut &*shared,
-                    &control::reply(Header { fingerprint: fp.to_string(), ..Default::default() }, Vec::new()),
-                );
-            };
-            // The client may hang up; the join goes on.
-            let mut r = r;
-            std::thread::spawn(move || while r.read().is_ok() {});
-            crate::away::join_invite(&self.state_dir, &joiner, &*save, &h.invite, &shown, log)?
+            // A remote invitation of 0.6 goes to live_join; another is of a
+            // group made before 0.6, which joins only at home.
+            return Err(Error::msg(crate::OLD_INVITATION));
         } else if h.listen {
             let mut r = r;
             let ln = std::net::TcpListener::bind(("::", 0))
@@ -3527,16 +3280,14 @@ fn device_names(node: &Node) -> Vec<String> {
 
 /// Keeps a member connection up to the member that admitted this device at
 /// addr, the address the user gave for the join, as Go's dialJoined: that
-/// member syncs with it at once, and when it is the group's hub it learns
-/// this device's tunnel key as soon as sync away from home is turned on
-/// here. It stops once this device knows a hub of the group, whose tunnel
-/// reaches it from then on, or when the member stops.
-fn keep_joined(node: Arc<Node>, away: Arc<Away>, addr: SocketAddr, log: Arc<dyn Fn(&str) + Send + Sync>) {
+/// member syncs with it at once, while discovery does not find it, until
+/// the member stops.
+fn keep_joined(node: Arc<Node>, addr: SocketAddr, log: Arc<dyn Fn(&str) + Send + Sync>) {
     const MIN: Duration = Duration::from_secs(1);
     const MAX: Duration = Duration::from_secs(30);
     std::thread::spawn(move || {
         let mut backoff = MIN;
-        while !node.is_closed() && away.known_hubs(&node.hub_order()).is_empty() {
+        while !node.is_closed() {
             let start = std::time::Instant::now();
             // While another way connects this device to the group, as
             // discovery, it waits.
@@ -3558,8 +3309,9 @@ fn keep_joined(node: Arc<Node>, away: Arc<Away>, addr: SocketAddr, log: Arc<dyn 
 
 /// The group's devices as cbb devices lists them, as Go's devices: the
 /// records' devices, this device if no record lists it yet, then the
-/// connected members no record lists, with what their hellos say.
-fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
+/// connected members no record lists, with what their hellos say. A
+/// group made before 0.6 has no hub.
+fn devices(node: &Node) -> Vec<Device> {
     let ident = node.identity();
     let me = ident.id.to_string();
     let peers = node.peers();
@@ -3574,7 +3326,6 @@ fn devices(node: &Node, hubs: &[String]) -> Vec<Device> {
     let fill = |mut d: Device| {
         d.this = d.id == me;
         d.root = d.id == root;
-        d.hub = hubs.contains(&d.id);
         let peer = peers.iter().find(|p| p.id.as_str() == d.id);
         if peer.is_some() || d.this {
             d.online = true;

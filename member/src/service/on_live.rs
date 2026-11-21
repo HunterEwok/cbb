@@ -118,7 +118,10 @@ impl Service {
         self.live_hello(&live);
         {
             let me = crate::certs::DeviceId::parse(&id_text(&live.mesh.device()))?;
-            live.with_away(Arc::new(crate::away::Away::new(cfg.state_dir.clone(), live.tag(), me, log.clone())));
+            // -tunnel-via sends the tunnel's packets to a local UDP port that
+            // leads to the hub (cbb next link -udp).
+            let away = crate::away::Away::new(cfg.state_dir.clone(), live.tag(), me, log.clone()).via(cfg.tunnel_via);
+            live.with_away(Arc::new(away));
         }
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         *self.live.write().unwrap() = Some(live.clone());
@@ -506,7 +509,7 @@ impl Service {
                 away.turn_on()?;
                 live.tunnel_to_hubs();
             }
-            "off" => away.turn_off()?,
+            "off" => live.away_off(Duration::ZERO)?,
             // The records must make this device a hub: an admin key, or the
             // root's hubs record (cbb hubs).
             "hub" if !live.mesh.may_be_hub(&live.mesh.device()) => {
@@ -1256,6 +1259,7 @@ fn away_status(live: &Live) -> Option<control::Away> {
     let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
     a.forwarder = away.live_forwarder(entries_held);
     a.relay = live.relay_status();
+    a.standby = a.hub && live.is_standing_by();
     Some(a)
 }
 

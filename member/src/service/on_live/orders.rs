@@ -129,9 +129,7 @@ impl Service {
                 outcome(&res.status, &res.reason)
             }
             Order::AwayOff => {
-                if let Some(a) = live.away() {
-                    a.turn_off()?;
-                }
+                live.away_off(Duration::from_millis(500))?;
                 (self.log)(&format!("cbb: {who} turned sync away from home off here"));
                 Ok(())
             }

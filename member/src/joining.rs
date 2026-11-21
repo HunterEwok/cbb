@@ -99,6 +99,9 @@ pub fn over(
     over_with(dir, sock, who, me, invitation, fp, STEP_TIMEOUT, &|_| Ok(()))
 }
 
+/// Why a join's connection ended before the member's TLS handshake.
+pub const NO_HANDSHAKE: &str = "the handshake with the member failed";
+
 /// over, waiting up to `step` for each of the member's answers (a remote
 /// invitation's admin confirms the device first), with `before` called
 /// with the checked Welcome before the set is kept.
@@ -133,7 +136,7 @@ pub fn over_with(
     )?);
     sock.set_read_timeout(Some(step)).map_err(|e| Error::with("cannot set the timeout", e))?;
     let mut s = tls::Session::client(Arc::new(cfg), bykey::unsent_name())?;
-    tls::handshake(&mut s, &sock, "the handshake with the member failed")?;
+    tls::handshake(&mut s, &sock, NO_HANDSHAKE)?;
     let member = bykey::peer_key(s.peer_certificates()).ok_or_else(|| Error::msg("the member showed no key"))?;
     if fp.is_some_and(|fp| cbb_core::records::Key::es256(member.to_vec()).hash() != fp) {
         return Err(Error::msg(format!(

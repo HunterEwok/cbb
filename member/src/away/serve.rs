@@ -154,9 +154,7 @@ impl Away {
                 cur.as_ref().filter(|s| s.is_hub).ok_or_else(|| Error::msg("this device is no hub of the group"))?;
             let next = st.hubs_to_try(&order).into_iter().find(|h| h.device != self.me.as_str());
             if next.is_none() && !anyway {
-                return Err(Error::msg(
-                    "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes",
-                ));
+                return Err(Error::msg(super::NO_OTHER_HUB));
             }
             let psks: Vec<(String, Vec<u8>)> = st
                 .members

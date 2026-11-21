@@ -52,6 +52,11 @@ impl Live {
         std::thread::spawn(move || super::relay::meet(&w));
     }
 
+    /// Whether this hub stands by while a hub above it serves.
+    pub fn is_standing_by(&self) -> bool {
+        self.standing_by.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Sync away from home, once with_away gave it.
     pub fn away(&self) -> Option<&Arc<Away>> {
         self.away.get()
@@ -62,6 +67,43 @@ impl Live {
     pub fn tunnel_to_hubs(&self) {
         for peer in self.mesh.connected() {
             self.tunnel_toward(&peer);
+        }
+    }
+
+    /// Turns sync away from home off: its keys go, and the connection
+    /// through the tunnel ends after `after`, so that the result of a
+    /// command that came on it goes back first.
+    pub fn away_off(&self, after: Duration) -> crate::error::Result<()> {
+        let Some(away) = self.away.get() else { return Ok(()) };
+        let through = away.live_status().filter(|s| s.through).and_then(|s| hub_id(&s.hub_device));
+        away.turn_off()?;
+        if let Some(hub) = through {
+            let mesh = Arc::downgrade(&self.mesh);
+            std::thread::spawn(move || {
+                std::thread::sleep(after);
+                if let Some(m) = mesh.upgrade() {
+                    m.disconnect(&hub);
+                }
+            });
+        }
+        Ok(())
+    }
+
+    /// Sends `tunnel` again to the devices connected that may be hubs and
+    /// whose offers are not held, RETUNNEL after it last went to each.
+    fn tunnel_again(&self, away: &Away) {
+        if !away.is_on() {
+            return;
+        }
+        let connected = self.mesh.connected();
+        self.toward.lock().unwrap().retain(|d, _| connected.contains(d));
+        let held: Vec<String> = away.hubs_kept().into_iter().map(|h| h.device).collect();
+        for peer in connected {
+            let due = self.toward.lock().unwrap().get(&peer).is_none_or(|t| t.elapsed() >= RETUNNEL);
+            if due && !held.contains(&cbb_core::certs::hex(&peer.0)) {
+                self.toward.lock().unwrap().insert(peer, Instant::now());
+                self.tunnel_toward(&peer);
+            }
         }
     }
 
@@ -79,7 +121,9 @@ impl Live {
         };
         match away.tunnel_to(peer, psk) {
             Ok(Some(f)) => {
-                self.mesh.send(peer, f);
+                if self.mesh.send(peer, f) {
+                    self.toward.lock().unwrap().insert(*peer, Instant::now());
+                }
             }
             Ok(None) => {}
             Err(e) => self.logf(&format!("cbb: the tunnel's key toward hub {}: {}", id_text4(peer), e.for_log())),
@@ -155,7 +199,7 @@ impl Live {
             ladder.above = false;
             ladder.lost = Some(Instant::now());
         }
-        above || ladder.lost.is_some_and(|t| t.elapsed() < AGAIN_AFTER)
+        above || ladder.lost.is_some_and(|t| t.elapsed() < again_after())
     }
 
     /// This hub of 0.6 stops being one: each client connected gets an offer
@@ -230,6 +274,10 @@ const MAX_WAIT: Duration = Duration::from_secs(30);
 const KEY_WAIT: Duration = Duration::from_secs(5);
 /// A connection through the tunnel that lasted this long resets the wait.
 const STEADY: Duration = Duration::from_secs(30);
+/// How often `tunnel` goes again to a device connected that may be a hub
+/// and whose offer this member does not hold: it may have become a hub, or
+/// one by the records, since the connection began.
+const RETUNNEL: Duration = Duration::from_secs(15);
 
 /// Dials, through the tunnel, the first hub whose offer is kept that
 /// answers, whenever no hub is connected or at home, until the member
@@ -246,6 +294,7 @@ fn reach_hubs(w: &Weak<Live>) {
             return;
         }
         let Some(away) = l.away.get().cloned() else { return };
+        l.tunnel_again(&away);
         // The hubs kept, in the order in which they serve; one outside the
         // order is not tried.
         let order = l.mesh.hub_order();
@@ -375,8 +424,16 @@ fn serve_hub(w: &Weak<Live>) {
         // A hub stands by while a hub above it serves: its clients go to
         // that one.
         let standby = settings.is_some() && l.stands_by();
+        l.standing_by.store(standby, std::sync::atomic::Ordering::SeqCst);
         let is_hub = settings.is_some();
         let settings = settings.filter(|_| !standby);
+        // Set again with another port, obfuscation or forwarder: it starts
+        // again with them.
+        let changed = settings.is_some() && l.hub.lock().unwrap().as_ref().is_some_and(|r| r.started != started(&away));
+        if changed {
+            l.hub.lock().unwrap().take();
+            l.logf("cbb: the hub starts again with its new settings");
+        }
         let running = l.hub.lock().unwrap().as_ref().map(|r| (r.hub.clone(), r.report.clone()));
         match (settings, running) {
             (None, Some(_)) => {
@@ -420,11 +477,29 @@ fn serve_hub(w: &Weak<Live>) {
     }
 }
 
-/// How long a hub that lost the hub above it waits before it serves again.
+/// What a hub started with that it starts again for when it changes: its
+/// port and obfuscation settings, and its forwarder and the pins it takes
+/// there. Its key changes with the period without that.
+type Started = (Option<(Option<serde_json::Value>, u16)>, Option<String>, Option<Vec<[u8; 32]>>);
+
+fn started(away: &Away) -> Started {
+    (
+        away.hub_settings().map(|(_, o, port)| (o, port)),
+        away.live_forwarder(false).map(|f| f.endpoint),
+        away.hub_forwarder_pins(),
+    )
+}
+
+/// How long a hub that lost the hub above it waits before it serves again:
+/// a minute, or CBB_TEST_STANDBY_GRACE seconds in a build for tests.
 #[cfg(not(test))]
-const AGAIN_AFTER: Duration = Duration::from_secs(60);
+fn again_after() -> Duration {
+    crate::away::standby_grace()
+}
 #[cfg(test)]
-const AGAIN_AFTER: Duration = Duration::from_secs(2);
+fn again_after() -> Duration {
+    Duration::from_secs(2)
+}
 
 /// The hubs that said they serve (`hubs`, t 16), and whether one above
 /// this hub did when last looked at, and since when it is gone.
@@ -436,9 +511,10 @@ pub(super) struct Ladder {
 }
 
 /// The hub of 0.6 while it serves: its registration with its forwarder,
-/// dropped first, and its tunnel.
+/// dropped first, and its tunnel, and what it started with.
 pub(super) struct HubRun {
     _registration: Option<crate::forward::Registration>,
+    started: Started,
     report: Option<Arc<std::sync::Mutex<crate::forward::Report>>>,
     hub: Arc<crate::hub::Hub>,
 }
@@ -510,6 +586,6 @@ impl Live {
             Some((r, report)) => (Some(r), Some(report)),
             None => (None, None),
         };
-        Ok(HubRun { _registration: registration, report, hub })
+        Ok(HubRun { _registration: registration, started: started(away), report, hub })
     }
 }

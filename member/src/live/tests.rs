@@ -401,3 +401,82 @@ fn a_hub_of_0_6_shows_its_forwarder() {
     assert!(away.live_forwarder(false).is_none());
     b.close();
 }
+
+/// A hub of 0.6 with a forwarder registers there under the hubs'
+/// credential of the forwarder's face, which the root lists it on: its
+/// status shows it registered and where the forwarder saw it, it keeps the
+/// VLESS settings the forwarder gave, and setting it again keeping its
+/// settings keeps the same VLESS user ID. A forwarder that refuses shows
+/// why in short.
+#[test]
+fn a_hub_of_0_6_registers_with_its_forwarder() {
+    use crate::nettest::forwarder::{Answer, Forwarder, welcome};
+    use base64::Engine;
+    let (da, db) = two_dirs_b_hub("away-registers");
+    let mut oa = own(&da);
+    oa.root = Some(Arc::new(root()));
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Live::open(&da, oa, log.clone()).unwrap();
+    let b = open(&db);
+    let f = Forwarder::start(welcome(), Some("203.0.113.9:51820"));
+    let no = Forwarder::start(Arc::new(|_: &crate::forward::v3::Register| Answer::Refused("full".into())), None);
+    // The forwarders as the project's keys.json would name them: the
+    // group shows each a face.
+    for l in [&a, &b] {
+        for fw in [&f, &no] {
+            l.mesh.add_test_server(crate::faces::Server { pin: fw.pin, address: fw.addr.to_string() });
+        }
+    }
+    // At home: the root lists b's server key on the forwarder's face.
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    let dialer = a.clone();
+    std::thread::spawn(move || dialer.mesh.dial(SocketAddr::from(([127, 0, 0, 1], member_port)), None));
+    until("b holds the hubs' credential of the forwarder's face", || b.mesh.hub_credential(&f.pin).is_some());
+    let me = crate::certs::DeviceId::parse(&id_text(&b.mesh.device())).unwrap();
+    let away = Arc::new(crate::away::Away::new(db.clone(), b.tag(), me, Arc::new(|_| {})));
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let h = crate::control::Header {
+        port: i64::from(port),
+        forwarder: f.addr.to_string(),
+        forwarder_key: base64::engine::general_purpose::STANDARD.encode(f.pin),
+        consent: true,
+        ..Default::default()
+    };
+    away.make_hub(&h).unwrap();
+    b.with_away(away.clone());
+    let end = Instant::now() + Duration::from_secs(20);
+    while !away.live_forwarder(false).is_some_and(|fw| fw.registered && fw.seen == "203.0.113.9:51820") {
+        assert!(Instant::now() < end, "never registered: {:?}", away.live_forwarder(false));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let claim = f.claims()[0].register.clone();
+    assert!(claim.vless.is_some() && claim.obfuscation.is_some(), "VLESS comes with AmneziaWG");
+    let user = claim.vless.unwrap();
+    let id_of = |s: &str| cbb_core::vless::parse_id(s).unwrap();
+    let vless_id =
+        || crate::tunnel::State::load(&db).unwrap().unwrap().forwarder.map(|fw| fw.vless_id).unwrap_or_default();
+    until("the hub keeps the forwarder's VLESS settings", || {
+        crate::tunnel::State::load(&db).unwrap().unwrap().forwarder.is_some_and(|fw| fw.vless.is_some())
+    });
+    assert_eq!(id_of(&vless_id()), user);
+    // Set again keeping its settings: the same VLESS user ID.
+    away.make_hub(&crate::control::Header { keep: true, consent: true, ..Default::default() }).unwrap();
+    assert_eq!(id_of(&vless_id()), user);
+    // A forwarder that refuses.
+    let h = crate::control::Header {
+        forwarder: no.addr.to_string(),
+        forwarder_key: base64::engine::general_purpose::STANDARD.encode(no.pin),
+        vless_off: true,
+        ..h
+    };
+    away.make_hub(&h).unwrap();
+    let end = Instant::now() + Duration::from_secs(20);
+    while !away.live_forwarder(false).is_some_and(|fw| fw.error.contains("refused the registration: full")) {
+        assert!(Instant::now() < end, "no refusal shown: {:?}", away.live_forwarder(false));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    a.close();
+    b.close();
+}

@@ -475,6 +475,9 @@ fn member_port() -> u16 {
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
 /// cbb pair's usage in no group.
+/// Why an invitation of a group made before 0.6 joins nothing.
+pub(crate) const OLD_INVITATION: &str = "this invitation comes from a group made before 0.6, which a device joins only at home with cbb pair; ask for an invitation of a group of 0.6";
+
 const PAIR_USE: &str =
     "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
 
@@ -596,28 +599,15 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         wait_for_hub(g);
         return Ok(());
     }
+    if invite.is_some() {
+        // An invitation of a group made before 0.6, which joins only at home.
+        return Err(Error::msg(OLD_INVITATION));
+    }
     let (joiner, save) = joiner(&g.state, &name)?;
     let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
     let save = &*save;
-    let invited = invite.is_some();
-    let id = match invite {
-        Some((path, text)) => {
-            let shown = |fp: &str| {
-                println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
-                println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
-                println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
-                std::io::stdout().flush().ok();
-            };
-            let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
-            let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
-            // It is used up, and was a secret; nothing needs it any more.
-            if !path.is_empty() {
-                let _ = std::fs::remove_file(&path);
-            }
-            id
-        }
-        None if code_addr.is_some() => {
-            let a = code_addr.unwrap_or_default();
+    let id = match code_addr {
+        Some(a) => {
             print!("{}", tr!("Pairing code: "));
             std::io::stdout().flush().ok();
             let mut line = String::new();
@@ -692,9 +682,6 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         print!("CBB# joined the group {} as {}\r", id.tag(), id.id);
     } else {
         println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
-    }
-    if invited {
-        wait_for_hub(g);
     }
     Ok(())
 }

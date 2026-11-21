@@ -27,15 +27,17 @@ mod held;
 mod hubs;
 mod invite;
 pub(crate) mod meet;
-mod movehub;
 mod offer;
 mod serve;
 mod toward;
 
 pub use held::{forwarder_named, offer_result};
-pub use invite::{GuestTunnel, join_invite, keep_guest};
-pub(crate) use movehub::NO_OTHER_HUB;
-pub use movehub::is_stop;
+#[cfg_attr(test, allow(unused_imports))]
+pub(crate) use hubs::standby_grace;
+pub use invite::{GuestTunnel, keep_guest};
+
+/// Why the only hub of a group does not stop without the user's word.
+pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
 
 /// The project's relay and forwarder by name, and the pins built in for
 /// them (the newest keys.json held lists others), for the faces the group
