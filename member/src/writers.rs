@@ -237,6 +237,44 @@ pub fn make_admin(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
+/// On the group's root, records where a member's keys live as its hello
+/// says (docs/protocol.md, section 17): a record that says `file` while the
+/// hello says hardware gets `hardware`, and a hello that says rootless
+/// gets `rootless`, without an admin key, powers or commands (D-79).
+/// Anything else, a phone's record, a record that already says it, or a
+/// signer that is not the root, signs nothing and gives None.
+pub fn store_from_hello(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    device: &DeviceId,
+    hello_store: u64,
+    now_ms: u64,
+) -> Result<Option<DeviceState>> {
+    use cbb_core::records::body::{STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Ok(None);
+    }
+    let Some(d) = st.devices.iter().find(|d| d.id == *device).cloned() else { return Ok(None) };
+    if d.role != ROLE_MEMBER || st.root_device == Some(d.id) {
+        return Ok(None);
+    }
+    let rootless = hello_store == STORE_ROOTLESS && d.store != STORE_ROOTLESS;
+    let hardware = hello_store == STORE_HARDWARE && d.store == STORE_FILE;
+    if !rootless && !hardware {
+        return Ok(None);
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    rec.store = hello_store;
+    if rootless {
+        (rec.admin, rec.powers, rec.commands, rec.proof) = (None, 0, 0, 0);
+    }
+    rec.seen = Vec::new();
+    set.write_record(&st, signer, Kind::device(rec), now_ms)
+        .map_err(|e| Error::msg(format!("cannot record where {}'s keys live: {e}", d.name)))?;
+    Ok(Some(d))
+}
+
 /// Makes this device (me) the group's root with the group's recovery key
 /// (rule 33): the change of root, signed by both halves of the recovery
 /// key, naming new_root, with this device's record again as the root's

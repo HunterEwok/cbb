@@ -176,14 +176,20 @@ impl Live {
                 self.ladder.lock().unwrap().serving.insert(*peer);
             }
             Ok(cbb_core::hubkey::HubSays::Stopped) => {
-                self.ladder.lock().unwrap().serving.remove(peer);
+                // A hub that says it stopped leaves no grace behind it, as
+                // a hub that moves away (D-122): the next one serves at once.
+                let mut ladder = self.ladder.lock().unwrap();
+                if ladder.serving.remove(peer) {
+                    (ladder.above, ladder.lost) = (false, None);
+                }
             }
             Err(e) => self.logf(&format!("cbb: ignored message hubs from {}: {e}", id_text4(peer))),
         }
     }
 
     /// Whether this hub stands by: a hub above it in the order is
-    /// connected and said it serves, or did less than a minute ago.
+    /// connected and said it serves, or was until less than a minute ago
+    /// and did not say it stopped.
     pub(super) fn stands_by(&self) -> bool {
         let order = self.mesh.hub_order();
         let me = self.mesh.device();
@@ -529,7 +535,12 @@ fn serve_hub(w: &Weak<Live>) {
                 Ok(r) => {
                     l.note_own_forwarder(&away);
                     *l.hub.lock().unwrap() = Some(r);
-                    l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                    // A hub that moves away, ordered before it served,
+                    // serves its clients but tells the other hubs nothing:
+                    // it said it stopped, so that the new one serves.
+                    if l.handoff.lock().unwrap().is_none() {
+                        l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                    }
                 }
                 Err(e) => away.failed(Some(&e)),
             },

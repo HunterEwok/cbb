@@ -3095,9 +3095,10 @@ of 0.6 no hub passes on another's offer or clients, and no wire is added for a m
    those addresses, listening on the port of the first address unless it was a hub already,
    and answers `done`.
 2. The old hub sends the other hubs `hubs` with `stopped`, so that the new hub serves even
-   below it in the order (after the grace a hub keeps when the hub above it goes), and
-   keeps serving the clients that came through its tunnel; while it hands over it does not
-   stand by for a hub above it.
+   below it in the order, at once (the grace a hub keeps when the hub above it goes is for a
+   hub that went without saying so), and keeps serving the clients that came through its
+   tunnel; while it hands over it does not stand by for a hub above it, and a tunnel it
+   starts meanwhile (moved before it served) sends no `serving`.
 3. A client away meets the new hub at home or at the group's relay, sends it `tunnel` there
    (t 15) as on any connection (the start of this section) and takes its offer from the
    answer.
@@ -3128,7 +3129,8 @@ record names it or the user makes it one there.
   nor clients.
 - A hub stands by, with no tunnel, while a hub above it in the order is connected and said
   it serves, and serves again a minute after it lost the last such hub
-  (`member/src/live/away.rs`); a hub that moves does not stand by ("Moving the hub" above).
+  (`member/src/live/away.rs`), or at once when that hub said `stopped`; a hub that moves
+  does not stand by ("Moving the hub" above).
 - An admin, or the root, makes a device the records allow a hub with a `hub` command (section
   15): field 10 names the hub by its address away from home and the hash of its member key,
   and a receiver whose key it does not name refuses; field 11 lists the forwarders with the
@@ -4691,7 +4693,11 @@ When it holds the 32 bytes, the root records the device's keys as `proven`, kind
 `proof` the hex SHA-256 of the EK certificate. Anything that fails is logged and changes
 nothing: the record keeps the `hardware` of the device's hello. A computer whose record says
 `file` while its hello says `hardware` (its keys were in the TPM before the root saw its
-hello, as one admitted by pairing) gets a record that says `hardware`. Nothing goes to the
+hello, as one admitted by pairing) gets a record that says `hardware`; on the records of
+0.6 the root signs it when the member's hello comes (`writers::store_from_hello`), and a
+member whose hello says `rootless` gets `store` `rootless` without an admin key, powers or
+commands. A member of 0.6 sends no TPM evidence yet: the `evidence` message (t 19) carries
+the formats, and the encoding of its `data` for them is still to be fixed. Nothing goes to the
 TPM's maker: a TPM whose EK certificate is not in its NV, as Intel's and AMD's firmware TPMs
 often, stays `hardware` (the strict key level will fetch theirs). The phones do not check
 TPM evidence yet; a phone as the group's root ignores it.

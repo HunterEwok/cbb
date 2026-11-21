@@ -2854,6 +2854,14 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a member's hello says where its keys live again, and the group's root
+  records it: a member whose record says `file` while its key is in a TPM or the Secure
+  Enclave gets `hardware`, and a rootless install gets `rootless` without an admin key, so a
+  member with its key in the hardware becomes an admin without the warning about keys in
+  files.
+- A hub moved before its own tunnel served no longer says it serves once that tunnel starts,
+  and a hub that says it stopped leaves no minute of grace behind: the new hub of `cbb global
+  move` serves at once instead of standing by.
 - `cbb recovery` refuses a second claim on the device that just became the root, in the
   moment before it restarts with its new root key, instead of making another root.
 - The Rust member's takeover and recovery tests run on the records of 0.6: an admin is made

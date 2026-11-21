@@ -134,6 +134,7 @@ pub struct Mesh {
     on_set: RwLock<Option<OnSet>>,
     on_other: RwLock<Option<OnOther>>,
     on_connected: RwLock<Option<OnConnected>>,
+    on_peer_hello: RwLock<Option<OnConnected>>,
     on_pair: RwLock<Option<OnPair>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
     /// The signed release and entry points this member holds and passes on.
@@ -314,6 +315,7 @@ impl Mesh {
                 on_set: RwLock::new(None),
                 on_other: RwLock::new(None),
                 on_connected: RwLock::new(None),
+                on_peer_hello: RwLock::new(None),
                 on_pair: RwLock::new(None),
                 waiting: Mutex::new(HashMap::new()),
                 releases: RwLock::new(None),
@@ -390,6 +392,12 @@ impl Mesh {
 
     pub fn on_connected(&self, f: OnConnected) {
         *self.on_connected.write().unwrap() = Some(f);
+    }
+
+    /// Called with the peer each time a hello from it arrives, once
+    /// `hellos` holds it.
+    pub fn on_peer_hello(&self, f: OnConnected) {
+        *self.on_peer_hello.write().unwrap() = Some(f);
     }
 
     /// Where a pairing on the member port goes while a window is open;
@@ -674,6 +682,9 @@ impl Mesh {
     /// when the peer's are older.
     fn on_hello(&self, conn: &Conn, h: &Hello) {
         self.hellos.lock().unwrap().insert(conn.peer, h.clone());
+        if let Some(f) = &*self.on_peer_hello.read().unwrap() {
+            f(&conn.peer);
+        }
         let now = crate::uptime::wall_ms();
         if let Some(r) = &*self.releases.read().unwrap()
             && crate::releases::newer(r.order(now), (h.release_keys_seq, h.release_seq))

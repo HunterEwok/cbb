@@ -154,3 +154,32 @@ fn the_root_makes_a_hub_that_only_passes_copies_on() {
     assert!(set_forward_only(&mut set, &*root, "pi", T + 6).unwrap().is_empty());
     assert!(!is_forward_only(find(&st, "laptop").unwrap().rights));
 }
+
+/// The root records where a member's keys live as its hello says: `file`
+/// moves to `hardware`, and `rootless` takes the admin key away; nothing
+/// else signs, nor does an admin.
+#[test]
+fn the_root_records_the_store_a_hello_says() {
+    use body::{STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
+    let (o, mut set) = group("store");
+    let root = o.root.clone().unwrap();
+    let dir = temp("store-admin");
+    let admin = own(&dir).make(&dir, Which::Admin).unwrap();
+    make_admin(&mut set, &*root, "laptop", &admin.public(), T + 2).unwrap();
+    let st = set.state();
+    let (laptop, old, desk) =
+        (find(&st, "laptop").unwrap().id, find(&st, "old laptop").unwrap().id, find(&st, "desk").unwrap().id);
+
+    assert!(store_from_hello(&mut set, &*admin, &old, STORE_HARDWARE, T + 3).unwrap().is_none(), "an admin");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_FILE, T + 3).unwrap().is_none(), "the same");
+    assert!(store_from_hello(&mut set, &*root, &desk, STORE_ROOTLESS, T + 3).unwrap().is_none(), "the root's own");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_HARDWARE, T + 4).unwrap().is_some());
+    assert_eq!(set.state().device(&old).unwrap().store, STORE_HARDWARE);
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_HARDWARE, T + 5).unwrap().is_none(), "said already");
+    assert!(store_from_hello(&mut set, &*root, &old, STORE_FILE, T + 5).unwrap().is_none(), "never back to a file");
+
+    assert!(store_from_hello(&mut set, &*root, &laptop, STORE_ROOTLESS, T + 6).unwrap().is_some());
+    let d = set.state().device(&laptop).unwrap().clone();
+    assert_eq!((d.store, d.admin, d.powers, d.commands), (STORE_ROOTLESS, None, 0, 0));
+    assert_eq!(d.name, "laptop", "the rest stays");
+}

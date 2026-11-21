@@ -141,6 +141,36 @@ impl Service {
         peers.extend(self.joined_at.lock().unwrap().take());
         discovery::start(live.clone(), tag, peers, cfg.mdns, port, log.clone());
         {
+            // On the group's root: where a member's keys live, as its hello
+            // says (docs/protocol.md, section 17).
+            let (w, log) = (Arc::downgrade(&live), log.clone());
+            live.mesh.on_peer_hello(Box::new(move |peer| {
+                let Some(l) = w.upgrade() else { return };
+                let Some(store) = l.mesh.hellos().get(peer).map(|h| h.key_store) else { return };
+                let st = l.mesh.state();
+                let root = l
+                    .mesh
+                    .own()
+                    .root
+                    .as_ref()
+                    .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
+                if !root {
+                    return;
+                }
+                let now = uptime::wall_ms().max(0) as u64;
+                match l.mesh.write(|set, k| writers::store_from_hello(set, k, peer, store, now)) {
+                    Ok(Some(d)) => log(&format!(
+                        "cbb: {} ({}) keeps its keys {}, as its hello says",
+                        d.name,
+                        id_text(&d.id),
+                        crate::roster::store_name(store)
+                    )),
+                    Ok(None) => {}
+                    Err(e) => log(&format!("cbb: {}", e.for_log())),
+                }
+            }));
+        }
+        {
             let (l, log) = (live.clone(), log.clone());
             std::thread::spawn(move || {
                 while !l.is_closed() && !STOP.load(Ordering::SeqCst) {
@@ -155,7 +185,7 @@ impl Service {
     }
 
     /// What this device says of itself in its hellos: its name, system,
-    /// version, mode and mute.
+    /// version, mode, mute and where its keys live.
     pub(super) fn live_hello(&self, live: &Live) {
         let muted = live.board.mute_left();
         live.mesh.set_hello(crate::hello::Hello {
@@ -167,6 +197,7 @@ impl Service {
             device: crate::hello::Device { version: VERSION.into(), ..Default::default() },
             features: crate::hello::FEATURE_MEDIA,
             actions: actions::load(&self.state_dir).map(|s| s.on()).unwrap_or_default(),
+            key_store: own_store(live.mesh.own()),
             ..Default::default()
         });
     }
@@ -1368,4 +1399,19 @@ pub(super) fn needs_no_group(op: &str) -> bool {
 /// Whether target names this device.
 fn self_named(live: &Live, target: &str) -> bool {
     writers::find(&live.mesh.state(), target).is_ok_and(|d| d.id == live.mesh.device())
+}
+
+/// Where this device's keys live, for its hello (docs/protocol.md, section
+/// 17): `rootless` for an install without root, `file` while it holds the
+/// group's root key (the CA key is a file) or its member key is in one,
+/// else `hardware`.
+fn own_store(own: &Own) -> u64 {
+    use cbb_core::records::body::{STORE_FILE, STORE_HARDWARE, STORE_ROOTLESS};
+    if crate::rootless::is() {
+        STORE_ROOTLESS
+    } else if own.root.is_none() && own.member.held().is_some() {
+        STORE_HARDWARE
+    } else {
+        STORE_FILE
+    }
 }
