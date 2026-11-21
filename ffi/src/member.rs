@@ -282,9 +282,6 @@ struct CommandArgs {
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
-    /// With recover_with_sheet: the recovery sheet's QR code.
-    #[serde(default)]
-    sheet: String,
     #[serde(default)]
     device: String,
     /// With make_admin: the user consented to a computer that keeps its
@@ -1170,25 +1167,9 @@ impl Old {
                     self.node.sign_period(Arc::new(AppKey { public: a.public.clone(), sign, ctx }))?;
                     return Ok(json!({ "period_due": self.node.period_due() }));
                 }
-                // A new phone that restored the group (cbb_restore) claims
-                // it with the recovery key from the sheet, which signs the
-                // claim here and is not kept.
                 // What the watch may do to device from the wrist, for the
                 // watch's list (cbb_core::manage::watch_actions).
                 "watch_actions" => return Ok(json!({ "actions": self.node.watch_actions(&a.device) })),
-                "recover_with_sheet" => {
-                    let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
-                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_member::restore::NEEDS_QR))?;
-                    let ca = Cert::parse(der)?;
-                    let pkcs8 = sheet.pkcs8().ok_or_else(|| Error::msg("the recovery key cannot be encoded"))?;
-                    let key = cbb_core::identity::FileKey::new(&pkcs8)?;
-                    if sheet.admin() != Some(ca.key_hash()) {
-                        return Err(Error::msg("the sheet's admin CA is for another key"));
-                    }
-                    let s = Signer { ca: &ca, key: &key, me: &me };
-                    self.node.claim(&s, How::Recovery, new_root()?)?;
-                    return Ok(json!({}));
-                }
                 _ => {}
             }
             let ca = match &a.admin_ca {

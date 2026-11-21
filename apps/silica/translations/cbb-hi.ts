@@ -525,10 +525,6 @@
         <translation>डिवाइस जोड़ने के लिए फ़ोन को घर के Wi-Fi से जोड़ें।</translation>
     </message>
     <message>
-        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
-        <translation>इस नेटवर्क पर समूह का कोई डिवाइस नहीं मिला। समूह का कोई फ़ोन या कंप्यूटर चालू करें और फिर से कोशिश करें।</translation>
-    </message>
-    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</translation>
     </message>
@@ -541,10 +537,6 @@
         <translation>समूह के डिवाइस केवल उसका एडमिन बदलता है।</translation>
     </message>
     <message>
-        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
-        <translation>रिकवरी शीट का QR कोड स्कैन करें: नए फ़ोन पर टाइप की गई कुंजी काफ़ी नहीं है।</translation>
-    </message>
-    <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया; फ़ोन समूह में सदस्य के रूप में रहता है।</translation>
     </message>
@@ -555,10 +547,6 @@
     <message>
         <source>The admin PIN is needed first.</source>
         <translation>पहले एडमिन PIN चाहिए।</translation>
-    </message>
-    <message>
-        <source>The claim to restore the group became void.</source>
-        <translation>समूह बहाल करने का अनुरोध अमान्य हो गया।</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -575,10 +563,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।</translation>
-    </message>
-    <message>
-        <source>The group's root cancelled the claim to restore the group.</source>
-        <translation>समूह के रूट ने समूह बहाल करने का अनुरोध रद्द कर दिया।</translation>
     </message>
     <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
@@ -611,10 +595,6 @@
     <message>
         <source>The phone could not read its key.</source>
         <translation>फ़ोन अपनी कुंजी नहीं पढ़ सका।</translation>
-    </message>
-    <message>
-        <source>The phone could not restore the group.</source>
-        <translation>फ़ोन समूह बहाल नहीं कर सका।</translation>
     </message>
     <message>
         <source>The phone could not save its key.</source>
@@ -671,18 +651,6 @@
     <message>
         <source>This is not a CBB invitation.</source>
         <translation>यह CBB निमंत्रण नहीं है।</translation>
-    </message>
-    <message>
-        <source>This is not a CBB recovery sheet.</source>
-        <translation>यह CBB रिकवरी शीट नहीं है।</translation>
-    </message>
-    <message>
-        <source>This is not the QR code of a CBB recovery sheet.</source>
-        <translation>यह CBB रिकवरी शीट का QR कोड नहीं है।</translation>
-    </message>
-    <message>
-        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
-        <translation>यह अब समूह की रिकवरी कुंजी नहीं है: रूट ने इसे हटा दिया या नई बना ली।</translation>
     </message>
     <message>
         <source>This phone has no secure element for keys.</source>
@@ -1165,10 +1133,6 @@
         <translation>जब तक मैं चालू न करूँ, बंद</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>रिकवरी शीट से बहाल करें</translation>
-    </message>
-    <message>
         <source>Send an invitation</source>
         <translation>निमंत्रण भेजें</translation>
     </message>
@@ -1481,44 +1445,12 @@
 <context>
     <name>RestorePage</name>
     <message>
-        <source>Claiming the group…</source>
-        <translation>समूह के लिए अनुरोध भेजा जा रहा है…</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>इस नेटवर्क पर समूह का फ़ोन या कंप्यूटर खोजा जा रहा है…</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>या कोड का टेक्स्ट चिपकाएँ, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>कैमरा समूह की रिकवरी शीट के QR कोड की ओर करें। समूह का कोई फ़ोन या कंप्यूटर चालू और इसी नेटवर्क पर रखें।</translation>
-    </message>
-    <message>
-        <source>Restore the group</source>
-        <translation>समूह बहाल करें</translation>
-    </message>
-    <message>
         <source>The camera does not start: %1</source>
         <translation>कैमरा शुरू नहीं हो रहा: %1</translation>
     </message>
     <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>समूह इस फ़ोन पर बहाल हो गया है। समूह का प्रतीक्षा समय ख़त्म होने पर यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>समूह इस फ़ोन पर बहाल हो गया है। प्रतीक्षा समय ख़त्म होने पर, %1 घंटे में, यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
-    </message>
-    <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>यह फ़ोन अब समूह का रूट है।</translation>
     </message>
     <message>
         <source>Try again</source>

@@ -58,8 +58,8 @@ function abilityElement(context: common.UIAbilityContext): bundleManager.Element
 }
 
 // Waits for a card held to the phone in reader mode and runs work with it:
-// work's calls of cbb.piv and cbb.memberManageCard talk to that card. The
-// tag and reader mode end when work does.
+// work's calls of cbb.piv talk to that card. The tag and reader mode end
+// when work does.
 export async function withCard(context: common.UIAbilityContext, work: () => Promise<string>): Promise<CardRun> {
   const run = new CardRun();
   if (!canIUse('SystemCapability.Communication.NFC.Tag') || !nfcController.isNfcAvailable()) {

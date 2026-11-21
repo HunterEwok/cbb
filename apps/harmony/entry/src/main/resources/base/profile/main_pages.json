@@ -4,7 +4,6 @@
     "pages/Main",
     "pages/Join",
     "pages/Invitation",
-    "pages/Restore",
     "pages/Device",
     "pages/OpenWindow",
     "pages/JoinWindow",

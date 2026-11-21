@@ -492,19 +492,8 @@ napi_value groupNew(napi_env env, napi_callback_info info)
     });
 }
 
-// restore(request: string): Promise<string>, signed with the member key.
-napi_value restore(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
-        size_t len = 0;
-        return take(cbb_restore(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &len), len);
-    });
-}
-
 // setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>): void, the
-// YubiKey that piv and memberManageCard speak to.
+// YubiKey that piv speaks to.
 napi_value setCard(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
@@ -615,22 +604,6 @@ napi_value memberManage(napi_env env, napi_callback_info info)
             return errorAnswer({"", "member: no handle"});
         size_t len = 0;
         return take(cbb_member_manage(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &len), len);
-    });
-}
-
-// memberManageCard(handle, request: string): Promise<string>, signed with
-// a slot's key on the app's YubiKey (cbb_member_manage_card).
-napi_value memberManageCard(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string req = stringOf(env, a.v[1]);
-    return laterString(env, [member, req]() {
-        if (!member)
-            return errorAnswer({"", "member: no handle"});
-        size_t len = 0;
-        return take(cbb_member_manage_card(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), transmitCard, nullptr, &len),
-                    len);
     });
 }
 
@@ -838,7 +811,6 @@ napi_value init(napi_env env, napi_value exports)
         {"keyEnsure", nullptr, keyEnsure, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"keyForget", nullptr, keyForget, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"groupNew", nullptr, groupNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"restore", nullptr, restore, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setCard", nullptr, setCard, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setWatch", nullptr, setWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"piv", nullptr, piv, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -846,7 +818,6 @@ napi_value init(napi_env env, napi_value exports)
         {"memberStart", nullptr, memberStart, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberCall", nullptr, memberCall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManage", nullptr, memberManage, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"memberManageCard", nullptr, memberManageCard, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManageWatch", nullptr, memberManageWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},

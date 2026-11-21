@@ -51,9 +51,6 @@ struct Start {
         this.choice($r('app.string.start_invitation'), $r('app.string.start_invitation_note'), false, () => {
           router.pushUrl({ url: 'pages/Invitation' });
         })
-        this.choice($r('app.string.start_restore'), $r('app.string.start_restore_note'), false, () => {
-          router.pushUrl({ url: 'pages/Restore' });
-        })
         BusyLine({ busy: app.busy })
         ErrorText({ text: app.error })
       }

@@ -525,10 +525,6 @@
         <translation>صِل الهاتف بشبكة Wi-Fi المنزلية لإضافة جهاز.</translation>
     </message>
     <message>
-        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
-        <translation>لم يُعثر على أي جهاز من المجموعة على هذه الشبكة. شغّل هاتفًا أو حاسوبًا من المجموعة وحاول مرة أخرى.</translation>
-    </message>
-    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
     </message>
@@ -541,10 +537,6 @@
         <translation>لا يغيّر أجهزة المجموعة إلا مشرفها.</translation>
     </message>
     <message>
-        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
-        <translation>امسح رمز QR في ورقة الاسترداد: على هاتف جديد لا يكفي المفتاح المكتوب.</translation>
-    </message>
-    <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>قفلت سبعة رموز PIN خاطئة مفتاح المشرف نهائيًا؛ يبقى الهاتف في المجموعة عضوًا.</translation>
     </message>
@@ -555,10 +547,6 @@
     <message>
         <source>The admin PIN is needed first.</source>
         <translation>يلزم رمز PIN للمشرف أولًا.</translation>
-    </message>
-    <message>
-        <source>The claim to restore the group became void.</source>
-        <translation>أصبح طلب استعادة المجموعة باطلًا.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -575,10 +563,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>لم يستجب محور المجموعة. تحقّق من أن الدعوة ما زالت صالحة وأن المحور يعمل، ثم حاول مجددًا.</translation>
-    </message>
-    <message>
-        <source>The group's root cancelled the claim to restore the group.</source>
-        <translation>ألغى جذر المجموعة طلب استعادة المجموعة.</translation>
     </message>
     <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
@@ -611,10 +595,6 @@
     <message>
         <source>The phone could not read its key.</source>
         <translation>تعذّر على الهاتف قراءة مفتاحه.</translation>
-    </message>
-    <message>
-        <source>The phone could not restore the group.</source>
-        <translation>تعذّر على الهاتف استعادة المجموعة.</translation>
     </message>
     <message>
         <source>The phone could not save its key.</source>
@@ -671,18 +651,6 @@
     <message>
         <source>This is not a CBB invitation.</source>
         <translation>هذه ليست دعوة CBB.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB recovery sheet.</source>
-        <translation>هذه ليست ورقة استرداد CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the QR code of a CBB recovery sheet.</source>
-        <translation>هذا ليس رمز QR لورقة استرداد CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
-        <translation>لم يعد هذا مفتاح استرداد المجموعة الآن: أزاله الجذر أو أنشأ واحدًا جديدًا.</translation>
     </message>
     <message>
         <source>This phone has no secure element for keys.</source>
@@ -1165,10 +1133,6 @@
         <translation>إيقاف حتى أشغّلها</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>الاستعادة بورقة الاسترداد</translation>
-    </message>
-    <message>
         <source>Send an invitation</source>
         <translation>إرسال دعوة</translation>
     </message>
@@ -1481,44 +1445,12 @@
 <context>
     <name>RestorePage</name>
     <message>
-        <source>Claiming the group…</source>
-        <translation>جارٍ طلب المجموعة…</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>جارٍ البحث عن هاتف أو حاسوب من المجموعة على هذه الشبكة…</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>أو الصق نص الرمز، cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>وجّه الكاميرا إلى رمز QR في ورقة استرداد المجموعة. أبقِ هاتفًا أو حاسوبًا من المجموعة قيد التشغيل على هذه الشبكة.</translation>
-    </message>
-    <message>
-        <source>Restore the group</source>
-        <translation>استعادة المجموعة</translation>
-    </message>
-    <message>
         <source>The camera does not start: %1</source>
         <translation>الكاميرا لا تعمل: %1</translation>
     </message>
     <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة انتظار المجموعة، ما لم يلغِ الجذر الطلب.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>استُعيدت المجموعة على هذا الهاتف. يصبح جذر المجموعة عند انتهاء مدة الانتظار، بعد %1 ساعة، ما لم يلغِ الجذر الطلب.</translation>
-    </message>
-    <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>ليس لهذا الجهاز شريحة آمنة للمفاتيح أو مستشعر موثوق للبصمة أو للوجه: فهو كجهاز رئيسي للمجموعة يحميها أقل من هاتف لديه الاثنان.</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>هذا الهاتف هو جذر المجموعة الآن.</translation>
     </message>
     <message>
         <source>Try again</source>

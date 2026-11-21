@@ -123,9 +123,7 @@ void cbb_member_stop(cbb_member *m);
  * "root_ca", public its key, "name", "os", "store", "seal" answers
  * {"state","left_ms"} while the claim waits, signing nothing, and
  * {"state":"effective","cert"} once it made the phone the root.
- * recover_with_sheet with "sheet" (the recovery sheet's QR code) and
- * "root_ca" claims the group for a phone that restored it (cbb_restore): the
- * sheet's key signs the claim, sign is not called. period, on the root of a
+ * period, on the root of a
  * member that serves the servers (cbb_member_servers), signs the next period
  * of the server credentials with the root key, when one is due, and answers
  * {"period_due"}. add_watch, the root with "key" (the watch's admin key's
@@ -138,19 +136,6 @@ uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t l
                            size_t *answer_len);
 
 /*
- * Restores a group on a new phone with its recovery key (src/restore.rs):
- * request is {"sheet","public","name","os","addrs","wait_ms"}, sheet the recovery
- * sheet's QR code and public the phone's member key point, which sign signs
- * with during this call only. It blocks while it browses for the group by
- * the sheet's tag (or asks addrs, "host:port") and takes the records from a member on a connection that
- * carries records only, checked; the answer {"device","cert","issuer",
- * "group_ca","roots","records","addr"} is what the app starts its member with.
- * In place of sheet, "card" is the keys cbb_piv's issue answers (the recovery
- * keys on a YubiKey): it then browses for any group and tries each.
- */
-uint8_t *cbb_restore(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
-
-/*
  * The app's YubiKey (src/piv.rs), only with the feature member: sends apdu
  * (len bytes) to the card and writes its answer, the status word last, to
  * out (at most out_cap bytes) and the length to out_len; returns 0, or
@@ -160,32 +145,15 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
                                    size_t *out_len);
 
 /*
- * One step with the group's recovery key on a YubiKey (src/piv.rs): the core
- * speaks PIV and transmit carries each APDU, during this call only. request
- * is {"op",...}: "make" {"pin"} makes a key in a free retired slot and
- * answers {"slot","key"} (its SubjectPublicKeyInfo, for manage's
- * recovery_for); "put" {"slot","cert"} stores the admin CA; "issue"
- * {"pin","public"} has each recovery key on the card issue a member
- * certificate for public, {"keys":[{"slot","admin_ca","device","cert","public"}]}
- * (public the slot's key point);
- * "sign" {"pin","slot","public","digest"} answers {"sig"}, DER. On a group
- * of 0.6 the card holds the recovery secret: "inspect" {"pin"} answers
- * {"default_key"}; "seal" {"pin","recovery","replace_default","management"}
- * seals the sheet's secret (recovery as manage's change_root takes it) and
- * answers {"default_key","replaced","warning"}; "open" {"pin"} answers
- * {"secret"}, base64, for change_root's recovery.
+ * One step with the group's recovery key on a YubiKey (src/piv.rs; docs/protocol.md,
+ * "The recovery key on a YubiKey (0.6)"): the core speaks PIV and transmit
+ * carries each APDU, during this call only. request is {"op",...}: "inspect"
+ * {"pin"} answers {"default_key"}; "seal" {"pin","recovery","replace_default",
+ * "management"} seals the sheet's secret (recovery as manage's change_root
+ * takes it) and answers {"default_key","replaced","warning"}; "open" {"pin"}
+ * answers {"secret"}, base64, for change_root's recovery.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
-
-/*
- * Signs a manage request as cbb_member_manage does, with a slot's key on the
- * app's YubiKey (src/piv.rs), as the recovery key claims the group
- * (action recover): request adds "pin" and "slot" to manage's fields,
- * public the slot's key point, and transmit carries each APDU to the card
- * during this call only. When the card refused, the answer is its error.
- */
-uint8_t *cbb_member_manage_card(const cbb_member *m, const uint8_t *request, size_t len, cbb_transmit_fn transmit,
-                                void *ctx, size_t *answer_len);
 
 /*
  * The app's link to its watch (src/watch.rs), only with the feature member:

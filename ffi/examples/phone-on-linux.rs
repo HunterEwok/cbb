@@ -42,16 +42,12 @@
 //!
 //! On a group of 0.5: -new-group makes a group of its own, the admin key
 //! standing for the root key, prints "Group <device> <group tag>", and runs
-//! the member as the group's root. With -restore <the recovery sheet's QR
-//! code> it restores the group as a new phone (cbb_restore), asking each
-//! -peer, prints "Restored <device> <group tag>" or "RESTORE FAILED
-//! <message>", and runs the member, the admin key standing for the new root
-//! key, which "MANAGE" signs root_ca with. With -card FILE a YubiKey kept
-//! in FILE stands for the one the app reads over NFC: "PIV <request as
-//! JSON>" (cbb_piv) is answered "PIV <answer as JSON>", "MANAGE_CARD
-//! <request>" signs with its key as "MANAGE" with the admin key, and
-//! -restore-card PIN restores with its recovery keys as -restore does with
-//! a sheet. -keys N gives a second phone keys of its own.
+//! the member as the group's root. -keys N gives a second phone keys of its
+//! own.
+//!
+//! With -card FILE a YubiKey kept in FILE stands for the one the app reads
+//! over NFC: "PIV <request as JSON>" (cbb_piv) is answered "PIV <answer as
+//! JSON>".
 //!
 //!   phone-on-linux -name phone -dir /tmp/p -join-window 'cbb://pair?…' -peer 127.0.0.1:8765
 
@@ -61,9 +57,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_free, cbb_group_new, cbb_invite_answer, cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_joiner_free,
-    cbb_joiner_new, cbb_joiner_new_admin, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_card,
-    cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore, cbb_window_free,
-    cbb_window_new, cbb_window_next,
+    cbb_joiner_new, cbb_joiner_new_admin, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_watch,
+    cbb_member_servers, cbb_member_start, cbb_piv, cbb_window_free, cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -251,53 +246,7 @@ fn main() -> ExitCode {
             None,
         );
     }
-    // With -restore-card PIN the recovery keys on the -card YubiKey issue
-    // this phone's member certificates first (cbb_piv's issue).
-    let card_keys = match arg("-restore-card") {
-        Some(pin) => {
-            let got = card::piv(&serde_json::json!({"op": "issue", "pin": pin, "public": public_b64}));
-            if got["ok"].is_null() {
-                println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
-                return ExitCode::FAILURE;
-            }
-            Some(got["ok"]["keys"].clone())
-        }
-        None => None,
-    };
-    if let Some(sheet) = arg("-restore").or(card_keys.as_ref().map(|_| String::new())) {
-        let mut req = serde_json::json!({
-            "sheet": sheet, "public": public_b64, "name": name, "os": "aurora", "addrs": peers,
-        });
-        if let Some(k) = &card_keys {
-            req["card"] = k.clone();
-        }
-        let req = req.to_string();
-        let mut n = 0usize;
-        let ctx = &key as *const SigningKey as *mut _;
-        // SAFETY: req and n live for the call, the key too.
-        let got = take(unsafe { cbb_restore(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
-        let restored = got["ok"].clone();
-        if restored.is_null() {
-            println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
-            return ExitCode::FAILURE;
-        }
-        let tag = cbb_core::certs::Cert::parse(&b64(&restored["group_ca"]))
-            .map(|ca| cbb_core::certs::tag(&ca))
-            .unwrap_or_default();
-        println!("Restored {} {tag}", restored["device"].as_str().unwrap_or_default());
-        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-        return run_member(
-            &key,
-            &public_b64,
-            &name,
-            &dir,
-            peers,
-            &restored,
-            Some((&admin_key, admin_public.as_str())),
-            None,
-        );
-    }
-    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite, -new-group or -restore");
+    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite or -new-group");
     ExitCode::FAILURE
 }
 
@@ -453,20 +402,6 @@ fn serve(
         } else if let Some(req) = line.strip_prefix("PIV ") {
             let r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
             println!("PIV {}", card::piv(&r));
-        } else if let Some(req) = line.strip_prefix("MANAGE_CARD ") {
-            // Signed with the key on the YubiKey (cbb_member_manage_card):
-            // the request names its slot, its key's point as public, and
-            // the PIN.
-            let mut n = 0usize;
-            // SAFETY: m runs; req and n live for the call; carry needs no
-            // context.
-            let got = take(
-                unsafe {
-                    cbb_member_manage_card(m, req.as_ptr(), req.len(), card::carry, std::ptr::null_mut(), &mut n)
-                },
-                n,
-            );
-            println!("MANAGED {got}");
         } else if let Some(name) = line.strip_prefix("WATCH ADD ") {
             // The root makes its watch an admin with the key the watch made
             // (add_watch); the watch keeps its device ID and admin CA.

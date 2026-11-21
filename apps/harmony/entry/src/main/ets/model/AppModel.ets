@@ -24,8 +24,6 @@ import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
 import { CheckedPaste, Paste, PasteAnswer } from './Paste';
-import { CardRun, cardFailure, withCard } from '../common/YubiKey';
-import { common } from '@kit.AbilityKit';
 
 // Renewals are due months ahead, so a look every few hours, and one a
 // minute after the member starts, once it reached its peers, is plenty.
@@ -67,35 +65,6 @@ export interface ManageAnswer {
   signer?: string;
 }
 
-interface Restored extends Joined {
-  addr?: string;
-}
-
-// A key the YubiKey made (cbb_piv's make).
-interface CardMade {
-  slot: number;
-  key: string;
-}
-
-// A member certificate a recovery key on the YubiKey issued this phone
-// (cbb_piv's issue).
-interface CardKey {
-  slot: number;
-  admin_ca: string;
-  device: string;
-  cert: string;
-  public: string;
-}
-
-interface CardKeys {
-  keys: CardKey[];
-}
-
-// The failure a step with the YubiKey left, set inside withCard's work.
-class CardStep {
-  failure?: Failure;
-}
-
 // An item of the main page: a device, or a collection of devices.
 export class Tile {
   kind: string = 'device'; // device or collection
@@ -103,23 +72,6 @@ export class Tile {
   id: string = '';
   name: string = '';
   devices: Device[] = [];
-}
-
-// What the user reads when restoring failed: the core's refusals it knows
-// said in the user's language, the core's own words kept in the details.
-function restoreFailure(f: Failure): Failure {
-  const d = `${f.message} ${f.details}`;
-  let shown = t('error_restore');
-  if (d.includes('scan the QR code of the recovery sheet')) {
-    shown = t('error_restore_scan');
-  } else if (d.includes("not the group's recovery key now")) {
-    shown = t('error_restore_not_key');
-  } else if (d.includes('no device of the group was found')) {
-    shown = t('error_restore_no_device');
-  } else if (d.includes('not a cbb recovery sheet')) {
-    shown = t('error_restore_not_sheet');
-  }
-  return new Failure(shown, `${f.details} (${f.message})`);
 }
 
 // The core's answer of a new group of 0.6 (ffi's found.rs).
@@ -145,19 +97,9 @@ export class AppModel {
   // "pending", "competing", "disputed", "none", "effective", "cancelled" or "void".
   @Trace claimState: string = '';
   @Trace claimLeftMs: number = 0;
-  // Restoring from the recovery sheet: '', restoring, claiming, claimed or failed.
-  @Trace restoreState: string = '';
   // The recovery sheet the root just made, shown once.
   @Trace recoveryText: string = '';
   @Trace recoveryModules: string[] = [];
-  // The YubiKey: '' or what the phone waits for the card to be held for:
-  // put, issue or claim; done once the recovery key is on it.
-  @Trace card: string = '';
-  @Trace cardDone: boolean = false;
-  // The recovery keys on the YubiKey that restored the group, and its PIN,
-  // until the claim is signed.
-  private cardKeys: CardKey[] = [];
-  private cardPin: string = '';
   // The admins and hubs the key level set last does not let in.
   @Trace belowLevel: string[] = [];
   // Bumped when the user's arrangement of the tiles changes.
@@ -525,50 +467,6 @@ export class AppModel {
     }
   }
 
-  // Puts the recovery key on a YubiKey held to the phone (common/YubiKey.ets):
-  // the card makes a key in a free slot, the root key certifies it as the
-  // group's recovery key (manage recovery_for), and the card keeps its admin
-  // CA as the slot's certificate.
-  async putOnYubiKey(context: common.UIAbilityContext, pin: string): Promise<void> {
-    if (!this.isRoot() || this.busy || this.card.length > 0) {
-      return;
-    }
-    this.show('');
-    this.cardDone = false;
-    this.card = 'put';
-    const step = new CardStep();
-    const run: CardRun = await withCard(context, async (): Promise<string> => {
-      const made = read<CardMade>(await cbb.piv(JSON.stringify({ 'op': 'make', 'pin': pin } as Record<string, Object>)),
-        'yubikey: make');
-      if (made.ok === undefined) {
-        step.failure = cardFailure(made.failure as Failure);
-        return '';
-      }
-      const a = await this.runManage('recovery_for', '', { 'key': made.ok.key } as Record<string, Object>);
-      if (a === undefined) {
-        return '';
-      }
-      const put: Record<string, Object> = { 'op': 'put', 'slot': made.ok.slot, 'cert': a.admin_ca ?? '' };
-      return await cbb.piv(JSON.stringify(put));
-    });
-    this.card = '';
-    const failure = run.failure ?? step.failure;
-    if (failure !== undefined) {
-      this.show(Errors.shown(failure));
-      return;
-    }
-    if (run.answer.length === 0) {
-      return; // runManage showed why
-    }
-    const put = read<Object>(run.answer, 'yubikey: put');
-    if (put.ok === undefined) {
-      this.show(Errors.shown(cardFailure(put.failure as Failure)));
-      return;
-    }
-    Errors.log('yubikey: the recovery key is on the YubiKey');
-    this.cardDone = true;
-  }
-
   // Makes the watch an admin as the root (manage add_watch) with the admin
   // key it made, key its SubjectPublicKeyInfo: the watch's device ID, its
   // admin CA, the group's tag and the key's hash as the records name it.
@@ -847,6 +745,19 @@ export class AppModel {
     this.finishTakeover();
   }
 
+  // root_ca on the member with the admin key, which newRootCa ensured
+  // itself, so it skips runManage's own steps.
+  private async manageRootCa(request: Record<string, Object>): Promise<string> {
+    const h = this.member.core();
+    if (h === null) {
+      return '';
+    }
+    this.busy = true;
+    const answer = await cbb.memberManage(h, JSON.stringify(request), 'admin');
+    this.busy = false;
+    return answer;
+  }
+
   // The root CA of the admin key as a new root, kept as the claim's.
   private async newRootCa(): Promise<string | undefined> {
     const key = await ensure('admin');
@@ -854,7 +765,7 @@ export class AppModel {
       this.show(Errors.shown(key.failure as Failure));
       return undefined;
     }
-    const a = read<ManageAnswer>(await this.manageAsRestorer({ 'action': 'root_ca', 'public': key.ok.public }), 'takeover');
+    const a = read<ManageAnswer>(await this.manageRootCa({ 'action': 'root_ca', 'public': key.ok.public }), 'takeover');
     const rootCa = a.ok?.root_ca ?? '';
     if (a.ok === undefined || rootCa.length === 0 || this.membership === undefined) {
       if (a.failure !== undefined) {
@@ -939,216 +850,10 @@ export class AppModel {
       }
       this.stopClaimTimer();
       Errors.log(`takeover: the claim is ${state}`);
-      // A phone that restored the group from its sheet is no admin.
-      const admin = next.isAdmin();
-      const cancelled = state === 'cancelled';
-      const shown = admin ? (cancelled ? t('takeover_cancelled_admin') : t('takeover_void_admin')) :
-        (cancelled ? t('takeover_cancelled_restore') : t('takeover_void_restore'));
-      if (!admin) {
-        this.restoreState = 'failed';
-      }
+      const shown = state === 'cancelled' ? t('takeover_cancelled_admin') : t('takeover_void_admin');
       this.show(Errors.shown(new Failure(shown, `takeover: the claim is ${state}`)));
     }
     this.claimState = state;
-  }
-
-  // Restores the group of the recovery sheet's QR code on this new phone
-  // (cbb_restore), then claims it with the sheet's key for a new root CA of
-  // the admin key, as takeOver does. A phone that restored the group but
-  // whose claim failed only claims again.
-  async restore(sheet: string): Promise<void> {
-    if (this.busy) {
-      return;
-    }
-    const m = this.membership;
-    if (m !== undefined) {
-      if (!m.isAdmin() && (m.member.claim ?? '').length === 0 && this.member.running) {
-        await this.claimWithSheet(sheet);
-      }
-      return;
-    }
-    this.busy = true;
-    this.restoreState = 'restoring';
-    this.show('');
-    const key = await ensure('member');
-    if (key.ok === undefined) {
-      this.busy = false;
-      this.show(Errors.shown(key.failure as Failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    const request: Record<string, Object> = { 'sheet': sheet.trim(), 'public': key.ok.public, 'name': phoneName(), 'os': OS };
-    const answer = read<Restored>(await cbb.restore(JSON.stringify(request)), 'restore');
-    this.busy = false;
-    if (answer.ok === undefined) {
-      this.show(Errors.shown(restoreFailure(answer.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    if (!(await this.adoptRestored(answer.ok))) {
-      return;
-    }
-    await this.claimWithSheet(sheet);
-  }
-
-  // Restores the group with the recovery keys on a YubiKey (cbb_piv's
-  // issue, then cbb_restore with card), then claims it with the card's key,
-  // held to the phone a second time.
-  async restoreWithYubiKey(context: common.UIAbilityContext, pin: string): Promise<void> {
-    if (this.busy || this.card.length > 0) {
-      return;
-    }
-    const m = this.membership;
-    if (m !== undefined) {
-      if (!m.isAdmin() && (m.member.claim ?? '').length === 0 && this.member.running && this.cardKeys.length > 0) {
-        this.cardPin = pin;
-        await this.claimWithCard(context);
-      }
-      return;
-    }
-    this.show('');
-    const key = await ensure('member');
-    if (key.ok === undefined) {
-      this.show(Errors.shown(key.failure as Failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.card = 'issue';
-    const issue: Record<string, Object> = { 'op': 'issue', 'pin': pin, 'public': key.ok.public };
-    const run = await withCard(context, async (): Promise<string> => await cbb.piv(JSON.stringify(issue)));
-    this.card = '';
-    if (run.failure !== undefined) {
-      this.show(Errors.shown(run.failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    const issued = read<CardKeys>(run.answer, 'yubikey: issue');
-    if (issued.ok === undefined) {
-      this.show(Errors.shown(cardFailure(issued.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.busy = true;
-    this.restoreState = 'restoring';
-    const request: Record<string, Object> = { 'card': issued.ok.keys, 'public': key.ok.public, 'name': phoneName(), 'os': OS };
-    const answer = read<Restored>(await cbb.restore(JSON.stringify(request)), 'restore');
-    this.busy = false;
-    if (answer.ok === undefined) {
-      this.show(Errors.shown(restoreFailure(answer.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    if (!(await this.adoptRestored(answer.ok))) {
-      return;
-    }
-    this.cardKeys = issued.ok.keys.filter((k: CardKey) => k.admin_ca === answer.ok?.issuer);
-    this.cardPin = pin;
-    await this.claimWithCard(context);
-  }
-
-  // Keeps the membership a restore answered and starts its member.
-  private async adoptRestored(ok: Restored): Promise<boolean> {
-    const restored = new Membership(ok);
-    restored.member.root = false;
-    const failure = restored.save(this.dir);
-    if (failure !== undefined) {
-      this.show(Errors.shown(failure));
-      this.restoreState = 'failed';
-      return false;
-    }
-    Errors.log(`restore: restored ${restored.groupTag()} as ${restored.member.device} from ${ok.addr ?? ''}`);
-    this.membership = restored;
-    await this.startMember();
-    return true;
-  }
-
-  private async claimWithCard(context: common.UIAbilityContext): Promise<void> {
-    const k = this.cardKeys.length > 0 ? this.cardKeys[0] : undefined;
-    const h = this.member.core();
-    if (!this.member.running || h === null || k === undefined) {
-      this.show(Errors.shown(new Failure(t('error_not_running'), 'restore: no member or no card key')));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.restoreState = 'claiming';
-    const rootCa = await this.newRootCa();
-    if (rootCa === undefined) {
-      this.restoreState = 'failed';
-      return;
-    }
-    this.card = 'claim';
-    const claim: Record<string, Object> = {
-      'action': 'recover', 'root_ca': rootCa, 'admin_ca': k.admin_ca, 'slot': k.slot, 'pin': this.cardPin, 'public': k.public
-    };
-    const run = await withCard(context, async (): Promise<string> => await cbb.memberManageCard(h, JSON.stringify(claim)));
-    this.card = '';
-    const answer = run.failure === undefined ? read<ManageAnswer>(run.answer, 'restore') : undefined;
-    if (answer === undefined || answer.ok === undefined) {
-      this.dropClaim();
-      const raw = answer?.failure as Failure;
-      const f = run.failure ?? (`${raw.message} ${raw.details}`.includes('YubiKey') ? cardFailure(raw) : restoreFailure(raw));
-      this.show(Errors.shown(f));
-      this.restoreState = 'failed';
-      return;
-    }
-    Errors.log('restore: claimed the group with the recovery key on the YubiKey');
-    this.cardKeys = [];
-    this.cardPin = '';
-    this.claimState = 'pending';
-    this.show('');
-    this.restoreState = 'claimed';
-    this.startClaimTimer();
-    this.finishTakeover();
-  }
-
-  private async claimWithSheet(sheet: string): Promise<void> {
-    if (!this.member.running) {
-      this.show(Errors.shown(new Failure(t('error_not_running'), 'restore: no member')));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.restoreState = 'claiming';
-    // The membership of a restored phone is no admin's: the core signs the
-    // root CA and the claim with the admin key as the claim's new root.
-    const rootCa = await this.newRootCa();
-    if (rootCa === undefined) {
-      this.restoreState = 'failed';
-      return;
-    }
-    const key = await ensure('admin');
-    const claim = read<ManageAnswer>(await this.manageAsRestorer(
-      { 'action': 'recover_with_sheet', 'sheet': sheet.trim(), 'root_ca': rootCa, 'public': key.ok?.public ?? '' }), 'restore');
-    if (claim.ok === undefined) {
-      this.dropClaim();
-      this.show(Errors.shown(restoreFailure(claim.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    Errors.log('restore: claimed the group with the recovery key');
-    this.claimState = 'pending';
-    this.show('');
-    this.restoreState = 'claimed';
-    this.startClaimTimer();
-    this.finishTakeover();
-  }
-
-  // A restoring phone is no admin yet, so its root CA and claim skip
-  // runManage's check.
-  private async manageAsRestorer(request: Record<string, Object>): Promise<string> {
-    const h = this.member.core();
-    if (h === null) {
-      return '';
-    }
-    this.busy = true;
-    const answer = await cbb.memberManage(h, JSON.stringify(request), 'admin');
-    this.busy = false;
-    return answer;
-  }
-
-  resetRestore(): void {
-    if (this.restoreState !== 'restoring' && this.restoreState !== 'claiming') {
-      this.restoreState = '';
-    }
   }
 
   // Leaves the group on this phone: stops the member and deletes the

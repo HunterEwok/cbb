@@ -525,10 +525,6 @@
         <translation>חברו את הטלפון ל-Wi-Fi הביתי כדי להוסיף מכשיר.</translation>
     </message>
     <message>
-        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
-        <translation>לא נמצא אף מכשיר של הקבוצה ברשת הזו. הפעילו טלפון או מחשב של הקבוצה ונסו שוב.</translation>
-    </message>
-    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
     </message>
@@ -541,10 +537,6 @@
         <translation>רק מנהל של הקבוצה משנה את המכשירים שלה.</translation>
     </message>
     <message>
-        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
-        <translation>סרקו את קוד ה-QR בדף השחזור: בטלפון חדש המפתח המוקלד לא מספיק.</translation>
-    </message>
-    <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>שבעה קודי PIN שגויים נעלו את מפתח המנהל לתמיד; הטלפון נשאר בקבוצה כחבר.</translation>
     </message>
@@ -555,10 +547,6 @@
     <message>
         <source>The admin PIN is needed first.</source>
         <translation>קודם צריך את קוד ה-PIN של המנהל.</translation>
-    </message>
-    <message>
-        <source>The claim to restore the group became void.</source>
-        <translation>הבקשה לשחזר את הקבוצה בוטלה.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -575,10 +563,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.</translation>
-    </message>
-    <message>
-        <source>The group's root cancelled the claim to restore the group.</source>
-        <translation>השורש של הקבוצה ביטל את הבקשה לשחזר את הקבוצה.</translation>
     </message>
     <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
@@ -611,10 +595,6 @@
     <message>
         <source>The phone could not read its key.</source>
         <translation>הטלפון לא הצליח לקרוא את המפתח שלו.</translation>
-    </message>
-    <message>
-        <source>The phone could not restore the group.</source>
-        <translation>הטלפון לא הצליח לשחזר את הקבוצה.</translation>
     </message>
     <message>
         <source>The phone could not save its key.</source>
@@ -671,18 +651,6 @@
     <message>
         <source>This is not a CBB invitation.</source>
         <translation>זו לא הזמנה של CBB.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB recovery sheet.</source>
-        <translation>זה לא דף שחזור של CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the QR code of a CBB recovery sheet.</source>
-        <translation>זה לא קוד ה-QR של דף שחזור של CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
-        <translation>זה כבר לא מפתח השחזור של הקבוצה: השורש הסיר אותו או יצר חדש.</translation>
     </message>
     <message>
         <source>This phone has no secure element for keys.</source>
@@ -1165,10 +1133,6 @@
         <translation>כיבוי עד שאפעיל</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>שחזור עם דף שחזור</translation>
-    </message>
-    <message>
         <source>Send an invitation</source>
         <translation>שליחת הזמנה</translation>
     </message>
@@ -1481,44 +1445,12 @@
 <context>
     <name>RestorePage</name>
     <message>
-        <source>Claiming the group…</source>
-        <translation>מבקש את הקבוצה…</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>מחפש טלפון או מחשב של הקבוצה ברשת הזו…</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>או הדביקו את טקסט הקוד, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>כוונו את המצלמה לקוד ה-QR בדף השחזור של הקבוצה. השאירו טלפון או מחשב של הקבוצה דולק וברשת הזו.</translation>
-    </message>
-    <message>
-        <source>Restore the group</source>
-        <translation>שחזור הקבוצה</translation>
-    </message>
-    <message>
         <source>The camera does not start: %1</source>
         <translation>המצלמה לא מופעלת: %1</translation>
     </message>
     <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה של הקבוצה יסתיים, אלא אם השורש יבטל את הבקשה.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
-    </message>
-    <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>הטלפון הזה הוא עכשיו השורש של הקבוצה.</translation>
     </message>
     <message>
         <source>Try again</source>

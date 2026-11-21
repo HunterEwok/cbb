@@ -525,10 +525,6 @@
         <translation>请将手机连接到家中的 Wi-Fi 以添加设备。</translation>
     </message>
     <message>
-        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
-        <translation>在此网络上没有找到群组的设备。请打开群组中的一部手机或一台电脑，然后重试。</translation>
-    </message>
-    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
     </message>
@@ -541,10 +537,6 @@
         <translation>只有群组管理员可以更改其设备。</translation>
     </message>
     <message>
-        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
-        <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
-    </message>
-    <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>连续七次输错 PIN，管理员密钥已被永久锁定；手机仍作为成员留在群组中。</translation>
     </message>
@@ -555,10 +547,6 @@
     <message>
         <source>The admin PIN is needed first.</source>
         <translation>需要先输入管理员 PIN。</translation>
-    </message>
-    <message>
-        <source>The claim to restore the group became void.</source>
-        <translation>恢复群组的申请已失效。</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -575,10 +563,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。</translation>
-    </message>
-    <message>
-        <source>The group's root cancelled the claim to restore the group.</source>
-        <translation>群组的根设备取消了恢复群组的申请。</translation>
     </message>
     <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
@@ -611,10 +595,6 @@
     <message>
         <source>The phone could not read its key.</source>
         <translation>手机未能读取密钥。</translation>
-    </message>
-    <message>
-        <source>The phone could not restore the group.</source>
-        <translation>手机无法恢复群组。</translation>
     </message>
     <message>
         <source>The phone could not save its key.</source>
@@ -671,18 +651,6 @@
     <message>
         <source>This is not a CBB invitation.</source>
         <translation>这不是 CBB 邀请。</translation>
-    </message>
-    <message>
-        <source>This is not a CBB recovery sheet.</source>
-        <translation>这不是 CBB 恢复单。</translation>
-    </message>
-    <message>
-        <source>This is not the QR code of a CBB recovery sheet.</source>
-        <translation>这不是 CBB 恢复单的二维码。</translation>
-    </message>
-    <message>
-        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
-        <translation>这已不是群组当前的恢复密钥：根设备已将其移除或生成了新密钥。</translation>
     </message>
     <message>
         <source>This phone has no secure element for keys.</source>
@@ -1165,10 +1133,6 @@
         <translation>关闭，直到我打开</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>用恢复单恢复</translation>
-    </message>
-    <message>
         <source>Send an invitation</source>
         <translation>发送邀请</translation>
     </message>
@@ -1481,44 +1445,12 @@
 <context>
     <name>RestorePage</name>
     <message>
-        <source>Claiming the group…</source>
-        <translation>正在申请群组…</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>正在此网络上查找群组的手机或电脑…</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>或粘贴二维码的文本 cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>将相机对准群组恢复单上的二维码。让群组中的一部手机或一台电脑保持开机并连接到此网络。</translation>
-    </message>
-    <message>
-        <source>Restore the group</source>
-        <translation>恢复群组</translation>
-    </message>
-    <message>
         <source>The camera does not start: %1</source>
         <translation>相机无法启动：%1</translation>
     </message>
     <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>群组已在这部手机上恢复。群组的等待时间结束后，它将成为群组的根设备，除非根设备取消申请。</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
-    </message>
-    <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>这部手机现在是群组的根设备。</translation>
     </message>
     <message>
         <source>Try again</source>

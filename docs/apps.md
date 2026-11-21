@@ -35,8 +35,8 @@ they look, so both apps are built to the same plan.
    invitation's QR code, or its text is pasted or its file opened; the invitation then
    waits on a screen of its own, with its group, its hub and when it expires, to be joined
    or declined, and declining sends nothing; joined, the phone shows the words the inviting
-   admin compares, docs/protocol.md, section 12), and, small, **Restore with the recovery
-   key**. A phone always joins as a member; the root makes it an admin later from the
+   admin compares, docs/protocol.md, section 12), and, small on the iPhone and Android,
+   **Restore with the recovery key** (a group of 0.5's; on 0.6 it comes with 0.7, D-125). A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
    the pull-down menu, as in every Silica app.
@@ -1255,12 +1255,13 @@ settings, why it does not sync and the lab.
   sends of its member key, with the revocation list the app fetches from the mirror once a
   day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
   core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
-- **YubiKey**: as on the iPhone and Android, the root puts the group's recovery key on a
-  YubiKey held to the back of the phone (firmware 5.7 or later with the factory management key
-  and a free retired PIV slot), and a new phone restores the group with it and its PIN, the card
-  held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
-  the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
-  carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
+- **YubiKey**: on a group of 0.6 the card holds the recovery secret (docs/protocol.md, "The
+  recovery key on a YubiKey (0.6)"): the root phone seals the sheet's secret onto it and a
+  phone in the group opens it with the PIN to change the root. HarmonyOS has no PIV of its
+  own, so the core speaks it (`cbb_piv`'s `inspect`, `seal` and `open`, docs/core-api.md) and
+  the app only carries each APDU to the card's IsoDep tag in NFC reader mode
+  (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`). The screens for it are not in the app
+  yet; the YubiKey of a group of 0.5 is gone from it.
 - **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
   Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
   how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
@@ -1503,8 +1504,14 @@ the app on real devices.
   or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
   (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
   root; the computer is not removed.
-- A new phone restores the group with the recovery key from its Start screen ("Restore with
-  the recovery key"; docs/protocol.md, section 10, "The recovery key"). It scans the
+- On a group of 0.6 a phone still in the group changes the root to itself with the
+  recovery key, the sheet's QR code or text or the secret a YubiKey opens, after showing who
+  stays (the member's `change_preview` and `change_root`, docs/core-api.md); a new phone joins
+  afterwards through the new root's window, and restoring on a phone in no group comes with
+  0.7 (D-125). The Aurora and HarmonyOS apps have no restore screen; on the iPhone and
+  Android, in a group of 0.5, a new phone restores the group with the recovery key from its
+  Start screen ("Restore with the recovery key"; docs/protocol.md, section 10, "The recovery
+  key"). It scans the
   sheet's QR code (the typed key carries no admin CA, so a new phone needs the QR code; a
   computer of the group takes the typed key with `cbb recovery`), finds the group's computers
   by their tag and lets the recovery key issue its member certificate (`Restore`). A computer

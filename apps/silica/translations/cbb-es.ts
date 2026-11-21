@@ -525,10 +525,6 @@
         <translation>Conecta el teléfono a la Wi-Fi de casa para añadir un dispositivo.</translation>
     </message>
     <message>
-        <source>No device of the group was found on this network. Turn on a phone or a computer of the group and try again.</source>
-        <translation>No se encontró ningún dispositivo del grupo en esta red. Enciende un teléfono o un ordenador del grupo e inténtalo de nuevo.</translation>
-    </message>
-    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</translation>
     </message>
@@ -541,10 +537,6 @@
         <translation>Solo un admin del grupo cambia sus dispositivos.</translation>
     </message>
     <message>
-        <source>Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.</source>
-        <translation>Escanea el código QR de la hoja de recuperación: en un teléfono nuevo no basta con la clave escrita.</translation>
-    </message>
-    <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
         <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre; el teléfono sigue en el grupo como miembro.</translation>
     </message>
@@ -555,10 +547,6 @@
     <message>
         <source>The admin PIN is needed first.</source>
         <translation>Primero hace falta el PIN de administrador.</translation>
-    </message>
-    <message>
-        <source>The claim to restore the group became void.</source>
-        <translation>La solicitud para restaurar el grupo dejó de ser válida.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -575,10 +563,6 @@
     <message>
         <source>The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.</source>
         <translation>El hub del grupo no respondió. Comprueba que la invitación sigue siendo válida y que el hub está encendido, y vuelve a intentarlo.</translation>
-    </message>
-    <message>
-        <source>The group's root cancelled the claim to restore the group.</source>
-        <translation>La raíz del grupo canceló la solicitud para restaurar el grupo.</translation>
     </message>
     <message>
         <source>The group's root cancelled the claim; the phone stays an admin.</source>
@@ -611,10 +595,6 @@
     <message>
         <source>The phone could not read its key.</source>
         <translation>El teléfono no pudo leer su clave.</translation>
-    </message>
-    <message>
-        <source>The phone could not restore the group.</source>
-        <translation>El teléfono no pudo restaurar el grupo.</translation>
     </message>
     <message>
         <source>The phone could not save its key.</source>
@@ -671,18 +651,6 @@
     <message>
         <source>This is not a CBB invitation.</source>
         <translation>Esto no es una invitación de CBB.</translation>
-    </message>
-    <message>
-        <source>This is not a CBB recovery sheet.</source>
-        <translation>Esto no es una hoja de recuperación de CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the QR code of a CBB recovery sheet.</source>
-        <translation>Este no es el código QR de una hoja de recuperación de CBB.</translation>
-    </message>
-    <message>
-        <source>This is not the group's recovery key now: the root removed it or made a new one.</source>
-        <translation>Esta ya no es la clave de recuperación del grupo: la raíz la quitó o creó una nueva.</translation>
     </message>
     <message>
         <source>This phone has no secure element for keys.</source>
@@ -1165,10 +1133,6 @@
         <translation>Desactivar hasta que la active</translation>
     </message>
     <message>
-        <source>Restore with a recovery sheet</source>
-        <translation>Restaurar con una hoja de recuperación</translation>
-    </message>
-    <message>
         <source>Send an invitation</source>
         <translation>Enviar una invitación</translation>
     </message>
@@ -1481,44 +1445,12 @@
 <context>
     <name>RestorePage</name>
     <message>
-        <source>Claiming the group…</source>
-        <translation>Solicitando el grupo…</translation>
-    </message>
-    <message>
-        <source>Looking for a phone or a computer of the group on this network…</source>
-        <translation>Buscando un teléfono o un ordenador del grupo en esta red…</translation>
-    </message>
-    <message>
-        <source>Or paste the code's text, cbb://recover…</source>
-        <translation>O pega el texto del código, cbb://recover…</translation>
-    </message>
-    <message>
-        <source>Point the camera at the QR code of the group's recovery sheet. Keep a phone or a computer of the group turned on and on this network.</source>
-        <translation>Apunta la cámara al código QR de la hoja de recuperación del grupo. Mantén encendido un teléfono o un ordenador del grupo en esta red.</translation>
-    </message>
-    <message>
-        <source>Restore the group</source>
-        <translation>Restaurar el grupo</translation>
-    </message>
-    <message>
         <source>The camera does not start: %1</source>
         <translation>La cámara no se inicia: %1</translation>
     </message>
     <message>
-        <source>The group is restored on this phone. It becomes the group's root once the group's waiting time passes, unless the root cancels the claim.</source>
-        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera del grupo, salvo que la raíz cancele la solicitud.</translation>
-    </message>
-    <message>
-        <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
-        <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera, dentro de %1 h, salvo que la raíz cancele la solicitud.</translation>
-    </message>
-    <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</translation>
-    </message>
-    <message>
-        <source>This phone is the group's root now.</source>
-        <translation>Este teléfono es ahora la raíz del grupo.</translation>
     </message>
     <message>
         <source>Try again</source>

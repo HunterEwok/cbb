@@ -2871,6 +2871,11 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phones' restore of a group made before 0.6 through the core: `cbb_restore`,
+  `cbb_member_manage_card`, the manage action `recover_with_sheet` and `cbb_piv`'s `make`,
+  `put`, `issue` and `sign`, with the Aurora and HarmonyOS apps' restore screens and the
+  HarmonyOS app's "Put it on a YubiKey" of a group of 0.5. On 0.6 a phone in the group changes
+  the root with the recovery key, and restoring on a new phone comes with 0.7 (D-125).
 
 - The phone apps' join by the phone's own QR code (the phone listened and the group's device
   scanned it and dialed in) and their old "Add a device" screen that scanned such a code: every
