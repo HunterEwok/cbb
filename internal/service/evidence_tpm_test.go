@@ -53,11 +53,13 @@ func TestTPMEvidenceUnknownMaker(t *testing.T) {
 	})
 }
 
-// TestRootInTPMCountsAsFiles checks that a computer root whose member key
-// is in the TPM still counts as keys in a file, since its group CA key is
-// a file: cbb new starts the group at the level files, the devices list
-// says files, and the level hardware is refused.
-func TestRootInTPMCountsAsFiles(t *testing.T) {
+// TestRootKeyLevelFollowsItsStore checks the key level a computer root
+// starts its group at on the records of 0.6, where the weakest of its keys
+// decides: with a TPM both its member key and its root key are in the TPM
+// (keys.json), so cbb new starts the group at the level hardware and lists
+// the root's keys as hardware; with no TPM both keys are files, so the
+// group starts at the level files, and the level hardware is refused.
+func TestRootKeyLevelFollowsItsStore(t *testing.T) {
 	tpmtest.Start(t)
 	sim := tpmOnlyFor(t)
 	var h hub
@@ -67,16 +69,31 @@ func TestRootInTPMCountsAsFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	keyInTPM(t, pi)
-	if m.Status == nil || m.Status.KeyLevel != "files" {
-		t.Fatalf("the new group's key level: %+v", m.Status)
+	keyOfInTPM(t, pi, "root")
+	if m.Status == nil || m.Status.KeyLevel != "hardware" {
+		t.Fatalf("the new group's key level with its root key in the TPM: %+v", m.Status)
 	}
 	for _, d := range pi.devices(t) {
-		if d.Name == "pi" && d.Store != group.StoreFile {
-			t.Errorf("the root's keys are listed as %s", d.Store)
+		if d.Name == "pi" && d.Store != group.StoreHardware {
+			t.Errorf("the root's keys in the TPM are listed as %s", d.Store)
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil {
-		t.Error("a root with its CA key in a file set the level hardware")
+
+	files := startEnv(t, &h, "box", "CBB_TPM=off")
+	m, err = files.do(t, control.Header{Op: control.OpNew}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Status == nil || m.Status.KeyLevel != "files" {
+		t.Fatalf("the new group's key level with its root key in a file: %+v", m.Status)
+	}
+	for _, d := range files.devices(t) {
+		if d.Name == "box" && d.Store != group.StoreFile {
+			t.Errorf("the root's keys in files are listed as %s", d.Store)
+		}
+	}
+	if _, err := files.do(t, control.Header{Op: control.OpKeyLevel, Value: "hardware"}, ""); err == nil {
+		t.Error("a root with its keys in files set the level hardware")
 	}
 }
 
@@ -121,6 +138,23 @@ func keyInTPM(t *testing.T, s *testService) {
 	}
 	if err := json.Unmarshal(raw, &f); err != nil || f.Member.PKCS8 != "" || len(f.Member.TPM) == 0 {
 		t.Fatalf("%s's member key is not in the TPM: keys.json keeps the key %d characters, the TPM blob %q (%v)", s.name, len(f.Member.PKCS8), f.Member.TPM, err)
+	}
+}
+
+// keyOfInTPM fails the test unless s's key which ("root", "admin") is in
+// the TPM: keys.json keeps its TPM blob and no PKCS#8 (src/own.rs in cbb).
+func keyOfInTPM(t *testing.T, s *testService, which string) {
+	t.Helper()
+	var f map[string]struct {
+		PKCS8 string          `json:"pkcs8"`
+		TPM   json.RawMessage `json:"tpm"`
+	}
+	raw, err := os.ReadFile(filepath.Join(s.dir, "keys.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &f); err != nil || f[which].PKCS8 != "" || len(f[which].TPM) == 0 {
+		t.Fatalf("%s's %s key is not in the TPM: keys.json keeps the key %d characters, the TPM blob %q (%v)", s.name, which, len(f[which].PKCS8), f[which].TPM, err)
 	}
 }
 

@@ -3120,7 +3120,7 @@
    {
     "lang": "go",
     "file": "internal/service/evidence_tpm_test.go",
-    "name": "TestRootInTPMCountsAsFiles"
+    "name": "TestRootKeyLevelFollowsItsStore"
    },
    {
     "lang": "rust",

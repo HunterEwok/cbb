@@ -122,7 +122,7 @@ TestRenewal 14.5
 TestRestartWithANewPort 13.7
 TestRestoredAdminSignsAgain 18.7
 TestRootHandover 6.7
-TestRootInTPMCountsAsFiles 2.8
+TestRootKeyLevelFollowsItsStore 2.8
 TestRootlessHoldsNoKeys 12.1
 TestRustCommandLine 12.1
 TestSealKeysRecorded 10.3
