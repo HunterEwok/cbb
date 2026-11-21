@@ -156,3 +156,80 @@ fn a_device_sends_its_hub_the_tunnels_key_and_keeps_its_offer() {
     a.close();
     b.close();
 }
+
+/// Sync away from home on the records of 0.6 end to end: at home the hub
+/// takes the device's key and answers with its offer; away from home (the
+/// device started again with no way to the hub but the tunnel) the device
+/// reaches the hub through its tunnel, AmneziaWG on, under a pre-shared key
+/// of their connection at home, and the member connection runs through it.
+#[test]
+fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
+    let (da, db) = two_dirs_b_hub("away-through");
+    let (a, b) = (open(&da), open(&db));
+    let away_of = |l: &Arc<Live>, dir: &Path| {
+        let me = crate::certs::DeviceId::parse(&id_text(&l.mesh.device())).unwrap();
+        Arc::new(crate::away::Away::new(dir.to_path_buf(), l.tag(), me, Arc::new(|_| {})))
+    };
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let hub_away = away_of(&b, &db);
+    let h = crate::control::Header {
+        addrs: vec![format!("127.0.0.1:{port}")],
+        port: i64::from(port),
+        consent: true,
+        ..Default::default()
+    };
+    hub_away.make_hub(&h).unwrap();
+    b.with_away(hub_away.clone());
+    let dev_away = away_of(&a, &da);
+    dev_away.turn_on().unwrap();
+    a.with_away(dev_away.clone());
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    crate::discovery::start(
+        a.clone(),
+        a.tag(),
+        vec![SocketAddr::from(([127, 0, 0, 1], member_port))],
+        false,
+        None,
+        log,
+    );
+    until("the hub's offer at home", || {
+        dev_away.live_status().is_some_and(|s| s.hub_device == id_text(&b.mesh.device()))
+    });
+    let kept = crate::tunnel::State::load(&da).unwrap().unwrap().hubs;
+    assert_eq!(kept[0].endpoints, vec![SocketAddr::from(([127, 0, 0, 1], port))]);
+    assert!(kept[0].obfuscation.is_some(), "the group's AmneziaWG settings");
+    assert!(crate::tunnel::State::load(&db).unwrap().unwrap().held.contains_key(&id_text(&a.mesh.device())));
+    a.close();
+    // Away from home: the device again, with no way to the hub but the
+    // tunnel.
+    let a = open(&da);
+    let dev_away = away_of(&a, &da);
+    a.with_away(dev_away.clone());
+    let end = Instant::now() + Duration::from_secs(40);
+    while !a.mesh.connected().contains(&b.mesh.device()) {
+        assert!(Instant::now() < end, "never reached the hub through the tunnel: {:?}", dev_away.live_status());
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(dev_away.live_status().unwrap().through, "through the tunnel");
+    // Both ends note the key the handshake took.
+    let name = id_text(&b.mesh.device());
+    let toward = crate::tunnel::State::load(&da).unwrap().unwrap().toward[&name].side();
+    assert!(toward.handshaked.is_some());
+    until("the hub notes the handshake", || {
+        crate::tunnel::State::load(&db).unwrap().unwrap().held[&id_text(&a.mesh.device())].side().handshaked
+            == vec![toward.handshaked.unwrap()]
+    });
+    // The connection through the tunnel sent its own `tunnel`: the hub
+    // holds that key too, and the tunnel it rides stays up.
+    until("the hub holds the key of the connection through the tunnel", || {
+        crate::tunnel::State::load(&db).unwrap().unwrap().held[&id_text(&a.mesh.device())].side().received.len() == 2
+    });
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(a.mesh.connected().contains(&b.mesh.device()), "the tunnel stays up as the hub's keys change");
+    assert!(dev_away.live_status().unwrap().through);
+    a.close();
+    b.close();
+}

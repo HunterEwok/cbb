@@ -98,6 +98,11 @@ fn shown(id: &DeviceId) -> certs::DeviceId {
     certs::DeviceId::parse(&id_text(id)).unwrap_or_else(|_| certs::DeviceId::random())
 }
 
+/// A device ID in hex, as `tunnel.json` keeps it.
+pub(crate) fn id_of_hex(s: &str) -> Option<DeviceId> {
+    of(&certs::DeviceId::parse(s).ok()?)
+}
+
 /// A device ID discovery names.
 fn of(id: &certs::DeviceId) -> Option<DeviceId> {
     let s = id.as_str();
@@ -130,6 +135,8 @@ pub struct Live {
     own_media: Mutex<Option<(SentMedia, i64)>>,
     /// Sync away from home, once the service gave it (`with_away`).
     away: std::sync::OnceLock<Arc<crate::away::Away>>,
+    /// The hub's tunnel, while this device serves as a hub of 0.6.
+    hub: Mutex<Option<Arc<crate::hub::Hub>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -175,6 +182,7 @@ impl Live {
             networks: RwLock::new(None),
             own_media: Mutex::new(None),
             away: std::sync::OnceLock::new(),
+            hub: Mutex::new(None),
             log,
         });
         live.settle(&live.mesh.state());

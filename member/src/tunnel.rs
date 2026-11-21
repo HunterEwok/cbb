@@ -99,6 +99,11 @@ pub struct State {
     /// hub's device ID in hex.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub toward: std::collections::BTreeMap<String, Toward>,
+    /// On a hub of the records of 0.6, each client's WireGuard key toward
+    /// it and the pre-shared keys it holds for that client
+    /// (`cbb_core::hubkey::HubSide`), by the client's device ID in hex.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub held: std::collections::BTreeMap<String, Held>,
     /// The key sealed by the TPM or the Secure Enclave, as Go keeps it;
     /// key stays out of the file then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -250,6 +255,44 @@ mod b64_list {
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Vec<u8>>, D::Error> {
         let list: Option<Vec<String>> = Option::deserialize(d)?;
         list.unwrap_or_default().iter().map(|t| STANDARD.decode(t).map_err(serde::de::Error::custom)).collect()
+    }
+}
+
+/// A client of a hub of 0.6, as `tunnel.json` keeps it: its WireGuard key
+/// toward this hub, and `cbb_core::hubkey::HubSide`: the keys of the last
+/// connections it sent `tunnel` over and of the last handshakes, newest
+/// first.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Held {
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    received: Vec<Vec<u8>>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    handshaked: Vec<Vec<u8>>,
+}
+
+impl std::fmt::Debug for Held {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Held").field("received", &self.received.len()).finish_non_exhaustive()
+    }
+}
+
+impl Held {
+    /// The keys as the core keeps them; a damaged entry is left out.
+    pub fn side(&self) -> cbb_core::hubkey::HubSide {
+        cbb_core::hubkey::HubSide {
+            received: self.received.iter().filter_map(|k| key32(k).ok()).collect(),
+            handshaked: self.handshaked.iter().filter_map(|k| key32(k).ok()).collect(),
+        }
+    }
+
+    pub fn of(key: [u8; 32], side: &cbb_core::hubkey::HubSide) -> Held {
+        Held {
+            key: key.to_vec(),
+            received: side.received.iter().map(|k| k.to_vec()).collect(),
+            handshaked: side.handshaked.iter().map(|k| k.to_vec()).collect(),
+        }
     }
 }
 
@@ -531,6 +574,7 @@ impl State {
             psk: Vec::new(),
             hubs: Vec::new(),
             toward: Default::default(),
+            held: Default::default(),
             key_tpm: None,
             key_se: None,
             is_hub: false,
@@ -706,7 +750,7 @@ impl State {
     }
 
     /// Whether pub is one of this device's public keys.
-    fn own_key(&self, public: &[u8]) -> bool {
+    pub(crate) fn own_key(&self, public: &[u8]) -> bool {
         [&self.key, &self.serving, &self.next].iter().any(|k| !k.is_empty() && public_of(k) == public)
     }
 

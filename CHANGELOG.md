@@ -83,7 +83,11 @@ made with 0.5 is set up again once. The details follow.
   keys of its connections with it one at a time (the confirmed one first) over every way of
   the hub at once: its own key, each forwarder face's key, and its next key. A hub's tunnel
   holds several pre-shared keys of a client (up to 6) and answers a handshake under each, the
-  client's data then showing which one fits. The rest of the hub's side is still moving.
+  client's data then showing which one fits. A hub of 0.6 keeps each client's key toward it
+  and the pre-shared keys it confirmed (`held` in `tunnel.json`), answers with its offer, and
+  serves its tunnel to them, keeping a client's tunnel up as its keys change; the key a
+  handshake took is noted at both ends. `cbb global hub` and the hub's forwarder on 0.6 are
+  still moving.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

@@ -141,9 +141,10 @@ impl core::fmt::Debug for Peer {
 
 impl Peer {
     /// Whether two clients are one tunnel: the same keys and address, when
-    /// they go aside.
+    /// they go aside. A client whose pre-shared keys alone changed keeps
+    /// the tunnels of the keys that stay.
     fn same_tunnel(&self, o: &Peer) -> bool {
-        self.key == o.key && self.psk == o.psk && self.older_psks == o.older_psks && self.addr == o.addr
+        self.key == o.key && self.addr == o.addr
     }
 
     /// Every pre-shared key held, the newest first.
@@ -186,9 +187,14 @@ pub struct Hub {
     out: Arc<UdpSocket>,
     dialed: Dialed,
     peers: Arc<Mutex<Option<Vec<Peer>>>>,
+    handshakes: Handshakes,
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
+
+/// The clients whose data came under another of their pre-shared keys
+/// than before, with that key, for the caller to note (`take_handshakes`).
+type Handshakes = Arc<Mutex<Vec<([u8; 32], [u8; 32])>>>;
 
 impl Hub {
     /// Starts the hub of the device `device` with its WireGuard private key,
@@ -239,6 +245,7 @@ impl Hub {
         // The clients and the guests are behind the tunnel, each a peer.
         let _ = iface.routes_mut().add_default_ipv6_route(own);
         let shared = Arc::new(Mutex::new(Some(peers)));
+        let handshakes: Handshakes = Arc::default();
         let stop = Arc::new(AtomicBool::new(false));
         let dialed: Dialed = Arc::default();
         let mut pump = Pump {
@@ -255,6 +262,7 @@ impl Hub {
             peers: HashMap::new(),
             by_index: HashMap::new(),
             wanted: shared.clone(),
+            handshakes: handshakes.clone(),
             iface,
             dev,
             sockets: SocketSet::new(Vec::new()),
@@ -280,7 +288,13 @@ impl Hub {
             let stop = stop.clone();
             std::thread::spawn(move || pump.run(&stop))
         };
-        Ok(Hub { port, out, dialed, peers: shared, stop, thread: Some(thread) })
+        Ok(Hub { port, out, dialed, peers: shared, handshakes, stop, thread: Some(thread) })
+    }
+
+    /// The clients whose data came under another of their pre-shared keys
+    /// since the last call, each with that key (its client's key first).
+    pub fn take_handshakes(&self) -> Vec<([u8; 32], [u8; 32])> {
+        self.handshakes.lock().map(|mut h| std::mem::take(&mut *h)).unwrap_or_default()
     }
 
     /// The client's tunnel address a connection to a loopback port came
@@ -366,8 +380,9 @@ struct PeerState {
     /// One tunnel per pre-shared key held, in the order of `Peer::psks`.
     tunns: Vec<Tunn>,
     /// The tunnel whose key the client's data last came under, which what
-    /// goes to the client takes.
+    /// goes to the client takes, and whether data came under it yet.
     active: usize,
+    noted: bool,
     /// Where its datagrams last came from, where the hub's go.
     endpoint: Option<SocketAddr>,
     /// AmneziaWG to this client, for a group that hides its tunnel.
@@ -448,6 +463,7 @@ struct Pump {
     by_index: HashMap<u32, ([u8; 32], usize)>,
     /// The clients set_peers asked for, taken by the pump's thread.
     wanted: Arc<Mutex<Option<Vec<Peer>>>>,
+    handshakes: Handshakes,
     iface: Interface,
     dev: Queues,
     sockets: SocketSet<'static>,
@@ -503,26 +519,50 @@ impl Pump {
         self.peers.retain(|k, s| keep.get(k).is_some_and(|p| p.same_tunnel(&s.peer)));
         let gone = before.saturating_sub(self.peers.len());
         for (k, p) in keep {
+            let new_tunn = |psk: &[u8; 32]| {
+                Tunn::new(
+                    self.secret.clone(),
+                    PublicKey::from(p.key),
+                    Some(*psk),
+                    None,
+                    self.index.clone(),
+                    self.limiter.clone(),
+                )
+            };
             if let Some(s) = self.peers.get_mut(&k) {
+                if s.peer.psks().ne(p.psks()) {
+                    // The tunnels of the keys that stay go on; the client's
+                    // sessions under them, and the hub's indices, too.
+                    let mut old: Vec<([u8; 32], Option<Tunn>)> =
+                        s.peer.psks().copied().zip(s.tunns.drain(..).map(Some)).collect();
+                    let active = old.get(s.active).map(|(k, _)| *k);
+                    let mut moved = Vec::new();
+                    for (i, psk) in p.psks().enumerate() {
+                        let kept = old.iter_mut().position(|(k, t)| k == psk && t.is_some());
+                        match kept.and_then(|j| old.get_mut(j).and_then(|(_, t)| t.take()).map(|t| (j, t))) {
+                            Some((j, t)) => {
+                                moved.push((j, i));
+                                s.tunns.push(t);
+                            }
+                            None => s.tunns.push(new_tunn(psk)),
+                        }
+                    }
+                    s.active = active.and_then(|a| p.psks().position(|k| *k == a)).unwrap_or(0);
+                    for (key, i) in self.by_index.values_mut() {
+                        if *key == k {
+                            *i = moved.iter().find(|(j, _)| j == i).map_or(usize::MAX, |(_, n)| *n);
+                        }
+                    }
+                    s.peer.psk = p.psk;
+                    s.peer.older_psks.clone_from(&p.older_psks);
+                }
                 s.peer.until = p.until;
                 s.peer.source = p.source;
                 continue;
             }
-            let tunns = p
-                .psks()
-                .map(|psk| {
-                    Tunn::new(
-                        self.secret.clone(),
-                        PublicKey::from(p.key),
-                        Some(*psk),
-                        None,
-                        self.index.clone(),
-                        self.limiter.clone(),
-                    )
-                })
-                .collect();
+            let tunns = p.psks().map(new_tunn).collect();
             let awg = self.obf.clone().map(|o| crate::awg::Awg::new(o, &p.key, self.public.as_bytes()));
-            self.peers.insert(k, PeerState { peer: p, tunns, active: 0, endpoint: None, awg });
+            self.peers.insert(k, PeerState { peer: p, tunns, active: 0, noted: false, endpoint: None, awg });
         }
         self.sources = self.peers.values().map(|s| (s.peer.addr, s.peer.source)).collect();
         if gone > 0 {
@@ -720,7 +760,12 @@ impl Pump {
                 }
                 TunnResult::WriteToTunnel(p) => {
                     s.endpoint = Some(from);
-                    s.active = i;
+                    if s.active != i || !s.noted {
+                        if let (Some(psk), Ok(mut h)) = (s.peer.psks().nth(i), self.handshakes.lock()) {
+                            h.push((s.peer.key, *psk));
+                        }
+                        (s.active, s.noted) = (i, true);
+                    }
                     let ip: &[u8] = p.as_ref();
                     // Only what comes from the client's own address, as
                     // WireGuard's allowed IPs would have it, to the hub's.

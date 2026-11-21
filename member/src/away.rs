@@ -23,6 +23,7 @@ use crate::tunnel::{self, Link, State};
 use crate::uptime;
 use crate::wire::TunnelOffer;
 
+mod held;
 mod hubs;
 mod invite;
 mod meet;
@@ -31,6 +32,7 @@ mod offer;
 mod serve;
 mod toward;
 
+pub use held::offer_result;
 pub use invite::{GuestTunnel, join_invite, keep_guest};
 pub use movehub::is_stop;
 

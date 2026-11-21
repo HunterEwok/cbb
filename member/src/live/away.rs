@@ -32,14 +32,17 @@ impl Live {
         }));
         let w: Weak<Live> = Arc::downgrade(self);
         self.mesh.on_other(Box::new(move |peer, t, msg| {
-            if let Some(l) = w.upgrade()
-                && t == cbb_core::msg::tables::T_RESULT
-            {
-                l.offered(peer, msg);
+            let Some(l) = w.upgrade() else { return };
+            match t {
+                cbb_core::msg::tables::T_RESULT => l.offered(peer, msg),
+                cbb_core::msg::tables::T_TUNNEL => l.tunnel_from(peer, msg),
+                _ => {}
             }
         }));
         let w: Weak<Live> = Arc::downgrade(self);
         std::thread::spawn(move || reach_hubs(&w));
+        let w: Weak<Live> = Arc::downgrade(self);
+        std::thread::spawn(move || serve_hub(&w));
     }
 
     /// Sync away from home, once with_away gave it.
@@ -74,6 +77,44 @@ impl Live {
             Ok(None) => {}
             Err(e) => self.logf(&format!("cbb: the tunnel's key toward hub {}: {}", id_text4(peer), e.for_log())),
         }
+    }
+
+    /// A client sent this hub `tunnel`: the key is kept, the hub answers
+    /// with its offer confirming the tag, and its tunnel takes the keys.
+    fn tunnel_from(&self, peer: &DeviceId, msg: &[u8]) {
+        let Some(away) = self.away.get() else { return };
+        let Ok((key, confirm)) = cbb_core::hubkey::read(msg) else { return };
+        let Some(psk) = self.mesh.tunnel_psk(peer, true) else { return };
+        let tag = match away.tunnel_from(peer, key, &confirm, psk) {
+            Ok(Some(tag)) => tag,
+            Ok(None) => return,
+            Err(e) => {
+                self.logf(&format!("cbb: the tunnel key of {}: {}", id_text4(peer), e.for_log()));
+                return;
+            }
+        };
+        self.give_hub_peers();
+        let Some(offer) = away.offer_encoding(&tag) else { return };
+        match crate::away::offer_result(&self.mesh.device(), &tag, &offer) {
+            Ok(f) => {
+                self.mesh.send(peer, f);
+            }
+            Err(e) => self.logf(&format!("cbb: the hub's offer: {}", e.for_log())),
+        }
+    }
+
+    /// Gives the hub's tunnel, while it runs, the clients and keys held.
+    fn give_hub_peers(&self) {
+        let (Some(away), Some(hub)) = (self.away.get(), self.hub.lock().unwrap().clone()) else { return };
+        let st = self.mesh.state();
+        let peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
+        if let Err(e) = hub.set_peers_at(peers, self.own_tunnel_addr()) {
+            self.logf(&format!("cbb: the hub could not take its clients: {}", e.for_log()));
+        }
+    }
+
+    fn own_tunnel_addr(&self) -> std::net::Ipv6Addr {
+        crate::tunnel::addr(&cbb_core::certs::hex(&self.me.0)).unwrap_or(std::net::Ipv6Addr::UNSPECIFIED)
     }
 
     /// A `result` with a hub's offer came from peer.
@@ -158,7 +199,7 @@ fn reach_hubs(w: &Weak<Live>) {
 }
 
 fn hub_id(device: &str) -> Option<DeviceId> {
-    super::of(&crate::certs::DeviceId::parse(device).ok()?)
+    super::id_of_hex(device)
 }
 
 impl Live {
@@ -216,6 +257,88 @@ impl Live {
                 id_text4(id)
             ))
         }))
+    }
+}
+
+/// Serves as a hub of 0.6 while this device is one: the hub's tunnel with
+/// the clients held, each connection through it to this member as a member
+/// connection, and the clients' handshakes noted; until the member closes.
+fn serve_hub(w: &Weak<Live>) {
+    loop {
+        let Some(l) = w.upgrade() else { return };
+        if l.is_closed() {
+            l.hub.lock().unwrap().take();
+            return;
+        }
+        let Some(away) = l.away.get().cloned() else { return };
+        let settings = away.hub_settings();
+        let running = l.hub.lock().unwrap().clone();
+        match (settings, running) {
+            (None, Some(_)) => {
+                l.hub.lock().unwrap().take();
+                l.logf("cbb: the hub stopped");
+            }
+            (Some(s), None) => match l.start_hub(&away, s) {
+                Ok(h) => *l.hub.lock().unwrap() = Some(h),
+                Err(e) => away.failed(Some(&e)),
+            },
+            (Some(_), Some(h)) => {
+                for (key, psk) in h.take_handshakes() {
+                    if let Err(e) = away.hub_handshaked(&key, &psk) {
+                        l.logf(&format!("cbb: {}", e.for_log()));
+                    }
+                }
+            }
+            (None, None) => {}
+        }
+        drop(l);
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+impl Live {
+    /// Starts the hub's tunnel with settings, its connections going to a
+    /// loopback port where this member takes them.
+    fn start_hub(
+        self: &Arc<Self>,
+        away: &Arc<Away>,
+        (key, obfuscation, port): ([u8; 32], Option<serde_json::Value>, u16),
+    ) -> crate::error::Result<Arc<crate::hub::Hub>> {
+        use crate::error::Context as _;
+        let port = if port == 0 { crate::tunnel::MEMBER_PORT } else { port };
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").context("cannot open the hub's local port")?;
+        let local = ln.local_addr().context("cannot open the hub's local port")?.port();
+        let st = self.mesh.state();
+        let peers = away.held_peers(&|id| st.device(id).is_some_and(|d| !d.frozen));
+        let target: crate::hub::Target = Arc::new(move |_| Some(local));
+        let start = |ip: std::net::IpAddr| {
+            crate::hub::Hub::start(
+                &key,
+                &cbb_core::certs::hex(&self.me.0),
+                obfuscation.as_ref(),
+                peers.clone(),
+                std::net::SocketAddr::from((ip, port)),
+                target.clone(),
+                self.log.clone(),
+            )
+        };
+        let hub = start(std::net::Ipv6Addr::UNSPECIFIED.into())
+            .or_else(|_| start(std::net::Ipv4Addr::UNSPECIFIED.into()))
+            .map_err(|e| e.context(format!("the hub could not listen on UDP port {port}")))?;
+        let hub = Arc::new(hub);
+        let w = Arc::downgrade(self);
+        std::thread::spawn(move || {
+            for sock in ln.incoming() {
+                let (Some(l), Ok(sock)) = (w.upgrade(), sock) else { return };
+                let mesh = l.mesh.clone();
+                drop(l);
+                std::thread::spawn(move || {
+                    let _ = mesh.accept(sock);
+                });
+            }
+        });
+        self.logf(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));
+        Ok(hub)
     }
 }
 

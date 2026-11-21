@@ -247,6 +247,26 @@ impl Obfuscation {
         v
     }
 
+    /// The settings as the format's table `obfuscation` encodes them, for
+    /// a hub's offer of 0.6: field 6 only with header protection.
+    pub fn to_cbor(&self) -> Vec<u8> {
+        use cbb_core::format::cbor::Value as V;
+        let s: Vec<V<'_>> = self.s.iter().map(|x| V::Uint(u64::from(*x))).collect();
+        let h: Vec<V<'_>> =
+            self.h.iter().map(|r| V::Array(vec![V::Uint(u64::from(r.min)), V::Uint(u64::from(r.max))])).collect();
+        let mut m = vec![
+            (1, V::Uint(u64::from(self.jc))),
+            (2, V::Uint(u64::from(self.jmin))),
+            (3, V::Uint(u64::from(self.jmax))),
+            (4, V::Array(s)),
+            (5, V::Array(h)),
+        ];
+        if let Some(k) = &self.header_key {
+            m.push((6, V::Bytes(k)));
+        }
+        V::Map(m).encode()
+    }
+
     /// Reads the settings as the format's table `obfuscation` carries them
     /// in a hub's offer (core `msg::tables::OBFUSCATION`, already checked
     /// against it): field 6, the header protection key, absent for none.

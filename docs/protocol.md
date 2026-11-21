@@ -3047,6 +3047,16 @@ WireGuard tunnel each. An initiation is answered under each of them; the client 
 answer under its own key, and its first data names the hub's session of that key, which
 carries what goes to the client from then on.
 
+A hub of 0.6 keeps, per client, its key toward the hub and the hub's `HubSide` (`held` in
+`tunnel.json`, `member/src/away/held.rs`). On a `tunnel` whose tag is the one of the
+connection's exported key it keeps the key (a key another client or the hub itself holds is
+refused, and a new key toward the hub starts afresh), answers with its offer, and gives its
+tunnel the client's keys; a client whose keys alone changed keeps the tunnels of the keys that
+stay, so a connection through the tunnel survives its own `tunnel`. Its offer names its
+endpoints, the forwarder's last with the key the hub serves there (field 9), and VLESS with the
+forwarder's site's name, port and path. The key a handshake took is kept among the last 2
+(`member/src/live/away.rs`).
+
 An offer whose way over VLESS has no `vless/host` is refused: the forwarder's XHTTP front is
 checked by the system's certificate authorities under a site's name, which an address is not.
 One without `vless/path` is refused too: the path comes from the forwarder's answer to the
