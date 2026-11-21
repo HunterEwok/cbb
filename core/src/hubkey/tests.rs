@@ -229,3 +229,28 @@ fn the_offers_id_follows_from_the_tag() {
     m.extend_from_slice(&a);
     assert_eq!(offer_id(&a)[..], crate::certs::sha256(&m)[..16]);
 }
+
+/// `hubs` says exactly one of stopped and serving, each the flag 1, and
+/// reads back as written; anything else is refused.
+#[test]
+fn the_hubs_message() {
+    for says in [HubSays::Serving, HubSays::Stopped] {
+        assert_eq!(read_hubs(&hubs_message(says)), Ok(says));
+    }
+    let m = |f: Vec<(u16, Value<'static>)>| {
+        let mut all = alloc::vec![(0, Value::Uint(T_HUBS))];
+        all.extend(f);
+        Value::Map(all).encode()
+    };
+    for bad in [
+        m(alloc::vec![]),
+        m(alloc::vec![(2, Value::Uint(1)), (3, Value::Uint(1))]),
+        m(alloc::vec![(3, Value::Uint(2))]),
+        m(alloc::vec![(2, Value::Text("yes"))]),
+    ] {
+        assert_eq!(read_hubs(&bad), Err(RULE_HUBS));
+    }
+    // A field it does not know is passed over.
+    assert_eq!(read_hubs(&m(alloc::vec![(3, Value::Uint(1)), (9, Value::Uint(5))])), Ok(HubSays::Serving));
+    assert_eq!(read_hubs(&message(&[1; 32], &[2; 32])), Err(RULE_HUBS));
+}

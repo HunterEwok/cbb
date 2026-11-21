@@ -315,8 +315,8 @@ pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String
                 .map_err(|e| Error::msg(format!("cannot let the device be a hub: {e}")))?,
         );
     }
-    hubs.sort();
-    hubs.dedup();
+    // In the user's order, which is the order the hubs serve in (format
+    // 4.8): not sorted.
     let st = set.state();
     out.extend(
         set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)

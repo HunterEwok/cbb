@@ -92,6 +92,10 @@ made with 0.5 is set up again once. The details follow.
   on a group of 0.6 show sync away from home, and on a hub its forwarder: where it is, whether
   it registered there, and why not.
   An `away-off` command turns sync away from home off on a member of 0.6.
+  The hubs of 0.6 serve in one order from the records (`State::hub_order` in the core), the
+  root's hubs record in the user's order first; a hub stands by while a hub above it serves
+  and says so in `hubs` (t 16), and serves again a minute after losing it. The hubs record
+  keeps the user's order instead of sorting it.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

@@ -58,15 +58,20 @@ fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
 
 /// The state directories of `two`'s devices, a's and b's.
 pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
-    dirs(name, false)
+    dirs(name, &[])
 }
 
 /// two_dirs, with b one of the group's hubs by the root's hubs record.
 pub(crate) fn two_dirs_b_hub(name: &str) -> (PathBuf, PathBuf) {
-    dirs(name, true)
+    dirs(name, &["b"])
 }
 
-fn dirs(name: &str, b_hub: bool) -> (PathBuf, PathBuf) {
+/// Two members that are both hubs, b above a in the hubs record.
+pub(crate) fn two_dirs_both_hubs(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, &["b", "a"])
+}
+
+fn dirs(name: &str, hubs: &[&str]) -> (PathBuf, PathBuf) {
     let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
     let (oa, ob) = (own(&da), own(&db));
     let root = root();
@@ -80,14 +85,15 @@ fn dirs(name: &str, b_hub: bool) -> (PathBuf, PathBuf) {
     for (o, name) in [(&oa, "a"), (&ob, "b")] {
         let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
         d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
-        if b_hub && name == "b" {
+        if hubs.contains(&name) {
             d.rights |= body::RIGHT_HUB;
         }
         let st = set.state();
         set.write_record(&st, &root, Kind::device(d), now - 1000).unwrap();
     }
-    if b_hub {
-        crate::writers::set_hubs(&mut set, &root, &["b".to_string()], now - 900).unwrap();
+    if !hubs.is_empty() {
+        let hubs: Vec<String> = hubs.iter().map(ToString::to_string).collect();
+        crate::writers::set_hubs(&mut set, &root, &hubs, now - 900).unwrap();
     }
     let b_set = set.clone();
     let mut d = Device::new(Key::es256(K(SigningKey::from_slice(&[7; 32]).unwrap()).public()), "c", body::ROLE_MEMBER);

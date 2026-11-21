@@ -3705,6 +3705,7 @@ mod change;
 mod change_over;
 mod change_spare;
 mod early_admins;
+mod hub_order;
 mod insert_cost;
 mod lost_root;
 mod recovery;

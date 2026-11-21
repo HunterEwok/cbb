@@ -70,6 +70,8 @@ pub const T_TUNNEL: u64 = 15;
 
 pub const RULE_TUNNEL: Rule = Rule::field("tunnel/key");
 pub const RULE_CONFIRM: Rule = Rule::field("tunnel/confirm");
+pub const RULE_HUBS: Rule = Rule::field("hubs/shape");
+pub const T_HUBS: u64 = 16;
 
 /// The context of the exporter: the hub's device ID, then the dialing
 /// device's.
@@ -150,6 +152,44 @@ pub fn message(public: &[u8; 32], confirm: &[u8; 32]) -> Vec<u8> {
         (3, Value::Bytes(confirm)),
     ])
     .encode()
+}
+
+/// What a hub tells the other hubs in message `hubs` (t 16).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HubSays {
+    /// It serves its clients as the hub (field 3).
+    Serving,
+    /// It stopped being a hub (field 2).
+    Stopped,
+}
+
+/// The `hubs` message a hub sends the other hubs: exactly one of field 2
+/// (stopped) and field 3 (serving), the flag 1.
+pub fn hubs_message(says: HubSays) -> Vec<u8> {
+    let field = match says {
+        HubSays::Stopped => 2,
+        HubSays::Serving => 3,
+    };
+    Value::Map(alloc::vec![(0, Value::Uint(T_HUBS)), (field, Value::Uint(1))]).encode()
+}
+
+/// Reads a `hubs` message: exactly one of stopped and serving, each the
+/// flag 1; fields it does not know are passed over.
+pub fn read_hubs(msg: &[u8]) -> Result<HubSays, Rule> {
+    let v = cbor::decode(msg)?;
+    if v.get(0).and_then(Value::as_uint) != Some(T_HUBS) {
+        return Err(RULE_HUBS);
+    }
+    let flag = |n| match v.get(n) {
+        None => Ok(false),
+        Some(f) if f.as_uint() == Some(1) => Ok(true),
+        Some(_) => Err(RULE_HUBS),
+    };
+    match (flag(2)?, flag(3)?) {
+        (true, false) => Ok(HubSays::Stopped),
+        (false, true) => Ok(HubSays::Serving),
+        _ => Err(RULE_HUBS),
+    }
 }
 
 /// The ID (field 2) of the `result` that carries a hub's offer answering

@@ -137,6 +137,8 @@ pub struct Live {
     away: std::sync::OnceLock<Arc<crate::away::Away>>,
     /// The hub's tunnel, while this device serves as a hub of 0.6.
     hub: Mutex<Option<away::HubRun>>,
+    /// The hubs above this one that said they serve, while it is a hub.
+    ladder: Mutex<away::Ladder>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -183,6 +185,7 @@ impl Live {
             own_media: Mutex::new(None),
             away: std::sync::OnceLock::new(),
             hub: Mutex::new(None),
+            ladder: Mutex::new(away::Ladder::default()),
             log,
         });
         live.settle(&live.mesh.state());

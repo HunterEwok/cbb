@@ -3062,6 +3062,19 @@ checked by the system's certificate authorities under a site's name, which an ad
 One without `vless/path` is refused too: the path comes from the forwarder's answer to the
 hub's registration.
 
+The hubs of 0.6 serve in the order `State::hub_order` derives from the records alone
+(`core/src/records/eval.rs`): the devices of the root's hubs record first, in the record's
+order (the user's, not sorted), then the other devices with an admin key, the computers before
+the phones, in each part the root's own device first, then by device ID; frozen devices are
+left out. A device tries the hubs whose offers it keeps in that order, and none outside it.
+A hub that serves sends `hubs` (t 16) with field 3 (serving, 1) to each connected device that
+may be a hub, after the hello and when it starts serving, and field 2 (stopped, 1) when it
+stops being a hub; exactly one of the two, else the message is refused
+(`hubkey::read_hubs`, `hubs/shape`). A hub stands by, with no tunnel, while a hub above it in
+the order is connected and said it serves, and serves again a minute after it lost the last
+such hub (`member/src/live/away.rs`). Hubs pass neither offers nor clients: a client learns a
+hub's offer only from its own `tunnel` to that hub.
+
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
   by writing `tunnel.json` next to the identity

@@ -5,7 +5,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use super::*;
-use crate::mesh::tests::{own, two_dirs, two_dirs_b_hub};
+use crate::mesh::tests::{own, two_dirs, two_dirs_b_hub, two_dirs_both_hubs};
 
 fn until(what: &str, f: impl Fn() -> bool) {
     let end = Instant::now() + Duration::from_secs(10);
@@ -16,7 +16,16 @@ fn until(what: &str, f: impl Fn() -> bool) {
 }
 
 fn open(dir: &Path) -> Arc<Live> {
-    Live::open(dir, own(dir), Arc::new(|_| {})).unwrap()
+    Live::open(
+        dir,
+        own(dir),
+        Arc::new(|s: &str| {
+            if std::env::var_os("CBB_TEST_LOG").is_some() {
+                eprintln!("{s}")
+            }
+        }),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -230,6 +239,55 @@ fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
     std::thread::sleep(Duration::from_secs(1));
     assert!(a.mesh.connected().contains(&b.mesh.device()), "the tunnel stays up as the hub's keys change");
     assert!(dev_away.live_status().unwrap().through);
+    a.close();
+    b.close();
+}
+
+/// Of two hubs of 0.6, the one lower in the order stands by while the one
+/// above serves and says so (`hubs`, t 16); once the one above stops being
+/// a hub and says so, the lower one serves after its wait.
+#[test]
+fn a_hub_stands_by_while_the_hub_above_serves() {
+    let (da, db) = two_dirs_both_hubs("away-ladder");
+    let (a, b) = (open(&da), open(&db));
+    let hub_of = |l: &Arc<Live>, dir: &Path| {
+        let me = crate::certs::DeviceId::parse(&id_text(&l.mesh.device())).unwrap();
+        let away = Arc::new(crate::away::Away::new(dir.to_path_buf(), l.tag(), me, Arc::new(|_| {})));
+        let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let port = udp.local_addr().unwrap().port();
+        drop(udp);
+        let h = crate::control::Header {
+            addrs: vec![format!("127.0.0.1:{port}")],
+            port: i64::from(port),
+            consent: true,
+            ..Default::default()
+        };
+        away.make_hub(&h).unwrap();
+        l.with_away(away.clone());
+        away
+    };
+    assert_eq!(a.mesh.hub_order(), vec![b.mesh.device(), a.mesh.device()]);
+    let b_away = hub_of(&b, &db);
+    until("b serves", || b.hub.lock().unwrap().is_some());
+    let _a_away = hub_of(&a, &da);
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    crate::discovery::start(
+        a.clone(),
+        a.tag(),
+        vec![SocketAddr::from(([127, 0, 0, 1], member_port))],
+        false,
+        None,
+        log,
+    );
+    until("a and b connect", || a.mesh.connected().contains(&b.mesh.device()));
+    until("a stands by", || a.hub.lock().unwrap().is_none() && a.stands_by());
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(a.hub.lock().unwrap().is_none(), "a stays standing by");
+    assert!(b.hub.lock().unwrap().is_some(), "b serves");
+    b_away.turn_off().unwrap();
+    until("b stops", || b.hub.lock().unwrap().is_none());
+    until("a serves", || a.hub.lock().unwrap().is_some());
     a.close();
     b.close();
 }

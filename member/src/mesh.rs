@@ -408,8 +408,12 @@ impl Mesh {
     /// not frozen, that holds an admin key or that the root's hubs record
     /// names.
     pub fn may_be_hub(&self, id: &DeviceId) -> bool {
-        let st = self.state();
-        st.device(id).is_some_and(|d| !d.frozen && (d.admin.is_some() || st.hubs.contains(id)))
+        self.state().may_be_hub(id)
+    }
+
+    /// The group's hubs in the order in which they serve (`State::hub_order`).
+    pub fn hub_order(&self) -> Vec<DeviceId> {
+        self.state().hub_order()
     }
 
     /// What this device's hellos say of it beyond the exchange's fields.

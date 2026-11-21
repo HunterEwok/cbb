@@ -28,6 +28,9 @@ impl Live {
         self.mesh.on_connected(Box::new(move |peer| {
             if let Some(l) = w.upgrade() {
                 l.tunnel_toward(peer);
+                if l.hub.lock().unwrap().is_some() {
+                    l.hubs_say(Some(peer), cbb_core::hubkey::HubSays::Serving);
+                }
             }
         }));
         let w: Weak<Live> = Arc::downgrade(self);
@@ -36,6 +39,7 @@ impl Live {
             match t {
                 cbb_core::msg::tables::T_RESULT => l.offered(peer, msg),
                 cbb_core::msg::tables::T_TUNNEL => l.tunnel_from(peer, msg),
+                cbb_core::msg::tables::T_HUBS => l.hubs_from(peer, msg),
                 _ => {}
             }
         }));
@@ -103,6 +107,52 @@ impl Live {
         }
     }
 
+    /// Sends `hubs` (t 16) to the device to, or to every device connected
+    /// that may be a hub.
+    fn hubs_say(&self, to: Option<&DeviceId>, says: cbb_core::hubkey::HubSays) {
+        let msg = cbb_core::hubkey::hubs_message(says);
+        let Ok(v) = cbb_core::format::cbor::decode(&msg) else { return };
+        let f = cbb_core::format::frame::write(&v);
+        let peers = to.map_or_else(|| self.mesh.connected().into_iter().collect(), |p| vec![*p]);
+        for p in peers.iter().filter(|p| self.mesh.may_be_hub(p)) {
+            self.mesh.send(p, f.clone());
+        }
+    }
+
+    /// Another hub said it serves, or that it stopped being a hub (mesh
+    /// takes `hubs` only from a device that may be a hub).
+    fn hubs_from(&self, peer: &DeviceId, msg: &[u8]) {
+        match cbb_core::hubkey::read_hubs(msg) {
+            Ok(cbb_core::hubkey::HubSays::Serving) => {
+                self.ladder.lock().unwrap().serving.insert(*peer);
+            }
+            Ok(cbb_core::hubkey::HubSays::Stopped) => {
+                self.ladder.lock().unwrap().serving.remove(peer);
+            }
+            Err(e) => self.logf(&format!("cbb: ignored message hubs from {}: {e}", id_text4(peer))),
+        }
+    }
+
+    /// Whether this hub stands by: a hub above it in the order is
+    /// connected and said it serves, or did less than a minute ago.
+    pub(super) fn stands_by(&self) -> bool {
+        let order = self.mesh.hub_order();
+        let me = self.mesh.device();
+        let at = order.iter().position(|d| *d == me).unwrap_or(order.len());
+        let connected = self.mesh.connected();
+        let mut ladder = self.ladder.lock().unwrap();
+        ladder.serving.retain(|d| connected.contains(d));
+        let above = ladder.serving.iter().any(|d| order.iter().position(|o| o == d).is_some_and(|p| p < at));
+        if above {
+            ladder.lost = None;
+            ladder.above = true;
+        } else if ladder.above {
+            ladder.above = false;
+            ladder.lost = Some(Instant::now());
+        }
+        above || ladder.lost.is_some_and(|t| t.elapsed() < AGAIN_AFTER)
+    }
+
     /// Gives the hub's tunnel, while it runs, the clients and keys held.
     fn give_hub_peers(&self) {
         let hub = self.hub.lock().unwrap().as_ref().map(|r| r.hub.clone());
@@ -164,8 +214,19 @@ fn reach_hubs(w: &Weak<Live>) {
             return;
         }
         let Some(away) = l.away.get().cloned() else { return };
-        let hubs = away.hubs_kept();
-        let ids: Vec<DeviceId> = hubs.iter().filter_map(|h| hub_id(&h.device)).collect();
+        // The hubs kept, in the order in which they serve; one outside the
+        // order is not tried.
+        let order = l.mesh.hub_order();
+        let mut kept: Vec<(usize, crate::tunnel::Hub, DeviceId)> = away
+            .hubs_kept()
+            .into_iter()
+            .filter_map(|h| {
+                let id = hub_id(&h.device)?;
+                Some((order.iter().position(|o| *o == id)?, h, id))
+            })
+            .collect();
+        kept.sort_by_key(|(at, ..)| *at);
+        let (hubs, ids): (Vec<_>, Vec<_>) = kept.into_iter().map(|(_, h, id)| (h, id)).unzip();
         let connected = l.mesh.connected();
         if hubs.is_empty() || l.is_paused() || ids.iter().any(|id| connected.contains(id) || l.at_home(id)) {
             drop(l);
@@ -274,15 +335,28 @@ fn serve_hub(w: &Weak<Live>) {
             return;
         }
         let settings = away.hub_settings();
+        // A hub stands by while a hub above it serves: its clients go to
+        // that one.
+        let standby = settings.is_some() && l.stands_by();
+        let is_hub = settings.is_some();
+        let settings = settings.filter(|_| !standby);
         let running = l.hub.lock().unwrap().as_ref().map(|r| (r.hub.clone(), r.report.clone()));
         match (settings, running) {
             (None, Some(_)) => {
                 l.hub.lock().unwrap().take();
                 away.hub_stopped();
-                l.logf("cbb: the hub stopped");
+                if is_hub {
+                    l.logf("cbb: the hub stands by, since a hub above it serves");
+                } else {
+                    l.hubs_say(None, cbb_core::hubkey::HubSays::Stopped);
+                    l.logf("cbb: the hub stopped");
+                }
             }
             (Some(s), None) => match l.start_hub(&away, s) {
-                Ok(r) => *l.hub.lock().unwrap() = Some(r),
+                Ok(r) => {
+                    *l.hub.lock().unwrap() = Some(r);
+                    l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                }
                 Err(e) => away.failed(Some(&e)),
             },
             (Some(_), Some((h, report))) => {
@@ -307,6 +381,21 @@ fn serve_hub(w: &Weak<Live>) {
         drop(l);
         std::thread::sleep(Duration::from_millis(500));
     }
+}
+
+/// How long a hub that lost the hub above it waits before it serves again.
+#[cfg(not(test))]
+const AGAIN_AFTER: Duration = Duration::from_secs(60);
+#[cfg(test)]
+const AGAIN_AFTER: Duration = Duration::from_secs(2);
+
+/// The hubs that said they serve (`hubs`, t 16), and whether one above
+/// this hub did when last looked at, and since when it is gone.
+#[derive(Default)]
+pub(super) struct Ladder {
+    serving: std::collections::BTreeSet<DeviceId>,
+    above: bool,
+    lost: Option<Instant>,
 }
 
 /// The hub of 0.6 while it serves: its registration with its forwarder,
