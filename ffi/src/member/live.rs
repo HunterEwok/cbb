@@ -992,9 +992,12 @@ impl Phone {
                     "type" => Way::Type,
                     m => return Err(Error::msg(format!("a paste is pasted or typed, not {m:?}"))),
                 };
+                // Cleaned as the computer cleans it (remotepaste::to_paste), so
+                // that a text with nothing left is refused here, before anything
+                // is signed or sent.
                 let what = match a.kind.as_str() {
-                    "" | "text" => What::Text(a.text.clone()),
-                    "secret" => What::Secret(a.text.clone()),
+                    "" | "text" => What::Text(cbb_core::remotepaste::to_paste(&a.text)?),
+                    "secret" => What::Secret(cbb_core::remotepaste::to_paste(&a.text)?),
                     "media" => {
                         if way == Way::Type {
                             return Err(Error::msg("images and files are pasted, not typed"));

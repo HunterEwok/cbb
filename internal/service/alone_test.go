@@ -1795,6 +1795,12 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if got := manage(`{"action":"paste","device":"` + pcID + `","method":"type","text":"hello","enter":true}`); !strings.Contains(got, `"status":"refused"`) || !strings.Contains(got, "remote paste is off") {
 		t.Fatalf("a paste on a computer with remote paste off: %s", got)
 	}
+	// With remote paste on there, a paste of only control characters is
+	// nothing to paste (remotepaste::to_paste), one paste a second apart.
+	if m, err := pc.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
+		t.Fatalf("paste-receive on: %+v, %v", m, err)
+	}
+	time.Sleep(time.Second)
 	if got := manage(`{"action":"paste","device":"` + pcID + `","text":"\u001b[2J"}`); !strings.Contains(got, "nothing to paste") {
 		t.Fatalf("a paste of only control characters: %s", got)
 	}
@@ -1822,9 +1828,9 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	// By the group's rule a removed device need not learn it was removed
 	// (whether it sees it is not checked): the group refuses it and gives
 	// it nothing more, not even the device list (TestFFIPhoneRemovesAway).
-	online := func(s *testService) bool {
-		return slices.ContainsFunc(s.status(t).Peers, func(p control.Device) bool { return p.Online })
-	}
+	// In a group of 0.6 a device's status lists as peers only the devices
+	// it is connected to now.
+	online := func(s *testService) bool { return len(s.status(t).Peers) > 0 }
 	waitUpTo(t, 60*time.Second, "the group drops the removed computer", func() bool { return !online(second) })
 	fmt.Fprintln(in, "COPY after the removal")
 	waitFor(t, "the other computer has the phone's copy", func() bool { return pc.paste(t) == "after the removal" })
@@ -1842,8 +1848,8 @@ func TestFFIPhoneRemoves(t *testing.T) {
 			t.Fatal("the removed computer got the records written after its removal")
 		}
 	}
-	if pc.status(t).Removed || !online(pc) {
-		t.Fatal("the other computer left the group with the removed one")
+	if st := pc.status(t); st.Removed || !online(pc) {
+		t.Fatalf("the other computer left the group with the removed one: removed %v, peers %+v", st.Removed, st.Peers)
 	}
 }
 
@@ -1890,7 +1896,8 @@ func TestFFIPhoneRemovesAway(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		got := next("PEERS ")
 		peers := second.status(t).Peers
-		if got != "0" || slices.ContainsFunc(peers, func(p control.Device) bool { return p.Online }) {
+		// In a group of 0.6 the status lists only the connected peers.
+		if got != "0" || len(peers) > 0 {
 			t.Fatalf("a connection with the removed computer stands: the phone has %s, the computer %+v", got, peers)
 		}
 	}
