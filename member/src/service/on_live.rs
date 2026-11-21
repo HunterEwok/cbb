@@ -830,15 +830,21 @@ impl Service {
         {
             return Err(Error::msg("this device is the group's root already"));
         }
-        if h.name == "yubikey" {
-            return Err(not_yet("a recovery key on a YubiKey"));
-        }
         let text = Zeroizing::new(String::from_utf8_lossy(payload).into_owned());
-        let read = cbb_core::sheet::read(&text).map_err(|r| Error::msg(r.message()))?;
         let set = live.mesh.set();
         let recovery = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).recovery().clone();
-        cbb_core::sheet::check(&read, &st.group, &recovery).map_err(|r| Error::msg(r.message()))?;
-        let (k1, k2) = cbb_core::records::pq::recovery_keys(&read.secret)
+        // The secret from the sheet, or opened on the YubiKey with its PIN
+        // (protocol.md, "The recovery key on a YubiKey (0.6)").
+        let secret = if h.name == "yubikey" {
+            let secret = crate::piv::recovery::open_one(text.trim())?;
+            cbb_core::sheet::yubikey::check(&secret, &recovery).map_err(|r| Error::msg(r.message()))?;
+            secret
+        } else {
+            let read = cbb_core::sheet::read(&text).map_err(|r| Error::msg(r.message()))?;
+            cbb_core::sheet::check(&read, &st.group, &recovery).map_err(|r| Error::msg(r.message()))?;
+            read.secret
+        };
+        let (k1, k2) = cbb_core::records::pq::recovery_keys(&secret)
             .map_err(|e| e.context("cannot make the recovery key from the sheet"))?;
         let pkcs8 = Zeroizing::new(
             p256::ecdsa::SigningKey::from(k1)

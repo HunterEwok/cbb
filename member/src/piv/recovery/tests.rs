@@ -622,3 +622,29 @@ fn a_failed_key_change_puts_the_protected_place_back() {
     let err = seal(&mut c, PIN, &secret(), &mut never, true).unwrap_err().to_string();
     assert!(err.contains("could not put back"), "{err}");
 }
+
+#[test]
+fn the_recovery_opens_the_one_card_with_a_key_in_slot_95() {
+    let sealed = || {
+        let (mut c, y) = card(Yubi::new([5, 4, 3]));
+        seal(&mut c, PIN, &secret(), &mut never, false).unwrap();
+        let mut g = y.lock().unwrap();
+        (g.verified, g.authed, g.touches) = (false, false, 0);
+        drop(g);
+        y
+    };
+    let boxed = |y: &std::sync::Arc<std::sync::Mutex<Yubi>>| -> Box<dyn Card> { Box::new(Shared(y.clone())) };
+    // Another card beside it is not asked for the PIN.
+    let (other, empty) = (sealed(), card(Yubi::new([5, 7, 2])).1);
+    let got = open_among(vec![boxed(&empty), boxed(&other)], PIN).unwrap();
+    assert_eq!(*got, secret());
+    assert!(!empty.lock().unwrap().verified, "the card without cbb's key was asked for the PIN");
+    assert_eq!(other.lock().unwrap().touches, 1);
+    // Two cards with a key there: neither is opened.
+    let (a, b) = (sealed(), sealed());
+    assert_eq!(open_among(vec![boxed(&a), boxed(&b)], PIN).unwrap_err().to_string(), super::super::TWO_CARDS);
+    assert!(!a.lock().unwrap().verified && !b.lock().unwrap().verified);
+    // A card without it, and no card at all.
+    assert_eq!(open_among(vec![boxed(&empty)], PIN).unwrap_err().to_string(), NONE);
+    assert_eq!(open_among(Vec::new(), PIN).unwrap_err().to_string(), super::super::NO_CARD);
+}

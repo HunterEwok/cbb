@@ -326,7 +326,10 @@ made with 0.5 is set up again once. The details follow.
   stops it before the first write. A card still on its factory management key, which anyone
   could use to spoil the recovery key without the PIN, is named before anything is written,
   and cbb replaces that key by a random PIN-protected one only when the person agrees; without
-  consent it seals as it is and keeps the warning.
+  consent it seals as it is and keeps the warning. `cbb recovery -yubikey` on a group of 0.6
+  opens it after the PIN and a touch, on the one card with a key in slot 95 (another card is
+  never asked for the PIN), checks it against the group's recovery key and changes the root
+  with it, as from the sheet.
 - One table of the format's bounds (`cbb_core::bounds`, `testdata/format/bounds.json`): each
   limit with its value, whether a later version may change it, the widest case it allows and
   the rule that refuses one more. Tests keep it complete: every number of the format is in it,
