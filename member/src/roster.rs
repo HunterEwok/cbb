@@ -114,6 +114,7 @@ fn from_record(d: &DeviceState, state: &State, is_admin: &dyn Fn(&KeyHash) -> bo
         listed: true,
         may_hub: !d.frozen && (admin || d.rights & RIGHT_HUB != 0),
         hub: state.hubs.contains(&d.id),
+        forward_only: crate::writers::is_forward_only(d.rights),
         ..Device::default()
     }
 }

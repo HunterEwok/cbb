@@ -129,3 +129,28 @@ fn the_root_lets_an_admitted_member_with_the_cap_hub_be_a_hub() {
     assert_ne!(find(&st, "pi").unwrap().rights & RIGHT_HUB, 0);
     assert!(st.hubs.contains(&id), "{:?}", st.hubs);
 }
+
+#[test]
+fn the_root_makes_a_hub_that_only_passes_copies_on() {
+    let (o, mut set) = group("forward-only");
+    let root = o.root.clone().unwrap();
+    let k = SigningKey::from_slice(&[9; 32]).unwrap();
+    let mut pi = Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), "pi", ROLE_MEMBER);
+    pi.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+    pi.caps = body::CAP_HUB;
+    let st = set.state();
+    set.write_record(&st, &*root, Kind::device(pi), T + 2).unwrap();
+    set_hubs(&mut set, &*root, &["laptop".to_string()], T + 3).unwrap();
+    assert!(set_forward_only(&mut set, &*root, "desk", T + 4).is_err(), "the root's own device");
+    assert!(set_forward_only(&mut set, &*root, "old laptop", T + 4).is_err(), "no cap hub");
+
+    set_forward_only(&mut set, &*root, "pi", T + 5).unwrap();
+    let st = set.state();
+    let pi = find(&st, "pi").unwrap();
+    assert!(is_forward_only(pi.rights) && pi.rights & body::RIGHT_SECRETS == 0, "{:b}", pi.rights);
+    let laptop = find(&st, "laptop").unwrap().id;
+    assert_eq!(st.hubs, vec![laptop, pi.id], "after the hubs named already");
+    // Again: nothing more to write.
+    assert!(set_forward_only(&mut set, &*root, "pi", T + 6).unwrap().is_empty());
+    assert!(!is_forward_only(find(&st, "laptop").unwrap().rights));
+}

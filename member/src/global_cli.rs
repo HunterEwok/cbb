@@ -83,8 +83,8 @@ fn usage_text() -> String {
                                       on an admin: make DEVICE, an admin computer with sync away from
                                       home on, a hub of the group as well, reached through the forwarder
                                       (without addresses, the project's) or at these addresses;
-                                      -forward-only makes any computer that is no admin a hub that only
-                                      passes the copies on, sealed, and reads none
+                                      -forward-only (on the root) makes any computer that is no admin a
+                                      hub that only passes the copies on, sealed, and reads none
        cbb global hub off [-on DEVICE] [-yes]
                                       stop being one of the group's hubs, or on an admin make DEVICE
                                       stop; its clients go to the next hub, and without one -yes

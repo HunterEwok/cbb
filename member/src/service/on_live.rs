@@ -529,6 +529,7 @@ impl Service {
     /// cbb paste: the local clipboard's text in a mode that takes the
     /// group's copies, the group's current text in one that does not.
     fn live_paste(&self, live: &Live) -> Result<Message> {
+        live.refuse_forward_only()?;
         let receives = live.board.mode().receives();
         let got = if receives {
             live.board.local().map(|(t, k, _)| (t, k))

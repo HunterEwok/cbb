@@ -325,6 +325,58 @@ pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String
     Ok(out)
 }
 
+/// Whether a device's rights make it a hub that only passes copies on: the
+/// right to be a hub, and neither to read nor to send.
+pub fn is_forward_only(rights: u64) -> bool {
+    use cbb_core::records::body::{RIGHT_READ, RIGHT_SEND};
+    rights & RIGHT_HUB != 0 && rights & (RIGHT_READ | RIGHT_SEND) == 0
+}
+
+/// Makes the device target one of the group's hubs that only passes the
+/// copies on, as the root alone may: its record keeps the right to be a hub
+/// and loses those to read, send and paste secrets, and the hubs record
+/// names it after the hubs it names already. A device that is no member
+/// computer with the cap hub, or that is an admin or the root, is refused.
+pub fn set_forward_only(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    target: &str,
+    now_ms: u64,
+) -> Result<Vec<Record>> {
+    use cbb_core::records::body::{MAX_HUBS, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+    let st = set.state();
+    let d = find(&st, target)?.clone();
+    if d.role != ROLE_MEMBER || d.caps & CAP_HUB == 0 || d.admin.is_some() || st.root_device == Some(d.id) {
+        return Err(Error::msg(format!(
+            "{} may not be a hub that only passes copies on: that takes a computer that is neither an admin nor the root",
+            d.name
+        )));
+    }
+    let mut out = Vec::new();
+    if !is_forward_only(d.rights) {
+        let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+        rec.rights = (rec.rights | RIGHT_HUB) & !(RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS);
+        rec.seen = Vec::new();
+        out.extend(
+            set.write_record(&st, signer, Kind::device(rec), now_ms)
+                .map_err(|e| Error::msg(format!("cannot make {} a hub that only passes copies on: {e}", d.name)))?,
+        );
+    }
+    let st = set.state();
+    if !st.hubs.contains(&d.id) {
+        let mut hubs = st.hubs.clone();
+        if hubs.len() >= MAX_HUBS {
+            return Err(Error::msg(format!("the group names {MAX_HUBS} hubs already")));
+        }
+        hubs.push(d.id);
+        out.extend(
+            set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
+                .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))?,
+        );
+    }
+    Ok(out)
+}
+
 /// Changes the group's settings from what they are now.
 pub fn set_settings(
     set: &mut RecordSet,

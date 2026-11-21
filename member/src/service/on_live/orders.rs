@@ -159,9 +159,7 @@ impl Service {
             return Err(refuse("the hub command names another device as the hub"));
         }
         if !live.mesh.may_be_hub(&live.mesh.device()) {
-            return Err(refuse(
-                "the group's records do not make this device a hub; the root names its hubs with cbb hubs",
-            ));
+            return Err(refuse(format!("{NOT_A_HUB_YET}; the root names its hubs with cbb hubs")));
         }
         let (fwd, key) = h
             .forwarders
@@ -214,11 +212,21 @@ impl Service {
     /// global move DEVICE on the records of 0.6.
     fn live_hubs_op(&self, live: &Live, h: &Header, other: bool) -> Result<String> {
         match h.name.as_str() {
-            "hub" if h.forward_only => Err(not_yet("making a device a hub that only passes copies on")),
             "hub" if !other => Err(Error::msg("-on names this device; cbb global hub makes it a hub here")),
             "hub" => {
+                if h.forward_only {
+                    // The device's record and the hubs record, which the
+                    // root alone gives (an admin grants base rights only).
+                    if !live.mesh.is_root() {
+                        return Err(not_yet(
+                            "an admin making a hub that only passes copies on; the group's root does it",
+                        ));
+                    }
+                    let now = crate::uptime::wall_ms().max(0) as u64;
+                    live.mesh.write(|set, k| writers::set_forward_only(set, k, &h.device, now))?;
+                }
                 let o = self.hub_order_for(live, &h.device, &h.addrs, (&h.forwarder, &h.forwarder_key))?;
-                let name = self.live_order(live, &h.device, &o)?;
+                let name = self.live_order_after_records(live, &h.device, &o)?;
                 note_forwarders(live, &h.device, &o)?;
                 (self.log)(&format!("cbb: {name} is one of the group's hubs now"));
                 Ok(name)
@@ -339,6 +347,22 @@ impl Service {
             s => {
                 let status = if s == cbb_core::commands::STATUS_REFUSED { "refused" } else { "failed" };
                 Err(Error::msg(format!("{} {status} it: {}", d.name, r.reason)))
+            }
+        }
+    }
+
+    /// As live_order, for an order that records just written allow: the
+    /// target refuses it until those records reach it, which a command may
+    /// overtake, so a refusal for want of them is asked again until the
+    /// target has them, for a while.
+    fn live_order_after_records(&self, live: &Live, target: &str, o: &Order) -> Result<String> {
+        let until = Instant::now() + RECORDS_REACH;
+        loop {
+            match self.live_order(live, target, o) {
+                Err(e) if e.message().contains(NOT_A_HUB_YET) && Instant::now() < until => {
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                res => return res,
             }
         }
     }
@@ -490,3 +514,11 @@ fn note_forwarders(live: &Live, target: &str, o: &Order) -> Result<()> {
         h.forwarders.iter().map(|(address, pin)| crate::faces::Server { pin: *pin, address: address.clone() });
     live.mesh.set_hub_forwarders(hub, servers.collect())
 }
+
+/// Why a device refuses a hub command while its records do not make it a
+/// hub.
+const NOT_A_HUB_YET: &str = "the group's records do not make this device a hub";
+
+/// How long a hub command waits for the records that allow it to reach its
+/// target.
+const RECORDS_REACH: Duration = Duration::from_secs(15);

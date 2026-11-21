@@ -2027,6 +2027,10 @@ made with 0.5 is set up again once. The details follow.
   forwarder its hub commands name, and its own hub's, a face of its own, whose hubs'
   credential lists the hubs of its `hubs` record; and a hub serves with a key of its own for
   each period of its forwarder's face, as in 0.5.
+- In a group of 0.6 the root makes a computer a hub that only passes the copies on (`cbb
+  global hub -on DEVICE -forward-only`): its record keeps the right to be a hub and loses
+  those to read, send and paste secrets, and the hubs record names it; such a hub refuses to
+  copy or paste.
 
 ### Changed
 - The cleaning of a remote paste's text and its refusal of nothing but control characters are

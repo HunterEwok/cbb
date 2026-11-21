@@ -301,7 +301,18 @@ impl Live {
     }
 
     /// A deliberate send (cbb copy): to the group, unless muted.
+    /// A hub that only passes the copies on makes, reads and pastes none
+    /// (`writers::is_forward_only`).
+    pub fn refuse_forward_only(&self) -> Result<()> {
+        let st = self.mesh.state();
+        if st.device(&self.me).is_some_and(|d| crate::writers::is_forward_only(d.rights)) {
+            return Err(crate::error::Error::msg(crate::node::FORWARD_ONLY));
+        }
+        Ok(())
+    }
+
     pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
+        self.refuse_forward_only()?;
         let c = self.board.send(text, kind, via)?;
         // A group with no other reader yet (this device alone) keeps the
         // copy here, as the board did; nothing goes out.
@@ -314,6 +325,7 @@ impl Live {
     /// and kept to serve, the clipboard's content here, and sent to the
     /// group as Board::sends_media says.
     pub fn copy_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via, deliberate: bool) -> Result<()> {
+        self.refuse_forward_only()?;
         let send = self.board.sends_media(deliberate)?;
         let files = parts.iter().any(|(p, _)| !p.path.is_empty() || p.dir);
         let c = Content {
