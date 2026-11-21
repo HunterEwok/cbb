@@ -164,7 +164,7 @@ impl Service {
             return Err(refuse("the hub command names another device as the hub"));
         }
         if !live.mesh.may_be_hub(&live.mesh.device()) {
-            return Err(refuse(format!("{NOT_A_HUB_YET}; the root names its hubs with cbb hubs")));
+            return Err(refuse(format!("{NOT_A_HUB_YET}; the root names its hubs with cbb global hubs")));
         }
         let (fwd, key) = h
             .forwarders
@@ -195,7 +195,7 @@ impl Service {
         let d = writers::find(&st, target)?;
         if !st.may_be_hub(&d.id) {
             return Err(Error::msg(format!(
-                "the group's records do not make {} a hub; the root names its hubs with cbb hubs",
+                "the group's records do not make {} a hub; the root names its hubs with cbb global hubs",
                 d.name
             )));
         }

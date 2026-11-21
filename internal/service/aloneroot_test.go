@@ -67,7 +67,7 @@ func keptHubEndpoints(s *testService, id string) []string {
 	return nil
 }
 
-// forwardHub names the device name the group's hub (cbb hubs) and makes it
+// forwardHub names the device name the group's hub (cbb global hubs) and makes it
 // a hub at its own UDP port, then has the root order it to the forwarder at
 // addr with the key of pin (cbb global hub -on): the root signs the
 // forwarder's pin in the hub command and gives the forwarder a face of its
@@ -77,7 +77,7 @@ func forwardHub(t *testing.T, cli string, root, s *testService, name, addr, pin 
 	t.Helper()
 	// The hubs' credential lists the hubs of the root's hubs record.
 	if _, err := root.do(t, control.Header{Op: control.OpHubs, Hubs: []string{name}}, ""); err != nil {
-		t.Fatalf("cbb hubs %s on %s: %v", name, root.name, err)
+		t.Fatalf("cbb global hubs %s on %s: %v", name, root.name, err)
 	}
 	port := freeUDP(t)
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}, Consent: true}

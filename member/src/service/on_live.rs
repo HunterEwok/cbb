@@ -609,10 +609,10 @@ impl Service {
             }
             "off" => live.away_off(Duration::ZERO)?,
             // The records must make this device a hub: an admin key, or the
-            // root's hubs record (cbb hubs).
+            // root's hubs record (cbb global hubs).
             "hub" if !live.mesh.may_be_hub(&live.mesh.device()) => {
                 return Err(Error::msg(
-                    "the group's records do not make this device a hub; the root names its hubs with cbb hubs",
+                    "the group's records do not make this device a hub; the root names its hubs with cbb global hubs",
                 ));
             }
             "hub" => {

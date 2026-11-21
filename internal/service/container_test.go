@@ -54,7 +54,7 @@ func TestContainerHoldsNoKeys(t *testing.T) {
 	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
+	if _, err := nas.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb global hubs") {
 		t.Fatalf("the container as the hub: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestRootlessHoldsNoKeys(t *testing.T) {
 	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
+	if _, err := box.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Addrs: []string{"127.0.0.1:1"}}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb global hubs") {
 		t.Fatalf("the rootless install as the hub: %v", err)
 	}
 }

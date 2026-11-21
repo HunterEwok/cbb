@@ -1889,7 +1889,7 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
-	// The root names itself the group's hub (cbb hubs); its own forwarder
+	// The root names itself the group's hub (cbb global hubs); its own forwarder
 	// gets a face of its own, whose hubs' credential it registers with.
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
 		t.Fatal(err)
