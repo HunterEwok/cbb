@@ -333,7 +333,8 @@ fn browse_txt<T>(
     start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
-    let mut deadline = std::time::Instant::now() + wait;
+    let full = std::time::Instant::now() + wait;
+    let mut deadline = full;
     let mut settled = false;
     let mut checked = std::time::Instant::now();
     let mut flood = Flood::default();
@@ -346,8 +347,22 @@ fn browse_txt<T>(
         }
         let Ok(ev) = rx.recv_timeout(left.min(CACHE_CHECK)) else { continue };
         trace(&format!("pairing browse: {ev:?}"));
-        let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
-        let Some(v) = pick(&info) else { continue };
+        let info = match ev {
+            mdns_sd::ServiceEvent::ServiceResolved(info) => info,
+            // A device that leaves, or no longer announces what is looked
+            // for, drops out: a member that just closed its window may
+            // answer with its old TXT while its new one is in a probe,
+            // and the new one follows within the settle time.
+            mdns_sd::ServiceEvent::ServiceRemoved(_, fullname) => {
+                drop_found(&mut found, &instance(&fullname), &mut settled, &mut deadline, full);
+                continue;
+            }
+            _ => continue,
+        };
+        let Some(v) = pick(&info) else {
+            drop_found(&mut found, &instance(&info.fullname), &mut settled, &mut deadline, full);
+            continue;
+        };
         let addrs = order(dial_addrs(&info).into_iter());
         if addrs.is_empty() {
             continue;
@@ -364,6 +379,21 @@ fn browse_txt<T>(
     }
     let _ = daemon.shutdown();
     Ok(found)
+}
+
+/// Drops a device from what a browse found; when none is left, the browse
+/// waits again for the first, up to its whole time.
+fn drop_found<T>(
+    found: &mut std::collections::BTreeMap<String, T>,
+    name: &str,
+    settled: &mut bool,
+    deadline: &mut std::time::Instant,
+    full: std::time::Instant,
+) {
+    if found.remove(name).is_some() && found.is_empty() {
+        *settled = false;
+        *deadline = (*deadline).max(full);
+    }
 }
 
 /// The device a found service is: its instance name without the " (n)"
@@ -1589,6 +1619,25 @@ mod tests {
         assert_eq!(link_scope("fe80::9e13".parse().unwrap(), 12, &own), 2);
         assert_eq!(link_scope("fe80::280e".parse().unwrap(), 2, &own), 12);
         assert_eq!(link_scope("fe80::77".parse().unwrap(), 12, &own), 12);
+    }
+
+    /// A device whose new TXT no longer announces a window drops out of
+    /// what the browse found, as one that leaves; with none left the
+    /// browse waits again for its whole time.
+    #[test]
+    fn a_closed_window_drops_out_of_the_browse() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let full = start + Duration::from_secs(5);
+        let mut found = std::collections::BTreeMap::from([("pi".to_string(), 1), ("a".to_string(), 2)]);
+        let (mut settled, mut deadline) = (true, start + Duration::from_secs(2));
+        drop_found(&mut found, "pi", &mut settled, &mut deadline, full);
+        assert_eq!(found.keys().collect::<Vec<_>>(), ["a"]);
+        assert!(settled && deadline == start + Duration::from_secs(2), "one left: the settle time stands");
+        drop_found(&mut found, "nobody", &mut settled, &mut deadline, full);
+        assert!(settled && found.len() == 1);
+        drop_found(&mut found, "a", &mut settled, &mut deadline, full);
+        assert!(found.is_empty() && !settled && deadline == full);
     }
 
     /// A name mDNS made unique by " (n)" names the same device.
