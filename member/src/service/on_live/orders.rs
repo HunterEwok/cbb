@@ -7,7 +7,7 @@
 //! takes and carries out, with the same checks of its user's switches as
 //! on the old records. Away-off turns sync away from home off here, and a
 //! hub command makes this device a hub or stops it being one; a small
-//! device's own command answers that it is not on the records of 0.6 yet.
+//! device's own command is refused, since this device has none.
 
 use super::*;
 
@@ -134,7 +134,12 @@ impl Service {
                 Ok(())
             }
             Order::Hub(h) => self.live_take_hub(live, &who, &h),
-            Order::Device { .. } => Err(not_yet(&format!("carrying out a {} command", order.name()))),
+            // A computer or a Pi defines no commands of its own: the
+            // small devices that do (the leaves) come with 0.7.
+            Order::Device { name, .. } => {
+                (self.log)(&format!("cbb: {who} sent the command {name:?}, which this device does not have"));
+                Err(refuse(format!("this device has no command {name}")))
+            }
         }
     }
 

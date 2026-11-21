@@ -4012,8 +4012,9 @@ On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-o
 (`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
 checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
 receiver's user or settings say no, such as remote paste being off, and `failed` (3) when
-carrying the command out went wrong. A small device's own command answers that it is not on
-the records of 0.6 yet; `away-off` turns sync away from home off on the receiver, which only
+carrying the command out went wrong. A small device's own command (`device`, type 10: a
+name and its arguments) is refused with "this device has no command NAME", since no computer
+or Pi defines commands of its own; the leaves that do, and a way to send one, come with 0.7; `away-off` turns sync away from home off on the receiver, which only
 its own user turns on again; `hub` makes the receiver a hub or stops it being one (below).
 
 A `hub` command of 0.6 orders field 10 (the hub: its address away from home and the hash of

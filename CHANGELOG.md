@@ -2854,6 +2854,8 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a small device's own command (`device`) sent to a computer or a Pi is
+  refused with "this device has no command NAME" instead of an error that it is not done yet.
 - A pairing window on 0.6 no longer reports a failed try for a connection that ended before
   it tried a code, such as one that dialed before the window opened and found another
   window's key; the window's next word is then the device that pairs.

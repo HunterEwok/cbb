@@ -108,6 +108,12 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     let t = crate::commands::Taken { kind: stop.kind(), orders: stop.orders().unwrap(), ..t };
     let e = a.live_command(&la, &t).unwrap_err();
     assert!(e.message().contains("no hub of the group"), "{}", e.message());
+    // A small device's own command: this device has none.
+    let open = crate::orders::Order::Device { name: "open".into(), args: None };
+    let t = crate::commands::Taken { kind: open.kind(), orders: open.orders().unwrap(), ..t };
+    let e = a.live_command(&la, &t).unwrap_err();
+    assert!(e.find::<NotYet>().is_none(), "{}", e.for_log());
+    assert_eq!(e.message(), "this device has no command open");
     // A device the records do not make a hub is refused as one.
     let e = ask(&a, "away", |h| (h.name, h.consent) = ("hub".into(), true)).unwrap_err();
     assert!(e.message().contains("do not make this device a hub"), "{}", e.message());
