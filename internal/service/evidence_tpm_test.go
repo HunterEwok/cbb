@@ -145,7 +145,10 @@ func keyInTPM(t *testing.T, s *testService) {
 // the TPM: keys.json keeps its TPM blob and no PKCS#8 (src/own.rs in cbb).
 func keyOfInTPM(t *testing.T, s *testService, which string) {
 	t.Helper()
-	var f map[string]struct {
+	// keys.json holds its version "v" beside the keys, so each key is read
+	// on its own.
+	var f map[string]json.RawMessage
+	var k struct {
 		PKCS8 string          `json:"pkcs8"`
 		TPM   json.RawMessage `json:"tpm"`
 	}
@@ -153,8 +156,11 @@ func keyOfInTPM(t *testing.T, s *testService, which string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(raw, &f); err != nil || f[which].PKCS8 != "" || len(f[which].TPM) == 0 {
-		t.Fatalf("%s's %s key is not in the TPM: keys.json keeps the key %d characters, the TPM blob %q (%v)", s.name, which, len(f[which].PKCS8), f[which].TPM, err)
+	if err = json.Unmarshal(raw, &f); err == nil {
+		err = json.Unmarshal(f[which], &k)
+	}
+	if err != nil || k.PKCS8 != "" || len(k.TPM) == 0 {
+		t.Fatalf("%s's %s key is not in the TPM: keys.json keeps the key %d characters, the TPM blob %q (%v)", s.name, which, len(k.PKCS8), k.TPM, err)
 	}
 }
 
