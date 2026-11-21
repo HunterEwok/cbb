@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a pairing window closes when its `cbb pair` ends and counts its five
+  minutes in the computer's running time, and `cbb pair` prints the QR code's text, which a
+  computer that cannot find the window by mDNS types instead of the six digits; a device that
+  joined at an address dials it at once when discovery finds none of the group.
 - On the records of 0.6 `cbb copy`, of a text or of files, reaches this device's own clipboard
   again, as well as the group, unless the clipboard holds that text already.
 - On the records of 0.6 a device that joins dials the member it joined through only when no

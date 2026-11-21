@@ -177,7 +177,7 @@ pub fn over_with(
     got.map_err(|e| {
         let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
         if eof {
-            e.context(format!("{who} has no pairing window open: run cbb pair there first, then join"))
+            e.context(format!("the pairing window is closed at {who}, or none was open: run cbb pair there, then join"))
         } else {
             e
         }

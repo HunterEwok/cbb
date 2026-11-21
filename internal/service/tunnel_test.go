@@ -884,12 +884,14 @@ func TestJoinByAddress(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
-	c, code := openWindow(t, pi)
+	// mDNS does not reach the deck: it joins with the link of the
+	// window's QR code, at the address given.
+	c, _, link := openWindowLink(t, pi)
 	defer c.Close()
 	piID := pi.status(t).Device
 	h.hide(piID) // the deck is on another network
 	addr := h.memberAddr(t, piID)
-	if _, err := deck.do(t, control.Header{Op: control.OpJoin, Code: code, Address: addr}, ""); err != nil {
+	if _, err := deck.do(t, control.Header{Op: control.OpJoin, Code: link, Address: addr}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck connects to the pi where it joined", func() bool {
@@ -901,6 +903,10 @@ func TestJoinByAddress(t *testing.T) {
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the deck" })
 
+	// The root names the group's hubs (cbb hubs) before one serves.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	for _, s := range []*testService{pi, deck} {
 		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 			t.Fatal(err)

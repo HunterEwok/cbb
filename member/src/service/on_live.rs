@@ -141,12 +141,13 @@ impl Service {
         discovery::start(live.clone(), tag, cfg.peers.clone(), cfg.mdns, port, log.clone());
         // The address this device joined at, given by hand (an SSH forward,
         // a VPN address that mDNS does not reach), is dialed while the
-        // device has no connection: with mDNS only after discovery had its
-        // time, so that of two members the lower ID still dials (section 4,
-        // "Who dials whom").
+        // device has no connection; with mDNS only once discovery had a
+        // moment and found none of the group, or found one that did not
+        // dial within the fallback's wait, so that of two members the lower
+        // ID still dials (section 4, "Who dials whom").
         if let Some(addr) = self.joined_at.lock().unwrap().take() {
-            let grace = if cfg.mdns { discovery::fallback() + Duration::from_secs(5) } else { Duration::ZERO };
-            keep_joined(Arc::downgrade(&live), addr, grace, log.clone());
+            let wait = cfg.mdns.then(|| (DISCOVERY_MOMENT, discovery::fallback() + Duration::from_secs(5)));
+            keep_joined(Arc::downgrade(&live), addr, wait, log.clone());
         }
         {
             // On the group's root: where a member's keys live, as its hello
@@ -1001,11 +1002,20 @@ impl Service {
     pub(super) fn live_pair_window(
         &self,
         live: &Arc<Live>,
-        _r: control::Reader<UnixStream>,
+        mut r: control::Reader<UnixStream>,
         out: &mut UnixStream,
     ) -> Result<()> {
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
             return Err(Error::msg(NOT_ADMITTER));
+        }
+        // The client hanging up (Ctrl+C) closes the window.
+        let hung = Arc::new(AtomicBool::new(false));
+        {
+            let hung = hung.clone();
+            std::thread::spawn(move || {
+                while let Ok(Some(_)) = r.read() {}
+                hung.store(true, Ordering::SeqCst);
+            });
         }
         {
             let mut slot = self.pairing.lock().unwrap();
@@ -1052,14 +1062,23 @@ impl Service {
             ..Default::default()
         };
         control::write(out, &control::partial(opened))?;
-        let end = Instant::now() + window::LIFETIME;
+        // Five minutes of this device's running time, which a wall clock
+        // set ahead does not move (docs/protocol.md, "Pairing in 0.6").
+        let end = crate::uptime::now() + window::LIFETIME;
         loop {
-            let left = end.saturating_duration_since(Instant::now());
+            if hung.load(Ordering::SeqCst) {
+                (self.log)("cbb: the pairing window closed: its cbb pair ended");
+                return Ok(());
+            }
+            let left = end.saturating_sub(crate::uptime::now());
             if left.is_zero() {
-                return Err(Error::msg("the pairing window closed: no device paired within 5 minutes"));
+                return Err(Error::msg("the pairing window expired: no device paired within 5 minutes"));
             }
             let attempts = open.next_attempt;
             match rx.recv_timeout(left.min(Duration::from_secs(1))) {
+                // A device that dials after the client hung up finds the
+                // window closed.
+                Ok(_) if hung.load(Ordering::SeqCst) => {}
                 Ok((sock, s, x)) => match crate::admitting::at_home(&live.mesh, sock, s, x, &mut open) {
                     // A connection that ended before the device began an
                     // attempt (one that dialed before the window opened, or
@@ -1438,24 +1457,33 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
     Some(why)
 }
 
-/// Dials `addr`, where this device joined, after `grace` and then while
-/// it has no connection to the group, as the old member's keep_joined.
+/// How long discovery has to find a device of the group before a device
+/// that joined at an address dials it.
+const DISCOVERY_MOMENT: Duration = Duration::from_secs(3);
+
+/// Dials `addr`, where this device joined, while it has no connection to
+/// the group, as the old member's keep_joined. `wait`, with mDNS: how long
+/// discovery has to find a device of the group, and how long one it found
+/// has to connect, before the dial.
 fn keep_joined(
     live: std::sync::Weak<Live>,
     addr: std::net::SocketAddr,
-    grace: Duration,
+    wait: Option<(Duration, Duration)>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 ) {
     const MIN: Duration = Duration::from_secs(1);
     const MAX: Duration = Duration::from_secs(30);
+    let start = Instant::now();
     std::thread::spawn(move || {
-        std::thread::sleep(grace);
         let mut backoff = MIN;
         while let Some(l) = live.upgrade() {
             if l.is_closed() {
                 return;
             }
-            if !l.mesh.connected().is_empty() {
+            let waits = wait.is_some_and(|(moment, grace)| {
+                start.elapsed() < moment || (l.any_at_home() && start.elapsed() < grace)
+            });
+            if waits || !l.mesh.connected().is_empty() {
                 drop(l);
                 std::thread::sleep(MIN);
                 continue;

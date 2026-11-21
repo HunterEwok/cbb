@@ -92,12 +92,18 @@ func TestAloneSteadyPeers(t *testing.T) {
 		if err := window.Start(); err != nil {
 			t.Fatal(err)
 		}
+		// Without mDNS six digits name no window: the joiner types the
+		// line of the QR code's text that cbb pair prints after the code.
 		codes := make(chan string, 1)
 		go func() {
 			sc := bufio.NewScanner(stdout)
+			code := ""
 			for sc.Scan() {
 				if m := codeLine.FindStringSubmatch(sc.Text()); m != nil {
-					codes <- m[1] + m[2]
+					code = m[1] + m[2]
+				}
+				if l := strings.TrimSpace(sc.Text()); code != "" && strings.HasPrefix(l, "cbb://pair?") && strings.HasSuffix(l, "&c="+code) {
+					codes <- l
 				}
 			}
 		}()

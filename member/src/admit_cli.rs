@@ -175,8 +175,23 @@ fn home_window(g: &Global, r: &mut Reader<UnixStream>, m: &Message) -> Result<()
         println!("\nOn a phone, scan this QR code in the app.");
     }
     println!("On the new computer run cbb pair -code and type the code.");
-    if !m.header.address.is_empty() {
-        println!("If it cannot find this one: cbb pair -code {}", m.header.address);
+    // Six digits name no window: without mDNS the new computer finds the
+    // window by its QR code's text, which carries its addresses, ID and
+    // key (cbb pair -code ADDRESS dials another address for it).
+    match (m.header.address.is_empty(), m.header.invite.is_empty()) {
+        (false, false) => {
+            println!(
+                "If it cannot find this one: cbb pair -code {}, and type this line instead of the code:",
+                m.header.address
+            );
+            println!("  {}", m.header.invite);
+        }
+        (true, false) => {
+            println!("If it cannot find this one, type this line instead of the code:");
+            println!("  {}", m.header.invite);
+        }
+        (false, true) => println!("If it cannot find this one: cbb pair -code {}", m.header.address),
+        (true, true) => {}
     }
     println!("\nWaiting up to {} minutes. Press Ctrl+C to cancel.", m.header.expires / 60);
     loop {

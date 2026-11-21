@@ -698,7 +698,7 @@ func TestWrongCode(t *testing.T) {
 	if code == wrong {
 		wrong = "111111"
 	}
-	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: wrong}, ""); err == nil || !strings.Contains(err.Error(), "wrong code") {
+	if _, err := b.do(t, control.Header{Op: control.OpJoin, Code: wrong}, ""); err == nil || !strings.Contains(err.Error(), "the code is not the window's") {
 		t.Fatalf("join with a wrong code: %v", err)
 	}
 	if st := b.status(t); st.Group != "" {
@@ -885,15 +885,28 @@ func (h *hub) memberAddr(t *testing.T, id string) string {
 
 func TestJoinAClosedWindow(t *testing.T) {
 	// At a member's address with no window, the joiner hears that the
-	// window is closed, not a TLS error.
+	// window is closed, not a TLS error: with six digits, which mDNS finds
+	// no window for there, and with the QR code's link of a window that
+	// closed since.
 	var h hub
 	a := startService(t, &h, "alpha")
 	b := startService(t, &h, "beta")
 	c := startService(t, &h, "gamma")
 	pairWith(t, a, b)
 	addr := h.memberAddr(t, a.status(t).Device)
-	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), "the pairing window is closed") {
+	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: "123456", Address: addr}, ""); err == nil || !strings.Contains(err.Error(), "no pairing window") {
 		t.Errorf("join at %s without a window: %v", addr, err)
+	}
+	w, _, link := openWindowLink(t, a)
+	id := a.status(t).Device
+	waitFor(t, "alpha announces its window", func() bool { return slices.Contains(h.txtOf(id), "p=1") })
+	w.Close()
+	waitFor(t, "alpha's window closed", func() bool { txt := h.txtOf(id); return txt != nil && !slices.Contains(txt, "p=1") })
+	if _, err := c.do(t, control.Header{Op: control.OpJoin, Code: link, Address: addr}, ""); err == nil || !strings.Contains(err.Error(), "the pairing window is closed") {
+		t.Errorf("join at %s with the link of a closed window: %v", addr, err)
+	}
+	if st := c.status(t); st.Group != "" {
+		t.Error("gamma is in a group after a closed window")
 	}
 }
 

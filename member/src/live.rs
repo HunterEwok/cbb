@@ -559,6 +559,12 @@ impl Live {
         self.home.lock().unwrap().get(id).is_some_and(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
     }
 
+    /// Whether discovery found any device of the group at home within
+    /// NEAR_GRACE.
+    pub fn any_at_home(&self) -> bool {
+        self.home.lock().unwrap().values().any(|at| uptime::now().saturating_sub(*at) < NEAR_GRACE)
+    }
+
     /// The members connected only because this one dialed them back.
     pub fn unreached(&self) -> Vec<String> {
         let connected = self.mesh.connected();

@@ -305,7 +305,8 @@ func TestAloneRoot(t *testing.T) {
 }
 
 // TestAloneRootWindow: the Rust root opens a pairing window with cbb pair,
-// as Go's root does, and a Go computer joins it with the code it shows:
+// as Go's root does, and a Go computer joins it with the line it shows
+// for its QR code, at its address, since the root runs without mDNS:
 // a wrong code counts and leaves the window open, a second window waits
 // for the first, the right code admits the computer, which then connects
 // to the root on the same port, and a window that closed refuses.
@@ -355,10 +356,13 @@ func TestAloneRootWindow(t *testing.T) {
 		}
 		close(lines)
 	}()
+	// Without mDNS (-no-mdns) six digits name no window: the new computer
+	// takes the line of the QR code's text that cbb pair prints, at the
+	// address given.
 	codeLine := regexp.MustCompile(`^Pairing code: (\d{3}) (\d{3})$`)
-	var code string
+	var code, link string
 	timeout := time.After(20 * time.Second)
-	for code == "" {
+	for code == "" || link == "" {
 		select {
 		case l, ok := <-lines:
 			if !ok {
@@ -367,9 +371,15 @@ func TestAloneRootWindow(t *testing.T) {
 			if m := codeLine.FindStringSubmatch(l); m != nil {
 				code = m[1] + m[2]
 			}
+			if l = strings.TrimSpace(l); strings.HasPrefix(l, "cbb://pair?") {
+				link = l
+			}
 		case <-timeout:
-			t.Fatal("cbb pair showed no code")
+			t.Fatal("cbb pair showed no code or no line instead of it")
 		}
+	}
+	if !strings.HasSuffix(link, "&c="+code) {
+		t.Fatalf("the line %q carries another code than %s", link, code)
 	}
 
 	// A second window waits for this one.
@@ -383,10 +393,11 @@ func TestAloneRootWindow(t *testing.T) {
 	if code == wrong {
 		wrong = "111111"
 	}
-	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: wrong, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "wrong code") {
+	wrongLink := strings.TrimSuffix(link, code) + wrong
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: wrongLink, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "the code is not the window's") {
 		t.Fatalf("a join with a wrong code: %v", err)
 	}
-	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: code, Address: address}, ""); err != nil {
+	if _, err := laptop.do(t, control.Header{Op: control.OpJoin, Code: link, Address: address}, ""); err != nil {
 		t.Fatalf("the join: %v", err)
 	}
 	joined := false
@@ -411,7 +422,7 @@ func TestAloneRootWindow(t *testing.T) {
 
 	// No window is open now.
 	desk := startService(t, &h, "desk")
-	if _, err := desk.do(t, control.Header{Op: control.OpJoin, Code: code, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "closed") {
+	if _, err := desk.do(t, control.Header{Op: control.OpJoin, Code: link, Address: address}, ""); err == nil || !strings.Contains(err.Error(), "closed") {
 		t.Errorf("a join without a window: %v", err)
 	}
 }
