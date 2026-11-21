@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -484,10 +483,16 @@ func TestFFIMember(t *testing.T) {
 		t.Fatal("the phone did not connect again on resume")
 	}
 
-	// A tunnel key goes into the hellos; a key of the wrong size does not.
-	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
-	call("tunnel_key", map[string]any{"key": key, "psk": key})
-	call("tunnel_key", map[string]any{})
+	// On the records of 0.6 the member makes its tunnel keys itself: sync
+	// away from home on keeps them (keys_in_file), and the tunnel messages
+	// offer them to the group's hubs (TestFFIPhoneAway); off forgets them.
+	a, _ := call("away", map[string]any{"on": true})["away"].(map[string]any)
+	if a == nil || a["keys_in_file"] != true {
+		t.Fatalf("sync away from home on keeps no tunnel keys: %v", a)
+	}
+	if a := call("away", map[string]any{"on": false})["away"]; a != nil {
+		t.Fatalf("the tunnel keys stay after turning it off: %v", a)
+	}
 }
 
 // TestFFIPhoneAway syncs the phone's member away from home through a Go
@@ -507,6 +512,10 @@ func TestFFIPhoneAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// On the records of 0.6 the root names its hubs.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	port := freeUDP(t)
@@ -816,6 +825,15 @@ func adminPhone(t *testing.T, bin string, h *hub) (pi *testService, next func(pr
 	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "file" {
 		t.Fatalf("the phone made an admin is listed as %+v", d)
 	}
+	// The phone acts as an admin once the root's record reached it.
+	waitFor(t, "the phone knows it is an admin", func() bool {
+		fmt.Fprintln(in, "DEVICES")
+		var devs []struct{ Admin, Self bool }
+		if err := json.Unmarshal([]byte(next("DEVICES ")), &devs); err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(devs, func(d struct{ Admin, Self bool }) bool { return d.Self && d.Admin })
+	})
 	return pi, next, in
 }
 
