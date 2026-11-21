@@ -13,6 +13,11 @@
 //! On the device that joined: until a hub's offer is kept, it dials the hub
 //! through the invitation's guest tunnel, with the invitation kept in
 //! `invite-guest`, so that its `tunnel` reaches the hub.
+//!
+//! A build without the tunnel (MIPS) neither serves invitations nor joins by
+//! one: it joins at home.
+
+#![cfg_attr(not(feature = "tunnel"), allow(dead_code, unused_imports))]
 
 use std::collections::HashMap;
 use std::net::{Ipv6Addr, Shutdown, TcpStream};
@@ -27,6 +32,7 @@ use cbb_core::records::DeviceId;
 use super::Live;
 use crate::discovery::Peers as _;
 use crate::error::{Context as _, Error, Result};
+#[cfg(feature = "tunnel")]
 use crate::hub;
 use crate::tls;
 
@@ -59,6 +65,7 @@ const FAIL_GRACE: Duration = Duration::from_secs(10);
 pub const GUEST_FILE: &str = "invite-guest";
 
 /// The guest of an open invitation, on the hub.
+#[cfg(feature = "tunnel")]
 pub(super) struct Guest {
     peer: hub::Peer,
     /// Where the guest's pairing connections go: the invitation's window,
@@ -80,7 +87,10 @@ pub(super) struct Guest {
 }
 
 /// The guests of the open invitations, by their tunnel addresses.
+#[cfg(feature = "tunnel")]
 pub(super) type Guests = std::sync::Mutex<HashMap<Ipv6Addr, Guest>>;
+#[cfg(not(feature = "tunnel"))]
+pub(super) type Guests = std::sync::Mutex<()>;
 
 /// What an invitation's guest path gives of the hub, and the pairing
 /// connections of its guest.
@@ -89,6 +99,7 @@ pub struct Opened {
     pub pairs: mpsc::Receiver<Pair>,
 }
 
+#[cfg(feature = "tunnel")]
 impl Live {
     /// Lets the guest of an invitation this hub makes into its tunnel: its
     /// one-time key and pre-shared key. Gives the invitation's guest path
@@ -330,6 +341,7 @@ impl Live {
     }
 }
 
+#[cfg(feature = "tunnel")]
 impl Live {
     /// Sends a `guest` message to the device to; whether it went.
     pub(super) fn send_guest(&self, to: &DeviceId, g: &cbb_core::join::guest::Guest) -> bool {
@@ -519,6 +531,7 @@ pub fn guest_path(inv: &Invitation) -> Result<&Path> {
 
 /// The guest tunnel of an invitation to its hub, whose loopback port leads
 /// to the hub's guest address.
+#[cfg(feature = "tunnel")]
 pub fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<crate::tunnel::Link> {
     let p = guest_path(inv)?;
     let (key, psk) = p.guest.ok_or_else(|| Error::msg("the invitation's guest path has no guest key"))?;
@@ -551,6 +564,7 @@ pub fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Res
 
 /// How many connections a join through the guest tunnel tries while each
 /// ends before its TLS handshake.
+#[cfg(feature = "tunnel")]
 const HANDSHAKE_TRIES: u32 = 5;
 
 /// Joins the group of a remote invitation of 0.6 (cbb pair -invite): through
@@ -559,6 +573,7 @@ const HANDSHAKE_TRIES: u32 = 5;
 /// that long. Sync away from home goes on, and the invitation is kept for
 /// the service to reach the hub through its guest tunnel, before the set,
 /// which the service takes.
+#[cfg(feature = "tunnel")]
 pub fn join(
     dir: &std::path::Path,
     me: &crate::joining::Me<'_>,
@@ -595,4 +610,15 @@ pub fn join(
     let _ = kept.set_read_timeout(Some(Duration::from_secs(5)));
     let _ = std::io::Read::read(&mut &kept, &mut [0u8; 64]);
     Ok(joined)
+}
+
+/// A build without the tunnel joins at home only.
+#[cfg(not(feature = "tunnel"))]
+pub fn join(
+    _dir: &std::path::Path,
+    _me: &crate::joining::Me<'_>,
+    _text: &str,
+    _log: Arc<dyn Fn(&str) + Send + Sync>,
+) -> Result<Box<cbb_core::join::session::Admitted>> {
+    Err(Error::msg(super::off::NO_TUNNEL))
 }

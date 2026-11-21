@@ -680,10 +680,10 @@ impl Service {
                 let now = uptime::wall_ms();
                 let pin = crate::faces::project_servers(live.mesh.entries().as_deref(), now)
                     .into_iter()
-                    .find(|s| s.address == crate::away::PROJECT_RELAY)
+                    .find(|s| s.address == crate::faces::PROJECT_RELAY)
                     .map(|s| s.pin)
                     .ok_or_else(|| Error::msg("this build knows no key of the project's relay"))?;
-                relays.push(Server { kind: SERVER_RELAY, endpoint: crate::away::PROJECT_RELAY.to_string(), pin });
+                relays.push(Server { kind: SERVER_RELAY, endpoint: crate::faces::PROJECT_RELAY.to_string(), pin });
                 break;
             }
             let endpoint = match addr.parse::<std::net::SocketAddr>() {

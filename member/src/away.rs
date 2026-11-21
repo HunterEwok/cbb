@@ -52,16 +52,7 @@ pub use held::{forwarder_named, offer_result};
 pub(crate) use hubs::standby_grace;
 pub use invite::{GuestTunnel, keep_guest};
 
-/// Why the only hub of a group does not stop without the user's word.
-pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
-
-/// The project's relay and forwarder by name, and the pins built in for
-/// them (the newest keys.json held lists others), for the faces the group
-/// shows them (`faces::project_servers`).
-pub(crate) const PROJECT_RELAY: &str = meet::PROJECT_HOST;
-pub(crate) const PROJECT_RELAY_PINS: &[&str] = meet::PROJECT_PINS;
-pub(crate) const PROJECT_FORWARDER: &str = "cbb.tools:8764";
-pub(crate) const PROJECT_FORWARDER_PINS: &[&str] = serve::PROJECT_PINS;
+pub(crate) use crate::NO_OTHER_HUB;
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
 /// The longest wait between tries of a hub that is a phone, there only

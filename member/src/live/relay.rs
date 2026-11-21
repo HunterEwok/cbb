@@ -150,7 +150,7 @@ impl Live {
         let m = self.meeting.lock().unwrap();
         let m = m.as_ref()?;
         let rep = m.report.lock().unwrap().clone();
-        let project = m.at.endpoint == crate::away::PROJECT_RELAY;
+        let project = m.at.endpoint == crate::faces::PROJECT_RELAY;
         let (error, detail) = match &rep.error {
             Some(e) => (crate::away::meet::problem(e, project), e.clone()),
             None => (String::new(), String::new()),

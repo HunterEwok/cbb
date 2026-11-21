@@ -148,10 +148,12 @@ pub struct Mesh {
     test_servers: Mutex<Vec<crate::faces::Server>>,
     /// The push sender (`crate::pusher`), and where it keeps the phones'
     /// registrations (`mesh/push.rs`).
-    push: crate::pusher::Sender,
+    push: push::Sender,
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
     push_saved: Arc<push::PushSaved>,
     push_faces: Arc<push::PushFaces>,
     /// What was applied when the phones' events were last looked for.
+    #[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
     applied: Mutex<push::Applied>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
@@ -287,7 +289,7 @@ impl Mesh {
         Ok(Arc::new_cyclic(|me| {
             let push_faces = Arc::new(push::PushFaces::new(me.clone()));
             Mesh {
-                push: crate::pusher::Sender::start(push_faces.clone(), push_saved.clone(), loaded, log.clone()),
+                push: push::Sender::start(push_faces.clone(), push_saved.clone(), loaded, log.clone()),
                 push_faces,
                 push_saved,
                 applied: Mutex::new(push::Applied::of(&set.state())),
@@ -418,6 +420,7 @@ impl Mesh {
 
     /// What this device, as a hub, shows the forwarder of pin `pin` now
     /// (`Faces::for_hub`).
+    #[cfg(feature = "tunnel")]
     pub fn hub_credential(&self, pin: &[u8; 32]) -> Option<crate::forward::HubCredential> {
         self.faces.for_hub(pin, crate::uptime::wall_ms().max(0) as u64)
     }
@@ -730,7 +733,7 @@ impl Mesh {
         self.kept.lock().unwrap().insert(kept.made.id, kept);
         self.broadcast(&frame, None);
         if let Ok(msg) = frame::read(&frame, frame::LIMIT_MEMBER) {
-            self.push_copy(&msg.map, crate::pusher::Role::Origin);
+            self.push_copy(&msg.map, push::Role::Origin);
         }
         Ok(true)
     }
@@ -1327,6 +1330,10 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 
 mod media;
 pub use media::SentMedia;
+#[cfg(feature = "tunnel")]
+mod push;
+#[cfg(not(feature = "tunnel"))]
+#[path = "mesh/push_off.rs"]
 mod push;
 
 #[cfg(test)]

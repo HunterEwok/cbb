@@ -99,6 +99,7 @@ fn shown(id: &DeviceId) -> certs::DeviceId {
 }
 
 /// A device ID in hex, as `tunnel.json` keeps it.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub(crate) fn id_of_hex(s: &str) -> Option<DeviceId> {
     of(&certs::DeviceId::parse(s).ok()?)
 }
@@ -134,22 +135,30 @@ pub struct Live {
     /// and when, on the wall clock.
     own_media: Mutex<Option<(SentMedia, i64)>>,
     /// Sync away from home, once the service gave it (`with_away`).
+    #[cfg(feature = "tunnel")]
     away: std::sync::OnceLock<Arc<crate::away::Away>>,
     /// The hub's tunnel, while this device serves as a hub of 0.6.
+    #[cfg(feature = "tunnel")]
     hub: Mutex<Option<away::HubRun>>,
     /// The hubs above this one that said they serve, while it is a hub.
+    #[cfg(feature = "tunnel")]
     ladder: Mutex<away::Ladder>,
     /// When this member last sent `tunnel` to each device connected that
     /// may be a hub.
+    #[cfg(feature = "tunnel")]
     toward: Mutex<HashMap<DeviceId, std::time::Instant>>,
     /// Whether this hub stands by, a hub above it serving.
+    #[cfg(feature = "tunnel")]
     standing_by: std::sync::atomic::AtomicBool,
     /// The link to the group's blind relay, while the device meets the
     /// group there.
+    #[cfg(feature = "tunnel")]
     meeting: Mutex<Option<relay::Meeting>>,
     /// The guests of the invitations this hub keeps open.
+    #[cfg(feature = "tunnel")]
     guests: invite::Guests,
     /// The invitations this admin makes through hubs.
+    #[cfg(feature = "tunnel")]
     through: through::Throughs,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
@@ -195,13 +204,21 @@ impl Live {
             home: Mutex::new(HashMap::new()),
             networks: RwLock::new(None),
             own_media: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
             away: std::sync::OnceLock::new(),
+            #[cfg(feature = "tunnel")]
             hub: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
             ladder: Mutex::new(away::Ladder::default()),
+            #[cfg(feature = "tunnel")]
             toward: Mutex::new(HashMap::new()),
+            #[cfg(feature = "tunnel")]
             standing_by: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tunnel")]
             meeting: Mutex::new(None),
+            #[cfg(feature = "tunnel")]
             guests: Default::default(),
+            #[cfg(feature = "tunnel")]
             through: Default::default(),
             log,
         });
@@ -573,13 +590,19 @@ impl Peers for Live {
 }
 
 /// The first four bytes of a device ID in hex, as the log names a device.
+#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 fn id_text4(id: &DeviceId) -> String {
     certs::hex(&id.0[..4])
 }
 
+#[cfg(feature = "tunnel")]
 mod away;
 pub mod invite;
+#[cfg(not(feature = "tunnel"))]
+mod off;
+#[cfg(feature = "tunnel")]
 mod relay;
+#[cfg(feature = "tunnel")]
 mod through;
 
 #[cfg(test)]

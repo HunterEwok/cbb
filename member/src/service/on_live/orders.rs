@@ -222,7 +222,7 @@ impl Service {
             "hub-off" => {
                 let hubs = live.mesh.hub_order();
                 if hubs.len() < 2 && !h.force {
-                    return Err(Error::msg(crate::away::NO_OTHER_HUB));
+                    return Err(Error::msg(crate::NO_OTHER_HUB));
                 }
                 if other {
                     let o = Order::Hub(crate::orders::Hub { stop: true, ..Default::default() });

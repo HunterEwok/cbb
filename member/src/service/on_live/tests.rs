@@ -321,12 +321,12 @@ fn the_root_sets_the_groups_relay() {
     let e = relay("cbb.tools:8765", "default", false).unwrap_err();
     assert!(e.message().contains("a relay learns"), "{}", e.message());
     let m = relay("cbb.tools:8765", "default", true).unwrap();
-    assert_eq!(m.header.relays, [crate::away::PROJECT_RELAY]);
+    assert_eq!(m.header.relays, [crate::faces::PROJECT_RELAY]);
     let servers = la.mesh.state().settings.servers;
     assert_eq!(servers.len(), 1);
-    assert_eq!((servers[0].kind, servers[0].endpoint.as_str()), (SERVER_RELAY, crate::away::PROJECT_RELAY));
+    assert_eq!((servers[0].kind, servers[0].endpoint.as_str()), (SERVER_RELAY, crate::faces::PROJECT_RELAY));
     let built_in = crate::faces::project_servers(None, uptime::wall_ms());
-    assert!(built_in.iter().any(|s| s.address == crate::away::PROJECT_RELAY && s.pin == servers[0].pin));
+    assert!(built_in.iter().any(|s| s.address == crate::faces::PROJECT_RELAY && s.pin == servers[0].pin));
     // Off: no relay, which needs no consent; no entries never mean the
     // project's relay.
     let m = relay("off", "", false).unwrap();

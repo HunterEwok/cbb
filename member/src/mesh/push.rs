@@ -21,7 +21,8 @@ use cbb_core::records::key::{DeviceId, GroupId};
 
 use super::Mesh;
 use crate::files;
-use crate::pusher::{self, Face, Role};
+use crate::pusher::{self, Face};
+pub(super) use crate::pusher::{Role, Sender};
 
 /// The file the phones' registrations are kept in.
 pub(super) const FILE: &str = "push.cbor";

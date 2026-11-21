@@ -521,6 +521,7 @@ impl Faces {
     /// pin `pin` at now_ms: the hubs' credential of that face and the
     /// server key it lists, with the key's certificate; None while that
     /// face's credentials do not list this device as a hub.
+    #[cfg(feature = "tunnel")]
     pub fn for_hub(&self, pin: &[u8; 32], now_ms: u64) -> Option<crate::forward::HubCredential> {
         let faces = self.faces.lock().unwrap();
         let (key, env) = faces.get(pin)?.kept.for_hub(&self.secret, now_ms)?;
@@ -802,21 +803,29 @@ impl Faces {
     }
 }
 
+/// The project's relay, forwarder and push service by name, and the pins
+/// built in for the relay's and the forwarder's keys (the newest keys.json
+/// held lists others).
+pub(crate) const PROJECT_RELAY: &str = "cbb.tools:8765";
+pub(crate) const PROJECT_RELAY_PINS: &[&str] = &["hnHvkm6ZrTMmfPEP4Bo0s38nlnNKeyXEdhQNKYt2Pzw="];
+pub(crate) const PROJECT_FORWARDER: &str = "cbb.tools:8764";
+pub(crate) const PROJECT_FORWARDER_PINS: &[&str] = &["efzUG2YzJBqS8FfojZGwqioECt46VzQcFo3oWpPru/g="];
+pub(crate) const PROJECT_PUSH: &str = "cbb.tools:8767";
+
 /// The project's servers a group of 0.6 shows a face to (A-55), by the
 /// newest keys.json held, else the pins built in: the relay, the forwarder
 /// and the push service at cbb.tools (push has no pin built in: it is
 /// reached only by the keys.json that names it). A server whose key changes
 /// has a face for each key listed while both are.
-#[cfg(feature = "tunnel")]
 pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -> Vec<Server> {
     use base64::Engine as _;
     let b64pin =
         |p: &str| base64::engine::general_purpose::STANDARD.decode(p).ok().and_then(|b| <[u8; 32]>::try_from(b).ok());
     let mut out = Vec::new();
     for (usage, name, built_in) in [
-        ("relay", crate::away::PROJECT_RELAY, crate::away::PROJECT_RELAY_PINS),
-        ("forwarder", crate::away::PROJECT_FORWARDER, crate::away::PROJECT_FORWARDER_PINS),
-        ("push", crate::pusher::SERVICE, &[]),
+        ("relay", PROJECT_RELAY, PROJECT_RELAY_PINS),
+        ("forwarder", PROJECT_FORWARDER, PROJECT_FORWARDER_PINS),
+        ("push", PROJECT_PUSH, &[]),
     ] {
         let listed = entries.map(|e| e.keys_for(usage, name, now_ms)).unwrap_or_default();
         let pins: Vec<[u8; 32]> = if listed.is_empty() {
@@ -835,11 +844,11 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
 /// once. The project's come first: a member keeps at most [`MAX_FACES`],
 /// and a hub registers with the project's forwarder.
 pub fn group_servers(state: &State, project: Vec<Server>) -> Vec<Server> {
-    let mut out = project;
     if cfg!(not(feature = "tunnel")) {
         // Without sync away from home a group meets no server.
-        return out;
+        return Vec::new();
     }
+    let mut out = project;
     for s in state.settings.servers.iter().filter(|s| s.kind == cbb_core::records::body::SERVER_RELAY) {
         let server = Server { pin: s.pin, address: s.endpoint.clone() };
         if !out.contains(&server) {
@@ -847,12 +856,6 @@ pub fn group_servers(state: &State, project: Vec<Server>) -> Vec<Server> {
         }
     }
     out
-}
-
-/// Without sync away from home a group meets no server.
-#[cfg(not(feature = "tunnel"))]
-pub fn project_servers(_: Option<&crate::entries::Entries>, _: i64) -> Vec<Server> {
-    Vec::new()
 }
 
 #[cfg(test)]

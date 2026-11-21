@@ -115,7 +115,7 @@ pub enum Role {
 
 /// The project's push service, as keys.json names its key (use `push`,
 /// [`crate::entries::Entries::push_keys`]) and where it is reached.
-pub const SERVICE: &str = "cbb.tools:8767";
+pub const SERVICE: &str = crate::faces::PROJECT_PUSH;
 
 /// How long a sender waits after a copy before it pushes.
 pub const WAIT: Duration = Duration::from_secs(2);

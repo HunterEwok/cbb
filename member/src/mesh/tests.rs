@@ -62,11 +62,13 @@ pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
 }
 
 /// two_dirs, with b one of the group's hubs by the root's hubs record.
+#[cfg(feature = "tunnel")]
 pub(crate) fn two_dirs_b_hub(name: &str) -> (PathBuf, PathBuf) {
     dirs(name, &["b"])
 }
 
 /// Two members that are both hubs, b above a in the hubs record.
+#[cfg(feature = "tunnel")]
 pub(crate) fn two_dirs_both_hubs(name: &str) -> (PathBuf, PathBuf) {
     dirs(name, &["b", "a"])
 }
@@ -458,6 +460,7 @@ fn server_credentials_go_round_the_group() {
 /// Message `push` from a peer over its own connection is its registration:
 /// the member keeps it, in push.cbor, and takes it again after a restart.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_peer_registers_for_push_and_the_member_keeps_it() {
     let (da, db) = two_dirs("push");
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});

@@ -5,7 +5,9 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use super::*;
-use crate::mesh::tests::{own, root, two_dirs, two_dirs_b_hub, two_dirs_both_hubs};
+use crate::mesh::tests::{own, two_dirs};
+#[cfg(feature = "tunnel")]
+use crate::mesh::tests::{root, two_dirs_b_hub, two_dirs_both_hubs};
 
 fn until(what: &str, f: impl Fn() -> bool) {
     let end = Instant::now() + Duration::from_secs(10);
@@ -106,6 +108,7 @@ fn a_paused_member_neither_dials_nor_takes() {
 /// this device's key toward it and the connection's tag; the hub's offer
 /// in the `result` that answers is kept, its tag confirming the key.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_device_sends_its_hub_the_tunnels_key_and_keeps_its_offer() {
     use cbb_core::format::cbor::Value as V;
     use cbb_core::format::frame;
@@ -165,6 +168,7 @@ fn a_device_sends_its_hub_the_tunnels_key_and_keeps_its_offer() {
 /// reaches the hub through its tunnel, AmneziaWG on, under a pre-shared key
 /// of their connection at home, and the member connection runs through it.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
     let (da, db) = two_dirs_b_hub("away-through");
     let (a, b) = (open(&da), open(&db));
@@ -240,6 +244,7 @@ fn a_device_reaches_its_hub_of_0_6_through_the_tunnel() {
 /// above serves and says so (`hubs`, t 16); once the one above stops being
 /// a hub and says so, the lower one serves after its wait.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_hub_stands_by_while_the_hub_above_serves() {
     let (da, db) = two_dirs_both_hubs("away-ladder");
     let (a, b) = (open(&da), open(&db));
@@ -292,6 +297,7 @@ fn a_hub_stands_by_while_the_hub_above_serves() {
 /// connection; status shows the relay. With the settings naming no relay
 /// the link stops.
 #[test]
+#[cfg(feature = "tunnel")]
 fn members_of_0_6_meet_at_the_groups_relay() {
     use crate::relayd::server;
     let (da, db) = two_dirs("relay-meet");
@@ -372,6 +378,7 @@ fn members_of_0_6_meet_at_the_groups_relay() {
 /// that it has not registered there, while the forwarder does not answer;
 /// a hub that stops serving shows none.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_hub_of_0_6_shows_its_forwarder() {
     use base64::Engine;
     let (_, db) = two_dirs_b_hub("away-forwarder");
@@ -409,6 +416,7 @@ fn a_hub_of_0_6_shows_its_forwarder() {
 /// settings keeps the same VLESS user ID. A forwarder that refuses shows
 /// why in short.
 #[test]
+#[cfg(feature = "tunnel")]
 fn a_hub_of_0_6_registers_with_its_forwarder() {
     use crate::nettest::forwarder::{Answer, Forwarder, welcome};
     use base64::Engine;

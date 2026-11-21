@@ -472,6 +472,9 @@ fn member_port() -> u16 {
     settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
+/// Why the only hub of a group does not stop without the user's word.
+pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
+
 /// Joins a group. For the Next (for_next), the QR code and the outcome come
 /// in its frames, and so do the log lines, as `CBB#` lines it skips.
 /// cbb pair's usage in no group.
