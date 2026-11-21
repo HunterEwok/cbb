@@ -11596,48 +11596,48 @@
         }
       }
     },
-    "No YubiKey was held to the phone. Try again.": {
+    "No YubiKey was held to the phone or plugged in. Try again.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يُقرَّب أي YubiKey من الهاتف. حاول مرة أخرى."
+            "value": "لم يُقرَّب أي YubiKey من الهاتف ولم يُوصَل به. حاول مرة أخرى."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se acercó ninguna YubiKey al teléfono. Vuelve a intentarlo."
+            "value": "No se acercó ninguna YubiKey al teléfono ni se conectó ninguna. Inténtalo de nuevo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "לא הוצמד YubiKey לטלפון. נסו שוב."
+            "value": "לא הוחזק YubiKey ליד הטלפון ולא חובר אליו. נסו שוב."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "फ़ोन से कोई YubiKey नहीं लगाई गई। दोबारा कोशिश करें।"
+            "value": "कोई YubiKey न फ़ोन से सटाई गई, न उसमें लगाई गई। फिर से कोशिश करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey не приложили к телефону. Попробуйте снова."
+            "value": "YubiKey не приложили к телефону и не вставили. Попробуйте снова."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hakuna YubiKey iliyoshikiliwa kwenye simu. Jaribu tena."
+            "value": "Hakuna YubiKey iliyoshikiliwa kwenye simu wala kuchomekwa. Jaribu tena."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有 YubiKey 贴近手机。请重试。"
+            "value": "没有 YubiKey 贴近手机，也没有插入。请重试。"
           }
         }
       }
@@ -19646,48 +19646,48 @@
         }
       }
     },
-    "The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.": {
+    "The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone or plug it into the USB-C port. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. اكتب رمز PIN ثم قرّبه من الهاتف. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN."
+            "value": "يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. اكتب رمز PIN ثم قرّبه من الهاتف أو أدخله في منفذ USB-C. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Escribe su PIN y acércala al teléfono. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN."
+            "value": "La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Escribe su PIN y acércala al teléfono o conéctala al puerto USB-C. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-YubiKey שומר את אותו מפתח כמו הדף הזה, מאחורי קוד ה-PIN שלו ונגיעה. הקלד את קוד ה-PIN שלו ואז הצמד אותו לטלפון. אם עדיין יש לו מפתח ניהול של היצרן, כל אחד יכול לברר את המפתח הזה ולמחוק את מפתח השחזור בלי קוד ה-PIN; האפליקציה יכולה להחליף אותו במפתח שקוד ה-PIN מגן עליו."
+            "value": "ה-YubiKey שומר את אותו מפתח כמו הדף הזה, מאחורי קוד ה-PIN שלו ונגיעה. הקלד את קוד ה-PIN שלו ואז הצמד אותו לטלפון או חבר אותו ליציאת ה-USB-C. אם עדיין יש לו מפתח ניהול של היצרן, כל אחד יכול לברר את המפתח הזה ולמחוק את מפתח השחזור בלי קוד ה-PIN; האפליקציה יכולה להחליף אותו במפתח שקוד ה-PIN מגן עליו."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। इसका PIN लिखें, फिर इसे फ़ोन से लगाएँ। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।"
+            "value": "YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। इसका PIN लिखें, फिर इसे फ़ोन से लगाएँ या USB-C पोर्ट में लगाएँ। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Введите его PIN-код и приложите YubiKey к телефону. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код."
+            "value": "YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Введите его PIN-код и приложите YubiKey к телефону или вставьте его в порт USB-C. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Andika PIN yake, kisha uishikilie kwenye simu. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN."
+            "value": "YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Andika PIN yake, kisha uishikilie kwenye simu au uichomeke kwenye mlango wa USB-C. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。输入它的 PIN，然后把它贴近手机。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。"
+            "value": "YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。输入它的 PIN，然后把它贴近手机或插入 USB-C 接口。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。"
           }
         }
       }
@@ -24706,48 +24706,48 @@
         }
       }
     },
-    "This iPhone cannot read a YubiKey over NFC.": {
+    "This iPhone cannot read a YubiKey over NFC. Plug the YubiKey into the USB-C port, or use the printed sheet.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يستطيع هذا الـ iPhone قراءة YubiKey عبر NFC."
+            "value": "لا يستطيع هذا الـ iPhone قراءة YubiKey عبر NFC. أدخل YubiKey في منفذ USB-C، أو استخدم الورقة المطبوعة."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este iPhone no puede leer una YubiKey por NFC."
+            "value": "Este iPhone no puede leer una YubiKey por NFC. Conecta la YubiKey al puerto USB-C o usa la hoja impresa."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-iPhone הזה לא יכול לקרוא YubiKey דרך NFC."
+            "value": "ה-iPhone הזה לא יכול לקרוא YubiKey דרך NFC. חברו את ה-YubiKey ליציאת ה-USB-C, או השתמשו בדף המודפס."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "यह iPhone NFC पर YubiKey नहीं पढ़ सकता।"
+            "value": "यह iPhone NFC से YubiKey नहीं पढ़ सकता। YubiKey को USB-C पोर्ट में लगाएँ, या छपी हुई शीट इस्तेमाल करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот iPhone не может прочитать YubiKey по NFC."
+            "value": "Этот iPhone не читает YubiKey по NFC. Вставьте YubiKey в порт USB-C или воспользуйтесь распечатанным листом."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "iPhone hii haiwezi kusoma YubiKey kupitia NFC."
+            "value": "iPhone hii haiwezi kusoma YubiKey kupitia NFC. Chomeka YubiKey kwenye mlango wa USB-C, au tumia karatasi iliyochapishwa."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这部 iPhone 无法通过 NFC 读取 YubiKey。"
+            "value": "这部 iPhone 无法通过 NFC 读取 YubiKey。请把 YubiKey 插入 USB-C 接口，或使用打印的那张纸。"
           }
         }
       }
@@ -26408,6 +26408,52 @@
         }
       }
     },
+    "Touch the YubiKey when it blinks, and keep it plugged in until this message goes.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المس YubiKey عندما يومض، وأبقِه موصولًا حتى تختفي هذه الرسالة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca la YubiKey cuando parpadee y mantenla conectada hasta que desaparezca este mensaje."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "געו ב-YubiKey כשהוא מהבהב, והשאירו אותו מחובר עד שההודעה הזו תיעלם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey के चमकने पर उसे छुएँ, और यह संदेश जाने तक उसे लगाए रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Коснитесь YubiKey, когда он замигает, и не вынимайте его, пока это сообщение не исчезнет."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gusa YubiKey inapomweka, na uiache imechomekwa hadi ujumbe huu uondoke."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YubiKey 闪烁时请触摸它，并保持插入，直到此消息消失。"
+          }
+        }
+      }
+    },
     "Turn Everywhere on?": {
       "localizations": {
         "ar": {
@@ -27006,48 +27052,48 @@
         }
       }
     },
-    "Type the YubiKey's PIN, then hold the YubiKey to the phone until it is done.": {
+    "Type the YubiKey's PIN, then hold the YubiKey to the phone or plug it into the USB-C port until it is done.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب رمز PIN لـ YubiKey، ثم أبقِ YubiKey قريبًا من الهاتف حتى ينتهي."
+            "value": "اكتب رمز PIN لـ YubiKey، ثم أبقِ YubiKey قريبًا من الهاتف أو موصولًا بمنفذ USB-C حتى ينتهي."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribe el PIN de la YubiKey y mantenla junto al teléfono hasta que termine."
+            "value": "Escribe el PIN de la YubiKey y mantenla junto al teléfono o conéctala al puerto USB-C hasta que termine."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקלד את קוד ה-PIN של ה-YubiKey, ואז החזק את ה-YubiKey צמוד לטלפון עד לסיום."
+            "value": "הקלד את קוד ה-PIN של ה-YubiKey, ואז החזק את ה-YubiKey צמוד לטלפון או מחובר ליציאת ה-USB-C עד לסיום."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "YubiKey का PIN लिखें, फिर काम पूरा होने तक YubiKey को फ़ोन से लगाए रखें।"
+            "value": "YubiKey का PIN लिखें, फिर काम पूरा होने तक YubiKey को फ़ोन से सटाए रखें या USB-C पोर्ट में लगाए रखें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Введите PIN-код YubiKey, затем приложите YubiKey к телефону и держите, пока всё не закончится."
+            "value": "Введите PIN-код YubiKey, затем приложите YubiKey к телефону или вставьте его в порт USB-C и держите, пока всё не закончится."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Andika PIN ya YubiKey, kisha ushikilie YubiKey kwenye simu hadi imalizike."
+            "value": "Andika PIN ya YubiKey, kisha ushikilie YubiKey kwenye simu au uichomeke kwenye mlango wa USB-C hadi imalizike."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入 YubiKey 的 PIN，然后把 YubiKey 贴近手机，直到完成。"
+            "value": "输入 YubiKey 的 PIN，然后把 YubiKey 贴近手机或插入 USB-C 接口，直到完成。"
           }
         }
       }

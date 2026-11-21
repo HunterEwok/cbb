@@ -44,7 +44,7 @@ struct ChangeRootView: View {
                 Button { openCard() } label: { Text("Hold the YubiKey") }.disabled(!YubiKeyPinField.fits(pin))
                 Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
             } message: {
-                Text("Type the YubiKey's PIN, then hold the YubiKey to the phone until it is done.")
+                Text("Type the YubiKey's PIN, then hold the YubiKey to the phone or plug it into the USB-C port until it is done.")
             }
         }
     }

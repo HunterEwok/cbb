@@ -119,7 +119,7 @@ struct RecoverySheetView: View {
                 Button { seal(replaceDefault: false) } label: { Text("Keep its key, then hold it") }.disabled(!YubiKeyPinField.fits(pin))
                 Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
             } message: {
-                Text("The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.")
+                Text("The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone or plug it into the USB-C port. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.")
             }
             .alert(Text("Did you keep the sheet?"), isPresented: $askingDone) {
                 Button { close() } label: { Text("I kept it") }

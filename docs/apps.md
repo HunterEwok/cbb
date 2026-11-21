@@ -1260,8 +1260,10 @@ settings, why it does not sync and the lab.
   phone in the group opens it with the PIN to change the root. HarmonyOS has no PIV of its
   own, so the core speaks it (`cbb_piv`'s `inspect`, `seal` and `open`, docs/core-api.md) and
   the app only carries each APDU to the card's IsoDep tag in NFC reader mode
-  (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`). The screens for it are not in the app
-  yet; the YubiKey of a group of 0.5 is gone from it.
+  (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
+  USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
+  right to use it (`setCard`'s bulk flag, the transport `ccid_bulk`). The sheet page seals
+  onto it and the change-root screen opens it; the YubiKey of a group of 0.5 is gone from it.
 - **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
   Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
   how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
@@ -1512,22 +1514,31 @@ the app on real devices.
   (never this phone), and after Face ID or the system's biometrics signs the change with
   the recovery key and the phone's new root key. A new phone joins afterwards through the
   new root's window, and restoring on a phone in no group comes with 0.7 (D-125).
-- The recovery key on a YubiKey, over NFC (docs/protocol.md, section 9, "The recovery key on
-  a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the app only
-  carries each APDU to the card (the kits' `RecoveryCard`). The root phone's sheet page has
+- The recovery key on a YubiKey, over NFC or USB-C (docs/protocol.md, section 9, "The
+  recovery key on a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the
+  app only carries the card's bytes (the kits' `RecoveryCard`). The root phone's sheet page has
   "Put it on a YubiKey": after the PIN, the app asks the card first (`inspect`), and when it
   still has its factory management key, which anyone could use to erase the recovery key
   without the PIN, says so and lets the person choose to replace it by a random key the PIN
-  protects or to keep it; then the card held to the phone seals the sheet's secret behind
-  the PIN and a touch (`seal`). A YubiKey older than firmware 5.3, or one whose management
-  key the app cannot use, takes the sheet only. The change-root screen's "Use a YubiKey
-  instead" opens the secret with the PIN and a touch (`open`) and hands it to `change_root`.
-  On Android the reader is the activity's NFC reader mode (`YubiKeyNfc`); on HarmonyOS the
-  NFC tag's IsoDep (`YubiKey.ets`); on the iPhone it is Core NFC's sheet
-  (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the Apple developer account:
-  a build signed ad hoc cannot read the YubiKey, and `device.sh` with `CBB_NFC=1` asks the
-  team's profile for it. The Aurora app takes the sheet only for now: the phone has
-  no NFC card path, and a YubiKey on USB-C through pcscd is not yet checked (docs/parity.md).
+  protects or to keep it; then the card held to the phone or plugged in seals the sheet's
+  secret behind the PIN and a touch (`seal`). A YubiKey older than firmware 5.3, or one whose
+  management key the app cannot use, takes the sheet only. The change-root screen's "Use a
+  YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
+  `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap
+  and, on Android and HarmonyOS, for a plug, and takes whichever comes first; on USB the
+  screen asks for the touch when the key blinks.
+  On Android NFC is the activity's reader mode and USB-C the key's CCID interface through
+  `UsbManager`, after the system asks the person to allow it (`YubiKey.kt`: `YubiKeys`,
+  `YubiKeyNfc`, `YubiKeyUsb`; the transport `ccid_bulk`, where the core frames each APDU); on
+  HarmonyOS the NFC tag's IsoDep and `usbManager` the same way (`YubiKey.ets`); on the iPhone
+  NFC is Core NFC's sheet (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the
+  Apple developer account: a build signed ad hoc cannot read the YubiKey, and `device.sh` with
+  `CBB_NFC=1` asks the team's profile for it. A YubiKey in an iPhone's USB-C port goes through
+  CryptoTokenKit (`App/YubiKeyUsb.swift`), where iOS drives the CCID interface and the app
+  sends whole APDUs; when iOS gives the app no slot manager the app stays with NFC. Whether
+  iOS asks for an entitlement for it is left to the real-card test before rc.1. The Aurora
+  app takes the sheet only for now: the R570E's pcscd takes a plugged YubiKey and its socket
+  is open inside the sandbox, so the app's path goes through pcscd (docs/parity.md).
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

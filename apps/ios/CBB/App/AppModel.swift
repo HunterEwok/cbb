@@ -1436,14 +1436,15 @@ final class AppModel: ObservableObject {
     }
 
     /// Seals the recovery sheet just made onto a YubiKey held to the phone
-    /// (Core NFC; docs/protocol.md, "The recovery key on a YubiKey (0.6)"),
+    /// or plugged in (Core NFC or CryptoTokenKit; docs/protocol.md, "The recovery key on a YubiKey (0.6)"),
     /// after its PIN; replaceDefault is the person's consent to replace the
     /// card's factory management key. True once the card holds it.
     func sealOnCard(sheet: String, pin: String, replaceDefault: Bool) async -> Bool {
         do {
-            let sealed = try await YubiKeyNfc.withCard(
+            let sealed = try await YubiKeys.withCard(
                 prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
-                done: String(localized: "The recovery key is on the YubiKey.", bundle: .app)
+                done: String(localized: "The recovery key is on the YubiKey.", bundle: .app),
+                plugged: { self.message = String(localized: "Touch the YubiKey when it blinks, and keep it plugged in until this message goes.", bundle: .app) }
             ) { (card: SmartCard) throws -> RecoveryCard.Sealed in
                 try RecoveryCard.seal(card, pin: pin, sheet: sheet, replaceDefault: replaceDefault)
             }
@@ -1464,12 +1465,15 @@ final class AppModel: ObservableObject {
     /// PIN and a touch, for one change of root; nil when it did not.
     func openCard(pin: String) async -> Data? {
         do {
-            return try await YubiKeyNfc.withCard(
+            let secret = try await YubiKeys.withCard(
                 prompt: String(localized: "Hold the YubiKey with the recovery key to the top of the phone.", bundle: .app),
-                done: String(localized: "The YubiKey opened the recovery key.", bundle: .app)
+                done: String(localized: "The YubiKey opened the recovery key.", bundle: .app),
+                plugged: { self.message = String(localized: "Touch the YubiKey when it blinks, and keep it plugged in until this message goes.", bundle: .app) }
             ) { (card: SmartCard) throws -> Data in
                 try RecoveryCard.open(card, pin: pin)
             }
+            message = nil
+            return secret
         } catch is CancellationError {
             return nil
         } catch {
@@ -1706,8 +1710,8 @@ final class AppModel: ObservableObject {
         }
         if let f = error as? YubiKeyNfc.Failure {
             switch f {
-            case .unavailable: return String(localized: "This iPhone cannot read a YubiKey over NFC.", bundle: .app)
-            case .noCard: return String(localized: "No YubiKey was held to the phone. Try again.", bundle: .app)
+            case .unavailable: return String(localized: "This iPhone cannot read a YubiKey over NFC. Plug the YubiKey into the USB-C port, or use the printed sheet.", bundle: .app)
+            case .noCard: return String(localized: "No YubiKey was held to the phone or plugged in. Try again.", bundle: .app)
             }
         }
         if let r = error as? LiveGroup.CommandRefused {
