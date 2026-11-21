@@ -152,6 +152,21 @@ pub fn message(public: &[u8; 32], confirm: &[u8; 32]) -> Vec<u8> {
     .encode()
 }
 
+/// The ID (field 2) of the `result` that carries a hub's offer answering
+/// the `tunnel` whose tag is confirm: the first 16 bytes of
+/// SHA-256(`cbb offer id v1` ‖ 0x00 ‖ tag), as unique as the tag and
+/// telling nothing of it.
+pub fn offer_id(confirm: &[u8; 32]) -> [u8; 16] {
+    let mut b = Vec::with_capacity(48);
+    b.extend_from_slice(b"cbb offer id v1\0");
+    b.extend_from_slice(confirm);
+    let mut id = [0u8; 16];
+    for (d, s) in id.iter_mut().zip(crate::certs::sha256(&b)) {
+        *d = s;
+    }
+    id
+}
+
 /// Reads a `tunnel` message: the device's WireGuard key toward this hub and
 /// its confirmation tag.
 pub fn read(msg: &[u8]) -> Result<([u8; 32], [u8; 32]), Rule> {

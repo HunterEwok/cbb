@@ -215,3 +215,17 @@ fn the_two_ends_always_share_a_key() {
         }
     }
 }
+
+/// The offer's result ID follows from the tag alone, differs per tag, and
+/// is not the tag's start.
+#[test]
+fn the_offers_id_follows_from_the_tag() {
+    let (a, b) = ([1u8; 32], [2u8; 32]);
+    assert_eq!(offer_id(&a), offer_id(&a));
+    assert_ne!(offer_id(&a), offer_id(&b));
+    assert_ne!(offer_id(&a)[..], a[..16]);
+    // SHA-256("cbb offer id v1\0" ‖ 0x01 × 32), its first 16 bytes.
+    let mut m = b"cbb offer id v1\0".to_vec();
+    m.extend_from_slice(&a);
+    assert_eq!(offer_id(&a)[..], crate::certs::sha256(&m)[..16]);
+}

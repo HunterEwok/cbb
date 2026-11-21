@@ -75,7 +75,9 @@ made with 0.5 is set up again once. The details follow.
   that hub and the tag of the pre-shared key exported from that connection, and keeps the hub's
   offer that comes back in `result` (hub key, endpoints with each forwarder face's key, next
   key, obfuscation, VLESS) in `tunnel.json` with the keys it sent. Obfuscation without its key
-  protects no headers. A member takes `tunnel` from any current member of the group, and the
+  protects no headers, and the member takes every obfuscation the format takes (up to 128 junk
+  packets of up to 1280 bytes, paddings up to 1280). The `result` with a hub's offer is numbered by
+  `hubkey::offer_id`, a hash of the tag, never the tag itself. A member takes `tunnel` from any current member of the group, and the
   hubs' own message only from a device that may be a hub. Away from home the device dials the
   hubs it met through the tunnel, under its own key toward each hub, trying the pre-shared
   keys of its connections with it one at a time (the confirmed one first) over every way of

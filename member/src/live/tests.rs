@@ -130,9 +130,10 @@ fn a_device_sends_its_hub_the_tunnels_key_and_keeps_its_offer() {
             (8, V::Bytes(&confirm)),
         ]);
         let me = hub.device();
+        let id = cbb_core::hubkey::offer_id(&confirm);
         let result = V::Map(vec![
             (frame::FIELD_T, V::Uint(cbb_core::msg::tables::T_RESULT)),
-            (2, V::Bytes(&confirm[..16])),
+            (2, V::Bytes(&id)),
             (3, V::Bytes(&me.0)),
             (4, V::Uint(1)),
             (6, offer),

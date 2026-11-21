@@ -49,10 +49,11 @@ const DATA_MIN: usize = 32; // the header and an empty message's tag
 const NONCE: usize = 12;
 const COOKIE_LIFE: Duration = Duration::from_secs(120 - 5);
 
-// The bounds of internal/tunnel's Check, so that both sides take the same
-// settings.
-const MAX_JUNK_COUNT: u32 = 16;
-const MAX_JUNK_SIZE: u32 = 1000;
+// The bounds of the format's table `obfuscation` (core
+// `msg::tables::OBFUSCATION`), so that the member takes every offer the
+// format takes.
+const MAX_JUNK_COUNT: u32 = 128;
+const MAX_JUNK_SIZE: u32 = 1280;
 const MIN_PADDING: u32 = 16;
 const MAX_PADDING: u32 = 64;
 /// The most padding a hub's settings may give a message (the format's
@@ -639,7 +640,10 @@ mod tests {
             let v: Value = serde_json::from_str(&go.replace(from, to)).unwrap();
             Obfuscation::from_offer(&v).is_err()
         };
-        assert!(bad("\"jc\":5", "\"jc\":17"));
+        assert!(bad("\"jc\":5", "\"jc\":129"));
+        assert!(!bad("\"jc\":5", "\"jc\":128"), "the format's most junk packets");
+        assert!(bad("\"jmax\":300", "\"jmax\":1281"));
+        assert!(!bad("\"jmax\":300", "\"jmax\":1280"), "the format's largest junk");
         assert!(bad("\"s1\":20", "\"s1\":12"));
         assert!(bad("1000016-1065551", "01000016-1065551"));
         assert!(bad("1000016-1065551", "1073741840-1073807375"), "overlapping");

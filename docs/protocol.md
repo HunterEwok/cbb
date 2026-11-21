@@ -3020,7 +3020,7 @@ sent, the one the hub confirmed and the one of its last handshake (`toward` in `
 `member/src/away/toward.rs`, `member/src/live/away.rs`). A member takes `tunnel` from any
 current member of the group (in the records, not frozen), and `hubs` (t 16) only from a device
 that may be a hub. The hub answers with a `result` (t 10) whose field 2 is the first 16 bytes
-of the tag, field 3 the hub, and field 6 its offer (table `offer`), which the device keeps as
+of SHA-256(`cbb offer id v1` ‖ 0x00 ‖ the tag) (`hubkey::offer_id`), field 3 the hub, and field 6 its offer (table `offer`), which the device keeps as
 that hub's, the tag it carries in field 8 confirming the key (`member/src/away/offer.rs`):
 
 - the way over VLESS goes to the offer's forwarder endpoint, the first in field 2 that field 9
@@ -3028,9 +3028,11 @@ that hub's, the tag it carries in field 8 confirming the key (`member/src/away/o
   the TLS server name and HTTP Host (the endpoint's host when absent), always over XHTTP in
   0.6; a later transport comes in a new field that 0.6 skips;
 - `obfuscation` without `obfuscation/key` protects no headers (plain AmneziaWG junk and
-  headers); a padding (`obfuscation/s`) is 0 to 1280 bytes, at least 16 with header protection;
+  headers); a padding (`obfuscation/s`) is 0 to 1280 bytes, at least 16 with header protection,
+  and the member takes the table's whole range of junk (`jc` up to 128, `jmax` up to 1280);
 - with `next-key` the obfuscation and VLESS stay the same;
-- an offer with `moved` makes the device forget that hub.
+- an offer with `moved` makes the device forget that hub; it takes the next one in the hubs'
+  order.
 
 Away from home, when no hub is connected or at home, the device dials a hub it holds an offer
 of through the tunnel (`member/src/live/away.rs`): under its key toward that hub, with one
