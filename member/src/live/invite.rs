@@ -566,6 +566,10 @@ pub fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Res
 /// ends before its TLS handshake.
 #[cfg(feature = "tunnel")]
 const HANDSHAKE_TRIES: u32 = 5;
+/// How long the guest waits for the hub's first answer through the guest
+/// tunnel before it gives up: WireGuard tries its handshake every 5 s.
+#[cfg(feature = "tunnel")]
+const ANSWER_WAIT: Duration = Duration::from_secs(20);
 
 /// Joins the group of a remote invitation of 0.6 (cbb pair -invite): through
 /// the invitation's guest tunnel to the hub, with its secret; the hub's
@@ -597,11 +601,37 @@ pub fn join(
         let sock = TcpStream::connect_timeout(&link.local(), Duration::from_secs(10))
             .context("cannot reach the tunnel's local port")?;
         let kept = sock.try_clone().context("cannot use the tunnel's connection")?;
-        match crate::joining::over_with(dir, sock, "the hub", me, inv.clone(), None, step, &before) {
+        // A hub that never answers through the guest tunnel (an invitation
+        // used up, a hub off) ends the try after ANSWER_WAIT, not after the
+        // whole wait for the admin.
+        let watch = sock.try_clone().context("cannot use the tunnel's connection")?;
+        let tried = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let answered = link.answered_flag();
+        {
+            let tried = tried.clone();
+            std::thread::spawn(move || {
+                let until = std::time::Instant::now() + ANSWER_WAIT;
+                while std::time::Instant::now() < until && !tried.load(std::sync::atomic::Ordering::SeqCst) {
+                    if answered.load(std::sync::atomic::Ordering::SeqCst) {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                if !tried.load(std::sync::atomic::Ordering::SeqCst)
+                    && !answered.load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    let _ = watch.shutdown(std::net::Shutdown::Both);
+                }
+            });
+        }
+        let res = crate::joining::over_with(dir, sock, "the hub", me, inv.clone(), None, step, &before);
+        tried.store(true, std::sync::atomic::Ordering::SeqCst);
+        match res {
+            // Never answered through the tunnel: no further try helps.
+            Err(e) if !link.answered() => return Err(e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")),
             Err(e) if tries < HANDSHAKE_TRIES && e.message().starts_with(crate::joining::NO_HANDSHAKE) => {
                 std::thread::sleep(Duration::from_secs(2));
             }
-            Err(e) if !link.answered() => return Err(e.context("the hub did not answer; check that the invitation is still valid, that the hub is on, and that its UDP port or its forwarder can be reached")),
             res => break (res?, kept),
         }
     };

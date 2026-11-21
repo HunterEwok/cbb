@@ -4,6 +4,7 @@
 package service
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/invite"
 )
 
 // aloneBin returns the Rust member's program, or skips the test.
@@ -40,18 +40,7 @@ func TestAloneInvite(t *testing.T) {
 	cli := cbbCLI(t)
 	var h hub
 	desk := startService(t, &h, "desk")
-	c, code := openWindow(t, desk)
-	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "pair", "-name", "rust", "-code", desk.addr())
-	join.Stdin = strings.NewReader(code + "\n")
-	join.Stderr = testWriter{t, "rust join: ", nil}
-	if out, err := join.Output(); err != nil || !strings.Contains(string(out), "Joined the group") {
-		t.Fatalf("cbb pair: %v; %s", err, out)
-	}
-	if m, err := c.Receive(); err != nil || m.Name != "rust" {
-		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
-	}
-	c.Close()
+	dir := joinAloneAs(t, bin, desk, "rust", nil)
 	rust := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", desk.addr())
 	waitFor(t, "the Rust member connected to the desk", func() bool {
 		st, err := rust.do(t, control.Header{Op: control.OpStatus}, "")
@@ -61,11 +50,16 @@ func TestAloneInvite(t *testing.T) {
 		t.Errorf("an invitation from a member that is no admin: %v", err)
 	}
 	adminOn(t, cli, desk, "rust")
+	// On the records of 0.6 the root names its hubs.
+	if _, err := desk.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"rust"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	port := freeUDP(t)
 	hubAt := []string{fmt.Sprintf("127.0.0.1:%d", port)}
 	waitFor(t, "the Rust member a hub", func() bool {
 		_, err := rust.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: hubAt, Consent: true}, "")
-		if err != nil && !strings.Contains(err.Error(), "admin") {
+		// Until the records reach it, it is no admin, nor a hub.
+		if err != nil && !strings.Contains(err.Error(), "admin") && !strings.Contains(err.Error(), "do not make this device a hub") {
 			t.Fatalf("cbb global hub on the Rust member: %v", err)
 		}
 		return err == nil
@@ -94,12 +88,8 @@ func TestAloneInvite(t *testing.T) {
 	if m.Expires != 600 || m.Done {
 		t.Fatalf("the invitation's answer: %+v", m)
 	}
-	in, err := invite.Parse(m.Invite)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if in.Hub != rustID || len(in.Secret) != 16 || len(in.Endpoints) != 1 || in.Endpoints[0].Port() != uint16(port) {
-		t.Errorf("the Rust hub's invitation %+v", in)
+	if raw := joinInvitation(t, m.Invite); !bytes.Contains(raw, []byte(fmt.Sprintf("127.0.0.1:%d", port))) {
+		t.Errorf("the Rust hub's invitation names not its endpoint: %x", raw)
 	}
 
 	// A stranger the admin does not confirm stays out.
@@ -116,8 +106,13 @@ func TestAloneInvite(t *testing.T) {
 	if err := inv.Send(&control.Message{Header: control.Header{Op: control.OpAnswer}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Receive(); err == nil || !strings.Contains(err.Error(), "did not confirm") {
+	if _, err := s.Receive(); err == nil || !strings.Contains(err.Error(), "did not admit it") {
 		t.Errorf("the declined join ended with %v", err)
+	}
+	// The hub tells the admin that the device it declined stays out, and
+	// the invitation stays open.
+	if m, err := inv.Receive(); err != nil || !m.Refused || m.Done {
+		t.Fatalf("after the decline the Rust hub said %+v, %v", m, err)
 	}
 
 	// The deck, which the admin confirms, joins.

@@ -2843,6 +2843,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a join with an invitation whose hub does not answer through the
+  guest tunnel (an invitation used up, a hub that is off) ends within about 20 seconds with
+  why, instead of waiting minutes for an admin that cannot be reached.
 - On the records of 0.6 the project's relay is met where the newest signed entry points put
   it and with the keys the newest keys.json names, so that a move or a new key there needs no
   new settings from the root; a link that keeps failing fetches the signed lists again from

@@ -1290,6 +1290,11 @@ impl Link {
     pub fn answered(&self) -> bool {
         self.answered.load(Ordering::SeqCst)
     }
+
+    /// What answered reads, for a watch on another thread.
+    pub fn answered_flag(&self) -> Arc<AtomicBool> {
+        self.answered.clone()
+    }
 }
 
 impl Drop for Link {
