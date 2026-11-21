@@ -244,6 +244,17 @@ func betweenRule(name string, m map[any]any) string {
 			seen[e] = true
 		}
 	}
+	// The next key's settings and way go with that key and with the
+	// present ones.
+	if name == "offer" {
+		has := func(n uint64) bool { _, ok := m[n]; return ok }
+		if has(10) && (!has(7) || !has(3)) {
+			return "offer/next-obfuscation"
+		}
+		if has(11) && (!has(7) || !has(4)) {
+			return "offer/next-vless"
+		}
+	}
 	// A want asks for something.
 	if _, ids := m[uint64(2)]; name == "want" && !ids && m[uint64(3)] == nil {
 		return "want/empty"

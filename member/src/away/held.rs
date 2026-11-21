@@ -317,8 +317,18 @@ impl Away {
         let obfuscation = st.obfuscation.as_ref().and_then(|o| crate::awg::Obfuscation::from_offer(o).ok());
         let obf_cbor = obfuscation.as_ref().map(crate::awg::Obfuscation::to_cbor);
         let vless = st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty()).and_then(|f| f.vless.clone());
-        let vless_parts = vless.as_ref().and_then(vless_parts);
+        let now_parts = vless.as_ref().and_then(vless_parts);
         let next = st.next_public();
+        // The settings and the way that go with the next key, which the hub
+        // takes at the switch (`State::rotate`): a client away across it
+        // reaches the hub with them.
+        let next_obf_cbor = (next.len() == 32 && obf_cbor.is_some())
+            .then(|| st.next_obfuscation())
+            .flatten()
+            .and_then(|o| crate::awg::Obfuscation::from_offer(&o).ok())
+            .map(|o| o.to_cbor());
+        let next_vless = (next.len() == 32 && now_parts.is_some()).then(|| st.next_vless()).flatten();
+        let next_vless_parts = next_vless.as_ref().and_then(vless_parts);
         let mut m: Vec<(u16, Value<'_>)> = vec![(1, key_value(&hub_key))];
         if !endpoints.is_empty() {
             m.push((2, Value::Array(endpoints.iter().map(|e| Value::Text(e)).collect())));
@@ -326,12 +336,8 @@ impl Away {
         if let Some(o) = &obf_cbor {
             m.push((3, cbb_core::format::cbor::decode(o).ok()?));
         }
-        if let Some((id, port, host, path)) = &vless_parts {
-            let mut v = vec![(1, Value::Bytes(id)), (2, Value::Uint(u64::from(*port))), (3, Value::Text(host))];
-            if let Some(p) = path {
-                v.push((4, Value::Text(p)));
-            }
-            m.push((4, Value::Map(v)));
+        if let Some(parts) = &now_parts {
+            m.push((4, vless_map(parts)));
         }
         if next.len() == 32 {
             m.push((7, key_value(&next)));
@@ -339,6 +345,12 @@ impl Away {
         m.push((8, Value::Bytes(confirm)));
         if let Some(f) = &fw {
             m.push((9, Value::Array(vec![Value::Map(vec![(1, Value::Text(f)), (2, key_value(&hub_key))])])));
+        }
+        if let Some(o) = &next_obf_cbor {
+            m.push((10, cbb_core::format::cbor::decode(o).ok()?));
+        }
+        if let Some(parts) = &next_vless_parts {
+            m.push((11, vless_map(parts)));
         }
         let v = Value::Map(m);
         let b = v.encode();
@@ -428,6 +440,15 @@ fn key_value(k: &[u8]) -> Value<'_> {
 
 /// The parts of the tunnel's VLESS settings that the offer carries: the user
 /// ID, the web server's port, the site's name and the path.
+/// The offer's map of a way over VLESS (`tables::VLESS`) from its parts.
+fn vless_map((id, port, host, path): &([u8; 16], u16, String, Option<String>)) -> Value<'_> {
+    let mut v = vec![(1, Value::Bytes(id)), (2, Value::Uint(u64::from(*port))), (3, Value::Text(host))];
+    if let Some(p) = path {
+        v.push((4, Value::Text(p)));
+    }
+    Value::Map(v)
+}
+
 fn vless_parts(v: &serde_json::Value) -> Option<([u8; 16], u16, String, Option<String>)> {
     let id = cbb_core::vless::parse_id(v.get("id")?.as_str()?).ok()?;
     let port = v.get("endpoint")?.as_str()?.parse::<std::net::SocketAddr>().ok()?.port();

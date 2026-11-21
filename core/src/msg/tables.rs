@@ -193,6 +193,8 @@ pub static OFFER: Table = Table {
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
         f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
+        f(10, "offer/next-obfuscation", Ty::Map(&OBFUSCATION), false),
+        f(11, "offer/next-vless", Ty::Map(&VLESS), false),
     ],
 };
 

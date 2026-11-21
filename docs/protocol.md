@@ -3053,9 +3053,11 @@ The offer (table `offer`, `core/src/msg/tables.rs`):
 | 3 | `obfuscation` | the group's AmneziaWG settings ("Obfuscation" below); absent for plain WireGuard |
 | 4 | `vless` | the way to the hub's forwarder over VLESS ("VLESS" below) |
 | 6 | `moved` | the hub is no hub any more: the device forgets its offer and takes the next hub in the order ("Moving the hub", "Stopping a hub") |
-| 7 | `next-key` | the key the hub serves with in the next period ("The hub's key" below); the obfuscation and VLESS stay the same |
+| 7 | `next-key` | the key the hub serves with in the next period ("The hub's key" below) |
 | 8 | `confirm` | the confirmation tag of the pre-shared key the hub holds newest for this device |
 | 9 | `endpoint-keys` | per endpoint, the key the hub serves under there (its key for that forwarder's face, section 18); an endpoint without one uses field 1 |
+| 10 | `next-obfuscation` | the AmneziaWG settings the hub takes with `next-key` (table `obfuscation`); only with fields 7 and 3 (`offer/next-obfuscation`), absent when they stay the same |
+| 11 | `next-vless` | the way over VLESS the hub takes with `next-key`, at the same forwarder (table `vless`); only with fields 7 and 4 (`offer/next-vless`), absent when it stays the same |
 
 Field 5 is not used. The device reads it so:
 
@@ -3124,7 +3126,7 @@ loses the hub until it meets the new hub, at home or at a relay, and takes its o
 
 The hubs of 0.6 serve in the order `State::hub_order` derives from the records alone
 (`core/src/records/eval.rs`): the devices of the root's hubs record first, in the record's
-order (the user's, not sorted; `cbb hubs`, the control operation `hubs`), then the other
+order (the user's, not sorted; `cbb global hubs`, the control operation `hubs`), then the other
 devices with an admin key, the computers before the phones, in each part the root's own device
 first, then by device ID; frozen devices are left out. The root is a hub only when its hubs
 record names it or the user makes it one there.
@@ -3201,19 +3203,22 @@ in `member/src/away/serve.rs`, called from `serve_hub` in `member/src/live/away.
 
 - The period is the tag of its forwarder's face, else of the project's forwarder's; without
   either, the hub keeps its key.
-- A hub that sees a period always holds the next key, made at random, which its offers give
-  as `next-key` from then on, to every connected client at once (they connect again and take
-  the offer with their next `tunnel`) and to the others when they meet it.
+- A hub that sees a period always holds the next key, made at random, and with it new
+  AmneziaWG settings when it hides its tunnel and a new VLESS user ID when it has VLESS, which
+  its offers give as `next-key`, `next-obfuscation` and `next-vless` from then on, to every
+  connected client at once (they connect again and take the offer with their next `tunnel`)
+  and to the others when they meet it.
 - When a period comes that it serves with no key for, and at least three days after it made
-  the next key, it serves with the next key in place of the old one: it starts its tunnel
-  again, registers again with its forwarder (section 13) under the new period, and makes the
-  key after it at once.
+  the next key, it serves with the next key in place of the old one, with the settings and
+  the VLESS user ID that go with it: it starts its tunnel again, registers again with its
+  forwarder (section 13) under the new period and the new user ID, and makes the key after it
+  at once.
 - `tunnel.json` keeps the key the hub serves with, the next one and the period each is for.
-- A client tries a hub with its key and, when the offer has one, with `next-key`, both at
-  once, and keeps the one that answers, so a client that was away while the hub moved on still
-  reaches it; the offer it gets then replaces the one it kept. A client that was away for the
-  whole period before and never got `next-key` reaches the hub again at home or at the
-  group's relay.
+- A client tries a hub with its key and, when the offer has one, with `next-key` and the
+  settings and way that go with it (`Hub::with_next`), both at once, and keeps the one that
+  answers, so a client that was away while the hub moved on still reaches it; the offer it
+  gets then replaces the one it kept. A client that was away for the whole period before and
+  never got `next-key` reaches the hub again at home or at the group's relay.
 - A hub refuses a client key that is one of its own keys.
 
 ### Obfuscation
@@ -4502,9 +4507,10 @@ it checks what it downloads.
   the group and its tunnel. Its `cbb update` (the daily timer, or by hand) asks its service
   (control operation `release_want`) for the archives of the held release that the
   members seen since its service started name in their hellos, `device` `archive` (section 4;
-  on the records of 0.6 field 5 of the hello's `device` map, `msg::member::HELLO_DEVICE`),
-  and it does not hold whole, at most 16, downloads each from the server it checked the release from, checks it against
-  `release.json` and hands it over as with `release_file`.
+  on the records of 0.6 field 5 of the hello's `device` map, the table `hello/device` in
+  `core/src/msg/member.rs`), and it does not hold whole, at most 16, downloads each from the
+  server it checked the release from, checks it against `release.json` and hands it over as
+  with `release_file`.
 - A member that does not know `release` ignores it, as it ignores every message of a type it does not know.
 
 ### Entry points

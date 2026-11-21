@@ -99,6 +99,8 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::OFFER, 7, Refuse, "the hub's next key"),
     o(&t::OFFER, 8, Refuse, "the confirmation tag"),
     o(&t::OFFER, 9, Refuse, "endpoint keys: absent would fall back to the offer's key"),
+    o(&t::OFFER, 10, Refuse, "the settings that go with the next key"),
+    o(&t::OFFER, 11, Refuse, "the way over VLESS that goes with the next key"),
     o(&t::HUBS, 2, Refuse, "stopped: a mode"),
     o(&t::HUBS, 3, Refuse, "serving: a mode"),
     o(&t::GUEST, 4, Refuse, "the guest's pre-shared key"),

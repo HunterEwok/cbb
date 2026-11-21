@@ -58,7 +58,7 @@ func turnTunnelOn(t *testing.T, s *testService) {
 	}
 }
 
-// nameHubs has root, the group's root, name the group's hubs (cbb hubs),
+// nameHubs has root, the group's root, name the group's hubs (cbb global hubs),
 // which on the records of 0.6 comes before a device serves as one.
 func nameHubs(t *testing.T, root *testService, names ...string) {
 	t.Helper()
@@ -323,7 +323,9 @@ func TestHubKeyRotation(t *testing.T) {
 	clock := newTestClock(t, 0)
 	var h hub
 	pi := startEnv(t, &h, "pi", clock.env())
-	deck := startService(t, &h, "deck")
+	// The deck's clock moves with the pi's: on the records of 0.6 a copy is
+	// judged by its time, and one 25 hours behind the pi's is old there.
+	deck := startEnv(t, &h, "deck", clock.env())
 	pairWith(t, pi, deck)
 	nameHubs(t, pi, "pi")
 	for _, s := range []*testService{pi, deck} {
@@ -584,7 +586,10 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 		renewEvery, hubKeyAhead = 200*time.Millisecond, 24*time.Hour
 		t.Cleanup(func() { renewEvery, hubKeyAhead = every, ahead })
 		clock = newTestClock(t, 0)
+		// The deck's clock moves with the pi's: on the records of 0.6 a
+		// copy is judged by its time, and one 25 hours behind is old.
 		piEnv = append(piEnv, clock.env())
+		deckEnv = append(deckEnv, clock.env())
 	}
 	pi := startEnv(t, &h, "pi", piEnv...)
 	deck := startEnv(t, &h, "deck", deckEnv...)
@@ -946,7 +951,7 @@ func TestJoinByAddress(t *testing.T) {
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from the deck" })
 
-	// The root names the group's hubs (cbb hubs) before one serves.
+	// The root names the group's hubs (cbb global hubs) before one serves.
 	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1172,7 +1177,7 @@ func TestSeveralHubs(t *testing.T) {
 
 // TestMakeHub has the pi, the group's root and not a hub, make the Mac, an
 // admin, a hub of the group: the Mac refuses while sync away from home is
-// off there, then, once the root names it with cbb hubs, becomes a hub and
+// off there, then, once the root names it with cbb global hubs, becomes a hub and
 // serves, and the pi keeps its offer. A device that is no admin cannot be
 // made one before the root names it.
 func TestMakeHub(t *testing.T) {
@@ -1197,7 +1202,7 @@ func TestMakeHub(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "sync away from home is off here") {
 		t.Errorf("a Mac without sync away from home became a hub: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb hubs") {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "deck", Addrs: addr}, ""); err == nil || !strings.Contains(err.Error(), "the root names its hubs with cbb global hubs") {
 		t.Errorf("a device that is no admin became a hub: %v", err)
 	}
 	if _, err := deck.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "mac", Addrs: addr}, ""); err == nil {

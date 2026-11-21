@@ -2860,12 +2860,17 @@ made with 0.5 is set up again once. The details follow.
   (`hub_rank`), a hub forgets the tunnel keys of a device the group removes, a hub whose
   forwarder holds its VLESS user ID for another group takes a new one, and stopping a device
   that is no hub says so rather than that it is the group's last hub. The Go tests of the hubs
-  name them with `cbb hubs` first and read the tunnel's keys of 0.6 (`toward`, `held`).
+  name them with `cbb global hubs` first and read the tunnel's keys of 0.6 (`toward`, `held`).
 - On the records of 0.6 a computer in a container offers no admin key when it pairs unless its
   user set `CBB_KEYS_IN_FILE=yes`, `cbb devices` lists a frozen admin as no admin until the
   freeze ends, as the core counts it, and a home pairing window counts its five minutes in the
   device's running time from end to end, so a wall clock set while it is open no longer ends
   it. A build for tests checks the sealing keys as often as `CBB_TEST_RENEW_EVERY` says.
+- On the records of 0.6 a hub's offer carries the AmneziaWG settings and the VLESS way that go
+  with its next key (offer fields 10 `next-obfuscation` and 11 `next-vless`, docs/protocol.md
+  section 11), so a client that was away across the hub's change of period reaches it with the
+  new settings and user ID, as before 0.6; a forwarder's endpoint that the hub serves under its
+  own key moves to the next key with it. The format's vectors and the Go reader carry them.
 - On the records of 0.6 an admin computer that removes another admin, or unfreezes one, hears
   that only the group's root does it, and its freeze of an admin names that admin's key alone,
   as the core counts an admin's freeze, rather than a record that would not count.

@@ -1781,6 +1781,8 @@ TABLES = {
         (7, "offer/next-key", "key 3", False),
         (8, "offer/confirm", "bytes 32", False),
         (9, "offer/endpoint-keys", "array 1..8 of map offer/endpoint-key", False),
+        (10, "offer/next-obfuscation", "map obfuscation", False),
+        (11, "offer/next-vless", "map vless", False),
     ],
     "offer/endpoint-key": [
         (1, "offer/endpoint-key/endpoint", "addr", True),
@@ -2071,6 +2073,11 @@ def between_rule(name, v):
         named = [k[1] for k in v[9]]
         if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
             return "offer/endpoint-keys"
+    # The next key's settings and way go with that key and with the present ones.
+    if name == "offer" and 10 in v and (7 not in v or 3 not in v):
+        return "offer/next-obfuscation"
+    if name == "offer" and 11 in v and (7 not in v or 4 not in v):
+        return "offer/next-vless"
     # A want asks for something.
     if name == "want" and 2 not in v and 3 not in v:
         return "want/empty"
@@ -2734,6 +2741,22 @@ def wave3_vectors(records_take):
     mp("an offer: an endpoint with its own hub key", "offer", {**offer, 9: [{1: offer[2][0], 2: face_key}]})
     mp("an offer: a key for an endpoint it does not list", "offer",
        {**offer, 9: [{1: "198.51.100.99:443", 2: face_key}]}, "offer/endpoint-keys")
+    next_obf = {**obf, 4: [16, 21, 0, 0]}
+    next_vless = {1: fake("next vless user", 16)}
+    rotating = {**offer, 7: wg("hub next wg key"), 10: next_obf, 11: next_vless}
+    mp("an offer with its next key's settings and way", "offer", rotating)
+    mp("an offer: next settings without the next key", "offer", {**offer, 10: next_obf}, "offer/next-obfuscation")
+    mp("an offer: next settings without settings now", "offer",
+       {k: v for k, v in rotating.items() if k != 3}, "offer/next-obfuscation")
+    mp("an offer: next settings with a jmax above its bound", "offer",
+       {**rotating, 10: {**next_obf, 3: 2000}}, "offer/next-obfuscation")
+    mp("an offer: next settings with jmin above jmax", "offer",
+       {**rotating, 10: {**next_obf, 2: 80}}, "offer/next-obfuscation")
+    mp("an offer: a next way with a user ID of the wrong length", "offer",
+       {**rotating, 11: {1: fake("short", 8)}}, "offer/next-vless")
+    mp("an offer: a next way without the next key", "offer", {**offer, 11: next_vless}, "offer/next-vless")
+    mp("an offer: a next way without a way now", "offer",
+       {k: v for k, v in rotating.items() if k != 4}, "offer/next-vless")
     mp("an offer: two keys for one endpoint", "offer",
        {**offer, 9: [{1: offer[2][0], 2: face_key}] * 2}, "offer/endpoint-keys")
     mp("an offer: an endpoint key that is no addr", "offer",

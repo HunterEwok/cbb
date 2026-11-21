@@ -86,17 +86,20 @@ pub fn read(hub: &DeviceId, v: &Value<'_>) -> Result<Offer> {
         return Err(Error::msg("the hub's offer has a key for an endpoint it does not name"));
     }
     let obfuscation = v.get(3).map(crate::awg::Obfuscation::from_cbor).transpose()?.map(|o| o.to_value());
-    let vless = match v.get(4) {
-        None => None,
-        Some(x) => {
-            let at =
-                faces.first().map(|f| f.endpoint).or_else(|| endpoints.first().copied()).ok_or_else(|| {
-                    Error::msg("the hub's offer has a way over VLESS without the forwarder's endpoint")
-                })?;
-            Some(vless(at, x)?)
-        }
+    let forwarder_at = || {
+        faces
+            .first()
+            .map(|f| f.endpoint)
+            .or_else(|| endpoints.first().copied())
+            .ok_or_else(|| Error::msg("the hub's offer has a way over VLESS without the forwarder's endpoint"))
     };
+    let vless_now = v.get(4).map(|x| vless(forwarder_at()?, x)).transpose()?;
     let next = v.get(7).map(wg_key).transpose()?.unwrap_or_default();
+    // The settings and the way the hub takes with its next key, at the
+    // same forwarder (the table holds them to the next key and the
+    // present ones).
+    let next_obfuscation = v.get(10).map(crate::awg::Obfuscation::from_cbor).transpose()?.map(|o| o.to_value());
+    let next_vless = v.get(11).map(|x| vless(forwarder_at()?, x)).transpose()?;
     let confirm = v.get(8).and_then(Value::as_bytes).and_then(|b| <[u8; 32]>::try_from(b).ok());
     let hub = Hub {
         device: cbb_core::certs::hex(&hub.0),
@@ -105,9 +108,9 @@ pub fn read(hub: &DeviceId, v: &Value<'_>) -> Result<Offer> {
         endpoints,
         next,
         obfuscation,
-        vless,
-        next_obfuscation: None,
-        next_vless: None,
+        vless: vless_now,
+        next_obfuscation,
+        next_vless,
         faces,
     };
     Ok(Offer { hub, confirm, moved: v.get(6).is_some() })
@@ -255,7 +258,64 @@ mod tests {
         let ob = crate::awg::Obfuscation::from_offer(hub.obfuscation.as_ref().unwrap()).unwrap();
         assert_eq!(ob.header_key, None, "no key, no header protection");
         assert_eq!(ob.s, [20, 33, 17, 25]);
-        assert!(hub.next_obfuscation.is_none() && hub.next_vless.is_none(), "the next key keeps them");
+        assert!(hub.next_obfuscation.is_none() && hub.next_vless.is_none(), "none given");
+    }
+
+    /// The settings and the way an offer gives for its next key read into
+    /// the hub, the way at the same forwarder, and `with_next` serves them.
+    #[test]
+    fn an_offer_gives_the_next_keys_settings_and_way() {
+        static NEXT_ID: [u8; 16] =
+            [0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x42, 0x22, 0x82, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22];
+        let (k, n) = ([1u8; 32], [2u8; 32]);
+        let obf = |s0: u64| {
+            V::Map(vec![
+                (1, V::Uint(3)),
+                (2, V::Uint(40)),
+                (3, V::Uint(140)),
+                (4, V::Array(vec![V::Uint(s0), V::Uint(33), V::Uint(17), V::Uint(25)])),
+                (
+                    5,
+                    V::Array(
+                        [(5u64, 9u64), (10, 19), (20, 29), (30, 39)]
+                            .map(|(a, b)| V::Array(vec![V::Uint(a), V::Uint(b)]))
+                            .to_vec(),
+                    ),
+                ),
+            ])
+        };
+        let way = |id: &'static [u8; 16]| {
+            V::Map(vec![
+                (1, V::Bytes(id)),
+                (2, V::Uint(443)),
+                (3, V::Text("www.example.com")),
+                (4, V::Text("/AbC-12_xyz0123456")),
+            ])
+        };
+        let offer = V::Map(vec![
+            (1, key(&k)),
+            (2, V::Array(vec![V::Text("203.0.113.5:8443")])),
+            (3, obf(20)),
+            (4, way(&ID)),
+            (7, key(&n)),
+            (9, V::Array(vec![V::Map(vec![(1, V::Text("203.0.113.5:8443")), (2, key(&k))])])),
+            (10, obf(21)),
+            (11, way(&NEXT_ID)),
+        ]);
+        assert!(cbb_core::msg::read_map(&cbb_core::msg::tables::OFFER, &offer).is_ok(), "the offer fits its table");
+        let hub = read(&DeviceId([9; 16]), &offer).unwrap().hub;
+        let next = crate::awg::Obfuscation::from_offer(hub.next_obfuscation.as_ref().unwrap()).unwrap();
+        assert_eq!(next.s, [21, 33, 17, 25]);
+        let nv = hub.next_vless.as_ref().unwrap();
+        assert_eq!(nv["endpoint"], "203.0.113.5:443");
+        assert_eq!(nv["id"], user_id(&NEXT_ID));
+        let w = hub.with_next();
+        assert_eq!(w.key, n.to_vec());
+        // The forwarder's endpoint, which the hub serves under its own key,
+        // moves to the next key with it.
+        assert_eq!(w.key_at(&"203.0.113.5:8443".parse().unwrap()), &n);
+        assert_eq!(w.vless.as_ref().unwrap()["id"], user_id(&NEXT_ID));
+        assert_eq!(crate::awg::Obfuscation::from_offer(w.obfuscation.as_ref().unwrap()).unwrap().s, [21, 33, 17, 25]);
     }
 
     /// A key of zeros, an endpoint key for an endpoint the offer does not

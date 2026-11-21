@@ -242,6 +242,46 @@ fn an_offer_names_its_endpoint_keys() {
     );
 }
 
+#[test]
+fn an_offer_gives_its_next_settings_with_its_next_key() {
+    use crate::format::Value;
+    static HUB: [u8; 32] = [3; 32];
+    static NEXT: [u8; 32] = [5; 32];
+    static USER: [u8; 16] = [6; 16];
+    let key = |k: &'static [u8; 32]| Value::Array(vec![Value::Uint(3), Value::Bytes(k)]);
+    let obf = || {
+        Value::Map(vec![
+            (1, Value::Uint(4)),
+            (2, Value::Uint(40)),
+            (3, Value::Uint(70)),
+            (4, Value::Array(vec![Value::Uint(0), Value::Uint(0), Value::Uint(0), Value::Uint(0)])),
+            (5, Value::Array((1..=4u64).map(|h| Value::Array(vec![Value::Uint(h), Value::Uint(h)])).collect())),
+        ])
+    };
+    let vless = || Value::Map(vec![(1, Value::Bytes(&USER))]);
+    let offer = |fields: &[u16]| {
+        let mut m = vec![(1, key(&HUB))];
+        for f in fields {
+            m.push(match f {
+                3 => (3, obf()),
+                4 => (4, vless()),
+                7 => (7, key(&NEXT)),
+                10 => (10, obf()),
+                _ => (11, vless()),
+            });
+        }
+        Value::Map(m)
+    };
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 4, 7, 10, 11])), Ok(()));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 7, 10])), Ok(()));
+    let next_obf = Err(Rule::field("offer/next-obfuscation"));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[3, 10])), next_obf, "without the next key");
+    assert_eq!(check_map(&tables::OFFER, &offer(&[7, 10])), next_obf, "without settings now");
+    let next_vless = Err(Rule::field("offer/next-vless"));
+    assert_eq!(check_map(&tables::OFFER, &offer(&[4, 11])), next_vless, "without the next key");
+    assert_eq!(check_map(&tables::OFFER, &offer(&[7, 11])), next_vless, "without a way now");
+}
+
 mod reading {
     use super::super::{Field, Later, Table, Ty, check_map, later, member, read_map, read_map_by, tables, wave4};
     use crate::format::{Rule, Value};

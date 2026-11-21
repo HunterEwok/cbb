@@ -486,6 +486,16 @@ impl Hub {
     /// AmneziaWG settings and the way over VLESS that go with it, or the
     /// present ones from a hub that gives none.
     pub fn with_next(&self) -> Hub {
+        // A face the hub serves under its own key (`endpoint-keys` naming
+        // field 1) moves to the next key with it.
+        let faces = self
+            .faces
+            .iter()
+            .map(|f| Face {
+                endpoint: f.endpoint,
+                key: if f.key == self.key { self.next.clone() } else { f.key.clone() },
+            })
+            .collect();
         Hub {
             key: self.next.clone(),
             next: Vec::new(),
@@ -493,6 +503,7 @@ impl Hub {
             vless: self.next_vless.clone().or_else(|| self.vless.clone()),
             next_obfuscation: None,
             next_vless: None,
+            faces,
             ..self.clone()
         }
     }
