@@ -651,6 +651,36 @@ public final class CoreMember: @unchecked Sendable {
         return try manage(A(public: try Self.point(`public`)), sign: sign, as: Periods.self)
     }
 
+    /// On a group of 0.6: the group's face toward the push service that the
+    /// newest keys.json the member holds names (16 bytes), which every
+    /// registration names; nil until one does.
+    public func pushFace() throws -> Data? {
+        struct R: Decodable { var face: Data? }
+        return try run("push_face", Optional<Empty>.none, as: R.self).face.flatMap { $0.count == 16 ? $0 : nil }
+    }
+
+    /// On a group of 0.6: this phone's registration for push, message
+    /// `push` as `PushVault` made it, which the member sends to every
+    /// member connected now and to each one that connects later; nil stops it.
+    public func setPush(_ frame: Data?) throws {
+        struct A: Encodable { var frame: Data? }
+        try run("push", A(frame: frame))
+    }
+
+    /// A `push-renew` a member sent: the group with this slot registers
+    /// again, from the phone's clock when `ahead`.
+    public struct Renewal: Decodable, Equatable, Sendable {
+        public var slot: Data
+        public var ahead: Bool
+    }
+
+    /// On a group of 0.6: the `push-renew` messages members sent since the
+    /// last call, one per slot.
+    public func pushRenewals() throws -> [Renewal] {
+        struct R: Decodable { var renewals: [Renewal] }
+        return try run("push_renewals", Optional<Empty>.none, as: R.self).renewals
+    }
+
     /// On a group of 0.6: the forwarder the group's root set for this phone
     /// as a hub, which it serves through; nil while the root set none.
     public func rootForwarder() throws -> RootForwarder? {

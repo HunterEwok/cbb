@@ -1946,7 +1946,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 takeRecords(n)
                 peerConnected(n, e.peer)
                 syncedSoon(n, e.peer.device)
-                // A member that holds a push-renew for this phone sends it right after the connection.
+                // A member sends the entry points and any push-renew for this phone right after the connection.
                 if (isV06) recordsPoll.schedule({ if (currentNode === n) takeRenewals(n) }, RENEWALS_AFTER_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
             }
             // No sync away from home on a group of 0.5 (D-123): a hub's offer is kept nowhere.
@@ -2149,8 +2149,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val pushFace: ByteArray?
         get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.pushFace() }.onFailure { Log.w(TAG, "reading the push face", it) }.getOrNull() }
 
-    /** Each `push-renew` members sent: the group registers again (PushSetup.renew). */
+    /** The group's face toward the push service and each `push-renew` members sent: the group registers with the face, and again for each renewal. */
     private fun takeRenewals(n: CoreMember) {
+        runCatching { n.pushFace() }.getOrNull()?.let { PushSetup.face(context, it) }
         val renewals = runCatching { n.pushRenewals() }.onFailure { Log.w(TAG, "reading the push renewals", it) }.getOrNull() ?: return
         for ((slot, ahead) in renewals) PushSetup.renew(context, slot, ahead)
     }

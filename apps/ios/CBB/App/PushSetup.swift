@@ -11,9 +11,10 @@ import UserNotifications
 /// asks iOS for the device token, keeps each group's registration in the
 /// push keychain group the notification extension shares (`PushVault`),
 /// keeps the push service's challenges for this phone's send key, and
-/// answers the notification's Copy button. The member's sync sends the
-/// saved registration to the group's members (the seam in
-/// member/src/pusher.rs). A registration is made again only when what it
+/// answers the notification's Copy button. The 0.6 member sends the saved
+/// registration to every member it connects to (`sink`, the member's
+/// `push`), gives the group's face toward the push service (`push_face`)
+/// and hands each `push-renew` to `renew`. A registration is made again only when what it
 /// says changed (the token, the switch, a challenge, a membership change)
 /// or a member asks (`push-renew`), never just because the app ran.
 @MainActor
@@ -39,6 +40,9 @@ final class PushSetup {
     private var group: (tag: String, me: Data, devices: PushVault.Devices, face: Data?)?
     /// The last problem, shown in Settings under the switch.
     private(set) var problem: String?
+    /// Where the group's registration goes once it is made: the 0.6
+    /// member's `push` (LiveGroup); nil while no member runs.
+    var sink: ((Data?) -> Void)?
 
     var on: Bool { UserDefaults.standard.object(forKey: Self.onKey) as? Bool ?? true }
 
@@ -89,7 +93,8 @@ final class PushSetup {
             return
         }
         let applied = PushVault.Devices(members: devices.compactMap { Data(hex: $0) }, root: root.flatMap { Data(hex: $0) })
-        let face = face ?? Self.testFace(tag)
+        // The face the member gave stays until it gives another.
+        let face = face ?? (group?.tag == tag ? group?.face : nil) ?? Self.testFace(tag)
         if group?.tag == tag, group?.me == id, group?.devices == applied, group?.face == face { return }
         group = (tag, id, applied, face)
         // A token given up when the last group was left: ask again.
@@ -102,6 +107,21 @@ final class PushSetup {
     /// mark from before then is spent when those records say its change did
     /// not happen and the app took in new records after the mark
     /// (PushMarks.synced).
+    /// The group's face toward the push service, once the member reads it
+    /// from the entry points: the group registers with it.
+    func face(_ face: Data?) {
+        guard let face, face.count == 16, let g = group, g.face != face else { return }
+        group = (g.tag, g.me, g.devices, face)
+        refresh()
+    }
+
+    /// The registration saved for the group, the frame the member sends;
+    /// nil when there is none.
+    func frame() -> Data? {
+        guard Self.accessGroup != nil, let group else { return nil }
+        return (try? vault.load(group.tag))?.frame
+    }
+
     func synced(at: Date, peers: Set<String>, recordsAt: Date?) {
         guard let group, let g = try? vault.load(group.tag) else { return }
         PushMarks.synced(group.tag, at: at, peers: Set(peers.compactMap { Data(hex: $0) }), recordsAt: recordsAt, state: g,
@@ -115,7 +135,9 @@ final class PushSetup {
     func leaving() -> Data? {
         guard Self.accessGroup != nil, let group else { return nil }
         do {
-            return try vault.leaving(group.tag)?.frame
+            let frame = try vault.leaving(group.tag)?.frame
+            if let frame { sink?(frame) }
+            return frame
         } catch {
             fail(error)
             return nil
@@ -218,7 +240,10 @@ final class PushSetup {
             }
             // A hints-only mark whose change is now applied, with its new
             // key in place, is spent.
-            PushMarks.spend(group.tag, try vault.load(group.tag), in: PushMarks.defaults)
+            let saved = try vault.load(group.tag)
+            PushMarks.spend(group.tag, saved, in: PushMarks.defaults)
+            // The member sends the group's registration as it is now.
+            sink?(saved.frame)
             problem = nil
         } catch {
             fail(error)

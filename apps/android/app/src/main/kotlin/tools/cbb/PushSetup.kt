@@ -156,7 +156,9 @@ object PushSetup {
         val root = devices.firstOrNull { it.isRoot }?.id?.let(::hex)
         prefs(c).edit {
             putString("group", tag)
-            (face ?: testFace(c, tag))?.let { putString("face", b64(it)) } ?: remove("face")
+            // The face the member gave stays until it gives another.
+            val kept = face(c).takeIf { prefs(c).getString("group", null) == tag }
+            (face ?: kept ?: testFace(c, tag))?.let { putString("face", b64(it)) } ?: remove("face")
         }
         // A token given up when the last group was left: ask again.
         if (on(c) && token(c) == null && PushPlatform.available(c)) PushPlatform.start(c)
@@ -169,6 +171,14 @@ object PushSetup {
      * group gives one nothing is registered.
      */
     private fun face(c: Context): ByteArray? = prefs(c).getString("face", null)?.let(::unb64)?.takeIf { it.size == 16 }
+
+    /** The group's face toward the push service, once the member reads it from the entry points: the group registers with it. */
+    fun face(c: Context, face: ByteArray?) {
+        if (face == null || face.size != 16 || prefs(c).getString("group", null) == null) return
+        if (face.contentEquals(face(c))) return
+        prefs(c).edit { putString("face", b64(face)) }
+        refresh(c)
+    }
 
     /** A debug build's face for a group that has not given one, for the test tool; null in a release build. */
     private fun testFace(c: Context, tag: String): ByteArray? {

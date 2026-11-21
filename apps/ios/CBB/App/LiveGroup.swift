@@ -326,6 +326,7 @@ final class LiveGroup: GroupController {
             state?.admin06 = gs.me.admin
         }
         pullRecords()
+        takePush()
         if let n = node, let ns = try? n.notices() { notices = ns }
         entries.reload()
         await finishTakeOverIfDue()
@@ -1378,8 +1379,28 @@ final class LiveGroup: GroupController {
             }
         }
         if background { try? node.pause() }
+        if g.isV06 {
+            // Push: the member sends the group's registration to every
+            // member it connects to.
+            PushSetup.shared.sink = { [weak self] frame in
+                guard let self, self.isV06, let node = self.node else { return }
+                do { try node.setPush(frame) } catch {
+                    modeLog.error("handing the member the push registration: \(String(reflecting: error), privacy: .public)")
+                }
+            }
+            try? node.setPush(PushSetup.shared.frame())
+        }
         refreshHub()
         refreshCredentials()
+    }
+
+    /// The group's face toward the push service and each `push-renew`
+    /// members sent, from the member of 0.6: the group registers with the
+    /// face, and again for each renewal.
+    private func takePush() {
+        guard isV06, let node else { return }
+        PushSetup.shared.face(try? node.pushFace())
+        for r in (try? node.pushRenewals()) ?? [] { PushSetup.shared.renew(slot: r.slot, ahead: r.ahead) }
     }
 
     /// The entry points an earlier version kept beside the group's file go
@@ -1482,6 +1503,12 @@ final class LiveGroup: GroupController {
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
             syncedSoon()
+            // A member sends the entry points and any push-renew for this
+            // phone right after the connection.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                self?.takePush()
+            }
         case let .message(from, .admin(ca)):
             Task { await adminCAReceived(ca, from: from) }
         case let .message(from, .evidence(ev)):
