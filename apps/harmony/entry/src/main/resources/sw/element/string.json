@@ -304,6 +304,7 @@
     {"name": "relay_ask_title", "value": "Mkutane kwenye kipitishi hiki?"},
     {"name": "relay_bad", "value": "Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu."},
     {"name": "relay_body", "value": "Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha."},
+    {"name": "relay_by_root", "value": "Mzizi wa kikundi huweka relei kwa kila kifaa; simu hii hukutana na vingine huko wakati usawazishaji ukiwa mbali na nyumbani umewashwa."},
     {"name": "relay_connecting", "value": "Inaunganisha na kipitishi…"},
     {"name": "relay_failed", "value": "Kipitishi hakiikubali simu hii. Kagua anwani na ufunguo wake."},
     {"name": "relay_key", "value": "Ufunguo wa kipitishi, herufi 44"},

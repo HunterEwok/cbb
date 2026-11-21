@@ -1247,7 +1247,8 @@ settings, why it does not sync and the lab.
   group without a computer the root or an admin phone is the hub itself (Settings, "This phone
   as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
   strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  user read what it learns. In a group of 0.6 that relay is the group's, which the root phone
+  sets (the manage action `relay`) and the other phones show read-only. The core runs both (`cbb_member_servers`, docs/core-api.md), with
   the server and period keys in HUKS; the root phone signs the next period of the group's
   server credentials (docs/protocol.md, section 18) with the root key when it renews the
   certificates, after the face, fingerprint or PIN.

@@ -304,6 +304,7 @@
     {"name": "relay_ask_title", "value": "¿Encontrarse en este relé?"},
     {"name": "relay_bad", "value": "Indica la dirección del relé con su puerto y su clave, tal como los imprime cbb relay, o deja ambos vacíos."},
     {"name": "relay_body", "value": "Para un grupo sin hub propio: los dispositivos se encuentran en un relé, como uno montado con cbb relay, mientras la app sincroniza. El portapapeles sigue cifrado entre los dispositivos, pero el relé sabe cuáles están en línea y sus direcciones, y cuáles hablan entre sí, cuándo y cuánto. Deja ambos campos vacíos para dejar de usarlo."},
+    {"name": "relay_by_root", "value": "La raíz del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada."},
     {"name": "relay_connecting", "value": "Conectando con el relé…"},
     {"name": "relay_failed", "value": "El relé no acepta este teléfono. Revisa su dirección y su clave."},
     {"name": "relay_key", "value": "Clave del relé, 44 caracteres"},

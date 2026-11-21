@@ -305,6 +305,7 @@
     {"name": "relay_ask_title", "value": "Meet at this relay?"},
     {"name": "relay_bad", "value": "Give the relay's address with its port and its key, as cbb relay prints them, or leave both empty."},
     {"name": "relay_body", "value": "For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop."},
+    {"name": "relay_by_root", "value": "The group's root sets the relay for every device; this phone meets the others there while sync away from home is on."},
     {"name": "relay_connecting", "value": "Connecting to the relay…"},
     {"name": "relay_failed", "value": "The relay does not take this phone. Check its address and key."},
     {"name": "relay_key", "value": "Relay key, 44 characters"},

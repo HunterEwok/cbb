@@ -721,6 +721,11 @@ export class AppModel {
   // Meets the group at the blind relay at relay with key, or leaves it
   // with both empty. Shows why not.
   async setRelay(relay: string, key: string): Promise<boolean> {
+    // On a group of 0.6 the relay is the group's: the root writes it into
+    // the group's settings, and every device meets the others there.
+    if (this.isV06()) {
+      return this.setGroupRelay(relay, key);
+    }
     const failure = await this.member.setRelay(relay, key);
     if (failure !== undefined) {
       this.show(Errors.shown(failure));
@@ -729,6 +734,29 @@ export class AppModel {
     this.prefs?.putSync('relay', relay);
     this.prefs?.putSync('relay_key', key);
     this.prefs?.flush();
+    this.show('');
+    return true;
+  }
+
+  // Whether the group is of 0.6, whose relay is the group's setting.
+  isV06(): boolean {
+    return this.membership !== undefined && this.membership.isV06();
+  }
+
+  // The root of a group of 0.6 sets the group's relay (manage relay): the
+  // address with its key's pin, the project's with the key 'default', or
+  // none with both empty.
+  private async setGroupRelay(relay: string, key: string): Promise<boolean> {
+    if (!this.isRoot()) {
+      this.show(Errors.shown(new Failure(t('relay_by_root'), 'relay: only the root sets the group\'s relay')));
+      return false;
+    }
+    const relays: string[] = relay.length === 0 ? [] : key === 'default' ? ['default'] : [`${relay} ${key}`];
+    const a = await this.runManage('relay', '', { 'relays': relays } as Record<string, Object>);
+    if (a === undefined) {
+      return false;
+    }
+    Errors.log(relays.length > 0 ? `relay: the group meets at ${relay}` : 'relay: the group meets at no relay');
     this.show('');
     return true;
   }
@@ -744,7 +772,7 @@ export class AppModel {
       }
     }
     const relay = this.relayAddress();
-    if (relay.length > 0) {
+    if (relay.length > 0 && !this.isV06()) {
       const failure = await this.member.setRelay(relay, this.relayKey());
       if (failure !== undefined) {
         Errors.log(`servers: the relay was not met again: ${failure.message} (${failure.details})`);
