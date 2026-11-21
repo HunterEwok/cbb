@@ -3010,6 +3010,28 @@ plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
 XHTTP (`member/src/vless.rs`).
 
+On the records of 0.6 (moving now; this section is rewritten when the move ends) a device
+sends no key in its hello. On each member connection with a device that may be its hub (the
+records give it an admin key or the root's hubs record names it), while sync away from home is
+on, it sends `tunnel` (t 15): field 2 its WireGuard key toward that hub, derived from its
+tunnel secret and the hub's ID, field 3 the confirmation tag of the pre-shared key both ends
+export from that connection's TLS (`core/src/hubkey.rs`). It keeps, per hub, the last 8 keys it
+sent, the one the hub confirmed and the one of its last handshake (`toward` in `tunnel.json`,
+`member/src/away/toward.rs`, `member/src/live/away.rs`). A member takes `tunnel` from any
+current member of the group (in the records, not frozen), and `hubs` (t 16) only from a device
+that may be a hub. The hub answers with a `result` (t 10) whose field 2 is the first 16 bytes
+of the tag, field 3 the hub, and field 6 its offer (table `offer`), which the device keeps as
+that hub's, the tag it carries in field 8 confirming the key (`member/src/away/offer.rs`):
+
+- the way over VLESS goes to the offer's forwarder endpoint, the first in field 2 that field 9
+  gives a key of its own (else the first): on `vless/port` when present, with `vless/host` as
+  the TLS server name and HTTP Host (the endpoint's host when absent), always over XHTTP in
+  0.6; a later transport comes in a new field that 0.6 skips;
+- `obfuscation` without `obfuscation/key` protects no headers (plain AmneziaWG junk and
+  headers); a padding (`obfuscation/s`) is 0 to 1280 bytes, at least 16 with header protection;
+- with `next-key` the obfuscation and VLESS stay the same;
+- an offer with `moved` makes the device forget that hub.
+
 - Sync away from home is off by default; nothing in this section happens on a device until
   the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
   by writing `tunnel.json` next to the identity

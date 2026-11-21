@@ -69,6 +69,15 @@ made with 0.5 is set up again once. The details follow.
   registrations under it. A hub (else the root's or an admin's device) wakes the phones for a
   device that joined or was removed and a change of root, with the first 16 bytes of the
   record's ID as the event's ID, so that every sender gives the same.
+- Sync away from home starts moving to 0.6, the device's side first: `cbb global`, `cbb
+  global on` and `cbb global off` work in a group of 0.6. On each member connection with a
+  device the records make a hub, a device where it is on sends `tunnel` with its own key toward
+  that hub and the tag of the pre-shared key exported from that connection, and keeps the hub's
+  offer that comes back in `result` (hub key, endpoints with each forwarder face's key, next
+  key, obfuscation, VLESS) in `tunnel.json` with the keys it sent. Obfuscation without its key
+  protects no headers. A member takes `tunnel` from any current member of the group, and the
+  hubs' own message only from a device that may be a hub. The hub's side and the tunnel
+  through it are still moving.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

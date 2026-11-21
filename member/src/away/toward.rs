@@ -64,6 +64,31 @@ impl Away {
     }
 }
 
+impl Away {
+    /// What cbb global shows of sync away from home on the records of
+    /// 0.6: off, or on with the hubs whose offers are kept, the first of
+    /// them shown, and what went wrong last.
+    pub fn live_status(&self) -> Option<crate::control::Away> {
+        let st = self.st.lock().unwrap();
+        let error = self.error.lock().unwrap().clone();
+        let Some(st) = st.as_ref() else {
+            return error.map(|(e, d)| crate::control::Away { error: e, detail: d, ..Default::default() });
+        };
+        let allow = st.destinations().iter().map(ToString::to_string).collect();
+        let mut a = crate::control::Away { keys_in_file: true, allow, ..Default::default() };
+        if let Some(h) = st.hubs.first() {
+            a.hub_device = h.device.clone();
+            a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
+            a.obfuscated = h.obfuscation.is_some();
+            a.vless = h.vless.is_some();
+        }
+        if let Some((e, d)) = error {
+            (a.error, a.detail) = (e, d);
+        }
+        Some(a)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

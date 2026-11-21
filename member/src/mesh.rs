@@ -83,6 +83,10 @@ pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
 /// tunnel, hubs, guest, reach, evidence, waiting and dismiss (its type and
 /// body), from the peer named.
 pub type OnOther = Box<dyn Fn(&DeviceId, u64, &[u8]) + Send + Sync>;
+
+/// What runs when a member connection with a device is up, after the
+/// hello went: the service sends `tunnel` to a hub then.
+pub type OnConnected = Box<dyn Fn(&DeviceId) + Send + Sync>;
 /// A pairing a device opened on the member port (ALPN `cbb-pair/3`): its
 /// socket, the TLS session and the session's pairing exporter, for the
 /// pairing window (`join::member`).
@@ -125,6 +129,7 @@ pub struct Mesh {
     on_command: RwLock<Option<OnCommand>>,
     on_set: RwLock<Option<OnSet>>,
     on_other: RwLock<Option<OnOther>>,
+    on_connected: RwLock<Option<OnConnected>>,
     on_pair: RwLock<Option<OnPair>>,
     waiting: Mutex<HashMap<[u8; 16], SyncSender<CommandResult>>>,
     /// The signed release and entry points this member holds and passes on.
@@ -299,6 +304,7 @@ impl Mesh {
                 on_command: RwLock::new(None),
                 on_set: RwLock::new(None),
                 on_other: RwLock::new(None),
+                on_connected: RwLock::new(None),
                 on_pair: RwLock::new(None),
                 waiting: Mutex::new(HashMap::new()),
                 releases: RwLock::new(None),
@@ -370,6 +376,10 @@ impl Mesh {
 
     pub fn on_other(&self, f: OnOther) {
         *self.on_other.write().unwrap() = Some(f);
+    }
+
+    pub fn on_connected(&self, f: OnConnected) {
+        *self.on_connected.write().unwrap() = Some(f);
     }
 
     /// Where a pairing on the member port goes while a window is open;
@@ -885,6 +895,9 @@ impl Mesh {
         for (_, f) in self.push.renewals(&peer) {
             let _ = conn.tx.try_send(f);
         }
+        if let Some(f) = &*self.on_connected.read().unwrap() {
+            f(&peer);
+        }
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
         let end = loop {
@@ -963,7 +976,7 @@ impl Mesh {
             Some(copies::T_COPY) => self.take_copy(conn, msg),
             Some(cbb_core::commands::T_COMMAND) => self.take_command(conn, msg),
             Some(cbb_core::msg::tables::T_RESULT) => {
-                self.take_result(msg);
+                self.take_result(conn, msg);
                 Ok(())
             }
             Some(copies::T_RESEAL) => self.take_reseal(conn, msg),
@@ -972,11 +985,20 @@ impl Mesh {
                 self.take_missing(msg);
                 Ok(())
             }
-            // A tunnel offer or a hub share only from a device that may be
-            // a hub, by the records, not by what its hello claims.
-            Some(t @ (cbb_core::msg::tables::T_TUNNEL | cbb_core::msg::tables::T_HUBS))
-                if !self.may_be_hub(&conn.peer) =>
+            // A device's key toward a hub from any current member of the
+            // group (in the records, not frozen); what a hub tells the
+            // other hubs only from a device that may be a hub, by the
+            // records, not by what its hello claims.
+            Some(t @ cbb_core::msg::tables::T_TUNNEL)
+                if !self.state().device(&conn.peer).is_some_and(|d| !d.frozen) =>
             {
+                self.logf(&format!(
+                    "ignored message {t} from {}: it is no current member of the group",
+                    hex(&conn.peer.0[..4])
+                ));
+                Ok(())
+            }
+            Some(t @ cbb_core::msg::tables::T_HUBS) if !self.may_be_hub(&conn.peer) => {
                 self.logf(&format!(
                     "ignored message {t} from {}: it may not be a hub of the group",
                     hex(&conn.peer.0[..4])
@@ -1124,8 +1146,16 @@ impl Mesh {
         Ok(())
     }
 
-    fn take_result(&self, msg: &[u8]) {
+    /// A command's result, to the command waiting for it; one with a hub's
+    /// offer (field 6), the answer to `tunnel`, goes to the service.
+    fn take_result(&self, conn: &Conn, msg: &[u8]) {
         let Ok((_, v, _)) = cbb_core::msg::read_noted(msg) else { return };
+        if v.get(6).is_some() {
+            if let Some(f) = &*self.on_other.read().unwrap() {
+                f(&conn.peer, cbb_core::msg::tables::T_RESULT, msg);
+            }
+            return;
+        }
         let Some(id) = v.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()) else { return };
         let by = v.get(3).and_then(Value::as_bytes).and_then(DeviceId::from_slice).unwrap_or_default();
         let r = CommandResult {

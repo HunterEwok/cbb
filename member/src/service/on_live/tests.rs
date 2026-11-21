@@ -80,10 +80,20 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     assert!(e.message().contains("only an admin can change the devices list"), "{}", e.message());
 
     // What has not moved yet answers so, with its cause.
-    for op in ["away", "invite"] {
-        let e = ask(&a, op, |_| {}).unwrap_err();
-        assert!(e.find::<NotYet>().is_some(), "{op}: {}", e.for_log());
+    for (op, name) in [("away", "hub"), ("away", "move"), ("invite", "")] {
+        let e = ask(&a, op, |h| h.name = name.into()).unwrap_err();
+        assert!(e.find::<NotYet>().is_some(), "{op} {name}: {}", e.for_log());
     }
+    // Sync away from home turns on, with consent to keys in files, and
+    // off; cbb global shows it.
+    assert!(ask(&a, "away", |_| {}).unwrap().header.status.unwrap().away.is_none(), "off");
+    let e = ask(&a, "away", |h| h.name = "on".into()).unwrap_err();
+    assert!(e.message().contains("needs your consent"), "{}", e.message());
+    let on = ask(&a, "away", |h| (h.name, h.consent) = ("on".into(), true)).unwrap();
+    assert!(on.header.status.unwrap().away.unwrap().keys_in_file);
+    assert!(ask(&a, "away", |_| {}).unwrap().header.status.unwrap().away.is_some(), "on");
+    let off = ask(&a, "away", |h| h.name = "off".into()).unwrap();
+    assert!(off.header.status.unwrap().away.is_none());
     // The signed release and entry points have moved: none is held yet.
     for (op, says) in [("release_held", "no signed release"), ("entries_get", "no signed entry points")] {
         let e = ask(&a, op, |_| {}).unwrap_err();

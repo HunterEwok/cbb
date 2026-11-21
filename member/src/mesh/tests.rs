@@ -58,6 +58,15 @@ fn two(name: &str) -> (Arc<Mesh>, Arc<Mesh>) {
 
 /// The state directories of `two`'s devices, a's and b's.
 pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, false)
+}
+
+/// two_dirs, with b one of the group's hubs by the root's hubs record.
+pub(crate) fn two_dirs_b_hub(name: &str) -> (PathBuf, PathBuf) {
+    dirs(name, true)
+}
+
+fn dirs(name: &str, b_hub: bool) -> (PathBuf, PathBuf) {
     let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
     let (oa, ob) = (own(&da), own(&db));
     let root = root();
@@ -71,8 +80,14 @@ pub(crate) fn two_dirs(name: &str) -> (PathBuf, PathBuf) {
     for (o, name) in [(&oa, "a"), (&ob, "b")] {
         let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
         d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+        if b_hub && name == "b" {
+            d.rights |= body::RIGHT_HUB;
+        }
         let st = set.state();
         set.write_record(&st, &root, Kind::device(d), now - 1000).unwrap();
+    }
+    if b_hub {
+        crate::writers::set_hubs(&mut set, &root, &["b".to_string()], now - 900).unwrap();
     }
     let b_set = set.clone();
     let mut d = Device::new(Key::es256(K(SigningKey::from_slice(&[7; 32]).unwrap()).public()), "c", body::ROLE_MEMBER);
@@ -215,7 +230,7 @@ fn the_signed_files_travel_as_published() {
 }
 
 #[test]
-fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
+fn other_messages_go_to_the_service_and_hub_shares_only_from_hubs() {
     let (a, b) = two("other");
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
@@ -228,8 +243,14 @@ fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
         (frame::FIELD_T, Value::Uint(m::T_REACH)),
         (2, Value::Array(vec![Value::Bytes(&[3; 16])])),
     ]));
-    // b holds no admin key and no hubs record names it: its tunnel offer is
-    // dropped, its reach goes on.
+    // b holds no admin key and no hubs record names it: what it would
+    // tell the hubs is dropped; its key toward a as a hub, as a member of
+    // the group, and its reach go on.
+    let hubs = frame::write(&Value::Map(vec![
+        (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_HUBS)),
+        (3, Value::Uint(1)),
+    ]));
+    assert_eq!(cbb_core::msg::check(&hubs[4..]), Ok(cbb_core::msg::tables::T_HUBS));
     let tunnel = frame::write(&Value::Map(vec![
         (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_TUNNEL)),
         (2, cbb_core::format::Key::new(cbb_core::format::Alg::X25519, &[4; 32]).to_value()),
@@ -237,8 +258,10 @@ fn other_messages_go_to_the_service_and_hub_offers_only_from_hubs() {
     ]));
     assert_eq!(cbb_core::msg::check(&tunnel[4..]), Ok(cbb_core::msg::tables::T_TUNNEL));
     assert!(!a.may_be_hub(&b.device()));
+    assert!(b.send(&a.device(), hubs));
     assert!(b.send(&a.device(), tunnel));
     assert!(b.send(&a.device(), reach));
+    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), cbb_core::msg::tables::T_TUNNEL));
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), m::T_REACH));
     assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     a.close();

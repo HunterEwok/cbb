@@ -128,6 +128,8 @@ pub struct Live {
     /// The images or files this member copied last, which a paste opens,
     /// and when, on the wall clock.
     own_media: Mutex<Option<(SentMedia, i64)>>,
+    /// Sync away from home, once the service gave it (`with_away`).
+    away: std::sync::OnceLock<Arc<crate::away::Away>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
@@ -172,6 +174,7 @@ impl Live {
             home: Mutex::new(HashMap::new()),
             networks: RwLock::new(None),
             own_media: Mutex::new(None),
+            away: std::sync::OnceLock::new(),
             log,
         });
         live.settle(&live.mesh.state());
@@ -532,6 +535,8 @@ impl Peers for Live {
         out
     }
 }
+
+mod away;
 
 #[cfg(test)]
 mod tests;

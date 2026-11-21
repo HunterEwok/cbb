@@ -116,6 +116,10 @@ impl Service {
             }));
         }
         self.live_hello(&live);
+        {
+            let me = crate::certs::DeviceId::parse(&id_text(&live.mesh.device()))?;
+            live.with_away(Arc::new(crate::away::Away::new(cfg.state_dir.clone(), live.tag(), me, log.clone())));
+        }
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         *self.live.write().unwrap() = Some(live.clone());
         let tag = live.tag();
@@ -477,10 +481,35 @@ impl Service {
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             "away" if h.name == "relay" => self.live_relay(live, h),
+            "away" if matches!(h.name.as_str(), "" | "on" | "off") && (h.name != "off" || h.device.is_empty()) => {
+                self.live_away(live, h)
+            }
             op if !MOVING.contains(&op) => return None,
             op => Err(not_yet(&format!("the operation {op:?}"))),
         };
         Some(res)
+    }
+
+    /// cbb global, cbb global on and cbb global off on this device, on the
+    /// records of 0.6: sync away from home turned on sends `tunnel` to the
+    /// hubs connected (`live::away`); the reply shows where it stands.
+    fn live_away(&self, live: &Live, h: &Header) -> Result<Message> {
+        let away = live.away().ok_or_else(|| Error::msg("sync away from home did not start on this device"))?;
+        match h.name.as_str() {
+            "on" if !h.consent => {
+                return Err(Error::msg(
+                    "this device keeps its keys in files, so sync away from home needs your consent; run cbb global on and read what it says",
+                ));
+            }
+            "on" => {
+                away.turn_on()?;
+                live.tunnel_to_hubs();
+            }
+            "off" => away.turn_off()?,
+            _ => {}
+        }
+        let status = Status { away: away.live_status(), ..Default::default() };
+        Ok(control::reply(Header { status: Some(status), ..Default::default() }, Vec::new()))
     }
 
     /// cbb paste: the local clipboard's text in a mode that takes the
