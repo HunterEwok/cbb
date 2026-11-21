@@ -18,6 +18,8 @@ struct AlertsCard: View {
         if model.handedOver {
             HandedCard()
         }
+        RootChangedCard()
+        NoticesCard()
         if !model.alerts.isEmpty {
             VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
                 ForEach(model.alerts) { alert in

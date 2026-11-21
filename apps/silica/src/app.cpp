@@ -15,11 +15,11 @@
 #include <QCryptographicHash>
 #include <QGuiApplication>
 #include <QHash>
-#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSysInfo>
 #include <QThread>
@@ -35,8 +35,6 @@ const int renewFirstMs = 60 * 1000;
 // had time to reach its peers.
 const int claimEveryMs = 60 * 1000;
 const int claimFirstMs = 10 * 1000;
-// Camera frames are scaled down to this before the core reads their codes.
-const int maxSheetFrameSide = 1024;
 
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
 class KeyThread : public QThread
@@ -96,10 +94,16 @@ public:
     QJsonObject answer;
     Failure failure;
     Core::AdminSign sign; // whether the admin key waited for its PIN
+    bool keyless = false; // a step that signs nothing, as change_preview
 
 protected:
     void run() override
     {
+        if (keyless) {
+            request.insert(QStringLiteral("public"), QString());
+            answer = call();
+            return;
+        }
         const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
         if (key.state != KeyStore::State::Ready) {
             sign.pinNeeded = key.pinNeeded;
@@ -139,6 +143,60 @@ private:
         return Core::take(cbb_member_manage(member, reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
                                             Core::signAdminDigest, &sign, &len),
                           len, QStringLiteral("manage"), &failure);
+    }
+};
+
+// Runs a step of the recovery key on a YubiKey off the GUI thread: the
+// core is the client of the system's pcscd (cbb_piv's transport pcsc), which
+// takes a YubiKey plugged into the USB-C port itself, and waits through the
+// card's touch.
+class PivThread : public QThread
+{
+public:
+    QJsonObject request; // without transport
+    QJsonObject answer;
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        request.insert(QStringLiteral("transport"), QStringLiteral("pcsc"));
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        answer = Core::take(cbb_piv(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), noCard, nullptr, &len),
+                            len, QStringLiteral("yubikey"), &failure);
+        if (!failure.isNull())
+            failure.message = shownFor(failure.message, failure.details);
+    }
+
+private:
+    // With pcsc the core never calls the app's card; the ABI still wants one.
+    static int32_t noCard(void *, const uint8_t *, size_t, uint8_t *, size_t, size_t *) { return 1; }
+
+    // The core's refusal in the user's words (member/src/piv.rs and
+    // piv/recovery.rs); its own words stay in the details.
+    static QString shownFor(const QString &m, const QString &details)
+    {
+        const QString d = m + QLatin1Char(' ') + details;
+        if (d.contains(QStringLiteral("PIN is blocked")))
+            return QCoreApplication::translate("Errors", "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.");
+        if (d.contains(QStringLiteral("wrong PIN")) || d.contains(QStringLiteral("PIN has 6 to 8")))
+            return QCoreApplication::translate("Errors", "Wrong PIN. After three wrong tries the YubiKey blocks its PIN.");
+        if (d.contains(QStringLiteral("firmware 5.3")))
+            return QCoreApplication::translate("Errors", "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.");
+        if (d.contains(QStringLiteral("holds no recovery key")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds no recovery key.");
+        if (d.contains(QStringLiteral("already holds a recovery key")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds a recovery key already. Use another YubiKey.");
+        if (d.contains(QStringLiteral("already holds something")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.");
+        if (d.contains(QStringLiteral("management key")))
+            return QCoreApplication::translate("Errors", "The app cannot use this YubiKey's management key. Use the printed sheet instead.");
+        if (d.contains(QStringLiteral("two YubiKeys")))
+            return QCoreApplication::translate("Errors", "Two YubiKeys are plugged in. Leave only one and try again.");
+        if (d.contains(QStringLiteral("no YubiKey found")))
+            return QCoreApplication::translate("Errors", "No YubiKey is plugged in. Plug it into the USB-C port and try again.");
+        return QCoreApplication::translate("Errors", "The YubiKey did not answer as expected. Plug it in again and try again.");
     }
 };
 
@@ -187,47 +245,6 @@ QString pinStateName(KeyStore::PinState state)
     case KeyStore::PinState::Failed: break;
     }
     return QStringLiteral("unknown");
-}
-
-// Restores a group from its recovery sheet off the GUI thread: the core
-// browses for a member of the group, takes its records on a connection
-// that carries records only and checks them, the member key signing this
-// phone's side of the handshake in the TEE.
-class RestoreThread : public QThread
-{
-public:
-    QJsonObject request;
-    QJsonObject answer; // a join's fields
-    Failure failure;
-
-protected:
-    void run() override
-    {
-        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
-        size_t len = 0;
-        answer = Core::take(cbb_restore(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
-                                        Core::signDigest, nullptr, &len),
-                            len, QStringLiteral("restore"), &failure);
-    }
-};
-
-// What the user reads when restoring failed: the core's refusals it knows
-// said in the user's language, the core's own words kept in the details.
-Failure restoreFailure(const Failure &f)
-{
-    const QString d = f.message + QLatin1Char(' ') + f.details;
-    QString shown;
-    if (d.contains(QStringLiteral("scan the QR code of the recovery sheet")))
-        shown = QCoreApplication::translate("Errors", "Scan the QR code of the recovery sheet: on a new phone the typed key is not enough.");
-    else if (d.contains(QStringLiteral("not the group's recovery key now")))
-        shown = QCoreApplication::translate("Errors", "This is not the group's recovery key now: the root removed it or made a new one.");
-    else if (d.contains(QStringLiteral("no device of the group was found")))
-        shown = QCoreApplication::translate("Errors", "No device of the group was found on this network. Turn on a phone or a computer of the group and try again.");
-    else if (d.contains(QStringLiteral("not a cbb recovery sheet")))
-        shown = QCoreApplication::translate("Errors", "This is not a CBB recovery sheet.");
-    else
-        shown = QCoreApplication::translate("Errors", "The phone could not restore the group.");
-    return {shown, QStringLiteral("%1 (%2)").arg(f.details, f.message)};
 }
 
 // Runs KeyStore::forget in a thread of its own.
@@ -340,21 +357,47 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
             startMember();
         });
     });
-    connect(&m_join, &Join::joined, this, [this](const Membership &m) {
-        m_member = m;
-        if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
-            Membership next = m;
-            next.adminOffer = m_joinOffer;
-            keep(next);
-        }
-        m_joinOffer.clear();
+    // A phone that joined a group of 0.6: the set is in the app's folder.
+    connect(&m_joiner, &Joiner::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
         emit groupChanged();
         startMember();
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        if (m_join.byInvite())
-            m_node.joinedByInvite(m_join.invite());
+    });
+    // On 0.6 the group's records say who is an admin; the member's devices
+    // list them.
+    connect(&m_node, &Member::devicesChanged, this, [this]() {
+        if (!m_member.isV06())
+            return;
+        for (const QVariant &v : m_node.devices()) {
+            const QVariantMap d = v.toMap();
+            if (!d.value(QStringLiteral("self")).toBool())
+                continue;
+            const bool admin = d.value(QStringLiteral("admin")).toBool();
+            if (admin != m_member.admin06) {
+                Membership next = m_member;
+                next.admin06 = admin;
+                if (keep(next)) {
+                    Errors::log(QStringLiteral("admin: the records %1 this phone an admin").arg(admin ? QStringLiteral("make") : QStringLiteral("no longer make")));
+                    emit groupChanged();
+                }
+            }
+            return;
+        }
+    });
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    connect(&m_join, &Join::joined, this, [this](const QString &group, const QString &device) {
+        Membership m;
+        m.device = device;
+        m.group06 = group;
+        if (!keep(m))
+            return;
+        emit groupChanged();
+        startMember();
     });
     // The root made this phone an admin: the member checks the admin CA
     // first, then the phone keeps it and signs with it.
@@ -419,52 +462,8 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin()
-{
-    if (m_publicKey.isEmpty()) {
-        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
-        return;
-    }
-    if (m_busy)
-        return;
-    const int serial = ++m_joinSerial;
-    m_joinOffer.clear();
-    const auto listen = [this, serial]() {
-        if (serial == m_joinSerial)
-            m_join.start(phoneName(), phoneOs(), m_publicKey);
-    };
-    // The admin key, which the member's hellos offer the root for its
-    // "Make an admin": found without the PIN, or made behind it.
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, serial, listen]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (serial != m_joinSerial)
-            return;
-        if (key.state == KeyStore::State::Ready) {
-            Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-            m_joinOffer = key.publicKey;
-            listen();
-            return;
-        }
-        if (key.pinNeeded && m_adminPin != QStringLiteral("locked")
-            && askPin([this]() { startJoin(); }, listen,
-                      QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.")))
-            return;
-        Errors::log(QStringLiteral("key: joining without an admin key: %1 (%2)").arg(key.failure.message, key.failure.details));
-        listen();
-    });
-    thread->start();
-}
-
 void App::stopJoin()
 {
-    ++m_joinSerial;
-    m_joinOffer.clear();
     m_join.stop();
 }
 
@@ -499,37 +498,6 @@ void App::prepareAdmin()
         // The hellos of the new connections offer it.
         m_node.stop();
         startMember();
-    });
-    thread->start();
-}
-
-void App::startAdmit(const QString &qr, bool makeAdmin)
-{
-    if (!m_member.isAdmin()) {
-        m_admit.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("admit: not an admin")});
-        return;
-    }
-    if (m_busy)
-        return;
-    if (askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); },
-               [this]() { m_admit.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("admit: no PIN")}); }))
-        return;
-    m_busy = true;
-    emit keyChanged();
-    m_admit.setPreparing();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread, qr, makeAdmin]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (key.state != KeyStore::State::Ready) {
-            if (key.pinNeeded && askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); }))
-                return;
-            m_admit.fail(key.failure);
-            return;
-        }
-        m_admit.admit(qr, m_node.handle(), key.publicKey, m_member.adminCa, makeAdmin && m_member.root);
     });
     thread->start();
 }
@@ -572,7 +540,7 @@ void App::startJoinByInvite(const QString &text)
                             QStringLiteral("join: in a group")}));
         return;
     }
-    m_join.startInvite(phoneName(), phoneOs(), m_publicKey, text);
+    m_join.startInvite(text, Membership::directory(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::resolve(const QStringList &records)
@@ -637,6 +605,90 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
             done(answer);
         m_node.pollDevices();
         emit managed(action, device, true);
+    });
+    thread->start();
+}
+
+void App::changePreview(const QVariantMap &recovery, const QStringList &leaveOut)
+{
+    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->keyless = true;
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), QStringLiteral("change_preview")},
+        {QStringLiteral("device"), QString()},
+        {QStringLiteral("recovery"), QJsonObject::fromVariantMap(recovery)},
+        {QStringLiteral("leave_out"), QJsonArray::fromStringList(leaveOut)},
+    };
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const QJsonObject answer = thread->answer;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit changePreviewed(false, QVariantList(), false);
+            return;
+        }
+        show(QString());
+        emit changePreviewed(true, answer.value(QStringLiteral("rows")).toArray().toVariantList(),
+                             answer.value(QStringLiteral("waiting")).toBool());
+    });
+    thread->start();
+}
+
+void App::changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, bool overWaiting)
+{
+    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+        return;
+    // The admin key in the TEE, behind its PIN, becomes the root key.
+    if (askPin([this, recovery, leaveOut, overWaiting]() { changeRoot(recovery, leaveOut, overWaiting); },
+               [this]() { emit rootChangedHere(false); }))
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), QStringLiteral("change_root")},
+        {QStringLiteral("device"), QString()},
+        {QStringLiteral("recovery"), QJsonObject::fromVariantMap(recovery)},
+        {QStringLiteral("leave_out"), QJsonArray::fromStringList(leaveOut)},
+        {QStringLiteral("over_waiting"), overWaiting},
+    };
+    connect(thread, &QThread::finished, this, [this, thread, recovery, leaveOut, overWaiting]() {
+        const Failure failure = thread->failure;
+        const bool pinNeeded = thread->sign.pinNeeded;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull() && pinNeeded
+            && askPin([this, recovery, leaveOut, overWaiting]() { changeRoot(recovery, leaveOut, overWaiting); },
+                      [this]() { emit rootChangedHere(false); }))
+            return;
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit rootChangedHere(false);
+            return;
+        }
+        Membership next = m_member;
+        next.root = true;
+        next.adminCa.clear();
+        next.claim.clear();
+        if (!keep(next)) {
+            emit rootChangedHere(false);
+            return;
+        }
+        Errors::log(QStringLiteral("change root: this phone is the group's root now, by the recovery key"));
+        show(QString());
+        m_node.pollDevices();
+        emit groupChanged();
+        emit rootChangedHere(true);
     });
     thread->start();
 }
@@ -717,6 +769,64 @@ void App::handOver(const QString &device)
     if (!m_member.root)
         return;
     runManage(QStringLiteral("hand_over"), device, QJsonObject(), nullptr);
+}
+
+void App::openCard(const QString &pin)
+{
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new PivThread;
+    thread->request = QJsonObject{{QStringLiteral("op"), QStringLiteral("open")}, {QStringLiteral("pin"), pin}};
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const QString secret = thread->answer.value(QStringLiteral("secret")).toString();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull() || secret.isEmpty()) {
+            show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The YubiKey did not answer as expected. Plug it in again and try again."), QStringLiteral("yubikey: open answered no secret")} : failure));
+            emit cardOpened(false, QString());
+            return;
+        }
+        // The secret goes to the core for one change of root, and the page drops it.
+        show(QString());
+        emit cardOpened(true, secret);
+    });
+    thread->start();
+}
+
+void App::sealCard(const QString &pin, bool replaceDefault)
+{
+    if (!m_member.root || m_recoveryText.isEmpty() || m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new PivThread;
+    thread->request = QJsonObject{
+        {QStringLiteral("op"), QStringLiteral("seal")},
+        {QStringLiteral("pin"), pin},
+        {QStringLiteral("recovery"), QJsonObject{{QStringLiteral("text"), m_recoveryText}}},
+        {QStringLiteral("replace_default"), replaceDefault},
+    };
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const bool defaultKey = thread->answer.value(QStringLiteral("default_key")).toBool();
+        const bool replaced = thread->answer.value(QStringLiteral("replaced")).toBool();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit cardSealed(false, false);
+            return;
+        }
+        Errors::log(QStringLiteral("yubikey: sealed, factory key %1, replaced %2").arg(defaultKey).arg(replaced));
+        show(QString());
+        emit cardSealed(true, defaultKey);
+    });
+    thread->start();
 }
 
 void App::makeRecovery()
@@ -916,185 +1026,13 @@ void App::finishTakeover()
                 return;
             m_claimTimer.stop();
             Errors::log(QStringLiteral("takeover: the claim is %1").arg(state));
-            // A phone that restored the group from its sheet is no admin.
-            const bool admin = m_member.isAdmin();
-            const bool cancelled = state == QStringLiteral("cancelled");
-            const QString shown = admin
-                ? (cancelled ? QCoreApplication::translate("Errors", "The group's root cancelled the claim; the phone stays an admin.")
-                             : QCoreApplication::translate("Errors", "The claim to take the group over became void; the phone stays an admin."))
-                : (cancelled ? QCoreApplication::translate("Errors", "The group's root cancelled the claim to restore the group.")
-                             : QCoreApplication::translate("Errors", "The claim to restore the group became void."));
-            if (!admin)
-                setRestoreState(QStringLiteral("failed"));
+            const QString shown = state == QStringLiteral("cancelled")
+                ? QCoreApplication::translate("Errors", "The group's root cancelled the claim; the phone stays an admin.")
+                : QCoreApplication::translate("Errors", "The claim to take the group over became void; the phone stays an admin.");
             show(Errors::shown({shown, QStringLiteral("takeover: the claim is %1").arg(state)}));
         }
         m_claimState = state;
         emit claimChanged();
-    });
-    thread->start();
-}
-
-QString App::scanSheet(const QVariant &frame)
-{
-    QImage img = frame.value<QImage>();
-    if (img.isNull())
-        return QString();
-    if (img.width() > maxSheetFrameSide || img.height() > maxSheetFrameSide)
-        img = img.scaled(maxSheetFrameSide, maxSheetFrameSide, Qt::KeepAspectRatio, Qt::FastTransformation);
-    img = img.convertToFormat(QImage::Format_Grayscale8);
-    size_t len = 0;
-    Failure failure;
-    const QJsonObject read = Core::take(cbb_qr_read(img.constBits(), size_t(img.width()), size_t(img.height()), size_t(img.bytesPerLine()), &len),
-                                        len, QStringLiteral("qr"), &failure);
-    if (!failure.isNull()) {
-        Errors::log(QStringLiteral("restore: reading a frame: %1: %2").arg(failure.message, failure.details));
-        return QString();
-    }
-    for (const QJsonValue &t : read.value(QStringLiteral("texts")).toArray()) {
-        const QString text = t.toString().trimmed();
-        if (text.startsWith(QStringLiteral("cbb://recover?")))
-            return text;
-        const QString hint = QCoreApplication::translate("Errors", "This is not the QR code of a CBB recovery sheet.");
-        if (m_restoreHint != hint) {
-            m_restoreHint = hint;
-            emit restoreChanged();
-        }
-    }
-    return QString();
-}
-
-void App::setRestoreState(const QString &state)
-{
-    if (m_restoreState == state)
-        return;
-    m_restoreState = state;
-    emit restoreChanged();
-}
-
-void App::resetRestore()
-{
-    if (m_restoreState == QStringLiteral("restoring") || m_restoreState == QStringLiteral("claiming"))
-        return;
-    m_restoreHint.clear();
-    m_restoreState.clear();
-    emit restoreChanged();
-}
-
-void App::restore(const QString &sheet)
-{
-    if (m_busy)
-        return;
-    // A phone that restored the group but did not get its claim out claims
-    // again; any other phone in a group has nothing to restore.
-    if (!m_member.isNull()) {
-        if (!m_member.isAdmin() && m_member.claim.isEmpty() && m_node.running())
-            claimWithSheet(sheet);
-        return;
-    }
-    if (m_publicKey.isEmpty()) {
-        show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("restore: no key")}));
-        setRestoreState(QStringLiteral("failed"));
-        return;
-    }
-    m_busy = true;
-    emit keyChanged();
-    m_restoreHint.clear();
-    setRestoreState(QStringLiteral("restoring"));
-    show(QString());
-    auto *thread = new RestoreThread;
-    thread->request = QJsonObject{
-        {QStringLiteral("sheet"), sheet},
-        {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
-        {QStringLiteral("name"), phoneName()},
-        {QStringLiteral("os"), phoneOs()},
-    };
-    connect(thread, &QThread::finished, this, [this, thread, sheet]() {
-        const QJsonObject answer = thread->answer;
-        Failure failure = thread->failure;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (!failure.isNull()) {
-            show(Errors::shown(restoreFailure(failure)));
-            setRestoreState(QStringLiteral("failed"));
-            return;
-        }
-        Membership m = Membership::fromJoined(answer);
-        m.root = false;
-        if (m.isNull() || !m.save(&failure)) {
-            show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("restore: no device in the answer")} : failure));
-            setRestoreState(QStringLiteral("failed"));
-            return;
-        }
-        Errors::log(QStringLiteral("restore: restored %1 as %2 from %3").arg(m.groupTag(), m.device, answer.value(QStringLiteral("addr")).toString()));
-        m_member = m;
-        emit groupChanged();
-        startMember();
-        claimWithSheet(sheet);
-    });
-    thread->start();
-}
-
-void App::claimWithSheet(const QString &sheet)
-{
-    if (!m_node.running()) {
-        show(Errors::shown({QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."),
-                            QStringLiteral("restore: no member")}));
-        setRestoreState(QStringLiteral("failed"));
-        return;
-    }
-    m_busy = true;
-    emit keyChanged();
-    setRestoreState(QStringLiteral("claiming"));
-    // The new root is the admin key, which stays in the TEE: its root CA is
-    // kept before the claim goes out, as in takeOver.
-    auto *thread = new ManageThread;
-    thread->member = m_node.handle();
-    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("root_ca")}};
-    connect(thread, &QThread::finished, this, [this, thread, sheet]() {
-        const Failure failure = thread->failure;
-        const QByteArray rootCa = QByteArray::fromBase64(thread->answer.value(QStringLiteral("root_ca")).toString().toLatin1());
-        thread->deleteLater();
-        Membership next = m_member;
-        next.claim = rootCa;
-        if (!failure.isNull() || rootCa.isEmpty() || !keep(next)) {
-            m_busy = false;
-            emit keyChanged();
-            if (!failure.isNull())
-                show(Errors::shown(failure));
-            setRestoreState(QStringLiteral("failed"));
-            return;
-        }
-        auto *claim = new ManageThread;
-        claim->member = m_node.handle();
-        claim->request = QJsonObject{
-            {QStringLiteral("action"), QStringLiteral("recover_with_sheet")},
-            {QStringLiteral("sheet"), sheet},
-            {QStringLiteral("root_ca"), QString::fromLatin1(rootCa.toBase64())},
-        };
-        connect(claim, &QThread::finished, this, [this, claim]() {
-            const Failure failure = claim->failure;
-            claim->deleteLater();
-            m_busy = false;
-            emit keyChanged();
-            if (!failure.isNull()) {
-                Membership next = m_member;
-                next.claim.clear();
-                keep(next);
-                show(Errors::shown(restoreFailure(failure)));
-                setRestoreState(QStringLiteral("failed"));
-                emit claimChanged();
-                return;
-            }
-            Errors::log(QStringLiteral("restore: claimed the group with the recovery key"));
-            m_claimState = QStringLiteral("pending");
-            emit claimChanged();
-            show(QString());
-            setRestoreState(QStringLiteral("claimed"));
-            m_claimTimer.start();
-            finishTakeover();
-        });
-        claim->start();
     });
     thread->start();
 }
@@ -1109,23 +1047,17 @@ void App::makeGroup()
     }
     if (askPin([this]() { makeGroup(); }))
         return;
-    Failure failure;
-    const QByteArray secret = sealSecret(&failure);
-    const QJsonObject seal = secret.isEmpty() ? QJsonObject()
-        : Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
-    if (!failure.isNull()) {
-        show(Errors::shown(failure));
-        return;
-    }
     m_busy = true;
     emit keyChanged();
     auto *thread = new GroupThread;
+    // A group of 0.6: the set is kept in the app's folder, where the member
+    // then starts on it (ffi's cbb_group_new with dir).
     thread->request = QJsonObject{
+        {QStringLiteral("dir"), Membership::directory()},
         {QStringLiteral("name"), phoneName()},
         {QStringLiteral("os"), phoneOs()},
         {QStringLiteral("store"), KeyStore::store()},
         {QStringLiteral("public"), QString::fromLatin1(m_publicKey.toBase64())},
-        {QStringLiteral("seal"), seal.value(QStringLiteral("key"))},
     };
     connect(thread, &QThread::finished, this, [this, thread]() {
         const QJsonObject group = thread->group;
@@ -1140,19 +1072,88 @@ void App::makeGroup()
             show(Errors::shown(failure));
             return;
         }
-        Membership m = Membership::fromJoined(group);
+        Membership m;
+        m.device = group.value(QStringLiteral("device")).toString();
+        m.group06 = group.value(QStringLiteral("group")).toString();
         m.root = true;
-        if (m.isNull() || !m.save(&failure)) {
+        if (m.isNull() || !m.isV06() || !m.save(&failure)) {
             show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("group: no device in the answer")} : failure));
             return;
         }
         Errors::log(QStringLiteral("group: made %1 as its root").arg(m.groupTag()));
         m_member = m;
+        // The recovery sheet, shown once and then forgotten (RecoveryPage).
+        const QJsonObject sheet = group.value(QStringLiteral("recovery")).toObject();
+        QStringList lines;
+        for (const QJsonValue &l : sheet.value(QStringLiteral("text")).toArray())
+            lines.append(l.toString());
+        m_recoveryText = lines.join(QLatin1Char('\n'));
+        m_recoveryModules.clear();
+        for (const QJsonValue &row : sheet.value(QStringLiteral("modules")).toArray())
+            m_recoveryModules.append(row.toString());
         show(QString());
         emit groupChanged();
+        emit recoveryChanged();
+        emit groupMade();
         startMember();
     });
     thread->start();
+}
+
+void App::openWindow()
+{
+    if (!m_member.isV06() || !m_member.isAdmin()) {
+        m_window.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("window: not an admin")});
+        return;
+    }
+    if (m_busy)
+        return;
+    if (askPin([this]() { openWindow(); },
+               [this]() { m_window.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("window: no PIN")}); }))
+        return;
+    Failure failure;
+    if (!m_node.listen(&failure)) {
+        m_window.fail(failure);
+        return;
+    }
+    m_busy = true;
+    emit keyChanged();
+    m_window.setPreparing();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (m_window.state() != QStringLiteral("preparing"))
+            return; // closed while the key was found
+        if (key.state != KeyStore::State::Ready) {
+            if (key.pinNeeded && askPin([this]() { openWindow(); }, std::function<void()>()))
+                return;
+            m_window.fail(key.failure);
+            return;
+        }
+        m_window.open(m_node.handle(), key.publicKey);
+    });
+    thread->start();
+}
+
+void App::joinByWindow(const QString &text)
+{
+    if (!m_member.isNull())
+        return;
+    if (m_publicKey.isEmpty()) {
+        m_joiner.fail({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("joiner: no key")});
+        return;
+    }
+    const QString t = text.trimmed();
+    QString digits = t;
+    digits.remove(QLatin1Char(' '));
+    static const QRegularExpression six(QStringLiteral("^[0-9]{6}$"));
+    if (six.match(digits).hasMatch())
+        m_joiner.start(Membership::directory(), QString(), digits, phoneName(), phoneOs(), m_publicKey);
+    else
+        m_joiner.start(Membership::directory(), t, QString(), phoneName(), phoneOs(), m_publicKey);
 }
 
 void App::leave()

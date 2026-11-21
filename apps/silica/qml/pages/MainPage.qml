@@ -134,6 +134,15 @@ Page {
         color: Theme.rgba(Theme.primaryColor, 0.2)
     }
 
+    // A group just made: its recovery sheet, shown once (RecoveryPage).
+    Connections {
+        target: app
+        onGroupMade: {
+            pageStack.completeAnimation()
+            pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
+        }
+    }
+
     // Aurora lets an app read the clipboard only in the foreground: what the
     // user copied goes to the group when the app comes to the front.
     Connections {
@@ -193,8 +202,8 @@ Page {
             }
             MenuItem {
                 visible: app.admin && app.member.running
-                text: qsTr("Scan a code")
-                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
+                text: qsTr("Add a device")
+                onClicked: pageStack.push(Qt.resolvedUrl("WindowPage.qml"))
             }
         }
 
@@ -245,7 +254,7 @@ Page {
                     anchors.horizontalCenter: parent.horizontalCenter
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join a group")
-                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+                    onClicked: pageStack.push(Qt.resolvedUrl("JoinWindowPage.qml"))
                 }
                 Button {
                     visible: app.keyLevel !== "none"
@@ -253,14 +262,6 @@ Page {
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join with an invitation")
                     onClicked: pageStack.push(Qt.resolvedUrl("InvitationPage.qml"))
-                }
-                Button {
-                    visible: app.keyLevel !== "none"
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    preferredWidth: Theme.buttonWidthLarge
-                    text: qsTr("Restore with a recovery sheet")
-                    enabled: !app.busy
-                    onClicked: pageStack.push(Qt.resolvedUrl("RestorePage.qml"))
                 }
                 Label {
                     visible: app.keyLevel === "none" && !app.busy
@@ -370,6 +371,8 @@ Page {
             }
 
             AlertsCard {}
+
+            GroupNotices {}
 
             // "Lost phone?" on the group's only admin: how a second phone
             // becomes one. Closed once, it stays closed.

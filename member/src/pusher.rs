@@ -245,6 +245,12 @@ impl Sender {
         due.into_iter().map(|(g, s, a)| (g, push::renew(&s, a))).collect()
     }
 
+    /// Whether a `push-renew` waits for `device`, without giving it.
+    #[cfg(test)]
+    pub fn renewal_pending(&self, device: &DeviceId) -> bool {
+        self.lock().renew.keys().any(|(_, d)| d == device)
+    }
+
     /// Whether a registration held for `group` still names the face with
     /// `tag`: the member keeps the previous period's face (its server key
     /// and credentials) for push only while this holds and its credentials

@@ -1851,7 +1851,7 @@ pub(crate) fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) ->
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     std::thread_local! {
@@ -2332,7 +2332,8 @@ mod tests {
         p
     }
 
-    fn syn(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+    /// An IPv6 packet with a TCP SYN from src's port 40000 to dst's port.
+    pub(crate) fn syn(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
         let mut t = vec![0u8; 20];
         t[0..2].copy_from_slice(&40000u16.to_be_bytes());
         t[2..4].copy_from_slice(&port.to_be_bytes());
@@ -2343,7 +2344,8 @@ mod tests {
         ip6(src, dst, 6, t, 16)
     }
 
-    fn udp(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+    /// An IPv6 packet with a UDP datagram from src's port 40000 to dst's port.
+    pub(crate) fn udp(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
         let mut u = vec![0u8; 8];
         u[0..2].copy_from_slice(&40000u16.to_be_bytes());
         u[2..4].copy_from_slice(&port.to_be_bytes());

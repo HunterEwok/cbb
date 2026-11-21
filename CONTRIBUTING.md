@@ -211,15 +211,10 @@ sh ffi/bind.sh host /tmp/cbb-core
 cd apps/ios/CBBKit && swift test -Xlinker -L/tmp/cbb-core
 ```
 
-The phones' tunnel (WireGuard for sync away from home) is in the Rust core's library
-(`ffi/src/tunnel.rs`, feature `tunnel`), which `ffi/bind.sh` builds for both apps; its tests
-run it against the Go hub, clients and forwarder:
-
-```sh
-cargo test -p cbb-ffi --features tunnel tunnel
-cargo build --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone
-```
+The phones' sync away from home is the Live member's own tunnel (`member/src/live/away.rs`),
+which the feature `tunnel` builds into the Rust core's library (`ffi/bind.sh` builds it for
+every app); `cargo test --workspace` and the service tests (`TestFFIPhoneAway`,
+`TestFFIPhoneHub`) run it.
 
 The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
 `ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C

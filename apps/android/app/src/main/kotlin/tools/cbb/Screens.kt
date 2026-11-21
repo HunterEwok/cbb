@@ -106,7 +106,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The terms of the project's forwarder and relay, in the reader's language. */
-private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
 
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
@@ -145,13 +144,12 @@ private fun LocalNetworkPermission(model: AppModel) {
 /**
  * No group yet (docs/apps.md, Start): settings and the language at the
  * top, the logo, "Create a group", "Join a group", "Join with an
- * invitation" and a small link to restore with the recovery key.
+ * invitation".
  */
 @Composable
 private fun StartScreen(model: AppModel) {
     val palette = LocalPalette.current
     var adding by rememberSaveable { mutableStateOf(false) }
-    var restoring by rememberSaveable { mutableStateOf(false) }
     var settings by rememberSaveable { mutableStateOf(false) }
     var invited by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { model.prepare() }
@@ -163,11 +161,8 @@ private fun StartScreen(model: AppModel) {
         InvitationScreen(model) { invited = false }
         return
     }
-    if (adding || restoring) {
-        AddDeviceScreen(model, restore = restoring) {
-            adding = false
-            restoring = false
-        }
+    if (adding) {
+        AddDeviceScreen(model) { adding = false }
         return
     }
     if (settings) {
@@ -207,9 +202,6 @@ private fun StartScreen(model: AppModel) {
         MainKeyNote(model)
         QuietButton(stringResource(R.string.join_group), onClick = { model.startJoining() })
         QuietButton(stringResource(R.string.invitation_join), onClick = { invited = true })
-        TextButton(onClick = { restoring = true }) {
-            Text(stringResource(R.string.restore_link), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
-        }
         model.message?.let { NoteText(it) }
     }
 }
@@ -259,54 +251,15 @@ private fun StartLanguageMenu(model: AppModel) {
 
 // Joining
 
-/** Joining another phone's group: this phone's QR code, which the other phone scans in Add a device. */
+/** Joining another phone's group: by an accepted invitation, or by the pairing window of a phone of the group. */
 @Composable
 private fun JoinScreen(model: AppModel) {
     if (model.joiningInvite != null) {
         JoinByInviteScreen(model)
         return
     }
-    val palette = LocalPalette.current
-    LaunchedEffect(Unit) { model.join() }
-    BackHandler { model.cancelJoin() }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Tokens.spacingLarge),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Tokens.spacingLarge),
-    ) {
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        Text(
-            stringResource(R.string.join_title),
-            style = MaterialTheme.typography.headlineMedium,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            color = palette.accent,
-        )
-        val code = model.joinCode
-        if (code != null) {
-            val label = stringResource(R.string.join_qr_label)
-            QrCode(
-                code.qrText,
-                Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                    .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
-                    .semantics { contentDescription = label },
-            )
-            Text(
-                code.grouped,
-                style = MaterialTheme.typography.headlineLarge,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.semantics { contentDescription = code.code.toList().joinToString(" ") },
-            )
-            val hint = if (model.isTv) R.string.join_hint_tv else R.string.join_hint
-            Text(stringResource(hint), textAlign = TextAlign.Center, color = palette.textDim)
-        } else if (model.message == null) {
-            CircularProgressIndicator(color = palette.accent)
-        }
-        model.message?.let { NoteText(it) }
-        Spacer(Modifier.heightIn(min = Tokens.spacingLarge))
-        QuietButton(stringResource(R.string.cancel), onClick = { model.cancelJoin() })
-    }
+    // The new phone dials a window (docs/protocol.md, section 6, "The window and who dials").
+    JoinByWindowScreen(model)
 }
 
 /**
@@ -525,109 +478,10 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
 
 // Adding
 
-/**
- * The camera with a frame; the text of the QR code by hand when there is no
- * camera or it is not allowed. With restore, it scans the recovery sheet's
- * QR code instead, on a phone without a group.
- */
+/** Add a device: the pairing window (Pairing06.kt). */
 @Composable
-internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
-    val palette = LocalPalette.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val hasCamera = remember { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }
-    var allowed by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    var asked by rememberSaveable { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        allowed = it
-        asked = true
-    }
-    LaunchedEffect(Unit) {
-        model.message = null
-        if (hasCamera && !allowed && !asked) launcher.launch(Manifest.permission.CAMERA)
-    }
-    // The device being admitted: one at a time; leaving the page cancels it.
-    var adding by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    // Why the camera did not start, if it did not.
-    var cameraError by remember { mutableStateOf<Exception?>(null) }
-    val add = { text: String ->
-        if (adding == null) {
-            adding = scope.launch {
-                try {
-                    if (if (restore) model.restore(text.trim()) else model.scanned(text)) close()
-                } finally {
-                    adding = null
-                }
-            }
-        }
-    }
-    BackHandler { close() }
-    // The recovery key typed or pasted stays out of screenshots and the
-    // recent apps' preview.
-    if (restore) SecureWindow()
-    Page(stringResource(if (restore) R.string.restore_title else R.string.add_device), close) {
-        // Restoring makes this device the group's root, as making the group does.
-        if (restore) MainKeyNote(model, hint = false)
-        if (hasCamera && allowed && cameraError == null) {
-            QrScanner(
-                onCode = { text -> scope.launch { if (!model.busy) add(text) } },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
-                onError = { cameraError = it },
-            )
-            Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        } else if (cameraError != null) {
-            // The camera did not start: the text of the QR code still works.
-            NoteText(model.describe(cameraError!!, R.string.camera_failed, log = false))
-        } else {
-            Text(
-                stringResource(if (hasCamera) R.string.camera_denied else R.string.paste_hint),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        var typed by rememberSaveable { mutableStateOf("") }
-        OutlinedTextField(
-            value = typed,
-            onValueChange = { typed = it },
-            label = { Text(stringResource(R.string.qr_text)) },
-            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        AccentButton(stringResource(if (restore) R.string.restore_go else R.string.add), enabled = typed.isNotBlank() && !model.busy, onClick = { add(typed) })
-        if (restore) {
-            var askingPin by remember { mutableStateOf(false) }
-            QuietButton(stringResource(R.string.yubikey_restore), onClick = { askingPin = true }, enabled = !model.busy)
-            if (askingPin) {
-                YubiKeyPinDialog(
-                    stringResource(R.string.yubikey_restore_title),
-                    stringResource(R.string.yubikey_restore_body),
-                    dismiss = { askingPin = false },
-                ) { pin ->
-                    if (adding == null) {
-                        adding = scope.launch {
-                            try {
-                                if (model.restoreWithCard(pin)) close()
-                            } finally {
-                                adding = null
-                            }
-                        }
-                    }
-                }
-            }
-            YubiKeyPrompt(model) { adding?.cancel() }
-        }
-        if (model.busy) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-                CircularProgressIndicator(Modifier.size(20.dp), color = palette.accent, strokeWidth = 2.dp)
-                Text(if (model.retries > 0) stringResource(R.string.not_ready_yet, model.retries) else stringResource(R.string.connecting))
-            }
-        } else {
-            model.message?.let { NoteText(it) }
-        }
-    }
+internal fun AddDeviceScreen(model: AppModel, close: () -> Unit) {
+    WindowScreen(model, close)
 }
 
 // Settings
@@ -669,6 +523,7 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
             if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
         }
         if (shows(SettingsPart.RECOVERY) && home && model.isRoot) RecoverySection(model)
+        if (shows(SettingsPart.RECOVERY) && home && !model.isRoot) ChangeRootSection(model)
         if (part == null && home) {
             Row(
                 Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {
@@ -923,7 +778,9 @@ private fun WatchSection(model: AppModel) {
     Section(stringResource(R.string.watch_title)) {
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
             watches.forEach { Text(it.name, fontWeight = FontWeight.SemiBold) }
-            if (watches.isEmpty()) {
+            // The watch signs nothing in a group of 0.6 (D-124).
+            val later = model.group.isV06
+            if (watches.isEmpty() && !later) {
                 Button(onClick = {
                     busy = true
                     scope.launch {
@@ -934,7 +791,7 @@ private fun WatchSection(model: AppModel) {
             }
             model.watchNote?.let { NoteText(it) }
             Text(
-                stringResource(if (watches.isEmpty()) R.string.watch_body else R.string.watch_replace),
+                stringResource(if (later) R.string.watch_later else if (watches.isEmpty()) R.string.watch_body else R.string.watch_replace),
                 style = MaterialTheme.typography.bodyMedium,
                 color = palette.textDim,
             )
@@ -975,6 +832,13 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
             Text(status, color = if (relay.status == RelayOnPhone.Status.CONNECTED) palette.accent else palette.textDim)
             // The relay's error underneath, when details are on.
             relay.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
+            // The root key renews the group's server credentials when the app opens.
+            if (relay.periodOverdue) Text("⚠ " + stringResource(R.string.period_overdue), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
+            // On a group of 0.6 the relay is the group's, which only the root sets.
+            if (!relay.editable) {
+                Tip(R.string.relay_by_root)
+                return@Column
+            }
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
@@ -1055,46 +919,18 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     color = palette.textDim,
                 )
                 if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                // The fields show the user's own forwarder; the project's leaves them empty.
-                val own = hub.forwarder?.takeUnless { it.isProject }
-                var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
-                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
+                // The forwarder is the group's root's setting: shown, not edited.
                 Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                val fw = hub.forwarder
                 Text(
-                    stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
+                    stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
                     style = MaterialTheme.typography.bodySmall,
                     color = palette.textDim,
                 )
-                if (hub.forwarder?.isProject == true) {
-                    val context = LocalContext.current
-                    Text(
-                        stringResource(R.string.project_terms),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = palette.accent,
-                        modifier = Modifier.focusRing().clickable(role = Role.Button) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_TERMS)))
-                        },
-                    )
+                if (fw != null) {
+                    Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
+                    Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
                 }
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.hub_forwarder_address)) },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { pin = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.hub_forwarder_key)) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
-                AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
                 // Strict networks: AmneziaWG for networks that block VPNs,
                 // and VLESS over it for those that let only the web through.
@@ -1125,7 +961,6 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     Text(stringResource(R.string.hub_background), modifier = Modifier.weight(1f))
                     Switch(checked = hub.background, onCheckedChange = null, enabled = !busy)
                 }
-                if (hub.computers.isNotEmpty()) MoveHub(model, hub)
             }
             model.hubNote?.let { NoteText(it) }
             Tip(R.string.hub_body)
@@ -1142,47 +977,6 @@ private fun StrictSwitch(label: String, on: Boolean, enabled: Boolean, flip: () 
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = on, onCheckedChange = null, enabled = enabled)
-    }
-}
-
-/**
- * Moving the hub to a computer (docs/design.md, "Moving the hub to a
- * computer"): the suggestion of one that is always on, once, and a button
- * for each computer the hub can move to, each asking first.
- */
-@Composable
-private fun MoveHub(model: AppModel, hub: AppModel.Hub) {
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var asking by remember { mutableStateOf<Pair<String, String>?>(null) }
-    val ready = hub.forwarder != null
-    Text(stringResource(R.string.hub_move_title), fontWeight = FontWeight.SemiBold)
-    if (!ready) Text(stringResource(R.string.hub_move_needs_forwarder), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
-    hub.suggested?.let { s ->
-        Text(stringResource(R.string.hub_suggest, s.second), style = MaterialTheme.typography.bodyMedium)
-        AccentButton(stringResource(R.string.hub_suggest_yes), enabled = ready, onClick = { asking = s })
-        QuietButton(stringResource(R.string.hub_suggest_keep), onClick = { scope.launch { model.keepPhoneHub() } })
-    }
-    Tip(R.string.hub_move_body)
-    for (c in hub.computers.filter { it != hub.suggested }) {
-        QuietButton(stringResource(R.string.hub_move_to, c.second), enabled = ready, onClick = { asking = c })
-    }
-    asking?.let { c ->
-        AlertDialog(
-            onDismissRequest = { asking = null },
-            title = { Text(stringResource(R.string.hub_move_confirm_title, c.second)) },
-            text = { Text(stringResource(R.string.hub_move_confirm_body, c.second)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    asking = null
-                    scope.launch { model.moveHub(c.first) }
-                }) { Text(stringResource(R.string.hub_move_confirm), color = palette.accent) }
-            },
-            dismissButton = { TextButton(onClick = { asking = null }) { Text(stringResource(R.string.cancel)) } },
-            containerColor = palette.surface,
-            titleContentColor = palette.text,
-            textContentColor = palette.textDim,
-        )
     }
 }
 

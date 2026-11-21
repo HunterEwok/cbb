@@ -41,8 +41,8 @@ public struct WhyReason: Codable, Equatable, Hashable, Sendable {
 }
 
 /// Where a tunnel the app runs itself stands, for the member's `why`: the
-/// phone's sync away from home through RustTunnel, which the member does not
-/// see (`cbb_core::why::AwayFacts`).
+/// phone as the hub, its sync away from home and its relay, which the member
+/// does not see (`cbb_core::why::AwayFacts`).
 public struct WhyAway: Codable, Equatable, Sendable {
     public var hub = false
     public var standby = false

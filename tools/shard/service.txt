@@ -58,12 +58,11 @@ TestFFIJoinerAdmin 5.3
 TestFFIJoinerMadeAdmin 2.7
 TestFFIMember 3.9
 TestFFIPhoneAway 7.7
+TestFFIPhoneChangeRoot 9.0
 TestFFIPhoneReach 5.3
 TestFFIPhoneRemoves 5.3
 TestFFIPhoneRemovesAway 2.7
-TestFFIPhoneRestore 17.4
 TestFFIPhoneRoot 2.7
-TestFFIPhoneTakeover 2.7
 TestFallbackDial 11.4
 TestForwardOnlyHub 16.1
 TestFreezeAnAdmin 18.9

@@ -10,9 +10,9 @@ import Security
 import UIKit
 import UniformTypeIdentifiers
 
-private let awayLog = Logger(subsystem: "tools.cbb", category: "away")
 private let relayLog = Logger(subsystem: "tools.cbb", category: "relay")
 private let browseLog = Logger(subsystem: "tools.cbb", category: "browse")
+private let pairLog = Logger(subsystem: "tools.cbb", category: "pair")
 private let hubLog = Logger(subsystem: "tools.cbb", category: "hub")
 private let modeLog = Logger(subsystem: "tools.cbb", category: "mode")
 private let keysLog = Logger(subsystem: "tools.cbb", category: "keys")
@@ -32,7 +32,7 @@ final class LiveGroup: GroupController {
     var onPanic: ((String, [String]) -> Void)?
     /// The member's recent log lines, for a bug report.
     private var recentLog: [String] = []
-    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]), hubUnreachable }
+    enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroup, rootLeaves([String]), hubUnreachable }
 
     /// The clipboard holds something the app could not read as text: the
     /// paste was not allowed, or it is not text. The button leaves it as it
@@ -51,20 +51,6 @@ final class LiveGroup: GroupController {
     nonisolated static let caLabel = "tools.cbb.group-root"
     /// The admin key of a phone that joined another phone's group.
     nonisolated static let adminLabel = "tools.cbb.admin"
-    /// How long the join QR code is good for, and how many wrong codes it
-    /// takes, as for cbb pair (docs/protocol.md, section 6).
-    static let joinWindow: TimeInterval = 300
-    /// How long admitting a device may take once its connection is up:
-    /// a computer that stops answering mid-pairing fails then. Two minutes,
-    /// as a slow member takes its time: a ZX Next gets the group's records
-    /// through its ESP at about 2K a second, and confirms only after them.
-    static let pairingDeadline: Duration = .seconds(120)
-    /// How long a device that does not take the connection yet is dialed
-    /// again, every dialPause: one scanned the moment it shows its QR code
-    /// may not listen yet (the ZX Next's network starts a moment later).
-    static let dialRetry: Duration = .seconds(20)
-    static let dialPause: Duration = .seconds(2)
-    static let joinAttempts = 3
     /// How long joinComputer browses for a pairing window, and then for a
     /// second one.
     static let browseFor: TimeInterval = 10
@@ -95,9 +81,6 @@ final class LiveGroup: GroupController {
     /// "The member"), and the task that takes its events.
     private var node: CoreMember?
     private var events: Task<Void, Never>?
-    /// Offers this phone's tunnel key through the guest tunnel of the
-    /// invitation it joined by, until the hub's offer comes.
-    private var guestTask: Task<Void, Never>?
     private var browser: BonjourBrowser?
     private var relay: Relay?
     private var recordBox: RecordBox?
@@ -107,21 +90,13 @@ final class LiveGroup: GroupController {
     private let periodKeys = PhoneKeys()
     private var renewer: Renewer?
     private var admins: AdminBox?
-    private var away: AwayFromHome?
-    /// The phone as the group's hub, and while it runs the member's ports:
-    /// on the loopback address for the tunnel, and on a home network on
-    /// every address, published by Bonjour.
-    private var hub: HubOnPhone?
-    private var tunnelPort: UInt16?
+    /// While the phone is the group's hub on a home network, the member's
+    /// port on every address, published by Bonjour.
     private var homePort: UInt16?
     private var publisher: BonjourPublisher?
-    /// The phone at a blind relay, and while it runs the member's port on
-    /// the loopback address, which serves only the calls the relay
-    /// announced, each only when its certificate names the caller.
-    private var blindRelay: RelayOnPhone?
-    private var relayPort: UInt16?
-    /// This phone's TLS identity, for an invitation's pairing window.
-    private var memberIdentity: SecIdentity?
+    /// On a group of 0.6, what the user chose for the hub; the Live member
+    /// runs sync away from home, the hub and the relay itself (AwayOn06).
+    private var hub06 = Hub06Keychain.load() ?? AwayOn06.Prefs()
     /// Whether the app is in front: the phone is the hub only then (iOS
     /// gives an app no way to keep it running in the background).
     private var foreground = false
@@ -308,33 +283,6 @@ final class LiveGroup: GroupController {
         try rootRecord(root) { n, p, s in try n.setKeyLevel(level, public: p, sign: s) }
     }
 
-    /// Puts the group's recovery key on a YubiKey held to the phone (Core
-    /// NFC): after Face ID, the card checks pin, makes a key in its first
-    /// free retired PIV slot, the root issues it an admin CA, which goes
-    /// into the slot, and signs the recovery record (docs/protocol.md,
-    /// section 10, "On a hardware key"). The key never leaves the YubiKey.
-    /// It returns the slot.
-    func makeRecoveryOnCard(pin: String) async throws -> UInt8 {
-        guard state?.isRoot == true else { throw PhoneGroup.Failure.notRoot }
-        let root = try await caSigner(reason: String(localized: "Put the recovery key on a YubiKey", bundle: .app))
-        guard let n = node else { throw CoreMember.Failure.notConnected }
-        let slot = try await YubiKeyNfc.withCard(
-            prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
-            done: String(localized: "The recovery key is on the YubiKey.", bundle: .app)
-        ) { (card: SmartCard) throws -> UInt8 in
-            try Piv.select(card)
-            try Piv.verify(card, pin: pin)
-            try Piv.authenticate(card)
-            let slot = try Piv.freeSlot(card)
-            let ca = try n.recoveryFor(try Piv.generate(card, slot: slot), public: root.publicKeyDER, sign: { try root.signature(digest: $0) })
-            try Piv.putCertificate(card, slot: slot, cert: ca)
-            return slot
-        }
-        pullRecords()
-        groupChanged()
-        return slot
-    }
-
     /// Removes the group's recovery key: a revocation of it, signed with the
     /// root key after Face ID and sent to every member.
     func removeRecovery() async throws {
@@ -353,6 +301,7 @@ final class LiveGroup: GroupController {
 
     var devices: [AppModel.Computer] {
         guard let g = state else { return [] }
+        if g.isV06 { return devices06(g) }
         let root = g.records.rootDevice
         return g.devices.map {
             .init(id: $0.id, name: $0.name, online: $0.id == g.device || online.contains($0.id) || reached.contains($0.id),
@@ -372,9 +321,182 @@ final class LiveGroup: GroupController {
 
     func refresh() async {
         take(peers: (try? node?.peers()) ?? [])
+        if state?.isV06 == true, let gs = try? node?.group() {
+            group06 = gs
+            state?.admin06 = gs.me.admin
+        }
         pullRecords()
+        takePush()
+        if let n = node, let ns = try? n.notices() { notices = ns }
         entries.reload()
         await finishTakeOverIfDue()
+    }
+
+    // MARK: The group in 0.6
+
+    /// The member's state of a group of 0.6, as the last refresh read it.
+    private var group06: GroupState?
+
+    var isV06: Bool { state?.isV06 ?? false }
+
+    /// The devices of a group of 0.6, as its member's state names them,
+    /// with what the connected ones' hellos say.
+    private func devices06(_ g: PhoneGroup) -> [AppModel.Computer] {
+        guard let gs = group06 else { return [] }
+        return gs.devices.map {
+            let me = $0.device == g.device
+            return .init(id: $0.device, name: $0.name, online: me || online.contains($0.device), role: $0.role == "computer" ? "member" : $0.role,
+                         os: $0.os.isEmpty ? nil : $0.os, isSelf: me, admin: $0.admin, isRoot: $0.device == gs.rootDevice,
+                         keysInFile: keyStores[$0.device] == Records.file, frozen: $0.frozen,
+                         device: me ? Self.ownDevice : infos[$0.device], mode: me ? modeBox.mode : modes[$0.device],
+                         actions: actions[$0.device] ?? [],
+                         muted: AppModel.Hold(ms: me ? modeBox.mutedUntilMS : mutes[$0.device]),
+                         syncOff: me && modeBox.mode == "own" ? AppModel.Hold(ms: modeBox.syncOffUntilMS ?? 0) : nil)
+        }
+    }
+
+    /// Makes a group of 0.6 on this phone (docs/apps.md, "Screens"): a new
+    /// root key in the Secure Enclave behind Face ID, the core writes this
+    /// phone's record under it and keeps the set where the member runs, and
+    /// the member starts. Returns the recovery sheet, which the app shows
+    /// once and keeps nowhere.
+    func newGroup06() async throws -> Core.RecoverySheet {
+        guard state == nil else { throw Failure.noGroup }
+        let root = try await newRootKey(reason: String(localized: "Add a computer to your group", bundle: .app))
+        let member = try memberSigner()
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let made = try CorePairing.newGroup06(dir: memberDir, name: PhoneGroup.validName(UIDevice.current.name), store: Records.hardware,
+                                              rootPublic: root.publicKeyDER, publicKey: member.publicKeyDER) { try root.signature(digest: $0) }
+        let g = PhoneGroup.of06(device: made.device, group: made.group, root: true)
+        try g.save(to: file)
+        try modeBox.newDevice()
+        forgetCredentials()
+        state = g
+        try startSync()
+        groupChanged()
+        await refresh()
+        let text = made.recovery.text.flatMap { $0.split(separator: " ").map(String.init) }.joined(separator: "-")
+        return Core.RecoverySheet(qr: made.recovery.qr, text: text, admin: Data())
+    }
+
+    /// Opens this phone's home window on a group of 0.6 (docs/protocol.md,
+    /// "Pairing in 0.6"): the member port listens, the window is announced
+    /// by Bonjour, and shown gets the QR code and the six digits. A device
+    /// that dials proves the digits; nobody is asked. Returns the name of
+    /// the device that joined; the window closes when it does, when its
+    /// time is up, after three wrong codes, or when the task is cancelled.
+    func openWindow(shown: @escaping @MainActor (_ qr: String, _ digits: String) -> Void) async throws -> String {
+        guard let g = state, g.isV06, g.isAdmin else { throw Failure.noGroup }
+        guard let node else { throw Failure.unreachable }
+        let signer = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
+        let port: UInt16
+        if let p = homePort { port = p } else { port = try node.listen(.home, port: 0) }
+        let hosts = LocalAddresses.current()
+        guard !hosts.isEmpty else { throw Failure.noNetwork }
+        let w = try CorePairing.Window(member: node, publicKey: signer.publicKeyDER, addrs: hosts) { try signer.signature(digest: $0) }
+        defer { w.close() }
+        let announced = try? BonjourPublisher(name: g.device, port: port, txt: Discovery.windowTXT(group: g.tag, fingerprint: w.fingerprint, id: w.id))
+        defer { announced?.stop() }
+        shown(w.qr, w.digits)
+        var version: UInt64 = 0
+        while true {
+            try Task.checkCancellation()
+            let v = version
+            let st = try await Task.detached { try w.next(after: v) }.value
+            version = st.version
+            switch st.state {
+            case "done":
+                await refresh()
+                return st.name
+            case "closed":
+                throw st.failure ?? Failure.timedOut
+            case "failed":
+                if let f = st.failure { pairLog.error("a device did not join through the window: \(String(reflecting: f), privacy: .public)") }
+            default:
+                break
+            }
+        }
+    }
+
+    /// Joins a group of 0.6 by a home window's QR code, or by the six
+    /// digits the person typed (qr empty: the one window Bonjour finds):
+    /// this phone dials, proves the digits, and the member starts on the
+    /// group it keeps.
+    func joinByWindow(_ qr: String, digits: String = "") async throws {
+        guard state == nil else { return }
+        let member = try memberSigner()
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let code = qr.isEmpty ? try await findHomeWindow(digits: digits) : qr
+        let j = try CorePairing.Joiner(dir: memberDir, qr: code, name: PhoneGroup.validName(UIDevice.current.name), os: "ios",
+                                       publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
+        try await follow(j, invite: false)
+    }
+
+    /// Follows a joiner to its end: on done the member starts on the group
+    /// it keeps; by an invitation, a hub that never answered is
+    /// hubUnreachable.
+    private func follow(_ j: CorePairing.Joiner, invite: Bool) async throws {
+        defer { j.close() }
+        var version: UInt64 = 0
+        var answered = false
+        while true {
+            try Task.checkCancellation()
+            let v = version
+            let st = try await Task.detached { try j.next(after: v) }.value
+            version = st.version
+            answered = answered || st.answered
+            switch st.state {
+            case "done":
+                let g = PhoneGroup.of06(device: st.device, group: st.group, root: false)
+                try g.save(to: file)
+                try modeBox.newDevice()
+                forgetCredentials()
+                state = g
+                try startSync()
+                groupChanged()
+                await refresh()
+                return
+            case "failed":
+                if invite && !answered { throw Failure.hubUnreachable }
+                if let f = st.failure { throw f }
+                throw Failure.unreachable
+            default:
+                break
+            }
+        }
+    }
+
+    /// The member's notices about the group, as the last refresh read them.
+    private(set) var notices: [Notice] = []
+
+    /// The change of root the member told of last, until the person saw it.
+    private(set) var rootChanged: AppModel.RootChange?
+
+    func dismissNotice(_ id: String) async throws {
+        guard let n = node else { throw Failure.unreachable }
+        try n.dismiss(id)
+        notices = (try? n.notices()) ?? notices.filter { $0.id != id }
+    }
+
+    func rootChangeSeen() { rootChanged = nil }
+
+    /// A device's name as the group's devices show it, else its ID.
+    private func name(of id: String) -> String { devices.first { $0.id == id }?.name ?? id }
+
+    func changePreview(_ recovery: RecoveryInput, leaveOut: [String]) async throws -> ChangePreview {
+        guard let n = node else { throw Failure.unreachable }
+        return try n.changePreview(recovery, leaveOut: leaveOut)
+    }
+
+    /// Moves the group's root to this phone (docs/design.md, "Changing the
+    /// root"): a new root key in the Secure Enclave behind Face ID, and the
+    /// member signs the change with the recovery key and the new root's
+    /// first records with that key.
+    func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], overWaiting: Bool) async throws {
+        guard let n = node else { throw Failure.unreachable }
+        let root = try await newRootKey(reason: String(localized: "Make this phone the group's main device", bundle: .app))
+        try n.changeRoot(recovery, leaveOut: leaveOut, rootPublic: root.publicKeyDER, overWaiting: overWaiting) { try root.signature(digest: $0) }
+        notices = (try? n.notices()) ?? notices
     }
 
     /// Keeps what the connected members' hellos and reach messages say.
@@ -512,135 +634,12 @@ final class LiveGroup: GroupController {
         try SecKeySigner(key(label: Self.memberLabel, secureEnclave: false))
     }
 
-    private func identity(_ g: PhoneGroup, _ member: SecKeySigner) throws -> SecIdentity {
-        try identity(certificate: g.memberCert, member)
-    }
-
     private func identity(certificate: Data, _ member: SecKeySigner) throws -> SecIdentity {
         KeychainIdentity.removeCertificates(label: Self.memberLabel)
         return try KeychainIdentity.identity(certificate: certificate, key: member.key, label: Self.memberLabel, storeKey: false)
     }
 
-    /// The certificates this phone sends after its own in TLS: the admin CA
-    /// that issued it, if one did.
-    private static func chain(_ g: PhoneGroup) -> [Data] { g.memberIssuer.map { [$0] } ?? [] }
-
-    // MARK: Admitting
-
-    func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws {
-        let ca = try await caSigner(reason: String(localized: "Add a computer to your group", bundle: .app))
-        let made = state == nil
-        if made {
-            // The core makes the group, and the phone's member runs before
-            // it admits: the device's record joins the member's records.
-            let member = try memberSigner()
-            let c = try CorePairing.newGroup(name: PhoneGroup.validName(UIDevice.current.name), store: Records.hardware,
-                                             rootPublic: ca.publicKeyDER, publicKey: member.publicKeyDER, seal: Self.sealKey()) {
-                try ca.signature(digest: $0)
-            }
-            let g = PhoneGroup.of(c, root: true)
-            try g.save(to: file)
-            try modeBox.newDevice()
-            forgetCredentials()
-            state = g
-            try startSync()
-            groupChanged()
-            // A group made on this phone has it as its hub from the start (D-64).
-            try? await setPhoneHub(true)
-        }
-        do {
-            try await admitWithCore(code, ca: ca, retrying: retrying)
-        } catch Failure.notConfirmed {
-            // The device may still hold its identity: the group stays.
-            throw Failure.notConfirmed
-        } catch {
-            // A first device that did not join leaves no group of one behind.
-            if made { try? await leave() }
-            throw error
-        }
-    }
-
-    /// Admits the device of code through the core's admission
-    /// (CorePairing.Admitting), dialing its addresses.
-    private func admitWithCore(_ code: JoinCode, ca: SecKeySigner, retrying: @escaping @MainActor () -> Void) async throws {
-        guard let g = state else { throw Failure.noGroup }
-        guard let node else { throw Failure.unreachable }
-        // The root makes a phone that asks to be an admin one (docs/protocol.md, section 6).
-        let admitting = try CorePairing.Admitting(member: node, qr: code.qrText, publicKey: ca.publicKeyDER, adminCA: g.adminCA,
-                                                  makeAdmin: g.isRoot) { try ca.signature(digest: $0) }
-        defer { admitting.close() }
-        var failure: Error?
-        let clock = ContinuousClock(), until = clock.now + Self.dialRetry
-        while true {
-            var answered = false
-            for addr in Self.ordered(code.addrs) {
-                try Task.checkCancellation()
-                guard let (host, port) = Self.split(addr) else { continue }
-                let connection = CorePairing.Connection(host: host, port: port, timeout: TLSTransport.connectTimeout)
-                // Closing the connection ends a pairing that takes too long or
-                // that the user cancelled: the pending read fails.
-                let deadline = Task {
-                    try await Task.sleep(for: Self.pairingDeadline)
-                    connection.close()
-                }
-                defer { deadline.cancel() }
-                do {
-                    try await connection.start()
-                } catch {
-                    connection.close()
-                    if Task.isCancelled { throw CancellationError() }
-                    failure = Self.telling(failure, error)
-                    continue
-                }
-                answered = true
-                do {
-                    let admitted = try await withTaskCancellationHandler {
-                        defer { connection.close() }
-                        return try await admitting.admit(connection)
-                    } onCancel: {
-                        connection.close()
-                    }
-                    if admitted.role != "phone", var g = state {
-                        // The address that answered goes first, for dialing when mDNS does not find the computer.
-                        g.noteComputer(device: admitted.device, name: admitted.name, os: admitted.os,
-                                       addrs: [addr] + code.addrs.filter { $0 != addr }, now: Date())
-                        try g.save(to: file)
-                        state = g
-                        groupChanged()
-                    }
-                    pullRecords()
-                    guard admitted.confirmed else { throw Failure.notConfirmed }
-                    return
-                } catch let e as CorePairing.Failure {
-                    throw e // the device answered: a wrong code is not worth another address
-                } catch Failure.notConfirmed {
-                    throw Failure.notConfirmed
-                } catch {
-                    connection.close()
-                    if Task.isCancelled { throw CancellationError() }
-                    failure = Self.telling(failure, error)
-                }
-            }
-            // No address took the connection: the device may not listen yet.
-            if answered || clock.now >= until { throw failure ?? Failure.unreachable }
-            retrying()
-            try await Task.sleep(for: Self.dialPause)
-        }
-    }
-
-    /// Of two failures on different addresses, the one that says more: an
-    /// address that answered, as with a failed handshake, over one that
-    /// did not.
-    nonisolated static func telling(_ earlier: Error?, _ later: Error) -> Error {
-        guard let earlier else { return later }
-        if case TLSTransport.Failure.timedOut = earlier, !isTimeout(later) { return later }
-        return earlier
-    }
-
-    nonisolated private static func isTimeout(_ e: Error) -> Bool {
-        if case TLSTransport.Failure.timedOut = e { return true }
-        return false
-    }
+    // MARK: Addresses
 
     /// The addresses to try, IPv4 first: a home network reaches those most
     /// surely, and each that fails costs its timeout.
@@ -651,50 +650,16 @@ final class LiveGroup: GroupController {
 
     // MARK: Inviting from afar
 
-    /// Opens a remote invitation on this phone, the group's hub
-    /// (docs/protocol.md, section 12): a guest tunnel through the hub's
-    /// forwarder and its pairing window, for one device, for lifetime
+    /// Opens a remote invitation through a hub of the group
+    /// (docs/protocol.md, section 12, "Through the hub"): the core opens the
+    /// guest tunnel on a connected hub and runs the pairing window here, the
+    /// hub passing the pairing's bytes, for one device, for lifetime
     /// seconds. ask asks the user whether to admit a device that proved it
     /// knows the secret; on yes Face ID unlocks the group's key. ended gets
     /// the admitted device's name, or why the invitation ended without one.
     func invite(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
                 ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
         guard let g = state, g.isAdmin else { throw Failure.notAdmin }
-        // A phone that is not the hub makes it through a hub of the group.
-        guard let hub, hub.isOn else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
-        guard let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
-        let guestBox = GuestBox()
-        let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)),
-                                          fromGuest: { port in guestBox.guest?.dialed(port: port) == true },
-                                          admit: { [weak self] t, joinerCert, sid in
-            guard let self, let guest = guestBox.guest else { throw HubOnPhone.Failure.notRunning }
-            return try await self.admitInvited(over: t, joinerCert: joinerCert, sessionID: sid, guest: guest, ask: ask)
-        }, onEnd: { r in
-            if case .failure = r { guestBox.guest?.close() }
-            Task { @MainActor in ended(r.map(\.info.name)) }
-        }, onError: { error in
-            hubLog.error("an attempt with the invitation failed: \(String(reflecting: error), privacy: .public)")
-        })
-        let port = try await window.start()
-        let guest: HubGuest
-        do {
-            guest = try hub.invite(group: g.tag, lifetime: lifetime, guestPort: port)
-        } catch {
-            window.close()
-            throw error
-        }
-        guestBox.guest = guest
-        return AppModel.Invitation(text: guest.text, expires: guest.expires, cancel: { window.close() })
-    }
-
-    /// Opens a remote invitation through a hub of the group, for a phone
-    /// that is not the hub (docs/protocol.md, section 12, "Through the
-    /// hub"): the core opens the guest tunnel on a connected hub and runs
-    /// the pairing window here, the hub passing the pairing's bytes. Face
-    /// ID unlocks the key when the user says yes to a device.
-    private func inviteThroughHub(lifetime: Int, ask: @escaping @MainActor (PairingMember.Request) async -> Bool,
-                                  ended: @escaping @MainActor (Result<String, Error>) -> Void) async throws -> AppModel.Invitation {
-        guard let g = state else { throw Failure.notAdmin }
         guard let node else { throw CoreMember.Failure.notConnected }
         let unlocked = UnlockedSigner()
         // The key's public half needs no Face ID; its signature does.
@@ -747,11 +712,6 @@ final class LiveGroup: GroupController {
         return true
     }
 
-    /// The guest tunnel, which the window's attempts need once it is open.
-    private final class GuestBox: @unchecked Sendable {
-        var guest: HubGuest?
-    }
-
     /// The group's key once Face ID unlocked it, after the user said yes.
     private final class UnlockedSigner: CertificateSigner, @unchecked Sendable {
         var signer: SecKeySigner?
@@ -762,208 +722,22 @@ final class LiveGroup: GroupController {
         }
     }
 
-    /// One attempt with an invitation: the device that proves the secret
-    /// and that the user confirms is admitted.
-    private func admitInvited(over t: TLSTransport, joinerCert: Data, sessionID: [UInt8], guest: HubGuest,
-                              ask: @escaping @MainActor (PairingMember.Request) async -> Bool) async throws -> PairingMember.Admitted {
-        guard var g = state else { throw Failure.notAdmin }
-        let unlocked = UnlockedSigner()
-        let reason = String(localized: "Add a computer to your group", bundle: .app)
-        let invitation = PairingMember.Invitation(secret: guest.secret) { [weak self] req in
-            // The device waits up to 5 minutes for the answer.
-            guard await ask(req), let self else { return false }
-            do {
-                let ca = try await self.caSigner(reason: reason)
-                await MainActor.run { unlocked.signer = ca }
-                return true
-            } catch {
-                return false
-            }
-        }
-        let admitted = try await g.admit(over: t, code: "", joinerCert: joinerCert, sessionID: sessionID, caSigner: unlocked,
-                                         invitation: invitation, now: Date())
-        guest.admitted()
-        try g.save(to: file)
-        state = g
-        groupChanged()
-        sendRecords(g.records.records)
-        return admitted
-    }
-
     // MARK: Joining
 
-    /// Joins another phone's group (docs/protocol.md, section 6, "The
-    /// joiner listens") through the core (CorePairing.Joining): listens,
-    /// hands show the QR code to put on screen, and waits up to five
-    /// minutes for an admin phone to scan it and admit this one, always as
-    /// a member: the root makes it an admin later with the admin key its
-    /// hellos offer (offeredAdminKey). Three wrong codes end it, as does
-    /// cancelling the task.
-    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
-        guard state == nil else { return }
-        let member = try memberSigner()
-        let listener = try CorePairing.Listener()
-        let port = try await listener.start()
-        let addrs = LocalAddresses.current().map { JoinCode.address(host: $0, port: port) }
-        guard !addrs.isEmpty else {
-            listener.stop()
-            throw Failure.noNetwork
-        }
-        let joining: CorePairing.Joining
-        do {
-            joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: addrs, sign: { try member.signature(digest: $0) })
-        } catch {
-            listener.stop()
-            throw error
-        }
-        defer { joining.close() }
-        // Announced by Bonjour while it waits, so that a computer of the
-        // group finds it by the code typed there (docs/protocol.md, section 6).
-        listener.advertise(name: joining.device, txt: Discovery.joinerTXT(fingerprint: joining.fingerprint))
-        show(JoinCode(code: joining.code, addrs: JoinCode(qr: joining.qr)?.addrs ?? addrs, fingerprint: joining.fingerprint))
-        let file = file
-        let timer = Task {
-            try await Task.sleep(for: .seconds(Self.joinWindow))
-            listener.stop()
-        }
-        defer {
-            timer.cancel()
-            listener.stop()
-        }
-        var wrong = 0
-        let joined: PhoneGroup? = try await withTaskCancellationHandler {
-            while let c = await listener.next() {
-                defer { c.close() }
-                let deadline = Task {
-                    try await Task.sleep(for: Self.pairingDeadline)
-                    c.close()
-                }
-                defer { deadline.cancel() }
-                do {
-                    var group: PhoneGroup?
-                    _ = try await joining.attempt(c) { j in
-                        let g = PhoneGroup.of(j, root: false)
-                        guard (try? g.save(to: file)) != nil else { return false }
-                        group = g
-                        return true
-                    }
-                    if let group { return group }
-                } catch let e as CorePairing.Failure where e.wrongCode {
-                    wrong += 1
-                    if wrong >= Self.joinAttempts { throw Failure.tooManyWrongCodes }
-                } catch {
-                    continue // another device, or a dropped connection: the code is not spent
-                }
-            }
-            return nil
-        } onCancel: {
-            listener.stop()
-        }
-        guard let joined else {
-            if Task.isCancelled { throw CancellationError() }
-            throw Failure.timedOut
-        }
-        try modeBox.newDevice()
-        forgetCredentials()
-        state = joined
-        try startSync()
-    }
-
-    /// Joins a group from afar by a remote invitation's text
-    /// (docs/protocol.md, section 12), which the user scanned, opened or
-    /// pasted and accepted: the core starts the invitation's guest tunnel,
-    /// the phone dials it and proves the invitation's secret, and the hub's
-    /// admin admits it by the fingerprint shown hands it. Sync away from
-    /// home goes on, and the phone offers its tunnel key to the hub through
-    /// the guest tunnel until the hub answers.
+    /// Joins a group of 0.6 from afar by a remote invitation's text
+    /// (docs/protocol.md, section 12): this phone dials the hub through the
+    /// invitation's guest tunnel and shows its fingerprint (shown) for the
+    /// inviting admin to compare; once admitted, the member starts on the
+    /// group it keeps and reaches the hub through that tunnel until the
+    /// hub's offer comes.
     func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws {
         guard state == nil else { return }
-        guard case .invitation(let inv) = try Core.readInvite(text) else { throw Failure.noGroup }
         let member = try memberSigner()
-        let joining = try CorePairing.Joining(name: PhoneGroup.validName(UIDevice.current.name), publicKey: member.publicKeyDER,
-                                              seal: Self.sealKey(), addrs: [], sign: { try member.signature(digest: $0) }, invite: text)
-        defer { joining.close() }
-        shown(joining.fingerprint)
-        let file = file
-        var joined: PhoneGroup?
-        var failure: Error?
-        for attempt in 0..<Self.inviteAttempts where joined == nil {
-            try Task.checkCancellation()
-            if attempt > 0 { try await Task.sleep(for: Self.dialPause) }
-            let c = CorePairing.Connection(host: "127.0.0.1", port: joining.port, timeout: TLSTransport.connectTimeout)
-            // The admin has up to 5 minutes to confirm the device.
-            let deadline = Task {
-                try await Task.sleep(for: Self.inviteDeadline)
-                c.close()
-            }
-            defer {
-                deadline.cancel()
-                c.close()
-            }
-            do {
-                try await c.start()
-                _ = try await joining.attempt(c) { j in
-                    let g = PhoneGroup.of(j, root: false)
-                    guard (try? g.save(to: file)) != nil else { return false }
-                    joined = g
-                    return true
-                }
-            } catch let e as CorePairing.Failure {
-                // The admin declined, or the secret was refused: no retry.
-                throw e
-            } catch {
-                if Task.isCancelled { throw CancellationError() }
-                failure = error
-            }
-        }
-        guard let joined else {
-            if !joining.answered { throw Failure.hubUnreachable }
-            throw failure ?? Failure.unreachable
-        }
-        try? InviteKeychain.save(InviteGuest(invite: text.trimmingCharacters(in: .whitespacesAndNewlines), hub: inv.hub, joined: Date()))
-        try modeBox.newDevice()
-        forgetCredentials()
-        state = joined
-        try startSync()
-        try await setAwayFromHome(true)
-    }
-
-    /// How many times joinByInvite dials the guest tunnel, and how long one
-    /// attempt may take with the admin's confirmation.
-    static let inviteAttempts = 5
-    static let inviteDeadline: Duration = .seconds(360)
-    /// How long the hub keeps the guest of the invitation this phone joined
-    /// by, as the core's guest grace.
-    static let guestGrace: TimeInterval = 24 * 3600
-
-    /// Offers this phone's tunnel key to the hub of the invitation it
-    /// joined by, through the invitation's guest tunnel, until the hub's
-    /// offer comes or a day passed: the hello offers the key, and the hub
-    /// answers with its offer on that connection.
-    private func offerThroughGuest(node: CoreMember, away: AwayFromHome) async {
-        while !Task.isCancelled {
-            guard let saved = InviteKeychain.load() else { return }
-            let hub = await away.hub
-            if Date().timeIntervalSince(saved.joined) > Self.guestGrace || hub != nil {
-                try? InviteKeychain.save(nil)
-                return
-            }
-            do {
-                let t = try RustTunnels().guest(invite: saved.invite)
-                defer { t.close() }
-                let link = try await Self.reach(node, key: "invite", port: t.port, device: saved.hub)
-                defer { link.close() }
-                let until = ContinuousClock.now + .seconds(60)
-                while (await away.hub) == nil, ContinuousClock.now < until, !Task.isCancelled {
-                    try await Task.sleep(for: .milliseconds(500))
-                }
-                if (await away.hub) != nil { awayLog.info("the invitation's hub took this phone's key") }
-            } catch {
-                awayLog.error("offering this phone's key through the invitation's guest tunnel: \(String(reflecting: error), privacy: .public)")
-            }
-            try? await Task.sleep(for: .seconds(15))
-        }
+        try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
+        let j = try CorePairing.Joiner(dir: memberDir, qr: "", invite: text, name: PhoneGroup.validName(UIDevice.current.name),
+                                       os: "ios", publicKey: member.publicKeyDER) { try member.signature(digest: $0) }
+        shown(j.fingerprint)
+        try await follow(j, invite: true)
     }
 
     /// Joins a computer's group (docs/protocol.md, section 6, "A phone joins
@@ -1012,169 +786,6 @@ final class LiveGroup: GroupController {
         try startSync()
     }
 
-    /// Restores the group on this new phone with its recovery key, read
-    /// from the QR code of the sheet (docs/protocol.md, section 10, "The
-    /// recovery key"): finds the group's computers by Bonjour (the sheet's
-    /// tag), takes and checks the records from one on a connection that
-    /// carries records only, starts its member in the Rust core, makes a new
-    /// root key in the Secure Enclave, and the member claims the group with
-    /// the recovery key and sends the claim. The phone is then a member of
-    /// the group whose claim waits the group's delay, unless the root phone
-    /// cancels it; finishTakeOverIfDue then makes it the root. The recovery
-    /// key is not kept.
-    func restore(sheet: Core.RecoveredKey) async throws {
-        guard state == nil else { return }
-        guard let tag = sheet.group else { throw Restore.Failure(kind: .needsQR, message: Restore.needsQRMessage) }
-        guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
-        let computers = try await findComputers(tag: tag)
-        let member = try memberSigner()
-        let r = try Restore(key: sheet, memberKey: member.publicKeyDER, now: Date())
-        let id = try identity(certificate: r.memberCert, member)
-        let name = PhoneGroup.validName(UIDevice.current.name)
-        func dial(_ endpoint: NWEndpoint) async throws -> TLSTransport {
-            // The handshake takes any certificate; Restore.group checks the computer's against the records.
-            let t = TLSTransport(endpoint: endpoint, alpn: Member.alpn, identity: id, chain: [r.adminCA]) { !$0.isEmpty }
-            try await t.start()
-            return t
-        }
-        var last: Error = Failure.noGroupComputer
-        for endpoint in computers {
-            var g: PhoneGroup
-            do {
-                g = try r.group(try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date()), now: Date())
-            } catch let e as Restore.Failure where e.kind == .notTheKey {
-                throw e
-            } catch {
-                // Another group's computer, or one that does not answer: the next may.
-                last = error
-                continue
-            }
-            try g.save(to: file)
-            try modeBox.newDevice()
-            forgetCredentials()
-            state = g
-            // The core's member, as this new phone, signs the claim with the recovery key.
-            try startSync()
-            guard let n = node else { throw Failure.unreachable }
-            let root = try await newRootKey(reason: String(localized: "Restore the group with its recovery key", bundle: .app))
-            let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
-            guard var claimed = state else { return }
-            try r.claim(&claimed, member: n, newRoot: newRoot)
-            try keepTakeover(&claimed, n)
-            // The member sends the claim once it connects; a records-only connection takes it out at once.
-            if let claim = claimed.claimRecord(in: try n.records()) {
-                do {
-                    _ = try await Restore.exchange(try await dial(endpoint), name: name, os: "ios", now: Date(), send: [claim])
-                } catch {
-                    keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
-                }
-            }
-            return
-        }
-        throw last
-    }
-
-    /// Restores the group on this new phone with the recovery key on a
-    /// YubiKey (docs/protocol.md, section 10, "On a hardware key"): the
-    /// card, held once, issues this phone's member certificate from each
-    /// slot whose certificate is an admin CA; the phone finds the computers
-    /// by Bonjour, takes and checks the records from one, makes a new root
-    /// key, and the card, held again, signs the claim through the member. A
-    /// YubiKey carries no group tag, so the records say which group it is.
-    func restoreWithCard(pin: String) async throws {
-        guard state == nil else { return }
-        guard !LocalAddresses.current().isEmpty else { throw Failure.noNetwork }
-        let member = try memberSigner()
-        let memberKey = member.publicKeyDER
-        // One Restore for each key the card holds.
-        let restores = try await YubiKeyNfc.withCard(
-            prompt: String(localized: "Hold the YubiKey with the recovery key to the top of the phone.", bundle: .app),
-            done: String(localized: "Looking for the group's computers…", bundle: .app)
-        ) { (card: SmartCard) throws -> [(restore: Restore, slot: UInt8)] in
-            try Piv.select(card)
-            let keys = try Piv.recoveryKeys(card)
-            guard !keys.isEmpty else { throw Piv.Failure(kind: .noKey, message: "this YubiKey holds no recovery key") }
-            return try keys.map { (k: (slot: UInt8, cert: Data)) throws -> (restore: Restore, slot: UInt8) in
-                let signer = Piv.Signer(card: card, slot: k.slot, publicKeyDER: try CertificateInfo(der: k.cert).publicKey, pin: pin)
-                return (restore: try Restore(card: signer, adminCA: k.cert, memberKey: memberKey, now: Date()), slot: k.slot)
-            }
-        }
-        let computers = try await findComputers(tag: nil)
-        let name = PhoneGroup.validName(UIDevice.current.name)
-        func dial(_ endpoint: NWEndpoint, _ r: Restore) async throws -> TLSTransport {
-            // The handshake takes any certificate; Restore.group checks the computer's against the records.
-            let t = TLSTransport(endpoint: endpoint, alpn: Member.alpn, identity: try identity(certificate: r.memberCert, member),
-                                 chain: [r.adminCA]) { !$0.isEmpty }
-            try await t.start()
-            return t
-        }
-        var last: Error = Failure.noGroupComputer
-        for endpoint in computers {
-            for (r, slot) in restores {
-                var g: PhoneGroup
-                do {
-                    g = try r.group(try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date()), now: Date())
-                } catch {
-                    // Another group's computer, a key of another group, or one that does not answer: the next may fit.
-                    last = error
-                    continue
-                }
-                try g.save(to: file)
-                try modeBox.newDevice()
-                forgetCredentials()
-                state = g
-                // The core's member, as this new phone, signs the claim with the key on the card.
-                try startSync()
-                guard let n = node else { throw Failure.unreachable }
-                let root = try await newRootKey(reason: String(localized: "Restore the group with its recovery key", bundle: .app))
-                let newRoot = try n.rootCA(public: root.publicKeyDER) { try root.signature(digest: $0) }
-                let adminKey = try CertificateInfo(der: r.adminCA).publicKey
-                guard let found = state else { return }
-                var claimed = try await YubiKeyNfc.withCard(
-                    prompt: String(localized: "Hold the YubiKey again to sign the claim.", bundle: .app),
-                    done: String(localized: "The claim is signed.", bundle: .app)
-                ) { (card: SmartCard) throws -> PhoneGroup in
-                    var g = found
-                    try Piv.select(card)
-                    try r.claim(&g, member: n, newRoot: newRoot, with: Piv.Signer(card: card, slot: slot, publicKeyDER: adminKey, pin: pin))
-                    return g
-                }
-                try keepTakeover(&claimed, n)
-                // The member sends the claim once it connects; a records-only connection takes it out at once.
-                if let claim = claimed.claimRecord(in: try n.records()) {
-                    do {
-                        _ = try await Restore.exchange(try await dial(endpoint, r), name: name, os: "ios", now: Date(), send: [claim])
-                    } catch {
-                        keysLog.notice("sending the claim; sync sends it later: \(String(describing: error), privacy: .public)")
-                    }
-                }
-                return
-            }
-        }
-        throw last
-    }
-
-    /// The endpoints of the computers of the group with tag, or of any
-    /// group without one, that Bonjour finds within browseFor seconds.
-    private func findComputers(tag: String?) async throws -> [NWEndpoint] {
-        let members = OSAllocatedUnfairLock<Set<String>>(initialState: [])
-        let b = BonjourBrowser { found in
-            members.withLock { $0 = Set(found.filter { $0.group != nil && (tag == nil || $0.group == tag) }.map(\.device)) }
-        }
-        b.start()
-        defer { b.stop() }
-        let deadline = Date().addingTimeInterval(Self.browseFor)
-        while members.withLock({ $0.isEmpty }) {
-            guard Date() < deadline else { throw Failure.noGroupComputer }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        // The others that answer a moment later.
-        try await Task.sleep(for: .seconds(Self.pairingSettle))
-        let found = members.withLock { $0 }.compactMap(b.endpoint(of:))
-        guard !found.isEmpty else { throw Failure.noGroupComputer }
-        return found
-    }
-
     /// The endpoint of the one computer announcing a pairing window; see
     /// joinComputer.
     private func findWindow() async throws -> NWEndpoint {
@@ -1192,6 +803,31 @@ final class LiveGroup: GroupController {
         guard found.count == 1 else { throw found.isEmpty ? Failure.noWindow : Failure.twoWindows }
         guard let endpoint = found.first.flatMap(b.endpoint(of:)) else { throw Failure.noWindow }
         return endpoint
+    }
+
+    /// The QR code text of the one home window Bonjour finds (p=1 with its
+    /// ID and key hash), with the six digits the person typed from its
+    /// screen. The app browses itself: the core's own mDNS would need the
+    /// multicast entitlement.
+    private func findHomeWindow(digits: String) async throws -> String {
+        let windows = OSAllocatedUnfairLock<Set<FoundMember>>(initialState: [])
+        let b = BonjourBrowser { found in
+            windows.withLock { $0 = found.filter { $0.pairing && $0.windowID != nil && $0.fingerprint != nil } }
+        }
+        b.start()
+        defer { b.stop() }
+        let deadline = Date().addingTimeInterval(Self.browseFor)
+        while windows.withLock({ $0.isEmpty }) {
+            guard Date() < deadline else { throw Failure.noWindow }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try await Task.sleep(for: .seconds(Self.pairingSettle))
+        let found = windows.withLock { $0 }
+        guard found.count == 1, let w = found.first, let id = w.windowID, let fp = w.fingerprint else {
+            throw found.isEmpty ? Failure.noWindow : Failure.twoWindows
+        }
+        guard let address = await b.addresses(of: w.device).first else { throw Failure.noWindow }
+        return Discovery.windowLink(address: address, fingerprint: fp, id: id, digits: digits.filter { $0.isASCII && $0.isNumber })
     }
 
     // MARK: Removing
@@ -1236,13 +872,9 @@ final class LiveGroup: GroupController {
             if !others.isEmpty { throw Failure.rootLeaves(others) }
         }
         await hubDone()
-        stopHub()
-        stopRelay()
-        (hub, blindRelay) = (nil, nil)
-        await away?.stop()
+        stopHome()
         stopNode()
         credentialBox = nil
-        memberIdentity = nil
         forgetCredentials()
         for label in [Self.caLabel, Self.adminLabel, Self.memberLabel] {
             KeychainIdentity.removeKey(label: label)
@@ -1250,10 +882,6 @@ final class LiveGroup: GroupController {
             KeychainIdentity.removeCertificates(label: label)
         }
         SealKey.remove()
-        try? AwayKeychain.save(nil)
-        try? InviteKeychain.save(nil)
-        try? HubKeychain.save(nil)
-        try? RelayKeychain.save(nil)
         let dir = file.deletingLastPathComponent()
         entries.remove()
         for url in [file, credentialsURL, dir.appendingPathComponent("attest-status"), memberDir] {
@@ -1579,9 +1207,8 @@ final class LiveGroup: GroupController {
 
     /// Makes this phone the group's root once its claim took effect: the
     /// core's member signs, with the new root key, this phone's certificate
-    /// from the new root and what a new root starts with, and the phone
-    /// becomes the hub when the lost phone was (docs/design.md, "Losing the
-    /// phone"). The member says where the claim stands without Face ID,
+    /// from the new root and what a new root starts with (docs/design.md,
+    /// "Losing the phone"). The member says where the claim stands without Face ID,
     /// since it signs nothing while the claim waits; a claim that was
     /// cancelled or became void is dropped, one that still waits stays.
     private func finishTakeOverIfDue() async {
@@ -1616,11 +1243,7 @@ final class LiveGroup: GroupController {
             state = g
             groupChanged()
             if let lost { try? n.disconnect(lost) }
-            if let lost, await away?.hub == lost {
-                try await setPhoneHub(true)
-            } else {
-                await restartSync()
-            }
+            await restartSync()
         } catch {
             keysLog.error("finishing the takeover: \(String(describing: error), privacy: .public)")
         }
@@ -1654,8 +1277,6 @@ final class LiveGroup: GroupController {
     private func forgetCredentials() {
         try? FileManager.default.removeItem(at: credentialsURL)
         periodKeys.clear()
-        blindRelay?.setCredentials(nil)
-        hub?.setCredentials(nil)
     }
 
     /// Brings the group's server credentials up to date as far as this
@@ -1669,8 +1290,6 @@ final class LiveGroup: GroupController {
         let root: (() -> CertificateSigner?)? = state?.isRoot == true ? { renewer?.signer() } : nil
         let signed = box.refresh(member: member, keys: periodKeys, rootSigner: root)
         if !signed.isEmpty { _ = try? node.sendCredentials(signed) }
-        blindRelay?.setCredentials(box.relayCredentials(keys: periodKeys))
-        hub?.setCredentials(box.hubCredentials(keys: periodKeys))
     }
 
     /// Passes a changed group to the parts that run with it.
@@ -1682,7 +1301,6 @@ final class LiveGroup: GroupController {
         admins?.group = g
         relay?.allowed = Self.allowed(g)
         relay?.addresses = g.addresses
-        hubRecords(g)
     }
 
     /// The devices the phone dials: those in the list. A phone that joined
@@ -1708,7 +1326,6 @@ final class LiveGroup: GroupController {
         relay?.allowed = Self.allowed(g)
         credentialBox?.group = g
         refreshCredentials()
-        hubRecords(g)
         if g.roots != roots { Task { await restartSync() } }
     }
 
@@ -1723,7 +1340,6 @@ final class LiveGroup: GroupController {
     private func startSync() throws {
         guard let g = state, node == nil else { return }
         let signer = try memberSigner()
-        let id = try identity(g, signer)
         try FileManager.default.createDirectory(at: memberDir, withIntermediateDirectories: true)
         Self.moveEntries(from: file.deletingLastPathComponent(), to: memberDir)
         let node = try CoreMember(.init(dir: memberDir, name: UIDevice.current.name, osVersion: Self.ownDevice.osVersion ?? "",
@@ -1742,61 +1358,49 @@ final class LiveGroup: GroupController {
         // The root sends a computer it made an admin its admin CA again
         // when the computer still offers the key.
         let admins = AdminBox(group: g)
-        // Sync away from home: the hellos offer the tunnel key while it is
-        // on, and the hubs' offers go to AwayFromHome. The phone as the hub
-        // answers the tunnel keys of the hellos, shares its clients with the
-        // group's other hubs and passes their offers on; it is no client
-        // itself (D-64; docs/protocol.md, section 11, "Several hubs").
-        let awayState = AwayKeychain.load()
-        let hub = HubOnPhone(device: g.device, tunnels: RustHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
-                             log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
-        let isHub = g.isAdmin && hub.isOn
-        if !isHub, let s = awayState, let key = try? RustTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
+        // A phone in a group of 0.5 syncs at home only (D-123); on a group
+        // of 0.6 the Live member runs sync away from home, the hub and the
+        // relay itself (AwayOn06).
         let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
-        // Through the tunnel the phone dials the hub's member port at its
-        // loopback port, with the same TLS as at home, and only while the
-        // hub is not found here.
-        let away = AwayFromHome(
-            device: g.device, tunnels: RustTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
-            atHome: { hub in await relay.atHome(hub) },
-            dial: { port, hub in try await Self.reach(node, key: "away", port: port, device: hub) },
-            serve: { link, _ in try await (link as? Link)?.served() },
-            mayHost: { box.mayHost($0) },
-            order: { box.hubOrder },
-            log: { what, error in awayLog.error("\(what, privacy: .public): \(String(reflecting: error), privacy: .public)") },
-            isPhone: { box.isPhone($0) })
-        // At a blind relay the phone dials the device the relay joined at
-        // the relay link's loopback port, while it is not found here.
-        let blindRelay = RelayOnPhone(
-            device: g.device, links: RustRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
-            dial: { port, peer in try await Self.reach(node, key: "relay:\(peer)", port: port, device: peer) },
-            serve: { link, _ in try await (link as? Link)?.served() },
-            elsewhere: { relay.found($0) },
-            log: { what, error in relayLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
         let browser = BonjourBrowser(log: { browseLog.notice("\($0, privacy: .public)") }) { found in relay.update(found) }
         relay.attach(node: node, browser: browser)
         // The computers at known addresses are dialed even while browsing finds nothing.
         relay.addresses = g.addresses
         browser.start()
-        (self.node, self.browser, self.relay, recordBox, self.renewer, self.admins, self.away) = (node, browser, relay, box, renewer, admins, away)
-        (self.hub, self.blindRelay, memberIdentity, credentialBox) = (hub, blindRelay, id, credentials)
-        let handler = Handler(node: node, box: box, renewer: renewer, admins: admins, hub: isHub ? hub : nil, credentials: credentials,
+        (self.node, self.browser, self.relay, recordBox, self.renewer, self.admins) = (node, browser, relay, box, renewer, admins)
+        credentialBox = credentials
+        let handler = Handler(node: node, box: box, renewer: renewer, admins: admins, credentials: credentials,
                               modeBox: modeBox, device: g.device)
-        handler.away = away
-        handler.blindRelay = blindRelay
         events = Task { @MainActor [weak self] in
             for await e in node.events {
                 handler.handle(e)
                 self?.handled(e)
             }
         }
-        Task { await away.start() }
-        guestTask?.cancel()
-        guestTask = Task { [weak self] in await self?.offerThroughGuest(node: node, away: away) }
         if background { try? node.pause() }
+        if g.isV06 {
+            // Push: the member sends the group's registration to every
+            // member it connects to.
+            PushSetup.shared.sink = { [weak self] frame in
+                guard let self, self.isV06, let node = self.node else { return }
+                do { try node.setPush(frame) } catch {
+                    modeLog.error("handing the member the push registration: \(String(reflecting: error), privacy: .public)")
+                }
+            }
+            try? node.setPush(PushSetup.shared.frame())
+        }
         refreshHub()
         refreshCredentials()
+    }
+
+    /// The group's face toward the push service and each `push-renew`
+    /// members sent, from the member of 0.6: the group registers with the
+    /// face, and again for each renewal.
+    private func takePush() {
+        guard isV06, let node else { return }
+        PushSetup.shared.face(try? node.pushFace())
+        for r in (try? node.pushRenewals()) ?? [] { PushSetup.shared.renew(slot: r.slot, ahead: r.ahead) }
     }
 
     /// The entry points an earlier version kept beside the group's file go
@@ -1808,72 +1412,21 @@ final class LiveGroup: GroupController {
         try? FileManager.default.removeItem(at: old)
     }
 
-    /// A connection the member made at a loopback port (the tunnel's, the
-    /// relay link's), as AwayFromHome and RelayOnPhone serve one: it lasts
-    /// while the member is connected to the device, and closing it stops the
-    /// dialing.
-    final class Link: ClosableTransport, @unchecked Sendable {
-        let node: CoreMember
-        let key: String
-        let device: String
-        private let lock = NSLock()
-        private var closed = false
-
-        init(node: CoreMember, key: String, device: String) { (self.node, self.key, self.device) = (node, key, device) }
-
-        /// Returns once the connection ended or was closed.
-        func served() async throws {
-            while !lock.withLock({ closed }), node.connected().contains(device) {
-                try await Task.sleep(for: .milliseconds(500))
-            }
-            close()
-        }
-
-        func close() {
-            guard lock.withLock({ () -> Bool in defer { closed = true }; return !closed }) else { return }
-            try? node.lost(key)
-        }
-
-        enum Failure: Error { case notAStream }
-        func write(_ data: Data) async throws { throw Failure.notAStream }
-        func read(exactly n: Int) async throws -> Data { throw Failure.notAStream }
-    }
-
-    /// Hands the member the loopback port as the device key leads there and
-    /// waits up to 10 s for it to connect.
-    nonisolated static func reach(_ node: CoreMember, key: String, port: UInt16, device: String) async throws -> ClosableTransport {
-        try node.found(key, addrs: ["127.0.0.1:\(port)"], device: device)
-        let link = Link(node: node, key: key, device: device)
-        let deadline = ContinuousClock.now + .seconds(10)
-        while !node.connected().contains(device) {
-            guard ContinuousClock.now < deadline else {
-                link.close()
-                throw TLSTransport.Failure.timedOut
-            }
-            try await Task.sleep(for: .milliseconds(200))
-        }
-        return link
-    }
-
     /// What the member's events ask of the group, off the main actor's
-    /// state: the parts that answer at once (renewals, admin CAs, the hub's
-    /// offers, credentials, commands for this phone).
+    /// state: the parts that answer at once (renewals, admin CAs,
+    /// credentials, commands for this phone).
     final class Handler: @unchecked Sendable {
         let node: CoreMember
         let box: RecordBox
         let renewer: Renewer
         let admins: AdminBox
-        /// The phone as the hub, while it is one.
-        let hub: HubOnPhone?
         let credentials: CredentialBox
         let modeBox: ModeBox
         let device: String
-        var away: AwayFromHome?
-        var blindRelay: RelayOnPhone?
 
-        init(node: CoreMember, box: RecordBox, renewer: Renewer, admins: AdminBox, hub: HubOnPhone?, credentials: CredentialBox,
+        init(node: CoreMember, box: RecordBox, renewer: Renewer, admins: AdminBox, credentials: CredentialBox,
              modeBox: ModeBox, device: String) {
-            (self.node, self.box, self.renewer, self.admins, self.hub) = (node, box, renewer, admins, hub)
+            (self.node, self.box, self.renewer, self.admins) = (node, box, renewer, admins)
             (self.credentials, self.modeBox, self.device) = (credentials, modeBox, device)
         }
 
@@ -1881,34 +1434,14 @@ final class LiveGroup: GroupController {
             switch e {
             case let .peer(p):
                 answer(p)
-            case let .tunnel(from, offer):
-                // A hub is no client: it gets the other hubs' offers in their shares.
-                guard hub == nil, offer.isValid, box.mayHost(from) else { return }
-                Task { await away?.keep(from: from, offer: offer) }
-            case let .message(from, .hubs(share)):
-                // The member took it only from a device that may be a hub, by its chain.
-                guard box.mayHost(from) else { return }
-                guard let hub else {
-                    // A client keeps the sharing hub's offer with its own preshared key, as any hub's.
-                    guard let o = share.offer, let away else { return }
-                    Task {
-                        guard let psk = await away.psk else { return }
-                        await away.keep(from: from, offer: o.with(psk: psk, hub: nil))
-                    }
-                    return
-                }
-                guard hub.shared(from: from, share, known: { self.box.knows($0) }) else { return }
-                for p in (try? node.peers()) ?? [] {
-                    for o in hub.offers(for: p.device, order: box.hubOrder) { _ = try? node.sendTunnel(to: p.device, offer: o) }
-                }
             case let .message(from, .credentials(cs)):
                 guard !cs.isEmpty, cs.count <= ServerCredentials.maxCredentials else { return }
                 let fresh = credentials.add(cs)
                 // New ones go on to the others, not back to the sender.
                 if !fresh.isEmpty { _ = try? node.sendCredentials(fresh, except: from) }
-            case let .caller(token, port, _):
-                // The device the relay said calls from that loopback port, once.
-                try? node.caller(token, device: blindRelay?.caller(port: port))
+            case let .caller(token, _, _):
+                // A phone in a group of 0.5 takes no relay's calls (D-123).
+                try? node.caller(token, device: nil)
             case let .command(token, from, c):
                 command(token, from: from, c)
             default:
@@ -1916,10 +1449,8 @@ final class LiveGroup: GroupController {
             }
         }
 
-        /// Answers a peer's hello: renews its certificate when it is due,
-        /// sends a computer this root made an admin its admin CA again, and
-        /// on the hub answers its tunnel key with offers and shares the hub's
-        /// clients with it.
+        /// Answers a peer's hello: renews its certificate when it is due and
+        /// sends a computer this root made an admin its admin CA again.
         private func answer(_ p: CoreMember.Peer) {
             guard !p.recordsOnly else { return }
             if !p.chain.isEmpty, let renewed = renewer.renew(p.chain) {
@@ -1928,28 +1459,9 @@ final class LiveGroup: GroupController {
             if let key = p.adminKey, let ca = admins.group.computerAdminCA(for: key) {
                 _ = try? node.sendAdminCA(to: p.device, ca: ca)
             }
-            if let hub, !p.chain.isEmpty {
-                if let key = p.tunnelKey {
-                    let psk = p.tunnelPSK.flatMap { $0.count == 32 ? $0 : nil }
-                    // A client admitted now is shared with the other hubs at
-                    // once, so that it reaches them when this phone is off.
-                    let offers = hub.offers(device: p.device, key: key, psk: psk, order: box.hubOrder, admitted: { [self] in shareWithHubs(hub) })
-                    for o in offers { _ = try? node.sendTunnel(to: p.device, offer: o) }
-                }
-                if box.mayHost(p.device, chain: p.chain), let share = hub.share() { _ = try? node.sendHubs(share, to: p.device) }
-            }
             // The credentials kept go to this peer, after its hello.
             let all = credentials.all
             if !all.isEmpty { _ = try? node.sendCredentials(all, to: p.device) }
-        }
-
-        /// Shares the hub's clients with each connected peer that may be a
-        /// hub, by its chain.
-        private func shareWithHubs(_ hub: HubOnPhone) {
-            guard let share = hub.share() else { return }
-            for p in (try? node.peers()) ?? [] where box.mayHost(p.device, chain: p.chain) {
-                _ = try? node.sendHubs(share, to: p.device)
-            }
         }
 
         /// Carries out a command for this phone and answers it; what it
@@ -1991,6 +1503,12 @@ final class LiveGroup: GroupController {
             take(peers: (try? node?.peers()) ?? [])
             pullRecords()
             syncedSoon()
+            // A member sends the entry points and any push-renew for this
+            // phone right after the connection.
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                self?.takePush()
+            }
         case let .message(from, .admin(ca)):
             Task { await adminCAReceived(ca, from: from) }
         case let .message(from, .evidence(ev)):
@@ -2012,6 +1530,13 @@ final class LiveGroup: GroupController {
             // shows it.
             try? modeBox.setMute(muted ? (forMS > 0 ? Int64(Date().timeIntervalSince1970 * 1000) + forMS : 0) : nil)
             modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
+        case let .sync(off, by):
+            // The member of 0.6 carried out an admin's sync mode and keeps
+            // it; the phone shows it.
+            do { try modeBox.setSync(on: !off) } catch {
+                modeLog.error("cannot save the sync mode: \(String(reflecting: error), privacy: .public)")
+            }
+            modeLog.notice("\(by, privacy: .public) turned sync \(off ? "off" : "on", privacy: .public) on this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
             recentLog.append(line)
@@ -2025,6 +1550,12 @@ final class LiveGroup: GroupController {
             // The core kept the certificate an admin renewed for this phone;
             // the app renews its own (renewOwnCertificate) and keeps that.
             syncLog.notice("the member got a renewed certificate or a new root")
+        case let .rootChanged(from, to, seq):
+            // Every device shows it, and nobody turns it off.
+            rootChanged = AppModel.RootChange(from: name(of: from), to: name(of: to), seq: seq)
+            Task { await refresh() }
+        case .state, .notice:
+            Task { await refresh() }
         default:
             break
         }
@@ -2033,10 +1564,7 @@ final class LiveGroup: GroupController {
     /// Stops syncing and starts again, with a renewed certificate.
     private func restartSync() async {
         await hubDone()
-        stopHub()
-        stopRelay()
-        (hub, blindRelay) = (nil, nil)
-        await away?.stop()
+        stopHome()
         stopNode()
         credentialBox = nil
         try? startSync()
@@ -2045,143 +1573,27 @@ final class LiveGroup: GroupController {
     /// Stops the member, its events and the browsing.
     private func stopNode() {
         events?.cancel()
-        guestTask?.cancel()
-        guestTask = nil
         browser?.stop()
         node?.stop()
-        (node, events, browser, relay, recordBox, renewer, admins, away) = (nil, nil, nil, nil, nil, nil, nil, nil)
+        (node, events, browser, relay, recordBox, renewer, admins) = (nil, nil, nil, nil, nil, nil, nil)
         publisher?.stop()
-        (publisher, tunnelPort, homePort, relayPort) = (nil, nil, nil, nil)
+        (publisher, homePort) = (nil, nil)
     }
 
     // MARK: The phone as the hub
 
     /// The phone as the group's hub as Settings shows it: nil without a
-    /// group, or on a phone that is no admin, which cannot be the hub.
+    /// group, on a phone that is no admin, which cannot be the hub, and in
+    /// a group of 0.5, where a phone is no hub (D-123). The forwarder is
+    /// the one the group's root set.
     func hubStatus() async -> AppModel.Hub? {
-        guard let hub, state?.isAdmin == true else { return nil }
-        let (status, error) = hub.status(paused: !foreground)
-        var h = AppModel.Hub(on: hub.isOn, status: status, error: error, forwarder: hub.forwarder,
-                             home: hub.isHome(network), clients: hub.clients.count, disguise: hub.disguise)
-        h.entriesStale = status == .failed && hub.forwarder?.isProject == true && entries.current == nil
-        // The computers show without a forwarder too, so that the user sees
-        // where the hub can go; Settings asks for the forwarder first.
-        if hub.isOn {
-            let movable = computers.filter { $0.online && !$0.throughHub && $0.can("hub") && ($0.admin || $0.canMakeAdmin) }
-            h.computers = movable.map { .init(id: $0.id, name: $0.name) }
-            if !UserDefaults.standard.bool(forKey: Self.keepsPhoneHubKey),
-               let s = movable.first(where: { Self.alwaysOn.contains($0.device?.form ?? "") }) {
-                h.suggested = .init(id: s.id, name: s.name)
-            }
-        }
+        guard isV06, state?.isAdmin == true else { return nil }
+        let a = awayState06, p = hub06, byRoot = rootForwarder06
+        let (status, error) = AwayOn06.hubStatus(p, a, paused: !foreground, forwarder: byRoot != nil)
+        var h = AppModel.Hub(on: p.on, status: status, error: error, forwarder: byRoot.map { .init(endpoint: $0.endpoint, pin: $0.key) },
+                             home: p.isHome(network), clients: a?.clients ?? 0, disguise: p.hides)
+        h.entriesStale = status == .failed && a?.forwarder?.entriesStale == true
         return h
-    }
-
-    /// The default that records the user's choice to keep this phone as
-    /// the hub when the app suggested a computer (docs/design.md, "Moving
-    /// the hub to a computer").
-    static let keepsPhoneHubKey = "KeepsPhoneHub"
-
-    /// The longest the old hub waits for its clients' connections to end
-    /// after it passed the new hub's offer on.
-    static let moveGrace: Duration = .seconds(10)
-
-    /// The forms of devices that are always on, as their hellos state them.
-    private static let alwaysOn: Set<String> = ["desktop", "server", "board", "router"]
-
-    /// Makes a connected admin computer the group's hub in place of this
-    /// phone (docs/protocol.md, section 11, "Moving the hub"): a hub command
-    /// signed with this phone's root or admin key after Face ID hands it the
-    /// clients' keys and the forwarder; the clients connected now get its
-    /// offer from this phone, which then stops being the hub and becomes
-    /// its client. A computer that is no admin yet becomes one first, on
-    /// the root.
-    func moveHub(to id: String) async throws {
-        guard let hub, hub.isOn, let fw = hub.forwarder else { throw HubOnPhone.Failure.notRunning }
-        guard let node else { throw CoreMember.Failure.notConnected }
-        if state?.records.mayHost(id) != true { try await makeAdmin(id, allowFileKey: false) }
-        let ca = try await caSigner(reason: String(localized: "Move the hub to a computer", bundle: .app))
-        guard let g = state, let away else { return }
-        // This phone is the new hub's client from now on, with a key of its own.
-        let wasOn = await away.isOn
-        if !wasOn { try await away.turnOn() }
-        guard let key = await away.publicKey, let psk = await away.psk else { throw HubOnPhone.Failure.notRunning }
-        let clients = hub.handover + [PhoneHub.Client(device: g.device, key: key, psk: psk)]
-        let offer: Member.TunnelOffer
-        do {
-            let c = try g.hubCommand(to: id, forwarder: (fw.endpoint, fw.pin), clients: clients, caSigner: ca, now: Date())
-            let r = try await node.command(c, timeout: .seconds(20))
-            guard r.done, let o = r.tunnel else { throw CommandRefused(reason: r.reason ?? r.status) }
-            offer = o
-        } catch {
-            if !wasOn { try? await away.turnOff() }
-            throw error
-        }
-        var sent: [String] = []
-        for p in (try? node.peers()) ?? [] {
-            if let o = hub.movedOffer(device: p.device, newHub: id, offer: offer), (try? node.sendTunnel(to: p.device, offer: o)) == true {
-                sent.append(p.device)
-            }
-        }
-        // The clients that came through the tunnel get the offer before it
-        // closes: each connection ends after the offer, with a goodbye, and
-        // the last packets get a second more.
-        try? await Task.sleep(for: .seconds(1))
-        for d in sent { try? node.disconnect(d) }
-        let grace = ContinuousClock.now + Self.moveGrace
-        while ContinuousClock.now < grace, !node.connected().isDisjoint(with: sent) { try? await Task.sleep(for: .milliseconds(200)) }
-        try? await Task.sleep(for: .seconds(1))
-        try hub.turnOff()
-        await away.keep(from: id, offer: offer.with(psk: psk, hub: nil))
-        await restartSync()
-    }
-
-    /// Makes a connected admin computer a hub of the group as well
-    /// (docs/protocol.md, section 11, "Several hubs"): a hub command signed
-    /// with this phone's root or admin key after Face ID, reached through
-    /// this phone's forwarder or else the project's. This phone stays what
-    /// it is: a hub hands the computer its clients, and with sync away from
-    /// home on this phone hands itself and keeps the computer's offer. The
-    /// computer must have sync away from home on; only its own user turns
-    /// that on. A hub that reads the copies is an admin: a computer that is
-    /// no admin yet becomes one first, on the root. With forwardOnly the
-    /// computer stays no admin and only passes the copies on, which no key
-    /// level limits: this phone signs its record so first, and no copy is
-    /// sealed to it from then on.
-    func makeHub(_ id: String, forwardOnly: Bool = false) async throws {
-        guard let node else { throw CoreMember.Failure.notConnected }
-        let current = state?.devices.first { $0.id == id }
-        if forwardOnly {
-            if current?.forwardOnly != true {
-                let ca = try await caSigner(reason: String(localized: "Make a computer a hub", bundle: .app))
-                guard var g = state else { return }
-                if let r = try g.markForwardOnly(device: id, caSigner: ca, now: Date()) {
-                    try g.save(to: file)
-                    state = g
-                    groupChanged()
-                    sendRecords([r])
-                }
-            }
-        } else if state?.records.mayHost(id) != true || current?.forwardOnly == true {
-            // A hub that reads the copies is an admin; making it one ends
-            // its passing on only.
-            try await makeAdmin(id, allowFileKey: false)
-        }
-        var forwarder = hub?.forwarder
-        if forwarder == nil { forwarder = await Self.projectForwarder() }
-        guard let fw = forwarder else { throw HubOnPhone.Failure.notRunning }
-        let ca = try await caSigner(reason: String(localized: "Make a computer a hub", bundle: .app))
-        guard let g = state else { return }
-        var clients = hub?.isOn == true ? hub?.handover ?? [] : []
-        var psk: Data?
-        if let away, await away.isOn, let key = await away.publicKey, let p = await away.psk {
-            clients.append(PhoneHub.Client(device: g.device, key: key, psk: p))
-            psk = p
-        }
-        let c = try g.hubCommand(to: id, forwarder: (fw.endpoint, fw.pin), clients: clients, caSigner: ca, now: Date())
-        let r = try await node.command(c, timeout: .seconds(20))
-        guard r.done else { throw CommandRefused(reason: r.reason ?? r.status) }
-        if let o = r.tunnel, let psk { await away?.keep(from: id, offer: o.with(psk: psk, hub: nil)) }
     }
 
     /// Tells the group the app came to the front or went to the background;
@@ -2195,6 +1607,22 @@ final class LiveGroup: GroupController {
         background = false
         try? node.resume()
         if node.connected().isEmpty { browser?.restart() }
+        if isV06 { Task { await renewPeriod06() } }
+    }
+
+    /// On the root phone of a group of 0.6, renews the group's server
+    /// credentials with the root key when they are due, asking with Face ID
+    /// first: only when the app comes to the front, and with the next root
+    /// action (the member renews them with its key then), never at another
+    /// moment.
+    private func renewPeriod06() async {
+        guard isRoot, let node, (try? node.periods())?.due == true else { return }
+        do {
+            let root = try await caSigner(reason: String(localized: "Renew the group's keys for sync away from home", bundle: .app))
+            _ = try rootRecord(root) { n, p, s in try n.renewPeriod(public: p, sign: s) }
+        } catch {
+            relayLog.warning("renewing the group's server credentials; the next time the app opens asks again: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// The app went to the background, or came back from it: there the
@@ -2216,117 +1644,62 @@ final class LiveGroup: GroupController {
         if running { try? node.resume() } else { try? node.pause() }
     }
 
-    /// Makes this phone the group's hub, or stops it being the hub. A hub
-    /// is no client of another, so turning it on turns this phone's own
-    /// sync away from home off; then it connects again, so the hellos it
-    /// answers get its offers.
+    /// Makes this phone the group's hub, or stops it being the hub, in a
+    /// group of 0.6; the network it is on becomes a home network of the hub.
     func setPhoneHub(_ on: Bool) async throws {
-        guard let hub, state?.isAdmin == true else { return }
-        if on {
-            if await away?.isOn == true { try await away?.turnOff() }
-            try hub.turnOn(home: network)
-            // Reached from afar through the project's forwarder, unless the
-            // user saved their own.
-            if hub.forwarder == nil, let fw = await Self.projectForwarder() { try hub.setForwarder(fw) }
-        } else {
-            try hub.turnOff()
-        }
-        await restartSync()
+        guard isV06, state?.isAdmin == true else { return }
+        var p = hub06
+        p.on = on
+        if on { p = p.adding(home: network) }
+        try saveHub06(p)
+        if on { try updateHub06() } else { unhub06() }
     }
 
-    /// Sets how the hub's tunnel hides, then connects again, so that the
-    /// clients at home get the new offer.
+    /// Sets how the hub's tunnel hides.
     func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {
-        guard let hub, state?.isAdmin == true else { return }
-        try hub.setDisguise(d)
-        await restartSync()
-    }
-
-    /// Sets the hub's forwarder: the user's own, or the project's when both
-    /// are empty (none when its name cannot be looked up now).
-    func setForwarder(address: String, pin: String) async throws {
-        guard let hub else { return }
-        let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
-        if a.isEmpty && p.isEmpty {
-            try hub.setForwarder(await Self.projectForwarder())
-        } else {
-            guard let ep = HubState.endpoint(a) else { throw HubOnPhone.Failure.badForwarder }
-            try hub.setForwarder(.init(endpoint: ep, pin: p))
-        }
-        refreshHub()
-    }
-
-    /// The project's forwarder at the address its name has now, IPv4 first,
-    /// as the hub takes it; nil when the name cannot be looked up.
-    nonisolated static func projectForwarder() async -> HubState.Forwarder? {
-        let hostPort = HubState.Forwarder.projectHost
-        return await Task.detached { () -> HubState.Forwarder? in
-            guard let colon = hostPort.lastIndex(of: ":") else { return nil }
-            let host = String(hostPort[..<colon]), port = String(hostPort[hostPort.index(after: colon)...])
-            var hints = addrinfo()
-            hints.ai_socktype = SOCK_STREAM
-            var list: UnsafeMutablePointer<addrinfo>?
-            guard getaddrinfo(host, port, &hints, &list) == 0, let first = list else { return nil }
-            defer { freeaddrinfo(first) }
-            var v4: String?, v6: String?
-            var next: UnsafeMutablePointer<addrinfo>? = first
-            while let ai = next {
-                var name = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                if getnameinfo(ai.pointee.ai_addr, ai.pointee.ai_addrlen, &name, socklen_t(name.count), nil, 0, NI_NUMERICHOST) == 0 {
-                    let ip = String(cString: name)
-                    if ai.pointee.ai_family == AF_INET, v4 == nil { v4 = "\(ip):\(port)" }
-                    if ai.pointee.ai_family == AF_INET6, v6 == nil { v6 = "[\(ip.split(separator: "%")[0])]:\(port)" }
-                }
-                next = ai.pointee.ai_next
-            }
-            guard let ep = v4 ?? v6 else { return nil }
-            return HubState.Forwarder(endpoint: ep, pin: HubState.Forwarder.projectPin)
-        }.value
+        guard isV06, state?.isAdmin == true else { return }
+        var p = hub06
+        p.hides = d
+        try saveHub06(p)
+        try updateHub06()
     }
 
     /// Remembers the network the phone is on as a home network, where the
     /// hub takes members and publishes itself.
     func addHomeNetwork() async throws {
-        guard let hub, let network else { return }
-        try hub.addHome(network)
+        guard isV06, state?.isAdmin == true, let network else { return }
+        try saveHub06(hub06.adding(home: network))
         refreshHub()
     }
 
-    /// Runs updateHub after the changes before it.
+    /// Runs updateHub06 after the changes before it.
     private func refreshHub() {
         let previous = hubWork
         hubWork = Task { @MainActor [weak self] in
             await previous?.value
-            await self?.updateHub()
-            await self?.updateRelay()
+            guard let self, self.isV06 else { return }
+            do { try self.updateHub06() } catch { hubLog.error("the hub did not start: \(String(reflecting: error), privacy: .public)") }
         }
     }
 
-    private func hubDone() async { await hubWork?.value }
+    // MARK: Away, the hub and the relay on 0.6
 
-    /// Runs the hub's parts that the moment calls for: with the hub on and
-    /// the app in front, the member port on the loopback address and the
-    /// tunnel with its registration; on a home network besides, the member
-    /// port on every address, published by Bonjour. Otherwise it stops them.
-    private func updateHub() async {
-        guard let hub, let node, let g = state, g.isAdmin, hub.isOn, foreground, let member = try? memberSigner() else { return stopHub() }
-        if tunnelPort == nil {
-            do {
-                tunnelPort = try node.listen(.tunnel)
-            } catch {
-                hubLog.error("the hub cannot listen: \(String(reflecting: error), privacy: .public)")
-                return
-            }
-        }
-        guard let port = tunnelPort, self.hub === hub else { return }
-        let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
-        // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
-        entries.reload()
-        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
-        hub.setCredentials(credentialBox?.hubCredentials(keys: periodKeys))
-        hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
-                        ways: entries.ways(for: HubState.Forwarder.projectHost)))
-        guard hub.isHome(network) else { return stopHome() }
+    private func saveHub06(_ p: AwayOn06.Prefs) throws {
+        try Hub06Keychain.save(p)
+        hub06 = p
+    }
+
+    /// On a group of 0.6, has the Live member serve as a hub while the
+    /// user turned it on and the app is in front, publishing it on a home
+    /// network of the hub. In the background the member pauses and the hub
+    /// stays one, so that a short trip away hands no clients over: they
+    /// wait out the gap as for any hub that goes quiet, and move on to the
+    /// group's next hub after it. Only the switch stops the hub at once.
+    private func updateHub06() throws {
+        guard let node, let g = state, g.isAdmin, hub06.on else { return unhub06() }
+        guard foreground else { return stopHome() }
+        try AwayOn06.serve(node, hub06, homeAddrs: LocalAddresses.current().filter { !$0.contains(":") }, byRoot: try? node.rootForwarder())
+        guard hub06.isHome(network) else { return stopHome() }
         guard homePort == nil else { return }
         for p in [Self.memberPort, 0] {
             guard let home = try? node.listen(.home, port: p) else { continue }
@@ -2341,6 +1714,44 @@ final class LiveGroup: GroupController {
         hubLog.error("the hub cannot listen on the home network")
     }
 
+    /// On a group of 0.6, stops the Live member serving as a hub, when it does.
+    private func unhub06() {
+        stopHome()
+        guard let node, (try? node.awayStatus())?.hub == true else { return }
+        do { try node.stopHub() } catch { hubLog.error("the hub did not stop: \(String(reflecting: error), privacy: .public)") }
+    }
+
+    /// On a group of 0.6, sync away from home as the Live member runs it; nil while it is off.
+    private var awayState06: CoreMember.AwayState? { try? node?.awayStatus() }
+
+    /// On a group of 0.6, the forwarder the group's root set for this phone as a hub; nil while it set none.
+    private var rootForwarder06: CoreMember.RootForwarder? { (try? node?.rootForwarder()) ?? nil }
+
+    /// On a group of 0.6, sets the group's relay (docs/design.md, "Blind
+    /// relay"), where every device meets the others while sync away from
+    /// home is on: the root writes it into the group's settings, signed
+    /// with the root key after Face ID. Both empty meet at no relay.
+    private func setGroupRelay(address: String, pin: String) async throws {
+        guard isRoot else { throw Failure.needsRoot }
+        let relays: [String]
+        if address.isEmpty && pin.isEmpty {
+            relays = []
+        } else {
+            guard let ep = HubState.endpoint(address), !pin.isEmpty else { throw RelayOnPhone.Failure.badRelay }
+            relays = ["\(ep) \(pin)"]
+        }
+        let root = try await caSigner(reason: String(localized: "Set the group's relay", bundle: .app))
+        try rootRecord(root) { n, p, s in try n.setRelays(relays, public: p, sign: s) }
+    }
+
+    /// Why sync away from home of 0.6 does not get through, as the member says.
+    struct Away06Failure: Error, CustomStringConvertible {
+        let message: String
+        var description: String { message }
+    }
+
+    private func hubDone() async { await hubWork?.value }
+
     private func stopHome() {
         publisher?.stop()
         publisher = nil
@@ -2348,116 +1759,55 @@ final class LiveGroup: GroupController {
         homePort = nil
     }
 
-    private func stopHub() {
-        stopHome()
-        if tunnelPort != nil { try? node?.unlisten(.tunnel) }
-        tunnelPort = nil
-        hub?.stop()
-    }
-
-    /// Forgets the hub's clients the records removed and hands its
-    /// forwarder the new authority records.
-    private func hubRecords(_ g: PhoneGroup) {
-        guard let hub else { return }
-        let ids = Set(g.devices.map(\.id))
-        hub.prune { ids.contains($0) }
-        hub.setRecords(g.records.authorityRecords)
-        blindRelay?.setRecords(g.records.authorityRecords)
-    }
-
-    // MARK: The blind relay
-
-    /// Runs the link to the blind relay while it is on and the app is in
-    /// front, with the member's port on the loopback address, which serves
-    /// only the calls the relay announced and only when the certificate
-    /// names the caller (the caller events); otherwise it stops them.
-    private func updateRelay() async {
-        guard let r = blindRelay, let node, let g = state, r.isOn, foreground, let member = try? memberSigner() else { return stopRelay() }
-        if relayPort == nil {
-            do {
-                relayPort = try node.listen(.relay)
-            } catch {
-                relayLog.error("the relay's calls cannot be taken: \(String(reflecting: error), privacy: .public)")
-                return
-            }
-        }
-        guard let port = relayPort, blindRelay === r else { return }
-        let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
-        // The relay takes the member chain and the group's roots after it, as a forwarder (docs/protocol.md, section 14).
-        r.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords))
-        r.setCredentials(credentialBox?.relayCredentials(keys: periodKeys))
-    }
-
-    private func stopRelay() {
-        if relayPort != nil { try? node?.unlisten(.relay) }
-        relayPort = nil
-        blindRelay?.stop()
-    }
-
-    /// The blind relay as Settings shows it; nil without a group.
-    /// Why the phone does not sync (docs/apps.md, "Why it does not sync"):
-    /// the member's reasons, with where the app's own tunnel stands, since
-    /// the phone's hub, its sync away from home and its relay run here.
+    /// Why the phone does not sync (docs/apps.md, "Why it does not sync"),
+    /// as the member says: the member of 0.6 runs the tunnel itself and
+    /// says where it stands; a phone in a group of 0.5 syncs at home only.
     func why() async -> [WhyReason] {
         guard let node else { return [WhyReason(code: "not_in_group", level: "stop")] }
-        var a: WhyAway?
-        if let hub, state?.isAdmin == true, hub.isOn {
-            let (status, error) = hub.status(paused: !foreground)
-            var w = WhyAway()
-            (w.hub, w.forwarder, w.forwarderRegistered) = (true, status != .homeOnly && status != .off, status == .registered)
-            w.entriesStale = status == .failed && hub.forwarder?.isProject == true && entries.current == nil
-            w.error = error ?? ""
-            a = w
-        } else if let r = blindRelay, case let (status, _, error) = r.status(paused: !foreground), status != .off {
-            var w = WhyAway()
-            (w.relay, w.relayConnected, w.error) = (true, status == .connected, error ?? "")
-            a = w
-        } else if let away, await away.isOn {
-            var w = WhyAway()
-            w.hubDevice = await away.hub ?? ""
-            w.through = await away.status == .connected
-            w.hidden = await away.hubHidesTunnel
-            w.error = await away.lastError.map { "\($0)" } ?? ""
-            a = w
-        }
-        return (try? node.why(away: a)) ?? []
+        return (try? node.why(away: nil)) ?? []
     }
 
+    /// The blind relay as Settings shows it; nil without a group, and in a
+    /// group of 0.5, where a phone meets no relay (D-123).
     func relayStatus() async -> AppModel.BlindRelay? {
-        guard let r = blindRelay else { return nil }
-        let (status, report, error) = r.status(paused: !foreground)
-        return AppModel.BlindRelay(status: status, error: error, relay: r.relay, online: report.online.count, through: report.through)
+        guard isV06, state != nil else { return nil }
+        let a = awayState06
+        let (status, error) = AwayOn06.relayStatus(a)
+        var r = AppModel.BlindRelay(status: status, error: error, relay: a?.relay.flatMap { $0.endpoint.isEmpty ? nil : .init(endpoint: $0.endpoint, pin: "") },
+                                    online: a?.relay?.online.count ?? 0)
+        r.editable = isRoot
+        r.periodOverdue = isRoot && ((try? node?.periods())?.overdue ?? false)
+        return r
     }
 
-    /// Meets the group at the relay at address, whose key is pin, after the
-    /// user read what a relay learns; both empty leave it.
+    /// Sets the group's relay at address, whose key is pin, after the user
+    /// read what a relay learns; both empty meet at no relay.
     func setRelay(address: String, pin: String) async throws {
-        guard let r = blindRelay else { return }
         let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
-        if a.isEmpty && p.isEmpty {
-            try r.turnOff()
-        } else {
-            try r.turnOn(endpoint: a, pin: p)
-        }
-        refreshHub()
+        try await setGroupRelay(address: a, pin: p)
     }
 
     /// The member port the hub takes members on at home, as the computers';
     /// another when it is taken.
     static let memberPort: UInt16 = 8764
 
-    /// Sync away from home as Settings shows it; nil without a group.
+    /// Sync away from home as Settings shows it; nil without a group, and
+    /// in a group of 0.5, where a phone syncs at home only (D-123).
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? {
-        guard let away else { return nil }
-        return (await away.isOn, await away.status, await away.lastError, await away.inUse, await away.hubs)
+        guard isV06, let node else { return nil }
+        let a = awayState06
+        let connected = Set(node.connected())
+        let status = AwayOn06.awayStatus(a) { connected.contains($0) }
+        let error = a.flatMap { $0.error.isEmpty ? nil : Away06Failure(message: AwayOn06.reason($0.error, $0.detail)) }
+        let hub = a.flatMap { $0.hubDevice.isEmpty || status == .connecting ? nil : $0.hubDevice }
+        return (a?.isOn == true && a?.hub != true, status, error, hub, a.map { $0.hubDevice.isEmpty ? [] : [$0.hubDevice] } ?? [])
     }
 
-    /// Turns sync away from home on or off, then connects again, so the
-    /// hellos offer the new key and the hub answers it.
+    /// Turns sync away from home on or off, in a group of 0.6.
     func setAwayFromHome(_ on: Bool) async throws {
-        guard let away else { return }
-        if on { try await away.turnOn() } else { try await away.turnOff() }
-        await restartSync()
+        guard isV06 else { return }
+        guard let node else { throw Failure.noGroup }
+        try node.setAway(on)
     }
 
     /// A value set after the closures that read it are made.
@@ -2707,7 +2057,7 @@ final class LiveGroup: GroupController {
             case "action":
                 return refused("a phone has no quick actions")
             case "hub":
-                return refused("a phone does not become the hub by a command; move the hub from the phone that is the hub")
+                return refused("a phone does not become the hub by a command")
             default:
                 return refused("this phone does not know the command \(body.type)")
             }
@@ -2748,26 +2098,12 @@ final class LiveGroup: GroupController {
         /// How long a copy from another device stays live after it arrives.
         var incomingMS: Int64 { lock.withLock { set.incomingMS } }
 
-        /// Whether device may be the hub for sync away from home.
-        func mayHost(_ device: String) -> Bool { lock.withLock { set.mayHost(device) } }
-
-        func mayHost(_ device: String, chain: [Data]) -> Bool { lock.withLock { set.mayHost(device, chain: chain) } }
-
-        /// The group's hubs, highest first.
-        var hubOrder: [String] { lock.withLock { set.hubOrder } }
-
-        /// Whether a record names device.
-        func knows(_ device: String) -> Bool { lock.withLock { set.knows(device) } }
-
         /// Checks a command for me against the records now (Commands.verify),
         /// opening a sealed one with this phone's secret for sealed messages.
         func verify(_ c: Member.Record, me: String, nowMS: Int64) throws -> Commands.Body {
             let secret = try? SealKey.secret()
             return try lock.withLock { try Commands.verify(c, records: set, me: me, nowMS: nowMS, secret: secret) }
         }
-
-        /// Whether device is a phone, a hub only while its app is open.
-        func isPhone(_ device: String) -> Bool { lock.withLock { set.devices.first { $0.id == device }?.role == "phone" } }
 
         func refused(chain: [Data]) -> String? { lock.withLock { set.refused(chain: chain) } }
         func stopped(chain: [Data]) -> Bool { lock.withLock { set.stopped(chain: chain) } }
@@ -2785,7 +2121,6 @@ final class LiveGroup: GroupController {
         private var _allowed: Set<String>? = []
         private var _addresses: [String: [String]] = [:]
         private var last: Set<FoundMember> = []
-        private var foundAt: [String: TimeInterval] = [:]
         /// The devices handed to the member now, with their addresses.
         private var handed: [String: [String]] = [:]
         /// The group tag of the members at known addresses.
@@ -2822,24 +2157,6 @@ final class LiveGroup: GroupController {
                 update(lock.withLock { last })
             }
         }
-        /// How long a member that the browser finds counts as at home
-        /// without a connection to it: anyone on a network can announce a
-        /// member's name and the group's tag (docs/protocol.md, section 11).
-        static let nearGrace: TimeInterval = 30
-
-        /// Whether the browser finds device on the home network now, and
-        /// either found it within nearGrace or the member is connected to it.
-        func atHome(_ device: String) async -> Bool {
-            let (at, n): (TimeInterval?, CoreMember?) = lock.withLock { (foundAt[device], node) }
-            guard let at else { return false }
-            if ProcessInfo.processInfo.systemUptime - at < Self.nearGrace { return true }
-            return n?.connected().contains(device) ?? false
-        }
-
-        /// Whether the browser finds device on the home network now, where
-        /// the member reaches it directly.
-        func found(_ device: String) -> Bool { lock.withLock { foundAt[device] != nil } }
-
         /// Whether addr is host:port with an IP address, as the member dials.
         static func numeric(_ addr: String) -> Bool {
             guard let (host, _) = JoinCode.split(addr) else { return false }
@@ -2849,8 +2166,6 @@ final class LiveGroup: GroupController {
         func update(_ found: Set<FoundMember>) {
             let (n, b, members, known): (CoreMember?, BonjourBrowser?, Set<FoundMember>, [String: [String]]) = lock.withLock {
                 last = found
-                let now = ProcessInfo.processInfo.systemUptime
-                foundAt = Dictionary(uniqueKeysWithValues: Set(found.filter { $0.group == group }.map(\.device)).map { ($0, foundAt[$0] ?? now) })
                 let all = Discovery.withKnown(found, known: Set(_addresses.keys), group: group).filter { $0.group == group && $0.device != device }
                 return (node, browser, _allowed.map { a in all.filter { a.contains($0.device) } } ?? all, _addresses)
             }

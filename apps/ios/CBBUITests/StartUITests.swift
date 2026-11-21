@@ -29,14 +29,13 @@ final class StartUITests: XCTestCase {
         return app
     }
 
-    /// A14: the Start screen says what the app does and offers the three
+    /// A14: the Start screen says what the app does and offers the
     /// ways in, with the language and Settings at the top.
     func testStartScreen() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["One clipboard for this phone and your computers."].waitForExistence(timeout: 30))
         XCTAssertTrue(app.buttons["Create a group"].exists)
         XCTAssertTrue(app.buttons["Join a group"].exists)
-        XCTAssertTrue(app.buttons["Restore with the recovery key"].exists)
         XCTAssertTrue(languageMenu(app).exists, "no language menu on the Start screen")
         XCTAssertTrue(app.buttons["Settings"].exists)
     }

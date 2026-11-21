@@ -478,7 +478,7 @@ func TestGoTakeoverVectors(t *testing.T) {
 
 // TestSwiftCommand checks the commands a phone kit signed
 // (swift-command.json, which the kits' tests write) with the records it
-// signed: mode commands with the root's key and with an admin CA's, a hub, a
+// signed: mode commands with the root's key and with an admin CA's, a
 // paste, a paste-off, an action, an actions-off, a mute, an unmute and a
 // paste of images or files are taken, for the device they name.
 func TestSwiftCommand(t *testing.T) {
@@ -510,14 +510,13 @@ func TestSwiftCommand(t *testing.T) {
 	if _, errs := s.AddAll(v.Records); len(errs) > 0 {
 		t.Fatalf("Go refuses the phone's records: %v", errs)
 	}
-	// Two mode commands, by the root and by an admin, a hub command by the
-	// root with one client, a typed paste by the admin, paste-off by the
-	// root, lock by the admin, actions-off by the root, and a paste by the
+	// Two mode commands, by the root and by an admin, a typed paste by the
+	// admin, paste-off by the root, lock by the admin, actions-off by the root, and a paste by the
 	// admin sealed to the key of go-sealed-commands.json, then a mute for an
 	// hour by the admin, an unmute by the root, and a paste of the copy
 	// of images or files 0011…eeff by the admin.
-	if len(v.Commands) != 11 {
-		t.Fatalf("%d commands, want 11", len(v.Commands))
+	if len(v.Commands) != 10 {
+		t.Fatalf("%d commands, want 10", len(v.Commands))
 	}
 	var sealed sealedVectors
 	data, err = os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "go-sealed-commands.json"))
@@ -539,33 +538,29 @@ func TestSwiftCommand(t *testing.T) {
 		if i < 2 && (got.Type != CommandMode || got.Mode != "receive") {
 			t.Errorf("command %d: %+v", i, got)
 		}
-		if i == 2 && (got.Type != CommandHub || got.Hub.Forwarder == nil || got.Hub.Forwarder.Endpoint != "203.0.113.9:8764" ||
-			len(got.Hub.Clients) != 1 || len(got.Hub.Clients[0].PSK) != 32) {
-			t.Errorf("the hub command: %+v", got.Hub)
-		}
-		if i == 3 && (got.Type != CommandPaste || got.Mode != PasteByTyping || !got.Enter || got.Kind != "text" || got.Text != "echo <ok> & \"done\"\n") {
+		if i == 2 && (got.Type != CommandPaste || got.Mode != PasteByTyping || !got.Enter || got.Kind != "text" || got.Text != "echo <ok> & \"done\"\n") {
 			t.Errorf("the paste command: %+v", got)
 		}
-		if i == 4 && got.Type != CommandPasteOff {
+		if i == 3 && got.Type != CommandPasteOff {
 			t.Errorf("the paste-off command: %+v", got)
 		}
-		if i == 5 && (got.Type != CommandAction || got.Action != "lock") {
+		if i == 4 && (got.Type != CommandAction || got.Action != "lock") {
 			t.Errorf("the action command: %+v", got)
 		}
-		if i == 6 && got.Type != CommandActionsOff {
+		if i == 5 && got.Type != CommandActionsOff {
 			t.Errorf("the actions-off command: %+v", got)
 		}
-		if i == 8 && (got.Type != CommandMute || got.ForMS != time.Hour.Milliseconds()) {
+		if i == 7 && (got.Type != CommandMute || got.ForMS != time.Hour.Milliseconds()) {
 			t.Errorf("the mute command: %+v", got)
 		}
-		if i == 9 && got.Type != CommandUnmute {
+		if i == 8 && got.Type != CommandUnmute {
 			t.Errorf("the unmute command: %+v", got)
 		}
-		if i == 10 && (got.Type != CommandPaste || got.Mode != PasteByClipboard || got.Kind != PasteMedia ||
+		if i == 9 && (got.Type != CommandPaste || got.Mode != PasteByClipboard || got.Kind != PasteMedia ||
 			got.Text != "00112233445566778899aabbccddeeff") {
 			t.Errorf("the paste of images or files: %+v", got)
 		}
-		if i == 7 {
+		if i == 6 {
 			if got.V != sealedCommandVersion || got.Text != "" {
 				t.Errorf("the sealed paste came in the open: %+v", got)
 			}

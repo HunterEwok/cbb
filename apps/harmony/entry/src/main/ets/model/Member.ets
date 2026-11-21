@@ -178,8 +178,19 @@ const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
 // A signed file of the mirror is far smaller.
 const ATTEST_MAX: number = 2 * 1024 * 1024;
 
+// The forwarder the group's root set for this phone as a hub (a group of 0.6).
+interface RootForwarder {
+  endpoint: string;
+  key: string;
+}
+
 interface AwayAnswer {
   away?: Away;
+  root_forwarder?: RootForwarder;
+  // On the root phone of a group of 0.6: the group's server credentials
+  // need its root key, or expired already.
+  period_due?: boolean;
+  period_overdue?: boolean;
 }
 
 interface Copy {
@@ -314,6 +325,15 @@ export class Member {
   // The blind relay the phone meets the group at, "" for none, and whether
   // the link is up.
   @Trace relayAt: string = '';
+  // On a group of 0.6, the forwarder the group's root set for this phone as
+  // a hub and its key's pin, "" while it set none.
+  @Trace rootForwarder: string = '';
+  @Trace rootForwarderKey: string = '';
+  // On the root phone of a group of 0.6, the group's server credentials
+  // expired: its relay and its hubs' forwarders take nobody until the root
+  // key renews them.
+  @Trace periodOverdue: boolean = false;
+  private periodDueAway: boolean = false;
   @Trace relayConnected: boolean = false;
   @Trace relayOnline: number = 0;
   @Trace relayError: string = '';
@@ -344,6 +364,8 @@ export class Member {
   recentLog: string[] = [];
 
   private handle: Handle | null = null;
+  // The member port is open (listen), for a pairing window of 0.6.
+  private listening: boolean = false;
   private timer: number = -1;
   private dir: string = '';
   private tookImage: string = '';
@@ -451,6 +473,7 @@ export class Member {
       return;
     }
     this.handle = null;
+    this.listening = false;
     clearInterval(this.timer);
     this.timer = -1;
     await cbb.memberStop(h);
@@ -467,6 +490,20 @@ export class Member {
     this.readAway(undefined);
     this.periodDue = false;
     Errors.log('member: stopped');
+  }
+
+  // Opens the member port at home, which a pairing window of 0.6 needs
+  // (the member's listen op); a second call keeps it open.
+  async listen(): Promise<Failure | undefined> {
+    if (this.listening) {
+      return undefined;
+    }
+    const r = await this.call<Object>('listen', { 'kind': 'home' } as Record<string, Object>);
+    if (r.ok === undefined) {
+      return r.failure;
+    }
+    this.listening = true;
+    return undefined;
   }
 
   // Asks the member: {"op","args"}.
@@ -672,18 +709,6 @@ export class Member {
     this.readAway(a.ok.away);
   }
 
-  // After joining by a remote invitation: sync away from home on, the
-  // tunnel key offered through the invitation's guest tunnel.
-  async joinedByInvite(invite: string): Promise<void> {
-    const a = await this.call<AwayAnswer>('joined_by_invite', { 'invite': invite } as Record<string, Object>);
-    if (a.ok === undefined) {
-      this.error = Errors.shown(a.failure as Failure);
-      return;
-    }
-    Errors.log('member: joined by an invitation; sync away from home is on');
-    this.readAway(a.ok.away);
-  }
-
   async pollDevices(): Promise<void> {
     if (this.handle === null) {
       return;
@@ -756,7 +781,8 @@ export class Member {
     await this.pollDevices();
     await this.pollAway();
     const s = await this.call<Servers>('servers');
-    const due = s.ok?.period_due === true;
+    // A group of 0.6 says it in away_status; one of 0.5 in servers.
+    const due = s.ok?.period_due === true || this.periodDueAway;
     if (due !== this.periodDue) {
       this.periodDue = due;
     }
@@ -764,7 +790,8 @@ export class Member {
 
   // Makes this phone one of the group's hubs, reached away from home
   // through the forwarder at forwarder whose key's pin is key ('default'
-  // for the project's), hidden as disguise says ('plain' WireGuard,
+  // for the project's; both empty on a group of 0.6: the one the root set),
+  // hidden as disguise says ('plain' WireGuard,
   // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
   // or stops it being one. Answers why it failed.
   async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
@@ -779,7 +806,8 @@ export class Member {
     if (a.ok === undefined) {
       return a.failure;
     }
-    Errors.log(on ? `member: this phone is a hub of the group, through ${forwarder}` : 'member: this phone is no hub any more');
+    const through = forwarder.length > 0 ? forwarder : (a.ok.root_forwarder?.endpoint ?? '');
+    Errors.log(on ? `member: this phone is a hub of the group, through ${through}` : 'member: this phone is no hub any more');
     this.readAway(a.ok.away);
     return undefined;
   }
@@ -873,6 +901,12 @@ export class Member {
       Errors.log(`member: sync away from home: ${f.message} (${f.details})`);
       return;
     }
+    this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
+    this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
+    this.periodDueAway = a.ok.period_due === true;
+    if (this.periodOverdue !== (a.ok.period_overdue === true)) {
+      this.periodOverdue = a.ok.period_overdue === true;
+    }
     this.readAway(a.ok.away);
   }
 
@@ -963,7 +997,7 @@ export class Member {
       this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
     } else if (e.type === 'identity') {
       this.onIdentity(e.cert ?? '', e.issuer ?? '', e.roots ?? []);
-    } else if (e.type === 'mute') {
+    } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
     } else if (e.type === 'command') {
       if (e.command !== undefined) {

@@ -34,5 +34,6 @@
     <string name="stale">Según lo último que dijo el teléfono.</string>
     <string name="sync">Sincronizar</string>
     <string name="watch_admin">Este reloj es administrador del grupo.</string>
+    <string name="watch_later">En este grupo el reloj solo muestra los dispositivos: sus acciones de emergencia llegarán con CBB 0.7.</string>
     <string name="watch_phone">El teléfono de este reloj</string>
 </resources>

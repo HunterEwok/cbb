@@ -64,8 +64,9 @@ Item {
                 onClicked: page.closed()
             }
             MenuItem {
-                // An admin takes a lost root's group over (cbb_core::takeover).
-                visible: page.acts && page.device.root && !app.root && app.claimState === ""
+                // An admin takes a lost root's group over (cbb_core::takeover);
+                // on 0.6 the root changes only with the recovery key (ChangeRootPage).
+                visible: page.acts && page.device.root && !app.root && app.claimState === "" && !app.group06
                 text: qsTr("Take the group over")
                 onClicked: remorse.execute(qsTr("Taking the group over from %1").arg(Devices.name(page.device)),
                                            function() { app.takeOver(page.device.id) })

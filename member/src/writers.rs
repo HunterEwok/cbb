@@ -79,7 +79,7 @@ fn device_record(set: &RecordSet, state: &State, id: &DeviceId) -> Option<Device
 
 /// The keys of a device that a removal or a freeze names: its member key,
 /// and its admin key when it holds one.
-pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
+pub fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     let mut keys = vec![d.key.hash()];
     keys.extend(d.admin);
     keys.sort();
@@ -313,6 +313,72 @@ pub fn make_admin(
     Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
 }
 
+/// On the group's root (signer holds the current root key), writes the
+/// device record of a watch (docs/protocol.md, section 10, "Watches"):
+/// it reads through its phone, its admin key is `admin`, the one the
+/// watch made and keeps, with a watch's powers and commands
+/// (`AdminKind::Watch`). Its device ID comes from a member key nobody
+/// keeps (D-124): made here, read for its public half, and dropped at
+/// once, never stored, logged or sent, so nothing can sign a statement or
+/// a copy as the watch. Gives the watch's device ID and the records added.
+pub fn add_watch(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    name: &str,
+    os: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceId, Vec<Record>)> {
+    let member = {
+        let pkcs8 = cbb_core::secret::Zeroizing::new(cbb_core::identity::new_key()?);
+        let k = cbb_core::identity::signing_key(&pkcs8)?;
+        k.verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    };
+    add_watch_with(set, signer, &member, name, os, admin, now_ms)
+}
+
+/// add_watch with the watch's member key given, for the tests.
+fn add_watch_with(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    member: &[u8],
+    name: &str,
+    os: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceId, Vec<Record>)> {
+    use cbb_core::records::body::{AdminKind, RIGHT_READ, ROLE_WATCH};
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Err(Error::msg("only the group's root adds a watch"));
+    }
+    if !["watchos", "wearos", "harmonyos"].contains(&os) {
+        return Err(Error::msg(format!("a watch runs watchos, wearos or harmonyos, not {os:?}")));
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(Error::msg("the watch needs a name"));
+    }
+    if st.devices.iter().any(|d| d.name == name) {
+        return Err(Error::msg(format!("another device of the group is named {name}")));
+    }
+    let admin = Key::es256(admin.to_vec());
+    let hash = admin.hash();
+    if st.devices.iter().any(|o| o.key.hash() == hash || o.admin == Some(hash)) || st.roots.contains(&hash) {
+        return Err(Error::msg("the watch's admin key belongs to another key of the group"));
+    }
+    let mut d = Device::new(Key::es256(member.to_vec()), name, ROLE_WATCH);
+    let id = d.key.device_id();
+    d.rights = RIGHT_READ;
+    d.os = cbb_core::format::print::os_number(os);
+    d.admin = Some(admin);
+    (d.powers, d.commands) = AdminKind::Watch.grants();
+    let out = set
+        .write_record(&st, signer, Kind::device(d), now_ms)
+        .map_err(|e| Error::msg(format!("cannot add the watch: {e}")))?;
+    Ok((id, out))
+}
+
 /// On the group's root, records where a member's keys live as its hello
 /// says (docs/protocol.md, section 17): a record that says `file` while the
 /// hello says hardware gets `hardware`, and a hello that says rootless
@@ -416,6 +482,48 @@ pub fn recover(
     leave_out: &[cbb_core::records::KeyHash],
     now_ms: u64,
 ) -> Result<cbb_core::records::set::Written> {
+    recover_with(set, recovery, recovery2, new_root, me, leave_out, Change::default(), now_ms)
+}
+
+/// Both halves of the group's recovery key from its secret (the sheet's,
+/// or what a YubiKey opened), the first as a key that signs: for the call
+/// that changes the root, and dropped after it.
+pub fn recovery_keys(secret: &[u8; 32]) -> Result<(cbb_core::identity::FileKey, cbb_core::records::pq::PqKey)> {
+    use p256::pkcs8::EncodePrivateKey as _;
+    let (k1, k2) = cbb_core::records::pq::recovery_keys(secret)
+        .map_err(|e| e.context("cannot make the recovery key from the sheet"))?;
+    let pkcs8 = cbb_core::secret::Zeroizing::new(
+        p256::ecdsa::SigningKey::from(k1)
+            .to_pkcs8_der()
+            .map_err(|_| Error::msg("cannot encode the recovery key"))?
+            .as_bytes()
+            .to_vec(),
+    );
+    Ok((cbb_core::identity::FileKey::new(&pkcs8)?, k2))
+}
+
+/// How a change of root goes besides who stays: drop_hubs leaves the
+/// group's hubs record behind; over_waiting writes over a change the set
+/// holds whose records never came (`RecordSet::write_change_over_waiting`),
+/// which a person chooses only after a sync failed.
+#[derive(Clone, Copy, Default)]
+pub struct Change {
+    pub drop_hubs: bool,
+    pub over_waiting: bool,
+}
+
+/// recover, with how the change goes.
+#[allow(clippy::too_many_arguments, reason = "the parts of one act")]
+pub fn recover_with(
+    set: &mut RecordSet,
+    recovery: &dyn ExternalKey,
+    recovery2: &cbb_core::records::pq::PqKey,
+    new_root: &dyn ExternalKey,
+    me: &DeviceId,
+    leave_out: &[cbb_core::records::KeyHash],
+    how: Change,
+    now_ms: u64,
+) -> Result<cbb_core::records::set::Written> {
     use cbb_core::records::body::{RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
     let st = set.state();
     let mut rec = device_record(set, &st, me).ok_or_else(|| Error::msg("this device's record is not here"))?;
@@ -425,8 +533,12 @@ pub fn recover(
     rec.commands = 0;
     rec.rights |= RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
     rec.seen = Vec::new();
-    set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, false, now_ms)
-        .map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
+    let written = if how.over_waiting {
+        set.write_change_over_waiting(&st, recovery, recovery2, new_root, rec, leave_out, how.drop_hubs, now_ms)
+    } else {
+        set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, how.drop_hubs, now_ms)
+    };
+    written.map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
 }
 
 /// Sets how long a copy from another device stays live on each member.

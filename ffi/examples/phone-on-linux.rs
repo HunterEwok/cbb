@@ -1,77 +1,66 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The Aurora app through the C functions of src/join.rs and
-//! src/member.rs, on Linux with a software key, for internal/service's
-//! TestFFIJoiner. It listens on -addr (host:port), prints the QR code's
-//! text after "QR: ", takes connections until one joins, and prints
-//! "Joined <device> <group tag>"; with -admin it offers an admin key too,
-//! and prints "Admin CA <base64>" when the member made it an admin. With
-//! -offer-admin it joins as a member and its member's hellos offer that
-//! key, for the root to make it an admin later: it prints "ADMIN CA
-//! <base64>" when the admin message brings the CA. With
-//! -dir, it then runs the member there,
-//! dialing each -peer: it prints "WRITE <kind> <text>" for each text for
-//! the clipboard, "IDENTITY <certificate in base64>" when an admin renewed
-//! its certificate, "MUTE <true|false> <for_ms> <by>" when an admin muted
-//! it or ended the mute, "CHANGE <copy as JSON>" for each copy that became
-//! the group's, "PEER <peer as JSON>" for each peer whose hello it took,
-//! "COMMAND <token> <command as JSON>" for each command for the phone
-//! itself, and "LOG <line>" for each log line. It takes "COPY <text>"
-//! (printing "REFUSED <reason>" when the member does not send it), "PEERS",
-//! answered "PEERS <count>", "SYNC OFF <ms>", "SYNC ON" and "MUTED", answered
-//! "MUTED <sync off> <muted>", "DEVICES", answered "DEVICES <the devices as a
-//! JSON array>", and "CALL <request as JSON>", answered "ANSWER <answer as
-//! JSON>" (cbb_member_call), and, after it joined as an admin, "ADMIT <a
-//! device's QR code>", which admits that device with the admin key and
-//! prints "ADMITTED <device>" and then "ADMIT DONE <confirmed>", or "ADMIT
-//! FAILED <message>", and "MANAGE <request as JSON>" (cbb_member_manage
-//! with the admin key), answered "MANAGED <answer as JSON>", on standard
-//! input, and "INVITE <seconds>", which makes a remote invitation with the
-//! admin key and prints "INVITE <text>", then "INVITE JOINING <name>
-//! <fingerprint>" for each device that uses it, "INVITE DONE <name>" or
-//! "INVITE FAILED <message>"; "INVITE ANSWER <yes|no>" answers about the
-//! joining device. With -invite TEXT it joins by that remote invitation in
-//! place of showing a QR code: it prints "Fingerprint <fingerprint>",
-//! dials the invitation's guest tunnel until the hub's admin admits it, and
-//! with -dir hands the invitation to the member, which offers its tunnel
-//! key to the hub through the guest tunnel. With -new-group it joins nothing:
-//! it makes a group of its own, the admin key standing for the root key,
-//! prints "Group <device> <group tag>", and runs the member as the group's
-//! root, which takes "ADMIT" too. With -restore <the recovery sheet's QR
-//! code> it restores the group as a new phone (cbb_restore), asking each
-//! -peer, prints "Restored <device> <group tag>" or "RESTORE FAILED
-//! <message>", and runs the member, the admin key standing for the new root
-//! key, which "MANAGE" signs root_ca with. "SERVERS" makes the member serve
-//! the servers (cbb_member_servers) with software keys for them, answered
-//! "SERVERS <answer as JSON>". With -card FILE a YubiKey kept in FILE
-//! stands for the one the app reads over NFC: "PIV <request as JSON>"
-//! (cbb_piv) is answered "PIV <answer as JSON>", "MANAGE_CARD <request>"
-//! signs with its key as "MANAGE" with the admin key, and -restore-card PIN
-//! restores with its recovery keys as -restore does with a sheet. -keys N
-//! gives a second phone keys of its own.
+//! The phone apps through the C functions of ffi (include/cbb_core.h), on
+//! Linux with software keys, for internal/service's TestFFI* tests.
 //!
-//!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
+//! On a group of 0.6: -group06 makes one in -dir (the admin key standing
+//! for the root key) and prints "Group <device> <group tag>"; -join-window
+//! <QR code text> joins one by its home window, or -join-digits <six
+//! digits> by the one window announced at home, keeping the set in -dir,
+//! and prints "Joined <device> <group tag> <member's name>" or "JOIN FAILED
+//! <message>"; with -admin it offers its admin key too, for the root to
+//! make it an admin later (cbb admin). The member of 0.6 then runs in -dir,
+//! dialing each -peer, and takes "WINDOW", which opens its home window (at
+//! once with -window): see window_new for what it prints. -invite TEXT
+//! joins by a remote invitation of 0.6 through its guest tunnel, printing
+//! "Fingerprint <fingerprint>" first, then as -join-window does. -resume
+//! <device> runs the member of the group it joined before in -dir again,
+//! as the app does when it opens.
+//!
+//! The member prints "WRITE <kind> <text>" for each text for the
+//! clipboard, "MUTE <true|false> <for_ms> <by>" when an
+//! admin muted it or ended the mute, "SYNC <off> <by>" when an admin turned
+//! its sync off or on, "CHANGE <copy as JSON>" for each copy that became
+//! the group's, and "LOG <line>" for each log line. It takes "COPY
+//! <text>" (printing "REFUSED <reason>" when the member does not send it),
+//! "PEERS", answered "PEERS <count>", "SYNC OFF <ms>", "SYNC ON" and
+//! "MUTED", answered "MUTED <sync off> <muted>", "DEVICES", answered
+//! "DEVICES <the devices as a JSON array>", "CALL <request as JSON>",
+//! answered "ANSWER <answer as JSON>" (cbb_member_call), and "MANAGE
+//! <request as JSON>" (cbb_member_manage with the admin key), answered
+//! "MANAGED <answer as JSON>", "NEWROOT <request as JSON>" (a change of
+//! root, cbb_member_manage with the new root key it makes), answered
+//! "NEWROOTED <answer as JSON>", on standard input, and "INVITE <seconds>",
+//! which makes a remote invitation with the admin key and prints "INVITE
+//! <text>", then "INVITE JOINING <name> <fingerprint>" for each device that
+//! uses it, "INVITE DONE <name>" or "INVITE FAILED <message>"; "INVITE
+//! ANSWER <yes|no>" answers about the joining device. "WATCH ADD <name>"
+//! adds a watch as the root does (add_watch), answered "WATCH ADDED <answer
+//! as JSON>", and "WATCH <request as JSON>" asks for an action from the
+//! wrist (cbb_member_manage_watch), answered "WATCH SAW <what the watch was
+//! shown>" and "WATCHED <answer as JSON>". -keys N gives a second phone
+//! keys of its own.
+//!
+//! With -card FILE a YubiKey kept in FILE stands for the one the app reads
+//! over NFC: "PIV <request as JSON>" (cbb_piv) is answered "PIV <answer as
+//! JSON>".
+//!
+//!   phone-on-linux -name phone -dir /tmp/p -join-window 'cbb://pair?…' -peer 127.0.0.1:8765
 
-use std::io::{Read, Write};
-use std::net::TcpListener;
 use std::process::ExitCode;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
-    cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
-    cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
-    cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
-    cbb_member_manage_card, cbb_member_manage_watch, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore,
+    cbb_free, cbb_group_new, cbb_invite_answer, cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_joiner_free,
+    cbb_joiner_new, cbb_joiner_new_admin, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_watch,
+    cbb_member_start, cbb_piv, cbb_window_free, cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
 
 /// The key's signing callback, as the app's KeyStore::sign is.
-/// The secret for sealed messages.
-const SEAL: [u8; 32] = [9u8; 32];
-
 unsafe extern "C" fn sign(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *mut u8, sig_len: *mut usize) -> i32 {
     // SAFETY: ctx is the key main keeps alive; digest is 32 bytes and sig
     // has 72 bytes of room, as cbb_core.h says.
@@ -87,56 +76,6 @@ unsafe extern "C" fn sign(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *
     0
 }
 
-/// The keys for the servers, by name, as the app's KeyStore keeps them.
-static SERVER_KEYS: std::sync::Mutex<Vec<(String, SigningKey)>> = std::sync::Mutex::new(Vec::new());
-
-/// The callback of the keys for the servers (cbb_member_servers).
-unsafe extern "C" fn server_keys(
-    _: *mut core::ffi::c_void,
-    op: i32,
-    name: *const u8,
-    name_len: usize,
-    digest: *const u8,
-    out: *mut u8,
-    out_len: *mut usize,
-) -> i32 {
-    // SAFETY: the library gives name_len bytes at name, 32 at digest when
-    // it signs, and 72 bytes of room at out.
-    unsafe {
-        let name = String::from_utf8_lossy(std::slice::from_raw_parts(name, name_len)).into_owned();
-        let mut keys = SERVER_KEYS.lock().unwrap();
-        let write = |b: &[u8]| {
-            std::ptr::copy_nonoverlapping(b.as_ptr(), out, b.len());
-            out_len.write(b.len());
-        };
-        match op {
-            0 => i32::from(!keys.iter().any(|(n, _)| *n == name)),
-            1 => {
-                if !keys.iter().any(|(n, _)| *n == name) {
-                    let seed = u8::try_from(keys.len() + 20).unwrap_or(250);
-                    keys.push((name.clone(), SigningKey::from_slice(&[seed; 32]).expect("a valid scalar")));
-                }
-                let k = &keys.iter().find(|(n, _)| *n == name).expect("made above").1;
-                write(k.verifying_key().to_sec1_point(false).as_bytes());
-                0
-            }
-            2 => {
-                let Some((_, k)) = keys.iter().find(|(n, _)| *n == name) else { return 1 };
-                let d = std::slice::from_raw_parts(digest, 32);
-                let Ok(s): Result<p256::ecdsa::Signature, _> = k.sign_prehash(d) else { return 1 };
-                write(s.to_der().as_bytes());
-                0
-            }
-            3 => {
-                let kept: Vec<&str> = name.split('\n').collect();
-                keys.retain(|(n, _)| kept.contains(&n.as_str()));
-                0
-            }
-            _ => 1,
-        }
-    }
-}
-
 /// Takes an answer of the library as JSON.
 fn take(p: *mut u8, n: usize) -> serde_json::Value {
     // SAFETY: p and n are an answer of the library, given back once.
@@ -146,14 +85,9 @@ fn take(p: *mut u8, n: usize) -> serde_json::Value {
     v
 }
 
-fn b64(v: &serde_json::Value) -> Vec<u8> {
-    STANDARD.decode(v.as_str().unwrap_or_default()).unwrap_or_default()
-}
-
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
-    let addr = arg("-addr").unwrap_or_else(|| "127.0.0.1:8764".into());
     let name = arg("-name").unwrap_or_else(|| "phone".into());
     // -keys N gives a second phone keys of its own.
     let keys: u8 = arg("-keys").and_then(|k| k.parse().ok()).unwrap_or(0);
@@ -166,21 +100,22 @@ fn main() -> ExitCode {
     let admin = args.iter().any(|a| a == "-admin");
     let admin_key = SigningKey::from_slice(&[8u8.wrapping_add(keys.wrapping_mul(2)); 32]).expect("a valid scalar");
     let admin_public = STANDARD.encode(admin_key.verifying_key().to_sec1_point(false).as_bytes());
-    // The secret for sealed messages, and its public key for the device
-    // record, as the app has them.
-    let seal_req =
-        serde_json::json!({"abi": cbb_ffi::abi(), "op": "seal_public", "args": {"secret": STANDARD.encode(SEAL)}});
-    let seal = serde_json::from_slice::<serde_json::Value>(&cbb_ffi::call(seal_req.to_string().into_bytes()))
-        .map(|v| v["ok"]["key"].clone())
-        .unwrap_or_default();
     let peers: Vec<String> =
         args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
-    if args.iter().any(|a| a == "-new-group") {
-        // A group of its own, the admin key standing for the root key the
-        // Aurora app keeps in its TEE; the phone then admits as the root.
+    // A group of 0.6 (-group06, the admin key standing for the root key)
+    // or joining one by a home window (-join-window <QR code text>, or
+    // -join-digits <six digits> with the one window announced at home); then
+    // the member of 0.6 runs in -dir, which takes "WINDOW" too (and opens it
+    // at once with -window).
+    let window = args.iter().any(|a| a == "-window");
+    if args.iter().any(|a| a == "-group06") {
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -group06 needs -dir");
+            return ExitCode::FAILURE;
+        };
         let req = serde_json::json!({
-            "name": name, "os": "aurora", "store": "hardware", "root_public": admin_public,
-            "public": public_b64, "seal": seal,
+            "dir": dir, "name": name, "os": "aurora", "store": "hardware", "root_public": admin_public,
+            "public": public_b64,
         })
         .to_string();
         let mut n = 0usize;
@@ -192,170 +127,37 @@ fn main() -> ExitCode {
             eprintln!("phone-on-linux: {made}");
             return ExitCode::FAILURE;
         }
-        let tag = cbb_core::certs::Cert::parse(&b64(&group["group_ca"]))
-            .map(|ca| cbb_core::certs::tag(&ca))
-            .unwrap_or_default();
-        println!("Group {} {tag}", group["device"].as_str().unwrap_or_default());
-        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-        return run_member(
-            &key,
-            &public_b64,
-            &name,
-            &dir,
-            peers,
-            &group,
-            Some((&admin_key, admin_public.as_str())),
-            None,
-        );
+        let device = group["device"].as_str().unwrap_or_default().to_string();
+        let id = group["group"].as_str().unwrap_or_default();
+        println!("Group {device} {}", id.get(..16).unwrap_or(id));
+        let admin = Some((&admin_key, admin_public.as_str()));
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
-    // With -restore-card PIN the recovery keys on the -card YubiKey issue
-    // this phone's member certificates first (cbb_piv's issue).
-    let card_keys = match arg("-restore-card") {
-        Some(pin) => {
-            let got = card::piv(&serde_json::json!({"op": "issue", "pin": pin, "public": public_b64}));
-            if got["ok"].is_null() {
-                println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
-                return ExitCode::FAILURE;
-            }
-            Some(got["ok"]["keys"].clone())
-        }
-        None => None,
-    };
-    if let Some(sheet) = arg("-restore").or(card_keys.as_ref().map(|_| String::new())) {
-        let mut req = serde_json::json!({
-            "sheet": sheet, "public": public_b64, "name": name, "os": "aurora", "addrs": peers,
-        });
-        if let Some(k) = &card_keys {
-            req["card"] = k.clone();
-        }
-        let req = req.to_string();
-        let mut n = 0usize;
-        let ctx = &key as *const SigningKey as *mut _;
-        // SAFETY: req and n live for the call, the key too.
-        let got = take(unsafe { cbb_restore(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
-        let restored = got["ok"].clone();
-        if restored.is_null() {
-            println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
+    let (qr, digits, invite) = (arg("-join-window"), arg("-join-digits"), arg("-invite"));
+    if qr.is_some() || digits.is_some() || invite.is_some() {
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -join-window, -join-digits and -invite need -dir");
             return ExitCode::FAILURE;
-        }
-        let tag = cbb_core::certs::Cert::parse(&b64(&restored["group_ca"]))
-            .map(|ca| cbb_core::certs::tag(&ca))
-            .unwrap_or_default();
-        println!("Restored {} {tag}", restored["device"].as_str().unwrap_or_default());
-        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-        return run_member(
-            &key,
-            &public_b64,
-            &name,
-            &dir,
-            peers,
-            &restored,
-            Some((&admin_key, admin_public.as_str())),
-            None,
-        );
+        };
+        let code = (qr.unwrap_or_default(), digits.unwrap_or_default(), invite.unwrap_or_default());
+        let admin = admin.then_some((&admin_key, admin_public.as_str()));
+        let Some(device) = join_window(&key, &public_b64, admin, &name, &dir, &code) else {
+            return ExitCode::FAILURE;
+        };
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
-    let invite = arg("-invite");
-    let mut req =
-        serde_json::json!({"name": name, "os": "aurora", "public": public_b64, "seal": seal, "addrs": [addr]});
-    if let Some(text) = &invite {
-        req["invite"] = text.clone().into();
-        req["addrs"] = serde_json::json!([]);
+    if let Some(device) = arg("-resume") {
+        // The app opened again on the group it joined before in -dir, as
+        // device.
+        let Some(dir) = arg("-dir") else {
+            eprintln!("phone-on-linux: -resume needs -dir");
+            return ExitCode::FAILURE;
+        };
+        let admin = admin.then_some((&admin_key, admin_public.as_str()));
+        return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
-    if admin {
-        req["admin_public"] = admin_public.clone().into();
-    }
-    let req = req.to_string();
-    let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
-    let ctx = &key as *const SigningKey as *mut _;
-    let admin_ctx = &admin_key as *const SigningKey as *mut _;
-    // SAFETY: req, ans and n live for the call; the keys outlive the joiner.
-    let j = unsafe {
-        if admin {
-            cbb_join_new_admin(req.as_ptr(), req.len(), sign, ctx, sign, admin_ctx, &mut ans, &mut n)
-        } else {
-            cbb_join_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n)
-        }
-    };
-    let created = take(ans, n);
-    if j.is_null() {
-        eprintln!("phone-on-linux: {created}");
-        return ExitCode::FAILURE;
-    }
-    let conns: Box<dyn Iterator<Item = std::net::TcpStream>> = match &invite {
-        Some(_) => {
-            println!("Fingerprint {}", created["ok"]["fingerprint"].as_str().unwrap_or_default());
-            let port = created["ok"]["port"].as_u64().unwrap_or_default();
-            // Dials the guest tunnel's port for each attempt, a few times.
-            Box::new((0..5).filter_map(move |i| {
-                if i > 0 {
-                    std::thread::sleep(std::time::Duration::from_secs(2));
-                }
-                std::net::TcpStream::connect(("127.0.0.1", port as u16)).ok()
-            }))
-        }
-        None => {
-            println!("QR: {}", created["ok"]["qr"].as_str().unwrap_or_default());
-            let ln = TcpListener::bind(&addr).expect("listen");
-            Box::new(std::iter::repeat_with(move || ln.accept()).filter_map(|r| r.ok().map(|(s, _)| s)))
-        }
-    };
-    let mut joined = serde_json::Value::Null;
-    'conns: for mut sock in conns {
-        // SAFETY: j is the joiner, used by this thread only.
-        let a = take(unsafe { cbb_join_accept(j, &mut n) }, n);
-        if a.get("error").is_some() {
-            eprintln!("phone-on-linux: {a}");
-            break;
-        }
-        // With an invitation, the joiner speaks first.
-        let _ = sock.write_all(&b64(&a["ok"]["send"]));
-        let mut buf = vec![0u8; 16 << 10];
-        loop {
-            let got = sock.read(&mut buf).unwrap_or(0);
-            // SAFETY: buf holds got bytes; j as above.
-            let step = take(unsafe { cbb_join_feed(j, buf.as_ptr(), got, 0, &mut n) }, n);
-            let ok = &step["ok"];
-            let _ = sock.write_all(&b64(&ok["send"]));
-            match ok["state"].as_str() {
-                Some("joined") => {
-                    // SAFETY: j as above.
-                    let last = take(unsafe { cbb_join_finish(j, 1, &mut n) }, n);
-                    let _ = sock.write_all(&b64(&last["ok"]["send"]));
-                    joined = ok["joined"].clone();
-                    let tag = cbb_core::certs::Cert::parse(&b64(&joined["group_ca"]))
-                        .map(|ca| cbb_core::certs::tag(&ca))
-                        .unwrap_or_default();
-                    if let Some(ca) = joined["admin_ca"].as_str() {
-                        println!("Admin CA {ca}");
-                    }
-                    println!("Joined {} {tag}", joined["device"].as_str().unwrap_or_default());
-                    break 'conns;
-                }
-                Some("failed") => {
-                    // SAFETY: j as above.
-                    let answered = unsafe { cbb_join_answered(j) } == 1;
-                    eprintln!("phone-on-linux: an attempt failed (hub answered: {answered}): {}", ok["error"]);
-                    continue 'conns;
-                }
-                _ if got == 0 => continue 'conns,
-                _ => {}
-            }
-        }
-    }
-    // SAFETY: j is freed once.
-    unsafe { cbb_join_free(j) };
-    if joined.is_null() {
-        return ExitCode::FAILURE;
-    }
-    let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-    // The key the hellos offer for the root's "Make it an admin", kept
-    // beside what the joiner gave.
-    if !admin && args.iter().any(|a| a == "-offer-admin") {
-        let spki = cbb_core::certs::p256_spki_of(admin_key.verifying_key().to_sec1_point(false).as_bytes());
-        joined["offer_admin_key"] = STANDARD.encode(spki).into();
-    }
-    let admin = admin.then_some((&admin_key, admin_public.as_str()));
-    run_member(&key, &public_b64, &name, &dir, peers, &joined, admin, invite.as_deref())
+    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite or -resume");
+    ExitCode::FAILURE
 }
 
 unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize) {
@@ -366,44 +168,43 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
     match v["type"].as_str() {
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
-        Some("identity") => println!("IDENTITY {}", s("cert")),
         Some("copy") => println!("CHANGE {}", v["copy"]),
-        Some("peer") => println!("PEER {}", v["peer"]),
-        Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
-        Some("message") if v["message"]["t"] == "admin" => {
-            println!("ADMIN CA {}", v["message"]["admin_ca"].as_str().unwrap_or_default())
-        }
+        Some("sync") => println!("SYNC {} {}", v["off"], s("by")),
         _ => {}
     }
 }
 
-/// Runs the member as the app does once it joined, until standard input
-/// ends; invite is the remote invitation it joined by.
+/// Runs the member of 0.6 whose group's set is in dir, as the app does
+/// once it made or joined the group, until standard input ends; with
+/// window, it opens its pairing window at once.
 #[allow(clippy::too_many_arguments)]
-fn run_member(
+fn run_live(
     key: &SigningKey,
     public_b64: &str,
     name: &str,
     dir: &str,
     peers: Vec<String>,
-    joined: &serde_json::Value,
+    device: &str,
     admin: Option<(&SigningKey, &str)>,
-    invite: Option<&str>,
+    window: bool,
 ) -> ExitCode {
-    let records = b64(&joined["records"]);
-    if std::fs::create_dir_all(dir).is_err() || std::fs::write(format!("{dir}/records.json"), records).is_err() {
-        eprintln!("phone-on-linux: cannot write the records in {dir}");
-        return ExitCode::FAILURE;
-    }
     let req = serde_json::json!({
-        "dir": dir, "name": name, "os": "aurora", "os_version": "Aurora OS 5.1.5", "version": "0.5.0",
-        "device": joined["device"], "public": public_b64,
-        "seal": STANDARD.encode(SEAL), "cert": joined["cert"], "issuer": joined["issuer"],
-        "group_ca": joined["group_ca"], "roots": joined["roots"], "peers": peers, "mdns": false,
-        "admin_key": joined.get("offer_admin_key"),
+        "dir": dir, "name": name, "os": "aurora", "os_version": "Aurora OS 5.1.5", "version": "0.6.0",
+        "device": device, "public": public_b64, "peers": peers, "mdns": false,
     })
     .to_string();
+    serve(key, &req, admin, window)
+}
+
+/// Starts the member with req and takes the commands on standard input
+/// until it ends.
+fn serve(key: &SigningKey, req: &str, admin: Option<(&SigningKey, &str)>, window: bool) -> ExitCode {
+    let mut admin = admin;
+    // The root key the app makes when it changes the group's root to this
+    // phone (NEWROOT): none of its other keys (seeds 7 and 8 up).
+    let new_root = SigningKey::from_slice(&[0x66u8; 32]).expect("a valid scalar");
+    let new_root_public = STANDARD.encode(new_root.verifying_key().to_sec1_point(false).as_bytes());
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
     // SAFETY: req, ans and n live for the call; the key outlives the member,
@@ -419,17 +220,18 @@ fn run_member(
         // SAFETY: m runs; req and n live for the call.
         take(unsafe { cbb_member_call(m, req.as_ptr(), req.len(), &mut n) }, n)
     };
-    if let Some(text) = invite {
-        let a = call(serde_json::json!({ "op": "joined_by_invite", "args": { "invite": text } }).to_string());
-        if let Some(e) = a.get("error") {
-            eprintln!("phone-on-linux: joined_by_invite: {e}");
-            return ExitCode::FAILURE;
-        }
-    }
     let mut inviting: Option<std::sync::Arc<Inviting>> = None;
+    let mut windows: Option<std::sync::Arc<Windowing>> = None;
+    if window {
+        windows = window_new(m, admin);
+    }
     for line in std::io::stdin().lines() {
         let Ok(line) = line else { break };
-        if let Some(text) = line.strip_prefix("COPY ") {
+        if line == "WINDOW" {
+            // The one open window closes before the next opens.
+            drop(windows.take());
+            windows = window_new(m, admin);
+        } else if let Some(text) = line.strip_prefix("COPY ") {
             let a = call(serde_json::json!({ "op": "copy", "args": { "text": text } }).to_string());
             if let Some(e) = a.get("error") {
                 println!("REFUSED {}", e["message"].as_str().unwrap_or_default());
@@ -440,13 +242,6 @@ fn run_member(
         } else if line == "DEVICES" {
             let a = call(serde_json::json!({ "op": "devices" }).to_string());
             println!("DEVICES {}", a["ok"]["devices"]);
-        } else if line == "SERVERS" {
-            let mut n = 0usize;
-            // SAFETY: m runs; the callback needs no context.
-            println!(
-                "SERVERS {}",
-                take(unsafe { cbb_member_servers(m, server_keys, std::ptr::null_mut(), &mut n) }, n)
-            );
         } else if let Some(req) = line.strip_prefix("CALL ") {
             println!("ANSWER {}", call(req.to_string()));
         } else if line == "MUTED" || line == "SYNC ON" || line.starts_with("SYNC OFF ") {
@@ -461,20 +256,6 @@ fn run_member(
         } else if let Some(req) = line.strip_prefix("PIV ") {
             let r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
             println!("PIV {}", card::piv(&r));
-        } else if let Some(req) = line.strip_prefix("MANAGE_CARD ") {
-            // Signed with the key on the YubiKey (cbb_member_manage_card):
-            // the request names its slot, its key's point as public, and
-            // the PIN.
-            let mut n = 0usize;
-            // SAFETY: m runs; req and n live for the call; carry needs no
-            // context.
-            let got = take(
-                unsafe {
-                    cbb_member_manage_card(m, req.as_ptr(), req.len(), card::carry, std::ptr::null_mut(), &mut n)
-                },
-                n,
-            );
-            println!("MANAGED {got}");
         } else if let Some(name) = line.strip_prefix("WATCH ADD ") {
             // The root makes its watch an admin with the key the watch made
             // (add_watch); the watch keeps its device ID and admin CA.
@@ -485,7 +266,7 @@ fn run_member(
                         "key": STANDARD.encode(watch::spki()),
                     })
                     .to_string();
-                    let got = manage(m, k, public, &joined["admin_ca"], &req);
+                    let got = manage(m, k, public, &req);
                     watch::admitted(&got["ok"]);
                     println!("WATCH ADDED {got}");
                 }
@@ -505,9 +286,18 @@ fn run_member(
             let got = take(unsafe { cbb_member_manage_watch(m, req.as_ptr(), req.len(), watch::sign, ctx, &mut n) }, n);
             println!("WATCH SAW {}", watch::seen());
             println!("WATCHED {got}");
+        } else if let Some(req) = line.strip_prefix("NEWROOT ") {
+            // A change of root with the recovery key (change_preview,
+            // change_root), signed by the new root key the app makes for
+            // it, fixed here; MANAGE signs with it once the change took.
+            let r = manage(m, &new_root, &new_root_public, req);
+            if r["ok"]["seq"].is_u64() {
+                admin = Some((&new_root, new_root_public.as_str()));
+            }
+            println!("NEWROOTED {r}");
         } else if let Some(req) = line.strip_prefix("MANAGE ") {
             match admin {
-                Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
+                Some((k, public)) => println!("MANAGED {}", manage(m, k, public, req)),
                 None => println!("MANAGED {{\"error\":{{\"message\":\"this phone is not an admin\"}}}}"),
             }
         } else if let Some(yes) = line.strip_prefix("INVITE ANSWER ") {
@@ -518,17 +308,184 @@ fn run_member(
         } else if let Some(secs) = line.strip_prefix("INVITE ") {
             inviting = None;
             match admin {
-                Some((k, public)) => inviting = invite_new(m, k, public, &joined["admin_ca"], secs),
+                Some((k, public)) => inviting = invite_new(m, k, public, secs),
                 None => println!("INVITE FAILED this phone is not an admin"),
-            }
-        } else if let Some(qr) = line.strip_prefix("ADMIT ") {
-            match admin {
-                Some((k, public)) => admit(m, k, public, &joined["admin_ca"], qr),
-                None => println!("ADMIT FAILED this phone is not an admin"),
             }
         }
     }
     ExitCode::SUCCESS
+}
+
+/// A pairing window of 0.6 the phone opened, freed when dropped.
+struct Windowing(*mut cbb_ffi::window::Window);
+
+// SAFETY: the library's window may be used from any thread.
+unsafe impl Send for Windowing {}
+unsafe impl Sync for Windowing {}
+
+impl Drop for Windowing {
+    fn drop(&mut self) {
+        // SAFETY: the window is freed once, here.
+        unsafe { cbb_window_free(self.0) };
+    }
+}
+
+/// Opens the member's home window of 0.6 with the admin key (the root key
+/// on a phone that made its group), as the app does: the member port
+/// listens first. It prints "WINDOW <QR code text>" and "WINDOW DIGITS
+/// <six digits>", then from a thread of its own "WINDOW JOINING" when a
+/// device dials it, "WINDOW DONE <name>" when one joined (the window then
+/// closes), "WINDOW FAILED <message>" for an attempt that failed (the
+/// window stays open) and "WINDOW CLOSED <message>" when its time is up or
+/// it took three wrong codes.
+fn window_new(
+    m: *const cbb_ffi::member::Member,
+    admin: Option<(&SigningKey, &str)>,
+) -> Option<std::sync::Arc<Windowing>> {
+    let Some((key, public)) = admin else {
+        println!("WINDOW FAILED this phone has no admin key");
+        return None;
+    };
+    let listen = serde_json::json!({ "op": "listen", "args": { "kind": "home", "port": 0 } }).to_string();
+    let mut n = 0usize;
+    // SAFETY: m runs; listen and n live for the call.
+    let got = take(unsafe { cbb_member_call(m, listen.as_ptr(), listen.len(), &mut n) }, n);
+    if let Some(e) = got.get("error") {
+        println!("WINDOW FAILED {}", e["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    let req = serde_json::json!({ "public": public, "addrs": ["127.0.0.1"], "expires": 0, "mdns": false }).to_string();
+    let mut ans = std::ptr::null_mut();
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: m runs; req, ans and n live for the call; the key outlives the
+    // window.
+    let w = unsafe { cbb_window_new(m, req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
+    let created = take(ans, n);
+    if w.is_null() {
+        println!("WINDOW FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    println!("WINDOW {}", created["ok"]["qr"].as_str().unwrap_or_default());
+    println!("WINDOW DIGITS {}", created["ok"]["digits"].as_str().unwrap_or_default());
+    let windowing = std::sync::Arc::new(Windowing(w));
+    let held = std::sync::Arc::downgrade(&windowing);
+    std::thread::spawn(move || {
+        let mut version = 0u64;
+        loop {
+            // Holds the window only for one wait, so that dropping it
+            // (another WINDOW, or the end) ends this thread.
+            let Some(w) = held.upgrade() else { return };
+            let mut n = 0usize;
+            // SAFETY: w keeps the window for the call.
+            let st = take(unsafe { cbb_window_next(w.0, version, 1000, &mut n) }, n);
+            drop(w);
+            let ok = &st["ok"];
+            let v = ok["version"].as_u64().unwrap_or(version);
+            if v == version {
+                continue;
+            }
+            version = v;
+            let text = |k: &str| ok[k].as_str().unwrap_or_default().to_string();
+            match ok["state"].as_str() {
+                Some("joining") => println!("WINDOW JOINING"),
+                Some("done") => {
+                    println!("WINDOW DONE {}", text("name"));
+                    return;
+                }
+                Some("failed") => {
+                    println!("WINDOW FAILED {}", ok["error"]["message"].as_str().unwrap_or_default())
+                }
+                Some("closed") => {
+                    println!("WINDOW CLOSED {}", ok["error"]["message"].as_str().unwrap_or_default());
+                    return;
+                }
+                _ => {}
+            }
+        }
+    });
+    Some(windowing)
+}
+
+/// Joins a group of 0.6 by a home window's QR code, or by its six digits
+/// with the one window announced at home, as the app does, keeping the set
+/// in dir: it prints "Joined <device> <group tag> <member's name>", the tag
+/// the first 16 hex characters of the group's ID, or "JOIN FAILED
+/// <message>". With admin it offers that key, for the root to make it an
+/// admin later. code is the QR code's text, the digits and a remote
+/// invitation's text, one of them given: by an invitation it prints
+/// "Fingerprint <fingerprint>" first, which the inviting admin compares.
+/// It answers the device ID.
+fn join_window(
+    key: &SigningKey,
+    public_b64: &str,
+    admin: Option<(&SigningKey, &str)>,
+    name: &str,
+    dir: &str,
+    (qr, digits, invite): &(String, String, String),
+) -> Option<String> {
+    let mut req = serde_json::json!({
+        "dir": dir, "qr": qr, "digits": digits, "invite": invite, "name": name, "os": "aurora",
+        "public": public_b64,
+    });
+    if let Some((_, public)) = admin {
+        req["admin_public"] = public.into();
+    }
+    let req = req.to_string();
+    let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
+    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
+    // SAFETY: req, ans and n live for the call; the keys outlive the joiner.
+    let j = unsafe {
+        match admin {
+            Some((k, _)) => {
+                let admin_ctx = k as *const SigningKey as *mut core::ffi::c_void;
+                cbb_joiner_new_admin(req.as_ptr(), req.len(), sign, ctx, sign, admin_ctx, &mut ans, &mut n)
+            }
+            None => cbb_joiner_new(req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n),
+        }
+    };
+    let created = take(ans, n);
+    if j.is_null() {
+        println!("JOIN FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
+        return None;
+    }
+    if let Some(fp) = created["ok"]["fingerprint"].as_str() {
+        println!("Fingerprint {fp}");
+    }
+    let mut version = 0u64;
+    let joined = loop {
+        // SAFETY: j is the joiner, used by this thread only.
+        let st = take(unsafe { cbb_joiner_next(j, version, 1000, &mut n) }, n);
+        let ok = &st["ok"];
+        if ok.is_null() {
+            println!("JOIN FAILED {}", st["error"]["message"].as_str().unwrap_or_default());
+            break None;
+        }
+        let v = ok["version"].as_u64().unwrap_or(version);
+        if v == version {
+            continue;
+        }
+        version = v;
+        match ok["state"].as_str() {
+            Some("done") => {
+                let group = ok["group"].as_str().unwrap_or_default();
+                let device = ok["device"].as_str().unwrap_or_default().to_string();
+                println!(
+                    "Joined {device} {} {}",
+                    group.get(..16).unwrap_or(group),
+                    ok["name"].as_str().unwrap_or_default()
+                );
+                break Some(device);
+            }
+            Some("failed") => {
+                println!("JOIN FAILED {}", ok["error"]["message"].as_str().unwrap_or_default());
+                break None;
+            }
+            _ => {}
+        }
+    };
+    // SAFETY: j is freed once.
+    unsafe { cbb_joiner_free(j) };
+    joined
 }
 
 /// An invitation the phone made, freed when dropped.
@@ -551,11 +508,10 @@ fn invite_new(
     m: *const cbb_ffi::member::Member,
     key: &SigningKey,
     public: &str,
-    admin_ca: &serde_json::Value,
     secs: &str,
 ) -> Option<std::sync::Arc<Inviting>> {
     let req = serde_json::json!({
-        "public": public, "admin_ca": admin_ca, "expires": secs.trim().parse::<u64>().unwrap_or(0),
+        "public": public, "expires": secs.trim().parse::<u64>().unwrap_or(0),
     })
     .to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
@@ -607,18 +563,9 @@ fn invite_new(
 
 /// Signs an admin's change or command (cbb_member_manage): req is the
 /// request without the key, which the admin key fills in.
-fn manage(
-    m: *const cbb_ffi::member::Member,
-    key: &SigningKey,
-    public: &str,
-    admin_ca: &serde_json::Value,
-    req: &str,
-) -> serde_json::Value {
+fn manage(m: *const cbb_ffi::member::Member, key: &SigningKey, public: &str, req: &str) -> serde_json::Value {
     let mut r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
     r["public"] = public.into();
-    if !admin_ca.is_null() {
-        r["admin_ca"] = admin_ca.clone();
-    }
     let req = r.to_string();
     let mut n = 0usize;
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
@@ -626,75 +573,42 @@ fn manage(
     take(unsafe { cbb_member_manage(m, req.as_ptr(), req.len(), sign, ctx, &mut n) }, n)
 }
 
-/// Admits the device whose QR code the user scanned, as the app does: the
-/// admission dials each of the code's addresses until one answers.
-fn admit(m: *const cbb_ffi::member::Member, key: &SigningKey, public: &str, admin_ca: &serde_json::Value, qr: &str) {
-    let req = serde_json::json!({ "qr": qr, "public": public, "admin_ca": admin_ca }).to_string();
-    let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
-    let ctx = key as *const SigningKey as *mut core::ffi::c_void;
-    // SAFETY: m runs; req, ans and n live for the call; the key outlives the
-    // admission.
-    let a = unsafe { cbb_admit_new(m, req.as_ptr(), req.len(), sign, ctx, &mut ans, &mut n) };
-    let created = take(ans, n);
-    if a.is_null() {
-        println!("ADMIT FAILED {}", created["error"]["message"].as_str().unwrap_or_default());
-        return;
-    }
-    let mut last = String::from("no address answered");
-    for addr in created["ok"]["addrs"].as_array().into_iter().flatten().filter_map(|v| v.as_str()) {
-        let Ok(mut sock) = std::net::TcpStream::connect(addr) else { continue };
-        // SAFETY: a is the admission, used by this thread only.
-        let mut step = take(unsafe { cbb_admit_dial(a, &mut n) }, n);
-        let mut buf = vec![0u8; 16 << 10];
-        loop {
-            let ok = &step["ok"];
-            if let Some(e) = step.get("error") {
-                last = e["message"].as_str().unwrap_or_default().into();
-                break;
-            }
-            let _ = sock.write_all(&b64(&ok["send"]));
-            match ok["state"].as_str() {
-                Some("admitted") => println!("ADMITTED {}", ok["device"]["device"].as_str().unwrap_or_default()),
-                Some("done") => {
-                    println!("ADMIT DONE {}", ok["confirmed"].as_bool().unwrap_or(false));
-                    // SAFETY: a is freed once.
-                    unsafe { cbb_admit_free(a) };
-                    return;
-                }
-                Some("failed") => {
-                    last = ok["error"]["message"].as_str().unwrap_or_default().into();
-                    break;
-                }
-                _ => {}
-            }
-            let got = sock.read(&mut buf).unwrap_or(0);
-            // SAFETY: buf holds got bytes; a as above.
-            step = take(unsafe { cbb_admit_feed(a, buf.as_ptr(), got, 0, &mut n) }, n);
-            if got == 0 && step["ok"]["state"] == "pending" {
-                last = "the device closed the connection".into();
-                break;
-            }
-        }
-    }
-    println!("ADMIT FAILED {last}");
-    // SAFETY: a is freed once.
-    unsafe { cbb_admit_free(a) };
-}
-
-/// A YubiKey with the PIV application kept in a file, for the tests: the
-/// retired slots' keys and certificates, the PIN 123456 and the factory
-/// AES-192 management key, as member/src/piv.rs's fake card in its tests.
 mod card {
+    //! A YubiKey 5 as far as the core's `cbb_piv` talks to it on a group of
+    //! 0.6 (docs/protocol.md, "The recovery key on a YubiKey (0.6)"): GET
+    //! VERSION, GET METADATA of slots 95 and 9B, the PIN 123456, GET DATA and
+    //! PUT DATA, the management key's challenge and response (AES-192, the
+    //! factory key first), SET MANAGEMENT KEY, GENERATE in slot 95 and ECDH
+    //! with its key. What the card holds is kept in the file, so that a later
+    //! run reads the same card; the touch is not asked.
+
     use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use aes::cipher::{Array, BlockCipherEncrypt as _, KeyInit as _};
+    use aes::cipher::{Array, BlockCipherDecrypt as _, BlockCipherEncrypt as _, KeyInit as _};
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
-    use p256::ecdsa::SigningKey;
-    use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-    use cbb_member::piv::DEFAULT_MANAGEMENT_KEY as KEY;
+    use cbb_core::sheet::yubikey as yk;
+    use cbb_member::piv::DEFAULT_MANAGEMENT_KEY;
+    use p256::elliptic_curve::sec1::ToSec1Point as _;
+
+    /// The card's lasting state.
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Held {
+        /// PIV objects by their tag, hex.
+        objects: BTreeMap<String, String>,
+        /// Slot 95: its private scalar and its PIN and touch policies.
+        slot: Option<(String, u8, u8)>,
+        /// The management key and whether it is the factory one.
+        mgmt: (String, bool),
+    }
+
+    impl Default for Held {
+        fn default() -> Held {
+            Held { objects: BTreeMap::new(), slot: None, mgmt: (STANDARD.encode(DEFAULT_MANAGEMENT_KEY), true) }
+        }
+    }
 
     #[derive(Default)]
     struct Session {
@@ -705,6 +619,10 @@ mod card {
         chain: Vec<u8>,
     }
 
+    const AES192: u8 = 0x0a;
+    const P256: u8 = 0x11;
+    const GENERATED: u8 = 0x01;
+
     static FILE: Mutex<Option<String>> = Mutex::new(None);
     static SESSION: Mutex<Option<Session>> = Mutex::new(None);
 
@@ -712,28 +630,18 @@ mod card {
         *FILE.lock().unwrap() = Some(f.to_string());
     }
 
-    /// The slots in the file: slot → (key, certificate).
-    fn load() -> BTreeMap<u8, (Vec<u8>, Vec<u8>)> {
+    fn load() -> Held {
         let f = FILE.lock().unwrap().clone().unwrap_or_default();
-        let v: serde_json::Value =
-            std::fs::read(&f).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
-        let mut out = BTreeMap::new();
-        for (k, e) in v.as_object().into_iter().flatten() {
-            let b = |x: &serde_json::Value| STANDARD.decode(x.as_str().unwrap_or_default()).unwrap_or_default();
-            out.insert(k.parse().unwrap_or(0), (b(&e["key"]), b(&e["cert"])));
-        }
-        out
+        std::fs::read(&f).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default()
     }
 
-    fn save(slots: &BTreeMap<u8, (Vec<u8>, Vec<u8>)>) {
+    fn save(h: &Held) {
         let f = FILE.lock().unwrap().clone().unwrap_or_default();
-        let v: serde_json::Map<String, serde_json::Value> = slots
-            .iter()
-            .map(|(k, (key, cert))| {
-                (k.to_string(), serde_json::json!({"key": STANDARD.encode(key), "cert": STANDARD.encode(cert)}))
-            })
-            .collect();
-        let _ = std::fs::write(f, serde_json::Value::Object(v).to_string());
+        let _ = std::fs::write(f, serde_json::to_vec(h).unwrap());
+    }
+
+    fn hex(b: &[u8]) -> String {
+        b.iter().map(|x| format!("{x:02x}")).collect()
     }
 
     fn tlv(tag: u8, v: &[u8]) -> Vec<u8> {
@@ -759,11 +667,15 @@ mod card {
         Some((b.get(i..i + n)?, b.get(i + n..)?))
     }
 
-    fn encrypt(block: &[u8]) -> Vec<u8> {
-        let c = aes::Aes192::new_from_slice(&KEY).unwrap();
-        let mut b: Array<u8, _> = <[u8; 16]>::try_from(block).unwrap().into();
-        c.encrypt_block(&mut b);
-        b.to_vec()
+    fn cipher(key: &[u8], block: &[u8], encrypt: bool) -> Option<Vec<u8>> {
+        let c = aes::Aes192::new_from_slice(key).ok()?;
+        let mut b: Array<u8, _> = <[u8; 16]>::try_from(block).ok()?.into();
+        if encrypt {
+            c.encrypt_block(&mut b);
+        } else {
+            c.decrypt_block(&mut b);
+        }
+        Some(b.to_vec())
     }
 
     fn sw(mut data: Vec<u8>, w: u16) -> Vec<u8> {
@@ -771,93 +683,130 @@ mod card {
         data
     }
 
+    fn scalar(h: &Held) -> Option<p256::SecretKey> {
+        let (k, _, _) = h.slot.as_ref()?;
+        p256::SecretKey::from_slice(&STANDARD.decode(k).ok()?).ok()
+    }
+
     /// One APDU to the card.
     fn transmit(apdu: &[u8]) -> Vec<u8> {
         let mut guard = SESSION.lock().unwrap();
         let s = guard.get_or_insert_with(Session::default);
-        let (cla, ins, _p1, p2) = (apdu[0], apdu[1], apdu[2], apdu[3]);
+        let (cla, ins, p1, p2) = (apdu[0], apdu[1], apdu[2], apdu[3]);
         let data = if apdu.len() > 5 { apdu[5..5 + usize::from(apdu[4])].to_vec() } else { Vec::new() };
         if cla & 0x10 != 0 {
             s.chain.extend(data);
             return sw(vec![], 0x9000);
         }
         let data = [std::mem::take(&mut s.chain), data].concat();
-        let mut slots = load();
+        let mut h = load();
+        let mgmt = STANDARD.decode(&h.mgmt.0).unwrap_or_default();
         match ins {
             0xa4 => {
                 *s = Session { selected: true, ..Session::default() };
                 sw(vec![], 0x9000)
             }
             _ if !s.selected => sw(vec![], 0x6d00),
-            0xcb => match slots.get(&(0x82 + data[4] - 0x0d)) {
-                Some((_, cert)) if !cert.is_empty() => {
-                    sw(tlv(0x53, &[tlv(0x70, cert), tlv(0x71, &[0])].concat()), 0x9000)
+            0xfd => sw(vec![5, 7, 1], 0x9000),
+            0xf7 if p2 == 0x9b => sw([tlv(0x01, &[AES192]), tlv(0x05, &[u8::from(h.mgmt.1)])].concat(), 0x9000),
+            0xf7 if p2 == yk::SLOT => match (&h.slot, scalar(&h)) {
+                (Some((_, pin, touch)), Some(k)) => {
+                    let point = k.public_key().to_sec1_point(false).as_bytes().to_vec();
+                    let m = [tlv(0x01, &[P256]), tlv(0x02, &[*pin, *touch]), tlv(0x03, &[GENERATED])];
+                    sw([&m[..], &[tlv(0x04, &tlv(0x86, &point))]].concat().concat(), 0x9000)
                 }
                 _ => sw(vec![], 0x6a82),
             },
+            0xf7 => sw(vec![], 0x6a82),
             0x20 => {
                 let mut want = [0xffu8; 8];
                 want[..6].copy_from_slice(b"123456");
                 s.verified = data == want;
                 sw(vec![], if s.verified { 0x9000 } else { 0x63c2 })
             }
-            0xf7 if p2 == 0x9b => sw(tlv(0x01, &[0x0b]), 0x9000),
-            0xf7 => match slots.get(&p2) {
-                Some(_) => sw(tlv(0x01, &[0x11]), 0x9000),
-                None => sw(vec![], 0x6a82),
-            },
+            0xcb => {
+                let Some(tag) = data.get(2..5) else { return sw(vec![], 0x6a80) };
+                let secret = tag == yk::OBJECT || tag == [0x5f, 0xc1, 0x09];
+                if secret && !s.verified {
+                    return sw(vec![], 0x6982);
+                }
+                match h.objects.get(&hex(tag)) {
+                    Some(v) => sw(tlv(0x53, &STANDARD.decode(v).unwrap_or_default()), 0x9000),
+                    None => sw(vec![], 0x6a82),
+                }
+            }
             0x87 if p2 == 0x9b => {
+                if p1 != AES192 {
+                    return sw(vec![], 0x6a86);
+                }
                 let (outer, _) = read(&data, 0x7c).unwrap();
                 let (first, rest) = read(outer, 0x80).unwrap();
                 if first.is_empty() {
                     let w = [0x5au8; 16];
                     s.witness = Some(w);
-                    return sw(tlv(0x7c, &tlv(0x80, &encrypt(&w))), 0x9000);
+                    return sw(tlv(0x7c, &tlv(0x80, &cipher(&mgmt, &w, true).unwrap())), 0x9000);
                 }
-                if Some(first) != s.witness.as_ref().map(|w| &w[..]) {
+                if Some(first) != s.witness.take().as_ref().map(|w| &w[..]) {
                     return sw(vec![], 0x6982);
                 }
                 let (challenge, _) = read(rest, 0x81).unwrap();
                 s.authed = true;
-                sw(tlv(0x7c, &tlv(0x82, &encrypt(challenge))), 0x9000)
+                sw(tlv(0x7c, &tlv(0x82, &cipher(&mgmt, challenge, true).unwrap())), 0x9000)
             }
-            0x87 => {
-                if !s.verified {
+            0x87 if p2 == yk::SLOT && p1 == P256 => {
+                // The PIN before each use of the key.
+                if !std::mem::take(&mut s.verified) {
                     return sw(vec![], 0x6982);
                 }
-                // The PIN before each signature.
-                s.verified = false;
-                let Some((key, _)) = slots.get(&p2) else { return sw(vec![], 0x6a82) };
-                let k = SigningKey::from_slice(key).unwrap();
+                let Some(k) = scalar(&h) else { return sw(vec![], 0x6a82) };
                 let (outer, _) = read(&data, 0x7c).unwrap();
                 let (_, rest) = read(outer, 0x82).unwrap();
-                let (digest, _) = read(rest, 0x81).unwrap();
-                let sig: p256::ecdsa::Signature = k.sign_prehash(digest).unwrap();
-                sw(tlv(0x7c, &tlv(0x82, sig.to_der().as_bytes())), 0x9000)
+                let (e, _) = read(rest, 0x85).unwrap();
+                match yk::ecdh(&k, e) {
+                    Ok(z) => sw(tlv(0x7c, &tlv(0x82, z.as_ref())), 0x9000),
+                    Err(_) => sw(vec![], 0x6a80),
+                }
             }
-            0x47 => {
+            0x87 => sw(vec![], 0x6a86),
+            0x47 if p2 == yk::SLOT => {
                 if !s.authed {
                     return sw(vec![], 0x6982);
                 }
-                let k = SigningKey::from_slice(&[0x40 + p2 % 0x40; 32]).unwrap();
-                let point = k.verifying_key().to_sec1_point(false).as_bytes().to_vec();
-                slots.insert(p2, (k.to_bytes().to_vec(), Vec::new()));
-                save(&slots);
+                let (spec, _) = read(&data, 0xac).unwrap();
+                let (pin, touch) = (spec[5], spec[8]);
+                // A test's key, the same on every run.
+                let k = p256::SecretKey::from_slice(&[0x95; 32]).unwrap();
+                let point = k.public_key().to_sec1_point(false).as_bytes().to_vec();
+                h.slot = Some((STANDARD.encode(k.to_bytes()), pin, touch));
+                save(&h);
                 let mut out = vec![0x7f];
                 out.extend(tlv(0x49, &tlv(0x86, &point)));
                 sw(out, 0x9000)
             }
+            0x47 => sw(vec![], 0x6a86),
             0xdb => {
                 if !s.authed {
                     return sw(vec![], 0x6982);
                 }
-                let (id, rest) = read(&data, 0x5c).unwrap();
-                let slot = 0x82 + id[2] - 0x0d;
-                let (obj, _) = read(rest, 0x53).unwrap();
-                let (der, _) = read(obj, 0x70).unwrap();
-                let Some(e) = slots.get_mut(&slot) else { return sw(vec![], 0x6a82) };
-                e.1 = der.to_vec();
-                save(&slots);
+                let (tag, rest) = read(&data, 0x5c).unwrap();
+                let (v, _) = read(rest, 0x53).unwrap();
+                // An empty value deletes the object.
+                if v.is_empty() {
+                    h.objects.remove(&hex(tag));
+                } else {
+                    h.objects.insert(hex(tag), STANDARD.encode(v));
+                }
+                save(&h);
+                sw(vec![], 0x9000)
+            }
+            0xff => {
+                if !s.authed || data.len() < 3 || data[0] != AES192 || data[1] != 0x9b {
+                    return sw(vec![], 0x6982);
+                }
+                let key = &data[3..3 + usize::from(data[2])];
+                h.mgmt = (STANDARD.encode(key), false);
+                save(&h);
+                s.authed = false;
                 sw(vec![], 0x9000)
             }
             _ => sw(vec![], 0x6d00),
@@ -884,12 +833,72 @@ mod card {
         0
     }
 
-    /// cbb_piv on the card.
+    /// The answers a fake CCID reader in front of the card has for the
+    /// app's bulk-in reads, in transfers of 64 bytes, as a YubiKey on USB
+    /// sends them.
+    static READER: std::sync::Mutex<std::collections::VecDeque<Vec<u8>>> =
+        std::sync::Mutex::new(std::collections::VecDeque::new());
+
+    fn reader_says(seq: u8, status: u8, data: &[u8]) {
+        let mut m = vec![0x80];
+        m.extend_from_slice(&u32::try_from(data.len()).unwrap_or(0).to_le_bytes());
+        m.extend_from_slice(&[0, seq, status, 0, 0]);
+        m.extend_from_slice(data);
+        let mut q = READER.lock().unwrap_or_else(|e| e.into_inner());
+        for c in m.chunks(64) {
+            q.push_back(c.to_vec());
+        }
+    }
+
+    /// cbb_transmit_fn for the transport `ccid_bulk`: a write is a CCID
+    /// message to the reader, which answers on the next reads, a time
+    /// extension before each APDU's answer as while a YubiKey waits for
+    /// its touch; a read with nothing waiting is empty.
+    pub unsafe extern "C" fn carry_ccid(
+        _: *mut core::ffi::c_void,
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        cap: usize,
+        out_len: *mut usize,
+    ) -> i32 {
+        // SAFETY: as cbb_core.h's cbb_transmit_fn says.
+        unsafe {
+            if len > 0 {
+                let m = std::slice::from_raw_parts(data, len);
+                if m.len() < 10 {
+                    return 1;
+                }
+                match m[0] {
+                    0x62 => reader_says(m[6], 0, &[0x3b, 0x8d, 0x80]),
+                    0x6f => {
+                        let r = transmit(&m[10..]);
+                        reader_says(m[6], 0x80, &[]);
+                        reader_says(m[6], 0, &r);
+                    }
+                    _ => reader_says(m[6], 0x40, &[]),
+                }
+                out_len.write(0);
+                return 0;
+            }
+            let next = READER.lock().unwrap_or_else(|e| e.into_inner()).pop_front().unwrap_or_default();
+            if next.len() > cap {
+                return 1;
+            }
+            std::ptr::copy_nonoverlapping(next.as_ptr(), out, next.len());
+            out_len.write(next.len());
+        }
+        0
+    }
+
+    /// cbb_piv on the card: through the fake CCID reader when the request
+    /// asks for the transport `ccid_bulk`.
     pub fn piv(req: &serde_json::Value) -> serde_json::Value {
+        let f = if req["transport"] == "ccid_bulk" { carry_ccid } else { carry };
         let req = req.to_string();
         let mut n = 0usize;
-        // SAFETY: req and n live for the call; carry needs no context.
-        super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), carry, std::ptr::null_mut(), &mut n) }, n)
+        // SAFETY: req and n live for the call; neither carrier needs a context.
+        super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), f, std::ptr::null_mut(), &mut n) }, n)
     }
 }
 
@@ -901,9 +910,10 @@ mod watch {
     use p256::ecdsa::SigningKey;
     use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-    /// The watch's admin key; fixed, as a test's.
+    /// The watch's admin key; fixed, as a test's, and none of the phone's
+    /// own keys (seeds 7 and 8 up).
     fn key() -> SigningKey {
-        SigningKey::from_slice(&[7u8; 32]).unwrap()
+        SigningKey::from_slice(&[0x77u8; 32]).unwrap()
     }
 
     static ADMITTED: Mutex<Option<serde_json::Value>> = Mutex::new(None);

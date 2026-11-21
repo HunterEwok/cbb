@@ -177,8 +177,6 @@ public final class CoreMember: @unchecked Sendable {
     public enum Message: Sendable {
         /// The admin CA the root issued for this phone's admin key.
         case admin(ca: Data)
-        /// What a hub shares with the group's other hubs.
-        case hubs(Member.HubShare)
         /// The group's server credentials it keeps.
         case credentials([ServerCredentials.Credential])
         /// An attestation of one of its keys.
@@ -216,6 +214,24 @@ public final class CoreMember: @unchecked Sendable {
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
         case mute(muted: Bool, forMS: Int64, by: String)
+        /// An admin turned this phone's sync off (off true) or on again:
+        /// the member of 0.6 carried the command out and keeps it.
+        case sync(off: Bool, by: String)
+        /// The group's state changed (a record came, a device joined or
+        /// left).
+        case state(GroupState)
+        /// A new notice about the group.
+        case notice(Notice)
+        /// The group's root changed by its recovery key: every device shows
+        /// it and cannot turn it off, with "This wasn't me". from and to are
+        /// the old and new root's devices, seq the change's step.
+        case rootChanged(from: String, to: String, seq: UInt64)
+        /// The member needs a key of the phone's (kind spare_admin): the app
+        /// makes it and answers with `keyMade(_:public:)` and the token.
+        case needKey(token: UInt64, kind: String)
+        /// The member no longer needs the key public (a point): the app may
+        /// delete it.
+        case keyDone(public: Data)
         /// Something in the member broke (docs/core-api.md, "Panics"):
         /// details say what and where. The app logs it, shows it and
         /// starts the member again.
@@ -306,7 +322,8 @@ public final class CoreMember: @unchecked Sendable {
         }
     }
 
-    /// The member's handle, which an admission (CorePairing.Admitting) runs on.
+    /// The member's handle, which a pairing window or an invitation
+    /// (CorePairing.Window, CorePairing.Inviting) runs on.
     let handle: OpaquePointer
     private let context: Context
     private let lock = NSLock()
@@ -506,6 +523,212 @@ public final class CoreMember: @unchecked Sendable {
         return try run("listen", A(port: port, kind: what), as: R.self).port
     }
 
+    /// A hub's registration with its forwarder, as `away_status` gives it.
+    public struct ForwarderState: Decodable, Equatable, Sendable {
+        public var endpoint = "", registered = false, seen = "", entriesStale = false, error = "", detail = ""
+
+        enum CodingKeys: String, CodingKey { case endpoint, registered, seen, entriesStale = "entries_stale", error, detail }
+
+        public init(endpoint: String = "", registered: Bool = false, seen: String = "", entriesStale: Bool = false, error: String = "", detail: String = "") {
+            (self.endpoint, self.registered, self.seen, self.entriesStale, self.error, self.detail) = (endpoint, registered, seen, entriesStale, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            endpoint = try c.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+            registered = try c.decodeIfPresent(Bool.self, forKey: .registered) ?? false
+            seen = try c.decodeIfPresent(String.self, forKey: .seen) ?? ""
+            entriesStale = try c.decodeIfPresent(Bool.self, forKey: .entriesStale) ?? false
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+    }
+
+    /// This phone's link to the group's relay, as `away_status` gives it.
+    public struct RelayState: Decodable, Equatable, Sendable {
+        public var endpoint = "", connected = false, online: [String] = [], error = "", detail = ""
+
+        public init(endpoint: String = "", connected: Bool = false, online: [String] = [], error: String = "", detail: String = "") {
+            (self.endpoint, self.connected, self.online, self.error, self.detail) = (endpoint, connected, online, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            endpoint = try c.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+            connected = try c.decodeIfPresent(Bool.self, forKey: .connected) ?? false
+            online = try c.decodeIfPresent([String].self, forKey: .online) ?? []
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+
+        enum CodingKeys: String, CodingKey { case endpoint, connected, online, error, detail }
+    }
+
+    /// Sync away from home on a group of 0.6, as the member runs it
+    /// (`away_status`, docs/core-api.md): a hub (standing by while a hub
+    /// above it serves) with its port, clients, endpoints and forwarder;
+    /// else the hub it reaches and whether through the tunnel now; the
+    /// relay link; the last error with its detail.
+    public struct AwayState: Decodable, Equatable, Sendable {
+        public var hub = false, standby = false, port = 0, clients = 0, obfuscated = false, vless = false
+        public var endpoints: [String] = [], hubDevice = "", through = false, keysInFile = false
+        public var forwarder: ForwarderState?, relay: RelayState?
+        public var error = "", detail = ""
+
+        /// Sync away from home is on: the member keeps its tunnel keys; a
+        /// failure while it is off shows only error.
+        public var isOn: Bool { keysInFile }
+
+        enum CodingKeys: String, CodingKey {
+            case hub, standby, port, clients, obfuscated, vless, endpoints, hubDevice = "hub_device", through, keysInFile = "keys_in_file"
+            case forwarder, relay, error, detail
+        }
+
+        public init(hub: Bool = false, hubDevice: String = "", through: Bool = false, keysInFile: Bool = true, clients: Int = 0,
+                    forwarder: ForwarderState? = nil, relay: RelayState? = nil, error: String = "", detail: String = "") {
+            (self.hub, self.hubDevice, self.through, self.keysInFile, self.clients) = (hub, hubDevice, through, keysInFile, clients)
+            (self.forwarder, self.relay, self.error, self.detail) = (forwarder, relay, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
+            standby = try c.decodeIfPresent(Bool.self, forKey: .standby) ?? false
+            port = try c.decodeIfPresent(Int.self, forKey: .port) ?? 0
+            clients = try c.decodeIfPresent(Int.self, forKey: .clients) ?? 0
+            obfuscated = try c.decodeIfPresent(Bool.self, forKey: .obfuscated) ?? false
+            vless = try c.decodeIfPresent(Bool.self, forKey: .vless) ?? false
+            endpoints = try c.decodeIfPresent([String].self, forKey: .endpoints) ?? []
+            hubDevice = try c.decodeIfPresent(String.self, forKey: .hubDevice) ?? ""
+            through = try c.decodeIfPresent(Bool.self, forKey: .through) ?? false
+            keysInFile = try c.decodeIfPresent(Bool.self, forKey: .keysInFile) ?? false
+            forwarder = try c.decodeIfPresent(ForwarderState.self, forKey: .forwarder)
+            relay = try c.decodeIfPresent(RelayState.self, forKey: .relay)
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+    }
+
+    private struct AwayAnswer: Decodable { var away: AwayState? }
+
+    /// The forwarder the group's root set for this phone as a hub: its address and its key's pin.
+    public struct RootForwarder: Codable, Equatable, Sendable {
+        public var endpoint: String
+        public var key: String
+
+        public init(endpoint: String, key: String) { (self.endpoint, self.key) = (endpoint, key) }
+    }
+
+    /// Where the group's server credentials stand on the root phone of a
+    /// group of 0.6: due when they need its root key (`renewPeriod`),
+    /// overdue when they expired, so that the group's relay and its hubs'
+    /// forwarders take nobody; both false elsewhere.
+    public struct Periods: Decodable, Equatable, Sendable {
+        public var due = false
+        public var overdue = false
+
+        public init(due: Bool = false, overdue: Bool = false) { (self.due, self.overdue) = (due, overdue) }
+
+        enum CodingKeys: String, CodingKey { case due = "period_due", overdue = "period_overdue" }
+
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            due = try c.decodeIfPresent(Bool.self, forKey: .due) ?? false
+            overdue = try c.decodeIfPresent(Bool.self, forKey: .overdue) ?? false
+        }
+    }
+
+    /// On the root phone of a group of 0.6: where the group's server credentials stand.
+    public func periods() throws -> Periods {
+        try run("away_status", Optional<Empty>.none, as: Periods.self)
+    }
+
+    /// On the root phone of a group of 0.6: renews the group's server
+    /// credentials with the root key, signed through sign; where they stand after.
+    @discardableResult
+    public func renewPeriod(public: Data, sign: @escaping (Data) throws -> Data) throws -> Periods {
+        struct A: Encodable { var action = "period", `public`: Data }
+        return try manage(A(public: try Self.point(`public`)), sign: sign, as: Periods.self)
+    }
+
+    /// On a group of 0.6: the group's face toward the push service that the
+    /// newest keys.json the member holds names (16 bytes), which every
+    /// registration names; nil until one does.
+    public func pushFace() throws -> Data? {
+        struct R: Decodable { var face: Data? }
+        return try run("push_face", Optional<Empty>.none, as: R.self).face.flatMap { $0.count == 16 ? $0 : nil }
+    }
+
+    /// On a group of 0.6: this phone's registration for push, message
+    /// `push` as `PushVault` made it, which the member sends to every
+    /// member connected now and to each one that connects later; nil stops it.
+    public func setPush(_ frame: Data?) throws {
+        struct A: Encodable { var frame: Data? }
+        try run("push", A(frame: frame))
+    }
+
+    /// A `push-renew` a member sent: the group with this slot registers
+    /// again, from the phone's clock when `ahead`.
+    public struct Renewal: Decodable, Equatable, Sendable {
+        public var slot: Data
+        public var ahead: Bool
+    }
+
+    /// On a group of 0.6: the `push-renew` messages members sent since the
+    /// last call, one per slot.
+    public func pushRenewals() throws -> [Renewal] {
+        struct R: Decodable { var renewals: [Renewal] }
+        return try run("push_renewals", Optional<Empty>.none, as: R.self).renewals
+    }
+
+    /// On a group of 0.6: the forwarder the group's root set for this phone
+    /// as a hub, which it serves through; nil while the root set none.
+    public func rootForwarder() throws -> RootForwarder? {
+        struct R: Decodable {
+            var rootForwarder: RootForwarder?
+            enum CodingKeys: String, CodingKey { case rootForwarder = "root_forwarder" }
+        }
+        return try run("away_status", Optional<Empty>.none, as: R.self).rootForwarder
+    }
+
+    /// On a group of 0.6: sync away from home as the member runs it, nil while it is off.
+    public func awayStatus() throws -> AwayState? {
+        try run("away_status", Optional<Empty>.none, as: AwayAnswer.self).away
+    }
+
+    /// On a group of 0.6: turns sync away from home on, with new tunnel keys, or off.
+    @discardableResult
+    public func setAway(_ on: Bool) throws -> AwayState? {
+        struct A: Encodable { var on: Bool }
+        return try run("away", A(on: on), as: AwayAnswer.self).away
+    }
+
+    /// On a group of 0.6, serves as a hub of the group (the records must
+    /// make this phone one: an admin key), as the computers' hub: reached
+    /// away from home through the forwarder at forwarder (`host:port`, its
+    /// key's pin key, or `default` for the project's), or at addrs
+    /// ("ip:port") on the UDP port (0 for any free one), hidden as
+    /// obfuscateOff and vlessOff say. Its clients and the guests of
+    /// invitations come in through its tunnel.
+    @discardableResult
+    public func serveAsHub(port: UInt16 = 0, addrs: [String] = [], forwarder: String = "", key: String = "",
+                           obfuscateOff: Bool = false, vlessOff: Bool = false) throws -> AwayState? {
+        struct A: Encodable {
+            var port: UInt16, addrs: [String], forwarder: String, key: String
+            var obfuscateOff: Bool, vlessOff: Bool
+            enum CodingKeys: String, CodingKey { case port, addrs, forwarder, key, obfuscateOff = "obfuscate_off", vlessOff = "vless_off" }
+        }
+        return try run("hub", A(port: port, addrs: addrs, forwarder: forwarder, key: key, obfuscateOff: obfuscateOff, vlessOff: vlessOff),
+                       as: AwayAnswer.self).away
+    }
+
+    /// On a group of 0.6: stops serving as a hub; its clients go to the
+    /// next hub in the group's order.
+    @discardableResult
+    public func stopHub() throws -> AwayState? {
+        try run("hub_off", Optional<Empty>.none, as: AwayAnswer.self).away
+    }
+
     /// Closes the member port for what, or every one with nil.
     public func unlisten(_ what: Listen? = nil) throws {
         struct A: Encodable { var kind: Listen? }
@@ -627,22 +850,6 @@ public final class CoreMember: @unchecked Sendable {
         return try run("send_admin_ca", A(to: to, ca: ca), as: Sent.self).sent
     }
 
-    /// Sends the member to a tunnel offer of this hub's, or of another it
-    /// passes on.
-    @discardableResult
-    public func sendTunnel(to: String, offer: Member.TunnelOffer) throws -> Bool {
-        struct A: Encodable { var to: String, offer: Member.TunnelOffer }
-        return try run("send_tunnel", A(to: to, offer: offer), as: Sent.self).sent
-    }
-
-    /// Sends what this hub shares to the group's other hubs connected, or
-    /// to the member to only; those it went to.
-    @discardableResult
-    public func sendHubs(_ share: Member.HubShare, to: String? = nil) throws -> [String] {
-        struct A: Encodable { var share: Member.HubShare, to: String? }
-        return try run("send_hubs", A(share: share, to: to), as: To.self).to
-    }
-
     /// Sends the group's server credentials to the member to only (a peer
     /// that just connected), or to every member but except (the one that
     /// sent them); those it went to.
@@ -657,13 +864,6 @@ public final class CoreMember: @unchecked Sendable {
     public func answer(_ token: UInt64, result: Member.CommandResult) throws {
         struct A: Encodable { var token: UInt64, status: String, reason: String }
         try run("answer", A(token: token, status: result.status, reason: result.reason ?? ""))
-    }
-
-    /// Sets the tunnel key and preshared key the hellos offer the group's
-    /// hubs, nil while sync away from home is off.
-    public func setTunnelKey(_ key: Data?, psk: Data?) throws {
-        struct A: Encodable { var key: Data?, psk: Data? }
-        try run("tunnel_key", key == nil || psk == nil ? A(key: nil, psk: nil) : A(key: key, psk: psk))
     }
 
     /// Sets the attestations of the phone's keys every peer gets after its
@@ -682,6 +882,67 @@ public final class CoreMember: @unchecked Sendable {
 
     /// The devices connected now, by ID.
     public func connected() -> Set<String> { Set(((try? peers()) ?? []).map(\.device)) }
+
+    // MARK: The group in 0.6
+
+    // The member keeps and evaluates the records (docs/core-api.md, "The
+    // member"); the app reads what it shows and asks for what the person
+    // decides.
+
+    /// The group as the member sees it now.
+    public func group() throws -> GroupState { try run("group", Optional<Empty>.none, as: GroupState.self) }
+
+    /// The member's notices about the group, newest first.
+    public func notices() throws -> [Notice] {
+        struct R: Decodable { var notices: [Notice] }
+        return try run("notices", Optional<Empty>.none, as: R.self).notices
+    }
+
+    /// Hides the notice id until something about it changes.
+    public func dismiss(_ id: String) throws {
+        struct A: Encodable { var id: String }
+        try run("dismiss", A(id: id))
+    }
+
+    /// Tells the member the person kept the recovery key: "sheet" or
+    /// "yubikey".
+    public func recoverySaved(_ how: String) throws {
+        struct A: Encodable { var how: String }
+        try run("recovery_saved", A(how: how))
+    }
+
+    /// Answers `Event.needKey`: the app made the key public (DER).
+    public func keyMade(_ token: UInt64, public: Data) throws {
+        struct A: Encodable { var token: UInt64, `public`: Data }
+        try run("key_made", A(token: token, public: try Self.point(`public`)))
+    }
+
+    /// Who stays after a change of root with the recovery key, before
+    /// anything is signed: the core writes the list; leaveOut are the
+    /// devices the person unticked. The recovery keys are derived inside
+    /// the call and dropped at its end.
+    public func changePreview(_ recovery: RecoveryInput, leaveOut: [String] = []) throws -> ChangePreview {
+        struct A: Encodable { var action = "change_preview", recovery: RecoveryInput, leave_out: [String] }
+        return try manage(A(recovery: recovery, leave_out: leaveOut), sign: { _ in throw Core.Mismatch(reason: "a preview signs nothing") },
+                          as: ChangePreview.self)
+    }
+
+    /// Changes the group's root to this phone's new root key rootPublic
+    /// (DER), which sign signs with (Face ID before each use): the recovery
+    /// key signs the change, the new root its first records, and leaveOut
+    /// are removed in the same act. overWaiting writes over a change whose
+    /// records never came; offer it only after a sync failed. It returns
+    /// the change's step.
+    @discardableResult
+    public func changeRoot(_ recovery: RecoveryInput, leaveOut: [String], rootPublic: Data, dropHubs: Bool = false, overWaiting: Bool = false,
+                           sign: @escaping (Data) throws -> Data) throws -> UInt64 {
+        struct A: Encodable {
+            var action = "change_root", recovery: RecoveryInput, leave_out: [String], drop_hubs: Bool, over_waiting: Bool, `public`: Data
+        }
+        struct R: Decodable { var seq: UInt64? }
+        return try manage(A(recovery: recovery, leave_out: leaveOut, drop_hubs: dropHubs, over_waiting: overWaiting,
+                            public: try Self.point(rootPublic)), sign: sign, as: R.self).seq ?? 0
+    }
 
     // MARK: Taking the group over
 
@@ -780,6 +1041,30 @@ public final class CoreMember: @unchecked Sendable {
         return try manage(A(level: level, public: try Self.point(`public`)), sign: sign, as: R.self).below ?? []
     }
 
+    /// On the root of a group of 0.6: the group's relays, each "address
+    /// pin", or "default" alone; none meets at no relay. It answers their
+    /// addresses.
+    @discardableResult
+    public func setRelays(_ relays: [String], public: Data, sign: @escaping (Data) throws -> Data) throws -> [String] {
+        struct A: Encodable { var action = "relay", relays: [String], `public`: Data }
+        struct R: Decodable { var relays: [String]? }
+        return try manage(A(relays: relays, public: try Self.point(`public`)), sign: sign, as: R.self).relays ?? []
+    }
+
+    /// On the root of a group of 0.6: names the forwarder of device, an
+    /// admin phone or a computer that may be a hub, at forwarder
+    /// (`host:port`, or `default` for the project's) with its key's pin
+    /// key, which the device takes as its forwarder setting and serves
+    /// through once its hub is on. The device's answer: done, refused or
+    /// failed, and why.
+    public func nameForwarder(_ device: String, forwarder: String, key: String, public: Data,
+                              sign: @escaping (Data) throws -> Data) throws -> (status: String, reason: String) {
+        struct A: Encodable { var action = "forwarder", device: String, forwarder: String, key: String, `public`: Data }
+        struct R: Decodable { var status: String?, reason: String? }
+        let r = try manage(A(device: device, forwarder: forwarder, key: key, public: try Self.point(`public`)), sign: sign, as: R.self)
+        return (r.status ?? "", r.reason ?? "")
+    }
+
     /// Hands the group to the admin device, whose claim then takes effect at once.
     public func handOver(to device: String, public: Data, sign: @escaping (Data) throws -> Data) throws {
         struct A: Encodable { var action = "hand_over", device: String, `public`: Data }
@@ -791,18 +1076,6 @@ public final class CoreMember: @unchecked Sendable {
     public func makeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws -> Core.RecoverySheet {
         struct A: Encodable { var action = "make_recovery", `public`: Data }
         return try manage(A(public: try Self.point(`public`)), sign: sign, as: Core.RecoverySheet.self)
-    }
-
-    /// Makes the group's recovery key from a key a YubiKey made (spki, a
-    /// SubjectPublicKeyInfo; Piv.generate): it returns the key's admin CA,
-    /// which goes into the YubiKey's slot.
-    public func recoveryFor(_ spki: Data, public: Data, sign: @escaping (Data) throws -> Data) throws -> Data {
-        struct A: Encodable { var action = "recovery_for", key: Data, `public`: Data }
-        struct R: Decodable { var admin_ca: Data? }
-        guard let ca = try manage(A(key: spki, public: try Self.point(`public`)), sign: sign, as: R.self).admin_ca else {
-            throw Core.Mismatch(reason: "the member's recovery key has no admin CA")
-        }
-        return ca
     }
 
     /// Removes the group's recovery key: the root revokes it, and a sheet
@@ -852,7 +1125,7 @@ public final class CoreMember: @unchecked Sendable {
     struct Wire: Decodable {
         var type: String
         var text: String?
-        var kind: Member.Kind?
+        var kind: String?
         var ttl_ms: UInt64?
         var line: String?
         var copy: Copy?
@@ -868,15 +1141,20 @@ public final class CoreMember: @unchecked Sendable {
         var port: UInt16?
         var device: String?
         var muted: Bool?
+        var off: Bool?
         var for_ms: Int64?
         var by: String?
         var details: String?
+        var state: GroupState?
+        var notice: Notice?
+        var to: String?
+        var seq: UInt64?
+        var `public`: Data?
     }
 
     struct WireMessage: Decodable {
         var t: String
         var admin_ca: Data?
-        var hubs: Member.HubShare?
         var credentials: [ServerCredentials.Credential]?
         var evidence: Member.Evidence?
     }
@@ -889,7 +1167,7 @@ public final class CoreMember: @unchecked Sendable {
         switch w.type {
         case "write":
             guard let text = w.text else { return nil }
-            return .write(text: text, kind: w.kind ?? .text, ttlMS: w.ttl_ms)
+            return .write(text: text, kind: w.kind.flatMap(Member.Kind.init(rawValue:)) ?? .text, ttlMS: w.ttl_ms)
         case "log": return w.line.map { .log($0) }
         case "copy": return w.copy.map { .copy($0) }
         case "identity":
@@ -905,6 +1183,16 @@ public final class CoreMember: @unchecked Sendable {
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
+        case "sync":
+            guard let off = w.off else { return nil }
+            return .sync(off: off, by: w.by ?? "")
+        case "state": return w.state.map { .state($0) }
+        case "notice": return w.notice.map { .notice($0) }
+        case "root_changed": return .rootChanged(from: w.from ?? "", to: w.to ?? "", seq: w.seq ?? 0)
+        case "need_key":
+            guard let token = w.token, let kind = w.kind else { return nil }
+            return .needKey(token: token, kind: kind)
+        case "key_done": return w.public.map { .keyDone(public: $0) }
         case "panic": return .panic(details: w.details ?? "")
         case "caller":
             guard let token = w.token, let port = w.port, let device = w.device else { return nil }
@@ -913,7 +1201,6 @@ public final class CoreMember: @unchecked Sendable {
             guard let from = w.from, let m = w.message else { return nil }
             switch m.t {
             case "admin": return m.admin_ca.map { .message(from: from, .admin(ca: $0)) }
-            case "hubs": return m.hubs.map { .message(from: from, .hubs($0)) }
             case "credentials": return m.credentials.map { .message(from: from, .credentials($0)) }
             case "evidence": return m.evidence.map { .message(from: from, .evidence($0)) }
             default: return .message(from: from, .other(m.t))

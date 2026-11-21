@@ -74,7 +74,8 @@ export function stateOf(actions: Map<string, string[]>, admin: boolean): WatchSt
     sync: !app.member.paused,
     away: app.member.awayOn ? app.member.awayStatus : 'off',
     events: app.events.recent.slice(0, 5),
-    admin: admin
+    admin: admin,
+    signs: !app.isV06()
   };
 }
 
@@ -164,7 +165,8 @@ export class Watch {
   // Sends the state when it changed since the watch got it last.
   private async tell(): Promise<void> {
     this.admin = this.stillAdmin();
-    if (this.admin) {
+    // In a group of 0.6 the watch signs nothing (D-124): no actions.
+    if (this.admin && !app.isV06()) {
       const next = new Map<string, string[]>();
       for (const d of app.member.devices) {
         next.set(d.id, await app.member.watchActions(d.id));

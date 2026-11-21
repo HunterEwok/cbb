@@ -36,7 +36,7 @@ fn sw(w: u16) -> Vec<u8> {
 /// the PIN), the management key's challenge and response, GENERATE in slot
 /// 95 and ECDH with its key after a touch. writes lists the INS of every
 /// command that changed the card.
-struct Yubi {
+pub(crate) struct Yubi {
     version: Option<[u8; 3]>,
     slot: Option<Slot>,
     objects: HashMap<[u8; 3], Vec<u8>>,
@@ -77,7 +77,7 @@ fn point(k: &p256::SecretKey) -> Vec<u8> {
 }
 
 impl Yubi {
-    fn new(version: [u8; 3]) -> Yubi {
+    pub(crate) fn new(version: [u8; 3]) -> Yubi {
         let alg = if version >= [5, 7, 0] { ALG_AES192 } else { ALG_3DES };
         Yubi {
             version: Some(version),
@@ -110,7 +110,7 @@ impl Yubi {
         .concat())
     }
 
-    fn handle(&mut self, apdu: &[u8]) -> Vec<u8> {
+    pub(crate) fn handle(&mut self, apdu: &[u8]) -> Vec<u8> {
         let (ins, p1, p2) = (apdu[1], apdu[2], apdu[3]);
         let data = if apdu.len() > 5 { &apdu[5..5 + usize::from(apdu[4])] } else { &[][..] };
         match ins {

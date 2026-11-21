@@ -227,3 +227,73 @@ fn the_root_voids_both_histories_of_an_admin_key() {
     set.write_record(&st, &*admin, Kind::device(device("shed", 22)), T + 7).unwrap();
     assert!(find(&set.state(), "shed").is_ok(), "the admin goes on below the fork");
 }
+
+/// The key the tests' watches make, as a SEC1 point.
+fn point_of(seed: u8) -> Vec<u8> {
+    SigningKey::from_slice(&[seed; 32]).unwrap().verifying_key().to_sec1_point(false).as_bytes().to_vec()
+}
+
+/// The root adds a watch with the key the watch made as its admin key and
+/// a watch's grants; each watch gets a member key of its own, and what
+/// another key of the group holds, another device's name, a system that is
+/// no watch's or a key that is not the root's is refused (D-124).
+#[test]
+fn the_root_adds_a_watch_whose_member_key_nobody_keeps() {
+    use cbb_core::records::body::{AdminKind, RIGHT_READ, ROLE_WATCH};
+    let (o, mut set) = group("watch");
+    let root = o.root.clone().unwrap();
+    let (id, recs) = add_watch(&mut set, &*root, " Wrist ", "harmonyos", &point_of(9), T + 10).unwrap();
+    assert_eq!(recs.len(), 1);
+    let st = set.state();
+    let w = st.device(&id).unwrap();
+    assert_eq!((w.role, w.rights, w.name.as_str()), (ROLE_WATCH, RIGHT_READ, "Wrist"));
+    assert_eq!(w.admin, Some(Key::es256(point_of(9)).hash()));
+    assert_eq!((w.powers, w.commands), AdminKind::Watch.grants());
+    let (id2, _) = add_watch(&mut set, &*root, "Second", "wearos", &point_of(10), T + 11).unwrap();
+    assert_ne!(id, id2, "one member key for both watches");
+    assert!(add_watch(&mut set, &*root, "Third", "harmonyos", &point_of(9), T + 12).is_err(), "an admin key taken");
+    assert!(add_watch(&mut set, &*root, "Wrist", "watchos", &point_of(11), T + 12).is_err(), "a name taken");
+    assert!(add_watch(&mut set, &*root, "Third", "linux", &point_of(11), T + 12).is_err(), "no watch's system");
+    let other = cbb_core::identity::FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap();
+    assert!(add_watch(&mut set, &other, "Third", "harmonyos", &point_of(11), T + 12).is_err(), "not the root");
+}
+
+/// Even someone holding a watch's member key signs nothing that counts:
+/// its keys statement verifies, yet no copy is sealed to a watch, and a
+/// copy it signed is refused, since a watch sends nothing (D-124).
+#[test]
+fn a_watchs_member_key_signs_nothing_that_counts() {
+    use cbb_core::content::Content;
+    use cbb_core::copies::{self, Made, Reader};
+    use cbb_core::hlc::Timestamp;
+    use cbb_core::records::key::{ALG_XWING, XWING_PUBLIC};
+    use cbb_core::records::statement::{self, Statement};
+    let (o, mut set) = group("watch-key");
+    let root = o.root.clone().unwrap();
+    // The key add_watch drops at once, kept here for the test alone.
+    let member = cbb_core::identity::FileKey::new(&cbb_core::identity::new_key().unwrap()).unwrap();
+    let (id, _) =
+        add_watch_with(&mut set, &*root, &member.public(), "Wrist", "harmonyos", &point_of(9), T + 10).unwrap();
+    let st = set.state();
+    let body = statement::Body {
+        group: st.group,
+        signer: Key::es256(member.public()).hash(),
+        epoch: 1,
+        time_ms: T + 11,
+        seal: Key::new(ALG_XWING, vec![3; XWING_PUBLIC]),
+        held: false,
+    };
+    let s = Statement::sign(body, &member).unwrap();
+    let sealing = statement::choose(&st, [&s]);
+    assert!(sealing.contains_key(&id), "the watch's statement verifies");
+    let content = Content::text("for the group", false);
+    let desk = o.member_key().device_id();
+    assert!(copies::readers(&st, &sealing, &content, &desk, &[], None).iter().all(|r| r.id != id));
+
+    let laptop = find(&st, "laptop").unwrap().id;
+    let seal = cbb_core::seal::public_key(&cbb_core::seal::generate_secret().unwrap()).unwrap();
+    let made = Made { id: [1; 16], time: Timestamp { wall: (T + 12) as i64, logical: 0 }, blob: None };
+    let copy = copies::seal(&member, &[Reader { id: laptop, epoch: 1, seal }], &made, &content).unwrap();
+    let v = cbb_core::format::cbor::decode(&copy).unwrap();
+    assert_eq!(copies::check(&v, &st).err(), Some(copies::RULE_SEND));
+}

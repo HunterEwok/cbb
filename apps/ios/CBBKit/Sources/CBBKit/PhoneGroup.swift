@@ -46,9 +46,18 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// The device of the root that claim takes the group over from, which
     /// the new root removes.
     public var claimedFrom: String?
+    /// On the records of 0.6: the Group ID (hex) the member's set names; nil
+    /// for a group of 0.5. Such a group has no certificates and no records
+    /// here: the member keeps its set in its own folder and answers the
+    /// group's state (CoreMember.group), and the app reads it from there.
+    public var group06: String?
+    /// On 0.6: whether the member's state names this phone an admin
+    /// (GroupState.me.admin); set as the state arrives.
+    public var admin06 = false
 
     enum CodingKeys: String, CodingKey {
         case device, groupCA, roots, memberCert, memberIssuer, isRoot, adminCA, computers, records, computerAdmins, claim, claimedFrom
+        case group06, admin06
     }
 
     init(device: String, groupCA: Data, memberCert: Data, computers: [Computer]) {
@@ -70,11 +79,16 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         computerAdmins = try c.decodeIfPresent([String: Data].self, forKey: .computerAdmins) ?? [:]
         claim = try c.decodeIfPresent(Data.self, forKey: .claim)
         claimedFrom = try c.decodeIfPresent(String.self, forKey: .claimedFrom)
+        group06 = try c.decodeIfPresent(String.self, forKey: .group06)
+        admin06 = try c.decodeIfPresent(Bool.self, forKey: .admin06) ?? false
     }
+
+    /// Whether the group is on the records of 0.6.
+    public var isV06: Bool { group06 != nil }
 
     /// Whether this phone may admit devices, renew certificates and remove
     /// devices: the root and the admins.
-    public var isAdmin: Bool { isRoot || adminCA != nil }
+    public var isAdmin: Bool { isRoot || adminCA != nil || (isV06 && admin06) }
 
     /// The certificate chain this phone presents in TLS, leaf first.
     public var memberChain: [Data] { [memberCert] + (memberIssuer.map { [$0] } ?? []) }
@@ -114,7 +128,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     }
 
     /// The group tag the computers publish.
-    public var tag: String { GroupCertificates.tag(groupCA: groupCA) }
+    public var tag: String { group06.map { String($0.prefix(16)) } ?? GroupCertificates.tag(groupCA: groupCA) }
 
     /// Creates a group: a root CA for caSigner's key, a member certificate
     /// for this phone's member key (a SubjectPublicKeyInfo), and the phone's
@@ -155,10 +169,17 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return g
     }
 
+    /// A group of 0.6 this phone made (CorePairing.newGroup06, root) or
+    /// joined (CorePairing.Joiner): its device and Group ID; the member keeps
+    /// the set.
+    public static func of06(device: String, group: String, root: Bool) -> PhoneGroup {
+        var g = PhoneGroup(device: device, groupCA: Data(), memberCert: Data(), computers: [])
+        (g.isRoot, g.group06) = (root, group)
+        return g
+    }
+
     /// The group the core made with this phone's root key
-    /// (CorePairing.newGroup), or the group a phone joined through the core
-    /// (CorePairing.Joining): a member of it, and an admin when the
-    /// admitting phone sent its admin CA.
+    /// (CorePairing.newGroup): a member of it, and the root.
     public static func of(_ c: CorePairing.Group, root: Bool) -> PhoneGroup {
         var g = PhoneGroup(device: c.device, groupCA: c.groupCA, memberCert: c.cert, computers: [])
         (g.memberIssuer, g.isRoot, g.adminCA) = (c.issuer, root, root ? nil : c.adminCA)
@@ -206,8 +227,6 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         case notForWatch
         /// The group has no recovery key to remove.
         case noRecovery
-        /// The group's recovery key now is not the one this phone holds.
-        case notTheRecoveryKey
         /// The key level is none of Records.keyLevels.
         case invalidKeyLevel
         /// The group's key level does not let the device's keys be an admin
@@ -302,16 +321,6 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     public func checkHandedOver() throws {
         guard handedToMe else { throw Failure.notHandedOver }
         try checkClaim()
-    }
-
-    /// Checks that this new phone, which Restore made a member of the group
-    /// under the recovery key's admin CA, may claim the group with that key
-    /// (docs/protocol.md, section 10, "The recovery key"). The lost root's
-    /// device goes when the claim takes effect.
-    public func checkRecovery() throws {
-        guard let adminCA, !isRoot else { throw Failure.notAdmin }
-        guard claim == nil else { throw Failure.claimWaiting }
-        guard let k = try? Records.keyHash(cert: adminCA), records.recovery == k else { throw Failure.notTheRecoveryKey }
     }
 
     private func checkClaim() throws {
@@ -505,16 +514,6 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         guard isAdmin else { throw Failure.notAdmin }
         return try Commands.unmute(to: device, group: tag, by: self.device, now: now, signer: caSigner, adminCA: adminCA,
                                    seal: sealKey(of: device))
-    }
-
-    /// A hub command that makes the admin computer to the group's hub in
-    /// place of this phone (section 11, "Moving the hub"), signed with this
-    /// phone's root or admin key, with the hub's clients and its forwarder.
-    public func hubCommand(to device: String, forwarder: (endpoint: String, pin: String)?, clients: [PhoneHub.Client],
-                           caSigner: CertificateSigner, now: Date) throws -> Member.Record {
-        guard isAdmin, records.mayHost(device) else { throw Failure.notAdmin }
-        return try Commands.hub(to: device, forwarder: forwarder, clients: clients.filter { $0.device != device }, group: tag, by: self.device,
-                                now: now, signer: caSigner, adminCA: adminCA, seal: sealKey(of: device))
     }
 
     /// Removes a device from the group: signs a revocation of every key it

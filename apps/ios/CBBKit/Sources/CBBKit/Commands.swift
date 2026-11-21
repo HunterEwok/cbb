@@ -52,7 +52,15 @@ public enum Commands {
         public var stop: Bool?
         public var forwarder: Forwarder?
         public var endpoints: [String]?
-        public var clients: [PhoneHub.Client]?
+        public var clients: [Client]?
+
+        /// A client the order hands over: its device ID, its tunnel key
+        /// and its preshared key.
+        public struct Client: Codable, Equatable, Sendable {
+            public var device: String
+            public var key: Data
+            public var psk: Data
+        }
 
         /// Whether the order is valid, as Go's HubOrder.check: a forwarder
         /// with an address and a key, or an address at least; at most 8
@@ -71,7 +79,7 @@ public enum Commands {
     /// The most clients a hub command hands over, as many as a hub keeps.
     public static let maxHubClients = 256
 
-    public enum Failure: Error { case unknownMode(String), badHubOrder, badPaste, badAction(String), badMute }
+    public enum Failure: Error { case unknownMode(String), badPaste, badAction(String), badMute }
 
     /// The longest name of a quick action, and the most a hello lists.
     public static let maxActionName = 32
@@ -159,21 +167,6 @@ public enum Commands {
         guard Member.modes.contains(mode) else { throw Failure.unknownMode(mode) }
         let ms = Records.ms(now)
         let body = Body(type: "mode", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS, mode: mode)
-        return try sign(body, signer: signer, adminCA: adminCA, seal: seal)
-    }
-
-    /// A hub command for the admin computer to: it becomes the group's
-    /// hub, reached through the forwarder (endpoint "ip:port" and the pin
-    /// of its key) and at endpoints, and takes clients, the old hub's, with
-    /// the keys they have. Signed as mode.
-    public static func hub(to: String, forwarder: (endpoint: String, pin: String)?, endpoints: [String] = [], clients: [PhoneHub.Client],
-                           group: String, by: String, now: Date, signer: CertificateSigner,
-                           adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
-        guard forwarder != nil || !endpoints.isEmpty, endpoints.count <= 8, clients.count <= maxHubClients else { throw Failure.badHubOrder }
-        let order = HubOrder(forwarder: forwarder.map { HubOrder.Forwarder(endpoint: $0.endpoint, key: $0.pin) },
-                             endpoints: endpoints.isEmpty ? nil : endpoints, clients: clients.isEmpty ? nil : clients)
-        let ms = Records.ms(now)
-        let body = Body(type: "hub", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS, hub: order)
         return try sign(body, signer: signer, adminCA: adminCA, seal: seal)
     }
 

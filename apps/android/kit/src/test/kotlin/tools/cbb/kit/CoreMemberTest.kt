@@ -172,9 +172,6 @@ class CoreMemberTest {
         assertEquals(g.device, m.by)
         assertTrue(eventsB.none { it is CoreMember.Event.Command && Commands.idOf(it.command) == Commands.idOf(mute) }, "the app got the mute")
 
-        b.setTunnelKey(ByteArray(32) { 1 } to ByteArray(32) { 2 })
-        assertFailsWith<Core.Refusal> { b.setTunnelKey(ByteArray(3) to ByteArray(32)) }
-        b.setTunnelKey(null)
         b.lost("a")
     }
 
@@ -258,12 +255,6 @@ class CoreMemberTest {
         assertEquals(69, sheet.text.length)
         g.add(m.records())
         assertTrue(g.records.recovery.contentEquals(sheet.admin), "the records name the sheet's key")
-        // A YubiKey's key replaces it; its admin CA goes into the card.
-        val card = SoftwareSigner()
-        val ca = m.recoveryFor(card.publicKeyDER, pub, root::signDigest)
-        assertTrue(CertificateInfo(ca).publicKey.contentEquals(card.publicKeyDER))
-        g.add(m.records())
-        assertTrue(g.records.recovery.contentEquals(Records.keyHashOfCert(ca)))
         m.removeRecovery(pub, root::signDigest)
         g.add(m.records())
         assertNull(g.records.recovery)

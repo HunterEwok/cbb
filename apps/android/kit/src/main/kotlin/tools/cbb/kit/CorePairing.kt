@@ -12,18 +12,15 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.Closeable
-import java.io.IOException
-import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Pairing in the Rust core (docs/core-api.md, "Joining and admitting"):
- * a phone that makes a group ([newGroup]), joins one by its QR code as the
- * joiner that listens ([Joining]), or admits a device by the device's QR
- * code as an admin ([Admitting]). The core runs the exchange inside its own
- * TLS and asks for each signature through a callback, so the keys stay in
- * the Keystore; the app does the sockets and hands each connection to
- * these classes, which pass its bytes to the core until the exchange ends.
+ * a phone that makes a group ([newGroup], [newGroup06]), opens a pairing
+ * window for a device at home ([Window]), joins a group by a window's QR
+ * code ([Joiner]), or makes a remote invitation ([Inviting]). The core runs
+ * the exchange inside its own TLS and asks for each signature through a
+ * callback, so the keys stay in the Keystore.
  */
 object CorePairing {
     /** Why a pairing failed: the core's message and details, and whether the code was wrong. */
@@ -85,244 +82,52 @@ object CorePairing {
         return Group.of(ok("new group", CoreMember.take(answer, count)))
     }
 
-    /**
-     * Runs one connection's exchange: sends what the core gives, reads what
-     * comes and hands it in, until done says the exchange ended. A connection
-     * that closes before then fails.
-     */
-    private fun exchange(socket: Socket, first: ByteArray, feed: (ByteArray) -> Pair<ByteArray, Boolean>) {
-        val out = socket.getOutputStream()
-        val input = socket.getInputStream()
-        if (first.isNotEmpty()) out.write(first)
-        out.flush()
-        val buf = ByteArray(64 * 1024)
-        while (true) {
-            val n = input.read(buf)
-            if (n < 0) throw IOException("the connection closed during pairing")
-            val (send, done) = feed(buf.copyOf(n))
-            if (send.isNotEmpty()) {
-                out.write(send)
-                out.flush()
-            }
-            if (done) return
-        }
-    }
+    /** A group of 0.6 this phone made: its ID, this phone's device ID and the recovery sheet, which the person keeps and the app keeps nowhere. */
+    class Made(val group: String, val device: String, val recoveryQR: String, val recoveryText: List<String>)
 
     /**
-     * Joining a group as the joiner that listens (docs/protocol.md, section
-     * 6): makes the device ID, the code and the QR code for addrs, the
-     * addresses the app listens on, and takes each connection the app
-     * accepts with [attempt] until an admin admits this phone. With
-     * adminPublic and signAdmin the phone offers an admin key, whose
-     * proof the core signs on the connection. With invite, a remote
-     * invitation's text (docs/protocol.md, section 12), the phone joins by
-     * it in place of showing a QR code: the core starts the invitation's
-     * guest tunnel, the app dials 127.0.0.1:[port] and runs [attempt]
-     * there, and the hub's admin admits the phone by its fingerprint.
+     * Makes a group of 0.6 with this phone's root key (cbb_group_new with
+     * dir): the core writes this phone's record under the root and keeps
+     * the set in dir, where [CoreMember.start] then reads it. rootPublic and
+     * public are the root and member keys (SubjectPublicKeyInfo or point),
+     * store where the member key lives (Records.HARDWARE or Records.FILE);
+     * signRoot signs a digest with the root key, during this call only.
      */
-    class Joining(
-        name: String,
-        os: String,
-        public: ByteArray,
-        seal: ByteArray?,
-        addrs: List<String>,
-        sign: (ByteArray) -> ByteArray,
-        adminPublic: ByteArray? = null,
-        signAdmin: ((ByteArray) -> ByteArray)? = null,
-        code: String = "",
-        invite: String? = null,
-    ) : Closeable {
-        private val signFn = CoreMember.signFn(sign)
-        private val adminFn = signAdmin?.let { CoreMember.signFn(it) }
-        private val handle: Pointer
-        private val closed = AtomicBoolean(false)
-
-        /** This phone's device ID, the six-digit code, the certificate's fingerprint and the QR code's text. */
-        val device: String
-        val code: String
-        val fingerprint: String
-        val qr: String
-
-        /** With an invitation: the loopback port of its guest tunnel. */
-        val port: Int
-
-        /** Whether the invitation's hub has answered through the guest tunnel: an attempt that failed before it did says the hub is off or cannot be reached. */
-        val answered: Boolean get() = !closed.get() && lib.cbb_join_answered(handle) == 1
-
-        init {
-            require((adminPublic == null) == (signAdmin == null)) { "the admin key needs both its public key and its signer" }
-            val request = Wire.encode(
-                Wire.obj(
-                    "name" to Wire.str(name),
-                    "os" to Wire.str(os),
-                    "public" to Wire.bytes(CoreMember.point(public)),
-                    "admin_public" to Wire.bytes(adminPublic?.let { CoreMember.point(it) }),
-                    "seal" to Wire.bytes(seal),
-                    "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
-                    "code" to Wire.str(code),
-                    "invite" to invite?.let { Wire.str(it) },
-                ),
-            )
-            val answer = PointerByReference()
-            val count = count()
-            val len = Core.SizeT(request.size.toLong())
-            val h = if (adminFn == null) {
-                lib.cbb_join_new(request, len, signFn, null, answer, count)
-            } else {
-                lib.cbb_join_new_admin(request, len, signFn, null, adminFn, null, answer, count)
-            }
-            val got = answer.value?.let { CoreMember.take(it, count) } ?: throw Core.Mismatch("the core gave no answer to the join")
-            val o = ok("join", got)
-            handle = h ?: throw Core.Mismatch("the core made no joiner")
-            device = o.optString("device") ?: ""
-            this.code = o.optString("code") ?: ""
-            fingerprint = o.optString("fingerprint") ?: ""
-            qr = o.optString("qr") ?: ""
-            port = (o.optLong("port") ?: 0).toInt()
-        }
-
-        /**
-         * Runs the exchange on a connection the app accepted. Returns the
-         * group when an admin admitted this phone, after save stored it
-         * (true when it did, which the core tells the admin); a failure
-         * throws [Failure], with wrongCode for a wrong code, and a dropped
-         * connection IOException.
-         */
-        fun attempt(socket: Socket, save: (Group) -> Boolean): Group {
-            check(!closed.get()) { "the joiner is closed" }
-            // With an invitation, the phone speaks first: the TLS client hello.
-            val started = ok("join", call { c -> lib.cbb_join_accept(handle, c) })
-            var joined: Group? = null
-            var failed: Failure? = null
-            exchange(socket, started.optBytes("send") ?: ByteArray(0)) { data ->
-                val step = ok("join", call { c -> lib.cbb_join_feed(handle, data, Core.SizeT(data.size.toLong()), 0, c) })
-                val send = step.optBytes("send") ?: ByteArray(0)
-                when (step.optString("state")) {
-                    "joined" -> {
-                        val g = Group.of(step.optObject("joined") ?: throw Core.Mismatch("the join has no group"))
-                        val saved = runCatching { save(g) }.getOrDefault(false)
-                        val last = ok("join", call { c -> lib.cbb_join_finish(handle, if (saved) 1 else 0, c) })
-                        joined = g.takeIf { saved }
-                        (send + (last.optBytes("send") ?: ByteArray(0))) to true
-                    }
-                    "failed" -> {
-                        // The refusal goes out first, so the admin hears why.
-                        failed = failure(step)
-                        send to true
-                    }
-                    else -> send to false
-                }
-            }
-            failed?.let { throw it }
-            return joined ?: throw Failure("the group could not be saved")
-        }
-
-        override fun close() {
-            if (!closed.getAndSet(true)) lib.cbb_join_free(handle)
-        }
-    }
-
-    /** A device the core admitted: its ID, name, system, role ("member" or "phone"), whether it became an admin, and whether it said it stored its identity. */
-    data class Admitted(val device: String, val name: String, val os: String, val role: String, val admin: Boolean, val confirmed: Boolean)
-
-    /**
-     * Admitting a device by its QR code as an admin (docs/protocol.md,
-     * section 6, "The joiner listens"), through member, the phone's running
-     * member, whose records the device's record joins. public is the key
-     * sign holds: the admin key with adminCA, or the root's key without;
-     * makeAdmin, for the root only, makes a phone that offers an admin key
-     * an admin. [addrs] are the QR code's addresses, which the app dials and
-     * hands to [admit] one at a time.
-     */
-    class Admitting(member: CoreMember, qr: String, public: ByteArray, adminCA: ByteArray?, makeAdmin: Boolean, sign: (ByteArray) -> ByteArray) : Closeable {
-        private val signFn = CoreMember.signFn(sign)
-        private val handle: Pointer
-        private val closed = AtomicBoolean(false)
-
-        /** The addresses of the QR code, host:port, in its order. */
-        val addrs: List<String>
-
-        init {
-            val request = Wire.encode(
-                Wire.obj(
-                    "qr" to Wire.str(qr),
-                    "public" to Wire.bytes(CoreMember.point(public)),
-                    "admin_ca" to Wire.bytes(adminCA),
-                    "make_admin" to JsonPrimitive(makeAdmin),
-                ),
-            )
-            val answer = PointerByReference()
-            val count = count()
-            val h = lib.cbb_admit_new(member.handle, request, Core.SizeT(request.size.toLong()), signFn, null, answer, count)
-            val got = answer.value?.let { CoreMember.take(it, count) } ?: throw Core.Mismatch("the core gave no answer to the admission")
-            val o = ok("admit", got)
-            handle = h ?: throw Core.Mismatch("the core made no admission")
-            addrs = o.optArray("addrs").orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
-        }
-
-        /**
-         * Runs the exchange on a connection the app dialed to one of addrs.
-         * Returns the admitted device; a refusal throws [Failure], with
-         * wrongCode for a wrong code, and a dropped connection IOException.
-         * Once the device is admitted its record is in the group, whatever
-         * the rest of the exchange does.
-         */
-        fun admit(socket: Socket): Admitted {
-            check(!closed.get()) { "the admission is closed" }
-            var device: JsonObject? = null
-            var confirmed = false
-            var failed: Failure? = null
-            fun step(o: JsonObject): Pair<ByteArray, Boolean> {
-                val send = o.optBytes("send") ?: ByteArray(0)
-                return when (o.optString("state")) {
-                    "admitted" -> {
-                        device = o.optObject("device")
-                        send to false
-                    }
-                    "done" -> {
-                        confirmed = o.optBool("confirmed") ?: false
-                        send to true
-                    }
-                    "failed" -> {
-                        // The device is in the group once admitted; only its answer is missing.
-                        if (device == null) failed = failure(o)
-                        send to true
-                    }
-                    else -> send to false
-                }
-            }
-            val first = ok("admit", call { c -> lib.cbb_admit_dial(handle, c) })
-            val (hello, ended) = step(first)
-            if (!ended) {
-                exchange(socket, hello) { data -> step(ok("admit", call { c -> lib.cbb_admit_feed(handle, data, Core.SizeT(data.size.toLong()), 0, c) })) }
-            }
-            failed?.let { throw it }
-            val d = device ?: throw Failure("the device was not admitted")
-            return Admitted(
-                d.optString("device") ?: "",
-                d.optString("name") ?: "",
-                d.optString("os") ?: "",
-                d.optString("role") ?: "member",
-                d.optBool("admin") ?: false,
-                confirmed,
-            )
-        }
-
-        override fun close() {
-            if (!closed.getAndSet(true)) lib.cbb_admit_free(handle)
-        }
+    fun newGroup06(dir: java.io.File, name: String, os: String, store: String, rootPublic: ByteArray, public: ByteArray, signRoot: (ByteArray) -> ByteArray): Made {
+        val request = Wire.encode(
+            Wire.obj(
+                "dir" to Wire.str(dir.path),
+                "name" to Wire.str(name),
+                "os" to Wire.str(os),
+                "store" to Wire.str(store),
+                "root_public" to Wire.bytes(CoreMember.point(rootPublic)),
+                "public" to Wire.bytes(CoreMember.point(public)),
+            ),
+        )
+        val sign = CoreMember.signFn(signRoot)
+        val count = count()
+        val answer = lib.cbb_group_new(request, Core.SizeT(request.size.toLong()), sign, null, count)
+            ?: throw Core.Mismatch("the core gave no answer to the new group")
+        val o = ok("new group", CoreMember.take(answer, count))
+        val r = o.optObject("recovery") ?: throw Core.Mismatch("the new group has no recovery sheet")
+        return Made(
+            o.optString("group") ?: throw Core.Mismatch("the new group has no ID"),
+            o.optString("device") ?: throw Core.Mismatch("the new group has no device"),
+            r.optString("qr") ?: "",
+            r.optArray("text")?.map { (it as? JsonPrimitive)?.content ?: "" }.orEmpty(),
+        )
     }
 
     /**
      * A remote invitation an admin phone makes (docs/protocol.md, section
      * 12) through member: its guest tunnel opens on this phone when it is
      * the group's hub, else through a connected hub of the group (hub
-     * names one, "" for any). public is the key sign holds, as for
-     * [Admitting]; sign is called when a device the user confirmed is
+     * names one, "" for any). public is the key sign holds (the admin
+     * key with adminCA, or the root's key without); sign is called when a device the user confirmed is
      * admitted. expiresS is in seconds: an hour when 0, a day at most. It
      * waits for the hub, so the app makes it off its main thread.
      */
-    class Inviting(member: CoreMember, public: ByteArray, adminCA: ByteArray?, expiresS: Int, hub: String = "", sign: (ByteArray) -> ByteArray) : Closeable {
+    class Inviting(member: CoreMember, public: ByteArray, adminCA: ByteArray?, expiresS: Int, hub: String = "", kind: String = "", sign: (ByteArray) -> ByteArray) : Closeable {
         private val signFn = CoreMember.signFn(sign)
         private val handle: Pointer
         private val closed = AtomicBoolean(false)
@@ -346,6 +151,7 @@ object CorePairing {
                     "admin_ca" to Wire.bytes(adminCA),
                     "expires" to JsonPrimitive(expiresS),
                     "hub" to Wire.str(hub),
+                    "kind" to Wire.str(kind),
                 ),
             )
             val answer = PointerByReference()
@@ -408,6 +214,212 @@ object CorePairing {
         }
     }
 
+    /**
+     * A home window of a phone of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+     * the member port listens, the app shows [qr] and [digits], the new
+     * device dials and proves the digits; nobody is asked. public is the
+     * admitting key sign holds (the admin key, or the root's); addrs the
+     * phone's home addresses without a port; expiresS in seconds (five
+     * minutes when 0, an hour at most). The app announces the window itself
+     * with NSD (p=1, f=[fingerprint], i=[id]), never the digits.
+     */
+    class Window(member: CoreMember, public: ByteArray, addrs: List<String>, expiresS: Int = 0, sign: (ByteArray) -> ByteArray) : Closeable {
+        private val signFn = CoreMember.signFn(sign)
+        private val handle: Pointer
+        private val closed = AtomicBoolean(false)
+        private val lock = Object()
+        private var calls = 0
+
+        /**
+         * open, joining (a device pairs), done (name joined; the window is closed), failed (that attempt; the
+         * window stays open) or closed (its time is up, or three wrong codes: failure).
+         */
+        data class State(val version: Long, val state: String, val name: String, val device: String, val failure: Failure?)
+
+        /**
+         * The QR code's text, cbb://pair?addr=...&fp=...&i=...&c=..., the six digits to show, the window's ID
+         * and the key hash it names in hex, and how long it is open, in seconds.
+         */
+        val qr: String
+        val digits: String
+        val id: String
+        val fingerprint: String
+        val expires: Int
+
+        init {
+            val request = Wire.encode(
+                Wire.obj(
+                    "public" to Wire.bytes(CoreMember.point(public)),
+                    "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
+                    "expires" to JsonPrimitive(expiresS),
+                    "mdns" to JsonPrimitive(false),
+                ),
+            )
+            val answer = PointerByReference()
+            val count = count()
+            val h = lib.cbb_window_new(member.handle, request, Core.SizeT(request.size.toLong()), signFn, null, answer, count)
+            val got = answer.value?.let { CoreMember.take(it, count) } ?: throw Core.Mismatch("the core gave no answer to the window")
+            val o = try {
+                ok("window", got)
+            } catch (e: Exception) {
+                h?.let { lib.cbb_window_free(it) }
+                throw e
+            }
+            handle = h ?: throw Core.Mismatch("the core opened no window")
+            qr = o.optString("qr") ?: ""
+            digits = o.optString("digits") ?: ""
+            id = o.optString("id") ?: ""
+            fingerprint = o.optString("fingerprint") ?: ""
+            expires = (o.optLong("expires") ?: 0).toInt()
+        }
+
+        /** Waits up to timeoutMS for a state past version; it blocks, so the app calls it off its main thread. */
+        fun next(version: Long, timeoutMS: Long = 1000): State {
+            enter()
+            try {
+                val o = ok("window", call { c -> lib.cbb_window_next(handle, version, timeoutMS, c) })
+                val f = o.optObject("error")?.let { Failure(it.optString("message") ?: "the pairing failed", it.optString("details")) }
+                return State(o.optLong("version") ?: version, o.optString("state") ?: "open", o.optString("name") ?: "", o.optString("device") ?: "", f)
+            } finally {
+                leave()
+            }
+        }
+
+        private fun enter() = synchronized(lock) {
+            check(!closed.get()) { "the window is closed" }
+            calls++
+        }
+
+        private fun leave() = synchronized(lock) {
+            calls--
+            lock.notifyAll()
+        }
+
+        /** Closes the window. */
+        override fun close() {
+            synchronized(lock) {
+                if (closed.getAndSet(true)) return
+                while (calls > 0) lock.wait()
+            }
+            lib.cbb_window_free(handle)
+        }
+    }
+
+    /**
+     * A new phone that joins a group of 0.6 by a home window's QR code, or
+     * by the six digits the person typed (qr "", the one window found by
+     * mDNS): it dials, proves the digits, and the group is kept in dir,
+     * where the app then starts its member. public is the member key sign
+     * holds.
+     */
+    class Joiner(
+        dir: String,
+        qr: String,
+        name: String,
+        os: String,
+        public: ByteArray,
+        sign: (ByteArray) -> ByteArray,
+        digits: String = "",
+        invite: String = "",
+        /** The admin key this phone offers, its public key and its signer: the root keeps it and makes the phone an admin with it later. */
+        admin: Pair<ByteArray, (ByteArray) -> ByteArray>? = null,
+    ) : Closeable {
+        private val signFn = CoreMember.signFn(sign)
+        private val adminSignFn = admin?.let { CoreMember.signFn(it.second) }
+        private val handle: Pointer
+        private val closed = AtomicBoolean(false)
+        private val lock = Object()
+        private var calls = 0
+
+        /**
+         * dialing, done (group, device, and name, the member that let the phone in) or failed; by an invitation,
+         * answered once the hub answered through the guest tunnel.
+         */
+        data class State(
+            val version: Long,
+            val state: String,
+            val group: String,
+            val device: String,
+            val name: String,
+            val failure: Failure?,
+            val answered: Boolean = false,
+        )
+
+        /** By an invitation ([invite], a remote invitation's text): the fingerprint the phone shows, which the inviting admin compares. */
+        val fingerprint: String
+
+        init {
+            val request = Wire.encode(
+                Wire.obj(
+                    "dir" to Wire.str(dir),
+                    "qr" to Wire.str(qr),
+                    "digits" to Wire.str(digits),
+                    "invite" to Wire.str(invite),
+                    "name" to Wire.str(name),
+                    "os" to Wire.str(os),
+                    "public" to Wire.bytes(CoreMember.point(public)),
+                    "admin_public" to admin?.let { Wire.bytes(CoreMember.point(it.first)) },
+                ),
+            )
+            val answer = PointerByReference()
+            val count = count()
+            val n = Core.SizeT(request.size.toLong())
+            val h = if (adminSignFn == null) {
+                lib.cbb_joiner_new(request, n, signFn, null, answer, count)
+            } else {
+                lib.cbb_joiner_new_admin(request, n, signFn, null, adminSignFn, null, answer, count)
+            }
+            val got = answer.value?.let { CoreMember.take(it, count) } ?: throw Core.Mismatch("the core gave no answer to joining")
+            val first = try {
+                ok("join", got)
+            } catch (e: Exception) {
+                h?.let { lib.cbb_joiner_free(it) }
+                throw e
+            }
+            handle = h ?: throw Core.Mismatch("the core started no joining")
+            fingerprint = first.optString("fingerprint") ?: ""
+        }
+
+        /** Waits up to timeoutMS for a state past version; it blocks, so the app calls it off its main thread. */
+        fun next(version: Long, timeoutMS: Long = 1000): State {
+            enter()
+            try {
+                val o = ok("join", call { c -> lib.cbb_joiner_next(handle, version, timeoutMS, c) })
+                val f = o.optObject("error")?.let { Failure(it.optString("message") ?: "the pairing failed", it.optString("details")) }
+                return State(
+                    o.optLong("version") ?: version,
+                    o.optString("state") ?: "dialing",
+                    o.optString("group") ?: "",
+                    o.optString("device") ?: "",
+                    o.optString("name") ?: "",
+                    f,
+                    o.optBool("answered") ?: false,
+                )
+            } finally {
+                leave()
+            }
+        }
+
+        private fun enter() = synchronized(lock) {
+            check(!closed.get()) { "joining ended" }
+            calls++
+        }
+
+        private fun leave() = synchronized(lock) {
+            calls--
+            lock.notifyAll()
+        }
+
+        /** Ends joining. */
+        override fun close() {
+            synchronized(lock) {
+                if (closed.getAndSet(true)) return
+                while (calls > 0) lock.wait()
+            }
+            lib.cbb_joiner_free(handle)
+        }
+    }
+
     private fun count() = Memory(Native.SIZE_T_SIZE.toLong()).apply { clear() }
 
     /** Calls f with the answer's length and takes the answer it returns. */
@@ -425,19 +437,27 @@ object CorePairing {
             throw Failure(e.message ?: "the core refused $what", e.details)
         }
 
-    /** The failure a failed step names. */
-    private fun failure(step: JsonObject): Failure {
-        val e = step.optObject("error")
-        return Failure(e?.optString("message") ?: "the pairing failed", e?.optString("details"), step.optBool("wrong_code") ?: false)
-    }
-
     @Suppress("FunctionName")
     private interface Lib : Library {
         fun cbb_group_new(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answerLen: Pointer): Pointer?
 
-        fun cbb_join_new(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
+        fun cbb_invite_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
 
-        fun cbb_join_new_admin(
+        fun cbb_invite_next(i: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
+
+        fun cbb_invite_answer(i: Pointer, yes: Int)
+
+        fun cbb_invite_free(i: Pointer)
+
+        fun cbb_window_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
+
+        fun cbb_window_next(w: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
+
+        fun cbb_window_free(w: Pointer)
+
+        fun cbb_joiner_new(request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
+
+        fun cbb_joiner_new_admin(
             request: ByteArray,
             len: Core.SizeT,
             sign: CoreMember.SignFn,
@@ -448,31 +468,9 @@ object CorePairing {
             answerLen: Pointer,
         ): Pointer?
 
-        fun cbb_join_accept(j: Pointer, answerLen: Pointer): Pointer?
+        fun cbb_joiner_next(j: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
 
-        fun cbb_join_feed(j: Pointer, data: ByteArray, len: Core.SizeT, nowMS: Long, answerLen: Pointer): Pointer?
-
-        fun cbb_join_finish(j: Pointer, saved: Int, answerLen: Pointer): Pointer?
-
-        fun cbb_join_answered(j: Pointer): Int
-
-        fun cbb_join_free(j: Pointer)
-
-        fun cbb_admit_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
-
-        fun cbb_admit_dial(a: Pointer, answerLen: Pointer): Pointer?
-
-        fun cbb_admit_feed(a: Pointer, data: ByteArray, len: Core.SizeT, nowMS: Long, answerLen: Pointer): Pointer?
-
-        fun cbb_admit_free(a: Pointer)
-
-        fun cbb_invite_new(m: Pointer, request: ByteArray, len: Core.SizeT, sign: CoreMember.SignFn, ctx: Pointer?, answer: PointerByReference, answerLen: Pointer): Pointer?
-
-        fun cbb_invite_next(i: Pointer, version: Long, timeoutMS: Long, answerLen: Pointer): Pointer?
-
-        fun cbb_invite_answer(i: Pointer, yes: Int)
-
-        fun cbb_invite_free(i: Pointer)
+        fun cbb_joiner_free(j: Pointer)
     }
 
     private val lib: Lib by lazy { Native.load("cbb_ffi", Lib::class.java) }

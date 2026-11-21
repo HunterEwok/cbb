@@ -34,5 +34,6 @@
     <string name="stale">כפי שהטלפון אמר לאחרונה.</string>
     <string name="sync">סנכרון</string>
     <string name="watch_admin">השעון הזה הוא מנהל בקבוצה.</string>
+    <string name="watch_later">בקבוצה הזו השעון רק מציג את המכשירים: פעולות החירום שלו יגיעו עם CBB 0.7.</string>
     <string name="watch_phone">הטלפון של השעון הזה</string>
 </resources>

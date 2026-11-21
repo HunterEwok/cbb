@@ -35,6 +35,7 @@
     {"name": "stale", "value": "Según lo último que dijo el teléfono."},
     {"name": "sync", "value": "Sincronizar"},
     {"name": "watch_admin", "value": "Este reloj es administrador del grupo."},
+    {"name": "watch_later", "value": "En este grupo el reloj solo muestra los dispositivos: sus acciones de emergencia llegarán con CBB 0.7."},
     {"name": "watch_phone", "value": "El teléfono de este reloj"}
   ]
 }

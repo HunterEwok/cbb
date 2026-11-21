@@ -485,40 +485,11 @@ public enum Member {
         }
     }
 
-    /// What a hub tells the group's other hubs (section 11, "Several
-    /// hubs"): whether it serves as the hub now, its offer without a
-    /// preshared key, and its clients, itself among them, with their keys.
-    public struct HubShare: Codable, Equatable, Sendable {
-        public var serving: Bool
-        public var offer: TunnelOffer?
-        public var clients: [PhoneHub.Client]
-
-        public init(serving: Bool = false, offer: TunnelOffer? = nil, clients: [PhoneHub.Client] = []) {
-            (self.serving, self.offer, self.clients) = (serving, offer, clients)
-        }
-
-        enum CodingKeys: String, CodingKey { case serving, offer, clients }
-
-        public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            serving = try c.decodeIfPresent(Bool.self, forKey: .serving) ?? false
-            offer = try c.decodeIfPresent(TunnelOffer.self, forKey: .offer)
-            clients = try c.decodeIfPresent([PhoneHub.Client].self, forKey: .clients) ?? []
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var c = encoder.container(keyedBy: CodingKeys.self)
-            if serving { try c.encode(true, forKey: .serving) }
-            try c.encodeIfPresent(offer, forKey: .offer)
-            if !clients.isEmpty { try c.encode(clients, forKey: .clients) }
-        }
-    }
-
     /// The way to the hub's forwarder over VLESS (section 11, "VLESS"), over
     /// XHTTP behind the forwarder's web server (`transport` "xhttp"); with
-    /// it, the only way to the hub. The kit only carries it: the tunnel
-    /// (RustTunnel) checks and uses it, and refuses a transport it does not
-    /// take, such as an older forwarder's REALITY.
+    /// it, the only way to the hub. The kit only carries it: the core's
+    /// tunnel checks and uses it, and refuses a transport it does not take,
+    /// such as an older forwarder's REALITY.
     public struct VLESS: Codable, Equatable, Sendable {
         public var transport: String
         public var endpoint: String
@@ -595,8 +566,8 @@ public enum Member {
     }
 
     /// A group's AmneziaWG settings (section 11, "Obfuscation"), with
-    /// AmneziaWG's own names. The kit only carries them: the tunnel in
-    /// RustTunnel checks and uses them.
+    /// AmneziaWG's own names. The kit only carries them: the core's tunnel
+    /// checks and uses them.
     public struct Obfuscation: Codable, Equatable, Sendable {
         public var jc, jmin, jmax: Int
         public var s1, s2, s3, s4: Int
@@ -762,10 +733,6 @@ public enum Member {
         /// receiver's hello carried; nil when absent or when it did not
         /// decode.
         case tunnel(TunnelOffer?)
-        /// Between the group's hubs (section 11, "Several hubs"): whether
-        /// the sender serves as the hub, its offer without a preshared key,
-        /// and its clients with their keys, so any hub can take them.
-        case hubs(HubShare)
         /// From an admin: a command signed for the receiver (section 15).
         case command(Record)
         /// The answer to a command.
@@ -877,7 +844,6 @@ public enum Member {
         case "credentials": return .credentials(w.credentials ?? [])
         case "admin": return .admin(w.admin_ca ?? Data())
         case "tunnel": return .tunnel(w.tunnel?.value)
-        case "hubs": return w.hubs?.value.map { .hubs($0) } ?? .unknown(w.t)
         case "command": return w.command?.value.map { .command($0) } ?? .unknown(w.t)
         case "result": return w.result?.value.map { .result($0) } ?? .unknown(w.t)
         case "evidence": return w.evidence?.value.map { .evidence($0) } ?? .unknown(w.t)
@@ -927,7 +893,6 @@ public enum Member {
         var credentials: [ServerCredentials.Credential]?
         var admin_ca: Data?
         var tunnel: Lenient<TunnelOffer>?
-        var hubs: Lenient<HubShare>?
         var command: Lenient<Record>?
         var result: Lenient<CommandResult>?
         var evidence: Lenient<Evidence>?
@@ -939,7 +904,7 @@ public enum Member {
         let m: Message
         init(_ m: Message) { self.m = m }
 
-        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, hubs, command, result, evidence, get, reach }
+        enum Keys: String, CodingKey { case t, role, hello, event, cert, issuer, records, credentials, admin_ca, tunnel, command, result, evidence, get, reach }
         enum HelloKeys: String, CodingKey { case wall_ms, current, records, name, os, device, admin_key, tunnel_key, tunnel_psk, mode, key_store, actions, features, group_ca, entries_seq, entries_keys_seq, muted, muted_for_ms }
 
         func encode(to encoder: Encoder) throws {
@@ -990,9 +955,6 @@ public enum Member {
             case let .tunnel(o):
                 try c.encode("tunnel", forKey: .t)
                 try c.encodeIfPresent(o, forKey: .tunnel)
-            case let .hubs(h):
-                try c.encode("hubs", forKey: .t)
-                try c.encode(h, forKey: .hubs)
             case let .command(r):
                 try c.encode("command", forKey: .t)
                 try c.encode(r, forKey: .command)

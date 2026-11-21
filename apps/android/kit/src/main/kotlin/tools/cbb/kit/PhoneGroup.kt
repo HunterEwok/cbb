@@ -107,8 +107,23 @@ class PhoneGroup internal constructor(
     /** The group's key level does not let the device's keys be an admin or the root; the root sets another level first. */
     class BelowKeyLevel : Exception("the group's key level does not let these keys in")
 
+    /**
+     * On the records of 0.6: the Group ID (hex) the member's set names; null
+     * for a group of 0.5. Such a group has no certificates and no records
+     * here: the member keeps its set in its own folder and answers the
+     * group's state (CoreMember.group), and the app reads it from there.
+     */
+    var group06: String? = null
+        internal set
+
+    /** On 0.6: whether the member's state names this phone an admin (GroupState.me.admin); set as the state arrives. */
+    @Volatile var admin06 = false
+
+    /** Whether the group is on the records of 0.6. */
+    val isV06: Boolean get() = group06 != null
+
     /** Whether this phone may admit devices, renew certificates and remove devices: the root and the admins. */
-    val isAdmin: Boolean get() = isRoot || adminCA != null
+    val isAdmin: Boolean get() = isRoot || adminCA != null || (isV06 && admin06)
 
     /** The certificate chain this phone presents in TLS, leaf first. */
     val memberChain: List<ByteArray> get() = listOf(memberCert) + listOfNotNull(memberIssuer)
@@ -126,7 +141,7 @@ class PhoneGroup internal constructor(
     val addresses: Map<String, List<String>> get() = computers.filter { it.addrs.isNotEmpty() }.associate { it.device to it.addrs }
 
     /** The group tag the computers publish. */
-    val tag: String get() = GroupCertificates.tag(groupCA)
+    val tag: String get() = group06?.take(16) ?: GroupCertificates.tag(groupCA)
 
     /** The devices of the group, from the records. */
     val devices: List<RecordSet.Device> get() = records.devices
@@ -249,19 +264,6 @@ class PhoneGroup internal constructor(
     fun checkHandedOver() {
         if (!handedToMe) throw Failure("the group was not handed to this phone")
         checkClaim()
-    }
-
-    /**
-     * Checks that this new phone, which [Restore] made a member of the group
-     * under the recovery key's admin CA, may claim the group with that key
-     * (docs/protocol.md, section 10, "The recovery key"). The lost root's
-     * device goes when the claim takes effect.
-     */
-    fun checkRecovery() {
-        val ca = adminCA ?: throw Failure("this phone holds no recovery key")
-        if (isRoot) throw Failure("this phone is the group's root already")
-        if (claim != null) throw Failure(CLAIM_WAITING)
-        if (records.recovery?.contentEquals(Records.keyHashOfCert(ca)) != true) throw Failure(Restore.NOT_THE_KEY)
     }
 
     private fun checkClaim() {
@@ -503,24 +505,6 @@ class PhoneGroup internal constructor(
     fun unmuteCommand(to: String, caSigner: CertificateSigner, now: Instant): Member.Record {
         if (!isAdmin) throw Failure("this phone is no admin")
         return Commands.unmute(to, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * A hub command that makes the admin computer to the group's hub in
-     * place of this phone (docs/protocol.md, section 11, "Moving the hub"),
-     * signed with this phone's root or admin key, with the hub's clients
-     * and its forwarder ("ip:port" and the pin of its key).
-     */
-    fun hubCommand(
-        to: String,
-        forwarder: Pair<String, String>?,
-        clients: List<PhoneHub.Client>,
-        caSigner: CertificateSigner,
-        now: Instant,
-    ): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        if (!records.mayHost(to)) throw Failure("only the group's root or an admin can be its hub")
-        return Commands.hub(to, forwarder, emptyList(), clients.filter { it.device != to }, tag, device, now, caSigner, adminCA, seal = sealKey(to))
     }
 
     /**
@@ -854,6 +838,8 @@ class PhoneGroup internal constructor(
             "computer_admins" to JsonObject(computerAdmins.mapValues { Wire.bytes(it.value)!! }),
             "claim" to Wire.bytes(claim),
             "claimed_from" to Wire.str(claimedFrom),
+            "group06" to Wire.str(group06),
+            "admin06" to JsonPrimitive(admin06),
         ),
     )
 
@@ -929,9 +915,7 @@ class PhoneGroup internal constructor(
 
         /**
          * The group the core made with this phone's root key
-         * (CorePairing.newGroup), or the group a phone joined through the
-         * core (CorePairing.Joining): a member of it, and an admin when the
-         * admitting phone sent its admin CA.
+         * (CorePairing.newGroup): a member of it, and the root.
          */
         fun of(c: CorePairing.Group, root: Boolean): PhoneGroup {
             val g = PhoneGroup(c.device, c.groupCA, c.cert)
@@ -941,6 +925,18 @@ class PhoneGroup internal constructor(
             g.records = RecordSet.fromFile(c.groupCA, c.records)
             // The records that lead to the roots stay with the group, so the roots are those its records name.
             g.roots = g.records.roots.ifEmpty { c.roots }
+            return g
+        }
+
+        /**
+         * A group of 0.6 this phone made (CorePairing.newGroup06, root) or
+         * joined (CorePairing.Joiner): its device and Group ID; the member
+         * keeps the set.
+         */
+        fun of06(device: String, group: String, root: Boolean): PhoneGroup {
+            val g = PhoneGroup(device, ByteArray(0), ByteArray(0))
+            g.isRoot = root
+            g.group06 = group
             return g
         }
 
@@ -974,6 +970,8 @@ class PhoneGroup internal constructor(
                 o.optObject("computer_admins")?.forEach { (k, _) -> o.optObject("computer_admins")!!.optBytes(k)?.let { g.computerAdmins[k] = it } }
                 g.claim = o.optBytes("claim")
                 g.claimedFrom = o.optString("claimed_from")
+                g.group06 = o.optString("group06")
+                g.admin06 = o.optBool("admin06") ?: false
                 return g
             } catch (e: WireTypeException) {
                 throw Failure("not a saved group: ${e.message}")

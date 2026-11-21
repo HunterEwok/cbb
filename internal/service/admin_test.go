@@ -310,15 +310,6 @@ func memberKey06(t *testing.T, dir string) *ecdsa.PublicKey {
 	return &ec.PublicKey
 }
 
-func mustLoad(t *testing.T, dir string) *group.Identity {
-	t.Helper()
-	id, err := group.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return id
-}
-
 // TestHubsTable: the root signs the group's main hubs, which come first in
 // every member's order of hubs; an admin without a hub set up, a device
 // that cannot be a hub and a device named twice are refused.

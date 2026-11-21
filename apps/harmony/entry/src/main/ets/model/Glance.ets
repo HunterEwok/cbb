@@ -77,15 +77,15 @@ export class Glance {
       this.shown = text;
       showOnWidgets(this.context, state);
     }
-    // Adding a device, from the scan until it is in the group.
-    const s = app.admit.state;
-    const adding = s === 'preparing' || s === 'dialing' || s === 'admitting';
+    // Adding a device, while the pairing window is open until one joined.
+    const s = app.window.state;
+    const adding = s === 'preparing' || s === 'open' || s === 'joining';
     if (adding && this.admitSince === 0) {
       this.admitSince = Date.now();
       this.live.adding(this.admitSince);
     } else if (!adding && this.admitSince > 0) {
       this.admitSince = 0;
-      this.live.added(s === 'admitted' || s === 'confirmed', app.admit.error.split('\n')[0]);
+      this.live.added(s === 'done', app.window.error.split('\n')[0]);
     }
     // Away from home through the hub's tunnel.
     const through = app.member.awayOn && app.member.awayStatus === 'connected';

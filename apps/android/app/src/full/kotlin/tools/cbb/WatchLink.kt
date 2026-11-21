@@ -104,8 +104,16 @@ object WatchLink {
 
     private const val ANSWER_MS = 15_000L
 
-    fun state(model: AppModel) = WatchState(
-        hasGroup = model.phase == AppModel.Phase.HOME,
+    fun state(model: AppModel): WatchState {
+        val home = model.phase == AppModel.Phase.HOME
+        // In a group of 0.6 the watch signs nothing (D-124): no actions.
+        val signs = !model.group.isV06
+        return state(model, home, signs)
+    }
+
+    private fun state(model: AppModel, home: Boolean, signs: Boolean) = WatchState(
+        hasGroup = home,
+        signs = signs.takeIf { home },
         group = model.group.groupTag.takeIf { model.phase == AppModel.Phase.HOME },
         // In the user's order, as the phone's own list has it, the phone
         // among them; a collection's devices one after another.
@@ -116,7 +124,7 @@ object WatchLink {
             }
         }.map { (d, c) ->
             if (d.isSelf) WatchState.Device(d.id, d.name, d.kind.form, true, phone = true, collection = c)
-            else WatchState.Device(d.id, d.name, d.kind.form, d.online, model.group.watchActions(d.id), d.actions, c)
+            else WatchState.Device(d.id, d.name, d.kind.form, d.online, if (signs) model.group.watchActions(d.id) else emptyList(), d.actions, c)
         },
         away = model.away?.let { a ->
             if (!a.on) {

@@ -514,6 +514,8 @@ private fun SwitchFace(
 internal fun Alerts(model: AppModel) {
     RemovedCard(model)
     Handed(model)
+    RootChangedCard(model)
+    NoticesCard(model)
     val scope = rememberCoroutineScope()
     AlertList(
         model.alerts,

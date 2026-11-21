@@ -32,7 +32,6 @@ LIBS += $$PWD/core/$$QT_ARCH/libcbb_ffi.a -ldl -lpthread -lm
 
 SOURCES += \
     src/main.cpp \
-    src/admit.cpp \
     src/invite.cpp \
     src/blekeyboard.cpp \
     src/pastereceiver.cpp \
@@ -44,9 +43,9 @@ SOURCES += \
     src/join.cpp \
     src/member.cpp \
     src/membership.cpp \
+    src/pairing06.cpp \
     src/platform/osinfo.cpp
 HEADERS += \
-    src/admit.h \
     src/invite.h \
     src/blekeyboard.h \
     src/pastereceiver.h \
@@ -58,6 +57,7 @@ HEADERS += \
     src/join.h \
     src/member.h \
     src/membership.h \
+    src/pairing06.h \
     src/platform/keystore.h \
     src/pinrule.h \
     src/platform/osinfo.h \
@@ -104,16 +104,18 @@ DISTFILES += \
     qml/pages/InvitationPage.qml \
     qml/pages/InvitePage.qml \
     qml/pages/NewGroupPage.qml \
-    qml/pages/AddDevicePage.qml \
+    qml/pages/WindowPage.qml \
+    qml/pages/JoinWindowPage.qml \
     qml/pages/DevicePage.qml \
     qml/pages/DeviceCard.qml \
     qml/pages/AlertsCard.qml \
+    qml/pages/GroupNotices.qml \
     qml/pages/WhySection.qml \
     qml/pages/RenameDevicePage.qml \
     qml/pages/PinDialog.qml \
     qml/pages/ChangePinDialog.qml \
     qml/pages/RecoveryPage.qml \
-    qml/pages/RestorePage.qml \
+    qml/pages/ChangeRootPage.qml \
     qml/pages/DeviceTile.qml \
     qml/pages/DeviceRow.qml \
     qml/pages/DeviceItems.qml \

@@ -102,7 +102,7 @@ starts whole members that find each other by mDNS on the same network. CI splits
 parts instead, each on a machine of its own:
 
 - `service tests on the Rust cbb, the build` builds every program once, instrumented for the
-  coverage (the Rust `cbb`, `phone-on-linux`, `tunnel-on-linux`, a `cbb-helper` and the Go
+  coverage (the Rust `cbb`, `phone-on-linux`, a `cbb-helper` and the Go
   test binaries built with `-cover`), runs the Rust cbb's own tests and hands the build on as
   one archive.
 - `service tests on the Rust cbb (1)` to `(6)` each run a part of `internal/service`;
@@ -231,8 +231,9 @@ test plays, every choice drawn from one seed, so that a failure replays from its
 
 What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
 lost and the group taken back with the recovery key, then handed to an admin
-(`TestRecovery`); a new phone restoring the group with the recovery sheet (`TestFFIPhoneRestore`,
-the phone's member on Linux); a device restored from yesterday's backup that gets back in while
+(`TestRecovery`); a phone in the group changing the root with the recovery sheet
+(`TestFFIPhoneChangeRoot`) or with the secret a YubiKey opens (`TestFFIPhoneYubiKey`), the
+phone's member on Linux; a device restored from yesterday's backup that gets back in while
 the group went on (`TestDrillRestoreFromYesterday`); a removed device restored from a backup made
 before its removal that stays out (`TestDrillRemovedStaysOut`). What a real iPhone's Secure
 Enclave and Face ID add is a hand checklist in the bench's test plan, run once before a release.

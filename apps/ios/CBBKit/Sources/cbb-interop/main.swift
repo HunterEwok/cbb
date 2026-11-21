@@ -27,26 +27,7 @@
 // joins a computer's group through the pairing window that `cbb pair`
 // opened at HOST:PORT (internal/service, TestSwiftJoinsComputerRoot), as a
 // phone with an admin key, and prints the group CA and then the admin CA
-// the root issued, each in base64 on a line.
-//
-//   cbb-interop invite-window SECRET yes|no   (macOS)
-//
-// opens a remote invitation's pairing window (InvitationWindow) with SECRET
-// (base64), as the phone that is the hub does, and prints "port N"; for the device
-// that proves it knows the secret it prints "fingerprint F" and admits it or
-// not; then it prints the group CA in base64, or fails with the first failed
-// attempt. Test use only.
-//
-//   cbb-interop restore-tls HOST PORT KEY CERT GROUP   (macOS)
-//
-// restores the group of the member at HOST:PORT on a new phone with the
-// group's recovery key (internal/service, TestSwiftRestoresWithRecoveryKey):
-// KEY (its 32 bytes) and CERT (its admin CA, DER), both base64, and GROUP,
-// the group's tag, make the sheet's QR code, which the tool reads as the
-// app does. It takes the records, checks them, claims the group for a new
-// root through its member in the Rust core, sends the claim on a second
-// connection, and prints its device ID,
-// then the new root in base64. Test use only.
+// the root issued, each in base64 on a line. Test use only.
 
 import CBBKit
 import Foundation
@@ -189,107 +170,9 @@ func joinTLS(host: String, port: UInt16, code: String) async throws {
     print(adminCA.base64EncodedString())
 }
 
-func restoreTLS(host: String, port: UInt16, key: Data, cert: Data, tag: String) async throws {
-    let qr = try Core.recoverySheet(key: key, cert: cert, group: tag).qr
-    guard case let .key(sheet) = try Core.readRecoverySheet(qr) else { throw TLSTransport.Failure.notReady("the sheet's QR code does not read") }
-    let label = "cbb-interop-restore-\(Member.newID())"
-    let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
-    let now = Date()
-    let r = try Restore(key: sheet, memberKey: signer.publicKeyDER, now: now)
-    let identity = try KeychainIdentity.identity(certificate: r.memberCert, key: signer.key, label: label, storeKey: false)
-    func dial() async throws -> TLSTransport {
-        // The handshake takes any certificate; Restore.group checks the computer's against the records.
-        let tls = TLSTransport(host: host, port: port, alpn: Member.alpn, identity: identity, chain: [r.adminCA]) { _ in true }
-        try await tls.start()
-        return tls
-    }
-    var g = try r.group(try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: now), now: now)
-    // The core's member signs the claim, as in the app; it goes out on a records-only connection.
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-interop-restore-\(Member.newID())")
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: dir) }
-    let member = try CoreMember(.init(dir: dir, name: "iPhone", device: r.device, publicKeyDER: signer.publicKeyDER, seal: Data((0..<32).map { _ in UInt8.random(in: 0...255) }),
-                                      cert: r.memberCert, issuer: r.adminCA, groupCA: g.groupCA, roots: g.trusted)) { try signer.signature(digest: $0) }
-    defer { member.stop() }
-    try member.addRecords(g.records.records)
-    let newRootKey = SoftwareSigner()
-    let newRoot = try member.rootCA(public: newRootKey.publicKeyDER) { try newRootKey.signature(digest: $0) }
-    try r.claim(&g, member: member, newRoot: newRoot)
-    guard let claim = g.claimRecord(in: try member.records()) else { throw TLSTransport.Failure.notReady("the member holds no claim") }
-    _ = try await Restore.exchange(try await dial(), name: "iPhone", os: "ios", now: Date(), send: [claim])
-    print(r.device)
-    print(newRoot.base64EncodedString())
-}
-
-/// The group the window's attempts change.
-final class GroupBox: @unchecked Sendable {
-    var group: PhoneGroup
-    init(_ g: PhoneGroup) { group = g }
-}
-
-func inviteWindow(secret: Data, yes: Bool) async throws {
-    let now = Date()
-    let caSigner = SoftwareSigner()
-    let label = "cbb-interop-hub-\(Member.newID())"
-    let signer = try SecKeySigner(try KeychainIdentity.makeKey(label: label))
-    let box = GroupBox(try PhoneGroup.create(caSigner: caSigner, memberKey: signer.publicKeyDER, now: now))
-    let identity = try KeychainIdentity.identity(certificate: box.group.memberCert, key: signer.key, label: label, storeKey: false)
-    let invitation = PairingMember.Invitation(secret: secret) { req in
-        print("fingerprint \(req.fingerprint)")
-        fflush(stdout)
-        return yes
-    }
-    let (ended, cont) = AsyncStream<Result<PairingMember.Admitted, Error>>.makeStream()
-    // Go's joiner dials the window itself, without a hub in between.
-    let window = try InvitationWindow(identity: identity, expires: now.addingTimeInterval(60), fromGuest: { _ in true }, admit: { t, joinerCert, sid in
-        var g = box.group
-        let a = try await g.admit(over: t, code: "", joinerCert: joinerCert, sessionID: sid, caSigner: caSigner, invitation: invitation, now: Date())
-        box.group = g
-        return a
-    }, onEnd: { cont.yield($0) }, onError: { cont.yield(.failure($0)) })
-    let port = try await window.start()
-    print("port \(port)")
-    fflush(stdout)
-    var it = ended.makeAsyncIterator()
-    guard let result = await it.next() else { throw TLSTransport.Failure.closed }
-    let admitted = try result.get()
-    guard admitted.confirmed, box.group.computers.map(\.device) == [admitted.device] else {
-        throw TLSTransport.Failure.notReady("the joiner did not confirm")
-    }
-    print(box.group.groupCA.base64EncodedString())
-}
 #endif
 
 let args = CommandLine.arguments
-if args.count == 4, args[1] == "invite-window", let secret = Data(base64Encoded: args[2]) {
-    #if canImport(Network)
-    do {
-        try await inviteWindow(secret: secret, yes: args[3] == "yes")
-        exit(0)
-    } catch {
-        FileHandle.standardError.write("cbb-interop: \(error)\n".data(using: .utf8)!)
-        exit(1)
-    }
-    #else
-    FileHandle.standardError.write("invite-window needs Network.framework\n".data(using: .utf8)!)
-    exit(2)
-    #endif
-}
-if args.count == 7, args[1] == "restore-tls", let port = UInt16(args[3]), let key = Data(base64Encoded: args[4]),
-   let cert = Data(base64Encoded: args[5]) {
-    #if canImport(Network)
-    do {
-        try await restoreTLS(host: args[2], port: port, key: key, cert: cert, tag: args[6])
-        exit(0)
-    } catch {
-        FileHandle.standardError.write("cbb-interop: \(error)\n".data(using: .utf8)!)
-        exit(1)
-    }
-    #else
-    FileHandle.standardError.write("restore-tls needs Network.framework\n".data(using: .utf8)!)
-    exit(2)
-    #endif
-}
 if args.count == 5, args[1] == "join-tls", let port = UInt16(args[3]) {
     #if canImport(Network)
     do {

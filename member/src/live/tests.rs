@@ -492,3 +492,77 @@ fn a_hub_of_0_6_registers_with_its_forwarder() {
     a.close();
     b.close();
 }
+
+/// `Live::open_invitation`, shared by the service and the phones' ffi:
+/// more than a day is refused before anything opens; a device that is no
+/// hub with no hub connected says so; a device that serves as the hub
+/// opens the guest here, and another device opens it through that hub;
+/// `invitation_ended` lets each guest go.
+#[test]
+#[cfg(feature = "tunnel")]
+fn an_invitation_opens_here_on_the_hub_or_through_it() {
+    use cbb_core::join::invitation::PathKind;
+    use cbb_core::records::body::{ROLE_MEMBER, ROLE_PHONE};
+    let (da, db) = two_dirs_b_hub("open-invitation");
+    let (a, b) = (open(&da), open(&db));
+    let too_long = b.open_invitation(None, ROLE_MEMBER, Some(Duration::from_secs(25 * 3600)));
+    assert!(too_long.err().unwrap().message().contains("24h0m0s at most"));
+    let alone = a.open_invitation(None, ROLE_MEMBER, None);
+    assert!(alone.err().unwrap().message().contains("no hub of the group is connected"));
+
+    let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let port = udp.local_addr().unwrap().port();
+    drop(udp);
+    let me = crate::certs::DeviceId::parse(&id_text(&b.mesh.device())).unwrap();
+    let hub_away = Arc::new(crate::away::Away::new(db.to_path_buf(), b.tag(), me, Arc::new(|_| {})));
+    let h = crate::control::Header {
+        addrs: vec![format!("127.0.0.1:{port}")],
+        port: i64::from(port),
+        consent: true,
+        ..Default::default()
+    };
+    hub_away.make_hub(&h).unwrap();
+    b.with_away(hub_away.clone());
+    until("the hub serves", || hub_away.is_hub_now() && b.hub.lock().unwrap().is_some());
+
+    let here = b.open_invitation(None, ROLE_PHONE, Some(Duration::from_secs(600))).unwrap();
+    assert_eq!(here.through, None, "opened on this hub");
+    assert_eq!(here.lifetime, Duration::from_secs(600));
+    assert_eq!(here.open.invitation.profile.role, ROLE_PHONE);
+    let path = &here.open.invitation.paths[0];
+    assert_eq!(path.kind, PathKind::Guest);
+    assert_eq!(path.endpoints, vec![format!("127.0.0.1:{port}")]);
+    assert!(path.guest.is_some() && path.hub_key.is_some());
+    b.invitation_ended(&here, None);
+
+    // The admin takes the hub's answers as the service's member does,
+    // with its sync away from home started.
+    a.start_away(da.to_path_buf(), None, Arc::new(|_| {})).unwrap();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let member_port = crate::discovery::listen(b.clone(), 0, log.clone()).unwrap();
+    crate::discovery::start(
+        a.clone(),
+        a.tag(),
+        vec![SocketAddr::from(([127, 0, 0, 1], member_port))],
+        false,
+        None,
+        log,
+    );
+    until("a connected to the hub", || a.mesh.connected().contains(&b.mesh.device()));
+    // Only an admin opens an invitation through the hub: the root makes a
+    // one, and the hub learns it.
+    let admin = crate::mesh::tests::root_like(2);
+    let now = crate::uptime::wall_ms().max(0) as u64;
+    a.mesh
+        .write_by(&root(), |set, k| crate::writers::make_admin(set, k, &id_text(&a.mesh.device()), &admin, now))
+        .unwrap();
+    let ida = a.mesh.device();
+    until("the hub knows a as an admin", || b.mesh.state().device(&ida).is_some_and(|d| d.admin.is_some()));
+    let through = a.open_invitation(None, ROLE_MEMBER, None).unwrap();
+    assert_eq!(through.through, Some(b.mesh.device()), "opened through the hub");
+    assert_eq!(through.lifetime, crate::inviter::DEFAULT_LIFETIME);
+    assert_eq!(through.open.invitation.paths[0].endpoints, vec![format!("127.0.0.1:{port}")]);
+    a.invitation_ended(&through, None);
+    a.close();
+    b.close();
+}

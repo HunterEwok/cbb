@@ -2,12 +2,14 @@
 // Copyright (C) 2026 HunterEwok
 
 // The root's recovery key (docs/apps.md, "Recovery key"): made, shown once
-// as its text and QR code to write down or print, or put on a YubiKey held
-// to the phone (common/YubiKey.ets); replaced or removed.
+// as its text and QR code to write down or print, and while it shows,
+// sealed onto a YubiKey held to the phone if the person wants; replaced or
+// removed.
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { t } from '../core/Text';
+import { canReachCard } from '../common/YubiKey';
 import { app } from '../model/AppModel';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
 import { QrView } from '../components/QrView';
@@ -15,17 +17,27 @@ import { QrView } from '../components/QrView';
 @Entry
 @ComponentV2
 struct Recovery {
-  // The YubiKey's PIN, typed when the user chose to put the key on one.
-  @Local onCard: boolean = false;
+  @Local askingPin: boolean = false;
   @Local pin: string = '';
-
-  aboutToAppear(): void {
-    app.cardDone = false;
-  }
+  @Local sealed: string = '';
 
   aboutToDisappear(): void {
-    app.forgetRecovery();
     this.pin = '';
+    app.forgetRecovery();
+  }
+
+  hasCard(): boolean {
+    return canReachCard();
+  }
+
+  // The person chose whether a factory management key is replaced.
+  async seal(replaceDefault: boolean): Promise<void> {
+    const pin = this.pin;
+    this.pin = '';
+    this.askingPin = false;
+    this.sealed = await app.sealOnCard(getContext(this) as common.UIAbilityContext, pin, replaceDefault, () => {
+      this.sealed = t('yubikey_touch_usb');
+    });
   }
 
   confirm(message: string, button: string, yes: () => void): void {
@@ -39,15 +51,6 @@ struct Recovery {
   lead(): string {
     if (app.recoveryText.length > 0) {
       return t('recovery_write_down');
-    }
-    if (app.card === 'put') {
-      return t('yubikey_hold');
-    }
-    if (app.cardDone) {
-      return t('yubikey_made');
-    }
-    if (this.onCard) {
-      return t('yubikey_put_body');
     }
     return app.member.rootView.recovery === true ? t('recovery_has') : t('recovery_none');
   }
@@ -71,37 +74,43 @@ struct Recovery {
             .fontColor($r('app.color.text'))
             .width('100%')
             .textAlign(TextAlign.Center)
+          if (this.hasCard() && app.recoveryQr.length > 0) {
+            if (!this.askingPin) {
+              Button(t('yubikey_put'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+                .width('100%')
+                .enabled(!app.busy)
+                .onClick(() => {
+                  this.askingPin = true;
+                })
+            } else {
+              Text(t('yubikey_put_title')).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
+              Text(t('yubikey_put_body')).fontColor($r('app.color.text'))
+              TextInput({ placeholder: t('yubikey_pin'), text: this.pin })
+                .type(InputType.Password)
+                .maxLength(8)
+                .onChange((v: string) => {
+                  this.pin = v;
+                })
+              Button(t('yubikey_seal_replace'), { type: ButtonType.Capsule })
+                .width('100%')
+                .enabled(!app.busy && this.pin.length >= 6)
+                .onClick(() => {
+                  this.seal(true);
+                })
+              Button(t('yubikey_seal_keep'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+                .width('100%')
+                .enabled(!app.busy && this.pin.length >= 6)
+                .onClick(() => {
+                  this.seal(false);
+                })
+            }
+            if (this.sealed.length > 0) {
+              Text(this.sealed).fontColor($r('app.color.secondary'))
+            }
+          }
           Button($r('app.string.recovery_wrote'), { type: ButtonType.Capsule }).width('100%').onClick(() => {
             app.forgetRecovery();
           })
-        } else if (app.isRoot() && this.onCard && !app.cardDone) {
-          TextInput({ placeholder: $r('app.string.yubikey_pin'), text: this.pin })
-            .type(InputType.NUMBER_PASSWORD)
-            .maxLength(8)
-            .enabled(app.card.length === 0)
-            .onChange((v: string) => {
-              this.pin = v;
-            })
-          Button($r('app.string.yubikey_go'), { type: ButtonType.Capsule })
-            .width('100%')
-            .enabled(!app.busy && app.card.length === 0 && app.member.running && this.pin.length >= 6)
-            .onClick(() => {
-              const go = () => {
-                app.putOnYubiKey(getContext(this) as common.UIAbilityContext, this.pin);
-              };
-              if (app.member.rootView.recovery === true) {
-                this.confirm(t('recovery_replace_confirm'), t('yubikey_go'), go);
-              } else {
-                go();
-              }
-            })
-          Button($r('app.string.cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-            .width('100%')
-            .enabled(app.card.length === 0)
-            .onClick(() => {
-              this.onCard = false;
-              this.pin = '';
-            })
         } else if (app.isRoot()) {
           Button(app.member.rootView.recovery === true ? t('recovery_make_new') : t('recovery_make'),
             { type: ButtonType.Capsule })
@@ -116,13 +125,6 @@ struct Recovery {
                 app.makeRecovery();
               }
             })
-          Button($r('app.string.yubikey_put'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-            .width('100%')
-            .enabled(!app.busy && app.member.running)
-            .onClick(() => {
-              app.cardDone = false;
-              this.onCard = true;
-            })
           if (app.member.rootView.recovery === true) {
             Button(t('recovery_remove'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
               .width('100%')
@@ -135,7 +137,7 @@ struct Recovery {
               })
           }
         }
-        BusyLine({ busy: app.busy || app.card.length > 0 })
+        BusyLine({ busy: app.busy })
         ErrorText({ text: app.error })
       }
       .padding(24)

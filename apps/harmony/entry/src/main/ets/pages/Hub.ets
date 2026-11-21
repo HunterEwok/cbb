@@ -33,8 +33,9 @@ struct Hub {
     const disguise = app.hubDisguise();
     this.strictWeb = disguise === 'vless';
     this.strictVpn = disguise !== 'plain';
-    this.relay = app.relayAddress();
-    this.relayKey = app.relayKey();
+    // On a group of 0.6 the relay is the group's, as the member meets it.
+    this.relay = app.isV06() ? app.member.relayAt : app.relayAddress();
+    this.relayKey = app.isV06() ? '' : app.relayKey();
     app.show('');
   }
 
@@ -83,7 +84,7 @@ struct Hub {
   }
 
   async hub(on: boolean, anyway: boolean): Promise<void> {
-    if (on && !this.pair(this.forwarder, this.forwarderKey)) {
+    if (on && !app.isV06() && !this.pair(this.forwarder, this.forwarderKey)) {
       this.error = t('hub_bad_forwarder');
       return;
     }
@@ -184,17 +185,26 @@ struct Hub {
           ErrorText({ text: app.member.hubError })
 
           this.section(t('hub_forwarder'))
-          this.note(t('hub_forwarder_project'))
-          TextInput({ placeholder: $r('app.string.hub_forwarder_address'), text: this.forwarder })
-            .onChange((v: string) => {
-              this.forwarder = v;
-            })
-          TextInput({ placeholder: $r('app.string.hub_forwarder_key'), text: this.forwarderKey })
-            .maxLength(KEY_LENGTH)
-            .onChange((v: string) => {
-              this.forwarderKey = v;
-            })
-          this.note(t('hub_forwarder_back'))
+          // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
+          if (app.isV06()) {
+            this.note(t(app.member.rootForwarder.length > 0 ? 'hub_forwarder_by_root' : 'hub_forwarder_none_by_root'))
+            if (app.member.rootForwarder.length > 0) {
+              Text(app.member.rootForwarder).fontSize(15)
+              Text(app.member.rootForwarderKey).fontSize(13).fontFamily('monospace').fontColor($r('app.color.secondary'))
+            }
+          } else {
+            this.note(t('hub_forwarder_project'))
+            TextInput({ placeholder: $r('app.string.hub_forwarder_address'), text: this.forwarder })
+              .onChange((v: string) => {
+                this.forwarder = v;
+              })
+            TextInput({ placeholder: $r('app.string.hub_forwarder_key'), text: this.forwarderKey })
+              .maxLength(KEY_LENGTH)
+              .onChange((v: string) => {
+                this.forwarderKey = v;
+              })
+            this.note(t('hub_forwarder_back'))
+          }
 
           this.section(t('hub_disguise'))
           this.note(t('hub_disguise_body'))
@@ -219,35 +229,47 @@ struct Hub {
         }
 
         this.section(t('relay_title'))
-        this.note(t('relay_body'))
-        TextInput({ placeholder: $r('app.string.relay_address'), text: this.relay })
-          .onChange((v: string) => {
-            this.relay = v;
-          })
-        TextInput({ placeholder: $r('app.string.relay_key'), text: this.relayKey })
-          .maxLength(KEY_LENGTH)
-          .onChange((v: string) => {
-            this.relayKey = v;
-          })
-        Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
-        ErrorText({ text: app.member.relayError })
-        Row({ space: 8 }) {
-          Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
-            .layoutWeight(1)
-            .enabled(!this.busy && !app.busy && app.member.running)
-            .onClick(() => {
-              this.meet();
-            })
-          if (app.member.relayAt.length > 0) {
-            Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-              .layoutWeight(1)
-              .enabled(!this.busy && !app.busy)
-              .onClick(() => {
-                this.leave();
-              })
-          }
+        // The root's key renews the group's server credentials when the app
+        // opens; until it does, the relay and the hubs' forwarders take nobody.
+        if (app.member.periodOverdue) {
+          ErrorText({ text: t('period_overdue') })
         }
-        .width('100%')
+        // On a group of 0.6 the relay is the group's, which only the root sets.
+        if (app.isV06() && !app.isRoot()) {
+          this.note(t('relay_by_root'))
+          Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
+          ErrorText({ text: app.member.relayError })
+        } else {
+          this.note(t('relay_body'))
+          TextInput({ placeholder: $r('app.string.relay_address'), text: this.relay })
+            .onChange((v: string) => {
+              this.relay = v;
+            })
+          TextInput({ placeholder: $r('app.string.relay_key'), text: this.relayKey })
+            .maxLength(KEY_LENGTH)
+            .onChange((v: string) => {
+              this.relayKey = v;
+            })
+          Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
+          ErrorText({ text: app.member.relayError })
+          Row({ space: 8 }) {
+            Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
+              .layoutWeight(1)
+              .enabled(!this.busy && !app.busy && app.member.running)
+              .onClick(() => {
+                this.meet();
+              })
+            if (app.member.relayAt.length > 0) {
+              Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+                .layoutWeight(1)
+                .enabled(!this.busy && !app.busy)
+                .onClick(() => {
+                  this.leave();
+                })
+            }
+          }
+          .width('100%')
+        }
 
         BusyLine({ busy: this.busy || app.busy })
         ErrorText({ text: app.error })

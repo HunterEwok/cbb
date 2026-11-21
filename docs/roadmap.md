@@ -547,8 +547,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     IPv4, IPv6 and names, the server's own loopback services among them, and reaches
     nothing: VLESS over XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
-    hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
-    (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and
+    hub's tunnel (`internal/tunnel/onlycbb_test.go`), the Rust hub, the phones' too
+    (`member/src/hub.rs`, `a_client_reaches_only_the_member_listener`), the relay (`member/src/nettest/relayd.rs`, `a_dial_reaches_no_address`) and
     `cbb`'s tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in

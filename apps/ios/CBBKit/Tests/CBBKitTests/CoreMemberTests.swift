@@ -51,10 +51,6 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(r.id, Commands.id(of: c))
         XCTAssertThrowsError(try b.member.answer(token, result: .init(id: "", status: "done")), "a second answer finds no command")
 
-        // A tunnel key goes into the hellos; one of the wrong size does not.
-        try b.member.setTunnelKey(Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32))
-        try b.member.setTunnelKey(nil, psk: nil)
-        XCTAssertThrowsError(try b.member.setTunnelKey(Data(repeating: 1, count: 3), psk: Data(repeating: 2, count: 32)))
         try b.member.setEvidence([])
         XCTAssertFalse(try a.member.records().isEmpty)
         // A device let go is dialed again.
@@ -135,24 +131,6 @@ final class CoreMemberTests: XCTestCase {
         return withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
         }
-    }
-
-    /// A hub share goes to the one peer the app names; from a device that
-    /// may not be a hub, the member drops it.
-    func testSendsAHubShareToOnePeer() async throws {
-        let t = try CoreGroup(3, test: self)
-        let (root, b, c) = (t.phones[0], t.phones[1], t.phones[2])
-        try await t.connect(1, to: 0)
-        try await t.connect(2, to: 0)
-        let share = Member.HubShare(serving: true)
-        XCTAssertEqual(try root.member.sendHubs(share, to: b.device), [b.device])
-        _ = try await b.next("the share") { if case let .message(_, .hubs(h)) = $0 { return h }; return nil }
-        // C, no hub, sends one to the root, which drops it.
-        XCTAssertEqual(try c.member.sendHubs(share, to: root.device), [root.device])
-        try c.member.copy("after the share")
-        _ = try await root.copy("after the share")
-        XCTAssertTrue(root.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty)
-        XCTAssertTrue(c.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty, "C was not named")
     }
 
     /// A mode change connects again so the hellos say it, and the member
@@ -247,12 +225,6 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(sheet.text.count, 69)
         _ = t.g.add(try m.records())
         XCTAssertEqual(t.g.records.recovery, sheet.admin, "the records name the sheet's key")
-        // A YubiKey's key replaces it; its admin CA goes into the card.
-        let card = SoftwareSigner()
-        let ca = try m.recoveryFor(card.publicKeyDER, public: pub, sign: root)
-        XCTAssertEqual(try CertificateInfo(der: ca).publicKey, card.publicKeyDER)
-        _ = t.g.add(try m.records())
-        XCTAssertEqual(t.g.records.recovery, try Records.keyHash(cert: ca))
         try m.removeRecovery(public: pub, sign: root)
         _ = t.g.add(try m.records())
         XCTAssertNil(t.g.records.recovery)

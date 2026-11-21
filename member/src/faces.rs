@@ -239,15 +239,13 @@ impl Kept {
     }
 
     /// What the credentials must list, by the server keys kept: the hubs in
-    /// their order (the first 16), the admins that are not frozen other
+    /// their order (`State::hub_order`, the first 16), the admins that are not frozen other
     /// than the root's own device, which holds the period key, and every
     /// device not frozen.
     fn lists(&self, state: &State) -> [Vec<[u8; 32]>; 3] {
         let root_dev = state.root_device.as_ref();
-        let hubs: Vec<[u8; 32]> = state
-            .hubs
+        let hubs: Vec<[u8; 32]> = hub_devices(state)
             .iter()
-            .filter_map(|id| state.device(id).filter(|d| !d.frozen))
             .filter_map(|d| self.server_of(&d.key.hash()))
             .take(credential::LENGTHS_HUBS[credential::LENGTHS_HUBS.len() - 1])
             .collect();
@@ -350,15 +348,27 @@ impl Kept {
     }
 }
 
+/// The devices the hubs' credential lists, in their order: those that may
+/// serve as hubs (`State::hub_order`: the root's hubs record, then the
+/// admins, so that an admin phone, which no hubs record names, is listed),
+/// never a frozen one.
+fn hub_devices(state: &State) -> Vec<&cbb_core::records::eval::DeviceState> {
+    state.hub_order().iter().filter_map(|id| state.device(id).filter(|d| !d.frozen)).collect()
+}
+
 fn b64(b: &[u8]) -> String {
     base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
 }
 
 /// What signs on this device: its member key, the root's key when it holds
-/// the current root, and its server secret.
+/// the current root or its app handed it over, whether this device is the
+/// root's (`root_here`: it keeps the period keys, which sign the hubs' and
+/// the members' credentials without the root's key, as on a root phone
+/// whose app holds that key), and its server secret.
 pub struct Signers<'a> {
     pub member: &'a dyn ExternalKey,
     pub root: Option<&'a dyn ExternalKey>,
+    pub root_here: bool,
     pub secret: &'a [u8; 32],
 }
 
@@ -491,6 +501,17 @@ impl Faces {
     /// without a face.
     pub fn kept(&self, pin: &[u8; 32]) -> Kept {
         self.faces.lock().unwrap().get(pin).map(|f| f.kept.clone()).unwrap_or_default()
+    }
+
+    /// Where the periods of servers stand at now_ms: whether the root
+    /// should start a new one for one of them (due), and whether one of
+    /// them has none that has not expired (overdue), so that its servers
+    /// take nobody of the group until the root signs one.
+    pub fn periods(&self, state: &State, servers: &[Server], now_ms: u64) -> (bool, bool) {
+        servers.iter().take(MAX_FACES).fold((false, false), |(due, overdue), s| {
+            let k = self.kept(&s.pin);
+            (due || k.period_due(state, now_ms), overdue || !k.period.as_ref().is_some_and(|p| p.c.live(now_ms)))
+        })
     }
 
     /// This device's server secret.
@@ -776,7 +797,7 @@ impl Faces {
             .unwrap()
             .get(&server.pin)
             .cloned()
-            .filter(|pk| pk.tag == tag && s.root.is_some())
+            .filter(|pk| pk.tag == tag && s.root_here)
             .map(|pk| ServerKey::from_scalar(&pk.scalar))
             .transpose()?
             .filter(|pk| period.c.key.as_deref() == Some(pk.public().as_slice()));

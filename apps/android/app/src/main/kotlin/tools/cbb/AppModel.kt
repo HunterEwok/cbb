@@ -15,20 +15,20 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
+import tools.cbb.kit.ChangePreview
+import tools.cbb.kit.Notice
+import tools.cbb.kit.RecoveryCard
+import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Arrangement
 import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
-import tools.cbb.kit.InvitationWindow
-import tools.cbb.kit.JoinCode
 import tools.cbb.kit.CorePairing
 import tools.cbb.kit.PairingJoiner
 import tools.cbb.kit.PairingMember
 import tools.cbb.kit.Pairing
 import tools.cbb.kit.PhoneGroup
-import tools.cbb.kit.Piv
-import tools.cbb.kit.Restore
 import tools.cbb.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -115,13 +115,6 @@ class AppModel(private val app: Context) {
     var busy by mutableStateOf(false)
         private set
 
-    /** How many times a device being added that has not answered yet was dialed again; 0 before that. */
-    var retries by mutableStateOf(0)
-        private set
-
-    /** The QR code this phone shows while it waits to join a group. */
-    var joinCode by mutableStateOf<JoinCode?>(null)
-        private set
     var isAdmin by mutableStateOf(group.isAdmin)
         private set
 
@@ -139,6 +132,14 @@ class AppModel(private val app: Context) {
 
     /** What the group's records stop and what ends it. */
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
+        private set
+
+    /** The member's notices about the group (docs/apps.md, "Notices"), on Home. */
+    var notices by mutableStateOf<List<Notice>>(emptyList())
+        private set
+
+    /** The group's root changed, until the person saw it (docs/apps.md, "Changing the main device"). */
+    var rootChanged by mutableStateOf<LiveGroup.RootChange?>(null)
         private set
 
     var theme by mutableStateOf(settings.theme)
@@ -202,10 +203,6 @@ class AppModel(private val app: Context) {
         val clients: Int = 0,
         /** How its tunnel hides. */
         val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.PLAIN,
-        /** The connected computers the hub can move to: admins, or computers the root can make admins; by ID, with their names. */
-        val computers: List<Pair<String, String>> = emptyList(),
-        /** The computer that is always on which the app suggests as the hub, unless the user chose to keep the phone. */
-        val suggested: Pair<String, String>? = null,
         /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
         val entriesStale: Boolean = false,
     )
@@ -231,6 +228,10 @@ class AppModel(private val app: Context) {
         val relay: HubState.Forwarder? = null,
         val online: Int = 0,
         val through: Int = 0,
+        /** Whether this phone sets the relay: on a group of 0.6 only the root does, for the whole group. */
+        val editable: Boolean = true,
+        /** On the root phone of a group of 0.6: the group's server credentials expired, so the relay and the hubs' forwarders take nobody until the root key renews them. */
+        val periodOverdue: Boolean = false,
     )
 
     var blindRelay by mutableStateOf<BlindRelay?>(null)
@@ -279,67 +280,6 @@ class AppModel(private val app: Context) {
     fun choose(appearance: Appearance) {
         settings.appearance = appearance
         this.appearance = appearance
-    }
-
-    /** Admits a scanned or pasted device; on success the app goes Home. */
-    suspend fun scanned(text: String): Boolean {
-        if (text.trim().startsWith(RECOVERY_QR)) return restore(text.trim())
-        val jc = read(text)
-        if (jc == null) {
-            message = Note(R.string.not_a_code, error = true)
-            return false
-        }
-        busy = true
-        retries = 0
-        try {
-            group.admit(jc) { retries++ }
-            phase = Phase.HOME
-            message = null
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            busy = false
-            retries = 0
-            update()
-        }
-    }
-
-    /**
-     * Restores the group with the recovery key from the sheet's QR code, on
-     * a phone without a group: the claim goes out, the app goes Home, and
-     * Home shows the time left until this phone becomes the root.
-     */
-    suspend fun restore(text: String): Boolean {
-        if (phase != Phase.START) {
-            message = Note(R.string.error_restore_has_group, error = true)
-            return false
-        }
-        busy = true
-        try {
-            val sheet = when (val r = withContext(Dispatchers.IO) { Core.readRecoverySheet(text) }) {
-                is Core.SheetReading.Key -> r.key
-                is Core.SheetReading.Refused -> {
-                    message = Note(R.string.error_sheet, if (settings.showsErrorDetails) r.message else null, error = true)
-                    return false
-                }
-            }
-            group.restore(sheet)
-            phase = Phase.HOME
-            message = Note(R.string.restore_started)
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            busy = false
-            update()
-        }
     }
 
     /** At the first launch: makes this phone's own key, once. */
@@ -455,28 +395,91 @@ class AppModel(private val app: Context) {
         }
     }
 
+    // Pairing on 0.6: the window and the joiner
+
+    /** The recovery sheet of the group of 0.6 this phone just made, shown once until the person says it is kept. */
+    var newSheet by mutableStateOf<Core.RecoverySheet?>(null)
+
+    /** The open window's QR code and its six digits, while "Add a device" shows them. */
+    var windowQr by mutableStateOf<String?>(null)
+        private set
+    var windowDigits by mutableStateOf<String?>(null)
+        private set
+
+    /** Whether the phone pairs on 0.6: without a group (a new one is of 0.6) or in a group of 0.6. */
+    val pairsOn06: Boolean get() = !group.hasGroup || group.isV06
+
     /**
-     * Joins another phone's group: shows this phone's QR code until an
-     * admin phone scans it, then goes Home. The join screen runs it as its
-     * effect, so leaving the screen cancels it and stops listening.
+     * "Add a device" on 0.6: makes the group first on a phone without one
+     * (its recovery sheet shows over the window), then opens the window
+     * until a device joins. "Add a device" runs it as its effect, so leaving
+     * it closes the window. Answers whether a device joined.
      */
-    suspend fun join() {
+    suspend fun addByWindow(): Boolean {
+        message = null
         try {
-            group.join { code -> joinCode = code }
+            if (!group.hasGroup) {
+                busy = true
+                newSheet = group.newGroup06()
+                busy = false
+                update()
+                phase = Phase.HOME
+            }
+            val name = group.openWindow { qr, digits ->
+                main.post {
+                    windowQr = qr
+                    windowDigits = digits
+                }
+            }
+            message = Note(R.string.window_joined)
+            Log.i(TAG, "$name joined through this phone's window")
             update()
-            phase = Phase.HOME
+            return true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             message = describe(e)
+            return false
         } finally {
-            joinCode = null
+            busy = false
+            windowQr = null
+            windowDigits = null
+        }
+    }
+
+    /**
+     * Joins a group of 0.6 by a window's scanned or pasted QR code, or by
+     * the six digits the person typed from the window's screen (the window
+     * is then found on the home network), then goes Home. The join screen
+     * runs it, so leaving the screen cancels it.
+     */
+    suspend fun joinByWindow(text: String): Boolean {
+        val t = text.trim()
+        val digits = t.filter { !it.isWhitespace() }
+        val typed = digits.length == 6 && digits.all { it in '0'..'9' }
+        if (!typed && !t.startsWith(WINDOW_QR)) {
+            message = Note(R.string.not_a_window_code, error = true)
+            return false
+        }
+        message = null
+        busy = true
+        try {
+            if (typed) group.joinByWindow("", digits) else group.joinByWindow(t)
+            update()
+            phase = Phase.HOME
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
         }
     }
 
     /** Leaves the join screen without joining. */
     fun cancelJoin() {
-        joinCode = null
         joiningInvite = null
         inviteFingerprint = null
         message = null
@@ -593,6 +596,8 @@ class AppModel(private val app: Context) {
         val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
         isRoot = root
         alerts = a
+        notices = withContext(Dispatchers.IO) { group.notices }
+        rootChanged = group.rootChanged
         handedOver = withContext(Dispatchers.IO) { group.handedOver }
         removed = withContext(Dispatchers.IO) { group.removed }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
@@ -601,51 +606,59 @@ class AppModel(private val app: Context) {
         notifier.observe(d)
         // Push learns the devices as applied: a device gone or a new root draws a new push key.
         val tag = withContext(Dispatchers.IO) { group.groupTag }
-        withContext(Dispatchers.IO) { PushSetup.group(app, tag, d) }
-        away = group.awayFromHome?.let { a ->
-            // The last failure only while it is still trying; once connected or at home it is old news.
-            val e = (a.lastError as? Exception)?.takeIf { a.status == AwayFromHome.Status.CONNECTING }
-            notifier.away(a.isOn && e != null)
-            // AwayFromHome logs each failure itself.
-            Away(a.isOn, a.status, e?.let { describe(it, R.string.away_error, log = false) })
+        withContext(Dispatchers.IO) { PushSetup.group(app, tag, d, group.pushFace) }
+        if (withContext(Dispatchers.IO) { group.isV06 }) {
+            update06(root)
+            WatchLink.update(app, this)
+            return
         }
-        hub = withContext(Dispatchers.IO) {
-            group.phoneHub?.let { h ->
-                val (status, error) = h.status(paused = !group.inForeground && !h.background)
-                if (error != hubError) {
-                    hubError = error
-                    if (error != null) Log.w(TAG, "the hub: $error")
-                }
-                Hub(
-                    h.isOn, status,
-                    error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                    h.forwarder, h.background, group.onHomeNetwork, h.clients.size,
-                    computers = if (h.isOn) {
-                        group.computers.filter { it.online && !it.throughHub && it.can("hub") && (it.admin || it.canMakeAdmin) }.map { it.id to it.name }
-                    } else {
-                        emptyList()
-                    },
-                    suggested = group.suggestedHub?.takeIf { h.isOn && !settings.keepsPhoneHub }?.let { it.id to it.name },
-                    disguise = h.disguise,
-                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && group.entriesStale,
-                )
-            }
-        }
-        blindRelay = withContext(Dispatchers.IO) {
-            group.blindRelay?.let { r ->
-                val (status, report, error) = r.status(paused = false)
-                if (error != relayError) {
-                    relayError = error
-                    if (error != null) Log.w(TAG, "the relay: $error")
-                }
-                BlindRelay(
-                    status,
-                    error?.let { Note(R.string.relay_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                    r.relay, report.online.size, report.through,
-                )
-            }
-        }
+        // A phone of a group of 0.5 syncs at home only (D-123).
+        away = null
+        hub = null
+        blindRelay = null
         WatchLink.update(app, this)
+    }
+
+    /**
+     * Away from home, the hub and the relay on a group of 0.6, as the Live
+     * member runs them (AwayOn06), from where the member says they stand.
+     * The relay is the group's, which the root sets.
+     */
+    private suspend fun update06(root: Boolean) {
+        val (a, prefs) = withContext(Dispatchers.IO) { group.awayState06 to group.hub06 }
+        val byRoot = prefs?.let { withContext(Dispatchers.IO) { group.rootForwarder06 } }
+        val awayStatus = withContext(Dispatchers.IO) { AwayOn06.awayStatus(a) { group.reaches(it) } }
+        val awayError = a?.takeIf { awayStatus == AwayFromHome.Status.CONNECTING && it.error.isNotEmpty() }?.let { Exception(if (it.detail.isEmpty()) it.error else "${it.error} (${it.detail})") }
+        notifier.away(awayError != null)
+        if (awayError != null) Log.w(TAG, "sync away from home: ${awayError.message}")
+        away = Away(a != null && !a.hub && awayStatus != AwayFromHome.Status.OFF, awayStatus, awayError?.let { describe(it, R.string.away_error, log = false) })
+        hub = prefs?.let { p ->
+            val (status, error) = AwayOn06.hubStatus(p, a, paused = !group.inForeground && !p.background, forwarder = byRoot != null)
+            if (error != hubError) {
+                hubError = error
+                if (error != null) Log.w(TAG, "the hub: $error")
+            }
+            Hub(
+                p.on, status,
+                error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
+                byRoot?.let { HubState.Forwarder(it.endpoint, it.key) }, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
+                disguise = p.disguise,
+                entriesStale = status == HubOnPhone.Status.FAILED && a?.forwarder?.entriesStale == true,
+            )
+        }
+        val (relayStatus, relayErr) = AwayOn06.relayStatus(a)
+        if (relayErr != relayError) {
+            relayError = relayErr
+            if (relayErr != null) Log.w(TAG, "the relay: $relayErr")
+        }
+        blindRelay = BlindRelay(
+            relayStatus,
+            relayErr?.let { Note(R.string.relay_failed, if (settings.showsErrorDetails) it else null, error = true) },
+            a?.relay?.endpoint?.takeIf { it.isNotEmpty() }?.let { HubState.Forwarder(it, "") },
+            a?.relay?.online?.size ?: 0,
+            editable = root,
+            periodOverdue = root && withContext(Dispatchers.IO) { group.periodOverdue06 },
+        )
     }
 
     /**
@@ -657,7 +670,7 @@ class AppModel(private val app: Context) {
         relayNote = try {
             if (address.isBlank() != pin.isBlank()) throw IllegalArgumentException("both or neither")
             if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
-            withContext(Dispatchers.IO) { group.setRelay(address, pin) }
+            group.setGroupRelay(address, pin)
             null
         } catch (e: CancellationException) {
             throw e
@@ -671,43 +684,6 @@ class AppModel(private val app: Context) {
 
     /** Makes this phone the group's hub, or stops it being the hub. */
     suspend fun setHub(on: Boolean) = hubChange { group.setPhoneHub(on) }
-
-    /**
-     * Makes a connected computer the hub in place of this phone
-     * (docs/protocol.md, section 11, "Moving the hub"); the reason it
-     * refused, if it does, shows under the message.
-     */
-    suspend fun moveHub(id: String) {
-        hubNote = try {
-            group.moveHub(id)
-            Note(R.string.hub_moved)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: LiveGroup.CommandRefused) {
-            Log.e(TAG, app.getString(R.string.hub_move_refused), e)
-            Note(R.string.hub_move_refused, e.reason, error = true)
-        } catch (e: HubOnPhone.NotRunning) {
-            describe(e, R.string.hub_move_not_running)
-        } catch (e: LiveGroup.NotConnected) {
-            describe(e, R.string.error_no_answer)
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
-    /** Keeps this phone as the hub: the app no longer suggests a computer. */
-    suspend fun keepPhoneHub() {
-        settings.keepsPhoneHub = true
-        update()
-    }
-
-    /** Sets the hub's forwarder; both empty for a hub at home only. */
-    suspend fun setForwarder(address: String, pin: String) = hubChange {
-        if ((address.isBlank() || pin.isBlank()) && !(address.isBlank() && pin.isBlank())) throw IllegalArgumentException("both or neither")
-        if (pin.isNotBlank() && !HubState.validPin(pin.trim())) throw IllegalArgumentException("not a pin")
-        group.setForwarder(address, pin)
-    }
 
     /** Sets how the hub's tunnel hides: plain WireGuard, AmneziaWG or VLESS. */
     suspend fun setHubDisguise(d: HubOnPhone.Disguise) = hubChange { group.setHubDisguise(d) }
@@ -754,8 +730,6 @@ class AppModel(private val app: Context) {
             null
         } catch (e: CancellationException) {
             throw e
-        } catch (e: HubOnPhone.NotRunning) {
-            describe(e, R.string.invite_no_hub)
         } catch (e: Exception) {
             describe(e)
         }
@@ -788,18 +762,7 @@ class AppModel(private val app: Context) {
         invitation = null
         answer?.complete(false)
         answer = null
-        inviteNote = r.fold(
-            { Note(R.string.invite_admitted) },
-            { e ->
-                val code = (e as? InvitationWindow.Ended)?.code
-                when (code) {
-                    Pairing.ErrorCode.CLOSED -> null
-                    Pairing.ErrorCode.EXPIRED -> Note(R.string.invite_expired)
-                    Pairing.ErrorCode.TOO_MANY -> Note(R.string.invite_too_many, error = true)
-                    else -> describe(e as? Exception ?: Exception(e))
-                }
-            },
-        )
+        inviteNote = r.fold({ Note(R.string.invite_admitted) }, { e -> describe(e as? Exception ?: Exception(e)) })
     }
 
     /** Turns sync away from home on or off; the hub's answer comes on the next connection at home. */
@@ -963,6 +926,50 @@ class AppModel(private val app: Context) {
         update()
     }
 
+    /** Hides a notice that may be hidden. */
+    suspend fun dismiss(notice: Notice) {
+        try {
+            withContext(Dispatchers.IO) { group.dismissNotice(notice.id) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+        }
+        update()
+    }
+
+    /** The person saw that the group's root changed. */
+    fun rootChangeSeen() {
+        group.rootChangeSeen()
+        rootChanged = null
+    }
+
+    /** The "who stays" list of a change of root with the recovery key, leaveOut unticked; null after a failure, which [message] says. */
+    suspend fun changePreview(recovery: RecoveryInput, leaveOut: List<String>): ChangePreview? = try {
+        withContext(Dispatchers.IO) { group.changePreview(recovery, leaveOut) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        message = describe(e)
+        null
+    }
+
+    /** Makes this phone the group's root with the recovery key, after the fingerprint or the screen lock; whether it did. */
+    suspend fun changeRoot(recovery: RecoveryInput, leaveOut: List<String>, overWaiting: Boolean): Boolean {
+        var done = false
+        message = try {
+            group.changeRoot(recovery, leaveOut, overWaiting)
+            done = true
+            Note(R.string.root_changed_here)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+        return done
+    }
+
     /** Takes the group the root handed to this phone (cbb handover), after the fingerprint or the screen lock. */
     suspend fun takeHandedGroup() {
         message = try {
@@ -1106,53 +1113,37 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Puts the group's recovery key on a YubiKey held to the phone; true
-     * when it is there, with recoveryNote saying so, or why not.
+     * Seals the recovery key of sheet (its QR code) onto a YubiKey held to
+     * the phone, after its PIN; replaceDefault is the person's consent to
+     * replace a factory management key. It returns what to tell the person.
      */
-    suspend fun makeRecoveryOnCard(pin: String): Boolean {
-        val ok = try {
-            cardPrompt = R.string.yubikey_hold
-            group.makeRecoveryOnCard(pin)
-            recoveryNote = Note(R.string.yubikey_made)
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            recoveryNote = describe(e)
-            false
-        } finally {
-            cardPrompt = null
-        }
-        update()
-        return ok
+    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean): Note = try {
+        cardPrompt = R.string.yubikey_hold
+        val sealed = group.sealOnCard(sheet, pin, replaceDefault) { cardPrompt = R.string.yubikey_touch_usb }
+        Log.i(TAG, "yubikey: sealed, factory key ${sealed.defaultKey}, replaced ${sealed.replaced}")
+        Note(if (sealed.defaultKey) R.string.yubikey_sealed_default_key else R.string.yubikey_sealed)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        describe(e)
+    } finally {
+        cardPrompt = null
     }
 
     /**
-     * Restores the group with the recovery key on a YubiKey, on a phone
-     * without a group, as [restore] does with the sheet.
+     * Opens the recovery key on a YubiKey held to the phone, after its PIN,
+     * for a change of root; null after a failure, which [message] says.
      */
-    suspend fun restoreWithCard(pin: String): Boolean {
-        if (phase != Phase.START) {
-            message = Note(R.string.error_restore_has_group, error = true)
-            return false
-        }
-        busy = true
-        try {
-            cardPrompt = R.string.yubikey_hold
-            group.restoreWithCard(pin) { cardPrompt = R.string.yubikey_hold_again }
-            phase = Phase.HOME
-            message = Note(R.string.restore_started)
-            return true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            message = describe(e)
-            return false
-        } finally {
-            cardPrompt = null
-            busy = false
-            update()
-        }
+    suspend fun openCard(pin: String): ByteArray? = try {
+        cardPrompt = R.string.yubikey_hold
+        group.openCard(pin) { cardPrompt = R.string.yubikey_touch_usb }.also { message = Note(R.string.yubikey_opened) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        message = describe(e)
+        null
+    } finally {
+        cardPrompt = null
     }
 
     /** Removes the group's recovery key. */
@@ -1203,29 +1194,6 @@ class AppModel(private val app: Context) {
             Note(R.string.made_admin)
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
-    /**
-     * Makes a connected computer a hub of the group as well
-     * (docs/protocol.md, section 11, "Several hubs"): one that reads the
-     * copies, an admin, or one that only passes them on; the reason it
-     * refused, if it does, shows under the message.
-     */
-    suspend fun makeHub(id: String, forwardOnly: Boolean = false) {
-        message = try {
-            group.makeHub(id, forwardOnly)
-            Note(if (forwardOnly) R.string.made_hub_forward_only else R.string.made_hub)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: LiveGroup.CommandRefused) {
-            Log.e(TAG, app.getString(R.string.make_hub_refused), e)
-            Note(R.string.make_hub_refused, e.reason, error = true)
-        } catch (e: LiveGroup.NotConnected) {
-            describe(e, R.string.error_no_answer)
         } catch (e: Exception) {
             describe(e)
         }
@@ -1320,14 +1288,9 @@ class AppModel(private val app: Context) {
         /** How long the user may take to confirm a device that used an invitation (docs/protocol.md, section 12). */
         const val CONFIRM_MS = 5 * 60_000L
 
-        /** How the QR code of a recovery sheet starts (docs/protocol.md, section 10, "The recovery key"). */
-        const val RECOVERY_QR = "cbb://recover?"
+        /** How the QR code of a pairing window of 0.6 starts (docs/protocol.md, section 7, "The window's QR code"). */
+        const val WINDOW_QR = "cbb://pair?"
 
-        /** Reads what the camera saw, or what the user pasted: the text of the QR code of cbb pair or of another phone. */
-        fun read(text: String): JoinCode? {
-            val jc = JoinCode.parse(text) ?: return null
-            return if (jc.codeIsValid && jc.addrs.isNotEmpty() && jc.fingerprint.isNotEmpty()) jc else null
-        }
 
         @StringRes
         fun summary(e: Exception): Int = when (e) {
@@ -1342,29 +1305,24 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
                 LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
-                LiveGroup.Failure.Kind.NO_GROUP_COMPUTER -> R.string.error_no_group_computer
                 LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave
                 LiveGroup.Failure.Kind.ROOT_LEAVES -> R.string.error_root_leaves
                 LiveGroup.Failure.Kind.HUB_UNREACHABLE -> R.string.error_hub_unreachable
             }
-            is Restore.Failure -> when (e.kind) {
-                Restore.Kind.NEEDS_QR -> R.string.error_restore_needs_qr
-                Restore.Kind.OTHER_GROUP -> R.string.error_restore_other_group
-                Restore.Kind.NOT_THE_KEY -> R.string.error_restore_not_the_key
-                Restore.Kind.NOT_A_MEMBER -> R.string.error_restore_not_a_member
-            }
-            is Piv.Failure -> when (e.kind) {
-                Piv.Kind.NO_PIV -> R.string.error_yubikey_no_piv
-                Piv.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
-                Piv.Kind.BLOCKED -> R.string.error_yubikey_blocked
-                Piv.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
-                Piv.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
-                Piv.Kind.NO_FREE_SLOT -> R.string.error_yubikey_full
-                Piv.Kind.NO_KEY -> R.string.error_yubikey_no_key
-                Piv.Kind.CARD -> R.string.error_yubikey
+            is RecoveryCard.Failure -> when (e.kind) {
+                RecoveryCard.Kind.WRONG_PIN -> R.string.error_yubikey_wrong_pin
+                RecoveryCard.Kind.BLOCKED -> R.string.error_yubikey_blocked
+                RecoveryCard.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
+                RecoveryCard.Kind.NO_KEY -> R.string.error_yubikey_no_key
+                RecoveryCard.Kind.HOLDS_ONE -> R.string.error_yubikey_holds_one
+                RecoveryCard.Kind.TAKEN -> R.string.error_yubikey_taken
+                RecoveryCard.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
+                RecoveryCard.Kind.CARD -> R.string.error_yubikey
             }
             is YubiKeyNfc.Unavailable -> if (e.off) R.string.error_nfc_off else R.string.error_no_nfc
-            is YubiKeyNfc.NoCard -> R.string.error_yubikey_none
+            is YubiKeys.Unavailable -> R.string.error_no_nfc
+            is YubiKeys.NoCard -> R.string.error_yubikey_none
+            is YubiKeyUsb.Denied -> R.string.error_yubikey_usb_denied
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Content.Unread -> R.string.error_copy_unread

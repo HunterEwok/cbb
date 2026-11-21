@@ -4,17 +4,17 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/invite"
-	"github.com/HunterEwok/cbb/internal/phone"
 )
 
 // phoneCall asks phone-on-linux's member (cbb_member_call) and returns the
@@ -54,7 +54,7 @@ func TestFFIJoinInvite(t *testing.T) {
 	}
 	var h hub
 	pi := startService(t, &h, "pi")
-	inv, text := inviteHub(t, &h, pi)
+	inv, text := inviteHubFor(t, &h, pi, "phone")
 	piID := pi.status(t).Device
 
 	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir(), "-invite", text)
@@ -69,7 +69,8 @@ func TestFFIJoinInvite(t *testing.T) {
 	if m, err := inv.Receive(); err != nil || !m.Done || m.Name != "phone" {
 		t.Fatalf("the invitation ended with %+v, %v", m, err)
 	}
-	if joined := next("Joined "); !strings.HasSuffix(joined, " "+pi.status(t).Group) {
+	// "Joined <device> <group tag> <the name of the member that let it in>".
+	if joined := strings.Fields(next("Joined ")); len(joined) != 3 || joined[1] != pi.status(t).Group || joined[2] != "pi" {
 		t.Fatalf("the phone joined %q, not the group %s", joined, pi.status(t).Group)
 	}
 
@@ -88,52 +89,53 @@ func TestFFIJoinInvite(t *testing.T) {
 }
 
 // TestFFIInviteThroughHub runs an admin phone's app (phone-on-linux) that
-// makes a remote invitation: the computer that holds the group's root is
-// its hub, so the guest tunnel opens there, and the phone's window admits
-// a computer from another network once the user confirms the fingerprint
-// it shows.
+// makes a remote invitation of 0.6: the computer that holds the group's
+// root is the group's hub, so the guest tunnel opens there and the hub
+// passes the pairing to the phone (docs/protocol.md, section 12, "Through
+// the hub"), which admits a computer from another network once the user
+// confirms the fingerprint it shows.
 func TestFFIInviteThroughHub(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
-	pi := startService(t, &h, "pi")
+	pi, next, in := adminPhone(t, bin, &h)
 	deck := startService(t, &h, "deck")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
+	piID := pi.status(t).Device
+
+	// With no hub named, the phone has nowhere to open the guest tunnel;
+	// until the root's record reaches it, the phone is no admin yet.
+	waitFor(t, "the phone an admin, in a group with no hub", func() bool {
+		fmt.Fprintln(in, "INVITE 600")
+		got, failed := strings.CutPrefix(next("INVITE "), "FAILED ")
+		if !failed {
+			t.Fatalf("an invitation in a group with no hub: %q", got)
+		}
+		return !strings.Contains(got, "admin key")
+	})
+	fmt.Fprintln(in, "INVITE 600")
+	if got := next("INVITE "); !strings.HasPrefix(got, "FAILED ") || !strings.Contains(got, "hub") {
+		t.Fatalf("an invitation in a group with no hub: %q", got)
 	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// On the records of 0.6 the root names its hubs.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	port := freeUDP(t)
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	piID := pi.status(t).Device
-
-	// The phone joins at home as an admin.
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: true}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	if ca := next("Admin CA "); ca == "" {
-		t.Fatal("the phone is not an admin")
-	}
-	next("Joined ")
-	call := phoneCall(t, next, in)
-	waitFor(t, "the phone connected", func() bool { return len(call("peers", nil)["peers"].([]any)) == 1 })
 
 	var text string
 	waitUpTo(t, 60*time.Second, "an invitation through the pi", func() bool {
 		fmt.Fprintln(in, "INVITE 600")
 		got := next("INVITE ")
 		if msg, failed := strings.CutPrefix(got, "FAILED "); failed {
-			if !strings.Contains(msg, "hub") {
+			if !strings.Contains(msg, "hub") && !strings.Contains(msg, "not running") {
 				t.Fatalf("the phone's invitation: %s", msg)
 			}
 			return false
@@ -141,12 +143,11 @@ func TestFFIInviteThroughHub(t *testing.T) {
 		text = got
 		return true
 	})
-	in2, err := invite.Parse(text)
-	if err != nil {
-		t.Fatal(err)
+	if raw := joinInvitation(t, text); !bytes.Contains(raw, []byte(fmt.Sprintf("127.0.0.1:%d", port))) {
+		t.Errorf("the invitation through the pi names not its endpoint: %x", raw)
 	}
-	if in2.Hub != piID || in2.Endpoints[0].Port() != uint16(port) {
-		t.Errorf("the phone's invitation: %+v", in2)
+	if !pi.logged("is open through this hub") {
+		t.Error("the pi did not log the invitation it carries")
 	}
 
 	j := deck.dial(t)
@@ -170,11 +171,10 @@ func TestFFIInviteThroughHub(t *testing.T) {
 		t.Fatalf("the deck is in group %q", st.Group)
 	}
 	waitUpTo(t, 60*time.Second, "the deck reaches the pi", func() bool {
-		for _, p := range deck.status(t).Peers {
-			if p.ID == piID {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(deck.status(t).Peers, func(p control.Device) bool { return p.ID == piID })
 	})
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "from afar"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "from afar" })
 }

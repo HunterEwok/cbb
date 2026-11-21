@@ -124,13 +124,9 @@ impl Service {
             }));
         }
         self.live_hello(&live);
-        {
-            let me = crate::certs::DeviceId::parse(&id_text(&live.mesh.device()))?;
-            // -tunnel-via sends the tunnel's packets to a local UDP port that
-            // leads to the hub (cbb next link -udp).
-            let away = crate::away::Away::new(cfg.state_dir.clone(), live.tag(), me, log.clone()).via(cfg.tunnel_via);
-            live.with_away(Arc::new(away));
-        }
+        // -tunnel-via sends the tunnel's packets to a local UDP port that
+        // leads to the hub (cbb next link -udp).
+        live.start_away(cfg.state_dir.clone(), cfg.tunnel_via, log.clone())?;
         live.set_networks(crate::networks::Networks::load(&cfg.state_dir, true, log.clone()));
         // The attestations of member keys (docs/protocol.md, section 17).
         live.with_attestations();
@@ -749,89 +745,19 @@ impl Service {
     /// with the project's alone. The answer's `relays` names them. Only the
     /// root sets them, an admin as well as a member is told so.
     fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
-        use cbb_core::records::body::{SERVER_RELAY, Server};
         let off = h.relay == "off" && h.relays.is_empty();
         if !h.consent && !off {
             return Err(Error::msg(
                 "a relay learns which devices of the group talk, when and how much, and their addresses; run cbb global relay and read what it says",
             ));
         }
-        let st = live.mesh.state();
-        let own = live.mesh.own();
-        let root = own
-            .root
-            .as_ref()
-            .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
-        // An admin too: on 0.6 only the root sets it (the owner,
-        // 2026-11-21); an admin asking the root comes with a command of
-        // its own in 0.7.
-        if !root {
-            return Err(Error::msg("only the group's root sets the group's relay: run cbb global relay on the root"));
-        }
-        let given = std::iter::once((h.relay.clone(), h.relay_key.clone())).chain(h.relays.iter().map(|r| {
-            let (a, k) = r.split_once(' ').unwrap_or((r, ""));
-            (a.to_string(), k.to_string())
-        }));
-        let mut relays: Vec<Server> = Vec::new();
-        for (addr, key) in given.filter(|_| !off) {
-            if key == "default" {
-                if !h.relays.is_empty() {
-                    return Err(Error::msg("the project's relay goes alone: cbb global relay default"));
-                }
-                // The project's relay, by name, with the pin of its key the
-                // newest keys.json gives (else the one built in): the
-                // root's consent is in the group's settings.
-                let now = uptime::wall_ms();
-                let pin = crate::faces::project_servers(live.mesh.entries().as_deref(), now)
-                    .into_iter()
-                    .find(|s| s.address == crate::faces::PROJECT_RELAY)
-                    .map(|s| s.pin)
-                    .ok_or_else(|| Error::msg("this build knows no key of the project's relay"))?;
-                relays.push(Server { kind: SERVER_RELAY, endpoint: crate::faces::PROJECT_RELAY.to_string(), pin });
-                break;
-            }
-            let endpoint = match addr.parse::<std::net::SocketAddr>() {
-                Ok(ep) if ep.port() != 0 => ep.to_string(),
-                _ => {
-                    return Err(Error::msg(format!(
-                        "{addr:?} is not the relay's address with a port, such as 203.0.113.9:8764"
-                    )));
-                }
-            };
-            use base64::Engine as _;
-            let b64 = base64::engine::general_purpose::STANDARD;
-            let pin = b64
-                .decode(&key)
-                .ok()
-                .filter(|b| b64.encode(b) == key)
-                .and_then(|b| <[u8; 32]>::try_from(b).ok())
-                .ok_or_else(|| {
-                    Error::msg(format!("{key:?} is not a relay's key; cbb relay prints it, 44 characters of base64"))
-                })?;
-            if relays.iter().any(|r| r.endpoint == endpoint) {
-                return Err(Error::msg(format!("the relay {endpoint} is given twice")));
-            }
-            relays.push(Server { kind: SERVER_RELAY, endpoint, pin });
-        }
-        let others = st.settings.servers.iter().filter(|v| v.kind != SERVER_RELAY).count();
-        if relays.len() + others > cbb_core::records::body::MAX_SERVERS {
-            return Err(Error::msg(format!(
-                "a group names at most {} servers in its settings",
-                cbb_core::records::body::MAX_SERVERS
-            )));
-        }
-        let now = uptime::wall_ms().max(0) as u64;
-        live.mesh.write(|set, k| {
-            writers::set_settings(
-                set,
-                k,
-                |s| {
-                    s.servers.retain(|v| v.kind != SERVER_RELAY);
-                    s.servers.extend(relays.iter().cloned());
-                },
-                now,
-            )
-        })?;
+        let given: Vec<(String, String)> = std::iter::once((h.relay.clone(), h.relay_key.clone()))
+            .chain(h.relays.iter().map(|r| {
+                let (a, k) = r.split_once(' ').unwrap_or((r, ""));
+                (a.to_string(), k.to_string())
+            }))
+            .collect();
+        let relays = live.set_relays(None, if off { &[] } else { &given })?;
         let endpoints: Vec<String> = relays.into_iter().map(|r| r.endpoint).collect();
         (self.log)(&if endpoints.is_empty() {
             "cbb: the group meets at no relay now".to_string()
@@ -1161,8 +1087,7 @@ impl Service {
         r: control::Reader<UnixStream>,
         out: &mut UnixStream,
     ) -> Result<()> {
-        use cbb_core::join::invitation::{Invitation, Open, Profile};
-        use cbb_core::records::body::{RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+        use cbb_core::records::body::{ROLE_MEMBER, ROLE_PHONE};
         let h = &m.header;
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
             return Err(Error::msg(NOT_ADMITTER));
@@ -1173,58 +1098,24 @@ impl Service {
             "" => None,
             d => Some(writers::find(&live.mesh.state(), d)?.id),
         };
-        let here = match named {
-            Some(d) => d == live.mesh.device(),
-            None => live.away().is_some_and(|a| a.is_hub_now()),
+        let expires = match h.expires {
+            n if n <= 0 => None,
+            n => Some(Duration::from_secs(n as u64)),
         };
-        let lifetime = match h.expires {
-            n if n <= 0 => crate::inviter::DEFAULT_LIFETIME,
-            n => Duration::from_secs(n as u64),
-        };
-        if lifetime > crate::inviter::MAX_LIFETIME {
-            return Err(Error::msg("an invitation is valid for 24h0m0s at most"));
-        }
         let role = match h.kind.as_str() {
             "" | "computer" => ROLE_MEMBER,
             "phone" => ROLE_PHONE,
             k => return Err(Error::msg(format!("an invitation is for a computer or a phone, not {k:?}"))),
         };
-        let profile = Profile {
-            role,
-            rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | RIGHT_HUB,
-            home_only: false,
-            guarded: false,
-        };
-        let now = || crate::uptime::wall_ms().max(0) as u64;
-        let expires_ms = now().saturating_add(u64::try_from(lifetime.as_millis()).unwrap_or(u64::MAX));
-        let mut invitation = Invitation::new(Vec::new(), profile);
-        let keys = crate::inviter::GuestKeys::new()?;
-        let (opened, through) = if here {
-            (live.open_guest(keys.key, keys.public, keys.psk)?, None)
-        } else {
-            let (o, hub) = live.open_through(named, (keys.key, keys.public, keys.psk), expires_ms, invitation.id)?;
+        let mut o = live.open_invitation(named, role, expires)?;
+        if let Some(hub) = o.through {
             (self.log)(&format!("cbb: the invitation goes through the hub {}", id_text(&hub)));
-            (o, Some(hub))
-        };
-        invitation.paths = vec![opened.path];
-        let mut open = Open {
-            invitation,
-            name: String::new(),
-            created_ms: now(),
-            expires_ms,
-            used: false,
-            failures: 0,
-            allowed_key: None,
-            attempt: None,
-            next_attempt: 0,
-        };
+        }
         // However it ends, the guest goes, unless a device was admitted.
         let mut admitted = None;
-        let res = self.run_invite(&mut open, &opened.pairs, lifetime, r, out, live, &mut admitted);
-        match through {
-            None => live.guest_ended(&keys.public, admitted),
-            Some(_) => live.through_ended(&keys.public, admitted),
-        }
+        let lifetime = o.lifetime;
+        let res = self.run_invite(&mut o.open, &o.pairs, lifetime, r, out, live, &mut admitted);
+        live.invitation_ended(&o, admitted);
         res
     }
 
@@ -1402,24 +1293,9 @@ fn relay_group(set: &cbb_core::records::RecordSet) -> String {
     format!("{}:{}:{}", hex(set.root().public()), hex(r.k1.public()), hex(r.k2.public()))
 }
 
-/// Sync away from home on a group of 0.6 for status: where it stands and,
-/// on a hub, its forwarder.
+/// Sync away from home on a group of 0.6 for status.
 fn away_status(live: &Live) -> Option<control::Away> {
-    let away = live.away()?;
-    let standby = away.is_hub_now() && live.is_standing_by();
-    // The hubs this member is connected to first, by any way, then the
-    // rest, each in the group's order of hubs: the status names the first
-    // it keeps an offer of.
-    let connected = live.mesh.connected();
-    let (mut order, rest): (Vec<_>, Vec<_>) = live.mesh.hub_order().into_iter().partition(|id| connected.contains(id));
-    order.extend(rest);
-    let order: Vec<String> = order.iter().map(|id| cbb_core::certs::hex(&id.0)).collect();
-    let mut a = away.live_status_as(standby, &order)?;
-    let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
-    a.forwarder = away.live_forwarder(entries_held);
-    a.relay = live.relay_status();
-    a.standby = standby;
-    Some(a)
+    live.away_status()
 }
 
 #[cfg(test)]

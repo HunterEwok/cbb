@@ -5,7 +5,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -20,9 +19,10 @@ import (
 )
 
 // rootPhoneWithLaptop runs a phone's app (phone-on-linux) as the root of a
-// group of its own that admits a laptop, with the member serving the
-// servers (cbb_member_servers), and returns the phone, its directory, the
-// laptop and their device IDs.
+// group of 0.6 of its own, which a laptop joins by its home window, and
+// returns the phone, its directory, the laptop and their device IDs. The
+// Live member keeps the group's server credentials itself, so the app
+// starts no servers (cbb_member_servers).
 func rootPhoneWithLaptop(t *testing.T, h *hub) (next func(string) string, in io.Writer, dir string, laptop *testService, phoneID, laptopID string) {
 	t.Helper()
 	return rootPhoneWithLaptopArgs(t, h)
@@ -37,19 +37,10 @@ func rootPhoneWithLaptopArgs(t *testing.T, h *hub, args ...string) (next func(st
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	dir = t.TempDir()
-	next, w := phoneOnLinux(t, bin, append([]string{"-name", "root phone", "-new-group", "-dir", dir}, args...)...)
+	next, w := phoneOnLinux(t, bin, append([]string{"-name", "root phone", "-group06", "-dir", dir}, args...)...)
 	phoneID = strings.Fields(next("Group "))[0]
-	laptop, qr := listeningJoin(t, h, "laptop")
-	fmt.Fprintln(w, "ADMIT "+qr)
-	laptopID = next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the laptop did not confirm its join: %q", got)
-	}
-	joinedIdentity(t, laptop, laptopID)
-	fmt.Fprintln(w, "SERVERS")
-	if got := next("SERVERS "); got != `{"ok":{}}` {
-		t.Fatalf("serving the servers: %s", got)
-	}
+	laptop = joinPhoneWindow(t, h, next, w, "laptop")
+	laptopID = laptop.status(t).Device
 	call := phoneCall(t, next, w)
 	call("found", map[string]any{"key": "laptop", "addrs": []string{laptop.addr()}})
 	waitFor(t, "the phone connected to the laptop", func() bool {
@@ -59,54 +50,58 @@ func rootPhoneWithLaptopArgs(t *testing.T, h *hub, args ...string) (next func(st
 	return next, w, dir, laptop, phoneID, laptopID
 }
 
-// TestFFIPhoneServersRelay: a root phone whose member serves the servers
-// signs the period of the group's server credentials when its app hands
-// it the root key (docs/protocol.md, section 18), its own server key and
-// the hubs' and members' credentials, and meets the laptop at a blind
-// relay with them.
+// TestFFIPhoneServersRelay: the root phone sets the group's relay, which it
+// signs in the group's settings (D-121), and with the root key that hands
+// over signs the period of the group's credentials for it, which was due
+// (docs/protocol.md, section 18), as the Rust root does by itself
+// (TestAloneRelayRoot): with sync away from home on, it and the laptop meet
+// at the relay, and the root setting none again leaves it.
 func TestFFIPhoneServersRelay(t *testing.T) {
 	var h hub
-	next, in, dir, laptop, phoneID, laptopID := rootPhoneWithLaptop(t, &h)
+	next, in, _, laptop, phoneID, laptopID := rootPhoneWithLaptop(t, &h)
 	call := phoneCall(t, next, in)
-	if due := call("servers", nil)["period_due"]; due != true {
-		t.Fatalf("the root phone's first period is not due: %v", due)
+	if st := call("away_status", nil); st["period_due"] != true {
+		t.Fatalf("the root phone's first period is not due: %v", st)
 	}
-	fmt.Fprintln(in, `MANAGE {"action":"period"}`)
-	if got := next("MANAGED "); got != `{"ok":{"period_due":false}}` {
-		t.Fatalf("signing the period: %s", got)
-	}
-	// The laptop's server key comes back, and the phone lists both in the
-	// hubs' and the members' credentials.
-	waitUpTo(t, 30*time.Second, "the root phone keeps the group's credentials", func() bool {
-		raw, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
-		var all []json.RawMessage
-		return err == nil && json.Unmarshal(raw, &all) == nil && len(all) == 5
-	})
-
 	r, keys := startRelay(t, laptop.status(t).RelayGroup)
-	call("relay", map[string]any{"relay": r.Addr().String(), "key": keys.Pin()})
-	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
-		t.Fatalf("cbb global relay on the laptop: %v", err)
+	// Setting the relay hands the root key over, which renews the
+	// credentials' period that is due for it.
+	fmt.Fprintf(in, "MANAGE {\"action\":\"relay\",\"relays\":[%q]}\n", r.Addr().String()+" "+keys.Pin())
+	if got := next("MANAGED "); got != fmt.Sprintf(`{"ok":{"relays":[%q]}}`, r.Addr().String()) {
+		t.Fatalf("setting the group's relay: %s", got)
+	}
+	if st := call("away_status", nil); st["period_due"] != false || st["period_overdue"] != false {
+		t.Fatalf("the root phone did not renew the credentials with the relay: %v", st)
+	}
+	call("away", map[string]any{"on": true})
+	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+		t.Fatalf("cbb global on on the laptop: %v", err)
 	}
 	waitUpTo(t, 60*time.Second, "both meet at the relay", func() bool {
 		b := laptop.status(t).Away
-		a := call("away_status", nil)["away"]
-		relay, _ := a.(map[string]any)["relay"].(map[string]any)
+		a, _ := call("away_status", nil)["away"].(map[string]any)
+		relay, _ := a["relay"].(map[string]any)
 		online, _ := relay["online"].([]any)
 		return relay["connected"] == true && len(online) == 1 && online[0] == laptopID &&
 			b != nil && b.Relay != nil && b.Relay.Connected && slices.Equal(b.Relay.Online, []string{phoneID})
 	})
 
-	// Leaving the relay turns sync away from home on again without it.
-	a := call("relay", map[string]any{"relay": ""})["away"].(map[string]any)
-	if a["relay"] != nil {
-		t.Fatalf("the phone still meets the group at the relay: %v", a)
+	// No relay again: the phone meets the group at none.
+	fmt.Fprintln(in, `MANAGE {"action":"relay","relays":[]}`)
+	if got := next("MANAGED "); got != `{"ok":{"relays":[]}}` {
+		t.Fatalf("setting no relay: %s", got)
 	}
+	waitUpTo(t, 30*time.Second, "the phone leaves the relay", func() bool {
+		a, _ := call("away_status", nil)["away"].(map[string]any)
+		return a["relay"] == nil
+	})
 }
 
-// TestFFIPhoneHub: a root phone whose member serves the servers is the
-// group's hub, registered with its forwarder, and the laptop keeps its
-// offer at the forwarder's address.
+// TestFFIPhoneHub: an admin phone is a hub of the group (on the records of
+// 0.6 a phone is one only with an admin key), registered with the
+// forwarder the root named for it, and the root computer keeps its offer at the forwarder's
+// address; stopping the hub hands its clients to the group's next hub, so
+// the group's only hub stops without anyway (D-122).
 func TestFFIPhoneHub(t *testing.T) {
 	cert, err := forward.NewCert()
 	if err != nil {
@@ -127,29 +122,52 @@ func TestFFIPhoneHub(t *testing.T) {
 		<-served
 	}()
 
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
 	var h hub
-	next, in, _, laptop, phoneID, _ := rootPhoneWithLaptop(t, &h)
+	pi, next, in := adminPhone(t, bin, &h)
+	var phoneID string
+	for _, d := range pi.devices(t) {
+		if d.Name == "member phone" {
+			phoneID = d.ID
+		}
+	}
 	call := phoneCall(t, next, in)
-	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	call("hub", map[string]any{"forwarder": f.Addr().String(), "key": forward.Pin(cert.Leaf), "vless_off": true})
+	// The root names the phone's forwarder, which makes the group's
+	// credentials for it; the phone keeps it as its setting and serves
+	// through it once its own switch is on, never before.
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Device: "member phone", Forwarder: f.Addr().String(),
+		ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
+		t.Fatal(err)
+	}
+	var set map[string]any
+	waitUpTo(t, 30*time.Second, "the phone keeps the root's forwarder", func() bool {
+		set = call("away_status", nil)
+		rf, _ := set["root_forwarder"].(map[string]any)
+		return rf["endpoint"] == f.Addr().String()
+	})
+	if a, _ := set["away"].(map[string]any); a["hub"] == true {
+		t.Fatalf("the root's command switched the phone's hub on: %v", set)
+	}
+	call("hub", map[string]any{"vless_off": true})
 	waitUpTo(t, 30*time.Second, "the phone registered with the forwarder", func() bool {
 		a, _ := call("away_status", nil)["away"].(map[string]any)
 		fw, _ := a["forwarder"].(map[string]any)
 		return a["hub"] == true && fw["registered"] == true
 	})
-	waitUpTo(t, 30*time.Second, "the laptop keeps the phone's offer at the forwarder", func() bool {
-		hl := tunnelState(t, laptop).Hub(phoneID)
+	waitUpTo(t, 30*time.Second, "the root keeps the phone's offer at the forwarder", func() bool {
+		hl := tunnelState(t, pi).Hub(phoneID)
 		return hl != nil && len(hl.Endpoints) == 1 && hl.Endpoints[0].String() == f.Addr().String()
 	})
 
-	// A phone that is the group's only hub stops being one only anyway.
-	fmt.Fprintln(in, `CALL {"op":"hub_off"}`)
-	if got := next("ANSWER "); !strings.Contains(got, "no other hub") {
-		t.Fatalf("stopping the only hub: %s", got)
-	}
-	if a := call("hub_off", map[string]any{"anyway": true})["away"].(map[string]any); a["hub"] == true {
+	// The group's only hub stops: its clients go to the next hub in the
+	// order, as on every hub of 0.6, so no anyway is asked for.
+	if a := call("hub_off", nil)["away"].(map[string]any); a["hub"] == true {
 		t.Fatalf("the phone is still a hub: %v", a)
 	}
 }

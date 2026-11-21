@@ -348,7 +348,9 @@ already expired cannot be renewed this way, since the handshake fails; the devic
 Members (computers, boards and routers with the service or the firmware) publish and browse;
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
-hub"), and a device that listens to join (section 6, "The joiner listens"), which publishes
+hub"), and a phone whose pairing window is open (section 6, "The window and who dials"), which
+publishes `v=1`, `g=<tag>`, `p=1`, `f=<fingerprint>` while the window is open. Until the switch
+to the core (wave 5), a device that listens to join (section 6, "The joiner listens") publishes
 its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
 `f=<fingerprint>` while it waits.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
@@ -386,9 +388,9 @@ TXT strings (each at most 255 bytes):
 |-----|-------|---------|
 | `v` | `1` | protocol version |
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
-| `p` | `1` | present only while a computer pairing window is open |
-| `j` | `1` | present only on a device that listens to join; it has no `g`, so no member dials it as one |
-| `f` | fingerprint | with `j`: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp`; with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the phone's pairing QR code's `fp`, which the new device checks before it sends anything |
+| `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
+| `j` | `1` | until the switch to the core (wave 5): present only on a device that listens to join; it has no `g`, so no member dials it as one |
+| `f` | fingerprint | with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything; with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
 | `i` | window ID | with `p`, on the records of 0.6: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
 
@@ -1057,8 +1059,8 @@ member that a connected member reaches as online through it. Each message replac
 last from that connection, and the connection's end drops it. The list is shown, never
 trusted: a member may leave a device out or name one it does not reach, as it could drop
 the commands it should pass on. A receiver ignores an ID that is not valid or that no
-device record of the group names. `cbb` and the phones send none for now, and
-a member that does not know the message ignores it.
+device record of the group names. `cbb` sends it (`member/src/mesh/reach.rs`), the
+phones send none, and a member that does not know the message ignores it.
 
 #### Presence
 
@@ -1358,6 +1360,35 @@ bytes (`intro/size`; vectors: `messages3.json`, `intros`). The receiver checks e
 up to the root it holds before it keeps any, then goes on; anything that does not check closes
 the connection and keeps nothing.
 
+#### The window and who dials
+
+In 0.6 the joiner always dials, and the device it joins through always waits: a member opens a
+pairing window and the new device connects to it. No device listens to join. A computer opens
+its window with `cbb pair` (`member/src/joining.rs` is the joiner, `member/src/admitting.rs`
+the member); a phone that may admit (the root phone, or a phone with an admin key that has
+`admit`) opens one with "Add a device" (`cbb_window_new`, `ffi/src/window.rs`), and a new phone
+joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
+
+- While the window is open the member takes pairing sessions (`cbb-pair/3`) on its member port,
+  one at a time; a session that comes while another runs gets message 69 `busy`. A phone's
+  window needs its member port open, and closes after five minutes unless the person gives it
+  another time (an hour at most), when the person closes it, or when the app frees it.
+- The member shows the window's QR code (section 7): its addresses with the member port and the
+  fingerprint of its TLS key, nothing secret. A phone scans it and dials the addresses in turn,
+  and goes on only with the member whose key in the handshake has that fingerprint; any other
+  key is refused before message 64.
+- While the window is open the member announces it by mDNS (section 3): `v=1`, `g=<tag>`, `p=1`
+  and `f=<fingerprint>`. A device without a camera (Aurora) browses for such a window for up to
+  10 s and MUST refuse when more than one announces itself; it dials the one, its addresses and
+  `f` in place of the QR code's. The announcement is not authenticated, and needs not be: both
+  persons compare the code, and the fingerprint only keeps the session to the device announced.
+- Both ends then show the code the session commits to ("The short code" above), each person
+  answers, and the session goes on only after both said "they match". The member writes the
+  joiner's record by the admission rules (`join::decide::joiner_record`): at home a member or a
+  phone reads, sends and takes secrets, a watch only reads, and a small device without a screen
+  joins only by its own invitation. A phone joins as a member of the group with role `phone`;
+  the root makes it an admin later, from the admin key its hellos offer.
+
 ### Until the switch to the core (wave 5)
 
 What follows is pairing as the Go helper and the apps of 0.5 speak it: JSON frames and a
@@ -1593,6 +1624,30 @@ the QR code dials the computer, and nothing is announced:
   A phone that is not the root makes no admins, so its welcome has no `admin_ca`.
 
 ## 7. The join QR code
+
+### The window's QR code (0.6)
+
+Source: `ffi/src/window.rs` (`qr_text`), `ffi/src/joiner.rs` (`read_code`).
+
+The QR code a member shows while its pairing window is open (section 6, "The window and who
+dials"), which the new phone scans:
+
+```
+cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp=<64 hex digits>
+```
+
+| Field | Count | Meaning |
+|-------|-------|---------|
+| `addr` | one to four | the member's addresses with its member port, `host:port`, best first; an IPv6 host in brackets |
+| `fp` | one | the key hash of the member's TLS key (format section 12), 64 lowercase hex digits |
+
+The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the host
+`pair` without regard to case, decodes only percent escapes, ignores fields it does not know,
+keeps at most the first four addresses and drops one it cannot read; a text without `fp` or
+without an address is not a window's QR code. Nothing in it is secret: the code both persons
+compare binds the session.
+
+### The join QR code until the switch (wave 5)
 
 Source: `internal/phone/joinqr.go`, the kits' `JoinCode`.
 
@@ -2518,6 +2573,14 @@ signs it; the phone adds the record to its records and sends it, or passes the c
 it passes its own (section 15). A watch is listed as an admin while its admin key is neither
 revoked nor frozen.
 
+On the records of 0.6 the root writes a watch's `device` record with role `watch`, `rights`
+`read`, its admin key the one the watch made, and the powers and commands of
+`AdminKind::Watch`; its member key, from which its device ID comes, is made for the record
+and dropped at once, so nothing signs a keys statement or a copy as the watch, and no copy is
+sealed to it (D-124). In 0.6 a watch signs nothing from the wrist: records sign a digest
+(`records::key::sign_es256`), which a watch that must see what it signs refuses, and the
+watch apps read the bodies of 0.5; signing on the watch comes with 0.7.
+
 #### Chains and numbers
 
 A signer's records form a chain: the record with `seq` n names in `prev` the ID of the one
@@ -3314,9 +3377,10 @@ and keeps it with its key; it learns the rest from the forwarder's answer when i
 
 ### Until the phones move to the records of 0.6
 
-The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `PhoneHub` and
-`TunnelOffer`) keeps the tunnel's messages of 0.5 until the phones move to the records of 0.6
-(D-122); a service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
+The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `TunnelOffer`)
+still reads and writes the tunnel's messages of 0.5 until the old code goes (D-122); the
+apps act on none of them, since a phone in a group of 0.5 syncs at home only (D-123), and a
+service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
 
 - Each member's hello carries `tunnel_key`, its WireGuard public key, and `tunnel_psk`, a
   preshared key of 32 random bytes it made with the key pair. A member where sync away from
@@ -3342,8 +3406,8 @@ A device that shares no network with the group joins through the hub's tunnel wi
 invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
 `cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
 on the computers and small devices, in the phones' member through ffi (`cbb_invite_*`,
-`cbb_join_*` with `invite`, the tunnel's `guest_start`), and on a phone that is the group's hub
-(the Rust tunnel's `hub_invite`, the kits' `InvitationWindow`). The text is read by the Rust
+`cbb_joiner_*` with `invite`), and on an admin phone that is the group's hub (the member's
+Live hub, ffi's `hub` operation). The text is read by the Rust
 core (`cbb_core::invite`) and Go's `internal/invite`.
 
 ### The invitation
@@ -3532,34 +3596,20 @@ and fewer for one admin.
 
 The phone joins in its app: Start's Join with an invitation reads the QR code, the text or
 the file, and the invitation waits to be accepted or declined. Accepted, the core starts the
-guest tunnel in the app's process and gives the app its loopback port, which the app dials
-for each attempt (`cbb_join_new` with `invite`, `cbb_join_accept`, `cbb_join_feed`); the
-phone is the TLS client of the pairing and shows the fingerprint the admin compares. Once
-admitted it saves its membership, turns sync away from home on, and offers its own tunnel
-key to the hub through the guest tunnel until the hub answers (the iPhone's and Android's
-`AwayFromHome`, the Aurora app through the member's `joined_by_invite`).
+guest tunnel in the app's process and dials the hub's guest address through it
+(`cbb_joiner_new` with `invite`); the phone is the TLS client of the pairing and shows the
+fingerprint the admin compares. Once admitted it keeps the set with the invitation, and its
+member, once started, reaches the hub through the guest tunnel and offers its own tunnel key
+until the hub's offer comes, as a computer that joined by an invitation does.
 
 ### On a phone that is the hub
 
-The phone makes the invitation in its app while it is registered with its forwarder; its
-`ep` is the forwarder's endpoint. The phone's hub adds the guest peer and joins each
-connection through the guest tunnel to a loopback port of the kit's pairing window
-(`InvitationWindow`), and once the window admitted the device, to the member listener, for
-the device's first hello. The window runs the exchange of section 6 as the server, with the
-secret as the password: the device confirms first, the phone asks its user to confirm the
-device by its name, system and fingerprint, then unlocks its signing key (Face ID or the
-screen lock) and sends the welcome with its own tag. It gives no CA keys and makes no admin.
-It takes one attempt at a time, ends after three failures, and the guest goes at expiry,
-when the user cancels, or as on any hub once the admitted device offered its own key.
-Other apps on the phone can reach the loopback port too, so the window takes only the
-connections the hub made for the invitation's guest (the hub knows each by the loopback port
-it dialed from, as a computer's hub does): any other is closed after the TLS handshake, before any pairing message,
-and neither counts as an attempt nor holds the window.
-An admin phone that is not the hub makes its invitation through a hub of the group, as
-"Through the hub" says, with the window in its member (`cbb_invite_*`); the invitation shows
-as a QR code. The invitation's file
-goes through the phone's share sheet. Go's `TestSwiftHubAdmitsInvitedGoJoiner` runs `cbb`'s
-joiner against the window of both kits.
+A phone that is a hub of a group of 0.6 is the Live member's hub, which serves the guests of
+invitations as the computers' does. An admin phone makes its invitation through a hub of the
+group, as "Through the hub" says, with the window in its member (`cbb_invite_*`), and so does
+an admin phone of a group of 0.5, which is no hub (D-123); the invitation shows as a QR code,
+and its file goes through the phone's share sheet. `TestFFIInviteThroughHub` and the Kotlin
+kit's `InviteKitTest` run it.
 
 
 ## 13. The forwarder
@@ -3829,7 +3879,7 @@ or to a log. With `CBB_DEBUG=1` it logs counts each minute.
 The meeting point, on the user's own server or the project's open relay, for a group that has
 no computer to be its hub ([design.md](design.md), "Blind relay"). Implemented in Rust (`member/src/relayd`,
 `cbb-relay`, which `cbb relay` starts, and on the devices `member/src/relay.rs`), and on the
-phones through the Rust tunnel (`cbb_tunnel_relay`) with the kits' `RelayOnPhone`. It holds none of the group's keys: it ends each device's WireGuard
+phones through the Live member in a group of 0.6. It holds none of the group's keys: it ends each device's WireGuard
 tunnel and joins two devices' connections inside the tunnels, and member TLS (section 4)
 runs end to end between the two devices.
 
@@ -4751,7 +4801,11 @@ Only the group's root records it; it records no proof for its own device, and a 
 hello says `rootless` keeps `store` 3. A computer sends its TPM's evidence on each new
 connection, to every peer since any may be the root or become it, and answers the root's credential (format 3) with format 4; the root
 takes one exchange at a time per device and keeps the last evidence of each to check again
-against a new revocation list.
+against a new revocation list. A phone that is the group's root has no helper and its app holds
+the root key: it keeps the last Android evidence of each peer, checks it with the core's
+checks (`cbb_core::attest`) under the revocation list its app hands it (`attest_status`), and
+records what it proves when its app hands it the root key (the manage action `attest`); it
+takes no TPM evidence.
 
 ### Revoked attestations
 
@@ -4793,12 +4847,11 @@ registers with no server, so it signs none and keeps none. The phones' kits do w
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
-by them once the members' credential lists its server key (`CredentialStore.registration`,
-`cbb_tunnel_relay_credentials`, member/src/relay.rs,
+by them once the members' credential lists its server key (the Live member, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
 names back to device IDs by the server credentials. A phone that is the group's hub
 registers with its forwarder the same way once the hubs' credential lists its server key
-(`CredentialStore.hubRegistration`, `cbb_tunnel_hub_credentials`, member/src/forward.rs), and
+(the Live member, member/src/forward.rs), and
 with its member certificate and the records until then.
 
 The group lives in **periods** of about 30 days. For each, its root signs, inside the group,

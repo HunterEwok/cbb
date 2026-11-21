@@ -580,7 +580,7 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
    taken over, a certificate close to expiry that did not renew, the hub unreachable while
    away from home, a remote paste received or refused. Each is a setting.
 2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
-   as the app's switch does (`AwayFromHome`, `RustTunnel`).
+   as the app's switch does (the Live member's `away`).
 3. **Emergency actions** with the watch's own admin key: freeze an admin computer, remove an
    ordinary device, turn remote paste off on a member, turn sync away from home **off** on a
    member. The watch shows what it signs and asks for a tap; the phone only carries the
@@ -1397,7 +1397,9 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 
 ##### Steps
 
-All built in 0.5, but for what each step names as still to do.
+All built in 0.5, but for what each step names as still to do. In 0.6 the Live member is
+the phone's hub and its client (D-122), and the apps' own tunnel, hub, invitation window and
+hub commands are gone with the phones' groups of 0.5, which sync at home only (D-123).
 
 1. Done: the hub's side in the Rust core's tunnel (`hub_start`, `cbb_tunnel_register`): the clients' tunnels,
    the member port leading to the kit's member listener, and the registration with the

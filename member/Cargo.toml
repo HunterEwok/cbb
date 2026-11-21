@@ -60,6 +60,13 @@ required-features = ["testhooks"]
 name = "away_hubs"
 required-features = ["testhooks", "tunnel"]
 
+# A phone's push with ffi's example phone-on-linux (CBB_PHONE_ON_LINUX)
+# and the push service in process; it points the members at that service
+# with CBB_TEST_PUSH_AT, which only a build for tests reads.
+[[test]]
+name = "phone_push"
+required-features = ["testhooks", "tunnel"]
+
 [features]
 default = ["tunnel"]
 # Builds cbbw as well; for Windows.

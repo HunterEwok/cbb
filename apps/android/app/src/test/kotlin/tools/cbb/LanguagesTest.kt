@@ -59,7 +59,7 @@ class LanguagesTest(private val lang: String) {
     private fun str(id: Int) = context.getString(id)
 
     /** The texts every person meets first, which must not stay English. */
-    private val firstTexts = listOf(R.string.tagline, R.string.create_group, R.string.join_group, R.string.restore_link, R.string.settings, R.string.language)
+    private val firstTexts = listOf(R.string.tagline, R.string.create_group, R.string.join_group, R.string.invitation_join, R.string.settings, R.string.language)
 
     @Test
     fun translatedAndWhole() {

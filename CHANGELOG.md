@@ -16,6 +16,95 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- A phone in a group of 0.6 changes the group's root to itself with the recovery key, from
+  the sheet's QR code or text or from the secret a YubiKey opens, after showing who stays
+  (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);
+  the root phone seals the sheet's secret onto a YubiKey through the core (`cbb_piv`'s
+  `inspect`, `seal` and `open`). Restoring a group on a new phone that is in no group yet
+  comes with 0.7 (D-125). Every phone app has the screen ("Move the group to this phone"):
+  the iPhone, Android and HarmonyOS apps take the sheet or a YubiKey over NFC and seal the
+  sheet onto a YubiKey after asking whether its factory management key is replaced; the
+  Aurora app takes the sheet or a YubiKey on USB-C. The iPhone and Android kits' own PIV code and their restore
+  on the Start screen are gone: the core speaks PIV for them.
+  `cbb_piv` also reaches a YubiKey plugged into the phone's USB-C port: with the transport
+  `ccid_bulk` the app only moves the bytes of the key's CCID interface and the core frames
+  each APDU (`member/src/piv/ccid.rs`). The Android and HarmonyOS apps take a YubiKey
+  plugged into USB-C as well as one held to NFC, whichever comes first; the iPhone app takes
+  one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC. The
+  Aurora app reaches a YubiKey plugged into USB-C through the system's pcscd, the core being its
+  client (`cbb_piv`'s transport `pcsc`).
+- A phone's member in a group of 0.6 registers for push as a computer's member takes it:
+  it keeps the signed entry points, reads its face toward the push service from them
+  (`push_face`), sends its registration, message `push`, to every member it connects to
+  (`push`), and hands the app each `push-renew` (`push_renewals`). `member/tests/phone_push.rs`
+  runs it end to end with the phone on Linux, two computers and the push service.
+- A phone in a group of 0.6 sends the attestation of its own member key that its app made to
+  each peer (`evidence` on the 0.6 member, message `evidence`, t 19), as a computer sends its
+  TPM's, so a root records an Android phone's keys as proven again
+  (`TestFFIPhoneOwnEvidence`).
+- In a group of 0.6 the root phone can add a watch with the key the watch made and a member
+  key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
+  signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its
+  emergency actions come with 0.7 instead of offering them.
+- A phone that is the root of a group of 0.6 checks the Android phones' attestations in the
+  core again and records what they show when its app hands it the root key, with the
+  revocation list its app fetched (`attest_status`, `attest` and the manage action `attest`
+  on the 0.6 member; docs/protocol.md, "Evidence on the records of 0.6").
+- The phones' kits read the group as the 0.6 member gives it: its state, its notices, the
+  "who stays" list before a change of root, and the events of a change of root and of a key
+  the member asks for (`GroupState`, `Notice`, `ChangePreview` in both kits, checked against
+  `testdata/interop/member-group.json`); "Why it does not sync" in every app says the reasons of
+  the 0.6 records: two admins in conflict, two histories of the root, a recovery key used twice,
+  a change of root arriving, a stuck checkpoint, a device that disagrees about the root, no
+  secrets or nothing sent here, and a copy waiting for its sender.
+- The iPhone and Android apps show the member's notices about the group on Home, move the
+  group's main device to the phone with the recovery key and the "who stays" list the core
+  writes, and show on every device that the main device changed, with "This wasn't me"
+  ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
+  and the change too.
+- A phone of 0.6 opens a home window (`cbb_window_new`, docs/core-api.md): it shows six digits
+  and a QR code with its addresses, key hash, window ID and the digits; a device that proves the
+  digits is admitted by its root or admin key under the core's admission rules and gets the
+  Welcome, with nobody asked; three wrong codes close the window, one success closes it too
+  (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
+- A computer of 0.6 tells each phone connected to it the other members it reaches, so a
+  phone away from home shows the members behind its hub as online
+  ([protocol](docs/protocol.md), section 4, "Reach").
+- The iPhone and Android apps of 0.6 run sync away from home, the phone as a hub and the
+  link to the group's relay through the Live member, with the same cards as before; the
+  root phone sets the group's relay, which every device meets at, on HarmonyOS too; an
+  admin phone's forwarder as a hub is the root's setting, named with a hub command, which the
+  phone shows and serves through; the root phone renews the group's server credentials with
+  its root key when the app opens ([phone apps](docs/apps.md), "Screens").
+- A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
+  (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
+  proves the digits, and the checked set is kept in the app's folder before the member hears it
+  was (`ffi/src/joiner.rs`). The iPhone's and Android's
+  kits open the window and join by it (`CorePairing.Window`, `CorePairing.Joiner`).
+- A phone's member of 0.6 carries out the commands an admin sends it that the records let
+  through, as the service does: mute, unmute and the sync mode, kept and sent in its next hello,
+  with a `sync` event for the app; it follows the button's rule (`waiting`, `took`, `sends`).
+- A phone of 0.6 offers its admin key when it joins (`cbb_joiner_new_admin`), for the root to
+  make it an admin later; a root phone keeps the key a device offered through its window, lets a
+  computer that can be a hub be one, mutes, unmutes, turns the sync of another device off and
+  on and sends it pastes by command, and as the root sets the key level and makes admins
+  (`cbb_member_manage`).
+- A phone of 0.6 copies images and files to the group and fetches the group's (`copy_media`,
+  `fetch`), on the service's media of 0.6.
+- A phone makes a new group of 0.6 (`cbb_group_new` with the app's folder, `ffi/src/found.rs`):
+  its root key signs its own record, the set is kept for the member, and the recovery sheet goes
+  to the app once (`CorePairing.newGroup06` in both kits). The phone's member of 0.6 answers
+  `group`, the state the apps show (the group, its root, the phone's place, the devices).
+- The Android and iPhone apps pair on 0.6: "Add a device" makes a group of 0.6 on a phone without one
+  (its recovery sheet shown once) and opens the pairing window with its QR code, announced by
+  NSD or Bonjour; "Add a device" shows the window's six digits under the code;
+  "Join a group" scans a window's code, or takes the six digits typed, finds the window by NSD or
+  Bonjour and dials it; nobody is asked ([phone apps](docs/apps.md), "Screens"). The device list comes from the member.
+- The Aurora and HarmonyOS apps pair on 0.6 too: "Create a group" makes a group of 0.6 and shows
+  its recovery sheet once, "Add a device" opens the pairing window, which the core announces by
+  mDNS, and "Join a group" takes the six digits the window shows and finds that window on the home
+  network (or dials a window's code, pasted on Aurora, scanned on HarmonyOS); nobody is asked. The 0.6
+  recovery sheet's answer carries its QR code's modules for the apps to draw.
 - `release-sign -push ADDRESS=KEY.pem` lists the project's push service's key in `keys.json`
   (use `push`), as `-relay` and `-forwarder` list theirs: the members show the service a face
   only once a `keys.json` names it, since no pin of it is built in. Two such pins may stand
@@ -124,6 +213,12 @@ made with 0.5 is set up again once. The details follow.
   An admin that is not the hub makes the invitation through a hub of the group (`-hub`, or
   the first of the hub order connected): the hub lets the guest in and passes its pairing to
   the admin's window in `guest` messages.
+- The phone apps join a group of 0.6 from afar by a remote invitation (`cbb://join#...`):
+  the phone dials the hub through the invitation's guest tunnel, shows its fingerprint for the
+  inviting admin to compare, and its member reaches the hub through that tunnel until the hub's
+  offer comes. An admin phone of 0.6 invites a computer or a phone, on itself as the group's
+  hub or through a hub, and admits by the core's rules once the person confirms the
+  fingerprint; an admin phone serves as the group's hub with the same hub as the computers.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and
@@ -2796,7 +2891,27 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
+  member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
+  and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,
+  `peer`, `tunnel`, `command` and `caller`, its operations (`served`, `caller`, `answer`,
+  `check_command`, `offer_admin_key`, `take_admin_ca`, `disconnect`, `records`, `alerts`,
+  `joined_by_invite`, `servers`, `relay`, `add_records`, `command`, `send_cert`,
+  `send_admin_ca`, `send_hubs`, `send_credentials`) and its watch signing are gone from ffi.
+  `cbb_group_new` makes only a group of 0.6 (the request names `dir`), `cbb_invite_new` only
+  the member of 0.6's invitation, and `cbb_member_servers` answers that the member of 0.6
+  serves the servers itself, until the HarmonyOS app drops it. The example `phone-on-linux`
+  drops `-new-group`, the member of 0.5 and `SERVERS`.
+- The phones' restore of a group made before 0.6 through the core: `cbb_restore`,
+  `cbb_member_manage_card`, the manage action `recover_with_sheet` and `cbb_piv`'s `make`,
+  `put`, `issue` and `sign`, with the Aurora and HarmonyOS apps' restore screens and the
+  HarmonyOS app's "Put it on a YubiKey" of a group of 0.5. On 0.6 a phone in the group changes
+  the root with the recovery key, and restoring on a new phone comes with 0.7 (D-125).
 
+- The phone apps' join by the phone's own QR code (the phone listened and the group's device
+  scanned it and dialed in) and their old "Add a device" screen that scanned such a code: every
+  phone app joins and adds at home through the pairing window ([phone apps](docs/apps.md),
+  "Screens"). A remote invitation and a restore keep their screens.
 - Sync away from home in a group made before 0.6: `cbb` refuses `away`, `hub`, `invite` from
   afar and an invitation of such a group, and says to start a group of 0.6 (D-122). In a
   group of 0.6 a hub that serves with new settings (a new forwarder) starts again with them,
@@ -2804,6 +2919,15 @@ made with 0.5 is set up again once. The details follow.
   -on` drops the connection through the tunnel, `-tunnel-via` is followed, and `status`
   shows a hub standing by. Its tests are the 0.6 ones in `member/tests/away_live.rs` and
   `away_hubs.rs`.
+- The phone apps' own tunnel, hub and relay link for a group made before 0.6 (D-123): such a
+  phone syncs at home only and invites through a hub of the group; the phones' tunnel library
+  (`cbb_tunnel*` and the example `tunnel-on-linux`), the kits' tunnel, phone hub and
+  invitation window, and moving the hub to a computer or making one a hub from a phone go
+  with it. In a group of 0.6 the Live member runs sync away from home, the hub and the relay
+  on the phones as before. The forwarder's check from a network that blocks WireGuard is
+  `TestAwayThroughRealForwarder`, between two Rust `cbb`. The kits' `sendTunnel` and
+  `setTunnelKey` and the 0.5 member's `send_tunnel` and `tunnel_key` in ffi, which no app
+  called after that, are gone too.
 - The blind relay's server in Go (`internal/relay`): the relay is `cbb-relay`, in Rust, alone.
   What stays of the package is a device's side in Go, with which the tests of
   `internal/relay`, `internal/tunnel` and `internal/service` check `cbb-relay` from outside;

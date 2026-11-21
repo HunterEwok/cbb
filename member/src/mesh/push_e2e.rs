@@ -217,11 +217,13 @@ fn a_registered_device_gets_its_copies_and_events_by_push() {
     });
     let face = face(&a).unwrap();
 
-    // b registers with a and c over its connections to them.
+    // b registers with a and c over its connections to them, as a phone's
+    // app does: its own registration, with the face b reads itself.
+    assert_eq!(b.push_face(), Some(face), "b's own face toward the push service");
     let key = [8; 32];
     let first = registration(1, face, key);
-    assert!(b.send(&a.device(), first.clone()));
-    assert!(b.send(&c.device(), first));
+    assert!(b.set_own_push(Some(b"not a frame".to_vec())).is_err(), "a registration members refuse");
+    b.set_own_push(Some(first)).unwrap();
     until("the registrations", 10, || a.push.held() == 1 && c.push.held() == 1);
 
     // While b is connected, a copy goes to it directly.
@@ -238,11 +240,12 @@ fn a_registered_device_gets_its_copies_and_events_by_push() {
         other => panic!("the first body opened as {other:?}"),
     }
 
-    // b comes back, registers again with a only, and goes.
+    // b comes back with a new registration set before it connects, which
+    // a gets on the connection; then b goes.
     let b = open(&db, own(&db));
+    b.set_own_push(Some(registration(2, face, key))).unwrap();
     connect(&a, &b);
     until("b back at a", 10, || a.connected().contains(&b.device()));
-    assert!(b.send(&a.device(), registration(2, face, key)));
     until("the new registration at a", 10, || push::saved_seq(&da, &b.device()) == Some(2));
     b.close();
     until("a sees b gone again", 10, || !a.connected().contains(&b.device()));
@@ -255,7 +258,13 @@ fn a_registered_device_gets_its_copies_and_events_by_push() {
         Ok(Body::Copy(_)) => {}
         other => panic!("the hub's body opened as {other:?}"),
     }
-    until("c asks b to register again", 20, || !c.push.renewals(&b.device()).is_empty());
+    // c holds a renewal for b, which b takes when it connects to c.
+    until("c asks b to register again", 20, || c.push.renewal_pending(&b.device()));
+    let b = open(&db, own(&db));
+    connect(&c, &b);
+    until("b takes c's push-renew", 10, || b.take_renewals().iter().any(|(slot, _)| *slot == [3; 16]));
+    b.close();
+    until("c sees b gone", 10, || !c.connected().contains(&b.device()));
 
     // A removal: the hub tells b of it.
     a.write(|set, k| crate::writers::remove(set, k, "c", crate::uptime::wall_ms() as u64).map(|_| ())).unwrap();
