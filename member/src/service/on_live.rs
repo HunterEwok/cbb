@@ -1400,7 +1400,14 @@ fn relay_group(set: &cbb_core::records::RecordSet) -> String {
 fn away_status(live: &Live) -> Option<control::Away> {
     let away = live.away()?;
     let standby = away.is_hub_now() && live.is_standing_by();
-    let mut a = away.live_status_as(standby)?;
+    // The hubs this member is connected to first, by any way, then the
+    // rest, each in the group's order of hubs: the status names the first
+    // it keeps an offer of.
+    let connected = live.mesh.connected();
+    let (mut order, rest): (Vec<_>, Vec<_>) = live.mesh.hub_order().into_iter().partition(|id| connected.contains(id));
+    order.extend(rest);
+    let order: Vec<String> = order.iter().map(|id| cbb_core::certs::hex(&id.0)).collect();
+    let mut a = away.live_status_as(standby, &order)?;
     let entries_held = live.mesh.entries().and_then(|e| e.current(uptime::wall_ms())).is_some();
     a.forwarder = away.live_forwarder(entries_held);
     a.relay = live.relay_status();

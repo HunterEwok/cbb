@@ -114,7 +114,7 @@ impl Away {
         None
     }
 
-    pub fn live_status_as(&self, _standby: bool) -> Option<control::Away> {
+    pub fn live_status_as(&self, _standby: bool, _order: &[String]) -> Option<control::Away> {
         None
     }
 

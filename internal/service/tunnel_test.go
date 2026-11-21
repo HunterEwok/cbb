@@ -25,6 +25,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/forward"
+	"github.com/HunterEwok/cbb/internal/relay"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
@@ -1020,8 +1021,8 @@ func TestMoveHub(t *testing.T) {
 	})
 	// The group's relay, which the root names now: the deck meets there
 	// the devices it does not reach through the tunnel, the Mac among them.
-	r, keys := startRelay(t, pi.status(t).RelayGroup)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: keys.Pin(), Consent: true}, ""); err != nil {
+	r, stopRelay := runRelay(t, relay.Keys{}, "", pi.status(t).RelayGroup)
+	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "relay", Relay: r.Addr().String(), RelayKey: r.Keys.Pin(), Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitUpTo(t, 60*time.Second, "the deck meets the Mac at the relay", func() bool {
@@ -1067,7 +1068,8 @@ func TestMoveHub(t *testing.T) {
 
 	// The pi, the root, is a hub again: the Mac gives way, and the deck,
 	// which meets the pi at the relay and takes its offer there, reaches
-	// the pi through its tunnel.
+	// the pi, at the relay or through its tunnel (section 11: a hub it is
+	// connected to by any way is reached), and names it as its hub.
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: piPort, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", piPort)}}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -1075,15 +1077,30 @@ func TestMoveHub(t *testing.T) {
 		a := mac.status(t).Away
 		return a != nil && a.Hub && a.Standby
 	})
-	waitUpTo(t, 90*time.Second, "the deck reaches the pi through the tunnel again", func() bool {
+	waitUpTo(t, 90*time.Second, "the deck reaches the pi again", func() bool {
 		st := deck.status(t)
-		return st.Away != nil && st.Away.Through && st.Away.HubDevice == piID &&
+		return st.Away != nil && st.Away.HubDevice == piID &&
 			slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == piID })
 	})
 	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "the root is the hub again"); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "the root is the hub again" })
+
+	// With no relay to meet it at, the deck, away, reaches the pi through
+	// the pi's tunnel alone, with the offer it took after the move back.
+	stopRelay()
+	deck.stop()
+	deck = restartService(t, &h, deck)
+	waitUpTo(t, 90*time.Second, "the deck reaches the pi through the tunnel again", func() bool {
+		st := deck.status(t)
+		return st.Away != nil && st.Away.Through && st.Away.HubDevice == piID &&
+			slices.ContainsFunc(st.Peers, func(p control.Device) bool { return p.ID == piID })
+	})
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "through the tunnel again"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the pi has it", func() bool { return pi.paste(t) == "through the tunnel again" })
 }
 
 // TestSeveralHubs runs two hubs, the pi, the root, above the Mac, an

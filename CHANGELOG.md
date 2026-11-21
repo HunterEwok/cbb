@@ -2866,6 +2866,9 @@ made with 0.5 is set up again once. The details follow.
   freeze ends, as the core counts it, and a home pairing window counts its five minutes in the
   device's running time from end to end, so a wall clock set while it is open no longer ends
   it. A build for tests checks the sealing keys as often as `CBB_TEST_RENEW_EVERY` says.
+- On the records of 0.6 a device away from home names as its hub, in `cbb global` and `cbb
+  status`, the one its tunnel uses, else the first hub in the group's order it is connected to
+  by any way, rather than the first offer it took.
 - On the records of 0.6 a hub's offer carries the AmneziaWG settings and the VLESS way that go
   with its next key (offer fields 10 `next-obfuscation` and 11 `next-vless`, docs/protocol.md
   section 11), so a client that was away across the hub's change of period reaches it with the

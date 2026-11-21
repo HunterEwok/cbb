@@ -122,12 +122,13 @@ impl Away {
     /// 0.6: off, or on with the hubs whose offers are kept, the first of
     /// them shown, and what went wrong last.
     pub fn live_status(&self) -> Option<crate::control::Away> {
-        self.live_status_as(false)
+        self.live_status_as(false, &[])
     }
 
     /// live_status, for a hub that stands by (`standby`) as a client of the
-    /// hub above it, which it shows as the hub it uses.
-    pub fn live_status_as(&self, standby: bool) -> Option<crate::control::Away> {
+    /// hub above it, which it shows as the hub it uses; `order` is the
+    /// group's hubs (IDs in hex) as `shown_hub` takes them.
+    pub fn live_status_as(&self, standby: bool, order: &[String]) -> Option<crate::control::Away> {
         let st = self.st.lock().unwrap();
         let error = self.error.lock().unwrap().clone();
         let Some(st) = st.as_ref() else {
@@ -142,8 +143,7 @@ impl Away {
             a.obfuscated = st.obfuscation.is_some();
         }
         let using = self.using.lock().unwrap().as_ref().map(|(d, _)| d.clone());
-        if let Some(h) = using.as_deref().and_then(|d| st.hub(d)).or(st.hubs.first()).filter(|_| !st.is_hub || standby)
-        {
+        if let Some(h) = shown_hub(&st.hubs, using.as_deref(), order).filter(|_| !st.is_hub || standby) {
             a.through = self.through.load(std::sync::atomic::Ordering::SeqCst) && using.is_some();
             a.hub_device = h.device.clone();
             // A hub that stands by keeps showing its own way in.
@@ -160,11 +160,38 @@ impl Away {
     }
 }
 
+/// The hub a client's status names: the one its tunnel is using, else the
+/// first of `order` it keeps an offer of (the caller puts the hubs this
+/// member is connected to first, each part in the group's order of hubs),
+/// else the first offer it keeps.
+fn shown_hub<'a>(
+    hubs: &'a [crate::tunnel::Hub],
+    using: Option<&str>,
+    order: &[String],
+) -> Option<&'a crate::tunnel::Hub> {
+    let kept = |d: &str| hubs.iter().find(|h| h.device == d);
+    using.and_then(kept).or_else(|| order.iter().find_map(|d| kept(d))).or(hubs.first())
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use super::*;
+
+    /// The status names the hub in use, else the first hub of the order
+    /// with an offer here, not the first offer kept.
+    #[test]
+    fn the_status_names_the_hub_by_the_order() {
+        let hub = |d: &str| crate::tunnel::Hub { device: d.into(), ..Default::default() };
+        let hubs = [hub("mac"), hub("pi")];
+        let order = |o: &[&str]| o.iter().map(|d| d.to_string()).collect::<Vec<_>>();
+        assert_eq!(shown_hub(&hubs, None, &order(&["pi", "mac"])).unwrap().device, "pi");
+        assert_eq!(shown_hub(&hubs, Some("mac"), &order(&["pi", "mac"])).unwrap().device, "mac", "the one in use");
+        assert_eq!(shown_hub(&hubs, None, &order(&["deck", "mac"])).unwrap().device, "mac", "one with an offer");
+        assert_eq!(shown_hub(&hubs, None, &[]).unwrap().device, "mac", "no order: the first kept");
+        assert!(shown_hub(&[], None, &order(&["pi"])).is_none());
+    }
 
     fn psk(n: u8) -> Psk {
         Psk { key: [n; 32], confirm: [n + 100; 32] }
