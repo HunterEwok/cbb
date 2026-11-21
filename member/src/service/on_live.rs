@@ -322,6 +322,7 @@ impl Service {
                 name: d.name.clone(),
                 role: d.role.clone(),
                 os: d.os.clone(),
+                online: true,
                 ..Default::default()
             })
             .collect();

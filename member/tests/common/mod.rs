@@ -339,8 +339,9 @@ impl Svc {
 
     /// Waits until the devices list shows name connected.
     pub fn wait_peer(&self, name: &str) {
+        // A peer the status lists is connected, and says so.
         self.wait(&format!("{} sees {name}", self.name), |st| {
-            st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == name))
+            st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == name && p["online"] == true))
         });
     }
 
