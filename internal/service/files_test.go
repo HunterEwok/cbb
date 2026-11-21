@@ -8,10 +8,12 @@ import "time"
 // The files and folders the service keeps in its state directory, which the
 // tests look at, as the Rust cbb names them.
 const (
-	syncFile        = "sync.json"     // sync on or off (member/src/sync.rs)
-	signedFile      = "signed.json"   // the records this device signed
-	contentDir      = "content"       // the parts of images and files
-	releaseFilesDir = "release-files" // the archives of the release held
+	syncFile        = "sync.json"           // sync on or off (member/src/sync.rs)
+	signedFile      = "signed.json"         // the records this device signed
+	signed06File    = "signed-records.json" // the records this device signed, on the records of 0.6 (member/src/mesh/signed.rs)
+	records06File   = "group.cbor"          // the group's records of 0.6 (member/src/set.rs)
+	contentDir      = "content"             // the parts of images and files
+	releaseFilesDir = "release-files"       // the archives of the release held
 )
 
 // groupFiles are the files of the group that cbb leave deletes
@@ -19,7 +21,7 @@ const (
 var groupFiles = []string{
 	"identity.json", "credentials.json", "server-keys.json", "seal.json", signedFile, "tunnel.json",
 	"entries.json", "networks.json", "attest-status.json", contentDir, "pastes.json", "actions-log.json",
-	"mute.json", "before-0.6", "records.json",
+	"mute.json", "before-0.6", "records.json", signed06File,
 }
 
 // The remote paste targets as the Rust cbb names them (member/src/service.rs).

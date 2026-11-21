@@ -183,3 +183,47 @@ fn the_root_records_the_store_a_hello_says() {
     assert_eq!((d.store, d.admin, d.powers, d.commands), (STORE_ROOTLESS, None, 0, 0));
     assert_eq!(d.name, "laptop", "the rest stays");
 }
+
+/// An admin key that signed two histories (a computer brought back from a
+/// backup): the root voids both, the key signs again below the fork, and
+/// an admin cannot resolve, nor can anyone when no key forked.
+#[test]
+fn the_root_voids_both_histories_of_an_admin_key() {
+    let (o, mut set) = group("resolve");
+    let root = o.root.clone().unwrap();
+    let dir = temp("resolve-admin");
+    let admin = own(&dir).make(&dir, Which::Admin).unwrap();
+    make_admin(&mut set, &*root, "laptop", &admin.public(), T + 2).unwrap();
+    assert!(resolve(&mut set, &*root, T + 3).unwrap_err().message().contains("no key"));
+    // The admin admits attic; brought back from a backup, it signs another
+    // record with the same seq.
+    let device = |name: &str, seed: u8| {
+        let k = SigningKey::from_slice(&[seed; 32]).unwrap();
+        let mut d =
+            Device::new(Key::es256(k.verifying_key().to_sec1_point(false).as_bytes().to_vec()), name, ROLE_MEMBER);
+        d.rights = body::RIGHT_READ | body::RIGHT_SEND;
+        d
+    };
+    let st = set.state();
+    let first = set.write_record(&st, &*admin, Kind::device(device("attic", 20)), T + 4).unwrap();
+    let b = first[0].body().clone();
+    let twin = Record::sign(
+        cbb_core::records::Body { kind: Kind::device(device("cellar", 21)), time_ms: T + 5, ..b },
+        &*admin,
+    )
+    .unwrap();
+    set.insert_all([twin]);
+    let st = set.state();
+    assert_eq!(two_histories(&st), vec!["laptop".to_string()]);
+
+    let e = resolve(&mut set, &*admin, T + 6).unwrap_err();
+    assert!(e.message().contains("only the group's root"), "{e:?}");
+    let (who, recs) = resolve(&mut set, &*root, T + 6).unwrap();
+    assert_eq!((who, recs.len()), (vec!["laptop".to_string()], 1));
+    let st = set.state();
+    assert!(two_histories(&st).is_empty(), "{:?}", st.conflicts);
+    assert!(find(&st, "attic").is_err() && find(&st, "cellar").is_err(), "both sides are void");
+    let st = set.state();
+    set.write_record(&st, &*admin, Kind::device(device("shed", 22)), T + 7).unwrap();
+    assert!(find(&set.state(), "shed").is_ok(), "the admin goes on below the fork");
+}

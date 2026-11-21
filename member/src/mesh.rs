@@ -628,9 +628,24 @@ impl Mesh {
             let st = set.state();
             let signer = crate::writers::signer(&self.own, &st)
                 .ok_or_else(|| Error::msg("this device holds neither the group's root key nor an admin key"))?;
-            f(&mut set, signer)?
+            self.noting(&mut set, signer, f)?
         };
         self.changed()?;
+        Ok(out)
+    }
+
+    /// f on the set, with the records signer wrote in it added to the log
+    /// of what this device signed (`signed`).
+    fn noting<T>(
+        &self,
+        set: &mut RecordSet,
+        signer: &dyn cbb_core::identity::ExternalKey,
+        f: impl FnOnce(&mut RecordSet, &dyn cbb_core::identity::ExternalKey) -> Result<T>,
+    ) -> Result<T> {
+        let h = Key::es256(signer.public()).hash();
+        let before = signed::ids_of(set, &h);
+        let out = f(set, signer)?;
+        signed::note(&self.dir, set, &h, &before, &|s| self.logf(s));
         Ok(out)
     }
 
@@ -643,7 +658,7 @@ impl Mesh {
     ) -> Result<T> {
         let out = {
             let mut set = self.set.lock().unwrap();
-            f(&mut set, signer)?
+            self.noting(&mut set, signer, f)?
         };
         self.changed()?;
         Ok(out)
@@ -1359,6 +1374,8 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 
 mod media;
 pub use media::SentMedia;
+mod signed;
+pub use signed::FILE_NAME as SIGNED_FILE;
 #[cfg(feature = "tunnel")]
 mod push;
 #[cfg(not(feature = "tunnel"))]

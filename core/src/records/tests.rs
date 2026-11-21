@@ -1207,6 +1207,40 @@ fn the_roots_resolve_leaves_its_two_histories() {
     assert_eq!(set.state(), s);
 }
 
+/// Once the root voided both histories of an admin key, the key's next
+/// record has the seq of the fork again, after the record below it, and
+/// counts; the writer does not follow a voided branch.
+#[test]
+fn a_key_goes_on_below_both_voided_histories() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let below = g.device(&a, &k("d"), "d", |_| {});
+    let x = g.device(&a, &k("x"), "x", |_| {});
+    let mut d = Device::new(k("y").key.clone(), "y", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    let y =
+        Record::sign(Body { seq: x.body().seq, prev: Some(below.id()), ..g.body(&a, Kind::device(d)) }, &a).unwrap();
+    g.recs.push(y.clone());
+    assert!(g.state().two_histories(&a.hash));
+    let mut ids = alloc::vec![x.id(), y.id()];
+    ids.sort();
+    g.root_rec(Kind::Resolve(ids));
+    let mut w = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = w.state();
+    assert!(!st.two_histories(&a.hash) && !st.counting.contains(&x.id()) && !st.counting.contains(&y.id()));
+    let voided: Vec<RecordId> = w.voided_of(&st, &a.hash).iter().map(Record::id).collect();
+    let mut both = alloc::vec![x.id(), y.id()];
+    both.sort_by_key(|id| (x.body().seq, *id));
+    assert_eq!(voided, both);
+    let mut z = Device::new(k("z").key.clone(), "z", ROLE_MEMBER);
+    z.rights = RIGHT_READ;
+    let out = w.write_record(&st, &a, Kind::device(z), 9_000).unwrap();
+    let r = out.last().unwrap();
+    assert_eq!((r.body().seq, r.body().prev), (x.body().seq, Some(below.id())));
+    assert!(w.state().counting.contains(&r.id()));
+}
+
 /// The root voids an admin's removal: the device counts again, with its
 /// key and ID.
 #[test]

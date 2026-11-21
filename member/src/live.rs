@@ -153,6 +153,8 @@ pub struct Live {
     /// from home (`Live::hand_hub_to`).
     #[cfg(feature = "tunnel")]
     handoff: Mutex<Option<DeviceId>>,
+    /// A thread signs again what a resolve voided (`resign_soon`).
+    resigning: std::sync::atomic::AtomicBool,
     /// The link to the group's blind relay, while the device meets the
     /// group there.
     #[cfg(feature = "tunnel")]
@@ -219,6 +221,7 @@ impl Live {
             standing_by: std::sync::atomic::AtomicBool::new(false),
             #[cfg(feature = "tunnel")]
             handoff: Mutex::new(None),
+            resigning: std::sync::atomic::AtomicBool::new(false),
             #[cfg(feature = "tunnel")]
             meeting: Mutex::new(None),
             #[cfg(feature = "tunnel")]
@@ -240,9 +243,16 @@ impl Live {
         let w: Weak<Live> = Arc::downgrade(&live);
         live.mesh.on_set(Box::new(move |set| {
             if let Some(l) = w.upgrade() {
-                l.settle(&set.state());
+                let st = set.state();
+                l.settle(&st);
                 // The records may let in devices refused until now.
                 l.redial();
+                // A root's resolve may have voided both histories of this
+                // device's admin key: what it signed, it signs again, off
+                // the set's lock.
+                if l.mesh.own().admin.is_some() {
+                    l.resign_soon();
+                }
             }
         }));
         Ok(live)
@@ -434,6 +444,20 @@ impl Live {
     }
 
     /// Makes the dial loops try at once.
+    /// Signs again, on a thread of its own and one at a time, what the
+    /// root's resolve voided of this device's records (`Mesh::resign_voided`).
+    fn resign_soon(self: &Arc<Self>) {
+        if self.resigning.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let w = Arc::downgrade(self);
+        std::thread::spawn(move || {
+            let Some(l) = w.upgrade() else { return };
+            l.mesh.resign_voided();
+            l.resigning.store(false, std::sync::atomic::Ordering::SeqCst);
+        });
+    }
+
     pub fn redial(&self) {
         self.redials.fetch_add(1, Ordering::SeqCst);
         self.kick();

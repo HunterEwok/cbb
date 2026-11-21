@@ -41,6 +41,7 @@ pub const GROUP_FILES: &[&str] = &[
     crate::sealed::FILE_NAME,
     crate::commands::FILE_NAME,
     crate::mesh::MARKS_FILE,
+    crate::mesh::SIGNED_FILE,
 ];
 
 /// Deletes the group's files from dir and turns remote paste and the quick

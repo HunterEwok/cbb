@@ -2854,6 +2854,10 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- `cbb resolve` works on the records of 0.6: the root voids both histories of every key that
+  signed two, and the admin computer whose key it was signs again by itself what its log
+  (`signed-records.json`) says it signed; the core's writer then goes on below the fork
+  instead of after a voided record, and `cbb status` lists the conflicts again.
 - On the records of 0.6 a small device's own command (`device`) sent to a computer or a Pi is
   refused with "this device has no command NAME" instead of an error that it is not done yet.
 - A pairing window on 0.6 no longer reports a failed try for a connection that ended before

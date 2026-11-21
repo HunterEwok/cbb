@@ -337,6 +337,13 @@ impl Service {
             quiet: live.networks().map(|n| n.unknown()).unwrap_or_default(),
             bug: self.bugs.waiting(),
             away: away_status(live),
+            stop: match st.stop {
+                cbb_core::records::eval::Stop::None => "",
+                cbb_core::records::eval::Stop::Secrets => "secrets",
+                _ => "full",
+            }
+            .into(),
+            conflicts: live_conflicts(&st),
             ..Default::default()
         };
         // The reasons: what the status says, and what the records of 0.6
@@ -501,11 +508,11 @@ impl Service {
                 self.live_write(live, |set, k, now| writers::freeze(set, k, &h.device, on, now))
             }
             "resolve" => {
-                if writers::two_histories(&live.mesh.state()).is_empty() {
-                    Err(Error::msg("no key of the group signed two histories"))
-                } else {
-                    Err(not_yet("voiding two histories"))
-                }
+                let now = uptime::wall_ms().max(0) as u64;
+                live.mesh.write(|set, k| writers::resolve(set, k, now)).map(|(who, _)| {
+                    (self.log)(&format!("cbb: voided both histories of {}", who.join(", ")));
+                    control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new())
+                })
             }
             "hubs" => {
                 let now = uptime::wall_ms().max(0) as u64;
@@ -1422,4 +1429,37 @@ fn own_store(own: &Own) -> u64 {
     } else {
         STORE_FILE
     }
+}
+
+/// The conflicts of the group's records, as `cbb status` shows them: the
+/// kind, and the devices of the keys that signed them (the first bytes of
+/// a key in hex when no device has it).
+fn live_conflicts(st: &cbb_core::records::State) -> Vec<control::Conflict> {
+    use cbb_core::records::eval::ConflictKind;
+    st.conflicts
+        .iter()
+        .map(|c| control::Conflict {
+            kind: match c.kind {
+                ConflictKind::Admins => "admins",
+                ConflictKind::Fork => "fork",
+                ConflictKind::TwoHistories => "two_histories",
+                ConflictKind::Admits => "admits",
+                ConflictKind::Ids => "ids",
+            }
+            .into(),
+            devices: c
+                .signers
+                .iter()
+                .map(|k| {
+                    st.devices
+                        .iter()
+                        .find(|d| d.key.hash() == *k || d.admin == Some(*k))
+                        .or_else(|| {
+                            (st.roots.last() == Some(k)).then(|| st.root_device.and_then(|r| st.device(&r))).flatten()
+                        })
+                        .map_or_else(|| crate::certs::hex(&k.0[..4]), |d| d.name.clone())
+                })
+                .collect(),
+        })
+        .collect()
 }

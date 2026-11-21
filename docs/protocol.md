@@ -2545,6 +2545,11 @@ was restored, stay void, and its user does again what was theirs. Before a recor
 asks for, a computer waits up to 10 seconds until it holds another member's records (a
 hello with its digest, or the records a member sent), so that a device brought back from
 a backup rarely signs a seq again; when no member answers, it signs anyway and logs it.
+On the records of 0.6 the member keeps the log in `signed-records.json`
+(`member/src/mesh/signed.rs`), the root's `cbb resolve` names both records of each key in
+two histories (`writers::resolve`), the writer follows no voided branch
+(`RecordSet::voided_of`), and `cbb status` lists the conflicts with the devices whose keys
+they are; it does not wait for another member's records first yet.
 
 #### Checkpoints
 

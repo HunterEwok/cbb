@@ -117,6 +117,42 @@ pub fn two_histories(state: &State) -> Vec<String> {
     state.devices.iter().filter(|d| keys_of(d).iter().any(|k| state.two_histories(k))).map(|d| d.name.clone()).collect()
 }
 
+/// Voids both histories of every key that signed two (docs/protocol.md,
+/// section 10, "Going on after two histories"): the root's `resolve`
+/// naming the records of each key at the seq where it forked, so that the
+/// key goes on from the record before them. Gives whose keys they were, by
+/// device name (the first bytes of the key in hex when no device has it),
+/// and what was written. Only the group's root resolves.
+pub fn resolve(set: &mut RecordSet, signer: &dyn ExternalKey, now_ms: u64) -> Result<(Vec<String>, Vec<Record>)> {
+    use cbb_core::records::eval::ConflictKind;
+    let st = set.state();
+    if st.roots.last() != Some(&Key::es256(signer.public()).hash()) {
+        return Err(Error::msg(
+            "only the group's root resolves two histories: run cbb resolve on the root computer, or resolve them on the root phone",
+        ));
+    }
+    let (mut ids, mut who) = (Vec::new(), Vec::new());
+    for c in st.conflicts.iter().filter(|c| c.kind == ConflictKind::TwoHistories) {
+        ids.extend(c.records.iter().copied());
+        for k in &c.signers {
+            let d =
+                st.devices.iter().find(|d| d.key.hash() == *k || d.admin == Some(*k)).or_else(|| {
+                    (st.roots.last() == Some(k)).then(|| st.root_device.and_then(|r| st.device(&r))).flatten()
+                });
+            who.push(d.map_or_else(|| hex(&k.0[..4]), |d| d.name.clone()));
+        }
+    }
+    if ids.is_empty() {
+        return Err(Error::msg("no key of the group signed two histories"));
+    }
+    ids.sort();
+    ids.dedup();
+    let out = set
+        .write_record(&st, signer, Kind::Resolve(ids), now_ms)
+        .map_err(|e| Error::msg(format!("cannot void the two histories: {e}")))?;
+    Ok((who, out))
+}
+
 /// Freezes a device (its keys sign nothing and it gets no copies until it
 /// is thawed), or thaws it.
 pub fn freeze(
