@@ -246,15 +246,19 @@ they look, so both apps are built to the same plan.
    before: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
    port and the addresses, and how its tunnel hides) and the link to the group's relay, and
    it keeps their keys and the hub's clients itself; the cards read where they stand from
-   `away_status` (docs/core-api.md). The Android app's `AwayOn06` keeps only what the user
-   chose for the hub (on, forwarder, disguise, background, home networks) and serves while
-   the app is in front or the background is allowed. Turning the switch off stops the hub at
-   once, which hands its clients to the group's next hub; the app going to the background on
-   its own, without leave to run there, stops it only after a minute there, so a short trip
-   away hands nobody over and the clients wait out the gap as for any hub that goes quiet.
+   `away_status` (docs/core-api.md). The apps keep only what the user chose for the hub (on,
+   forwarder, disguise, home networks, and on Android the background): Android's `AwayOn06`
+   in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
+   app is in front (on Android also in the background when allowed). Turning the switch off
+   stops the hub at once, which hands its clients to the group's next hub. The app going to
+   the background on its own does not: on Android, without leave to run there, the hub stops
+   after a minute there; on the iPhone the member pauses and the hub stays one. So a short
+   trip away hands nobody over, and the clients wait out the gap as for any hub that goes
+   quiet, then move on to the next hub.
    A hub without a forwarder is reached at the phone's addresses on the home network. The relay is the group's setting: the root sets it with
    the fingerprint, the face or the screen lock (the manage action `relay`), and the other
-   devices show where their link to it stands, with "The group's root sets the relay".
+   devices show where their link to it stands, with "The group's root sets the relay for
+   every device".
    On an admin phone, Home's "+" "Send an invitation" makes a remote invitation for an hour
    (docs/protocol.md, section 12): on this phone while it is the group's registered hub,
    else through a hub of the group it is connected to. The phone shows the invitation's QR

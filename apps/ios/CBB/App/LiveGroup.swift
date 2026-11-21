@@ -107,6 +107,9 @@ final class LiveGroup: GroupController {
     /// announced, each only when its certificate names the caller.
     private var blindRelay: RelayOnPhone?
     private var relayPort: UInt16?
+    /// On a group of 0.6, what the user chose for the hub; the Live member
+    /// runs sync away from home, the hub and the relay itself (AwayOn06).
+    private var hub06 = Hub06Keychain.load() ?? AwayOn06.Prefs()
     /// This phone's TLS identity, for an invitation's pairing window.
     private var memberIdentity: SecIdentity?
     /// Whether the app is in front: the phone is the hub only then (iOS
@@ -1693,17 +1696,20 @@ final class LiveGroup: GroupController {
         // answers the tunnel keys of the hellos, shares its clients with the
         // group's other hubs and passes their offers on; it is no client
         // itself (D-64; docs/protocol.md, section 11, "Several hubs").
-        let awayState = AwayKeychain.load()
-        let hub = HubOnPhone(device: g.device, tunnels: RustHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
+        // On a group of 0.6 the Live member runs all of it (AwayOn06), so
+        // none of these is made.
+        let v06 = g.isV06
+        let awayState = v06 ? nil : AwayKeychain.load()
+        let hub = v06 ? nil : HubOnPhone(device: g.device, tunnels: RustHubTunnels(), state: HubKeychain.load(), save: { try HubKeychain.save($0) },
                              log: { what, error in hubLog.error("\(what, privacy: .public): \(error.map { String(reflecting: $0) } ?? "", privacy: .public)") })
-        let isHub = g.isAdmin && hub.isOn
-        if !isHub, let s = awayState, let key = try? RustTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
+        let isHub = g.isAdmin && hub?.isOn == true
+        if !v06, !isHub, let s = awayState, let key = try? RustTunnels().publicKey(s.key) { try node.setTunnelKey(key, psk: s.psk) }
         let relay = Relay(group: g.tag, device: g.device)
         relay.allowed = Self.allowed(g)
         // Through the tunnel the phone dials the hub's member port at its
         // loopback port, with the same TLS as at home, and only while the
         // hub is not found here.
-        let away = AwayFromHome(
+        let away = v06 ? nil : AwayFromHome(
             device: g.device, tunnels: RustTunnels(), state: awayState, save: { try AwayKeychain.save($0) },
             atHome: { hub in await relay.atHome(hub) },
             dial: { port, hub in try await Self.reach(node, key: "away", port: port, device: hub) },
@@ -1714,7 +1720,7 @@ final class LiveGroup: GroupController {
             isPhone: { box.isPhone($0) })
         // At a blind relay the phone dials the device the relay joined at
         // the relay link's loopback port, while it is not found here.
-        let blindRelay = RelayOnPhone(
+        let blindRelay = v06 ? nil : RelayOnPhone(
             device: g.device, links: RustRelayLinks(), settings: RelayKeychain.load(), save: { try RelayKeychain.save($0) },
             dial: { port, peer in try await Self.reach(node, key: "relay:\(peer)", port: port, device: peer) },
             serve: { link, _ in try await (link as? Link)?.served() },
@@ -1737,9 +1743,11 @@ final class LiveGroup: GroupController {
                 self?.handled(e)
             }
         }
-        Task { await away.start() }
         guestTask?.cancel()
-        guestTask = Task { [weak self] in await self?.offerThroughGuest(node: node, away: away) }
+        if let away {
+            Task { await away.start() }
+            guestTask = Task { [weak self] in await self?.offerThroughGuest(node: node, away: away) }
+        }
         if background { try? node.pause() }
         refreshHub()
         refreshCredentials()
@@ -2018,6 +2026,15 @@ final class LiveGroup: GroupController {
     /// The phone as the group's hub as Settings shows it: nil without a
     /// group, or on a phone that is no admin, which cannot be the hub.
     func hubStatus() async -> AppModel.Hub? {
+        if isV06 {
+            guard state?.isAdmin == true else { return nil }
+            let a = awayState06, p = hub06
+            let (status, error) = AwayOn06.hubStatus(p, a, paused: !foreground)
+            var h = AppModel.Hub(on: p.on, status: status, error: error, forwarder: p.forwarder, home: p.isHome(network),
+                                 clients: a?.clients ?? 0, disguise: p.hides)
+            h.entriesStale = status == .failed && a?.forwarder?.entriesStale == true
+            return h
+        }
         guard let hub, state?.isAdmin == true else { return nil }
         let (status, error) = hub.status(paused: !foreground)
         var h = AppModel.Hub(on: hub.isOn, status: status, error: error, forwarder: hub.forwarder,
@@ -2180,6 +2197,19 @@ final class LiveGroup: GroupController {
     /// sync away from home off; then it connects again, so the hellos it
     /// answers get its offers.
     func setPhoneHub(_ on: Bool) async throws {
+        if isV06 {
+            guard state?.isAdmin == true else { return }
+            var p = hub06
+            p.on = on
+            if on {
+                p = p.adding(home: network)
+                // Reached from afar through the project's forwarder, unless the user saved their own.
+                if p.forwarder == nil { p.forwarder = await Self.projectForwarder() }
+            }
+            try saveHub06(p)
+            if on { try updateHub06() } else { unhub06() }
+            return
+        }
         guard let hub, state?.isAdmin == true else { return }
         if on {
             if await away?.isOn == true { try await away?.turnOff() }
@@ -2196,6 +2226,14 @@ final class LiveGroup: GroupController {
     /// Sets how the hub's tunnel hides, then connects again, so that the
     /// clients at home get the new offer.
     func setHubDisguise(_ d: HubOnPhone.Disguise) async throws {
+        if isV06 {
+            guard state?.isAdmin == true else { return }
+            var p = hub06
+            p.hides = d
+            try saveHub06(p)
+            try updateHub06()
+            return
+        }
         guard let hub, state?.isAdmin == true else { return }
         try hub.setDisguise(d)
         await restartSync()
@@ -2204,8 +2242,21 @@ final class LiveGroup: GroupController {
     /// Sets the hub's forwarder: the user's own, or the project's when both
     /// are empty (none when its name cannot be looked up now).
     func setForwarder(address: String, pin: String) async throws {
-        guard let hub else { return }
         let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
+        if isV06 {
+            guard state?.isAdmin == true else { return }
+            var next = hub06
+            if a.isEmpty && p.isEmpty {
+                next.forwarder = await Self.projectForwarder()
+            } else {
+                guard let ep = HubState.endpoint(a) else { throw HubOnPhone.Failure.badForwarder }
+                next.forwarder = .init(endpoint: ep, pin: p)
+            }
+            try saveHub06(next)
+            try updateHub06()
+            return
+        }
+        guard let hub else { return }
         if a.isEmpty && p.isEmpty {
             try hub.setForwarder(await Self.projectForwarder())
         } else {
@@ -2246,6 +2297,12 @@ final class LiveGroup: GroupController {
     /// Remembers the network the phone is on as a home network, where the
     /// hub takes members and publishes itself.
     func addHomeNetwork() async throws {
+        if isV06 {
+            guard state?.isAdmin == true, let network else { return }
+            try saveHub06(hub06.adding(home: network))
+            refreshHub()
+            return
+        }
         guard let hub, let network else { return }
         try hub.addHome(network)
         refreshHub()
@@ -2256,9 +2313,79 @@ final class LiveGroup: GroupController {
         let previous = hubWork
         hubWork = Task { @MainActor [weak self] in
             await previous?.value
-            await self?.updateHub()
-            await self?.updateRelay()
+            guard let self else { return }
+            if self.isV06 {
+                do { try self.updateHub06() } catch { hubLog.error("the hub did not start: \(String(reflecting: error), privacy: .public)") }
+                return
+            }
+            await self.updateHub()
+            await self.updateRelay()
         }
+    }
+
+    // MARK: Away, the hub and the relay on 0.6
+
+    private func saveHub06(_ p: AwayOn06.Prefs) throws {
+        try Hub06Keychain.save(p)
+        hub06 = p
+    }
+
+    /// On a group of 0.6, has the Live member serve as a hub while the
+    /// user turned it on and the app is in front, publishing it on a home
+    /// network of the hub. In the background the member pauses and the hub
+    /// stays one, so that a short trip away hands no clients over: they
+    /// wait out the gap as for any hub that goes quiet, and move on to the
+    /// group's next hub after it. Only the switch stops the hub at once.
+    private func updateHub06() throws {
+        guard let node, let g = state, g.isAdmin, hub06.on else { return unhub06() }
+        guard foreground else { return stopHome() }
+        try AwayOn06.serve(node, hub06, homeAddrs: LocalAddresses.current().filter { !$0.contains(":") })
+        guard hub06.isHome(network) else { return stopHome() }
+        guard homePort == nil else { return }
+        for p in [Self.memberPort, 0] {
+            guard let home = try? node.listen(.home, port: p) else { continue }
+            homePort = home
+            do {
+                publisher = try BonjourPublisher(name: g.device, port: home, txt: ["v": "1", "g": g.tag, "r": "phone"])
+            } catch {
+                hubLog.error("the hub cannot publish itself on the home network: \(String(reflecting: error), privacy: .public)")
+            }
+            return
+        }
+        hubLog.error("the hub cannot listen on the home network")
+    }
+
+    /// On a group of 0.6, stops the Live member serving as a hub, when it does.
+    private func unhub06() {
+        stopHome()
+        guard let node, (try? node.awayStatus())?.hub == true else { return }
+        do { try node.stopHub() } catch { hubLog.error("the hub did not stop: \(String(reflecting: error), privacy: .public)") }
+    }
+
+    /// On a group of 0.6, sync away from home as the Live member runs it; nil while it is off.
+    private var awayState06: CoreMember.AwayState? { try? node?.awayStatus() }
+
+    /// On a group of 0.6, sets the group's relay (docs/design.md, "Blind
+    /// relay"), where every device meets the others while sync away from
+    /// home is on: the root writes it into the group's settings, signed
+    /// with the root key after Face ID. Both empty meet at no relay.
+    private func setGroupRelay(address: String, pin: String) async throws {
+        guard isRoot else { throw Failure.needsRoot }
+        let relays: [String]
+        if address.isEmpty && pin.isEmpty {
+            relays = []
+        } else {
+            guard let ep = HubState.endpoint(address), !pin.isEmpty else { throw RelayOnPhone.Failure.badRelay }
+            relays = ["\(ep) \(pin)"]
+        }
+        let root = try await caSigner(reason: String(localized: "Set the group's relay", bundle: .app))
+        try rootRecord(root) { n, p, s in try n.setRelays(relays, public: p, sign: s) }
+    }
+
+    /// Why sync away from home of 0.6 does not get through, as the member says.
+    struct Away06Failure: Error, CustomStringConvertible {
+        let message: String
+        var description: String { message }
     }
 
     private func hubDone() async { await hubWork?.value }
@@ -2359,6 +2486,8 @@ final class LiveGroup: GroupController {
     /// the phone's hub, its sync away from home and its relay run here.
     func why() async -> [WhyReason] {
         guard let node else { return [WhyReason(code: "not_in_group", level: "stop")] }
+        // The member of 0.6 runs the tunnel itself and says where it stands.
+        if isV06 { return (try? node.why(away: nil)) ?? [] }
         var a: WhyAway?
         if let hub, state?.isAdmin == true, hub.isOn {
             let (status, error) = hub.status(paused: !foreground)
@@ -2383,6 +2512,15 @@ final class LiveGroup: GroupController {
     }
 
     func relayStatus() async -> AppModel.BlindRelay? {
+        if isV06 {
+            guard state != nil else { return nil }
+            let a = awayState06
+            let (status, error) = AwayOn06.relayStatus(a)
+            var r = AppModel.BlindRelay(status: status, error: error, relay: a?.relay.flatMap { $0.endpoint.isEmpty ? nil : .init(endpoint: $0.endpoint, pin: "") },
+                                        online: a?.relay?.online.count ?? 0)
+            r.editable = isRoot
+            return r
+        }
         guard let r = blindRelay else { return nil }
         let (status, report, error) = r.status(paused: !foreground)
         return AppModel.BlindRelay(status: status, error: error, relay: r.relay, online: report.online.count, through: report.through)
@@ -2391,8 +2529,9 @@ final class LiveGroup: GroupController {
     /// Meets the group at the relay at address, whose key is pin, after the
     /// user read what a relay learns; both empty leave it.
     func setRelay(address: String, pin: String) async throws {
-        guard let r = blindRelay else { return }
         let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
+        if isV06 { return try await setGroupRelay(address: a, pin: p) }
+        guard let r = blindRelay else { return }
         if a.isEmpty && p.isEmpty {
             try r.turnOff()
         } else {
@@ -2407,6 +2546,15 @@ final class LiveGroup: GroupController {
 
     /// Sync away from home as Settings shows it; nil without a group.
     func awayStatus() async -> (on: Bool, status: AwayFromHome.Status, error: Error?, hub: String?, hubs: [String])? {
+        if isV06 {
+            guard let node else { return nil }
+            let a = awayState06
+            let connected = Set(node.connected())
+            let status = AwayOn06.awayStatus(a) { connected.contains($0) }
+            let error = a.flatMap { $0.error.isEmpty ? nil : Away06Failure(message: AwayOn06.reason($0.error, $0.detail)) }
+            let hub = a.flatMap { $0.hubDevice.isEmpty || status == .connecting ? nil : $0.hubDevice }
+            return (a?.isOn == true && a?.hub != true, status, error, hub, a.map { $0.hubDevice.isEmpty ? [] : [$0.hubDevice] } ?? [])
+        }
         guard let away else { return nil }
         return (await away.isOn, await away.status, await away.lastError, await away.inUse, await away.hubs)
     }
@@ -2414,6 +2562,11 @@ final class LiveGroup: GroupController {
     /// Turns sync away from home on or off, then connects again, so the
     /// hellos offer the new key and the hub answers it.
     func setAwayFromHome(_ on: Bool) async throws {
+        if isV06 {
+            guard let node else { throw Failure.noGroup }
+            try node.setAway(on)
+            return
+        }
         guard let away else { return }
         if on { try await away.turnOn() } else { try await away.turnOff() }
         await restartSync()

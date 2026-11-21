@@ -539,6 +539,9 @@ final class AppModel: ObservableObject {
         var relay: HubState.Forwarder?
         var online = 0
         var through = 0
+        /// Whether this phone sets the relay: on a group of 0.6 only the
+        /// root does, for the whole group.
+        var editable = true
     }
 
     @Published private(set) var blindRelay: BlindRelay?

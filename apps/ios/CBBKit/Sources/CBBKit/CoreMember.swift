@@ -525,13 +525,130 @@ public final class CoreMember: @unchecked Sendable {
         return try run("listen", A(port: port, kind: what), as: R.self).port
     }
 
+    /// A hub's registration with its forwarder, as `away_status` gives it.
+    public struct ForwarderState: Decodable, Equatable, Sendable {
+        public var endpoint = "", registered = false, seen = "", entriesStale = false, error = "", detail = ""
+
+        enum CodingKeys: String, CodingKey { case endpoint, registered, seen, entriesStale = "entries_stale", error, detail }
+
+        public init(endpoint: String = "", registered: Bool = false, seen: String = "", entriesStale: Bool = false, error: String = "", detail: String = "") {
+            (self.endpoint, self.registered, self.seen, self.entriesStale, self.error, self.detail) = (endpoint, registered, seen, entriesStale, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            endpoint = try c.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+            registered = try c.decodeIfPresent(Bool.self, forKey: .registered) ?? false
+            seen = try c.decodeIfPresent(String.self, forKey: .seen) ?? ""
+            entriesStale = try c.decodeIfPresent(Bool.self, forKey: .entriesStale) ?? false
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+    }
+
+    /// This phone's link to the group's relay, as `away_status` gives it.
+    public struct RelayState: Decodable, Equatable, Sendable {
+        public var endpoint = "", connected = false, online: [String] = [], error = "", detail = ""
+
+        public init(endpoint: String = "", connected: Bool = false, online: [String] = [], error: String = "", detail: String = "") {
+            (self.endpoint, self.connected, self.online, self.error, self.detail) = (endpoint, connected, online, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            endpoint = try c.decodeIfPresent(String.self, forKey: .endpoint) ?? ""
+            connected = try c.decodeIfPresent(Bool.self, forKey: .connected) ?? false
+            online = try c.decodeIfPresent([String].self, forKey: .online) ?? []
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+
+        enum CodingKeys: String, CodingKey { case endpoint, connected, online, error, detail }
+    }
+
+    /// Sync away from home on a group of 0.6, as the member runs it
+    /// (`away_status`, docs/core-api.md): a hub (standing by while a hub
+    /// above it serves) with its port, clients, endpoints and forwarder;
+    /// else the hub it reaches and whether through the tunnel now; the
+    /// relay link; the last error with its detail.
+    public struct AwayState: Decodable, Equatable, Sendable {
+        public var hub = false, standby = false, port = 0, clients = 0, obfuscated = false, vless = false
+        public var endpoints: [String] = [], hubDevice = "", through = false, keysInFile = false
+        public var forwarder: ForwarderState?, relay: RelayState?
+        public var error = "", detail = ""
+
+        /// Sync away from home is on: the member keeps its tunnel keys; a
+        /// failure while it is off shows only error.
+        public var isOn: Bool { keysInFile }
+
+        enum CodingKeys: String, CodingKey {
+            case hub, standby, port, clients, obfuscated, vless, endpoints, hubDevice = "hub_device", through, keysInFile = "keys_in_file"
+            case forwarder, relay, error, detail
+        }
+
+        public init(hub: Bool = false, hubDevice: String = "", through: Bool = false, keysInFile: Bool = true, clients: Int = 0,
+                    forwarder: ForwarderState? = nil, relay: RelayState? = nil, error: String = "", detail: String = "") {
+            (self.hub, self.hubDevice, self.through, self.keysInFile, self.clients) = (hub, hubDevice, through, keysInFile, clients)
+            (self.forwarder, self.relay, self.error, self.detail) = (forwarder, relay, error, detail)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
+            standby = try c.decodeIfPresent(Bool.self, forKey: .standby) ?? false
+            port = try c.decodeIfPresent(Int.self, forKey: .port) ?? 0
+            clients = try c.decodeIfPresent(Int.self, forKey: .clients) ?? 0
+            obfuscated = try c.decodeIfPresent(Bool.self, forKey: .obfuscated) ?? false
+            vless = try c.decodeIfPresent(Bool.self, forKey: .vless) ?? false
+            endpoints = try c.decodeIfPresent([String].self, forKey: .endpoints) ?? []
+            hubDevice = try c.decodeIfPresent(String.self, forKey: .hubDevice) ?? ""
+            through = try c.decodeIfPresent(Bool.self, forKey: .through) ?? false
+            keysInFile = try c.decodeIfPresent(Bool.self, forKey: .keysInFile) ?? false
+            forwarder = try c.decodeIfPresent(ForwarderState.self, forKey: .forwarder)
+            relay = try c.decodeIfPresent(RelayState.self, forKey: .relay)
+            error = try c.decodeIfPresent(String.self, forKey: .error) ?? ""
+            detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        }
+    }
+
+    private struct AwayAnswer: Decodable { var away: AwayState? }
+
+    /// On a group of 0.6: sync away from home as the member runs it, nil while it is off.
+    public func awayStatus() throws -> AwayState? {
+        try run("away_status", Optional<Empty>.none, as: AwayAnswer.self).away
+    }
+
+    /// On a group of 0.6: turns sync away from home on, with new tunnel keys, or off.
+    @discardableResult
+    public func setAway(_ on: Bool) throws -> AwayState? {
+        struct A: Encodable { var on: Bool }
+        return try run("away", A(on: on), as: AwayAnswer.self).away
+    }
+
     /// On a group of 0.6, serves as a hub of the group (the records must
-    /// make this phone one: an admin key) on the UDP port (0 for any free
-    /// one), reached from afar at addrs ("ip:port"): its clients and the
-    /// guests of invitations come in through its tunnel.
-    public func serveAsHub(port: UInt16, addrs: [String]) throws {
-        struct A: Encodable { var port: UInt16, addrs: [String] }
-        try run("hub", A(port: port, addrs: addrs))
+    /// make this phone one: an admin key), as the computers' hub: reached
+    /// away from home through the forwarder at forwarder (`host:port`, its
+    /// key's pin key, or `default` for the project's), or at addrs
+    /// ("ip:port") on the UDP port (0 for any free one), hidden as
+    /// obfuscateOff and vlessOff say. Its clients and the guests of
+    /// invitations come in through its tunnel.
+    @discardableResult
+    public func serveAsHub(port: UInt16 = 0, addrs: [String] = [], forwarder: String = "", key: String = "",
+                           obfuscateOff: Bool = false, vlessOff: Bool = false) throws -> AwayState? {
+        struct A: Encodable {
+            var port: UInt16, addrs: [String], forwarder: String, key: String
+            var obfuscateOff: Bool, vlessOff: Bool
+            enum CodingKeys: String, CodingKey { case port, addrs, forwarder, key, obfuscateOff = "obfuscate_off", vlessOff = "vless_off" }
+        }
+        return try run("hub", A(port: port, addrs: addrs, forwarder: forwarder, key: key, obfuscateOff: obfuscateOff, vlessOff: vlessOff),
+                       as: AwayAnswer.self).away
+    }
+
+    /// On a group of 0.6: stops serving as a hub; its clients go to the
+    /// next hub in the group's order.
+    @discardableResult
+    public func stopHub() throws -> AwayState? {
+        try run("hub_off", Optional<Empty>.none, as: AwayAnswer.self).away
     }
 
     /// Closes the member port for what, or every one with nil.
@@ -867,6 +984,16 @@ public final class CoreMember: @unchecked Sendable {
         struct A: Encodable { var action = "key_level", level: String, `public`: Data }
         struct R: Decodable { var below: [String]? }
         return try manage(A(level: level, public: try Self.point(`public`)), sign: sign, as: R.self).below ?? []
+    }
+
+    /// On the root of a group of 0.6: the group's relays, each "address
+    /// pin", or "default" alone; none meets at no relay. It answers their
+    /// addresses.
+    @discardableResult
+    public func setRelays(_ relays: [String], public: Data, sign: @escaping (Data) throws -> Data) throws -> [String] {
+        struct A: Encodable { var action = "relay", relays: [String], `public`: Data }
+        struct R: Decodable { var relays: [String]? }
+        return try manage(A(relays: relays, public: try Self.point(`public`)), sign: sign, as: R.self).relays ?? []
     }
 
     /// Hands the group to the admin device, whose claim then takes effect at once.
