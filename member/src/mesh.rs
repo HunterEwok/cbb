@@ -179,6 +179,8 @@ struct Conn {
     tunnel_psks: TunnelPsks,
     /// The hub took it from its tunnel (`accept_tunneled`).
     through_hub: bool,
+    /// The peer's member key, as TLS showed it.
+    point: [u8; 65],
 }
 
 impl Conn {
@@ -471,9 +473,20 @@ impl Mesh {
         self.state().hub_order()
     }
 
-    /// What this device's hellos say of it beyond the exchange's fields.
+    /// What this device's hellos say of it beyond the exchange's fields;
+    /// a change goes to the peers connected in a new hello at once, as a
+    /// mute or a quick action turned on must.
     pub fn set_hello(&self, h: Hello) {
-        *self.hello.write().unwrap() = h;
+        let changed = {
+            let mut cur = self.hello.write().unwrap();
+            let changed = *cur != h;
+            *cur = h;
+            changed
+        };
+        if changed {
+            let hello = self.hello_frame(&self.set.lock().unwrap());
+            self.broadcast(&hello, None);
+        }
     }
 
     /// The signed release and entry points this member holds, which its
@@ -729,7 +742,22 @@ impl Mesh {
         let hello = self.hello_frame(&set);
         drop(set);
         self.broadcast(&hello, None);
+        self.drop_refused();
         Ok(())
+    }
+
+    /// Ends the connections with peers the records refuse now, such as a
+    /// device just removed or frozen: the group keeps no connection with
+    /// it, and it need not learn why (docs/protocol.md, section 10).
+    fn drop_refused(&self) {
+        let state = self.state();
+        let own = self.own.hash();
+        for c in self.conns.lock().unwrap().values() {
+            if let Standing::Refused(why) = standing(&state, &own, &c.point) {
+                self.logf(&format!("ended the connection with {}: {why}", hex(&c.peer.0[..4])));
+                c.close();
+            }
+        }
     }
 
     fn hello_frame(&self, set: &RecordSet) -> Vec<u8> {
@@ -1054,6 +1082,7 @@ impl Mesh {
             lower_dialed,
             tunnel_psks: tunnel_psks.unwrap_or_default(),
             through_hub,
+            point,
         });
         {
             let mut conns = self.conns.lock().unwrap();
@@ -1166,6 +1195,7 @@ impl Mesh {
         if out.changed {
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            self.drop_refused();
         }
         match out.other {
             None => {

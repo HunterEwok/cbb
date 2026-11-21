@@ -19,6 +19,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -76,6 +81,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -139,6 +149,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -196,6 +211,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -814,6 +834,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -871,6 +896,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -934,6 +964,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -991,6 +1026,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -1054,6 +1094,11 @@
    },
    {
     "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
+   },
+   {
+    "lang": "rust",
     "file": "member/src/service.rs",
     "name": "paste_goes_to_the_user_at_the_screen"
    },
@@ -1111,6 +1156,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",

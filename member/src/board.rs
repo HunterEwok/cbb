@@ -168,10 +168,16 @@ impl Board {
         self.inner.lock().unwrap().mute = None;
     }
 
-    /// While muted: when the mute ends, 0 for until it is lifted.
+    /// Whether this member is muted, and for how many milliseconds more: 0
+    /// for until it is lifted, at least 1 otherwise, as `Engine::mute_left`
+    /// (the status, the hello's `muted_for_ms` and mute.json take it so).
     pub fn mute_left(&self) -> Option<i64> {
         let mut st = self.inner.lock().unwrap();
-        if self.muted(&mut st) { st.mute } else { None }
+        let now = (self.wall)();
+        match self.muted(&mut st) {
+            false => None,
+            true => Some(st.mute.filter(|u| *u != 0).map_or(0, |u| u.saturating_sub(now).max(1))),
+        }
     }
 
     /// The group's window for incoming copies and lifetime of secrets;
@@ -195,6 +201,17 @@ impl Board {
     /// The group's current copy.
     pub fn current(&self) -> Option<Current> {
         self.inner.lock().unwrap().current.clone()
+    }
+
+    /// Drops the group's current copy when it is the copy `id`: one that no
+    /// longer counts. Whether it was.
+    pub fn forget(&self, id: &[u8; 16]) -> bool {
+        let mut st = self.inner.lock().unwrap();
+        if st.current.as_ref().is_some_and(|c| &c.id == id) {
+            st.current = None;
+            return true;
+        }
+        false
     }
 
     /// A watcher reported the clipboard changed: the content to send to
@@ -367,7 +384,12 @@ mod tests {
         assert_eq!(b.received(&arrived(Content::text("x", false), DeviceId([1; 16]), 0)), Verdict::Mode);
         t.store(1_000_600, Ordering::SeqCst);
         assert_eq!(b.sync(), (true, 0), "sync comes back on by itself");
+        assert_eq!(b.mute_left(), None);
+        // A mute until a moment says the time left, as the engine's does.
+        b.set_mute(1_000_600 + 3_600_000);
+        assert_eq!(b.mute_left(), Some(3_600_000));
         b.set_mute(0);
+        assert_eq!(b.mute_left(), Some(0), "until it is lifted");
         assert!(b.copied("b", Kind::Text, Via::Copy).unwrap().is_none());
         assert!(b.send("c", Kind::Text, Via::Copy).is_err());
         b.unmute();

@@ -278,6 +278,18 @@ impl Live {
     fn settle(&self, state: &State) {
         let (_, secret_ms) = self.board.lifetimes();
         self.board.set_lifetimes(state.incoming_ms.unwrap_or(LIVE_WINDOW_MS), secret_ms);
+        // The group's last copy, made on a device removed since, no longer
+        // counts here and is never written later (docs/protocol.md,
+        // section 10, "The copies setting").
+        if let Some(c) = self.board.current()
+            && state.device(&c.origin).is_none()
+            && self.board.forget(&c.id)
+        {
+            self.logf(&format!(
+                "cbb: the group's last copy no longer counts and is dropped: {} is no device of the group",
+                id_text(&c.origin)
+            ));
+        }
     }
 
     /// A copy a peer brought, which the core found new.

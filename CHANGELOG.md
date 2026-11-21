@@ -2854,6 +2854,12 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6: a device's hello goes to the members connected again when it changes
+  (a mute, sync off, a quick action), and the mute in it says the time left, not its end;
+  only an admin ends a mute an admin set, and on the control socket only an admin mutes
+  itself; the members end their connections with a device the records refuse now, such as
+  one just removed, which need not learn why; the group's last copy, made on a device removed
+  since, is dropped.
 - On the records of 0.6 images and files reach a device away from home through its hub
   again: a hub serving fetches the blob of each copy it does not write itself within its limit
   away from home (`cbb config max-copy-away`), and serves through its tunnel only blobs within

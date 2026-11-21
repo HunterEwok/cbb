@@ -662,6 +662,12 @@ impl Service {
         let on = h.op == "mute";
         let until = crate::mute::until(h.for_ms)?;
         let me = id_text(&me);
+        // A mute an admin set on this device only an admin ends, after a
+        // restart too (mute.json keeps who set it).
+        let by = crate::mute::by(&self.state_dir, &live.board)?;
+        if !on && !by.is_empty() && by != me && writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
+            return Err(Error::msg(MUTE_NOT_ADMIN));
+        }
         let saved =
             if on { crate::mute::kept_by(&crate::mute::by(&self.state_dir, &live.board)?, &me) } else { me.clone() };
         self.live_mute(live, on, until, &saved)?;
@@ -1414,9 +1420,7 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
             "only the group's root or an admin sets how long an incoming copy stays live"
         }
         "hubs" if !admin => "only the group's root or an admin that may be a hub sets the main hubs",
-        "mute" | "unmute" if !admin && other => {
-            "only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb sync off turns this device's own sync off"
-        }
+        "mute" | "unmute" if !admin && other => MUTE_NOT_ADMIN,
         "sync" if !admin && other => {
             "only an admin turns another device's sync on or off: the group's root, an admin it made (cbb admin), or an admin phone"
         }
@@ -1428,6 +1432,10 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
     };
     Some(why)
 }
+
+/// Why a member that is no admin mutes no other device and ends no mute
+/// of another's, nor its own on the control socket.
+pub(super) const MUTE_NOT_ADMIN: &str = "only an admin mutes a device or ends its mute: the group's root, an admin it made (cbb admin), or an admin phone; cbb sync off turns this device's own sync off";
 
 /// The operations the service answers without a group.
 pub(super) fn needs_no_group(op: &str) -> bool {

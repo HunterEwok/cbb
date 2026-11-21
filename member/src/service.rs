@@ -958,6 +958,21 @@ impl Service {
         if !control::is_own_device_op(&h.op) || h.device.is_empty() {
             return false;
         }
+        if let Some(live) = self.live() {
+            let me = crate::roster::id_text(&live.mesh.device());
+            if !crate::writers::find(&live.mesh.state(), &h.device).is_ok_and(|d| d.id == live.mesh.device()) {
+                return false;
+            }
+            // On the control socket only an admin mutes itself; a member
+            // that is no admin turns its own sync off instead.
+            if crate::writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
+                return false;
+            }
+            if peer::may_take(peer::uid(conn), DESKTOP, peer::at_screen_surely) != peer::Verdict::Allowed {
+                return false;
+            }
+            return crate::mute::by(&self.state_dir, &live.board).is_ok_and(|by| by.is_empty() || by == me);
+        }
         let Ok(node) = self.node() else { return false };
         let me = node.identity().id.to_string();
         if !crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == me) {
@@ -2092,6 +2107,14 @@ impl Service {
                 )))
             };
             let _ = control::write(&mut out, &answer);
+            return;
+        }
+        if control::needs_admin(&m.header)
+            && !admin
+            && control::is_own_device_op(&m.header.op)
+            && self.live().is_some_and(|l| crate::writers::signer(l.mesh.own(), &l.mesh.state()).is_none())
+        {
+            let _ = control::write(&mut out, &control::failure(&Error::msg(on_live::MUTE_NOT_ADMIN)));
             return;
         }
         if control::needs_admin(&m.header) && !admin && !self.own_device_op(&out, &m.header) {

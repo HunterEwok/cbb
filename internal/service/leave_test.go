@@ -65,7 +65,18 @@ func TestLeave(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "deck"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the deck sees it was removed", func() bool { return deck.status(t).Removed })
+	// By the owner's rule a removed device need not learn of its removal:
+	// the group refuses it and keeps no connection with it, and it leaves
+	// all the same.
+	deckID := deck.status(t).Device
+	waitFor(t, "the group keeps no connection with the removed deck", func() bool {
+		for _, p := range pi.status(t).Peers {
+			if p.ID == deckID {
+				return false
+			}
+		}
+		return len(deck.status(t).Peers) == 0
+	})
 
 	leaveOn(t, deck)
 	for _, name := range groupFiles {
@@ -141,9 +152,11 @@ func TestAloneLeave(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpRemove, Device: "small"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the small device sees it was removed", func() bool {
+	// A removed device need not learn of its removal: the group keeps no
+	// connection with it, and it leaves all the same.
+	waitFor(t, "the group keeps no connection with the small device", func() bool {
 		m, err := small.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && m.Status != nil && m.Status.Removed
+		return len(pi.status(t).Peers) == 0 && err == nil && m.Status != nil && len(m.Status.Peers) == 0
 	})
 	leave := func() string {
 		out, err := exec.Command(bin, "-state", dir, "-socket", small.socket, "leave", "-yes").CombinedOutput()
