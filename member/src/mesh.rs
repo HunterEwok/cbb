@@ -126,6 +126,10 @@ pub struct Mesh {
     conns: Mutex<HashMap<DeviceId, Arc<Conn>>>,
     /// The last hello of each device connected now, for the views.
     hellos: Mutex<HashMap<DeviceId, Hello>>,
+    /// The release archive each device seen since the service started
+    /// updates from, as its hello names it: a hub fetches those for the
+    /// group (`archives`).
+    archives: Mutex<HashMap<DeviceId, String>>,
     clock: Clock,
     hello: RwLock<Hello>,
     lifetimes: RwLock<Lifetimes>,
@@ -308,6 +312,7 @@ impl Mesh {
                 fetches: Mutex::new(HashMap::new()),
                 conns: Mutex::new(HashMap::new()),
                 hellos: Mutex::new(HashMap::new()),
+                archives: Mutex::new(HashMap::new()),
                 clock,
                 hello: RwLock::new(Hello::default()),
                 lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
@@ -490,6 +495,7 @@ impl Mesh {
             }
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            self.offer_signed(None);
         }
         Ok(newer)
     }
@@ -504,6 +510,7 @@ impl Mesh {
         if newer {
             let hello = self.hello_frame(&self.set.lock().unwrap());
             self.broadcast(&hello, None);
+            self.offer_signed(None);
             // A project's server with a new key gets its face now, not at
             // the next period's beat.
             self.refresh_faces(&self.state());
@@ -519,6 +526,16 @@ impl Mesh {
     /// The last hello of each device connected now.
     pub fn hellos(&self) -> HashMap<DeviceId, Hello> {
         self.hellos.lock().unwrap().clone()
+    }
+
+    /// The release archives the devices seen since the service started
+    /// update from, each once, in order: only names as
+    /// packaging/archive.sh makes them (`cbb_core::wire::archive_name_valid`).
+    pub fn archives(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.archives.lock().unwrap().values().cloned().collect();
+        out.sort();
+        out.dedup();
+        out
     }
 
     /// The tunnel's pre-shared key the connection with `peer` gives
@@ -708,9 +725,32 @@ impl Mesh {
     /// when the peer's are older.
     fn on_hello(&self, conn: &Conn, h: &Hello) {
         self.hellos.lock().unwrap().insert(conn.peer, h.clone());
+        if cbb_core::wire::archive_name_valid(&h.device.archive) {
+            self.archives.lock().unwrap().insert(conn.peer, h.device.archive.clone());
+        }
         if let Some(f) = &*self.on_peer_hello.read().unwrap() {
             f(&conn.peer);
         }
+        self.offer_newer(conn, h);
+    }
+
+    /// The release and entry points this member holds, to the peers
+    /// connected whose last hello names older ones (all but `except`, which
+    /// sent them): once this member took newer ones, as a peer's hello
+    /// that comes later gets them.
+    fn offer_signed(&self, except: Option<&DeviceId>) {
+        let hellos = self.hellos();
+        let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
+        for c in conns.iter().filter(|c| Some(&c.peer) != except) {
+            if let Some(h) = hellos.get(&c.peer) {
+                self.offer_newer(c, h);
+            }
+        }
+    }
+
+    /// Sends the peer of conn the release and entry points this member
+    /// holds when its hello h names older ones.
+    fn offer_newer(&self, conn: &Conn, h: &Hello) {
         let now = crate::uptime::wall_ms();
         if let Some(r) = &*self.releases.read().unwrap()
             && crate::releases::newer(r.order(now), (h.release_keys_seq, h.release_seq))
@@ -741,6 +781,7 @@ impl Mesh {
                 // Newer here: passed on to the others with a new hello.
                 let hello = self.hello_frame(&self.set.lock().unwrap());
                 self.broadcast(&hello, Some(&conn.peer));
+                self.offer_signed(Some(&conn.peer));
                 if t == m::T_ENTRIES {
                     // As put_entries: the project's servers' faces follow.
                     self.refresh_faces(&self.state());

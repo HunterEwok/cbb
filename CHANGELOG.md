@@ -2854,6 +2854,14 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a hub fetches the release archives its group's devices update from
+  again (control operation `release_want`), as with 0.5: a computer that `cbb update` updates
+  names its archive in its hello's `device` map, and the hub's `cbb update` downloads the ones
+  it does not hold whole and serves them to the group. On the records of 0.6 a member that
+  takes a newer signed release or entry points passes them to the members connected at once,
+  not only to one that connects later; `cbb status` shows the release held and the update it
+  offers; and `cbb update` fetches an archive from a member that holds it (`get`, t 13) instead
+  of saying it is not done yet.
 - Proven keys work on the records of 0.6 as with 0.5: a computer with a TPM sends its
   evidence (t 19, the data of docs/protocol.md, section 17, "Evidence on the records of
   0.6") and answers the root's credential; the root checks an Android chain or a TPM's

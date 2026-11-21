@@ -153,6 +153,25 @@ fn two_members_sync_their_records_and_statements() {
     b.close();
 }
 
+// Each member keeps the release archive a peer's hello names, for the
+// hub's cbb update, after the connection ends too; a name not made as
+// packaging/archive.sh makes them is not kept.
+#[test]
+fn a_member_keeps_the_archives_its_peers_update_from() {
+    let (a, b) = two("archives");
+    let device = |archive: &str| crate::hello::Device { archive: archive.into(), ..Default::default() };
+    a.set_hello(crate::hello::Hello { device: device("cbb-linux-arm64.tar.gz"), ..Default::default() });
+    b.set_hello(crate::hello::Hello { device: device("cbb-linux-arm64.tar.gz/.."), ..Default::default() });
+    connect(&a, &b);
+    until("the hellos", || b.hellos().contains_key(&a.device()) && a.hellos().contains_key(&b.device()));
+    assert_eq!(b.archives(), vec!["cbb-linux-arm64.tar.gz".to_string()]);
+    assert!(a.archives().is_empty(), "a name packaging/archive.sh does not make");
+    a.close();
+    until("the connection gone", || b.connected().is_empty());
+    assert_eq!(b.archives(), vec!["cbb-linux-arm64.tar.gz".to_string()]);
+    b.close();
+}
+
 #[test]
 fn a_copy_reaches_the_other_member() {
     let (a, b) = two("copy");

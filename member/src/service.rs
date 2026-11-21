@@ -2361,12 +2361,8 @@ impl Service {
         use std::io::Read;
         let sha = sha.to_ascii_lowercase();
         let releases = self.releases_here()?;
-        if self.live().is_some() {
-            // On the records of 0.6 only a hub fetches archives, and none
-            // is a hub yet: an archive is served when it is held here.
-            releases
-                .held(&sha, uptime::wall_ms())
-                .ok_or_else(|| crate::live::not_yet("fetching a release's archive from the group's hub"))?;
+        if let Some(l) = self.live() {
+            l.mesh.fetch_release_file(&sha)?;
         } else {
             self.node()?.fetch_release_file(&sha)?;
         }

@@ -196,7 +196,13 @@ impl Service {
             mode: if live.board.mode() == Mode::Own { 2 } else { 1 },
             muted: muted.is_some(),
             muted_for_ms: muted.map_or(0, |l| u64::try_from(l).unwrap_or(0)),
-            device: crate::hello::Device { version: VERSION.into(), ..Default::default() },
+            // The archive cbb update installs here, for the group's hub to
+            // fetch (docs/protocol.md, section 16, "In the group").
+            device: crate::hello::Device {
+                version: VERSION.into(),
+                archive: crate::device::own().archive.clone(),
+                ..Default::default()
+            },
             features: crate::hello::FEATURE_MEDIA,
             actions: actions::load(&self.state_dir).map(|s| s.on()).unwrap_or_default(),
             key_store: own_store(live.mesh.own()),
@@ -308,6 +314,9 @@ impl Service {
         // Its own statement: the set's lock ends here, before the fields
         // below take it again.
         let relay_group = relay_group(&live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+        // The newest signed release the group passed around, offered when
+        // newer than this device's version.
+        let release = live.mesh.releases().and_then(|r| r.version(uptime::wall_ms()));
         let status = Status {
             device: id_text(&me),
             group: live.tag(),
@@ -323,6 +332,8 @@ impl Service {
             paste: self.paste_status(),
             keyboard: peripherals.as_ref().and_then(|p| p.keyboard.clone()),
             tvs: peripherals.map(|p| p.tvs).unwrap_or_default(),
+            release: release.clone().unwrap_or_default(),
+            update: release.filter(|v| crate::releases::offered(v)).unwrap_or_default(),
             actions: action_status(&actions::load(&self.state_dir).unwrap_or_default()),
             removed: mine.is_none(),
             frozen: mine.is_some_and(|d| d.frozen),
@@ -453,8 +464,9 @@ impl Service {
                 .and_then(|r| r.current(uptime::wall_ms()))
                 .ok_or_else(|| Error::msg("this device holds no signed release"))
                 .map(|set| control::reply(Header { done: true, ..Default::default() }, set.get().as_bytes().to_vec())),
-            // A hub of 0.6 fetches no archives for the members yet.
-            "release_want" => Ok(control::reply(Header { done: true, ..Default::default() }, b"null".to_vec())),
+            "release_want" => serde_json::to_vec(&live.wanted_release_files())
+                .map_err(|e| Error::with("cannot encode the files", e))
+                .map(|data| control::reply(Header { done: true, ..Default::default() }, data)),
             "update_way" => {
                 #[cfg(feature = "tunnel")]
                 let way = live.update_way();

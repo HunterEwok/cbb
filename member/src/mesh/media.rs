@@ -6,7 +6,9 @@
 //! keeps it; a reader fetches the sealed blob from a member that holds it,
 //! a range at a time (`get`, answered by binary chunk frames or `missing`),
 //! checks it whole against the header's size and SHA-256 and opens it.
-//! Members fetch, keep and serve only sealed blobs.
+//! Members fetch, keep and serve only sealed blobs, and the archives of
+//! the signed release they hold (docs/protocol.md, section 16, "In the
+//! group"), which the same `get` names by their SHA-256.
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -181,8 +183,9 @@ impl Mesh {
         let mut peers = vec![*from];
         peers.extend(self.connected().into_iter().filter(|p| p != from));
         let mut last = Error::msg("no member that may hold the blob is connected");
+        let part = self.content.partial(&blob.sha256);
         for p in peers {
-            match self.fetch_from(&p, blob, &rx) {
+            match self.fetch_from(&p, &blob.sha256, blob.size, &part, &rx) {
                 Ok(()) => return self.content.finish(&blob.sha256, blob.size),
                 Err(e) => {
                     self.logf(&format!("fetching a blob from {} failed: {}", hex(&p.0[..4]), e.details()));
@@ -193,17 +196,25 @@ impl Mesh {
         Err(last)
     }
 
-    fn fetch_from(&self, peer: &DeviceId, blob: &Blob, rx: &mpsc::Receiver<Got>) -> Result<()> {
-        let part = self.content.partial(&blob.sha256);
+    /// Fetches the blob or archive `sum` of `size` bytes from `peer` into
+    /// the partial file `part`, continuing what an earlier fetch left.
+    fn fetch_from(
+        &self,
+        peer: &DeviceId,
+        sum: &[u8; 32],
+        size: u64,
+        part: &Path,
+        rx: &mpsc::Receiver<Got>,
+    ) -> Result<()> {
         if let Some(dir) = part.parent() {
             fs::create_dir_all(dir).context("make the folder of the copies' content")?;
         }
-        let mut f = OpenOptions::new().create(true).append(true).open(&part).context("keep the blob being fetched")?;
+        let mut f = OpenOptions::new().create(true).append(true).open(part).context("keep the blob being fetched")?;
         // What an earlier fetch left is continued.
-        let mut offset = f.metadata().map(|m| m.len()).unwrap_or(0).min(blob.size);
-        while offset < blob.size {
-            let len = FETCH_AHEAD.min(blob.size - offset);
-            if !self.send_to(peer, range(m::T_GET, &blob.sha256, offset, len)) {
+        let mut offset = f.metadata().map(|m| m.len()).unwrap_or(0).min(size);
+        while offset < size {
+            let len = FETCH_AHEAD.min(size - offset);
+            if !self.send_to(peer, range(m::T_GET, sum, offset, len)) {
                 return Err(Error::msg("the member is not connected"));
             }
             let end = offset + len;
@@ -218,7 +229,7 @@ impl Mesh {
                     Ok(Got::Chunk(_)) => {}
                     Ok(Got::Missing) => return Err(Error::msg("the member does not hold the blob")),
                     Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => {
-                        let _ = self.send_to(peer, range(m::T_GET, &blob.sha256, 0, 0));
+                        let _ = self.send_to(peer, range(m::T_GET, sum, 0, 0));
                         return Err(Error::msg(format!("no chunk came for {} s", CHUNK_WAIT.as_secs())));
                     }
                 }
@@ -226,6 +237,49 @@ impl Mesh {
         }
         f.flush().context("keep the blob being fetched")?;
         Ok(())
+    }
+
+    /// Fetches the archive of the release held whose SHA-256 is `sha` (in
+    /// hex) from a member connected that holds it, for cbb update, and
+    /// keeps it once it is whole and matches `release.json`; nothing when
+    /// it is held here already.
+    pub fn fetch_release_file(&self, sha: &str) -> Result<()> {
+        let r = self.releases().ok_or_else(|| Error::msg("this device keeps no release"))?;
+        let now = crate::uptime::wall_ms();
+        let a = r.file(sha, now).ok_or_else(|| Error::msg("the release this device holds lists no such file"))?;
+        if r.held(sha, now).is_some() {
+            return Ok(());
+        }
+        let sum: [u8; 32] = crate::releases::unhex(sha)
+            .and_then(|b| b.try_into().ok())
+            .ok_or_else(|| Error::msg(format!("{sha:?} is not a SHA-256")))?;
+        let size = u64::try_from(a.size).map_err(|_| Error::msg("the archive has no size"))?;
+        let (tx, rx) = mpsc::sync_channel(64);
+        {
+            let mut f = self.fetches.lock().unwrap();
+            if f.contains_key(&sum) {
+                return Err(Error::msg("this archive is being fetched already"));
+            }
+            f.insert(sum, tx);
+        }
+        let _place = Fetching { mesh: self, sum };
+        let part = r.files_dir()?.join(format!(".part-{sha}"));
+        let mut last = Error::msg("no member that serves files is connected");
+        let hellos = self.hellos();
+        let serving = |p: &DeviceId| hellos.get(p).is_some_and(|h| h.features & crate::hello::FEATURE_MEDIA != 0);
+        for p in self.connected().into_iter().filter(serving) {
+            let _ = fs::remove_file(&part);
+            match self.fetch_from(&p, &sum, size, &part, &rx).and_then(|()| r.keep_file(sha, &part, now)) {
+                Ok(()) => {
+                    let name = hellos.get(&p).map(|h| h.name.clone()).unwrap_or_default();
+                    self.logf(&format!("fetched {} from {name} for cbb update", a.name));
+                    return Ok(());
+                }
+                Err(e) => last = e.context(format!("from {}", hex(&p.0[..4]))),
+            }
+        }
+        let _ = fs::remove_file(&part);
+        Err(last)
     }
 
     /// Opens a copy's blob, held whole, into the new folder `out`: each
@@ -252,15 +306,23 @@ impl Mesh {
             return Ok(());
         }
         let length = length.min(FETCH_AHEAD);
-        let Some(size) = self.content.held(&sum) else {
+        // A sealed blob, else an archive of the release held whole.
+        let now = crate::uptime::wall_ms();
+        let releases = self.releases();
+        let blob = self.content.held(&sum);
+        let Some(size) = blob.or_else(|| releases.as_ref()?.held(&crate::releases::hex(&sum), now)) else {
             let _ = conn.tx.try_send(range(m::T_MISSING, &sum, offset, length));
             return Ok(());
+        };
+        let read = |at: u64, n: usize| match blob {
+            Some(_) => self.content.read(&sum, at, n),
+            None => releases.as_ref()?.read(&sum, at, n, now),
         };
         let end = offset.saturating_add(length).min(size);
         let mut at = offset;
         while at < end {
             let n = usize::try_from(end - at).unwrap_or(usize::MAX).min(wire::MAX_CHUNK_DATA);
-            let Some(data) = self.content.read(&sum, at, n) else {
+            let Some(data) = read(at, n) else {
                 let _ = conn.tx.try_send(range(m::T_MISSING, &sum, at, end - at));
                 return Ok(());
             };

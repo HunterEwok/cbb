@@ -4497,8 +4497,9 @@ it checks what it downloads.
   blocks the update servers, as one that syncs over AmneziaWG may be on, gets them through
   the group and its tunnel. Its `cbb update` (the daily timer, or by hand) asks its service
   (control operation `release_want`) for the archives of the held release that the
-  members' hellos name in `device` `archive` (section 4) and it does not hold whole, at most
-  16, downloads each from the server it checked the release from, checks it against
+  members seen since its service started name in their hellos, `device` `archive` (section 4;
+  on the records of 0.6 field 5 of the hello's `device` map, `msg::member::HELLO_DEVICE`),
+  and it does not hold whole, at most 16, downloads each from the server it checked the release from, checks it against
   `release.json` and hands it over as with `release_file`.
 - A member that does not know `release` ignores it, as it ignores every message of a type it does not know.
 

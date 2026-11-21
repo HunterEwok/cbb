@@ -424,6 +424,18 @@ impl Live {
 
     /// The known networks, where the member port takes connections and
     /// mDNS publishes this device.
+    /// On a hub, the archives of the release held that the devices seen
+    /// update from and this device does not hold whole, at most
+    /// `releases::MAX_WANTED`, for its cbb update to download; elsewhere none
+    /// (docs/protocol.md, section 16, "In the group").
+    pub fn wanted_release_files(&self) -> Option<Vec<String>> {
+        if !self.away().is_some_and(|a| a.is_hub_now()) {
+            return None;
+        }
+        let r = self.mesh.releases()?;
+        Some(r.wanted(&self.mesh.archives(), crate::uptime::wall_ms())).filter(|w| !w.is_empty())
+    }
+
     pub fn set_networks(&self, n: Arc<Networks>) {
         *self.networks.write().unwrap() = Some(n);
     }
