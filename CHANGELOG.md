@@ -2036,6 +2036,10 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The protocol's tunnel keys (section 11) and the design's hub describe sync away from home
+  on the records of 0.6: the `tunnel` and `hubs` messages, the offer's table, the hubs'
+  order, stopping a hub, the hub's key per period, obfuscation and VLESS as 0.6 carries them;
+  the messages of 0.5 stay described only for the phones' member until it moves.
 - On the records of 0.6 a hub that moves (`cbb global move`) keeps serving its clients away
   from home until the new hub serves and then for up to 5 minutes, while they meet the new
   hub at home or at the group's relay and take its offer there; only then does it tell them

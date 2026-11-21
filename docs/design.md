@@ -235,7 +235,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
-  `key_level`, `takeover_delay`, `incoming`, `hand_over`, `mute` and `unmute` of another
+  `key_level`, `incoming`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
@@ -246,57 +246,45 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   protocols, `cbb/4` and `cbb-pair/3`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestAloneRootWindow`). With the capability `admin`, it is a computer's service
-  before its own device record arrives: its hellos offer an admin key (in the hardware where
-  cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
-  admin with a member certificate from that CA. On such an admin `take_over` keeps the new
-  root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
-  two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
-  the root (`root_key`) and signs a new root's first records; as root the same loop gives
-  each connected admin whose admin CA is from an earlier root a new one for the same key, as
-  Go's `renewAdminCAs` (`TestAloneTakeover`). Any
-  member claims the group the same way with the recovery key (`recover`): the sheet's key,
-  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
-  claim under the recovery key's admin CA from the records or the sheet (`TestAloneRecovery`).
-- **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
-  group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
-  (`is_hub`, `endpoints`, `listen_port`, obfuscation kept or made), and its hellos offer the
-  hub's tunnel key. A member's hello with a tunnel key is admitted by Go's `Admit` rules
-  (`members`, at most 256) and answered with the hub's offer and the offers of the hubs
-  after it in the group's order. The hub serves while no hub above it has an offer: GotaTun
-  through `hub.rs` on the UDP port (8764 when none is set), each tunneled TCP connection to
-  the member port passed to a loopback listener of its own, where the node takes it only
-  from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
-  loop drops members the records refuse or no longer list. `hub off` passes the next hub's
-  offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
-  state as `retired` (`TestAloneHub`). With several hubs (`away/hubs.rs`, Go's `hubs.go`) it
-  sends each peer that may be a hub its `hubs` share after the hello, and again when it
-  starts or stops serving or admits a client; it takes the clients and the offer another hub
-  shares, and a device that stopped being a hub tells the computers and the possible hubs
-  so. The run loop serves only while no hub above answers: starting, it tries them once;
-  having lost the hub above, for a minute (`CBB_TEST_STANDBY_GRACE` in tests); while it serves,
-  every 15 minutes, and when a hub above shares that it serves, after passing that hub's
-  offer on to its clients and waiting for those in its tunnel to leave (`TestAloneHubs`). Hub
-  commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
-  `manage::Order::Hub`, signed by the admin and sealed to the receiver: `move` hands over the
-  clients and this device, passes the new hub's offer on as `moved` and keeps it as a
-  client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
-  Received, a hub command makes this device a hub at the order's addresses, serving at once
-  and answering with its offer in the result's `tunnel`, or with a stop order stops it after
-  the result went back (`TestAloneHubCommands`). A hub with a forwarder (`tunnel.json`'s
-  `forwarder`, from a request or a hub command; `default` stands for the project's, by the
-  pins this release knows) registers while it serves through the phones' `forward.rs`: its
-  member certificate with the roots, the group's records as the proof that it is the root or
-  an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestAloneHubForwarder`). Unless `-no-vless` turned it off it registers the group's VLESS user ID
-  (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
-  registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
-  connect again for the offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
-  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
-  DEVICE -forward-only` on an admin that admitted the device signs its record with
-  `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
-  without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
-  refuses paste and action commands (`TestAloneForwardOnly`).
+  (`Admission::accept`, `TestAloneRootWindow`). On the records of 0.6 a computer becomes an admin
+  only with the admin key it offered, with its proof over the pairing session, when it
+  paired with the root: the root keeps that key by device (`offered.json`) and `make_admin`
+  writes it into the device's record, so no admin CA travels (D-118). The root changes only
+  with the group's recovery key (rule 33, D-117): `take_over`, `takeover_delay` and
+  `hand_over` answer an error that points to `cbb recovery`, and an admin keeps its rights
+  (`TestAloneTakeover`). `recover` takes the sheet's text or its QR code's
+  (`cbb_core::sheet`), checks it against the group's recovery keys, leaves out the devices
+  `-leave` names, makes a new root key and writes the change of root with both halves of the
+  recovery key, then restarts to sign with the new key; a device the records name the root
+  already is refused, and the other members follow the new root (`TestAloneRecovery`). A
+  recovery key on a YubiKey is not done yet on 0.6.
+- **The hub.** On the records of 0.6 (`member/src/live/away.rs`; docs/protocol.md, section
+  11) a device the records allow a hub (named in the root's hubs record, or an admin) becomes
+  one with `cbb global hub` or a `hub` command: the state in `tunnel.json` becomes a hub's,
+  with its port, addresses, obfuscation and forwarder. A device with sync away from home on
+  sends each possible hub `tunnel` (t 15) with its key toward that hub and the tag of the
+  connection's exported pre-shared key, at home or at the group's relay alike; the hub keeps
+  the key (`away/held.rs`) and answers with its offer, which no hub passes on to another
+  (A-22). The hub serves while no hub above it in the records' order said it serves (`hubs`,
+  t 16), and again a minute after it lost the last such hub (`CBB_TEST_STANDBY_GRACE` in
+  tests): GotaTun through `hub.rs` on the UDP port (8764 when none is set), one tunnel per
+  pre-shared key it accepts of each client, each tunneled TCP connection to the member port
+  passed to a loopback listener of its own, where the node takes it only from the device
+  whose tunnel address it came from. Its key changes with the period of its forwarder's face,
+  the next key offered ahead (`Away::rotate_live`). Hub commands go through the core's
+  `Order::Hub`, signed and sealed to the receiver: field 10 names the hub by its address and
+  member key, field 11 the forwarders with the pins the root signs (D-121); `hub off -on`
+  sends a stop order, after which the hub sends its clients `moved`. `move` makes the new
+  hub one and keeps serving its clients until the new hub serves and then up to five minutes,
+  while they meet the new hub at home or at the relay (option C of D-122, `TestMoveHub`;
+  `CBB_TEST_MOVE_LINGER` in tests). A hub with a forwarder registers with the hubs'
+  credential of the forwarder's face (`TestAloneHubCredential`), keeps the forwarder's VLESS
+  settings once the registration returns them and has the members connect again for the
+  offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). The root signs the `hubs`
+  record and sends `away-off` (`Order::AwayOff`) to another device. `hub -on DEVICE
+  -forward-only` on the root signs the device's record with `forward_only` first; an
+  admin's is refused as not done yet (D-122). Such a member takes the hub command, seals no
+  copies and refuses paste and action commands (`TestAloneForwardOnly`).
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in

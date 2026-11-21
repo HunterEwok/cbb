@@ -2999,148 +2999,87 @@ records; in random orders beyond) and check the same bytes.
 ## 11. Tunnel keys
 
 The keys of the group's WireGuard tunnel for sync away from home ([design.md](design.md),
-"Sync away from home"). Implemented in the Rust `cbb` (`member/src/tunnel.rs`,
-`member/src/away.rs`, `member/src/node.rs`); the tunnel carries the member protocol between
-members ("Through the tunnel" below). The phone kits speak the hello's `tunnel_key` and the
-`tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
-event, `send_tunnel`) and run the tunnel itself in
-the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
-the offer and hand them to the tunnel. `cbb` on Linux takes part as a client, with
-plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
-(`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
-XHTTP (`member/src/vless.rs`).
+"Sync away from home"), on the records of 0.6. Implemented in the Rust `cbb`: the device's
+side in `member/src/live/away.rs` and `member/src/away/toward.rs`, the offer in
+`member/src/away/offer.rs`, the hub's side in `member/src/away/held.rs`,
+`member/src/away/serve.rs` and the tunnel's hub in `member/src/hub.rs`, the keys and tags in
+`core/src/hubkey.rs`; the tunnel carries the member protocol between members ("Through the
+tunnel" below). `cbb` runs GotaTun's WireGuard and smoltcp's TCP in its process
+(`member/src/tunnel.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over XHTTP
+(`member/src/vless.rs`). The phones' member keeps the messages of 0.5 until the phones move
+to the records of 0.6 (D-122; "Until the phones move to the records of 0.6" below).
 
-On the records of 0.6 (moving now; this section is rewritten when the move ends) a device
-sends no key in its hello. On each member connection with a device that may be its hub (the
-records give it an admin key or the root's hubs record names it), while sync away from home is
-on, it sends `tunnel` (t 15): field 2 its WireGuard key toward that hub, derived from its
-tunnel secret and the hub's ID, field 3 the confirmation tag of the pre-shared key both ends
-export from that connection's TLS (`core/src/hubkey.rs`). It keeps, per hub, the last 8 keys it
-sent, the one the hub confirmed and the one of its last handshake (`toward` in `tunnel.json`,
-`member/src/away/toward.rs`, `member/src/live/away.rs`). A member takes `tunnel` from any
-current member of the group (in the records, not frozen), and `hubs` (t 16) only from a device
-that may be a hub. The hub answers with a `result` (t 10) whose field 2 is the first 16 bytes
-of SHA-256(`cbb offer id v1` ‖ 0x00 ‖ the tag) (`hubkey::offer_id`), field 3 the hub, and field 6 its offer (table `offer`), which the device keeps as
-that hub's, the tag it carries in field 8 confirming the key (`member/src/away/offer.rs`):
+- Sync away from home is off by default; nothing in this section happens on a device until
+  the user turns it on there (`cbb global on`, the control operation `away`). A device whose
+  tunnel secret sits in a file (every one but a Linux computer with a TPM, which seals it,
+  section 17) MUST ask for the user's consent first (`consent` in the request). The device
+  keeps this section's state in `tunnel.json` next to the group's records (mode 0600); a
+  device that moves to another group turns sync away from home off and deletes it.
+- A device sends no key in its hello. On each member connection with a device that may be its
+  hub (the records give it an admin key or the root's hubs record names it), while sync away
+  from home is on, it sends `tunnel` (t 15): field 2 its WireGuard key toward that hub,
+  derived from its tunnel secret and the hub's ID, field 3 the confirmation tag of the
+  pre-shared key both ends export from that connection's TLS (`hubkey`). It keeps, per hub,
+  the last 8 keys it sent, the one the hub confirmed and the one of its last handshake
+  (`toward` in `tunnel.json`). The relay's member connections (section 14) count as any
+  other: a device meets its hubs there too.
+- A member takes `tunnel` from any current member of the group (in the records, not frozen),
+  and `hubs` (t 16) only from a device that may be a hub. The hub answers `tunnel` with a
+  `result` (t 10) whose field 2 is the first 16 bytes of SHA-256(`cbb offer id v1` ‖ 0x00 ‖
+  the tag) (`hubkey::offer_id`), field 3 the hub, and field 6 its offer (table `offer`, below),
+  which the device keeps as that hub's, the tag in the offer's field 8 confirming the key.
+  An offer comes only from the hub itself: no hub passes on another's offer or clients (A-22).
+- All of this happens inside member TLS, so a device gets into the tunnel only after it met
+  the hub as a member, and only with the key it sent on such a connection. A device that is
+  not yet a member reaches a hub from the internet only with a remote invitation's guest key
+  (section 12). No signed record binds the key: the connection's exported key does.
+- When the records remove or freeze a device, the hub MUST forget its keys at once.
+
+The offer (table `offer`, `core/src/msg/tables.rs`):
+
+| Field | Name | Meaning |
+|-------|------|---------|
+| 1 | `hub-key` | the key the hub serves WireGuard under, 32 bytes, not all zeros |
+| 2 | `endpoints` | the hub's addresses away from home, at most 8, each once; its forwarder's last (section 13) |
+| 3 | `obfuscation` | the group's AmneziaWG settings ("Obfuscation" below); absent for plain WireGuard |
+| 4 | `vless` | the way to the hub's forwarder over VLESS ("VLESS" below) |
+| 6 | `moved` | the hub is no hub any more: the device forgets its offer and takes the next hub in the order ("Moving the hub", "Stopping a hub") |
+| 7 | `next-key` | the key the hub serves with in the next period ("The hub's key" below); the obfuscation and VLESS stay the same |
+| 8 | `confirm` | the confirmation tag of the pre-shared key the hub holds newest for this device |
+| 9 | `endpoint-keys` | per endpoint, the key the hub serves under there (its key for that forwarder's face, section 18); an endpoint without one uses field 1 |
+
+Field 5 is not used. The device reads it so:
 
 - the way over VLESS goes to the offer's forwarder endpoint, the first in field 2 that field 9
   gives a key of its own (else the first): on `vless/port` when present, with `vless/host` as
   the TLS server name and HTTP Host (the endpoint's host when absent), always over XHTTP in
-  0.6; a later transport comes in a new field that 0.6 skips;
+  0.6; a later transport comes in a new field that 0.6 skips. An offer whose way over VLESS
+  has no `vless/host` is refused: the forwarder's XHTTP front is checked by the system's
+  certificate authorities under a site's name, which an address is not. One without
+  `vless/path` is refused too: the path comes from the forwarder's answer to the hub's
+  registration;
 - `obfuscation` without `obfuscation/key` protects no headers (plain AmneziaWG junk and
-  headers); a padding (`obfuscation/s`) is 0 to 1280 bytes, at least 16 with header protection,
-  and the member takes the table's whole range of junk (`jc` up to 128, `jmax` up to 1280);
-- with `next-key` the obfuscation and VLESS stay the same;
-- an offer with `moved` makes the device forget that hub; it takes the next one in the hubs'
-  order.
+  headers).
 
-Away from home, when no hub is connected or at home, the device dials a hub it holds an offer
-of through the tunnel (`member/src/live/away.rs`): under its key toward that hub, with one
+Away from home, when no hub is connected at home, the device dials a hub it holds an offer of
+through the tunnel (`member/src/live/away.rs`): under its key toward that hub, with one
 pre-shared key at a time in the order above, over every way of the hub at once (one per key
 the hub serves under: its own on the endpoints no face names, each face's on its endpoint, the
 way over VLESS with its forwarder's face, and the same with `next-key`). The key whose
 handshake the hub answers is noted, and the member connection runs through that link.
 
-The hub's tunnel (`member/src/hub.rs`) holds, per client, every pre-shared key it accepts (at
-most 6: the last 4 received and the last 2 handshakes', `hubkey::HubSide::accepts`) as one
-WireGuard tunnel each. An initiation is answered under each of them; the client takes the
+The hub keeps, per client, its key toward the hub and the hub's `HubSide` (`held` in
+`tunnel.json`). On a `tunnel` whose tag is the one of the connection's exported key it keeps
+the key (a key another client or the hub itself holds is refused, and a new key toward the hub
+starts afresh), answers with its offer, and gives its tunnel the client's keys; a client whose
+keys alone changed keeps the tunnels of the keys that stay, so a connection through the tunnel
+survives its own `tunnel`. The tunnel holds, per client, every pre-shared key the hub accepts
+(at most 6: the last 4 received and the last 2 handshakes', `hubkey::HubSide::accepts`) as
+one WireGuard tunnel each. An initiation is answered under each of them; the client takes the
 answer under its own key, and its first data names the hub's session of that key, which
-carries what goes to the client from then on.
-
-A hub of 0.6 keeps, per client, its key toward the hub and the hub's `HubSide` (`held` in
-`tunnel.json`, `member/src/away/held.rs`). On a `tunnel` whose tag is the one of the
-connection's exported key it keeps the key (a key another client or the hub itself holds is
-refused, and a new key toward the hub starts afresh), answers with its offer, and gives its
-tunnel the client's keys; a client whose keys alone changed keeps the tunnels of the keys that
-stay, so a connection through the tunnel survives its own `tunnel`. Its offer names its
-endpoints, the forwarder's last with the key the hub serves there (field 9), and VLESS with the
-forwarder's site's name, port and path. The key a handshake took is kept among the last 2
-(`member/src/live/away.rs`).
-
-An offer whose way over VLESS has no `vless/host` is refused: the forwarder's XHTTP front is
-checked by the system's certificate authorities under a site's name, which an address is not.
-One without `vless/path` is refused too: the path comes from the forwarder's answer to the
-hub's registration.
-
-The hubs of 0.6 serve in the order `State::hub_order` derives from the records alone
-(`core/src/records/eval.rs`): the devices of the root's hubs record first, in the record's
-order (the user's, not sorted), then the other devices with an admin key, the computers before
-the phones, in each part the root's own device first, then by device ID; frozen devices are
-left out. A device tries the hubs whose offers it keeps in that order, and none outside it.
-A hub that serves sends `hubs` (t 16) with field 3 (serving, 1) to each connected device that
-may be a hub, after the hello and when it starts serving, and field 2 (stopped, 1) when it
-stops being a hub; exactly one of the two, else the message is refused
-(`hubkey::read_hubs`, `hubs/shape`). A hub stands by, with no tunnel, while a hub above it in
-the order is connected and said it serves, and serves again a minute after it lost the last
-such hub (`member/src/live/away.rs`). Hubs pass neither offers nor clients: a client learns a
-hub's offer only from its own `tunnel` to that hub.
-
-- Sync away from home is off by default; nothing in this section happens on a device until
-  the user turns it on there (`cbb global on`, the control operation `away`). Go turns it on
-  by writing `tunnel.json` next to the identity
-  (mode 0600), which holds the device's own Curve25519 key pair, made on the device, and the
-  rest of this section's state; on a Linux computer with a TPM the private key is sealed by
-  it (`key_tpm` in place of `key`, section 17). `cbb` keeps its own `tunnel.json` there: `v` (1),
-  `group` (the group tag), `key` (its private key, base64), `psk` (the preshared key it chose)
-  and `hubs`, each hub's offer (`device`, `key`, `psk`, `endpoints`, `next`). A device whose tunnel key sits in a file (every
-  one but a Linux computer with a TPM) MUST ask for the user's consent before it turns sync
-  away from home on (`consent` in the request).
-- Each member's hello carries `tunnel_key`, its public key, and `tunnel_psk`, a preshared
-  key of 32 random bytes it made with the key pair: 32 bytes each. When the user turns sync
-  away from home on or off, or makes the device a hub, the member tells its peers in a
-  `presence` message (section 4, "Presence") instead of connecting again. A member where sync
-  away from home is off, or whose tunnel state cannot be read, sends neither, and syncs at
-  home only.
-- A hub is a member chosen on that member (`cbb global hub`; `is_hub`,
-  `endpoints`, `listen_port` and `forwarder` in its `tunnel.json`); a group can have several
-  ("Several hubs" below). When
-  a peer's hello carries `tunnel_key`, the hub admits it for the peer's device ID together
-  with the certificate chain the peer presented in this connection's TLS handshake, and
-  answers with `{"t":"tunnel","tunnel":{"hub_key":...,"psk":...,"endpoints":[...]}}`:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `hub_key` | bytes | the hub's public key, 32 bytes |
-| `psk` | bytes | the member's own WireGuard preshared key, 32 bytes: the one its hello offered |
-| `endpoints` | array of strings or absent | the hub's addresses away from home, `ip:port` or `[ipv6]:port`, at most 8; its forwarder's last (section 13) |
-| `obfuscation` | object or absent | the group's AmneziaWG settings ("Obfuscation" below); absent for plain WireGuard |
-| `vless` | object or absent | the way to the hub's forwarder over VLESS ("VLESS" below); with it, the endpoints are tried over UDP only with `obfuscation` |
-| `hub` | string or absent | in an offer one hub passes on for another: that hub's device ID ("Several hubs", "Moving the hub" below) |
-| `moved` | bool or absent | `true` when the sender is no hub any more and hands its clients over to `hub` |
-| `next_key` | bytes or absent | the key the hub serves with in the next period, 32 bytes ("The hub's key" below) |
-| `next_obfuscation` | object or absent | with `next_key` and `obfuscation`: the AmneziaWG settings that go with the next key; absent for the same as `obfuscation` |
-| `next_vless` | object or absent | with `next_key` and `vless`: the way over VLESS that goes with the next key, with a new user ID and the path made for it; absent for the same as `vless` |
-
-- The hub keeps one preshared key per device: the one the device's hello offers, so every
-  hub of the group uses the same. From a member without `tunnel_psk` it keeps the one it
-  had, and makes a new one for a new key. It MUST refuse a key that another device or the hub
-  itself has, and keeps at most 256 devices. It sends the offer on every connection whose
-  hello carries a key, so a member learns new endpoints the next time it connects.
-- A member MUST keep an offer only from a device that may be a hub: the group's root, an
-  admin (by its records, or an admin CA in its verified chain), or a device whose newest
-  record has `forward_only` ("Two kinds of hub" below). The record that makes the peer so
-  must name the key of the certificate it presented, not only its device ID, and never the
-  role its hello claims. It keeps one offer per hub, by the hub's device ID: the sender's, or
-  the one its `hub` names when the records make that device one that may be a hub and it is
-  not the member itself, which it ignores. A new offer for a hub replaces that hub's earlier one;
-  `moved` also makes the member forget the sender's own. An offer that does not decode is
-  ignored and changes nothing. Go, both kits and `cbb` all apply these rules.
-  `cbb global hub` refuses on a device that may not be a hub. A phone that is the hub ignores
-  offers. The tunnel addresses follow from the device IDs (fd00:cbb::/32 followed by the
-  first 96 bits of the ID), so the offer does not carry them.
-- A phone can be the hub while its app is open ([design.md](design.md), "The phone as the
-  hub", D-64): its member in the Rust core listens for member connections (`listen`; the
-  tunnel's hub in the Rust core leads each connection through the tunnel to that port) and
-  the app admits clients and answers with the offer by the rules above (`PhoneHub`, from the
-  member's `peer` events); the tunnel's `hub_set_clients` takes the clients it keeps.
-- When records revoke a device (section 10, "Certificates", on the chain it presented), the hub
-  MUST forget its key at once.
-- All of this happens inside member TLS, so a device gets into the tunnel only after it met
-  the hub as a member, with the key that member sent. A device that is not yet a member
-  reaches the hub from the internet only with a remote invitation's guest key (section 12).
-  No signed record binds the key: the member certificate already does.
-- A member that moves to another group turns sync away from home off: it deletes
-  `tunnel.json` (whose `group` names the old group), and the user turns it on again.
+carries what goes to the client from then on. The key a handshake took is kept among the last
+2. Its offer names its endpoints, the forwarder's last with the key the hub serves there
+(field 9), and VLESS with the forwarder's site's name, port and path.
 
 ### Moving the hub
 
@@ -3171,244 +3110,170 @@ of 0.6 no hub passes on another's offer or clients, and no wire is added for a m
 A client away with neither home nor a relay holds no offer of the new hub at the move: it
 loses the hub until it meets the new hub, at home or at a relay, and takes its offer there.
 
-When an admin phone takes the group over from a lost root phone that was the hub, it turns
-its own hub on; the clients keep its offer as any hub's.
-
 ### Several hubs
 
-The group's root, its admins with `hub` and its devices with `forward_only` are its hubs,
-in an order every member derives from the records alone: the computers that are the root or
-admins first (a computer stays on, so every client keeps one place), then the phones (a phone
-is a hub only while its app is open), then the devices with `forward_only`; within each, the
-root first, then by device ID (D-96). The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
-order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and `cbb`
-(`hub_order`) must all derive. The root, or an admin with `hub`, may sign a table of main
-hubs in the user's order (a `hubs` record, section 10, "The hubs table"; `cbb global hubs`):
-its hubs come first, in its order, then the others in the derived order (D-65 in
-[design.md](design.md)).
+The hubs of 0.6 serve in the order `State::hub_order` derives from the records alone
+(`core/src/records/eval.rs`): the devices of the root's hubs record first, in the record's
+order (the user's, not sorted; `cbb hubs`, the control operation `hubs`), then the other
+devices with an admin key, the computers before the phones, in each part the root's own device
+first, then by device ID; frozen devices are left out. The root is a hub only when its hubs
+record names it or the user makes it one there.
 
-- A member keeps every hub's offer and, away from home, uses the first hub in the order that
-  answers: it tries them in turn, each at the next of its endpoints. On a hub below the
-  first it ends the connection after 5 minutes and tries the hubs above again. A hub found
-  on the home network, or connected directly, counts as answering. Hubs outside the order
-  are not tried.
-- Since every member offers its own preshared key, a hub can serve a member it never met,
-  given the member's public key. A hub sends each peer that may be a hub, after the hello,
-  `{"t":"hubs","hubs":{...}}`:
-
-| Field | Type | Meaning |
-|-------|------|---------|
-| `stopped` | bool or absent | `true`, alone, from a device that stopped being a hub ("Stopping a hub" below) |
-| `serving` | bool or absent | `true` while the sender serves its clients as the hub |
-| `offer` | object or absent | the sender's offer, without `psk` |
-| `clients` | array or absent | the sender's clients, each `device`, `key` and `psk`, the sender itself among them, without the receiver; at most 256 |
-
-- The receiver takes the message only from a device that may be a hub, by the same check
-  as an offer. On a hub it takes each client its records list, other than itself, as it
-  takes the clients a hub command hands over ("Moving the hub"): a client it met keeps its
-  own keys. Every receiver keeps the sender's offer with its own preshared key, as that
-  hub's. A hub sends the message again to the connected hubs when it starts or stops
-  serving, and when it admits a client it did not have, so that the other hubs know every
-  client before this hub is off.
-- A computer's hub serves only while no hub above it answers, and is otherwise a client of
-  the first that does. Starting, it tries the hubs above it once, then serves. It stops
-  serving when a hub above it says it serves, or offers its tunnel: first it passes that
-  hub's offer on to its connected clients and waits for those through its tunnel to leave, as
-  a hub that moves does, since a client far from home may know only this hub. Once it loses
-  the hub above, it tries the hubs above for a minute and then serves again. While it serves with
-  hubs above it, it tries them as a client every 15 minutes.
-- A hub passes the other hubs' offers on to its clients, each with the client's own
-  preshared key and `hub`, so a client that met only one hub learns them all.
-- An admin makes another admin computer, or a computer it has given `forward_only`, a hub
-  with a `hub` command (section 15), as a hub that moves does, but stays what it is: `cbb global hub -on DEVICE`, "Make it a hub" in the
-  apps. A hub hands it its clients; a sender with sync away from home on hands itself too and
-  keeps the new hub's offer from the result. The receiver takes it as in "Moving the hub" and
-  refuses while sync away from home is off there, which only its own user turns on (D-45).
-- A phone that is the hub shares its clients, takes the others' and passes their offers on,
-  but does not yet stop serving for a hub above it, nor become another hub's client. Its
-  clients move to a computer's hub above it as any client below the first does, after 5
-  minutes, and a computer's hub keeps serving while the phone serves.
+- A device tries the hubs whose offers it keeps in that order, and none outside it. It learns
+  a hub's offer only from its own `tunnel` to that hub.
+- A hub that serves sends `hubs` (t 16) with field 3 (serving, 1) to each connected device
+  that may be a hub, after the hello and when it starts serving, and field 2 (stopped, 1)
+  when it stops being a hub; exactly one of the two, else the message is refused
+  (`hubkey::read_hubs`, `hubs/shape`). Fields 4 and 5 are not used: hubs pass neither offers
+  nor clients.
+- A hub stands by, with no tunnel, while a hub above it in the order is connected and said
+  it serves, and serves again a minute after it lost the last such hub
+  (`member/src/live/away.rs`); a hub that moves does not stand by ("Moving the hub" above).
+- An admin, or the root, makes a device the records allow a hub with a `hub` command (section
+  15): field 10 names the hub by its address away from home and the hash of its member key,
+  and a receiver whose key it does not name refuses; field 11 lists the forwarders with the
+  pin the root signs for each (D-121). `cbb global hub -on DEVICE`, "Make it a hub" in the
+  apps. The receiver refuses while sync away from home is off there, which only its own user
+  turns on (D-45).
 
 ### Two kinds of hub
 
 Copies are sealed end to end (section 4), so a hub needs no more trust than the members it
 passes them between. A group has two kinds of hub, chosen when a device is made one (D-84):
 
-- A **trusted hub** is the root or an admin with `hub`, as in the rest of this section. It
-  reads the copies as every reader does, and as an admin it admits devices; the group's key
-  level (section 17) applies to it as to every admin.
-- A hub that **only passes copies on** is a computer whose newest device record has
-  `forward_only` (section 10), signed by the root or an admin with `admit` and `hub`. No copy is sealed to
-  it, so it reads none; it makes no copies (every member refuses one whose origin has
-  `forward_only`, section 4, "Opening"), writes none to a clipboard and takes no `paste`
-  or `action` command. It holds no CA key, so it makes no remote invitation (section 12): a
-  device far away joins through a trusted hub, or at home. No key level applies to it, since
-  whoever takes its keys can hold copies back and learn what any member in between learns
-  (section 4, "What the members in between see"), and nothing more: an always-on board
-  whose keys sit in files serves as well as any.
+- A **trusted hub** is the root or an admin, as in the rest of this section. It reads the
+  copies as every reader does, and as an admin it admits devices; the group's key level
+  (section 17) applies to it as to every admin.
+- A hub that **only passes copies on** is a computer whose device record has `forward_only`
+  (section 10), which on 0.6 the group's root alone signs, naming it in the hubs record too;
+  an admin's order for one is refused as not done yet (D-122). No copy is sealed to it, so it
+  reads none; it makes no copies (every member refuses one whose origin has `forward_only`,
+  section 4, "Opening"), writes none to a clipboard and takes no `paste` or `action` command.
+  It holds no admin key, so it makes no remote invitation (section 12): a device far away
+  joins through a trusted hub, or at home. No key level applies to it, since whoever takes
+  its keys can hold copies back and learn what any member in between learns (section 4,
+  "What the members in between see"), and nothing more: an always-on board whose keys sit in
+  files serves as well as any.
 
-An admin makes a computer such a hub by signing it a device record with `forward_only` and
-then sending it a `hub` command (`cbb global hub -on DEVICE -forward-only`; the apps' "Make
-it a hub", "Only passes copies on"). A hub of one kind becomes the other: to trust it, the root
-makes it an admin, which checks the key level then, and the record that names its admin key
-leaves `forward_only` out (any admin with `admit` may sign it a record without it, as it may
-admit a device that reads copies anyway); to make a trusted hub only pass copies on, an admin with
-`remove-admins` revokes its admin key and signs it a record with `forward_only`. From the
-next copy on, the copies are sealed to it, or no longer.
+The root makes a computer such a hub with `cbb global hub -on DEVICE -forward-only` (the apps'
+"Make it a hub", "Only passes copies on"): it signs the record and then sends the `hub`
+command.
 
 ### Stopping a hub
 
 A hub stops being one by its own user's word (`cbb global hub off`, "Stop being the hub" on
-the device's own page in the Mac app and the tray app) or by an admin's: a `hub` command
-whose order is `{"stop":true}` and nothing else (section 15; `cbb global hub off -on DEVICE`,
-"Stop being the hub" on another device's page). Implemented in Go
-(`internal/service/stophub.go`); both kits and the Rust core accept the order; `TestStopHub`
-stops one of two hubs, then the only one.
+the device's own page in the Mac app and the tray app) or by an admin's: a `hub` command whose
+order is `stop` and nothing else (section 15; `cbb global hub off -on DEVICE`, "Stop being the
+hub" on another device's page).
 
-1. The hub, which must be one, takes the first other hub in the group's order whose offer it
-   keeps, the next hub. Without one it refuses, unless the user agreed that the devices away
-   from home stop syncing until a device is a hub again (`-yes`; the apps ask first); a
-   receiver of the command never refuses for that reason, since its sender asked.
-2. With a next hub, it sends each client connected to it the next hub's offer with that
-   client's own preshared key, `hub`, the next hub's device ID, and `moved`, and waits for
-   the clients through its tunnel to leave, as a hub that moves does ("Moving the hub").
-3. It becomes a client with the offers it keeps, marks itself `retired` in `tunnel.json`,
-   and sends `{"t":"hubs","hubs":{"stopped":true}}` to its connected peers that are
-   computers or may be hubs, and on each later connection to them while it stays retired.
-   A receiver that keeps the sender's offer forgets it by the rules of an offer (only from
-   the root or an admin), and a member that reached the group through it tries the others.
-   Becoming a hub again clears `retired`.
+1. Without another hub in the group's order the sender refuses, unless the user agreed that
+   the devices away from home stop syncing until a device is a hub again (`-yes`; the apps
+   ask first); a receiver of the command never refuses for that reason, since its sender
+   asked.
+2. The hub sends each client connected to it an offer that says it `moved`, so that the
+   client takes the next hub in the order whose offer it holds, and drops its hub settings;
+   its tunnel stops.
+3. It sends `hubs` with `stopped` to its connected peers that may be hubs, so that a hub
+   below it that stood by serves.
 
-The receiver of the command answers `done` first and then stops, after the result has gone
-back. The sender forgets the stopped hub's offer at once. A phone or a small device that was
-away and not connected keeps the old hub's offer until a hub passes it a newer one; it tries
-the hubs in order, so the stopped one costs it a try.
+The receiver of the command answers `done` first and then stops. A device that was away and
+not connected keeps the stopped hub's offer until it meets a hub again; it tries the hubs in
+order, so the stopped one costs it a try.
 
 ### The hub's key
 
-A hub serves its clients with a WireGuard key of its own for each period of the group's
-server credentials (section 18), apart from the key its hello offers, and with AmneziaWG
-settings and a VLESS user ID of that period, so that a server on the way, such as the
-forwarder, cannot link the group's traffic from one period to the next by the hub's key, its
-obfuscation or its user ID. Implemented in the Rust `cbb` (`State::rotate` in
-`member/src/tunnel.rs`, `member/src/away/serve.rs`); a phone that is the hub serves with the
-key its hello offers and keeps its settings.
+A hub serves its clients with a WireGuard key of its own for each period of its forwarder's
+face (section 18), apart from its key at home, so that a server on the way, such as the
+forwarder, cannot link the group's traffic from one period to the next by the hub's key.
+Implemented in the Rust `cbb` (`State::rotate` in `member/src/tunnel.rs`, `Away::rotate_live`
+in `member/src/away/serve.rs`, called from `serve_hub` in `member/src/live/away.rs`).
 
-- A hub that sees a period always holds the next key, made at random, with the next
-  obfuscation settings when it is obfuscated and the next VLESS user ID when its clients come
-  over VLESS. Its offers give them from then on as `next_key`, `next_obfuscation` and
-  `next_vless` (the offer's `vless` with the next user ID and the path the forwarder makes
-  for it, section 13, "VLESS"), to every connected client at once and to the others when
-  they connect.
+- The period is the tag of its forwarder's face, else of the project's forwarder's; without
+  either, the hub keeps its key.
+- A hub that sees a period always holds the next key, made at random, which its offers give
+  as `next-key` from then on, to every connected client at once (they connect again and take
+  the offer with their next `tunnel`) and to the others when they meet it.
 - When a period comes that it serves with no key for, and at least three days after it made
-  the next key, it serves with the next key and settings in place of the old ones: it starts
-  its tunnel again, registers again with its forwarder (section 13) under the new period, and
-  makes the key and settings after them at once. Until then it stays registered under the
-  period it serves with, with the credential it last had for it, so the forwarder never sees
-  a new period with the keys and settings of the one before; one that starts again in between
-  registers under the new period. Until the first period, and in a group without server
-  credentials, it serves with the key its hello offers; the first period it serves three
-  days after it came.
-- `tunnel.json` keeps the key the hub serves with (`serving`, or `serving_tpm` when the TPM
-  seals it, and `serving_for`, the period's tag), the next one (`next`, `next_tpm`,
-  `next_for`, the period it was made in, and `next_at_ms`, from when it may serve with it),
-  and the settings that go with it (`next_obfuscation`, `next_vless_id`); a client keeps a
-  hub's `next_key`, `next_obfuscation` and `next_vless` as `next`, `next_obfuscation` and
-  `next_vless` in its offer.
-- A client tries a hub with its key and, when the offer has one, with `next`, the latter with
-  `next_obfuscation` and `next_vless` in place of `obfuscation` and `vless` where the offer has
-  them, so a client that was away while the hub moved on still reaches it; the offer it gets
-  then replaces the one it kept. The Rust `cbb` (`hubs_to_try` in `member/src/tunnel.rs`,
-  `member/src/away.rs`) tries both at once and keeps the one that answers, waiting long
-  enough for each to go through all its ways (10 s at each address, then VLESS), so the key
-  the hub no longer serves with costs no time; the phone kits (`TunnelOffer.withNextKey`) try
-  them in turn, the old key first. A client
-  that was away for the whole period before and never got `next` reaches the hub again at
-  home.
-- A receiver MUST refuse an offer whose `next_obfuscation` or `next_vless` comes without
-  `next_key`, or without `obfuscation` or `vless`, and settings for the next key that it would
-  refuse for the present ones.
-- A hub refuses a client or another hub's offer with any of its own keys.
+  the next key, it serves with the next key in place of the old one: it starts its tunnel
+  again, registers again with its forwarder (section 13) under the new period, and makes the
+  key after it at once.
+- `tunnel.json` keeps the key the hub serves with, the next one and the period each is for.
+- A client tries a hub with its key and, when the offer has one, with `next-key`, both at
+  once, and keeps the one that answers, so a client that was away while the hub moved on still
+  reaches it; the offer it gets then replaces the one it kept. A client that was away for the
+  whole period before and never got `next-key` reaches the hub again at home or at the
+  group's relay.
+- A hub refuses a client key that is one of its own keys.
 
 ### Obfuscation
 
 A hub speaks AmneziaWG instead of plain WireGuard unless the user turned it off (`cbb global
-hub -no-obfuscate -no-vless`; `obfuscation` in its `tunnel.json`). Its offer carries the settings,
-with AmneziaWG's own names; every client sets them on its end before the hub as its peer:
+hub -no-obfuscate -no-vless`). Its offer carries the settings in field 3 (table
+`obfuscation`); every client sets them on its end before the hub as its peer:
 
-| Field | Type | Meaning |
+| Field | Name | Meaning |
 |-------|------|---------|
-| `jc`, `jmin`, `jmax` | numbers | junk packets of random bytes before each handshake: `jc` (0 to 16) of them, `jmin` to `jmax` bytes (at most 1000) |
-| `s1`, `s2`, `s3`, `s4` | numbers | random bytes in front of the handshake initiation, the response, the cookie reply and each data message: 16 to 64; the three padded handshake messages differ in size |
-| `h1`, `h2`, `h3`, `h4` | strings | `"min-max"`: the range each of those messages' type field is drawn from, in the same order; above 4, not overlapping |
-| `header_protection_key` | base64 | 32 bytes: the key of the header protection, which encrypts the rest of each message's header with the first 12 bytes of its padding as the ChaCha20 nonce |
+| 1, 2, 3 | `jc`, `jmin`, `jmax` | junk packets of random bytes before each handshake: `jc` (1 to 128) of them, `jmin` to `jmax` bytes (at most 1280) |
+| 4 | `s` | up to 4 paddings, 0 to 1280 bytes each: random bytes in front of the handshake initiation, the response, the cookie reply and each data message, at least 16 with header protection |
+| 5 | `h` | up to 4 ranges, each a pair of 32-bit numbers: the range each of those messages' type field is drawn from, in the same order; above 4, not overlapping |
+| 6 | `key` | 32 bytes, optional: the key of the header protection, which encrypts the rest of each message's header with the first 12 bytes of its padding as the ChaCha20 nonce; absent, no header is protected |
 
 - A receiver MUST refuse settings outside these bounds and not start the tunnel, and also
-  when `header_protection_key` is all zero, or when two of the padded handshake messages
-  would have the same size: the initiation is 148 + `s1` bytes, the response 92 + `s2` and
-  the cookie reply 64 + `s3`, and the three MUST differ.
+  when `key` is all zero, or when two of the padded handshake messages would have the same
+  size: the initiation is 148 + its padding, the response 92 + its padding and the cookie
+  reply 64 + its padding, and the three MUST differ.
 - The header protection, the padding and the type ranges are AmneziaWG's, as the
   amneziawg-go version in `go.mod` implements them (`device/send.go`, `device/receive.go`;
   a copy with three changes unrelated to the wire is in `internal/third_party/amneziawg-go`).
   An implementation MUST follow that version byte for byte.
-- The hub makes the settings at random (docs/design.md, "Blocked networks") and keeps them
-  for a period of the group's server credentials, then serves with the next ones its offers
-  gave ahead of time ("The hub's key" above). Switching obfuscation on or off changes them;
-  each client gets the new ones the next time it meets the hub at home.
+- The hub makes the settings at random (docs/design.md, "Blocked networks"); its next key
+  keeps them. Switching obfuscation on or off changes them; each client gets the new ones the
+  next time it meets the hub at home or at the group's relay.
 - An obfuscated hub with a forwarder gives it the settings when it registers (section 13),
   since the forwarder's routing needs WireGuard's own headers.
 
 ### VLESS
 
-A hub with a forwarder where the user asked for it (`cbb global hub -forwarder ... -vless`)
-has its clients reach the forwarder inside VLESS where UDP does not pass, which to the network is HTTPS to a
-website (docs/design.md, "Blocked networks"): XHTTP behind the web server of the
-forwarder's own site. The hub makes a VLESS user ID for the group and keeps it for a period
-of the group's server credentials, then serves with the next one its offers gave ahead of
-time ("The hub's key" above) (`forwarder.vless_id` in its `tunnel.json`); it learns the rest
-from the forwarder's answer when it registers (section 13) and keeps that too
-(`forwarder.vless`). Its offer then carries:
+A hub with a forwarder has its clients reach the forwarder inside VLESS where UDP does not
+pass, which to the network is HTTPS to a website (docs/design.md, "Blocked networks"): XHTTP
+behind the web server of the forwarder's own site. The hub makes a VLESS user ID for the group
+and keeps it with its key; it learns the rest from the forwarder's answer when it registers
+(section 13) and keeps that too. Its offer then carries, in field 4 (table `vless`):
 
-| Field | Type | Meaning |
+| Field | Name | Meaning |
 |-------|------|---------|
-| `transport` | string | `xhttp`; a client refuses any other, and an offer without it, which an older forwarder's REALITY made |
-| `endpoint` | string | `ip:port` (TCP): the web server's, the forwarder's address with the port its answer gave |
-| `server_name` | string | the site whose name the TLS handshake carries and its certificate must carry |
-| `path` | string | the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`, then the group's own part, made from `id` (section 13, "VLESS") |
-| `id` | string | the group's VLESS user ID, a random UUID (version 4) |
+| 1 | `user` | the group's VLESS user ID, 16 random bytes (a UUID of version 4) |
+| 2 | `port` | the web server's TCP port at the forwarder's address; absent, the endpoint's |
+| 3 | `host` | the site whose name the TLS handshake carries and its certificate must carry; required in 0.6 |
+| 4 | `path` | the path the web server passes, a slash and 8 to 64 of `A-Z a-z 0-9 - _`, then the group's own part, made from the user ID (section 13, "VLESS"); required in 0.6 |
 
 - A hub at a forwarder asks for VLESS unless the user turned it off (`cbb global hub
-  -no-vless`). A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer carries
-  `obfuscation` beside `vless`. Inside VLESS it hides WireGuard's fixed sizes from what the
-  TLS records show, and over UDP it lets a client try the faster way first.
-- Until the hub has the forwarder's answer it MUST NOT send an offer, so a client never
-  learns the hub without its way over VLESS. A client with a `vless` offer MUST NOT send plain
-  WireGuard to the hub's endpoints. It tries them over UDP only when the offer has
-  `obfuscation` too, and VLESS after them; the way that reached the hub goes first the next
-  time, and after a try that ended before the hub answered, the next try starts with the way
-  after the one it last tried. An offer with `vless` and no `obfuscation` is reached over VLESS only. When the answer
-  comes, or changes, the members connect again and get the new offer.
+  -no-vless`). A hub that sets VLESS speaks AmneziaWG as well ("Obfuscation" above): its offer
+  carries `obfuscation` beside `vless`. Inside VLESS it hides WireGuard's fixed sizes from
+  what the TLS records show, and over UDP it lets a client try the faster way first.
+- Until the hub has the forwarder's answer it MUST NOT send an offer with `vless`. When the
+  answer comes, or changes, the clients connected connect again and take the new offer with
+  their next `tunnel`.
 - The client runs VLESS without encryption (Xray-core) from a local UDP port to that
-  endpoint, and points its WireGuard at the local port instead of the offer's `endpoints`.
-  It is XHTTP's `packet-up` mode (plain HTTP requests, which any web server and proxy passes) on
-  `path`, with `server_name` as the host, over TLS with the fingerprint of Chrome, ALPN `h2`
-  and `http/1.1`, and the site's certificate checked against the public CAs for
-  `server_name`. Its HTTP connections are reused as Xray's own client configuration does
-  by default (three at once, each dropped after 600 to 900 requests or 1800 to 3000
-  seconds, at random), and the gap between two uploads is 10 to 50 ms at random; each
-  request carries Xray's padding of random length.
-  Each upload carries at most 32 KiB, and the forwarder refuses a larger one
-  and keeps at most 8 uploads of a session that no client has opened
-  ([relay-budget.md](relay-budget.md#xhttp)). The forwarder passes every UDP packet that comes over VLESS to its own UDP
-  port, so the packets are forwarded as in section 13; VLESS carries nothing else.
-- A receiver MUST refuse settings that do not have this form, or a `transport` it does not
-  know, and not start the tunnel; it never falls back to plain WireGuard.
+  endpoint, and points its WireGuard at the local port. It is XHTTP's `packet-up` mode (plain
+  HTTP requests, which any web server and proxy passes) on `path`, with `host` as the host,
+  over TLS with the fingerprint of Chrome, ALPN `h2` and `http/1.1`, and the site's
+  certificate checked against the public CAs for `host`. Its HTTP connections are reused as
+  Xray's own client configuration does by default (three at once, each dropped after 600 to
+  900 requests or 1800 to 3000 seconds, at random), and the gap between two uploads is 10 to
+  50 ms at random; each request carries Xray's padding of random length. Each upload carries
+  at most 32 KiB, and the forwarder refuses a larger one and keeps at most 8 uploads of a
+  session that no client has opened ([relay-budget.md](relay-budget.md#xhttp)). The forwarder
+  passes every UDP packet that comes over VLESS to its own UDP port, so the packets are
+  forwarded as in section 13; VLESS carries nothing else.
+- A receiver MUST refuse settings that do not have this form and not start the tunnel; it
+  never falls back to plain WireGuard.
 
 ### Through the tunnel
 
-- The hub runs WireGuard in user space on UDP `listen_port` (8764 when 0), with one peer per
-  admitted device: its key, its preshared key, and its tunnel address as the only allowed
-  address. Inside the tunnel the hub MUST listen only on TCP 8764 at its own tunnel
+- The hub runs WireGuard in user space on its UDP port (8764 when none is given), with one
+  tunnel per pre-shared key it accepts of each client (above), the client's tunnel address
+  the only allowed address. Inside the tunnel the hub MUST listen only on TCP 8764 at its own tunnel
   address, for the member protocol (section 4) and nothing else: no pairing and no forwarding of packets between peers.
 - After the member TLS handshake the hub MUST check that the device ID of the client
   certificate gives the tunnel address the connection came from, and close it otherwise,
@@ -3419,9 +3284,8 @@ from the forwarder's answer when it registers (section 13) and keeps that too
   planned for 0.7, with a call in the phones' tunnel that names the peer of a loopback connection.
 - A member that keeps hubs' offers runs the other end, with the hub it tries as its only
   peer and a keepalive every 25 s. It dials the hub's tunnel address, TCP 8764, with member
-  TLS whenever no hub is connected on the home network, trying the hubs in order and each
-  offer's endpoints in turn ("Several hubs" above), with the dialers' backoff (1 s, doubling
-  to 30 s). A hub that discovery finds holds
+  TLS whenever no hub is connected on the home network, trying the hubs in order, each over
+  all its ways at once (above), with the dialers' backoff (1 s, doubling to 30 s). A hub that discovery finds holds
   this off for 30 s only: anyone on a network can announce the hub's name and the group's
   tag, so after that only a connection to the hub counts. The relay path (section 14) and
   the dialers through the hub follow the same rule.
@@ -3429,8 +3293,32 @@ from the forwarder's answer when it registers (section 13) and keeps that too
   member syncs at home only, and `status` says why (`error`, with `detail` for debugging).
 - `cbb` starts its end only while it dials the hub through it, so at home it sends
   nothing to the hub's addresses away from home. It accepts an offer only from a
-  member that may be a hub, starts the handshake at once, tries the next endpoint after 10 s without an answer,
+  member that may be a hub, starts the handshake at once over every way of the hub,
   and runs TCP inside the tunnel with an MTU of 1280, so no packet is fragmented on the way.
+
+### Until the phones move to the records of 0.6
+
+The phones' member of 0.5 (`member/src/phone.rs`, through ffi; the kits' `PhoneHub` and
+`TunnelOffer`) keeps the tunnel's messages of 0.5 until the phones move to the records of 0.6
+(D-122); a service of 0.6 starts no tunnel in a group of 0.5 and never sends them.
+
+- Each member's hello carries `tunnel_key`, its WireGuard public key, and `tunnel_psk`, a
+  preshared key of 32 random bytes it made with the key pair. A member where sync away from
+  home is off sends neither, and tells its peers of a change in a `presence` message.
+- A hub admits a peer whose hello carries `tunnel_key` and answers with
+  `{"t":"tunnel","tunnel":{...}}`: `hub_key` (32 bytes), `psk` (the one the hello offered),
+  `endpoints` (at most 8), `obfuscation` (AmneziaWG's names: `jc` 0 to 16, `jmin` and `jmax`
+  at most 1000, `s1` to `s4` 16 to 64, `h1` to `h4` as `"min-max"`,
+  `header_protection_key`), `vless` (`transport` `xhttp`, `endpoint`, `server_name`, `path`,
+  `id`), `hub` (in an offer passed on for another hub), `moved`, and `next_key`,
+  `next_obfuscation` and `next_vless` for the next period.
+- A hub sends each peer that may be a hub `{"t":"hubs","hubs":{...}}` with `stopped`,
+  `serving`, its `offer` without `psk` and its `clients` (`device`, `key`, `psk`, at most
+  256), and passes the other hubs' offers on to its clients.
+- A member keeps an offer only from a device that may be a hub by its records (the root, an
+  admin, or a device with `forward_only`), one per hub by device ID; `moved` makes it forget
+  the sender's. A phone that is the hub ignores offers, and shares its clients but does not
+  stand by for a hub above it.
 
 ## 12. Remote invitations
 
