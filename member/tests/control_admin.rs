@@ -47,8 +47,12 @@ fn renames_and_removes_a_device() {
     let m = root.ok(true, json!({"op": "remove", "device": "work"}));
     assert_eq!(m.s("name"), "work");
     assert!(root.find("work").is_none(), "{:?}", root.devices());
-    // The removed device learns it, over the records the root sends.
-    desk.wait("desk learns it was removed", |st| st["removed"] == true);
+    // The removed device need not learn it (the owner's rule): the root
+    // refuses it and sends it no records.
+    root.wait("the root refuses desk", |st| {
+        !st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == "work"))
+    });
+    assert_ne!(desk.status()["removed"], true, "a removed device was sent its removal");
     has(&root.err(true, json!({"op": "remove", "device": "work"})), "no device");
 }
 
@@ -170,13 +174,31 @@ fn makes_an_admin_and_hands_the_group_over() {
     let m = root.ok(true, json!({"op": "freeze", "device": "desk"}));
     assert_eq!(m.s("name"), "desk");
     has(&root.err(true, json!({"op": "freeze", "device": "desk"})), "frozen already");
-    desk.wait("desk learns it is frozen", |st| st["frozen"] == true);
-    has(&desk.err(true, json!({"op": "rename", "device": "lap", "name": "x"})), "froze this computer's admin key");
-    has(&desk.err(true, json!({"op": "mute", "device": "lap"})), "froze this computer's admin key");
-    has(&desk.err(true, json!({"op": "action_on", "device": "lap", "name": "lock"})), "froze");
+    // A frozen device learns nothing, its freeze included (the owner's
+    // rule for removed and frozen devices): the root refuses it.
+    root.wait("the root refuses desk", |st| {
+        !st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == "desk"))
+    });
+    // What desk signs while frozen never counts: it may refuse itself
+    // (when the freeze reached it some other way) or sign, but the group
+    // takes none of it, not even after the thaw brings desk back.
+    for h in [
+        json!({"op": "rename", "device": "lap", "name": "x"}),
+        json!({"op": "mute", "device": "lap"}),
+        json!({"op": "action_on", "device": "lap", "name": "lock"}),
+    ] {
+        let m = desk.ask(true, h, b"");
+        assert_eq!(m.s("op"), "reply", "{:?}", m.h);
+    }
     root.ok(true, json!({"op": "thaw", "device": "desk"}));
     has(&root.err(true, json!({"op": "thaw", "device": "desk"})), "is not frozen");
-    desk.wait("desk learns it is unfrozen", |st| st["frozen"] != true);
+    root.wait_peer("desk");
+    desk.wait_peer("root");
+    std::thread::sleep(Duration::from_secs(3));
+    let lap_at_root =
+        root.find("lap").unwrap_or_else(|| panic!("a frozen admin's rename counted: {:?}", root.devices()));
+    assert_ne!(lap_at_root["muted"], true, "a frozen admin's mute counted: {lap_at_root:?}");
+    assert_ne!(lap.status()["muted"], true, "a frozen admin's mute reached lap");
 
     // No handover or claim on the records of 0.6: the root changes only
     // with the recovery key (rule 33).
@@ -369,7 +391,7 @@ fn pairing_one_at_a_time() {
         }
     }
     // Closed: even the right digits find no window.
-    has(&other.err(true, json!({"op": "join", "code": link})), "no pairing window open");
+    has(&other.err(true, json!({"op": "join", "code": link})), "the pairing window is closed");
     assert!(other.status()["group"].is_null(), "{}", other.log());
     drop((wconn, r));
     // Another window opens.
