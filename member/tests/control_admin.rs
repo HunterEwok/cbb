@@ -553,7 +553,9 @@ fn leaves_the_group() {
 
 /// A device that joins by another window's link is refused before any
 /// code: the member's key is not the one the link names; it pairs once
-/// this member's window is open. (A closed window: pairing_one_at_a_time.)
+/// this member's window is open. Such a connection tried nothing, so the
+/// window hears of no try, also when it reaches a window opened since.
+/// (A closed window: pairing_one_at_a_time.)
 #[test]
 fn a_closed_window_refuses_the_joiner() {
     let root = Svc::start("root", &[], &[]);
@@ -565,7 +567,15 @@ fn a_closed_window_refuses_the_joiner() {
     let (_wconn, _r, _, link) = elsewhere.window(false);
     let mut l = cbb_core::join::invitation::WindowLink::parse(&link).unwrap();
     l.addrs = vec![root.addr()];
-    let link = l.text();
-    has(&other.err(true, json!({"op": "join", "code": link})), "is not the window's member");
-    assert_eq!(root.admit(&other, false), "other");
+    let wrong = l.text();
+    has(&other.err(true, json!({"op": "join", "code": wrong})), "is not the window's member");
+    // The same while this root's window is open: the window's next word
+    // is the device that paired, not a try.
+    let (_rconn, mut r, _, link) = root.window(false);
+    has(&other.err(true, json!({"op": "join", "code": wrong})), "is not the window's member");
+    wait_for("the window drops the connection", || root.log().contains("tried nothing").then_some(()), || root.log());
+    other.ok(true, json!({"op": "join", "code": link}));
+    let closed = read(&mut r).unwrap_or_else(|| panic!("the window did not close:\n{}", root.log()));
+    assert!(closed.error().is_empty() && closed.done(), "the window said {:?}\n{}", closed.h, root.log());
+    assert_eq!(closed.s("name"), "other");
 }

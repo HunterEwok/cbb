@@ -2854,6 +2854,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A pairing window on 0.6 no longer reports a failed try for a connection that ended before
+  it tried a code, such as one that dialed before the window opened and found another
+  window's key; the window's next word is then the device that pairs.
 - On the records of 0.6 a member's hello says where its keys live again, and the group's root
   records it: a member whose record says `file` while its key is in a TPM or the Secure
   Enclave gets `hardware`, and a rootless install gets `rootless` without an admin key, so a

@@ -1017,8 +1017,16 @@ impl Service {
             if left.is_zero() {
                 return Err(Error::msg("the pairing window closed: no device paired within 5 minutes"));
             }
+            let attempts = open.next_attempt;
             match rx.recv_timeout(left.min(Duration::from_secs(1))) {
                 Ok((sock, s, x)) => match crate::admitting::at_home(&live.mesh, sock, s, x, &mut open) {
+                    // A connection that ended before the device began an
+                    // attempt (one that dialed before the window opened, or
+                    // found another window's key here) tried nothing: it is
+                    // logged, and the window is not told of a try.
+                    Err(e) if open.next_attempt == attempts => {
+                        (self.log)(&format!("cbb: a connection to the pairing window tried nothing: {}", e.for_log()));
+                    }
                     Ok(info) => {
                         (self.log)(&format!("cbb: {} joined the group", info.name));
                         let done = Header { name: info.name, done: true, ..Default::default() };
