@@ -204,11 +204,15 @@ pub unsafe extern "C" fn cbb_qr_read(
     to_c(guard::answer(|| qr::read(frame, width, height, stride)), answer_len)
 }
 
-/// Makes a group with the app's root key: on 0.6, when `request` names
-/// the app's `dir` (src/found.rs), the set is kept there and the answer is
-/// the group's and the phone's IDs and the recovery sheet; else as 0.5
-/// (src/join.rs, new_group), whose answer has a join's fields. `sign` is
-/// the root key's callback with `ctx`, called during this call only.
+/// What `cbb_group_new` answers for a request without the app's folder.
+#[cfg(feature = "join")]
+const NEW_GROUP_NEEDS_DIR: &str = "a new group needs the app's folder (dir): groups are 0.6 only";
+
+/// Makes a group of 0.6 with the app's root key (src/found.rs): `request`
+/// names the app's `dir`, where the set is kept, and the answer is the
+/// group's and the phone's IDs and the recovery sheet. A request without
+/// `dir` is refused: groups are 0.6 only (D-126). `sign` is the root key's
+/// callback with `ctx`, called during this call only.
 ///
 /// # Safety
 ///
@@ -232,7 +236,9 @@ pub unsafe extern "C" fn cbb_group_new(
     if found::on_06(req) {
         return to_c(guard::answer(|| found::new_group(req, sign, ctx as usize)), answer_len);
     }
-    to_c(guard::answer(|| join::new_group(req, sign, ctx as usize)), answer_len)
+    let _ = (req, sign, ctx);
+    let refused: Result<(), cbb_core::error::Error> = Err(cbb_core::error::Error::msg(NEW_GROUP_NEEDS_DIR));
+    to_c(guard::answer(|| join::answer(refused)), answer_len)
 }
 
 /// Starts the member inside the app (src/member.rs): `request` is its
@@ -405,9 +411,10 @@ pub unsafe extern "C" fn cbb_member_manage_watch(
     if request.is_null() || answer_len.is_null() {
         return core::ptr::null_mut();
     }
-    // SAFETY: the caller gives len readable bytes at request.
-    let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(guard::answer(|| m.manage_watch(req, sign_body, ctx as usize)), answer_len)
+    // The watch signs nothing in 0.6: the member refuses every action,
+    // so neither the request nor sign_body is read.
+    let _ = (len, sign_body, ctx);
+    to_c(guard::answer(|| m.manage_watch()), answer_len)
 }
 
 /// Makes a remote invitation as an admin of the group (src/invite.rs):

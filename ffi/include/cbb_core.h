@@ -51,15 +51,14 @@ typedef int32_t (*cbb_sign_fn)(void *ctx, const uint8_t *digest, uint8_t *sig, s
 
 /*
  * The member inside the app (src/member.rs), only in a library built with the
- * feature member (the phones' apps): cbb's node on threads of its
- * own, with the app's key through sign. event gets each event as JSON on any
- * thread: {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
- * {"type":"identity","cert","issuer","roots"}, {"type":"copy","copy"},
- * {"type":"message","from","message"}, {"type":"peer","peer"},
- * {"type":"tunnel","from","offer"}, {"type":"command","token","from",
- * "command"}, which the app answers with the op "answer", or
- * {"type":"mute","muted","for_ms","by"}; ctx must stay valid for the rest
- * of the process.
+ * feature member (the phones' apps): cbb's member of 0.6 on threads of its
+ * own, with the app's key through sign, for the group whose group.cbor the
+ * request's dir holds; a folder without one, a group made before 0.6, is
+ * refused (D-126). event gets each event as JSON on any thread:
+ * {"type":"write","text","kind","ttl_ms"}, {"type":"log","line"},
+ * {"type":"panic","details"}, {"type":"copy","copy"},
+ * {"type":"mute","muted","for_ms","by"} or {"type":"sync","off","by"}; ctx
+ * must stay valid for the rest of the process.
  */
 typedef void (*cbb_event_fn)(void *ctx, const uint8_t *event, size_t len);
 
@@ -69,29 +68,23 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
                              uint8_t **answer, size_t *answer_len);
 /*
  * Asks the member: request is {"op","args"} (docs/core-api.md, "The
- * member"), the answer {"ok"} or {"error"}, given back with cbb_free. fetch,
- * command and wait block on the network: call them off the main thread.
+ * member"), the answer {"ok"} or {"error"}, given back with cbb_free. fetch
+ * and wait block on the network: call them off the main thread.
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 /*
- * The app's keys for the servers (docs/protocol.md, section 18), by name
- * ("server TAG" or "period TAG"): op 0 answers 0 when the app holds the key
- * name, 1 writes its public point (SEC1, 65 bytes) to out, making the key
- * first, 2 writes its signature (DER) of the 32-byte digest to out, 3 drops
- * every key but those name lists, one a line. out has room for 72 bytes and
- * out_len gets how many it holds; any answer but 0 is a failure. ctx must
- * stay valid, and the callback callable from any thread, for the rest of
- * the process.
+ * The app's keys for the servers, by name: the member of 0.6 keeps the
+ * group's server credentials itself and calls them no more. op 0 answers 0
+ * when the app holds the key name, 1 writes its public point (SEC1, 65
+ * bytes) to out, 2 its signature (DER) of the 32-byte digest, 3 drops every
+ * key but those name lists; out has room for 72 bytes.
  */
 typedef int32_t (*cbb_keys_fn)(void *ctx, int32_t op, const uint8_t *name, size_t name_len, const uint8_t *digest,
                                uint8_t *out, size_t *out_len);
 /*
- * Makes the member do what the service does for the servers: it keeps the
- * group's server credentials with its keys for them behind keys, signs its
- * server key and, on the root, the hubs' and members' credentials and the
- * period the app hands the root key for (cbb_member_manage, period); it may
- * then be one of the group's hubs (the ops hub, hub_off) or meet the group at
- * a blind relay (relay). The answer is {"ok"} or {"error"}.
+ * The member of 0.6 serves the group's servers itself: this answers that it
+ * does not serve them for the app, an {"error"} whose details say "not on
+ * the records of 0.6 yet". It stays until the Harmony app drops the call.
  */
 uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, size_t *answer_len);
 /*
@@ -102,35 +95,17 @@ uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, si
 void cbb_member_stop(cbb_member *m);
 /*
  * An admin's change to a device of the group or command for it, signed with
- * the key public names (the phone's admin key, or the root's key with no
- * admin_ca) through sign, called during this call only (src/member.rs,
- * manage): request is {"action","device","name","for_ms","allow_file_key",
- * "records","text","mode","kind","enter","public","admin_ca","timeout_ms"},
- * action remove, rename, thaw, make_admin (the root, for a computer
- * connected), mute, unmute, sync_on, sync_off (the device's house, a mode
- * command), paste ("text" put where the device's focus is, "mode" paste or
- * type, "kind" text, secret or media, the last with "text" the event ID of
- * a copy of images or files the phone made just before), paste_off,
- * actions_off, away_off, action (name the quick action), freeze (an admin
- * that removes no admins), renew (every
- * member certificate due, and as the root every admin CA from an earlier root;
- * no device) or resolve (the root voids the records an alert of the member's
- * alerts op names); the answer {}, {"result"} for a command, or {"renewed":
- * count}. A command blocks on the network. Taking the group over
- * (src/takeover.rs): root_ca, public the new key, answers {"root_ca"}, which
- * the app keeps; take_over (device the lost root), take_handed_over or recover
- * (the recovery key) claims the group for "root_ca"; finish_takeover with
- * "root_ca", public its key, "name", "os", "store", "seal" answers
- * {"state","left_ms"} while the claim waits, signing nothing, and
- * {"state":"effective","cert"} once it made the phone the root.
- * period, on the root of a
- * member that serves the servers (cbb_member_servers), signs the next period
- * of the server credentials with the root key, when one is due, and answers
- * {"period_due"}. add_watch, the root with "key" (the watch's admin key's
- * SubjectPublicKeyInfo), "name", "os" and an optional "device", makes a watch
- * an admin and answers {"device","admin_ca","group","signer"} for the watch;
- * watch_actions (nothing signed) answers {"actions"}, what a watch may do to
- * device: freeze, remove, paste-off, actions-off, away-off, action.
+ * the key public names (the phone's admin key, or the root's key) through
+ * sign, called during this call only (src/member/live.rs, manage): request
+ * is {"action","public",...} (docs/core-api.md, "The member"). action
+ * remove, rename, freeze, thaw (records the records judge); mute, unmute,
+ * sync_off, sync_on, paste, paste_off, actions_off, away_off (commands for
+ * another device, answered {"status","reason"}); on the root relay, period,
+ * forwarder, hubs, make_admin, key_level, add_watch and attest;
+ * watch_actions (nothing signed); change_preview and change_root (the
+ * recovery key, "recovery"), which change the group's root to this phone.
+ * take_over, take_handed_over, recover, hand_over, takeover_delay and
+ * finish_takeover answer that the root changes only with the recovery key.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);
@@ -173,11 +148,8 @@ typedef int32_t (*cbb_sign_body_fn)(void *ctx, const uint8_t *body, size_t len, 
 
 /*
  * Does what the app's watch asked from the wrist, signed by the watch's admin
- * key through sign_body during this call only: request is {"action","device",
- * "watch","public","admin_ca","name","timeout_ms"}, action one of
- * watch_actions for device (freeze, remove, paste_off, actions_off, away_off,
- * action), watch the watch's device ID, public its key point and admin_ca
- * what add_watch made. The answer is as cbb_member_manage's.
+ * key through sign_body during this call only. A watch signs nothing in
+ * 0.6: the member refuses, saying its actions come with 0.7.
  */
 uint8_t *cbb_member_manage_watch(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_body_fn sign_body,
                                  void *ctx, size_t *answer_len);
@@ -190,25 +162,22 @@ uint8_t *cbb_member_manage_watch(const cbb_member *m, const uint8_t *request, si
 uint8_t *cbb_qr_read(const uint8_t *gray, size_t width, size_t height, size_t stride, size_t *answer_len);
 
 /*
- * A group the phone makes, its root key the app's (src/join.rs, new_group),
- * only with the feature join: the request is
- * {"name","os","store":"hardware"|"file","root_public","public","seal"?}, the
- * keys' points base64, and sign the root key's callback, called during this
- * call only; the answer has a join's fields (device, cert, group_ca, roots,
- * records). On 0.6 the request also names "dir" (src/found.rs; no "seal"):
- * the set is kept there for cbb_member_start, and the answer is
- * {"group","device","recovery":{"qr","text":[4 lines],"modules"}}, the recovery sheet,
- * which the core keeps nowhere.
+ * A group the phone makes, its root key the app's (src/found.rs), only with
+ * the feature member: the request is {"dir","name","os","store":"hardware"|
+ * "file","root_public","public"}, the keys' points base64, and sign the root
+ * key's callback, called during this call only. The set is kept in dir for
+ * cbb_member_start, and the answer is {"group","device","recovery":{"qr",
+ * "text":[4 lines],"modules"}}, the recovery sheet, which the core keeps
+ * nowhere. A request without dir is refused: groups are 0.6 only (D-126).
  */
 uint8_t *cbb_group_new(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
 
 /*
  * A remote invitation an admin phone makes (src/invite.rs): request is
- * {"public","admin_ca","expires","hub","kind"}, public the point of the key
- * sign holds (the phone's admin key, or the root's key with no admin_ca; a
- * member of 0.6 needs no admin_ca), expires in seconds (an hour when 0, a
- * day at most), hub a device ID or empty for any connected hub, and kind
- * the device invited on 0.6, "computer" (or empty) or "phone"; sign with
+ * {"public","expires","hub","kind"}, public the point of the key sign holds
+ * (the phone's admin key, or the root's key), expires in seconds (an hour
+ * when 0, a day at most), hub a device ID or empty for any connected hub,
+ * and kind the device invited, "computer" (or empty) or "phone"; sign with
  * ctx signs until cbb_invite_free. The answer is {"invite","expires",
  * "modules"}; it waits for the hub, so the app calls it off its main
  * thread. cbb_invite_next waits up to timeout_ms for a

@@ -2891,6 +2891,17 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
+  member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
+  and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,
+  `peer`, `tunnel`, `command` and `caller`, its operations (`served`, `caller`, `answer`,
+  `check_command`, `offer_admin_key`, `take_admin_ca`, `disconnect`, `records`, `alerts`,
+  `joined_by_invite`, `servers`, `relay`, `add_records`, `command`, `send_cert`,
+  `send_admin_ca`, `send_hubs`, `send_credentials`) and its watch signing are gone from ffi.
+  `cbb_group_new` makes only a group of 0.6 (the request names `dir`), `cbb_invite_new` only
+  the member of 0.6's invitation, and `cbb_member_servers` answers that the member of 0.6
+  serves the servers itself, until the HarmonyOS app drops it. The example `phone-on-linux`
+  drops `-new-group`, the member of 0.5 and `SERVERS`.
 - The phones' restore of a group made before 0.6 through the core: `cbb_restore`,
   `cbb_member_manage_card`, the manage action `recover_with_sheet` and `cbb_piv`'s `make`,
   `put`, `issue` and `sign`, with the Aurora and HarmonyOS apps' restore screens and the

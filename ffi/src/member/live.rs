@@ -1451,7 +1451,13 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let empty = json!({ "dir": dir.to_string_lossy() }).to_string();
-        assert!(!on_06(empty.as_bytes()), "a folder without group.cbor is 0.5's");
+        assert!(!on_06(empty.as_bytes()), "a folder without group.cbor holds a group made before 0.6");
+        // A group made before 0.6 runs no member: the app says to make a new
+        // one (D-126), and the folder stays as it is.
+        let (m, a) = Member::start(empty.as_bytes(), sign, events, 0);
+        assert!(m.is_none());
+        assert_eq!(error(&a), super::super::BEFORE_06);
+        assert!(dir.is_dir());
 
         let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
         let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
@@ -1475,7 +1481,6 @@ mod tests {
         let (m, a) = Member::start(req.as_bytes(), sign, events, ctx(member));
         ok(&a);
         let m = m.unwrap();
-        assert!(matches!(m, Member::Live(_)));
         let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
 
         ok(&call("copy", json!({ "text": "hello" })));
@@ -1509,6 +1514,35 @@ mod tests {
         assert!(error(&manage("remove", "tablet", "")).contains("cannot remove itself"));
         // A command names another device; this phone's own switches are its own.
         assert!(error(&manage("mute", "tablet", "")).contains("its own, not a command"));
+        // A remote paste is cleaned and checked before anything is signed
+        // or sent, as the computer cleans it.
+        {
+            use cbb_member::orders::{Order, Way, What};
+            let order = |method: &str, kind: &str, text: &str| {
+                let a: ManageArgs = serde_json::from_value(json!({
+                    "action": "paste", "device": "pc", "public": b64(&root.0.public()),
+                    "method": method, "kind": kind, "text": text, "enter": true,
+                }))
+                .unwrap();
+                m.0.order(&a)
+            };
+            let o = order("", "", "ls\u{1b}[2J\r\n").unwrap();
+            assert!(
+                matches!(&o, Order::Paste { way: Way::Paste, enter: true, what: What::Text(t) } if t == "ls\n"),
+                "a text is cleaned"
+            );
+            let o = order("type", "secret", "pin").unwrap();
+            assert!(matches!(&o, Order::Paste { way: Way::Type, what: What::Secret(_), .. }));
+            for (method, kind, text) in [
+                ("type", "media", "copy-id"),
+                ("say", "text", "hi"),
+                ("paste", "file", "hi"),
+                ("paste", "text", "\u{7}\u{1b}[0m"),
+                ("paste", "media", ""),
+            ] {
+                assert!(order(method, kind, text).is_err(), "{method} {kind} {text:?} is refused");
+            }
+        }
         // The root changes only with the recovery key (D-117).
         assert!(error(&manage("hand_over", "tablet", "")).contains("only with its recovery key"));
         // The root sets the group's relays, and none again.
@@ -1553,7 +1587,7 @@ mod tests {
         let (m, a) = Member::start(req.as_bytes(), sign, events, member as *const Signer as usize);
         ok(&a);
         let m = m.unwrap();
-        let Member::Live(phone) = &m else { panic!("not the member of 0.6") };
+        let phone = &*m.0;
         let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
         ok(&call("away", json!({ "on": true })));
         let none = ok(&call("away_status", Value::Null));

@@ -19,13 +19,10 @@
 //! as the app does when it opens.
 //!
 //! The member prints "WRITE <kind> <text>" for each text for the
-//! clipboard, "IDENTITY <certificate in base64>" when an admin renewed its
-//! certificate (a group of 0.5), "MUTE <true|false> <for_ms> <by>" when an
+//! clipboard, "MUTE <true|false> <for_ms> <by>" when an
 //! admin muted it or ended the mute, "SYNC <off> <by>" when an admin turned
-//! its sync off or on (a group of 0.6), "CHANGE <copy as JSON>" for each
-//! copy that became the group's, "PEER <peer as JSON>" for each peer whose
-//! hello it took, "COMMAND <token> <command as JSON>" for each command for
-//! the phone itself, and "LOG <line>" for each log line. It takes "COPY
+//! its sync off or on, "CHANGE <copy as JSON>" for each copy that became
+//! the group's, and "LOG <line>" for each log line. It takes "COPY
 //! <text>" (printing "REFUSED <reason>" when the member does not send it),
 //! "PEERS", answered "PEERS <count>", "SYNC OFF <ms>", "SYNC ON" and
 //! "MUTED", answered "MUTED <sync off> <muted>", "DEVICES", answered
@@ -38,14 +35,12 @@
 //! which makes a remote invitation with the admin key and prints "INVITE
 //! <text>", then "INVITE JOINING <name> <fingerprint>" for each device that
 //! uses it, "INVITE DONE <name>" or "INVITE FAILED <message>"; "INVITE
-//! ANSWER <yes|no>" answers about the joining device. "SERVERS" makes the
-//! member serve the servers (cbb_member_servers) with software keys for
-//! them, answered "SERVERS <answer as JSON>".
-//!
-//! On a group of 0.5: -new-group makes a group of its own, the admin key
-//! standing for the root key, prints "Group <device> <group tag>", and runs
-//! the member as the group's root. -keys N gives a second phone keys of its
-//! own.
+//! ANSWER <yes|no>" answers about the joining device. "WATCH ADD <name>"
+//! adds a watch as the root does (add_watch), answered "WATCH ADDED <answer
+//! as JSON>", and "WATCH <request as JSON>" asks for an action from the
+//! wrist (cbb_member_manage_watch), answered "WATCH SAW <what the watch was
+//! shown>" and "WATCHED <answer as JSON>". -keys N gives a second phone
+//! keys of its own.
 //!
 //! With -card FILE a YubiKey kept in FILE stands for the one the app reads
 //! over NFC: "PIV <request as JSON>" (cbb_piv) is answered "PIV <answer as
@@ -60,15 +55,12 @@ use base64::engine::general_purpose::STANDARD;
 use cbb_ffi::{
     cbb_free, cbb_group_new, cbb_invite_answer, cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_joiner_free,
     cbb_joiner_new, cbb_joiner_new_admin, cbb_joiner_next, cbb_member_call, cbb_member_manage, cbb_member_manage_watch,
-    cbb_member_servers, cbb_member_start, cbb_piv, cbb_window_free, cbb_window_new, cbb_window_next,
+    cbb_member_start, cbb_piv, cbb_window_free, cbb_window_new, cbb_window_next,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
 
 /// The key's signing callback, as the app's KeyStore::sign is.
-/// The secret for sealed messages.
-const SEAL: [u8; 32] = [9u8; 32];
-
 unsafe extern "C" fn sign(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *mut u8, sig_len: *mut usize) -> i32 {
     // SAFETY: ctx is the key main keeps alive; digest is 32 bytes and sig
     // has 72 bytes of room, as cbb_core.h says.
@@ -84,56 +76,6 @@ unsafe extern "C" fn sign(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *
     0
 }
 
-/// The keys for the servers, by name, as the app's KeyStore keeps them.
-static SERVER_KEYS: std::sync::Mutex<Vec<(String, SigningKey)>> = std::sync::Mutex::new(Vec::new());
-
-/// The callback of the keys for the servers (cbb_member_servers).
-unsafe extern "C" fn server_keys(
-    _: *mut core::ffi::c_void,
-    op: i32,
-    name: *const u8,
-    name_len: usize,
-    digest: *const u8,
-    out: *mut u8,
-    out_len: *mut usize,
-) -> i32 {
-    // SAFETY: the library gives name_len bytes at name, 32 at digest when
-    // it signs, and 72 bytes of room at out.
-    unsafe {
-        let name = String::from_utf8_lossy(std::slice::from_raw_parts(name, name_len)).into_owned();
-        let mut keys = SERVER_KEYS.lock().unwrap();
-        let write = |b: &[u8]| {
-            std::ptr::copy_nonoverlapping(b.as_ptr(), out, b.len());
-            out_len.write(b.len());
-        };
-        match op {
-            0 => i32::from(!keys.iter().any(|(n, _)| *n == name)),
-            1 => {
-                if !keys.iter().any(|(n, _)| *n == name) {
-                    let seed = u8::try_from(keys.len() + 20).unwrap_or(250);
-                    keys.push((name.clone(), SigningKey::from_slice(&[seed; 32]).expect("a valid scalar")));
-                }
-                let k = &keys.iter().find(|(n, _)| *n == name).expect("made above").1;
-                write(k.verifying_key().to_sec1_point(false).as_bytes());
-                0
-            }
-            2 => {
-                let Some((_, k)) = keys.iter().find(|(n, _)| *n == name) else { return 1 };
-                let d = std::slice::from_raw_parts(digest, 32);
-                let Ok(s): Result<p256::ecdsa::Signature, _> = k.sign_prehash(d) else { return 1 };
-                write(s.to_der().as_bytes());
-                0
-            }
-            3 => {
-                let kept: Vec<&str> = name.split('\n').collect();
-                keys.retain(|(n, _)| kept.contains(&n.as_str()));
-                0
-            }
-            _ => 1,
-        }
-    }
-}
-
 /// Takes an answer of the library as JSON.
 fn take(p: *mut u8, n: usize) -> serde_json::Value {
     // SAFETY: p and n are an answer of the library, given back once.
@@ -141,10 +83,6 @@ fn take(p: *mut u8, n: usize) -> serde_json::Value {
     // SAFETY: as above.
     unsafe { cbb_free(p, n) };
     v
-}
-
-fn b64(v: &serde_json::Value) -> Vec<u8> {
-    STANDARD.decode(v.as_str().unwrap_or_default()).unwrap_or_default()
 }
 
 fn main() -> ExitCode {
@@ -162,13 +100,6 @@ fn main() -> ExitCode {
     let admin = args.iter().any(|a| a == "-admin");
     let admin_key = SigningKey::from_slice(&[8u8.wrapping_add(keys.wrapping_mul(2)); 32]).expect("a valid scalar");
     let admin_public = STANDARD.encode(admin_key.verifying_key().to_sec1_point(false).as_bytes());
-    // The secret for sealed messages, and its public key for the device
-    // record, as the app has them.
-    let seal_req =
-        serde_json::json!({"abi": cbb_ffi::abi(), "op": "seal_public", "args": {"secret": STANDARD.encode(SEAL)}});
-    let seal = serde_json::from_slice::<serde_json::Value>(&cbb_ffi::call(seal_req.to_string().into_bytes()))
-        .map(|v| v["ok"]["key"].clone())
-        .unwrap_or_default();
     let peers: Vec<String> =
         args.windows(2).filter(|w| w.first().is_some_and(|a| a == "-peer")).filter_map(|w| w.get(1).cloned()).collect();
     // A group of 0.6 (-group06, the admin key standing for the root key)
@@ -225,40 +156,7 @@ fn main() -> ExitCode {
         let admin = admin.then_some((&admin_key, admin_public.as_str()));
         return run_live(&key, &public_b64, &name, &dir, peers, &device, admin, window);
     }
-    if args.iter().any(|a| a == "-new-group") {
-        // A group of its own, the admin key standing for the root key the
-        // Aurora app keeps in its TEE; the phone then admits as the root.
-        let req = serde_json::json!({
-            "name": name, "os": "aurora", "store": "hardware", "root_public": admin_public,
-            "public": public_b64, "seal": seal,
-        })
-        .to_string();
-        let mut n = 0usize;
-        let ctx = &admin_key as *const SigningKey as *mut _;
-        // SAFETY: req and n live for the call, the key too.
-        let made = take(unsafe { cbb_group_new(req.as_ptr(), req.len(), sign, ctx, &mut n) }, n);
-        let group = made["ok"].clone();
-        if group.is_null() {
-            eprintln!("phone-on-linux: {made}");
-            return ExitCode::FAILURE;
-        }
-        let tag = cbb_core::certs::Cert::parse(&b64(&group["group_ca"]))
-            .map(|ca| cbb_core::certs::tag(&ca))
-            .unwrap_or_default();
-        println!("Group {} {tag}", group["device"].as_str().unwrap_or_default());
-        let Some(dir) = arg("-dir") else { return ExitCode::SUCCESS };
-        return run_member(
-            &key,
-            &public_b64,
-            &name,
-            &dir,
-            peers,
-            &group,
-            Some((&admin_key, admin_public.as_str())),
-            None,
-        );
-    }
-    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite, -resume or -new-group");
+    eprintln!("phone-on-linux: give -group06, -join-window, -join-digits, -invite or -resume");
     ExitCode::FAILURE
 }
 
@@ -270,46 +168,11 @@ unsafe extern "C" fn event(_: *mut core::ffi::c_void, ev: *const u8, len: usize)
     match v["type"].as_str() {
         Some("write") => println!("WRITE {} {}", s("kind"), s("text")),
         Some("log") => println!("LOG {}", s("line")),
-        Some("identity") => println!("IDENTITY {}", s("cert")),
         Some("copy") => println!("CHANGE {}", v["copy"]),
-        Some("peer") => println!("PEER {}", v["peer"]),
-        Some("command") => println!("COMMAND {} {}", v["token"], v["command"]),
         Some("mute") => println!("MUTE {} {} {}", v["muted"], v["for_ms"], s("by")),
         Some("sync") => println!("SYNC {} {}", v["off"], s("by")),
-        Some("message") if v["message"]["t"] == "admin" => {
-            println!("ADMIN CA {}", v["message"]["admin_ca"].as_str().unwrap_or_default())
-        }
         _ => {}
     }
-}
-
-/// Runs the member as the app does once it joined, until standard input
-/// ends; invite is the remote invitation it joined by.
-#[allow(clippy::too_many_arguments)]
-fn run_member(
-    key: &SigningKey,
-    public_b64: &str,
-    name: &str,
-    dir: &str,
-    peers: Vec<String>,
-    joined: &serde_json::Value,
-    admin: Option<(&SigningKey, &str)>,
-    invite: Option<&str>,
-) -> ExitCode {
-    let records = b64(&joined["records"]);
-    if std::fs::create_dir_all(dir).is_err() || std::fs::write(format!("{dir}/records.json"), records).is_err() {
-        eprintln!("phone-on-linux: cannot write the records in {dir}");
-        return ExitCode::FAILURE;
-    }
-    let req = serde_json::json!({
-        "dir": dir, "name": name, "os": "aurora", "os_version": "Aurora OS 5.1.5", "version": "0.5.0",
-        "device": joined["device"], "public": public_b64,
-        "seal": STANDARD.encode(SEAL), "cert": joined["cert"], "issuer": joined["issuer"],
-        "group_ca": joined["group_ca"], "roots": joined["roots"], "peers": peers, "mdns": false,
-        "admin_key": joined.get("offer_admin_key"),
-    })
-    .to_string();
-    serve(key, &req, joined, admin, invite, false)
 }
 
 /// Runs the member of 0.6 whose group's set is in dir, as the app does
@@ -331,19 +194,12 @@ fn run_live(
         "device": device, "public": public_b64, "peers": peers, "mdns": false,
     })
     .to_string();
-    serve(key, &req, &serde_json::Value::Null, admin, None, window)
+    serve(key, &req, admin, window)
 }
 
 /// Starts the member with req and takes the commands on standard input
 /// until it ends.
-fn serve(
-    key: &SigningKey,
-    req: &str,
-    joined: &serde_json::Value,
-    admin: Option<(&SigningKey, &str)>,
-    invite: Option<&str>,
-    window: bool,
-) -> ExitCode {
+fn serve(key: &SigningKey, req: &str, admin: Option<(&SigningKey, &str)>, window: bool) -> ExitCode {
     let mut admin = admin;
     // The root key the app makes when it changes the group's root to this
     // phone (NEWROOT): none of its other keys (seeds 7 and 8 up).
@@ -364,13 +220,6 @@ fn serve(
         // SAFETY: m runs; req and n live for the call.
         take(unsafe { cbb_member_call(m, req.as_ptr(), req.len(), &mut n) }, n)
     };
-    if let Some(text) = invite {
-        let a = call(serde_json::json!({ "op": "joined_by_invite", "args": { "invite": text } }).to_string());
-        if let Some(e) = a.get("error") {
-            eprintln!("phone-on-linux: joined_by_invite: {e}");
-            return ExitCode::FAILURE;
-        }
-    }
     let mut inviting: Option<std::sync::Arc<Inviting>> = None;
     let mut windows: Option<std::sync::Arc<Windowing>> = None;
     if window {
@@ -393,13 +242,6 @@ fn serve(
         } else if line == "DEVICES" {
             let a = call(serde_json::json!({ "op": "devices" }).to_string());
             println!("DEVICES {}", a["ok"]["devices"]);
-        } else if line == "SERVERS" {
-            let mut n = 0usize;
-            // SAFETY: m runs; the callback needs no context.
-            println!(
-                "SERVERS {}",
-                take(unsafe { cbb_member_servers(m, server_keys, std::ptr::null_mut(), &mut n) }, n)
-            );
         } else if let Some(req) = line.strip_prefix("CALL ") {
             println!("ANSWER {}", call(req.to_string()));
         } else if line == "MUTED" || line == "SYNC ON" || line.starts_with("SYNC OFF ") {
@@ -424,7 +266,7 @@ fn serve(
                         "key": STANDARD.encode(watch::spki()),
                     })
                     .to_string();
-                    let got = manage(m, k, public, &joined["admin_ca"], &req);
+                    let got = manage(m, k, public, &req);
                     watch::admitted(&got["ok"]);
                     println!("WATCH ADDED {got}");
                 }
@@ -448,14 +290,14 @@ fn serve(
             // A change of root with the recovery key (change_preview,
             // change_root), signed by the new root key the app makes for
             // it, fixed here; MANAGE signs with it once the change took.
-            let r = manage(m, &new_root, &new_root_public, &serde_json::Value::Null, req);
+            let r = manage(m, &new_root, &new_root_public, req);
             if r["ok"]["seq"].is_u64() {
                 admin = Some((&new_root, new_root_public.as_str()));
             }
             println!("NEWROOTED {r}");
         } else if let Some(req) = line.strip_prefix("MANAGE ") {
             match admin {
-                Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
+                Some((k, public)) => println!("MANAGED {}", manage(m, k, public, req)),
                 None => println!("MANAGED {{\"error\":{{\"message\":\"this phone is not an admin\"}}}}"),
             }
         } else if let Some(yes) = line.strip_prefix("INVITE ANSWER ") {
@@ -466,7 +308,7 @@ fn serve(
         } else if let Some(secs) = line.strip_prefix("INVITE ") {
             inviting = None;
             match admin {
-                Some((k, public)) => inviting = invite_new(m, k, public, &joined["admin_ca"], secs),
+                Some((k, public)) => inviting = invite_new(m, k, public, secs),
                 None => println!("INVITE FAILED this phone is not an admin"),
             }
         }
@@ -666,11 +508,10 @@ fn invite_new(
     m: *const cbb_ffi::member::Member,
     key: &SigningKey,
     public: &str,
-    admin_ca: &serde_json::Value,
     secs: &str,
 ) -> Option<std::sync::Arc<Inviting>> {
     let req = serde_json::json!({
-        "public": public, "admin_ca": admin_ca, "expires": secs.trim().parse::<u64>().unwrap_or(0),
+        "public": public, "expires": secs.trim().parse::<u64>().unwrap_or(0),
     })
     .to_string();
     let (mut ans, mut n) = (std::ptr::null_mut(), 0usize);
@@ -722,18 +563,9 @@ fn invite_new(
 
 /// Signs an admin's change or command (cbb_member_manage): req is the
 /// request without the key, which the admin key fills in.
-fn manage(
-    m: *const cbb_ffi::member::Member,
-    key: &SigningKey,
-    public: &str,
-    admin_ca: &serde_json::Value,
-    req: &str,
-) -> serde_json::Value {
+fn manage(m: *const cbb_ffi::member::Member, key: &SigningKey, public: &str, req: &str) -> serde_json::Value {
     let mut r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
     r["public"] = public.into();
-    if !admin_ca.is_null() {
-        r["admin_ca"] = admin_ca.clone();
-    }
     let req = r.to_string();
     let mut n = 0usize;
     let ctx = key as *const SigningKey as *mut core::ffi::c_void;
