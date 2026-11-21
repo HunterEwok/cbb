@@ -1885,12 +1885,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.e(TAG, "the node did not start", e)
             return null
         }
+        // The member of 0.6 keeps the group's records itself; each step on its own, so that one refused leaves the others done.
+        if (!v06) runCatching { n.addRecords(g.records.records) }.onFailure { Log.w(TAG, "handing the node the records", it) }
         runCatching {
-            n.addRecords(g.records.records)
             n.setSync(syncMode != "own", syncOffUntilMS?.takeIf { it > 0 }?.let { it - System.currentTimeMillis() }?.coerceAtLeast(1) ?: 0)
             n.setMute(mutedUntilMS)
-            n.setEvidence(ownEvidence())
         }.onFailure { Log.w(TAG, "setting up the node", it) }
+        // The attestation of the member key, which every peer gets (t 19 on 0.6), so the root records the keys as proven.
+        runCatching { n.setEvidence(ownEvidence()) }.onFailure { Log.w(TAG, "handing the node the attestation", it) }
         val b = NsdBrowser(context) { members ->
             synchronized(lock) {
                 found = members

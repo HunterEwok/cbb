@@ -238,10 +238,33 @@ impl Live {
     /// the Android evidence its peers send while it is the group's root
     /// and checks it when its app hands it the root key (`attest_record`),
     /// under the revocation list its app fetched (`attest_status`). It
-    /// sends no evidence of its own (its app does, through its hello on
-    /// 0.5) and takes no TPM's.
+    /// takes no TPM's; the evidence of its own key its app made
+    /// ([`Live::set_own_evidence`]) goes to each peer that connects.
     pub fn with_phone_attestations(self: &Arc<Self>) {
-        self.start_attest(true);
+        if !self.start_attest(true) {
+            return;
+        }
+        let w: Weak<Live> = Arc::downgrade(self);
+        self.mesh.on_connected(Box::new(move |peer| {
+            if let Some(l) = w.upgrade() {
+                l.send_own_evidence(Some(peer));
+            }
+        }));
+    }
+
+    /// The evidence of this phone's member key its app made (Android Key
+    /// Attestation), as the helper's JSON gives a computer's: kept and
+    /// sent in `evidence` messages (t 19) to every peer connected now and
+    /// to each one that connects later; an empty list sends none.
+    pub fn set_own_evidence(&self, list: &[Json]) -> Result<()> {
+        let a = self.attest.get().ok_or_else(|| Error::msg("this member takes no attestations"))?;
+        let wire = list
+            .iter()
+            .map(|e| to_wire(e).ok_or_else(|| Error::msg("an attestation does not fit the format")))
+            .collect::<Result<Vec<_>>>()?;
+        *a.own.lock().unwrap() = wire;
+        self.send_own_evidence(None);
+        Ok(())
     }
 
     /// Sets the attestations up and takes the peers' evidence; false when

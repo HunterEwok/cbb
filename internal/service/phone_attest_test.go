@@ -4,12 +4,16 @@
 package service
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,4 +129,62 @@ func TestFFIPhoneAttest(t *testing.T) {
 		t.Fatalf("recording the revoked attestation: %s", got)
 	}
 	waitUpTo(t, 30*time.Second, "the laptop's keys are only in hardware", func() bool { return store() == group.StoreHardware })
+}
+
+// TestFFIPhoneOwnEvidence: a phone of 0.6 sends the attestation of its own
+// member key its app made (`evidence`, t 19) to each peer that connects,
+// as a computer sends its TPM's; a root phone keeps it and records what it
+// proves (docs/protocol.md, section 17, "Evidence on the records of 0.6").
+// Both phones are phone-on-linux: the member phone runs with -keys 1, whose
+// member key is the P-256 scalar of 32 bytes 9.
+func TestFFIPhoneOwnEvidence(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	dir := t.TempDir()
+	attestRoots := filepath.Join(dir, "attest-roots.pem")
+	t.Setenv("CBB_TEST_ATTEST_ROOTS", attestRoots)
+
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", filepath.Join(dir, "root"))
+	next("Group ")
+	call := phoneCall(t, next, in)
+	fmt.Fprintln(in, "WINDOW")
+	link := next("WINDOW ")
+	if !strings.HasPrefix(link, "cbb://pair?") {
+		t.Fatalf("the root phone's window: %q", link)
+	}
+	mnext, min := phoneOnLinux(t, bin, "-name", "member phone", "-keys", "1", "-dir", filepath.Join(dir, "member"), "-join-window", link)
+	mnext("Joined ")
+	if got := next("WINDOW DONE "); got != "member phone" {
+		t.Fatalf("the root phone's window admitted %q", got)
+	}
+	mcall := phoneCall(t, mnext, min)
+	port := call("listen", map[string]any{"port": 0})["port"]
+	mcall("found", map[string]any{"key": "root", "addrs": []string{fmt.Sprintf("127.0.0.1:%v", port)}})
+	waitFor(t, "the phones connected", func() bool {
+		fmt.Fprintln(min, "PEERS")
+		return mnext("PEERS ") == "1"
+	})
+
+	// The member phone's app hands its member the attestation it made.
+	key, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), bytes.Repeat([]byte{9}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := make([]byte, 16)
+	challenge, _ := attest.Challenge("", nil, salt)
+	chain, root, err := attesttest.Android(&key.PublicKey, challenge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(attestRoots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: root}), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mcall("evidence", map[string]any{"evidence": []map[string]any{{"format": "android-key", "key": "member", "salt": salt, "chain": chain}}})
+	waitUpTo(t, 30*time.Second, "the root phone keeps the evidence", func() bool { return call("attest", nil)["pending"] == float64(1) })
+	fmt.Fprintln(in, `MANAGE {"action":"attest"}`)
+	if got := next("MANAGED "); got != `{"ok":{"pending":0,"recorded":1}}` {
+		t.Fatalf("recording the attestation: %s", got)
+	}
 }

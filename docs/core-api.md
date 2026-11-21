@@ -136,7 +136,10 @@ answer `period_due` and `period_overdue` (expired, so the group's relay and its 
 forwarders take nobody), both false on a phone that is not the root. A root phone checks its
 peers' Android attestations in the core (`attest_status` takes the revocation list the app
 fetched, `attest` answers how many wait, and manage's `attest` records them with the root key;
-protocol.md section 17). It adds a watch with manage's `add_watch` (`key`, the watch's admin
+protocol.md section 17). Every phone hands its member the attestation of its own member key
+that its app made (`evidence`, `{evidence}` as the helper's JSON gives a computer's TPM
+evidence; an empty list sends none), which the member sends in `evidence` messages (t 19) to
+each peer connected now and to each one that connects later. A root phone adds a watch with manage's `add_watch` (`key`, the watch's admin
 key as a SubjectPublicKeyInfo; `name`, `os`), whose member key nobody keeps (D-124),
 answered `{device, name}`; a watch signs nothing in 0.6, so `watch_actions` answers none and
 `cbb_member_manage_watch` refuses, saying its actions come with 0.7. A phone in the group

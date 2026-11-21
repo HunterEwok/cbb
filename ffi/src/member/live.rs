@@ -635,6 +635,13 @@ impl Phone {
                 Ok(json!({ "revoked": revoked, "pending": l.attest_pending() }))
             }
             "attest" => Ok(json!({ "pending": l.attest_pending() })),
+            // The attestation of the phone's own member key its app made,
+            // which every peer gets (t 19).
+            "evidence" => {
+                let list = arg("evidence").as_array().cloned().unwrap_or_default();
+                l.set_own_evidence(&list)?;
+                done()
+            }
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
             _ => Err(not_yet(&format!("the operation {op:?}"))),
         }

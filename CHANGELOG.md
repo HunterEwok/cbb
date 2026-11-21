@@ -38,6 +38,10 @@ made with 0.5 is set up again once. The details follow.
   (`push_face`), sends its registration, message `push`, to every member it connects to
   (`push`), and hands the app each `push-renew` (`push_renewals`). `member/tests/phone_push.rs`
   runs it end to end with the phone on Linux, two computers and the push service.
+- A phone in a group of 0.6 sends the attestation of its own member key that its app made to
+  each peer (`evidence` on the 0.6 member, message `evidence`, t 19), as a computer sends its
+  TPM's, so a root records an Android phone's keys as proven again
+  (`TestFFIPhoneOwnEvidence`).
 - In a group of 0.6 the root phone can add a watch with the key the watch made and a member
   key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
   signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its
