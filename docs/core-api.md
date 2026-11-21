@@ -370,10 +370,15 @@ records; that is a group of 0.5's.
 A phone in no group restores nothing: a phone in the group changes the root with the recovery key
 (`change_root`, above), and restoring on a new phone comes with 0.7 (D-125).
 
-An app without a PIV of its own (the HarmonyOS app) keeps the recovery secret on a YubiKey
-through the core (`ffi/src/piv.rs`, `cbb_member::piv::recovery`): `cbb_piv` runs one step of PIV
-and the app's `cbb_transmit_fn` carries each APDU to the card (over NFC, IsoDep), answered with
-its status word last. The card holds the recovery secret itself
+Every phone app keeps the recovery secret on a YubiKey through the core (`ffi/src/piv.rs`,
+`cbb_member::piv::recovery`): `cbb_piv` runs one step of PIV and the app's `cbb_transmit_fn`
+reaches the card. With `transport` `apdu` (the default: NFC, or a card the system already
+speaks to) it carries each APDU and answers with the status word last. With `ccid_bulk` (a
+YubiKey on USB-C, whose CCID interface the app claimed) it only moves bytes: a call with data
+writes them to the bulk-out endpoint, a call without reads one bulk-in transfer (empty when
+nothing came within about a second), and the core frames each APDU as CCID's
+`PC_to_RDR_XfrBlock` and waits through the card's time extensions while it waits for its
+touch (`cbb_member::piv::ccid`). The card holds the recovery secret itself
 (protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`):
 `inspect` (`pin`) checks that the card can take it, with nothing written, and answers
 `{"default_key"}`, true while the card has its factory management key, which the app tells the
@@ -383,7 +388,7 @@ key in base64) makes the card's key in slot 95 and writes the sealed secret in `
 answering `{"default_key", "replaced", "warning"}`; `open` (`pin`, then a touch) answers
 `{"secret"}`, base64, which the app hands to manage's `change_root` as `recovery` and drops.
 `TestFFIPhoneYubiKey` seals a group's sheet on a fake YubiKey in `phone-on-linux`, opens it
-after the root is lost and changes the root with it.
+after the root is lost, over NFC and through a fake CCID reader, and changes the root with it.
 
 A root phone makes its watch an admin with manage's `add_watch` (`key`, the watch's admin key
 as a SubjectPublicKeyInfo; `name`, `os`): the core issues the watch's admin CA and adds its

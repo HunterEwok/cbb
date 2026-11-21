@@ -17,7 +17,8 @@ import (
 // (cbb_piv's inspect and seal), as the root phone does when the group is
 // made; once the root is lost, the phone opens the card with its PIN
 // (cbb_piv's open) and changes the root with the secret it gave
-// (docs/protocol.md, "The recovery key on a YubiKey (0.6)").
+// (docs/protocol.md, "The recovery key on a YubiKey (0.6)"), over NFC or
+// over the CCID interface of a YubiKey on USB-C.
 func TestFFIPhoneYubiKey(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	var h hub
@@ -71,6 +72,14 @@ func TestFFIPhoneYubiKey(t *testing.T) {
 	got = piv(map[string]any{"op": "open", "pin": "123456"})
 	if err := json.Unmarshal([]byte(got), &opened); err != nil || opened.OK.Secret == "" {
 		t.Fatalf("opening: %s", got)
+	}
+	// A YubiKey on USB-C: the app moves the bytes of its CCID interface
+	// and the core frames them, through a time extension for the touch.
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "transport": "ccid_bulk"}); !strings.Contains(got, opened.OK.Secret) {
+		t.Fatalf("opening over CCID: %s", got)
+	}
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "transport": "lightning"}); !strings.Contains(got, "no YubiKey transport") {
+		t.Errorf("a transport there is none of: %s", got)
 	}
 	newRoot := func(req map[string]any) string {
 		t.Helper()

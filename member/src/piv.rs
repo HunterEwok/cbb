@@ -37,6 +37,7 @@ const PIN_REF: u8 = 0x80;
 /// most a few kilobytes.
 const MAX_ANSWER: usize = 16 << 10;
 
+pub mod ccid;
 pub mod recovery;
 
 pub const NO_CARD: &str = "no YubiKey found: plug it in, or hold it to the reader";

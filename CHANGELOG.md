@@ -26,6 +26,9 @@ made with 0.5 is set up again once. The details follow.
   sheet onto a YubiKey after asking whether its factory management key is replaced; the
   Aurora app takes the sheet. The iPhone and Android kits' own PIV code and their restore
   on the Start screen are gone: the core speaks PIV for them.
+  `cbb_piv` also reaches a YubiKey plugged into the phone's USB-C port: with the transport
+  `ccid_bulk` the app only moves the bytes of the key's CCID interface and the core frames
+  each APDU (`member/src/piv/ccid.rs`).
 - In a group of 0.6 the root phone can add a watch with the key the watch made and a member
   key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
   signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its

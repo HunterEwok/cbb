@@ -136,10 +136,13 @@ uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t l
                            size_t *answer_len);
 
 /*
- * The app's YubiKey (src/piv.rs), only with the feature member: sends apdu
- * (len bytes) to the card and writes its answer, the status word last, to
- * out (at most out_cap bytes) and the length to out_len; returns 0, or
- * another value when the card left.
+ * The app's YubiKey (src/piv.rs), only with the feature member. With the
+ * transport "apdu": sends apdu (len bytes) to the card and writes its
+ * answer, the status word last, to out (at most out_cap bytes) and the
+ * length to out_len. With "ccid_bulk" (a YubiKey's CCID interface on USB):
+ * len > 0 writes those bytes to the bulk-out endpoint, out_len 0; len 0
+ * reads one bulk-in transfer into out, out_len 0 when nothing came within
+ * about a second. Returns 0, or another value when the card left.
  */
 typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, uint8_t *out, size_t out_cap,
                                    size_t *out_len);
@@ -151,7 +154,8 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
  * {"pin"} answers {"default_key"}; "seal" {"pin","recovery","replace_default",
  * "management"} seals the sheet's secret (recovery as manage's change_root
  * takes it) and answers {"default_key","replaced","warning"}; "open" {"pin"}
- * answers {"secret"}, base64, for change_root's recovery.
+ * answers {"secret"}, base64, for change_root's recovery. "transport" is
+ * "apdu" (the default) or "ccid_bulk", as cbb_transmit_fn says.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
 

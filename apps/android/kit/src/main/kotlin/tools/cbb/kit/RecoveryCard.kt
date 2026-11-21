@@ -9,7 +9,6 @@ import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -19,6 +18,25 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 fun interface SmartCard {
     fun transmit(apdu: ByteArray): ByteArray
+}
+
+/**
+ * The bulk endpoints of a YubiKey's CCID interface on USB-C, which the app
+ * claimed: the core frames each APDU (`cbb_piv`'s transport `ccid_bulk`).
+ */
+interface CcidBulk {
+    /** Writes bytes to the bulk-out endpoint. */
+    fun write(data: ByteArray)
+
+    /** Reads one bulk-in transfer, at most max bytes; empty when nothing came within about a second. */
+    fun read(max: Int): ByteArray
+}
+
+/** How the app reaches the card: an APDU at a time (NFC), or the bytes of its CCID interface (USB-C). */
+sealed class CardLink {
+    class Apdu(val card: SmartCard) : CardLink()
+
+    class Ccid(val bulk: CcidBulk) : CardLink()
 }
 
 /**
@@ -91,7 +109,9 @@ object RecoveryCard {
      * it still has its factory management key, which the app tells the
      * person before [seal] and asks whether to replace.
      */
-    fun inspect(card: SmartCard, pin: String): Boolean =
+    fun inspect(card: SmartCard, pin: String): Boolean = inspect(CardLink.Apdu(card), pin)
+
+    fun inspect(card: CardLink, pin: String): Boolean =
         run(card, Wire.obj("op" to Wire.str("inspect"), "pin" to Wire.str(pin))).optBool("default_key")
             ?: throw Core.Mismatch("the core's answer to inspect has no default_key")
 
@@ -100,7 +120,10 @@ object RecoveryCard {
      * code or its text; replaceDefault is the person's consent to replace a
      * factory management key.
      */
-    fun seal(card: SmartCard, pin: String, sheet: String, replaceDefault: Boolean): Sealed {
+    fun seal(card: SmartCard, pin: String, sheet: String, replaceDefault: Boolean): Sealed =
+        seal(CardLink.Apdu(card), pin, sheet, replaceDefault)
+
+    fun seal(card: CardLink, pin: String, sheet: String, replaceDefault: Boolean): Sealed {
         val ok = run(
             card,
             Wire.obj(
@@ -114,7 +137,9 @@ object RecoveryCard {
     }
 
     /** Opens the secret after the PIN and a touch, for a change of root; the caller drops it after that one use. */
-    fun open(card: SmartCard, pin: String): ByteArray =
+    fun open(card: SmartCard, pin: String): ByteArray = open(CardLink.Apdu(card), pin)
+
+    fun open(card: CardLink, pin: String): ByteArray =
         run(card, Wire.obj("op" to Wire.str("open"), "pin" to Wire.str(pin))).optBytes("secret")
             ?: throw Core.Mismatch("the core's answer to open has no secret")
 
@@ -132,13 +157,23 @@ object RecoveryCard {
 
     private val lib: Lib by lazy { Native.load("cbb_ffi", Lib::class.java) }
 
-    private fun run(card: SmartCard, request: JsonElement): JsonObject {
-        val bytes = Wire.encode(request)
+    private fun run(card: CardLink, request: JsonObject): JsonObject {
+        val transport = if (card is CardLink.Ccid) "ccid_bulk" else "apdu"
+        val bytes = Wire.encode(JsonObject(request + ("transport" to JsonPrimitive(transport))))
         val transmit = TransmitFn { _, apdu, len, out, cap, outLen ->
             try {
-                val r = card.transmit(apdu.getByteArray(0, len.toInt()))
+                val data = if (len.toLong() > 0) apdu.getByteArray(0, len.toInt()) else ByteArray(0)
+                val r = when (card) {
+                    is CardLink.Apdu -> card.card.transmit(data)
+                    is CardLink.Ccid -> if (data.isNotEmpty()) {
+                        card.bulk.write(data)
+                        ByteArray(0)
+                    } else {
+                        card.bulk.read(cap.toInt())
+                    }
+                }
                 if (r.size > cap.toLong()) return@TransmitFn 1
-                out.write(0, r, 0, r.size)
+                if (r.isNotEmpty()) out.write(0, r, 0, r.size)
                 if (Native.SIZE_T_SIZE == 8) outLen.setLong(0, r.size.toLong()) else outLen.setInt(0, r.size)
                 0
             } catch (e: Exception) {

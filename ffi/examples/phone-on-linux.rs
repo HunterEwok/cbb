@@ -989,12 +989,72 @@ mod card {
         0
     }
 
-    /// cbb_piv on the card.
+    /// The answers a fake CCID reader in front of the card has for the
+    /// app's bulk-in reads, in transfers of 64 bytes, as a YubiKey on USB
+    /// sends them.
+    static READER: std::sync::Mutex<std::collections::VecDeque<Vec<u8>>> =
+        std::sync::Mutex::new(std::collections::VecDeque::new());
+
+    fn reader_says(seq: u8, status: u8, data: &[u8]) {
+        let mut m = vec![0x80];
+        m.extend_from_slice(&u32::try_from(data.len()).unwrap_or(0).to_le_bytes());
+        m.extend_from_slice(&[0, seq, status, 0, 0]);
+        m.extend_from_slice(data);
+        let mut q = READER.lock().unwrap_or_else(|e| e.into_inner());
+        for c in m.chunks(64) {
+            q.push_back(c.to_vec());
+        }
+    }
+
+    /// cbb_transmit_fn for the transport `ccid_bulk`: a write is a CCID
+    /// message to the reader, which answers on the next reads, a time
+    /// extension before each APDU's answer as while a YubiKey waits for
+    /// its touch; a read with nothing waiting is empty.
+    pub unsafe extern "C" fn carry_ccid(
+        _: *mut core::ffi::c_void,
+        data: *const u8,
+        len: usize,
+        out: *mut u8,
+        cap: usize,
+        out_len: *mut usize,
+    ) -> i32 {
+        // SAFETY: as cbb_core.h's cbb_transmit_fn says.
+        unsafe {
+            if len > 0 {
+                let m = std::slice::from_raw_parts(data, len);
+                if m.len() < 10 {
+                    return 1;
+                }
+                match m[0] {
+                    0x62 => reader_says(m[6], 0, &[0x3b, 0x8d, 0x80]),
+                    0x6f => {
+                        let r = transmit(&m[10..]);
+                        reader_says(m[6], 0x80, &[]);
+                        reader_says(m[6], 0, &r);
+                    }
+                    _ => reader_says(m[6], 0x40, &[]),
+                }
+                out_len.write(0);
+                return 0;
+            }
+            let next = READER.lock().unwrap_or_else(|e| e.into_inner()).pop_front().unwrap_or_default();
+            if next.len() > cap {
+                return 1;
+            }
+            std::ptr::copy_nonoverlapping(next.as_ptr(), out, next.len());
+            out_len.write(next.len());
+        }
+        0
+    }
+
+    /// cbb_piv on the card: through the fake CCID reader when the request
+    /// asks for the transport `ccid_bulk`.
     pub fn piv(req: &serde_json::Value) -> serde_json::Value {
+        let f = if req["transport"] == "ccid_bulk" { carry_ccid } else { carry };
         let req = req.to_string();
         let mut n = 0usize;
-        // SAFETY: req and n live for the call; carry needs no context.
-        super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), carry, std::ptr::null_mut(), &mut n) }, n)
+        // SAFETY: req and n live for the call; neither carrier needs a context.
+        super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), f, std::ptr::null_mut(), &mut n) }, n)
     }
 }
 

@@ -545,4 +545,4 @@ pub fn open(c: &mut dyn Card, pin: &str) -> Result<Zeroizing<[u8; 32]>> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
