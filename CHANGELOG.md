@@ -2866,6 +2866,9 @@ made with 0.5 is set up again once. The details follow.
   freeze ends, as the core counts it, and a home pairing window counts its five minutes in the
   device's running time from end to end, so a wall clock set while it is open no longer ends
   it. A build for tests checks the sealing keys as often as `CBB_TEST_RENEW_EVERY` says.
+- On the records of 0.6 an admin computer that removes another admin, or unfreezes one, hears
+  that only the group's root does it, and its freeze of an admin names that admin's key alone,
+  as the core counts an admin's freeze, rather than a record that would not count.
 - On the records of 0.6 the copy a member sends as a connection opens is one it made sealed
   again to that peer by the records as they are then, and a member that takes records refusing
   a peer, removed or frozen, ends that connection before it sends anything more, so a refused

@@ -86,6 +86,16 @@ pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     keys
 }
 
+/// The powers of the admin key signer as the records give them, or None
+/// when it is the group's current root, which has every power.
+fn admin_powers(st: &State, signer: &dyn ExternalKey) -> Option<u64> {
+    let h = Key::es256(signer.public()).hash();
+    if st.roots.last() == Some(&h) {
+        return None;
+    }
+    Some(st.devices.iter().find(|d| d.admin == Some(h)).map_or(0, |d| d.powers))
+}
+
 /// Removes a device from the group: its keys count no more.
 pub fn remove(
     set: &mut RecordSet,
@@ -98,6 +108,14 @@ pub fn remove(
     if Some(d.id) == st.root_device {
         return Err(Error::msg(format!(
             "{} holds the group's root, which is not removed: the root changes only with its recovery key (cbb recovery)",
+            d.name
+        )));
+    }
+    if d.admin.is_some()
+        && admin_powers(&st, signer).is_some_and(|p| p & cbb_core::records::body::POWER_REMOVE_ADMINS == 0)
+    {
+        return Err(Error::msg(format!(
+            "{} is an admin, and only the group's root removes an admin: run cbb remove on the root computer",
             d.name
         )));
     }
@@ -173,7 +191,29 @@ pub fn freeze(
     if !on && !d.frozen {
         return Err(Error::msg(format!("{} is not frozen", d.name)));
     }
-    let keys = keys_of(&d);
+    // An admin freezes admin keys alone, and only the root (or an admin
+    // with the power to remove admins) thaws (docs/protocol.md, section 10).
+    let by_admin = admin_powers(&st, signer);
+    let keys = match (by_admin, d.admin) {
+        (Some(_), Some(a)) if on => vec![a],
+        (Some(_), None) if on => {
+            return Err(Error::msg(format!(
+                "{} is no admin, and an admin freezes only admins: remove it, or freeze it on the root computer",
+                d.name
+            )));
+        }
+        (Some(p), _)
+            if !on
+                && p & (cbb_core::records::body::POWER_THAW | cbb_core::records::body::POWER_REMOVE_ADMINS)
+                    != (cbb_core::records::body::POWER_THAW | cbb_core::records::body::POWER_REMOVE_ADMINS) =>
+        {
+            return Err(Error::msg(format!(
+                "only the group's root unfreezes {}: run cbb thaw on the root computer",
+                d.name
+            )));
+        }
+        _ => keys_of(&d),
+    };
     let kind = if on {
         Kind::Freeze(Removal { keys, seen: Vec::new() })
     } else {

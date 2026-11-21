@@ -1433,7 +1433,9 @@ func TestFreezeAnAdmin(t *testing.T) {
 	if _, err := a.do(t, control.Header{Op: control.OpFreeze, Device: "b"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the root and b hear of the freeze", func() bool { return frozen(pi) && frozen(b) })
+	// A frozen device learns nothing, its freeze included: the root and
+	// a list it frozen, and the root refuses it.
+	waitFor(t, "the root and a hold the freeze", func() bool { return frozen(pi) && frozen(a) })
 	waitFor(t, "b is refused", func() bool { return len(pi.status(t).Peers) == 1 })
 	if _, err := b.do(t, control.Header{Op: control.OpRemove, Device: "a"}, ""); err == nil {
 		t.Error("a frozen admin signed a record")
