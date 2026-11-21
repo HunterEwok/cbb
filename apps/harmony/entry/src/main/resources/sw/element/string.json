@@ -286,6 +286,7 @@
     {"name": "paste_unverified", "value": "(haijathibitishwa)"},
     {"name": "pasted", "value": "Imebandikwa."},
     {"name": "pasted_from", "value": "Imebandikwa kutoka %1$s"},
+    {"name": "period_overdue", "value": "Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa mzizi."},
     {"name": "reason_biometric", "value": "Ili kuthibitisha kila badiliko la kikundi chako kwa uso, alama ya kidole au PIN."},
     {"name": "reason_bluetooth", "value": "Ili kufanya kazi kama kibodi ya Bluetooth kwa TV, kompyuta kibao au kompyuta."},
     {"name": "recovery_has", "value": "Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea."},

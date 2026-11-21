@@ -3025,6 +3025,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun signDue() {
         if (activity == null) return
+        if (isV06) return renewPeriod06()
         try {
             renewDue()
             if (synchronized(lock) { state }?.isRoot == true) {
@@ -3083,6 +3084,29 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             published(listOf(r))
         }
     }
+
+    /**
+     * On the root phone of a group of 0.6, renews the group's server
+     * credentials with the root key when they are due, asking first: only
+     * when the app opens, and with the next root action (the member renews
+     * them with its key then), never at another moment.
+     */
+    private suspend fun renewPeriod06() {
+        val n = currentNode ?: return
+        if (!isRoot || !withContext(Dispatchers.IO) { runCatching { n.periods().first }.getOrDefault(false) }) return
+        try {
+            val root = signer(Keys.ROOT, R.string.reason_period)
+            withContext(Dispatchers.IO) { n.renewPeriod(root.publicKeyDER, root::signDigest) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "renewing the group's server credentials; the next start asks again", e)
+        }
+    }
+
+    /** On the root phone of a group of 0.6, whether the group's server credentials expired; false elsewhere. */
+    val periodOverdue06: Boolean
+        get() = if (!isV06) false else currentNode?.let { n -> runCatching { n.periods().second }.getOrNull() } ?: false
 
     /** Signs the next period of the server credentials, asking first, since the refresh signs it under the lock. */
     private suspend fun signPeriod() {

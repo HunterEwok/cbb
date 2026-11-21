@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">कितनी देर के लिए, चुनें</string>
     <string name="pause_hour">एक घंटे के लिए</string>
     <string name="pause_quarter">15 मिनट के लिए</string>
+    <string name="period_overdue">घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन रूट की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।</string>
     <string name="project_terms">प्रोजेक्ट के सर्वरों की शर्तें</string>
     <string name="push_copy">कॉपी करें</string>
     <string name="push_copy_waits">एक कॉपी इंतज़ार में है। ऐप खोलें।</string>

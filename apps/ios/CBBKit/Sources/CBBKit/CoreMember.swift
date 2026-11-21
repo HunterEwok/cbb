@@ -621,6 +621,38 @@ public final class CoreMember: @unchecked Sendable {
         public init(endpoint: String, key: String) { (self.endpoint, self.key) = (endpoint, key) }
     }
 
+    /// Where the group's server credentials stand on the root phone of a
+    /// group of 0.6: due when they need its root key (`renewPeriod`),
+    /// overdue when they expired, so that the group's relay and its hubs'
+    /// forwarders take nobody; both false elsewhere.
+    public struct Periods: Decodable, Equatable, Sendable {
+        public var due = false
+        public var overdue = false
+
+        public init(due: Bool = false, overdue: Bool = false) { (self.due, self.overdue) = (due, overdue) }
+
+        enum CodingKeys: String, CodingKey { case due = "period_due", overdue = "period_overdue" }
+
+        public init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            due = try c.decodeIfPresent(Bool.self, forKey: .due) ?? false
+            overdue = try c.decodeIfPresent(Bool.self, forKey: .overdue) ?? false
+        }
+    }
+
+    /// On the root phone of a group of 0.6: where the group's server credentials stand.
+    public func periods() throws -> Periods {
+        try run("away_status", Optional<Empty>.none, as: Periods.self)
+    }
+
+    /// On the root phone of a group of 0.6: renews the group's server
+    /// credentials with the root key, signed through sign; where they stand after.
+    @discardableResult
+    public func renewPeriod(public: Data, sign: @escaping (Data) throws -> Data) throws -> Periods {
+        struct A: Encodable { var action = "period", `public`: Data }
+        return try manage(A(public: try Self.point(`public`)), sign: sign, as: Periods.self)
+    }
+
     /// On a group of 0.6: the forwarder the group's root set for this phone
     /// as a hub, which it serves through; nil while the root set none.
     public func rootForwarder() throws -> RootForwarder? {

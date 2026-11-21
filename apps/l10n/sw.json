@@ -1224,6 +1224,7 @@
   "The group's hub": "Kitovu cha kikundi",
   "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": "Kitovu cha kikundi hakikujibu. Hakikisha mwaliko bado ni halali na kitovu kimewashwa, kisha jaribu tena.",
   "The group's hub, in use now": "Kitovu cha kikundi, kinatumika sasa",
+  "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": "Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa mzizi.",
   "The group's main device changed": "Kifaa kikuu cha kikundi kimebadilika",
   "The group's owner decides on its alerts.": "Mmiliki wa kikundi huamua kwenye arifa zake.",
   "The group's records stop the exchange.": "Rekodi za kikundi zimesimamisha ubadilishanaji.",

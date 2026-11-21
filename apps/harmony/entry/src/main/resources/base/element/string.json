@@ -287,6 +287,7 @@
     {"name": "paste_unverified", "value": "(unverified)"},
     {"name": "pasted", "value": "Pasted."},
     {"name": "pasted_from", "value": "Pasted from %1$s"},
+    {"name": "period_overdue", "value": "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key."},
     {"name": "reason_biometric", "value": "To confirm each change to your group with your face, fingerprint or PIN."},
     {"name": "reason_bluetooth", "value": "To act as a Bluetooth keyboard for a TV, a tablet or a computer."},
     {"name": "recovery_has", "value": "The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost."},

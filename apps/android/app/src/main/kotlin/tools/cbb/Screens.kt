@@ -939,6 +939,8 @@ private fun BlindRelaySection(model: AppModel, relay: AppModel.BlindRelay) {
             Text(status, color = if (relay.status == RelayOnPhone.Status.CONNECTED) palette.accent else palette.textDim)
             // The relay's error underneath, when details are on.
             relay.error?.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.textDim) }
+            // The root key renews the group's server credentials when the app opens.
+            if (relay.periodOverdue) Text("⚠ " + stringResource(R.string.period_overdue), style = MaterialTheme.typography.bodySmall, color = palette.textDim)
             // On a group of 0.6 the relay is the group's, which only the root sets.
             if (!relay.editable) {
                 Tip(R.string.relay_by_root)

@@ -229,6 +229,11 @@ struct Hub {
         }
 
         this.section(t('relay_title'))
+        // The root's key renews the group's server credentials when the app
+        // opens; until it does, the relay and the hubs' forwarders take nobody.
+        if (app.member.periodOverdue) {
+          ErrorText({ text: t('period_overdue') })
+        }
         // On a group of 0.6 the relay is the group's, which only the root sets.
         if (app.isV06() && !app.isRoot()) {
           this.note(t('relay_by_root'))

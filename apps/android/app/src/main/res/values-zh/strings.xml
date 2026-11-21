@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">选择时长</string>
     <string name="pause_hour">1 小时</string>
     <string name="pause_quarter">15 分钟</string>
+    <string name="period_overdue">群组用于离家同步的密钥已过期：在这部手机用根密钥续期之前，它的中继和中心节点不接受任何设备。</string>
     <string name="project_terms">项目服务器条款</string>
     <string name="push_copy">复制</string>
     <string name="push_copy_waits">有复制内容在等待。请打开应用。</string>

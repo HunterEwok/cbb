@@ -1059,8 +1059,8 @@ member that a connected member reaches as online through it. Each message replac
 last from that connection, and the connection's end drops it. The list is shown, never
 trusted: a member may leave a device out or name one it does not reach, as it could drop
 the commands it should pass on. A receiver ignores an ID that is not valid or that no
-device record of the group names. `cbb` and the phones send none for now, and
-a member that does not know the message ignores it.
+device record of the group names. `cbb` sends it (`member/src/mesh/reach.rs`), the
+phones send none, and a member that does not know the message ignores it.
 
 #### Presence
 

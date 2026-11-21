@@ -444,6 +444,12 @@ extension SettingsView {
             if let error = relay.error, AppModel.showsErrorDetails {
                 Text(verbatim: error).font(.caption).foregroundStyle(palette.textDim)
             }
+            // The root key renews the group's server credentials when the app opens.
+            if relay.periodOverdue {
+                Text("The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.")
+                    .font(.caption)
+                    .foregroundStyle(palette.textDim)
+            }
             // On a group of 0.6 the relay is the group's, which only the root sets.
             if relay.editable {
                 TextField(text: $relayAddress) { Text("Relay address, such as 198.51.100.9:8764") }

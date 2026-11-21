@@ -185,9 +185,15 @@ class AwayKitTest {
         assertFailsWith<Core.Refusal>("default goes alone") { g.r.setRelays(listOf("default", "127.0.0.1:1 $pin"), g.rootKey.publicKeyDER, g.rootKey::signDigest) }
         assertFailsWith<Core.Refusal>("an admin key is no root key") { g.a.setRelays(listOf("127.0.0.1:1 $pin"), g.aAdmin.publicKeyDER, g.aAdmin::signDigest) }
 
-        // Nothing listens at the relay's address.
+        // Nothing listens at the relay's address. The root key that sets it
+        // also renews the group's server credentials, which were due.
+        assertTrue(g.r.periods().first, "the root phone's first period is due")
+        assertEquals(false to false, g.a.periods(), "only the root phone signs periods")
+        assertFailsWith<Core.Refusal>("an admin key is no root key") { g.a.renewPeriod(g.aAdmin.publicKeyDER, g.aAdmin::signDigest) }
         val relayPort = freeUDP()
         assertEquals(listOf("127.0.0.1:$relayPort"), g.r.setRelays(listOf("127.0.0.1:$relayPort $pin"), g.rootKey.publicKeyDER, g.rootKey::signDigest))
+        assertEquals(false to false, g.r.periods(), "the relay's root key renewed the credentials")
+        assertEquals(false to false, g.r.renewPeriod(g.rootKey.publicKeyDER, g.rootKey::signDigest))
         g.a.setAway(true)
         val relay = waitFor("the admin phone never tried the group's relay") { g.a.awayStatus()?.relay?.takeIf { it.endpoint == "127.0.0.1:$relayPort" && it.error.isNotEmpty() } }
         assertFalse(relay.connected, "the relay does not take it")

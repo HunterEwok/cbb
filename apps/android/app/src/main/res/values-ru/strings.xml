@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">выбрать, на сколько</string>
     <string name="pause_hour">На час</string>
     <string name="pause_quarter">На 15 минут</string>
+    <string name="period_overdue">Срок ключей группы для синхронизации вне дома истёк: её ретранслятор и хабы не принимают устройства, пока этот телефон не обновит их ключом корня.</string>
     <string name="project_terms">Условия серверов проекта</string>
     <string name="push_copy">Скопировать</string>
     <string name="push_copy_waits">Копия ждёт. Откройте приложение.</string>

@@ -17116,6 +17116,52 @@
         }
       }
     },
+    "Renew the group's keys for sync away from home": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تجديد مفاتيح المجموعة للمزامنة بعيدًا عن المنزل"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renovar las claves del grupo para sincronizar fuera de casa"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "חידוש מפתחות הקבוצה לסנכרון מחוץ לבית"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर से दूर सिंक के लिए समूह की कुंजियाँ नवीनीकृत करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновить ключи группы для синхронизации вне дома"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya upya funguo za kikundi za kusawazisha ukiwa mbali na nyumbani"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "续订群组用于离家同步的密钥"
+          }
+        }
+      }
+    },
     "Renew this phone's certificate": {
       "localizations": {
         "ar": {
@@ -23506,6 +23552,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的中心节点，正在使用"
+          }
+        }
+      }
+    },
+    "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجذر."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave raíz."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח השורש."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन रूट की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Срок ключей группы для синхронизации вне дома истёк: её ретранслятор и хабы не принимают устройства, пока этот телефон не обновит их ключом корня."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa mzizi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组用于离家同步的密钥已过期：在这部手机用根密钥续期之前，它的中继和中心节点不接受任何设备。"
           }
         }
       }

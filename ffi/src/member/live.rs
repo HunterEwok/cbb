@@ -458,6 +458,15 @@ impl Phone {
             "muted" => Ok(self.state()),
             "peers" => {
                 let all = arg("all").as_bool().unwrap_or(false);
+                // What each connected member says it reaches (protocol.md,
+                // section 4, "Reach"), so that the app shows the members
+                // behind a hub as online through it.
+                let reach: std::collections::HashMap<String, Vec<String>> = l
+                    .mesh
+                    .connected()
+                    .iter()
+                    .map(|p| (id_text(p), l.mesh.reach_of(p).iter().map(id_text).collect()))
+                    .collect();
                 let ps: Vec<Value> = self
                     .devices()
                     .iter()
@@ -466,6 +475,7 @@ impl Phone {
                         json!({
                             "device": d.id, "name": d.name, "role": d.role, "os": d.os,
                             "key_store": d.store, "mode": d.mode, "muted": d.muted,
+                            "reach": reach.get(&d.id).cloned().unwrap_or_default(),
                         })
                     })
                     .collect();
@@ -622,9 +632,19 @@ impl Phone {
     /// Sync away from home as the away ops answer it: its state, null
     /// while it is off, and the forwarder the group's root set for this
     /// phone as a hub (`endpoint`, `key`), null while it set none, which
-    /// the apps show as the root's setting.
+    /// the apps show as the root's setting; and on the root phone whether
+    /// the group's server credentials need its root key (`period_due`,
+    /// which the manage action `period` renews) and whether they expired
+    /// already (`period_overdue`), so that the group's relay and its hubs'
+    /// forwarders take nobody until then.
     fn away_answer(&self) -> Value {
-        json!({ "away": self.live.away_status(), "root_forwarder": root_forwarder(&self.dir) })
+        let (due, overdue) = self.live.mesh.periods();
+        json!({
+            "away": self.live.away_status(),
+            "root_forwarder": root_forwarder(&self.dir),
+            "period_due": due,
+            "period_overdue": overdue,
+        })
     }
 
     /// Whether sync is off and whether the phone is muted, as on 0.5.
@@ -709,15 +729,30 @@ impl Phone {
                         })
                         .collect();
                     let relays = self.live.set_relays(Some(&key), &given)?;
+                    self.renew_by(&key);
                     return Ok(json!({ "relays": relays.into_iter().map(|r| r.endpoint).collect::<Vec<_>>() }));
+                }
+                // The root's key, handed over to renew the group's server
+                // credentials: the root phone signs the period for each of
+                // the group's servers that needs one (protocol.md, section
+                // 18), as the root computer does by itself.
+                "period" => {
+                    mesh.refresh_faces_by(&key)?;
+                    let (due, overdue) = mesh.periods();
+                    return Ok(json!({ "period_due": due, "period_overdue": overdue }));
                 }
                 // The root names the forwarder of an admin phone that is a
                 // hub (`forwarder`, its key's pin `key`, or `default` for the
                 // project's) with the hub command, as cbb global hub -on
                 // does, and makes the group's credentials for it there.
-                "forwarder" => return self.name_forwarder(&a, &key),
+                "forwarder" => {
+                    let r = self.name_forwarder(&a, &key)?;
+                    self.renew_by(&key);
+                    return Ok(r);
+                }
                 "hubs" => {
                     mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
+                    self.renew_by(&key);
                     return Ok(json!({ "hubs": a.hubs }));
                 }
                 "make_admin" => self.make_admin(&a, &key, now)?,
@@ -766,6 +801,20 @@ impl Phone {
             mesh.set_hub_forwarders(d.id, vec![cbb_member::faces::Server { pin: f.1, address: f.0 }])?;
         }
         Ok(json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }))
+    }
+
+    /// Renews the group's server credentials with the root's key that a
+    /// root action handed over, while it is here: the next root action
+    /// renews a period that is due, so the app asks for no key at another
+    /// moment. Another key renews nothing.
+    fn renew_by(&self, key: &AppKey) {
+        let mesh = &self.live.mesh;
+        if mesh.state().roots.last() == Some(&cbb_core::records::Key::es256(key.public.clone()).hash())
+            && mesh.periods().0
+            && let Err(e) = mesh.refresh_faces_by(key)
+        {
+            (self.log)(&format!("cbb: renewing the group's server credentials: {}", e.for_log()));
+        }
     }
 
     /// The group's key level as the records set it.

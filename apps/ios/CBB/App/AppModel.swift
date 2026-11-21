@@ -545,6 +545,10 @@ final class AppModel: ObservableObject {
         /// Whether this phone sets the relay: on a group of 0.6 only the
         /// root does, for the whole group.
         var editable = true
+        /// On the root phone of a group of 0.6: the group's server
+        /// credentials expired, so the relay and the hubs' forwarders take
+        /// nobody until the root key renews them.
+        var periodOverdue = false
     }
 
     @Published private(set) var blindRelay: BlindRelay?

@@ -74,20 +74,22 @@ fn the_root_starts_a_period_and_members_add_their_keys() {
     let (state, without_b) = group();
     let (root, a, b) = (k(1), k(2), k(3));
     let ra = Faces::open(&temp("root"), &state, quiet()).unwrap();
-    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
     assert_eq!(signed.len(), 4, "the period, a's server key, the hubs' and the members' credentials");
-    assert!(one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() }).is_empty());
+    assert!(
+        one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() }).is_empty()
+    );
 
     // b takes them all, then adds its own server key; it signs nothing else.
     let fb = Faces::open(&temp("b"), &state, quiet()).unwrap();
     assert_eq!(fb.add(&state, "a", &server(7), &signed).len(), 4);
-    let mine = one(&fb, &state, &Signers { member: &b, root: None, secret: fb.secret() });
+    let mine = one(&fb, &state, &Signers { member: &b, root: None, root_here: false, secret: fb.secret() });
     assert_eq!(mine.len(), 1);
     assert_eq!(Credential::read(&mine[0]).unwrap().kind, TYPE_SERVER);
 
     // The root lists b in a new members' credential.
     assert_eq!(ra.add(&state, "b", &server(7), &mine).len(), 1);
-    let more = one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let more = one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
     assert_eq!(more.len(), 1);
     let m = Credential::read(&more[0]).unwrap();
     assert_eq!(m.kind, TYPE_MEMBERS);
@@ -104,7 +106,7 @@ fn the_root_starts_a_period_and_members_add_their_keys() {
     assert!(!kept.period_due(&state, crate::uptime::wall_ms() as u64));
     assert!(kept.period_due(&without_b, crate::uptime::wall_ms() as u64));
     let old_tag = kept.tag();
-    let next = one(&ra, &without_b, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let next = one(&ra, &without_b, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
     assert_eq!(next.len(), 4);
     let kept = ra.kept(&S);
     assert_ne!(kept.tag(), old_tag);
@@ -117,11 +119,11 @@ fn what_is_not_the_groups_is_refused() {
     let (state, without_b) = group();
     let (root, a, b) = (k(1), k(2), k(3));
     let ra = Faces::open(&temp("refuse-root"), &state, quiet()).unwrap();
-    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
 
     // A period signed by a member is no period of the group.
     let fake = Faces::open(&temp("refuse-fake"), &state, quiet()).unwrap();
-    let not_root = one(&fake, &state, &Signers { member: &b, root: Some(&b), secret: fake.secret() });
+    let not_root = one(&fake, &state, &Signers { member: &b, root: Some(&b), root_here: true, secret: fake.secret() });
     assert!(not_root.is_empty(), "the period does not count, so nothing follows it");
     let fresh = Faces::open(&temp("refuse-fresh"), &state, quiet()).unwrap();
     assert!(fresh.add(&state, "b", &server(7), &not_root).is_empty());
@@ -129,7 +131,7 @@ fn what_is_not_the_groups_is_refused() {
     // A server key of a device removed is refused.
     let fb = Faces::open(&temp("refuse-b"), &state, quiet()).unwrap();
     fb.add(&state, "a", &server(7), &signed);
-    let mine = one(&fb, &state, &Signers { member: &b, root: None, secret: fb.secret() });
+    let mine = one(&fb, &state, &Signers { member: &b, root: None, root_here: false, secret: fb.secret() });
     assert!(ra.add(&without_b, "b", &server(7), &mine).is_empty());
 
     // The members' credential signed by a server key the hubs' credential
@@ -151,7 +153,7 @@ fn messages_carry_them_and_the_file_keeps_them() {
     let (root, a) = (k(1), k(2));
     let dir = temp("file");
     let ra = Faces::open(&dir, &state, quiet()).unwrap();
-    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
     let frames = Faces::messages(&server(7), &signed);
     assert_eq!(frames.len(), 1);
     let got = Faces::read_message(&frames[0][4..]).unwrap();
@@ -173,9 +175,9 @@ fn messages_carry_them_and_the_file_keeps_them() {
     let b = k(3);
     let fb = Faces::open(&temp("file-b"), &state, quiet()).unwrap();
     fb.add(&state, "a", &server(7), &signed);
-    let mine = one(&fb, &state, &Signers { member: &b, root: None, secret: fb.secret() });
+    let mine = one(&fb, &state, &Signers { member: &b, root: None, root_here: false, secret: fb.secret() });
     again.add(&state, "b", &server(7), &mine);
-    let more = one(&again, &state, &Signers { member: &a, root: Some(&root), secret: again.secret() });
+    let more = one(&again, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: again.secret() });
     assert_eq!(more.len(), 1, "a new members' credential, no new period");
 }
 
@@ -188,7 +190,7 @@ fn each_server_sees_another_face() {
     let (root, a) = (k(1), k(2));
     let dir = temp("two");
     let ra = Faces::open(&dir, &state, quiet()).unwrap();
-    let s = Signers { member: &a, root: Some(&root), secret: ra.secret() };
+    let s = Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() };
     let got = ra.refresh(&state, &s, &[server(7), server(8)]).unwrap();
     assert_eq!(
         got.iter().map(|(srv, e)| (srv.clone(), e.len())).collect::<Vec<_>>(),
@@ -225,7 +227,7 @@ fn every_face_names_its_server() {
     let (state, _) = group();
     let (root, a) = (k(1), k(2));
     let ra = Faces::open(&temp("names"), &state, quiet()).unwrap();
-    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), secret: ra.secret() });
+    let signed = one(&ra, &state, &Signers { member: &a, root: Some(&root), root_here: true, secret: ra.secret() });
     let f = Faces::messages(&server(7), &signed).remove(0);
     let (_, v, _) = cbb_core::msg::read_noted(&f[4..]).unwrap();
     let without: Vec<(u16, Value<'_>)> = v.as_map().unwrap().iter().filter(|(k, _)| *k != 4).cloned().collect();
@@ -235,7 +237,9 @@ fn every_face_names_its_server() {
 
     let many: Vec<Server> = (0..=MAX_FACES as u8).map(|i| server(100 + i)).collect();
     let rb = Faces::open(&temp("many"), &state, quiet()).unwrap();
-    let got = rb.refresh(&state, &Signers { member: &a, root: Some(&root), secret: rb.secret() }, &many).unwrap();
+    let got = rb
+        .refresh(&state, &Signers { member: &a, root: Some(&root), root_here: true, secret: rb.secret() }, &many)
+        .unwrap();
     assert_eq!(got.len(), MAX_FACES);
     assert_eq!(rb.servers().len(), MAX_FACES);
     let other = Faces::open(&temp("many-b"), &state, quiet()).unwrap();

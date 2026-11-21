@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">elige durante cuánto tiempo</string>
     <string name="pause_hour">Durante una hora</string>
     <string name="pause_quarter">Durante 15 minutos</string>
+    <string name="period_overdue">Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave raíz.</string>
     <string name="project_terms">Condiciones de los servidores del proyecto</string>
     <string name="push_copy">Copiar</string>
     <string name="push_copy_waits">Hay una copia esperando. Abre la app.</string>

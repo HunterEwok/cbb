@@ -1224,6 +1224,7 @@
   "The group's hub": "समूह का हब",
   "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": "समूह के हब ने जवाब नहीं दिया। जाँचें कि निमंत्रण अभी मान्य है और हब चालू है, फिर दोबारा कोशिश करें।",
   "The group's hub, in use now": "समूह का हब, अभी उपयोग में",
+  "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": "घर से दूर सिंक के लिए समूह की कुंजियों की अवधि समाप्त हो गई है: जब तक यह फ़ोन रूट की कुंजी से उन्हें नवीनीकृत नहीं करता, उसका रिले और हब किसी डिवाइस को नहीं लेते।",
   "The group's main device changed": "समूह का मुख्य डिवाइस बदल गया",
   "The group's owner decides on its alerts.": "समूह का स्वामी अपनी चेतावनियों में फ़ैसला करता है।",
   "The group's records stop the exchange.": "समूह के रिकॉर्ड ने आदान-प्रदान रोक दिया है।",

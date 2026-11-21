@@ -79,4 +79,10 @@ final class AwayOn06Tests: XCTestCase {
         let failed = try JSONDecoder().decode(CoreMember.AwayState.self, from: Data(#"{"error":"off","detail":"why"}"#.utf8))
         XCTAssertFalse(failed.isOn)
     }
+
+    func testPeriodsDecode() throws {
+        let both = try JSONDecoder().decode(CoreMember.Periods.self, from: Data(#"{"away":null,"period_due":true,"period_overdue":true}"#.utf8))
+        XCTAssertEqual(both, .init(due: true, overdue: true))
+        XCTAssertEqual(try JSONDecoder().decode(CoreMember.Periods.self, from: Data(#"{"away":null}"#.utf8)), .init())
+    }
 }

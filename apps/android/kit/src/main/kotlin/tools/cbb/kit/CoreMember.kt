@@ -393,6 +393,16 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         RootForwarder(f.optString("endpoint") ?: "", f.optString("key") ?: "")
     }
 
+    /**
+     * On the root phone of a group of 0.6: whether the group's server credentials need its root key ([renewPeriod]) and
+     * whether they expired already, so that the group's relay and its hubs' forwarders take nobody; both false elsewhere.
+     */
+    fun periods(): Pair<Boolean, Boolean> = call("away_status").let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }
+
+    /** On the root phone of a group of 0.6: renews the group's server credentials with the root key; the periods after. */
+    fun renewPeriod(public: ByteArray, sign: (ByteArray) -> ByteArray): Pair<Boolean, Boolean> =
+        root(Wire.obj("action" to Wire.str("period")), public, sign).let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }
+
     /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
     fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
 

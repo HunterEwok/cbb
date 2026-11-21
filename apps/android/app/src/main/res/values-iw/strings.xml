@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">בחרו לכמה זמן</string>
     <string name="pause_hour">למשך שעה</string>
     <string name="pause_quarter">למשך 15 דקות</string>
+    <string name="period_overdue">תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח השורש.</string>
     <string name="project_terms">תנאי השרתים של הפרויקט</string>
     <string name="push_copy">העתקה</string>
     <string name="push_copy_waits">העתקה ממתינה. פתחו את האפליקציה.</string>

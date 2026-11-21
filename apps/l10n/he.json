@@ -1224,6 +1224,7 @@
   "The group's hub": "הרכזת של הקבוצה",
   "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": "הרכזת של הקבוצה לא ענתה. ודאו שההזמנה עדיין בתוקף ושהרכזת פועלת, ונסו שוב.",
   "The group's hub, in use now": "הרכזת של הקבוצה, בשימוש כעת",
+  "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": "תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח השורש.",
   "The group's main device changed": "המכשיר הראשי של הקבוצה השתנה",
   "The group's owner decides on its alerts.": "הבעלים של הקבוצה מחליטים בהתראות שלהם.",
   "The group's records stop the exchange.": "הרשומות של הקבוצה עצרו את ההחלפה.",

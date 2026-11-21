@@ -2172,6 +2172,22 @@ final class LiveGroup: GroupController {
         background = false
         try? node.resume()
         if node.connected().isEmpty { browser?.restart() }
+        if isV06 { Task { await renewPeriod06() } }
+    }
+
+    /// On the root phone of a group of 0.6, renews the group's server
+    /// credentials with the root key when they are due, asking with Face ID
+    /// first: only when the app comes to the front, and with the next root
+    /// action (the member renews them with its key then), never at another
+    /// moment.
+    private func renewPeriod06() async {
+        guard isRoot, let node, (try? node.periods())?.due == true else { return }
+        do {
+            let root = try await caSigner(reason: String(localized: "Renew the group's keys for sync away from home", bundle: .app))
+            _ = try rootRecord(root) { n, p, s in try n.renewPeriod(public: p, sign: s) }
+        } catch {
+            relayLog.warning("renewing the group's server credentials; the next time the app opens asks again: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// The app went to the background, or came back from it: there the
@@ -2509,6 +2525,7 @@ final class LiveGroup: GroupController {
             var r = AppModel.BlindRelay(status: status, error: error, relay: a?.relay.flatMap { $0.endpoint.isEmpty ? nil : .init(endpoint: $0.endpoint, pin: "") },
                                         online: a?.relay?.online.count ?? 0)
             r.editable = isRoot
+            r.periodOverdue = isRoot && ((try? node?.periods())?.overdue ?? false)
             return r
         }
         guard let r = blindRelay else { return nil }

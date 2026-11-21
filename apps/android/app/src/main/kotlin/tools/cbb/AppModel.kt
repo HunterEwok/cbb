@@ -238,6 +238,8 @@ class AppModel(private val app: Context) {
         val through: Int = 0,
         /** Whether this phone sets the relay: on a group of 0.6 only the root does, for the whole group. */
         val editable: Boolean = true,
+        /** On the root phone of a group of 0.6: the group's server credentials expired, so the relay and the hubs' forwarders take nobody until the root key renews them. */
+        val periodOverdue: Boolean = false,
     )
 
     var blindRelay by mutableStateOf<BlindRelay?>(null)
@@ -737,6 +739,7 @@ class AppModel(private val app: Context) {
             a?.relay?.endpoint?.takeIf { it.isNotEmpty() }?.let { HubState.Forwarder(it, "") },
             a?.relay?.online?.size ?: 0,
             editable = root,
+            periodOverdue = root && withContext(Dispatchers.IO) { group.periodOverdue06 },
         )
     }
 

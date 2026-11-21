@@ -286,6 +286,7 @@
     {"name": "paste_unverified", "value": "（未验证）"},
     {"name": "pasted", "value": "已粘贴。"},
     {"name": "pasted_from", "value": "粘贴自 %1$s"},
+    {"name": "period_overdue", "value": "群组用于离家同步的密钥已过期：在这部手机用根密钥续期之前，它的中继和中心节点不接受任何设备。"},
     {"name": "reason_biometric", "value": "用面容、指纹或 PIN 确认对群组的每项更改。"},
     {"name": "reason_bluetooth", "value": "用于充当电视、平板电脑或电脑的蓝牙键盘。"},
     {"name": "recovery_has", "value": "群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。"},

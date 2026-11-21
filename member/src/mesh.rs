@@ -137,6 +137,10 @@ pub struct Mesh {
     conns: Mutex<HashMap<DeviceId, Arc<Conn>>>,
     /// The last hello of each device connected now, for the views.
     hellos: Mutex<HashMap<DeviceId, Hello>>,
+    /// What each connected member said it reaches, and what this
+    /// computer last told each connected phone (`reach`).
+    reach_in: Mutex<HashMap<DeviceId, Vec<DeviceId>>>,
+    reach_out: Mutex<HashMap<DeviceId, Vec<DeviceId>>>,
     /// The release archive each device seen since the service started
     /// updates from, as its hello names it: a hub fetches those for the
     /// group (`archives`).
@@ -339,6 +343,8 @@ impl Mesh {
                 fetches: Mutex::new(HashMap::new()),
                 conns: Mutex::new(HashMap::new()),
                 hellos: Mutex::new(HashMap::new()),
+                reach_in: Mutex::new(HashMap::new()),
+                reach_out: Mutex::new(HashMap::new()),
                 archives: Mutex::new(HashMap::new()),
                 clock,
                 hello: RwLock::new(Hello::default()),
@@ -642,15 +648,51 @@ impl Mesh {
     /// project's, the group's own relays and its hubs' forwarders,
     /// `faces::group_servers`), and sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
+        let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
+        self.refresh_faces_with(state, root);
+    }
+
+    /// refresh_faces with the group's root key that a phone's app holds and
+    /// hands over for it (after Face ID or the passcode), so that a root
+    /// phone signs the server credentials' period as the root computer
+    /// does; an error when it is not the group's current root key.
+    pub fn refresh_faces_by(&self, root: &dyn cbb_core::identity::ExternalKey) -> Result<()> {
+        let state = self.state();
+        if !state.is_root(&Key::es256(root.public()).hash()) {
+            return Err(Error::msg("the key is not the group's current root key"));
+        }
+        self.refresh_faces_with(&state, Some(root));
+        Ok(())
+    }
+
+    /// Where the periods of the group's server credentials stand on its
+    /// root (`Faces::periods`): due when the root should sign a new one,
+    /// overdue when a server of the group has none that has not expired.
+    /// Both false on a device that is not the root's.
+    pub fn periods(&self) -> (bool, bool) {
+        let state = self.state();
+        if state.root_device != Some(self.device()) {
+            return (false, false);
+        }
+        let servers = self.group_servers(&state, true);
+        self.faces.periods(&state, &servers, crate::uptime::wall_ms().max(0) as u64)
+    }
+
+    /// The servers the group shows a face of its own (`faces::group_servers`);
+    /// only the root makes faces, so only on it do its hubs' forwarders count.
+    fn group_servers(&self, state: &State, root: bool) -> Vec<crate::faces::Server> {
+        let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
+        let forwarders = if root { self.hub_forwarders.servers(state) } else { Vec::new() };
+        crate::faces::group_servers(state, project, forwarders)
+    }
+
+    fn refresh_faces_with(&self, state: &State, root: Option<&dyn cbb_core::identity::ExternalKey>) {
         // A removed or frozen device's push registration goes with it,
         // and the push service's previous face is kept for those under it.
         self.prune_push(state);
-        let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
-        let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
-        let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
-        // Only the root makes faces, so only its hubs' forwarders count.
-        let forwarders = if root.is_some() { self.hub_forwarders.servers(state) } else { Vec::new() };
-        let servers = crate::faces::group_servers(state, project, forwarders);
+        let root_here = root.is_some() || state.root_device == Some(self.device());
+        let s = Signers { member: &*self.own.member, root, root_here, secret: self.faces.secret() };
+        let servers = self.group_servers(state, root_here);
         match self.faces.refresh(state, &s, &servers) {
             Ok(signed) => {
                 for (server, envs) in signed {
@@ -1215,6 +1257,7 @@ impl Mesh {
         for f in self.on_connected.read().unwrap().iter() {
             f(&peer);
         }
+        self.send_reach();
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
         let end = loop {
@@ -1230,12 +1273,17 @@ impl Mesh {
                 break e;
             }
         };
-        {
+        let gone = {
             let mut conns = self.conns.lock().unwrap();
-            if conns.get(&peer).is_some_and(|c| Arc::ptr_eq(c, &conn)) {
+            let ours = conns.get(&peer).is_some_and(|c| Arc::ptr_eq(c, &conn));
+            if ours {
                 conns.remove(&peer);
                 self.hellos.lock().unwrap().remove(&peer);
             }
+            ours
+        };
+        if gone {
+            self.reach_gone(&peer);
         }
         conn.close();
         self.push.left(&peer);
@@ -1330,11 +1378,11 @@ impl Mesh {
                 ));
                 Ok(())
             }
+            Some(m::T_REACH) => self.take_reach(&conn.peer, msg),
             Some(
                 t @ (cbb_core::msg::tables::T_TUNNEL
                 | cbb_core::msg::tables::T_HUBS
                 | cbb_core::msg::tables::T_GUEST
-                | m::T_REACH
                 | cbb_core::msg::tables::T_WAITING
                 | cbb_core::msg::tables::T_DISMISS),
             ) => {
@@ -1603,6 +1651,7 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
 
 mod media;
 pub use media::SentMedia;
+mod reach;
 mod signed;
 pub use signed::FILE_NAME as SIGNED_FILE;
 /// The file the phones' push registrations are kept in.

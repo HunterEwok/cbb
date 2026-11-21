@@ -120,7 +120,13 @@ others while sync away from home is on (protocol.md section 14). The root names 
 and makes the group's credentials for that forwarder, as `cbb global hub -on` does; a phone
 takes the root's `hub` command only as that setting: it keeps the forwarder in
 `root_forwarder.json` and serves through it again while it is a hub, never turns its hub on
-or off by the command, and refuses one from another key or one to stop. Everything else, and `cbb_member_servers` and
+or off by the command, and refuses one from another key or one to stop. A root phone keeps the
+period keys of the group's server credentials, which sign the hubs' and the members'
+credentials, but its root key stays with the app: `period` hands it over to sign the periods
+that are due (protocol.md section 18; `{period_due, period_overdue}` after), and `relay`,
+`forwarder` and `hubs` signed with the root key renew a due period with it too; the away ops
+answer `period_due` and `period_overdue` (expired, so the group's relay and its hubs'
+forwarders take nobody), both false on a phone that is not the root. Everything else, and `cbb_member_servers` and
 `cbb_member_manage_watch`, answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest

@@ -1224,6 +1224,7 @@
   "The group's hub": "Хаб группы",
   "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": "Хаб группы не ответил. Проверьте, что приглашение ещё действует и хаб включён, и попробуйте снова.",
   "The group's hub, in use now": "Хаб группы, используется сейчас",
+  "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": "Срок ключей группы для синхронизации вне дома истёк: её ретранслятор и хабы не принимают устройства, пока этот телефон не обновит их ключом корня.",
   "The group's main device changed": "Главное устройство группы сменилось",
   "The group's owner decides on its alerts.": "Владелец группы решает это в своих предупреждениях.",
   "The group's records stop the exchange.": "Записи группы остановили обмен.",

@@ -251,7 +251,10 @@ they look, so both apps are built to the same plan.
    manage action `forwarder`), which also makes the group's credentials for it; the phone keeps
    it and serves through it once its own switch is on, and Settings shows it with "The group's
    root sets this hub's forwarder", without fields, or that the hub serves at home only while
-   the root set none. The apps keep only what the user chose for the hub (on,
+   the root set none. On the root phone the group's server credentials need the root key
+   every 30 days: the app renews them when it comes to the front, asking with "Renew the
+   group's keys for sync away from home", and a root action (the relay, a forwarder, the
+   hubs) renews them with its key; once they expired, the relay card says so. The apps keep only what the user chose for the hub (on,
    disguise, home networks, and on Android the background): Android's `AwayOn06`
    in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
    app is in front (on Android also in the background when allowed). Turning the switch off

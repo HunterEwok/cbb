@@ -440,6 +440,7 @@
     <string name="pause_for_a_time">pick for how long</string>
     <string name="pause_hour">For an hour</string>
     <string name="pause_quarter">For 15 minutes</string>
+    <string name="period_overdue">The group\'s keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root\'s key.</string>
     <string name="project_terms">Terms of the project\'s servers</string>
     <string name="push_copy">Copy</string>
     <string name="push_copy_waits">A copy is waiting. Open the app.</string>

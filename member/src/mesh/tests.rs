@@ -80,6 +80,11 @@ pub(crate) fn two_dirs_both_hubs(name: &str) -> (PathBuf, PathBuf) {
 }
 
 fn dirs(name: &str, hubs: &[&str]) -> (PathBuf, PathBuf) {
+    dirs_with(name, hubs, body::ROLE_MEMBER, false)
+}
+
+/// dirs, with b's role b_role, and b frozen in a's records when frozen.
+fn dirs_with(name: &str, hubs: &[&str], b_role: u64, frozen: bool) -> (PathBuf, PathBuf) {
     let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
     let (oa, ob) = (own(&da), own(&db));
     let root = root();
@@ -91,7 +96,7 @@ fn dirs(name: &str, hubs: &[&str]) -> (PathBuf, PathBuf) {
     );
     let now = crate::uptime::wall_ms() as u64;
     for (o, name) in [(&oa, "a"), (&ob, "b")] {
-        let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
+        let mut d = Device::new(o.member_key(), name, if name == "b" { b_role } else { body::ROLE_MEMBER });
         d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
         if hubs.contains(&name) {
             d.rights |= body::RIGHT_HUB;
@@ -104,6 +109,9 @@ fn dirs(name: &str, hubs: &[&str]) -> (PathBuf, PathBuf) {
         crate::writers::set_hubs(&mut set, &root, &hubs, now - 900).unwrap();
     }
     let b_set = set.clone();
+    if frozen {
+        crate::writers::freeze(&mut set, &root, "b", true, now - 800).unwrap();
+    }
     let mut d = Device::new(Key::es256(K(SigningKey::from_slice(&[7; 32]).unwrap()).public()), "c", body::ROLE_MEMBER);
     d.rights = body::RIGHT_READ;
     let st = set.state();
@@ -372,7 +380,7 @@ fn other_messages_go_to_the_service_and_hub_shares_only_from_hubs() {
     ]));
     // b holds no admin key and no hubs record names it: what it would
     // tell the hubs is dropped; its key toward a as a hub, as a member of
-    // the group, and its reach go on.
+    // the group, goes on.
     let hubs = frame::write(&Value::Map(vec![
         (frame::FIELD_T, Value::Uint(cbb_core::msg::tables::T_HUBS)),
         (3, Value::Uint(1)),
@@ -389,8 +397,10 @@ fn other_messages_go_to_the_service_and_hub_shares_only_from_hubs() {
     assert!(b.send(&a.device(), tunnel));
     assert!(b.send(&a.device(), reach));
     assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), cbb_core::msg::tables::T_TUNNEL));
-    assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), (b.device(), m::T_REACH));
+    // The member keeps a reach itself (`reach`), the device no record of
+    // the group names left out.
     assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+    assert!(a.reach_of(&b.device()).is_empty());
     a.close();
     b.close();
 }
@@ -622,6 +632,64 @@ fn a_connection_gives_both_ends_the_tunnels_key() {
     let b_hub = b.tunnel_psk(&a.device(), true).unwrap();
     assert_eq!(a.tunnel_psk(&b.device(), false), Some(b_hub));
     assert_ne!(a_hub, b_hub, "each direction its own");
+    a.close();
+    b.close();
+}
+
+/// Reach (docs/protocol.md, section 4): a computer tells a phone connected
+/// to it the other members it reaches, and a member keeps what a peer told
+/// it, the IDs the records name and not its own, until the connection ends.
+#[test]
+fn a_computer_tells_a_phone_what_it_reaches() {
+    let (da, db) = dirs_with("reach", &[], body::ROLE_PHONE, false);
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let (a, b) = (Mesh::open(&da, own(&da), log.clone()).unwrap(), Mesh::open(&db, own(&db), log).unwrap());
+    connect(&a, &b);
+    until("the connection", || b.connected().contains(&a.device()));
+    // a, a computer, reaches nobody else: it tells the phone so.
+    until("the phone's reach from the computer", || b.reach_in.lock().unwrap().contains_key(&a.device()));
+    assert!(b.reach_of(&a.device()).is_empty());
+    assert!(!a.reach_in.lock().unwrap().contains_key(&b.device()), "a phone tells no reach");
+
+    let c = a.state().devices.iter().find(|d| d.name == "c").unwrap().id;
+    let a_id = a.device();
+    // A set goes sorted (docs/protocol.md, section 2).
+    let mut ids = [c.0, [3; 16], a_id.0];
+    ids.sort();
+    let reach = frame::write(&Value::Map(vec![
+        (frame::FIELD_T, Value::Uint(m::T_REACH)),
+        (2, Value::Array(ids.iter().map(|i| Value::Bytes(i)).collect())),
+    ]));
+    assert!(b.send(&a.device(), reach));
+    until("the computer keeps the reach", || a.reach_of(&b.device()) == vec![c]);
+    b.close();
+    until("the reach goes with the connection", || a.reach_of(&b.device()).is_empty());
+    a.close();
+}
+
+/// A phone the records refuse (frozen) learns nothing of whom the computer
+/// reaches: no reach goes to it.
+#[test]
+fn a_refused_phone_gets_no_reach() {
+    let (da, db) = dirs_with("reach-frozen", &[], body::ROLE_PHONE, true);
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let (a, b) = (Mesh::open(&da, own(&da), log.clone()).unwrap(), Mesh::open(&db, own(&db), log).unwrap());
+    assert!(a.state().device(&b.device()).is_some_and(|d| d.frozen));
+    connect(&a, &b);
+    std::thread::sleep(Duration::from_secs(2));
+    assert!(!b.reach_in.lock().unwrap().contains_key(&a.device()), "a frozen phone got a reach");
+    a.close();
+    b.close();
+}
+
+/// Only the group's current root key renews the server credentials.
+#[test]
+fn only_the_root_key_renews_the_credentials() {
+    let (a, b) = two("renew");
+    let other = K(SigningKey::from_slice(&[9; 32]).unwrap());
+    let e = a.refresh_faces_by(&other).unwrap_err();
+    assert!(e.message().contains("not the group's current root key"), "{e:?}");
+    assert!(a.refresh_faces_by(&root()).is_ok());
     a.close();
     b.close();
 }

@@ -187,6 +187,10 @@ interface RootForwarder {
 interface AwayAnswer {
   away?: Away;
   root_forwarder?: RootForwarder;
+  // On the root phone of a group of 0.6: the group's server credentials
+  // need its root key, or expired already.
+  period_due?: boolean;
+  period_overdue?: boolean;
 }
 
 interface Copy {
@@ -325,6 +329,11 @@ export class Member {
   // a hub and its key's pin, "" while it set none.
   @Trace rootForwarder: string = '';
   @Trace rootForwarderKey: string = '';
+  // On the root phone of a group of 0.6, the group's server credentials
+  // expired: its relay and its hubs' forwarders take nobody until the root
+  // key renews them.
+  @Trace periodOverdue: boolean = false;
+  private periodDueAway: boolean = false;
   @Trace relayConnected: boolean = false;
   @Trace relayOnline: number = 0;
   @Trace relayError: string = '';
@@ -772,7 +781,8 @@ export class Member {
     await this.pollDevices();
     await this.pollAway();
     const s = await this.call<Servers>('servers');
-    const due = s.ok?.period_due === true;
+    // A group of 0.6 says it in away_status; one of 0.5 in servers.
+    const due = s.ok?.period_due === true || this.periodDueAway;
     if (due !== this.periodDue) {
       this.periodDue = due;
     }
@@ -893,6 +903,10 @@ export class Member {
     }
     this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
     this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
+    this.periodDueAway = a.ok.period_due === true;
+    if (this.periodOverdue !== (a.ok.period_overdue === true)) {
+      this.periodOverdue = a.ok.period_overdue === true;
+    }
     this.readAway(a.ok.away);
   }
 

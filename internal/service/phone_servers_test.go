@@ -51,18 +51,27 @@ func rootPhoneWithLaptopArgs(t *testing.T, h *hub, args ...string) (next func(st
 }
 
 // TestFFIPhoneServersRelay: the root phone sets the group's relay, which it
-// signs in the group's settings (D-121), and makes the group's credentials
-// for it itself, as the Rust root does (TestAloneRelayRoot): with sync away
-// from home on, it and the laptop meet at the relay, and the root setting
-// none again leaves it.
+// signs in the group's settings (D-121), and with the root key that hands
+// over signs the period of the group's credentials for it, which was due
+// (docs/protocol.md, section 18), as the Rust root does by itself
+// (TestAloneRelayRoot): with sync away from home on, it and the laptop meet
+// at the relay, and the root setting none again leaves it.
 func TestFFIPhoneServersRelay(t *testing.T) {
 	var h hub
 	next, in, _, laptop, phoneID, laptopID := rootPhoneWithLaptop(t, &h)
 	call := phoneCall(t, next, in)
+	if st := call("away_status", nil); st["period_due"] != true {
+		t.Fatalf("the root phone's first period is not due: %v", st)
+	}
 	r, keys := startRelay(t, laptop.status(t).RelayGroup)
+	// Setting the relay hands the root key over, which renews the
+	// credentials' period that is due for it.
 	fmt.Fprintf(in, "MANAGE {\"action\":\"relay\",\"relays\":[%q]}\n", r.Addr().String()+" "+keys.Pin())
 	if got := next("MANAGED "); got != fmt.Sprintf(`{"ok":{"relays":[%q]}}`, r.Addr().String()) {
 		t.Fatalf("setting the group's relay: %s", got)
+	}
+	if st := call("away_status", nil); st["period_due"] != false || st["period_overdue"] != false {
+		t.Fatalf("the root phone did not renew the credentials with the relay: %v", st)
 	}
 	call("away", map[string]any{"on": true})
 	if _, err := laptop.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {

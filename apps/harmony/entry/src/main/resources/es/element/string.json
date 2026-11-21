@@ -286,6 +286,7 @@
     {"name": "paste_unverified", "value": "(sin verificar)"},
     {"name": "pasted", "value": "Pegado."},
     {"name": "pasted_from", "value": "Pegado desde %1$s"},
+    {"name": "period_overdue", "value": "Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave raíz."},
     {"name": "reason_biometric", "value": "Para confirmar cada cambio de tu grupo con tu cara, tu huella o tu PIN."},
     {"name": "reason_bluetooth", "value": "Para actuar como teclado Bluetooth de un televisor, una tableta o un ordenador."},
     {"name": "recovery_has", "value": "El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono."},

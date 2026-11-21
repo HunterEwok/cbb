@@ -1224,6 +1224,7 @@
   "The group's hub": "群组的中心节点",
   "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.": "群组的中心节点没有响应。请确认邀请仍然有效且中心节点已开启，然后重试。",
   "The group's hub, in use now": "群组的中心节点，正在使用",
+  "The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.": "群组用于离家同步的密钥已过期：在这部手机用根密钥续期之前，它的中继和中心节点不接受任何设备。",
   "The group's main device changed": "群组的主设备已更换",
   "The group's owner decides on its alerts.": "由群组的所有者在其提醒中决定。",
   "The group's records stop the exchange.": "群组的记录已停止交换。",

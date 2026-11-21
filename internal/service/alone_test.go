@@ -609,19 +609,16 @@ func TestFFIPhoneAway(t *testing.T) {
 // TestFFIPhoneReach: a computer tells the phone connected to it the other
 // members it is connected to (docs/protocol.md, section 4, "Reach"), so
 // that a phone away from home shows the members behind its hub as online;
-// and turning sync away from home on there makes the phone connect again,
-// so that the hello it gets carries the new tunnel key, which a phone that
-// is the group's hub answers with its offer.
+// and a computer that turns sync away from home on sends its tunnel key
+// (section 11) to the group's hub, here an admin phone, which answers with
+// its offer.
 func TestFFIPhoneReach(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
+	pi, next, in := adminPhone(t, bin, &h)
 	m2 := startService(t, &h, "m2")
 	c, _, link := openWindowLink(t, pi)
 	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
@@ -637,27 +634,8 @@ func TestFFIPhoneReach(t *testing.T) {
 		}
 		return false
 	})
-	next, in, _ := phoneJoins(t, bin, pi, "-name", "phone", "-dir", t.TempDir())
-	call := func(op string, args any) map[string]any {
-		t.Helper()
-		req, err := json.Marshal(map[string]any{"op": op, "args": args})
-		if err != nil {
-			t.Fatal(err)
-		}
-		fmt.Fprintf(in, "CALL %s\n", req)
-		var ans struct {
-			OK    map[string]any `json:"ok"`
-			Error map[string]any `json:"error"`
-		}
-		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
-			t.Fatalf("%s: %v", op, err)
-		}
-		if ans.Error != nil {
-			t.Fatalf("%s: %v", op, ans.Error)
-		}
-		return ans.OK
-	}
-	// The phone's view of pi, the only member it is told of.
+	call := phoneCall(t, next, in)
+	// The phone's view of pi, the only member it is connected to.
 	piPeer := func() map[string]any {
 		for _, p := range call("peers", nil)["peers"].([]any) {
 			if m, _ := p.(map[string]any); m["device"] == string(piID) {
@@ -666,21 +644,27 @@ func TestFFIPhoneReach(t *testing.T) {
 		}
 		return nil
 	}
-	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
 	waitFor(t, "pi tells the phone it reaches m2", func() bool {
 		p := piPeer()
 		return p != nil && fmt.Sprint(p["reach"]) == fmt.Sprint([]any{string(m2ID)})
 	})
-	if p := piPeer(); p["tunnel_key"] != nil {
-		t.Fatalf("pi offers a tunnel key before sync away from home is on: %v", p["tunnel_key"])
-	}
 
+	// The admin phone serves as the group's hub; pi, away on, sends it its
+	// tunnel key and takes its offer.
+	var phoneID string
+	for _, d := range pi.devices(t) {
+		if d.Name == "member phone" {
+			phoneID = d.ID
+		}
+	}
+	port := freeUDP(t)
+	call("hub", map[string]any{"port": port, "addrs": []string{fmt.Sprintf("127.0.0.1:%d", port)}})
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitUpTo(t, 30*time.Second, "the phone connected again and got pi's tunnel key", func() bool {
-		p := piPeer()
-		return p != nil && p["tunnel_key"] != nil
+	waitUpTo(t, 30*time.Second, "pi took the phone hub's offer", func() bool {
+		a := pi.status(t).Away
+		return a != nil && a.HubDevice == phoneID
 	})
 
 	m2.stop()

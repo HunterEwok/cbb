@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">اختر المدة</string>
     <string name="pause_hour">لمدة ساعة</string>
     <string name="pause_quarter">لمدة 15 دقيقة</string>
+    <string name="period_overdue">انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجذر.</string>
     <string name="project_terms">شروط خوادم المشروع</string>
     <string name="push_copy">نسخ</string>
     <string name="push_copy_waits">هناك نسخ بانتظارك. افتح التطبيق.</string>

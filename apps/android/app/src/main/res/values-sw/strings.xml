@@ -437,6 +437,7 @@
     <string name="pause_for_a_time">chagua kwa muda gani</string>
     <string name="pause_hour">Kwa saa moja</string>
     <string name="pause_quarter">Kwa dakika 15</string>
+    <string name="period_overdue">Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa mzizi.</string>
     <string name="project_terms">Masharti ya seva za mradi</string>
     <string name="push_copy">Nakili</string>
     <string name="push_copy_waits">Nakala inasubiri. Fungua programu.</string>
