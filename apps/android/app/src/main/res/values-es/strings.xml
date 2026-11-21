@@ -206,7 +206,9 @@
     <string name="hub_forwarder">Reenviador</string>
     <string name="hub_forwarder_address">Dirección, como 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">Para volver al reenviador del proyecto, vacía ambos campos y guarda.</string>
+    <string name="hub_forwarder_by_root">La raíz del grupo configura el reenviador de este hub; los dispositivos fuera de casa llegan a este teléfono a través de él.</string>
     <string name="hub_forwarder_key">Clave, 44 caracteres</string>
+    <string name="hub_forwarder_none_by_root">La raíz del grupo no configuró ningún reenviador para este teléfono, así que funciona como hub solo en casa.</string>
     <string name="hub_forwarder_project">Accesible desde lejos a través del reenviador del proyecto en cbb.tools. Para usar el tuyo, introduce su dirección y su clave.</string>
     <string name="hub_forwarder_save">Guardar el reenviador</string>
     <string name="hub_home_background">Este teléfono es el hub, también en segundo plano.</string>

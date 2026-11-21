@@ -23,6 +23,8 @@ mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+/// A forwarder as a hub command names it, which the phone's root names too.
+pub use away::forwarder_named;
 mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;

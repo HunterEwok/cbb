@@ -206,7 +206,9 @@
     <string name="hub_forwarder">Kisambazaji</string>
     <string name="hub_forwarder_address">Anwani, kama 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">Ili kurudi kwenye kisambazaji cha mradi, futa sehemu zote mbili na uhifadhi.</string>
+    <string name="hub_forwarder_by_root">Mzizi wa kikundi huweka kisambazaji cha kitovu hiki; vifaa vilivyo mbali na nyumbani hufikia simu hii kupitia kisambazaji hicho.</string>
     <string name="hub_forwarder_key">Ufunguo, herufi 44</string>
+    <string name="hub_forwarder_none_by_root">Mzizi wa kikundi haukuweka kisambazaji kwa simu hii, kwa hivyo inatumika kama kitovu cha nyumbani pekee.</string>
     <string name="hub_forwarder_project">Hufikiwa kutoka mbali kupitia kisambazaji cha mradi kwenye cbb.tools. Ili kutumia chako, weka anwani na ufunguo wake.</string>
     <string name="hub_forwarder_save">Hifadhi kisambazaji</string>
     <string name="hub_home_background">Simu hii ndiyo kitovu, hata chinichini.</string>

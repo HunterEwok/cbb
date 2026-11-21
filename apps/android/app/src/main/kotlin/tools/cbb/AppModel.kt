@@ -211,6 +211,8 @@ class AppModel(private val app: Context) {
         val suggested: Pair<String, String>? = null,
         /** The project's forwarder does not take it and the phone holds no signed entry points that have not expired: a new list may be what it needs. */
         val entriesStale: Boolean = false,
+        /** The forwarder is the group's root's setting (a group of 0.6), which the screen shows and does not edit. */
+        val forwarderByRoot: Boolean = false,
     )
 
     var hub by mutableStateOf<Hub?>(null)
@@ -703,13 +705,14 @@ class AppModel(private val app: Context) {
      */
     private suspend fun update06(root: Boolean) {
         val (a, prefs) = withContext(Dispatchers.IO) { group.awayState06 to group.hub06 }
+        val byRoot = prefs?.let { withContext(Dispatchers.IO) { group.rootForwarder06 } }
         val awayStatus = withContext(Dispatchers.IO) { AwayOn06.awayStatus(a) { group.reaches(it) } }
         val awayError = a?.takeIf { awayStatus == AwayFromHome.Status.CONNECTING && it.error.isNotEmpty() }?.let { Exception(if (it.detail.isEmpty()) it.error else "${it.error} (${it.detail})") }
         notifier.away(awayError != null)
         if (awayError != null) Log.w(TAG, "sync away from home: ${awayError.message}")
         away = Away(a != null && !a.hub && awayStatus != AwayFromHome.Status.OFF, awayStatus, awayError?.let { describe(it, R.string.away_error, log = false) })
         hub = prefs?.let { p ->
-            val (status, error) = AwayOn06.hubStatus(p, a, paused = !group.inForeground && !p.background)
+            val (status, error) = AwayOn06.hubStatus(p, a, paused = !group.inForeground && !p.background, forwarder = byRoot != null)
             if (error != hubError) {
                 hubError = error
                 if (error != null) Log.w(TAG, "the hub: $error")
@@ -717,9 +720,10 @@ class AppModel(private val app: Context) {
             Hub(
                 p.on, status,
                 error?.let { Note(R.string.hub_failed, if (settings.showsErrorDetails) it else null, error = true) },
-                p.forwarder, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
+                byRoot?.let { HubState.Forwarder(it.endpoint, it.key) }, p.background, withContext(Dispatchers.IO) { group.onHomeNetwork }, a?.clients ?: 0,
                 disguise = p.disguise,
                 entriesStale = status == HubOnPhone.Status.FAILED && a?.forwarder?.entriesStale == true,
+                forwarderByRoot = true,
             )
         }
         val (relayStatus, relayErr) = AwayOn06.relayStatus(a)

@@ -691,11 +691,14 @@ export class AppModel {
 
   // Makes this phone a hub of the group, through the forwarder at
   // forwarder with key (both empty for the project's), or stops it being
-  // one (anyway: also when it is the group's only hub). Shows why not,
-  // except that it is the only hub, which it answers for the user to decide.
+  // one (anyway: also when it is the group's only hub). On a group of 0.6
+  // the forwarder is the one the group's root set. Shows why not, except
+  // that it is the only hub, which it answers for the user to decide.
   async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
     const own = forwarder.length > 0;
-    const failure = await this.member.setHub(on, own ? forwarder : PROJECT_FORWARDER, own ? key : PROJECT_KEY, disguise, anyway);
+    const failure = this.isV06()
+      ? await this.member.setHub(on, '', '', disguise, anyway)
+      : await this.member.setHub(on, own ? forwarder : PROJECT_FORWARDER, own ? key : PROJECT_KEY, disguise, anyway);
     if (failure !== undefined) {
       if (on || anyway || !failure.details.includes(ONLY_HUB)) {
         this.show(Errors.shown(failure));
@@ -763,10 +766,11 @@ export class AppModel {
 
   private async restoreServers(): Promise<void> {
     if (this.hubWanted() && this.isAdmin()) {
-      const forwarder = this.hubForwarder();
+      const forwarder = this.isV06() ? '' : this.hubForwarder();
       const own = forwarder.length > 0;
-      const failure = await this.member.setHub(true, own ? forwarder : PROJECT_FORWARDER, own ? this.hubKey() : PROJECT_KEY,
-        this.hubDisguise(), false);
+      const failure = this.isV06()
+        ? await this.member.setHub(true, '', '', this.hubDisguise(), false)
+        : await this.member.setHub(true, own ? forwarder : PROJECT_FORWARDER, own ? this.hubKey() : PROJECT_KEY, this.hubDisguise(), false);
       if (failure !== undefined) {
         Errors.log(`servers: the hub did not start again: ${failure.message} (${failure.details})`);
       }

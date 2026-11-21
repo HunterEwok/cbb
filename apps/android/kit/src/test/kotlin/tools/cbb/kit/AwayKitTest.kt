@@ -134,6 +134,30 @@ class AwayKitTest {
         assertFailsWith<Core.Refusal>("a phone that is no hub cannot stop being one") { g.a.stopHub() }
     }
 
+    /**
+     * The hub's forwarder is the root's setting: the root names it for an admin phone, which keeps it without becoming
+     * a hub and serves through it once its own switch is on; nobody else names it.
+     */
+    @Test
+    fun theRootNamesAnAdminPhonesForwarder() {
+        val g = Group()
+        val pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        val fw = "127.0.0.1:${freeUDP()}"
+        assertFailsWith<Core.Refusal>("an admin key is no root key") { g.a.nameForwarder("Root phone", fw, pin, g.aAdmin.publicKeyDER, g.aAdmin::signDigest) }
+        assertFailsWith<Core.Refusal>("the root is no hub") { g.r.nameForwarder("Root phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }
+        assertNull(g.a.rootForwarder())
+        val named = waitFor("the admin phone never took the root's forwarder") {
+            runCatching { g.r.nameForwarder("Admin phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }.getOrNull()?.takeIf { it.first == "done" }
+        }
+        assertEquals("done" to "", named)
+        assertEquals(CoreMember.RootForwarder(fw, pin), g.a.rootForwarder())
+        assertTrue(g.a.awayStatus()?.hub != true, "the root's command does not switch the hub on")
+        // Its own switch on, with no forwarder given: the root's.
+        val hub = g.serve { g.a.serveAsHub() }
+        assertTrue(hub.hub)
+        assertEquals(fw, hub.forwarder?.endpoint)
+    }
+
     /** What the member refuses: a phone the records do not make a hub, a hub with no way to it, and bad addresses. */
     @Test
     fun theMemberRefusesABadHub() {

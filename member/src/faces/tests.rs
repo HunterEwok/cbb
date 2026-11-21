@@ -244,3 +244,28 @@ fn every_face_names_its_server() {
     }
     assert!(other.add(&state, "a", &server(9), &signed).is_empty(), "past MAX_FACES");
 }
+
+/// The hubs' credential lists the hubs in their order, the admins after the
+/// root's hubs record, so an admin phone is listed, and never a frozen one.
+#[test]
+fn the_hubs_listed_are_the_hub_order_without_the_frozen() {
+    let root = k(1);
+    let (k1, k2) = pq::recovery_keys(&[1; 32]).unwrap();
+    let k1 = SigningKey::from(&k1).verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let mut set = RecordSet::new(
+        Key::es256(root.public()),
+        Recovery::new(Key::es256(k1), Key::new(ALG_SLH_DSA, k2.public())).unwrap(),
+    );
+    let now = crate::uptime::wall_ms() as u64;
+    for (key, name) in [(k(2), "a"), (k(3), "b"), (k(4), "c")] {
+        let d = Device::new(Key::es256(key.public()), name, body::ROLE_PHONE);
+        let st = set.state();
+        set.write_record(&st, &root, Kind::device(d), now - 1000).unwrap();
+    }
+    crate::writers::make_admin(&mut set, &root, "a", &k(5).public(), now - 900).unwrap();
+    crate::writers::make_admin(&mut set, &root, "b", &k(6).public(), now - 800).unwrap();
+    crate::writers::freeze(&mut set, &root, "b", true, now - 700).unwrap();
+    let st = set.state();
+    let names: Vec<&str> = hub_devices(&st).iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["a"], "the admin phone, not the frozen admin nor the phone that is no admin");
+}

@@ -206,7 +206,9 @@
     <string name="hub_forwarder">מעביר</string>
     <string name="hub_forwarder_address">כתובת, למשל 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">כדי לחזור למעביר של הפרויקט, רוקנו את שני השדות ושמרו.</string>
+    <string name="hub_forwarder_by_root">השורש של הקבוצה מגדיר את המעביר של הרכזת הזו; מכשירים מחוץ לבית מגיעים לטלפון הזה דרכו.</string>
     <string name="hub_forwarder_key">מפתח, 44 תווים</string>
+    <string name="hub_forwarder_none_by_root">השורש של הקבוצה לא הגדיר מעביר לטלפון הזה, ולכן הוא משמש רכזת בבית בלבד.</string>
     <string name="hub_forwarder_project">נגיש מרחוק דרך המעביר של הפרויקט ב-cbb.tools. כדי להשתמש במעביר משלכם, הזינו את הכתובת והמפתח שלו.</string>
     <string name="hub_forwarder_save">שמירת המעביר</string>
     <string name="hub_home_background">הטלפון הזה הוא הרכזת, גם ברקע.</string>

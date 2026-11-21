@@ -613,6 +613,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val awayState06: CoreMember.AwayState?
         get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.awayStatus() }.onFailure { Log.w(TAG, "reading where sync away from home stands", it) }.getOrNull() }
 
+    /** On a group of 0.6, the forwarder the group's root set for this phone as a hub; null while it set none. */
+    val rootForwarder06: CoreMember.RootForwarder?
+        get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.rootForwarder() }.onFailure { Log.w(TAG, "reading the root's forwarder", it) }.getOrNull() }
+
     /** On a group of 0.6, what the user chose for the hub; null on a phone that is no admin, which cannot be a hub. */
     val hub06: AwayOn06.Prefs? get() = if (isV06 && isAdmin) away06.hub else null
 
@@ -665,17 +669,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Sets the hub's forwarder from what the user typed, or the project's when both are empty (none when its name cannot be looked up now); on the caller's IO thread. */
     fun setForwarder(address: String, pin: String) {
-        if (isV06) {
-            if (!isAdmin) return
-            val fw = if (address.isBlank() && pin.isBlank()) {
-                HubState.Forwarder.project()
-            } else {
-                HubState.Forwarder(HubState.resolve(address) ?: throw IllegalArgumentException("not an address"), pin.trim())
-            }
-            away06.setForwarder(fw)
-            updateHub06(throwing = true)
-            return
-        }
+        // On 0.6 the hub's forwarder is the root's setting, which its hub
+        // command names; the screen shows it and offers no fields.
+        if (isV06) return
         val h = phoneHub ?: return
         if (address.isBlank() && pin.isBlank()) {
             h.setForwarder(HubState.Forwarder.project())
@@ -776,7 +772,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         cancelUnhub06()
         try {
-            away06.serve(n, homeAddrs())
+            away06.serve(n, homeAddrs(), runCatching { n.rootForwarder() }.getOrNull())
         } catch (e: Exception) {
             Log.w(TAG, "the hub did not start", e)
             if (throwing) throw e

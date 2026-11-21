@@ -178,8 +178,15 @@ const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
 // A signed file of the mirror is far smaller.
 const ATTEST_MAX: number = 2 * 1024 * 1024;
 
+// The forwarder the group's root set for this phone as a hub (a group of 0.6).
+interface RootForwarder {
+  endpoint: string;
+  key: string;
+}
+
 interface AwayAnswer {
   away?: Away;
+  root_forwarder?: RootForwarder;
 }
 
 interface Copy {
@@ -314,6 +321,10 @@ export class Member {
   // The blind relay the phone meets the group at, "" for none, and whether
   // the link is up.
   @Trace relayAt: string = '';
+  // On a group of 0.6, the forwarder the group's root set for this phone as
+  // a hub and its key's pin, "" while it set none.
+  @Trace rootForwarder: string = '';
+  @Trace rootForwarderKey: string = '';
   @Trace relayConnected: boolean = false;
   @Trace relayOnline: number = 0;
   @Trace relayError: string = '';
@@ -769,7 +780,8 @@ export class Member {
 
   // Makes this phone one of the group's hubs, reached away from home
   // through the forwarder at forwarder whose key's pin is key ('default'
-  // for the project's), hidden as disguise says ('plain' WireGuard,
+  // for the project's; both empty on a group of 0.6: the one the root set),
+  // hidden as disguise says ('plain' WireGuard,
   // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
   // or stops it being one. Answers why it failed.
   async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
@@ -784,7 +796,8 @@ export class Member {
     if (a.ok === undefined) {
       return a.failure;
     }
-    Errors.log(on ? `member: this phone is a hub of the group, through ${forwarder}` : 'member: this phone is no hub any more');
+    const through = forwarder.length > 0 ? forwarder : (a.ok.root_forwarder?.endpoint ?? '');
+    Errors.log(on ? `member: this phone is a hub of the group, through ${through}` : 'member: this phone is no hub any more');
     this.readAway(a.ok.away);
     return undefined;
   }
@@ -878,6 +891,8 @@ export class Member {
       Errors.log(`member: sync away from home: ${f.message} (${f.details})`);
       return;
     }
+    this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
+    this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
     this.readAway(a.ok.away);
   }
 

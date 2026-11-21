@@ -2028,11 +2028,12 @@ final class LiveGroup: GroupController {
     func hubStatus() async -> AppModel.Hub? {
         if isV06 {
             guard state?.isAdmin == true else { return nil }
-            let a = awayState06, p = hub06
-            let (status, error) = AwayOn06.hubStatus(p, a, paused: !foreground)
-            var h = AppModel.Hub(on: p.on, status: status, error: error, forwarder: p.forwarder, home: p.isHome(network),
-                                 clients: a?.clients ?? 0, disguise: p.hides)
+            let a = awayState06, p = hub06, byRoot = rootForwarder06
+            let (status, error) = AwayOn06.hubStatus(p, a, paused: !foreground, forwarder: byRoot != nil)
+            var h = AppModel.Hub(on: p.on, status: status, error: error, forwarder: byRoot.map { .init(endpoint: $0.endpoint, pin: $0.key) },
+                                 home: p.isHome(network), clients: a?.clients ?? 0, disguise: p.hides)
             h.entriesStale = status == .failed && a?.forwarder?.entriesStale == true
+            h.forwarderByRoot = true
             return h
         }
         guard let hub, state?.isAdmin == true else { return nil }
@@ -2201,11 +2202,7 @@ final class LiveGroup: GroupController {
             guard state?.isAdmin == true else { return }
             var p = hub06
             p.on = on
-            if on {
-                p = p.adding(home: network)
-                // Reached from afar through the project's forwarder, unless the user saved their own.
-                if p.forwarder == nil { p.forwarder = await Self.projectForwarder() }
-            }
+            if on { p = p.adding(home: network) }
             try saveHub06(p)
             if on { try updateHub06() } else { unhub06() }
             return
@@ -2243,19 +2240,9 @@ final class LiveGroup: GroupController {
     /// are empty (none when its name cannot be looked up now).
     func setForwarder(address: String, pin: String) async throws {
         let a = address.trimmingCharacters(in: .whitespaces), p = pin.trimmingCharacters(in: .whitespaces)
-        if isV06 {
-            guard state?.isAdmin == true else { return }
-            var next = hub06
-            if a.isEmpty && p.isEmpty {
-                next.forwarder = await Self.projectForwarder()
-            } else {
-                guard let ep = HubState.endpoint(a) else { throw HubOnPhone.Failure.badForwarder }
-                next.forwarder = .init(endpoint: ep, pin: p)
-            }
-            try saveHub06(next)
-            try updateHub06()
-            return
-        }
+        // On 0.6 the hub's forwarder is the root's setting, which its hub
+        // command names; Settings shows it and offers no fields.
+        if isV06 { return }
         guard let hub else { return }
         if a.isEmpty && p.isEmpty {
             try hub.setForwarder(await Self.projectForwarder())
@@ -2339,7 +2326,7 @@ final class LiveGroup: GroupController {
     private func updateHub06() throws {
         guard let node, let g = state, g.isAdmin, hub06.on else { return unhub06() }
         guard foreground else { return stopHome() }
-        try AwayOn06.serve(node, hub06, homeAddrs: LocalAddresses.current().filter { !$0.contains(":") })
+        try AwayOn06.serve(node, hub06, homeAddrs: LocalAddresses.current().filter { !$0.contains(":") }, byRoot: try? node.rootForwarder())
         guard hub06.isHome(network) else { return stopHome() }
         guard homePort == nil else { return }
         for p in [Self.memberPort, 0] {
@@ -2364,6 +2351,9 @@ final class LiveGroup: GroupController {
 
     /// On a group of 0.6, sync away from home as the Live member runs it; nil while it is off.
     private var awayState06: CoreMember.AwayState? { try? node?.awayStatus() }
+
+    /// On a group of 0.6, the forwarder the group's root set for this phone as a hub; nil while it set none.
+    private var rootForwarder06: CoreMember.RootForwarder? { (try? node?.rootForwarder()) ?? nil }
 
     /// On a group of 0.6, sets the group's relay (docs/design.md, "Blind
     /// relay"), where every device meets the others while sync away from

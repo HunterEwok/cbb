@@ -301,33 +301,48 @@ struct SettingsView: View {
                 if !hub.home {
                     Button { Task { await model.addHomeNetwork() } } label: { Text("This is my home network") }
                 }
-                Text(hub.forwarder?.isProject == true
-                     ? "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key."
-                     : "To go back to the project's forwarder, empty both fields and save.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.textDim)
-                if hub.forwarder?.isProject == true {
-                    Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
+                // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
+                if hub.forwarderByRoot {
+                    Text(hub.forwarder != nil
+                         ? "The group's root sets this hub's forwarder; devices away from home reach this phone through it."
+                         : "The group's root set no forwarder for this phone, so it serves as the hub at home only.")
                         .font(.footnote)
-                }
-                TextField(text: $forwarderAddress) { Text("Forwarder address, such as 198.51.100.9:8764") }
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.numbersAndPunctuation)
-                TextField(text: $forwarderKey) { Text("Forwarder key, 44 characters") }
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(.system(.body, design: .monospaced))
-                Button {
-                    switching = true
-                    Task {
-                        await model.setForwarder(address: forwarderAddress, pin: forwarderKey)
-                        switching = false
+                        .foregroundStyle(palette.textDim)
+                    if let fw = hub.forwarder {
+                        Text(verbatim: fw.endpoint)
+                        Text(verbatim: fw.pin)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(palette.textDim)
                     }
-                } label: {
-                    Text("Save the forwarder")
+                } else {
+                    Text(hub.forwarder?.isProject == true
+                         ? "Reached from afar through the project's forwarder at cbb.tools. To use your own, enter its address and key."
+                         : "To go back to the project's forwarder, empty both fields and save.")
+                        .font(.footnote)
+                        .foregroundStyle(palette.textDim)
+                    if hub.forwarder?.isProject == true {
+                        Link(destination: URL(string: "https://cbb.tools/?p=terms.html")!) { Text("Terms of the project's servers") }
+                            .font(.footnote)
+                    }
+                    TextField(text: $forwarderAddress) { Text("Forwarder address, such as 198.51.100.9:8764") }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.numbersAndPunctuation)
+                    TextField(text: $forwarderKey) { Text("Forwarder key, 44 characters") }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(.body, design: .monospaced))
+                    Button {
+                        switching = true
+                        Task {
+                            await model.setForwarder(address: forwarderAddress, pin: forwarderKey)
+                            switching = false
+                        }
+                    } label: {
+                        Text("Save the forwarder")
+                    }
+                    .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
                 }
-                .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
                 // Strict networks: AmneziaWG for networks that block VPNs,
                 // and VLESS over it for those that let only the web through.
                 Toggle(isOn: Binding(get: { hub.disguise != .plain }, set: { disguiseTo = $0 ? .obfuscate : .plain })) {

@@ -613,6 +613,24 @@ public final class CoreMember: @unchecked Sendable {
 
     private struct AwayAnswer: Decodable { var away: AwayState? }
 
+    /// The forwarder the group's root set for this phone as a hub: its address and its key's pin.
+    public struct RootForwarder: Codable, Equatable, Sendable {
+        public var endpoint: String
+        public var key: String
+
+        public init(endpoint: String, key: String) { (self.endpoint, self.key) = (endpoint, key) }
+    }
+
+    /// On a group of 0.6: the forwarder the group's root set for this phone
+    /// as a hub, which it serves through; nil while the root set none.
+    public func rootForwarder() throws -> RootForwarder? {
+        struct R: Decodable {
+            var rootForwarder: RootForwarder?
+            enum CodingKeys: String, CodingKey { case rootForwarder = "root_forwarder" }
+        }
+        return try run("away_status", Optional<Empty>.none, as: R.self).rootForwarder
+    }
+
     /// On a group of 0.6: sync away from home as the member runs it, nil while it is off.
     public func awayStatus() throws -> AwayState? {
         try run("away_status", Optional<Empty>.none, as: AwayAnswer.self).away
@@ -994,6 +1012,20 @@ public final class CoreMember: @unchecked Sendable {
         struct A: Encodable { var action = "relay", relays: [String], `public`: Data }
         struct R: Decodable { var relays: [String]? }
         return try manage(A(relays: relays, public: try Self.point(`public`)), sign: sign, as: R.self).relays ?? []
+    }
+
+    /// On the root of a group of 0.6: names the forwarder of device, an
+    /// admin phone or a computer that may be a hub, at forwarder
+    /// (`host:port`, or `default` for the project's) with its key's pin
+    /// key, which the device takes as its forwarder setting and serves
+    /// through once its hub is on. The device's answer: done, refused or
+    /// failed, and why.
+    public func nameForwarder(_ device: String, forwarder: String, key: String, public: Data,
+                              sign: @escaping (Data) throws -> Data) throws -> (status: String, reason: String) {
+        struct A: Encodable { var action = "forwarder", device: String, forwarder: String, key: String, `public`: Data }
+        struct R: Decodable { var status: String?, reason: String? }
+        let r = try manage(A(device: device, forwarder: forwarder, key: key, public: try Self.point(`public`)), sign: sign, as: R.self)
+        return (r.status ?? "", r.reason ?? "")
     }
 
     /// Hands the group to the admin device, whose claim then takes effect at once.

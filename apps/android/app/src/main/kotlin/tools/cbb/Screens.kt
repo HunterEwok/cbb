@@ -1024,46 +1024,61 @@ private fun HubSection(model: AppModel, hub: AppModel.Hub) {
                     color = palette.textDim,
                 )
                 if (!hub.home) QuietButton(stringResource(R.string.hub_add_home), onClick = { if (!busy) act { model.addHomeNetwork() } })
-                // The fields show the user's own forwarder; the project's leaves them empty.
-                val own = hub.forwarder?.takeUnless { it.isProject }
-                var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
-                var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
-                Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
-                Text(
-                    stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textDim,
-                )
-                if (hub.forwarder?.isProject == true) {
-                    val context = LocalContext.current
+                // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
+                if (hub.forwarderByRoot) {
+                    Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                    val fw = hub.forwarder
                     Text(
-                        stringResource(R.string.project_terms),
+                        stringResource(if (fw != null) R.string.hub_forwarder_by_root else R.string.hub_forwarder_none_by_root),
                         style = MaterialTheme.typography.bodySmall,
-                        color = palette.accent,
-                        modifier = Modifier.focusRing().clickable(role = Role.Button) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_TERMS)))
-                        },
+                        color = palette.textDim,
                     )
+                    if (fw != null) {
+                        Text(fw.endpoint, style = MaterialTheme.typography.bodyMedium)
+                        Text(fw.pin, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = palette.textDim)
+                    }
+                } else {
+                    // The fields show the user's own forwarder; the project's leaves them empty.
+                    val own = hub.forwarder?.takeUnless { it.isProject }
+                    var address by rememberSaveable(hub.forwarder) { mutableStateOf(own?.endpoint ?: "") }
+                    var pin by rememberSaveable(hub.forwarder) { mutableStateOf(own?.pin ?: "") }
+                    Text(stringResource(R.string.hub_forwarder), fontWeight = FontWeight.SemiBold)
+                    Text(
+                        stringResource(if (hub.forwarder?.isProject == true) R.string.hub_forwarder_project else R.string.hub_forwarder_back),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = palette.textDim,
+                    )
+                    if (hub.forwarder?.isProject == true) {
+                        val context = LocalContext.current
+                        Text(
+                            stringResource(R.string.project_terms),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.accent,
+                            modifier = Modifier.focusRing().clickable(role = Role.Button) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PROJECT_TERMS)))
+                            },
+                        )
+                    }
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.hub_forwarder_address)) },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { pin = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.hub_forwarder_key)) },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
+                    AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 }
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.hub_forwarder_address)) },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { pin = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.hub_forwarder_key)) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                val changed = address != (own?.endpoint ?: "") || pin != (own?.pin ?: "")
-                AccentButton(stringResource(R.string.hub_forwarder_save), enabled = changed && !busy, onClick = { act { model.setForwarder(address, pin) } })
                 Text(stringResource(R.string.hub_disguise), fontWeight = FontWeight.SemiBold)
                 // Strict networks: AmneziaWG for networks that block VPNs,
                 // and VLESS over it for those that let only the web through.

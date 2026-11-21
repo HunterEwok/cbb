@@ -239,15 +239,13 @@ impl Kept {
     }
 
     /// What the credentials must list, by the server keys kept: the hubs in
-    /// their order (the first 16), the admins that are not frozen other
+    /// their order (`State::hub_order`, the first 16), the admins that are not frozen other
     /// than the root's own device, which holds the period key, and every
     /// device not frozen.
     fn lists(&self, state: &State) -> [Vec<[u8; 32]>; 3] {
         let root_dev = state.root_device.as_ref();
-        let hubs: Vec<[u8; 32]> = state
-            .hubs
+        let hubs: Vec<[u8; 32]> = hub_devices(state)
             .iter()
-            .filter_map(|id| state.device(id).filter(|d| !d.frozen))
             .filter_map(|d| self.server_of(&d.key.hash()))
             .take(credential::LENGTHS_HUBS[credential::LENGTHS_HUBS.len() - 1])
             .collect();
@@ -348,6 +346,14 @@ impl Kept {
         }
         Some((ServerKey::from_scalar(&scalar).ok()?, hubs.env.clone()))
     }
+}
+
+/// The devices the hubs' credential lists, in their order: those that may
+/// serve as hubs (`State::hub_order`: the root's hubs record, then the
+/// admins, so that an admin phone, which no hubs record names, is listed),
+/// never a frozen one.
+fn hub_devices(state: &State) -> Vec<&cbb_core::records::eval::DeviceState> {
+    state.hub_order().iter().filter_map(|id| state.device(id).filter(|d| !d.frozen)).collect()
 }
 
 fn b64(b: &[u8]) -> String {

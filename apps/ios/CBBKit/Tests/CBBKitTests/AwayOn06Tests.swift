@@ -9,10 +9,10 @@ import XCTest
 /// the Live member says sync away from home stands.
 final class AwayOn06Tests: XCTestCase {
     let hubID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
-    let fw = HubState.Forwarder(endpoint: "203.0.113.9:8764", pin: String(repeating: "A", count: 43) + "=")
+    let fw = "203.0.113.9:8764"
 
     func testSettingsRoundTrip() throws {
-        let p = AwayOn06.Prefs(on: true, forwarder: fw, disguise: .vless, homes: ["a", "b"])
+        let p = AwayOn06.Prefs(on: true, disguise: .vless, homes: ["a", "b"])
         XCTAssertEqual(AwayOn06.Prefs.decode(try p.encoded()), p)
         XCTAssertEqual(AwayOn06.Prefs.decode(try AwayOn06.Prefs().encoded()), AwayOn06.Prefs())
         XCTAssertNil(AwayOn06.Prefs.decode(Data("not json".utf8)))
@@ -33,10 +33,10 @@ final class AwayOn06Tests: XCTestCase {
     }
 
     func testHubStatus() {
-        let on = AwayOn06.Prefs(on: true, forwarder: fw)
-        func check(_ p: AwayOn06.Prefs, _ a: CoreMember.AwayState?, paused: Bool = false, _ want: HubOnPhone.Status, _ error: String? = nil,
-                   line: UInt = #line) {
-            let (s, e) = AwayOn06.hubStatus(p, a, paused: paused)
+        let on = AwayOn06.Prefs(on: true)
+        func check(_ p: AwayOn06.Prefs, _ a: CoreMember.AwayState?, paused: Bool = false, forwarder: Bool = true, _ want: HubOnPhone.Status,
+                   _ error: String? = nil, line: UInt = #line) {
+            let (s, e) = AwayOn06.hubStatus(p, a, paused: paused, forwarder: forwarder)
             XCTAssertEqual(s, want, line: line)
             XCTAssertEqual(e, error, line: line)
         }
@@ -44,12 +44,11 @@ final class AwayOn06Tests: XCTestCase {
         check(on, .init(hub: true), paused: true, .paused)
         check(on, nil, .registering)
         check(on, .init(error: "no way", detail: "bind"), .failed, "no way (bind)")
-        var home = on
-        home.forwarder = nil
-        check(home, .init(hub: true), .homeOnly)
+        // The root set no forwarder: the hub serves at home only.
+        check(on, .init(hub: true), forwarder: false, .homeOnly)
         check(on, .init(hub: true), .registering)
-        check(on, .init(hub: true, forwarder: .init(endpoint: fw.endpoint, registered: true)), .registered)
-        check(on, .init(hub: true, forwarder: .init(endpoint: fw.endpoint, error: "refused", detail: "refused")), .failed, "refused")
+        check(on, .init(hub: true, forwarder: .init(endpoint: fw, registered: true)), .registered)
+        check(on, .init(hub: true, forwarder: .init(endpoint: fw, error: "refused", detail: "refused")), .failed, "refused")
     }
 
     func testRelayStatus() {

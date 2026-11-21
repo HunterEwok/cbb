@@ -24,7 +24,7 @@ class AwayOn06Test {
 
     @Test
     fun settingsRoundTrip() {
-        val p = AwayOn06.Prefs(true, HubState.Forwarder("203.0.113.9:8764", "A".repeat(43) + "="), HubOnPhone.Disguise.VLESS, true, listOf("a", "b"))
+        val p = AwayOn06.Prefs(true, HubOnPhone.Disguise.VLESS, true, listOf("a", "b"))
         assertEquals(p, AwayOn06.Prefs.decode(p.encode()))
         assertEquals(AwayOn06.Prefs(), AwayOn06.Prefs.decode(AwayOn06.Prefs().encode()))
         assertNull(AwayOn06.Prefs.decode("not json".toByteArray()))
@@ -42,18 +42,18 @@ class AwayOn06Test {
 
     @Test
     fun hubStatus() {
-        val fw = HubState.Forwarder("203.0.113.9:8764", "A".repeat(43) + "=")
-        val on = AwayOn06.Prefs(on = true, forwarder = fw)
-        assertEquals(HubOnPhone.Status.OFF to null, AwayOn06.hubStatus(AwayOn06.Prefs(), state(hub = true), false))
-        assertEquals(HubOnPhone.Status.PAUSED to null, AwayOn06.hubStatus(on, state(hub = true), true))
-        assertEquals(HubOnPhone.Status.REGISTERING to null, AwayOn06.hubStatus(on, null, false))
-        assertEquals(HubOnPhone.Status.FAILED to "no way (bind)", AwayOn06.hubStatus(on, state(error = "no way", detail = "bind"), false))
-        assertEquals(HubOnPhone.Status.HOME_ONLY to null, AwayOn06.hubStatus(on.copy(forwarder = null), state(hub = true), false))
-        assertEquals(HubOnPhone.Status.REGISTERING to null, AwayOn06.hubStatus(on, state(hub = true), false))
-        val registered = CoreMember.ForwarderState(fw.endpoint, true, "198.51.100.1:5000", false, "", "")
-        assertEquals(HubOnPhone.Status.REGISTERED to null, AwayOn06.hubStatus(on, state(hub = true, forwarder = registered), false))
+        val on = AwayOn06.Prefs(on = true)
+        assertEquals(HubOnPhone.Status.OFF to null, AwayOn06.hubStatus(AwayOn06.Prefs(), state(hub = true), false, true))
+        assertEquals(HubOnPhone.Status.PAUSED to null, AwayOn06.hubStatus(on, state(hub = true), true, true))
+        assertEquals(HubOnPhone.Status.REGISTERING to null, AwayOn06.hubStatus(on, null, false, true))
+        assertEquals(HubOnPhone.Status.FAILED to "no way (bind)", AwayOn06.hubStatus(on, state(error = "no way", detail = "bind"), false, true))
+        // The root set no forwarder: the hub serves at home only.
+        assertEquals(HubOnPhone.Status.HOME_ONLY to null, AwayOn06.hubStatus(on, state(hub = true), false, false))
+        assertEquals(HubOnPhone.Status.REGISTERING to null, AwayOn06.hubStatus(on, state(hub = true), false, true))
+        val registered = CoreMember.ForwarderState("203.0.113.9:8764", true, "198.51.100.1:5000", false, "", "")
+        assertEquals(HubOnPhone.Status.REGISTERED to null, AwayOn06.hubStatus(on, state(hub = true, forwarder = registered), false, true))
         val refused = registered.copy(registered = false, error = "refused", detail = "refused")
-        assertEquals(HubOnPhone.Status.FAILED to "refused", AwayOn06.hubStatus(on, state(hub = true, forwarder = refused), false))
+        assertEquals(HubOnPhone.Status.FAILED to "refused", AwayOn06.hubStatus(on, state(hub = true, forwarder = refused), false, true))
     }
 
     @Test

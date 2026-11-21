@@ -246,8 +246,13 @@ they look, so both apps are built to the same plan.
    before: sync away from home (`away`), the hub (`hub`, `hub_off`, with the forwarder, the
    port and the addresses, and how its tunnel hides) and the link to the group's relay, and
    it keeps their keys and the hub's clients itself; the cards read where they stand from
-   `away_status` (docs/core-api.md). The apps keep only what the user chose for the hub (on,
-   forwarder, disguise, home networks, and on Android the background): Android's `AwayOn06`
+   `away_status` (docs/core-api.md). The hub's forwarder is the root's setting: the root names
+   it with a hub command (from a computer, `cbb global hub -on`; from the root phone, the
+   manage action `forwarder`), which also makes the group's credentials for it; the phone keeps
+   it and serves through it once its own switch is on, and Settings shows it with "The group's
+   root sets this hub's forwarder", without fields, or that the hub serves at home only while
+   the root set none. The apps keep only what the user chose for the hub (on,
+   disguise, home networks, and on Android the background): Android's `AwayOn06`
    in a sealed file, the Swift kit's `AwayOn06.Prefs` in the keychain; they serve while the
    app is in front (on Android also in the background when allowed). Turning the switch off
    stops the hub at once, which hands its clients to the group's next hub. The app going to

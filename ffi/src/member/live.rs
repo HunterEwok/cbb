@@ -120,6 +120,12 @@ struct ManageArgs {
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
+    /// With forwarder, on the root: the hub's forwarder, `host:port` or
+    /// `default` for the project's, and its key's pin in base64 (`key`).
+    #[serde(default)]
+    forwarder: String,
+    #[serde(default)]
+    key: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
 }
@@ -474,7 +480,7 @@ impl Phone {
                 } else {
                     l.away_off(std::time::Duration::ZERO)?;
                 }
-                Ok(json!({ "away": l.away_status() }))
+                Ok(self.away_answer())
             }
             // The phone as a hub of the group (the records must make it
             // one: an admin key), as cbb global hub does on a computer and
@@ -496,10 +502,15 @@ impl Phone {
                     .as_array()
                     .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
                     .unwrap_or_default();
+                // No forwarder given: the one the group's root set, if any.
+                let (forwarder, key) = match (text("forwarder"), root_forwarder(&self.dir)) {
+                    (f, Some(r)) if f.is_empty() => (r.endpoint, r.key),
+                    (f, _) => (resolve(&f)?, text("key")),
+                };
                 let h = cbb_member::control::Header {
                     name: "hub".into(),
-                    forwarder: resolve(&text("forwarder"))?,
-                    forwarder_key: text("key"),
+                    forwarder,
+                    forwarder_key: key,
                     obfuscate_off: arg("obfuscate_off").as_bool().unwrap_or(false),
                     vless_off: arg("vless_off").as_bool().unwrap_or(false),
                     port: arg("port").as_i64().unwrap_or(0),
@@ -508,15 +519,15 @@ impl Phone {
                     ..Default::default()
                 };
                 away.make_hub(&h)?;
-                Ok(json!({ "away": l.away_status() }))
+                Ok(self.away_answer())
             }
             // A Live hub that stops hands its clients to the next hub in
             // the group's order (D-122), so `anyway` of 0.5 is not needed.
             "hub_off" => {
                 l.stop_being_hub()?;
-                Ok(json!({ "away": l.away_status() }))
+                Ok(self.away_answer())
             }
-            "away_status" => Ok(json!({ "away": l.away_status() })),
+            "away_status" => Ok(self.away_answer()),
             "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
             "why" => Ok(json!({ "why": self.why() })),
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
@@ -608,6 +619,14 @@ impl Phone {
         cbb_core::why::diagnose(&facts, cbb_member::uptime::wall_ms())
     }
 
+    /// Sync away from home as the away ops answer it: its state, null
+    /// while it is off, and the forwarder the group's root set for this
+    /// phone as a hub (`endpoint`, `key`), null while it set none, which
+    /// the apps show as the root's setting.
+    fn away_answer(&self) -> Value {
+        json!({ "away": self.live.away_status(), "root_forwarder": root_forwarder(&self.dir) })
+    }
+
     /// Whether sync is off and whether the phone is muted, as on 0.5.
     fn state(&self) -> Value {
         serde_json::to_value(cbb_member::sync::standing(&self.live.board)).unwrap_or_default()
@@ -692,6 +711,11 @@ impl Phone {
                     let relays = self.live.set_relays(Some(&key), &given)?;
                     return Ok(json!({ "relays": relays.into_iter().map(|r| r.endpoint).collect::<Vec<_>>() }));
                 }
+                // The root names the forwarder of an admin phone that is a
+                // hub (`forwarder`, its key's pin `key`, or `default` for the
+                // project's) with the hub command, as cbb global hub -on
+                // does, and makes the group's credentials for it there.
+                "forwarder" => return self.name_forwarder(&a, &key),
                 "hubs" => {
                     mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
                     return Ok(json!({ "hubs": a.hubs }));
@@ -702,6 +726,46 @@ impl Phone {
             };
             Ok(json!({ "device": id_text(&d.id), "name": d.name }))
         })())
+    }
+
+    /// The root's hub command that names the forwarder of the device
+    /// `a.device`, a hub of the group by the records, which takes it as its
+    /// forwarder setting: answered as a command is (`{status, reason}`).
+    fn name_forwarder(&self, a: &ManageArgs, key: &AppKey) -> Result<Value> {
+        let mesh = &self.live.mesh;
+        let st = mesh.state();
+        if st.roots.last() != Some(&cbb_core::records::Key::es256(key.public.clone()).hash()) {
+            return Err(Error::msg("only the group's root names a hub's forwarder"));
+        }
+        let d = writers::find(&st, &a.device)?.clone();
+        if d.id == mesh.device() {
+            return Err(Error::msg("this phone, the group's root, is no hub"));
+        }
+        if !st.may_be_hub(&d.id) {
+            return Err(Error::msg(format!(
+                "the group's records do not make {} a hub; only an admin or a hub the root names can be one",
+                d.name
+            )));
+        }
+        drop(st);
+        let f = cbb_member::forwarder_named(&resolve(&a.forwarder)?, &a.key)?
+            .ok_or_else(|| Error::msg("name the forwarder: its address with its key's pin, or default"))?;
+        let o = cbb_member::orders::Order::Hub(cbb_member::orders::Hub {
+            forwarders: vec![f.clone()],
+            ..Default::default()
+        });
+        let r = mesh
+            .command(key, d.id, o.kind(), o.orders()?.as_deref())
+            .map_err(|e| Error::msg(format!("{}: {}", d.name, e.message())))?;
+        let status = match r.status {
+            1 => "done",
+            s if s == cbb_core::commands::STATUS_REFUSED => "refused",
+            _ => "failed",
+        };
+        if status == "done" {
+            mesh.set_hub_forwarders(d.id, vec![cbb_member::faces::Server { pin: f.1, address: f.0 }])?;
+        }
+        Ok(json!({ "device": id_text(&d.id), "name": d.name, "status": status, "reason": r.reason }))
     }
 
     /// The group's key level as the records set it.
@@ -897,12 +961,74 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
         // does not sync away from home: each of them is off already.
         Order::PasteOff | Order::ActionsOff | Order::AwayOff => Ok(()),
         Order::Action(_) => Err(refuse("a phone has no quick actions")),
-        Order::Hub(_) => {
-            Err(refuse("a phone does not become the hub by a command; move the hub from the phone that is the hub"))
+        Order::Hub(h) => {
+            if !root {
+                return Err(refuse("only the group's root sets a phone's forwarder"));
+            }
+            if h.stop {
+                return Err(refuse("a phone stops being a hub by its own switch, not by a command"));
+            }
+            take_forwarder(live, dir, &h)?;
+            log(&format!("cbb: {who} set this phone's forwarder"));
+            Ok(())
         }
         Order::Device { .. } => Err(refuse("a phone carries out no small device's own command")),
         Order::Paste { .. } => Err(not_yet("a remote paste on a phone")),
     }
+}
+
+/// The forwarder the group's root set for this phone as a hub, in the
+/// phone's folder: the root's hub command names it, and the root
+/// makes the blind credentials the forwarder asks of it.
+const ROOT_FORWARDER: &str = "root_forwarder.json";
+
+/// A forwarder as the root set it: its address and its key's pin.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
+struct RootForwarder {
+    endpoint: String,
+    /// The pin of the forwarder's key, standard base64.
+    key: String,
+}
+
+/// The forwarder the root set for this phone, if any.
+fn root_forwarder(dir: &Path) -> Option<RootForwarder> {
+    let b = std::fs::read(dir.join(ROOT_FORWARDER)).ok()?;
+    serde_json::from_slice(&b).ok()
+}
+
+/// Takes the root's hub command on a phone only as the phone's forwarder
+/// setting: it keeps the first forwarder the command names (none clears
+/// it) and, while the user's switch has the phone serve as a hub, serves
+/// again through it, hidden as before. It never turns the hub on: that is
+/// the user's switch on the phone.
+fn take_forwarder(live: &Live, dir: &Path, h: &cbb_member::orders::Hub) -> Result<()> {
+    let path = dir.join(ROOT_FORWARDER);
+    let Some((endpoint, pin)) = h.forwarders.first() else {
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                Err(Error::with("cannot forget the root's forwarder", e))
+            }
+            _ => Ok(()),
+        };
+    };
+    let fw = RootForwarder { endpoint: endpoint.clone(), key: certs::b64::encode(pin) };
+    let b = serde_json::to_vec(&fw).map_err(|e| Error::with("cannot write the root's forwarder", e))?;
+    cbb_member::files::write_atomic(&path, &b, 0o600)?;
+    let Some(away) = live.away().filter(|a| a.is_hub_now()) else { return Ok(()) };
+    let st = live.away_status().unwrap_or_default();
+    let port = away.hub_settings().map_or(0, |(_, _, port)| i64::from(port));
+    let hdr = cbb_member::control::Header {
+        name: "hub".into(),
+        forwarder: fw.endpoint,
+        forwarder_key: fw.key,
+        obfuscate_off: !st.obfuscated,
+        vless_off: !st.vless,
+        port,
+        consent: true,
+        ..Default::default()
+    };
+    away.make_hub(&hdr)?;
+    Ok(())
 }
 
 /// A copy from the group to write to the phone's clipboard: its text, and
@@ -1118,6 +1244,78 @@ mod tests {
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The root's hub command on a phone only sets the phone's forwarder:
+    /// it never switches the hub on, a command of another key or one to
+    /// stop is refused, and a command with no forwarder clears it.
+    #[test]
+    fn a_hub_command_on_a_phone_sets_its_forwarder_and_does_not_switch_the_hub_on() {
+        use cbb_member::orders::{Hub, Order};
+        let dir = std::env::temp_dir().join(format!("cbb-ffi-live-fw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
+        let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+        cbb_member::founding::found_with(&dir, &me, now, &|| None).unwrap();
+        let own = Own::load(&dir).unwrap();
+        let member: &'static Signer = Box::leak(Box::new(Signer(own.member.clone())));
+        let req = json!({
+            "dir": dir.to_string_lossy(), "name": "phone", "os": "ios", "device": id_text(&own.device()),
+            "public": b64(&member.0.public()), "mdns": false,
+        })
+        .to_string();
+        let (m, a) = Member::start(req.as_bytes(), sign, events, member as *const Signer as usize);
+        ok(&a);
+        let m = m.unwrap();
+        let Member::Live(phone) = &m else { panic!("not the member of 0.6") };
+        let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
+        ok(&call("away", json!({ "on": true })));
+        let none = ok(&call("away_status", Value::Null));
+        assert!(none["root_forwarder"].is_null(), "{none}");
+
+        let ev = Events { f: events, ctx: 0 };
+        let st = phone.live.mesh.state();
+        let root = *st.roots.last().unwrap();
+        let other = phone.live.mesh.own().hash();
+        drop(st);
+        let taken = |o: &Order, signer| cbb_member::commands::Taken {
+            kind: o.kind(),
+            id: [1; 16],
+            signer,
+            orders: o.orders().unwrap(),
+        };
+        let set = Order::Hub(Hub { forwarders: vec![("203.0.113.9:8764".into(), [7; 32])], ..Hub::default() });
+        assert!(
+            carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&set, other))
+                .unwrap_err()
+                .message()
+                .contains("only the group's root")
+        );
+        assert!(root_forwarder(&dir).is_none(), "a command of another key changed nothing");
+        let stop = Order::Hub(Hub { stop: true, ..Hub::default() });
+        assert!(
+            carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&stop, root))
+                .unwrap_err()
+                .message()
+                .contains("its own switch")
+        );
+
+        carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&set, root)).unwrap();
+        let got = ok(&call("away_status", Value::Null));
+        assert_eq!(
+            got["root_forwarder"],
+            json!({ "endpoint": "203.0.113.9:8764", "key": certs::b64::encode(&[7; 32]) }),
+            "{got}"
+        );
+        assert!(!got["away"]["hub"].as_bool().unwrap_or(false), "the command did not switch the hub on: {got}");
+
+        // A command that names the phone's own address and no forwarder clears it.
+        let clear = Order::Hub(Hub { hub: Some(("198.51.100.7:8764".into(), other.0)), ..Hub::default() });
+        carry_out(&phone.live, &phone.me, &dir, &ev, &taken(&clear, root)).unwrap();
+        assert!(ok(&call("away_status", Value::Null))["root_forwarder"].is_null());
+        m.stop();
         let _ = std::fs::remove_dir_all(&dir);
     }
 

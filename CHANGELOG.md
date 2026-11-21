@@ -35,8 +35,9 @@ made with 0.5 is set up again once. The details follow.
   (`ffi/src/window.rs`, `ffi/src/pair06.rs`).
 - The iPhone and Android apps of 0.6 run sync away from home, the phone as a hub and the
   link to the group's relay through the Live member, with the same cards as before; the
-  root phone sets the group's relay, which every device meets at, on HarmonyOS too
-  ([phone apps](docs/apps.md), "Screens").
+  root phone sets the group's relay, which every device meets at, on HarmonyOS too; an
+  admin phone's forwarder as a hub is the root's setting, named with a hub command, which the
+  phone shows and serves through ([phone apps](docs/apps.md), "Screens").
 - A new phone joins a group of 0.6 by a window's QR code, or by the six digits its person types
   (the window found by mDNS) (`cbb_joiner_new`): it dials the member whose key the code names,
   proves the digits, and the checked set is kept in the app's folder before the member hears it

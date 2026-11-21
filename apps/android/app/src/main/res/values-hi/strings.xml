@@ -206,7 +206,9 @@
     <string name="hub_forwarder">फ़ॉरवर्डर</string>
     <string name="hub_forwarder_address">पता, जैसे 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">प्रोजेक्ट के फ़ॉरवर्डर पर लौटने के लिए, दोनों फ़ील्ड खाली करें और सहेजें।</string>
+    <string name="hub_forwarder_by_root">समूह का रूट इस हब का फ़ॉरवर्डर सेट करता है; घर से दूर के डिवाइस इसी के ज़रिए इस फ़ोन तक पहुँचते हैं।</string>
     <string name="hub_forwarder_key">कुंजी, 44 अक्षर</string>
+    <string name="hub_forwarder_none_by_root">समूह के रूट ने इस फ़ोन के लिए कोई फ़ॉरवर्डर सेट नहीं किया, इसलिए यह केवल घर पर हब के रूप में काम करता है।</string>
     <string name="hub_forwarder_project">cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए दूर से पहुँचा जाता है। अपना इस्तेमाल करने के लिए, उसका पता और कुंजी डालें।</string>
     <string name="hub_forwarder_save">फ़ॉरवर्डर सहेजें</string>
     <string name="hub_home_background">यह फ़ोन हब है, बैकग्राउंड में भी।</string>

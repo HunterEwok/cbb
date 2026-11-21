@@ -23786,6 +23786,52 @@
         }
       }
     },
+    "The group's root set no forwarder for this phone, so it serves as the hub at home only.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يعيّن جذر المجموعة مُعيد توجيه لهذا الهاتف، لذا يعمل محورًا في المنزل فقط."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La raíz del grupo no configuró ningún reenviador para este teléfono, así que funciona como hub solo en casa."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השורש של הקבוצה לא הגדיר מעביר לטלפון הזה, ולכן הוא משמש רכזת בבית בלבד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के रूट ने इस फ़ोन के लिए कोई फ़ॉरवर्डर सेट नहीं किया, इसलिए यह केवल घर पर हब के रूप में काम करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корень группы не задал форвардер для этого телефона, поэтому он работает хабом только дома."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mzizi wa kikundi haukuweka kisambazaji kwa simu hii, kwa hivyo inatumika kama kitovu cha nyumbani pekee."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的根设备没有为这部手机设置转发器，因此它只在家中充当中心节点。"
+          }
+        }
+      }
+    },
     "The group's root sets the relay for every device; this phone meets the others there while sync away from home is on.": {
       "localizations": {
         "ar": {
@@ -23828,6 +23874,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的根设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。"
+          }
+        }
+      }
+    },
+    "The group's root sets this hub's forwarder; devices away from home reach this phone through it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعيّن جذر المجموعة مُعيد التوجيه لهذا المحور؛ وتصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف من خلاله."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La raíz del grupo configura el reenviador de este hub; los dispositivos fuera de casa llegan a este teléfono a través de él."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השורש של הקבוצה מגדיר את המעביר של הרכזת הזו; מכשירים מחוץ לבית מגיעים לטלפון הזה דרכו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का रूट इस हब का फ़ॉरवर्डर सेट करता है; घर से दूर के डिवाइस इसी के ज़रिए इस फ़ोन तक पहुँचते हैं।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форвардер этого хаба задаёт корень группы; устройства вне дома видят этот телефон через него."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mzizi wa kikundi huweka kisambazaji cha kitovu hiki; vifaa vilivyo mbali na nyumbani hufikia simu hii kupitia kisambazaji hicho."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的根设备为这个中心节点设置转发器；离家的设备通过它连接到这部手机。"
           }
         }
       }

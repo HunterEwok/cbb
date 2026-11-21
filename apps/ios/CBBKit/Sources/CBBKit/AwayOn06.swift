@@ -9,19 +9,20 @@ import Foundation
 /// space as before, and keeps their keys and clients itself; the app keeps
 /// only what the user chose for the hub, `Prefs`, and maps where the member
 /// says they stand (`CoreMember.AwayState`) onto the same cards as before.
-/// The relay is the group's setting, which the root writes; every device
-/// meets the others there.
+/// The hub's forwarder is the root's setting, which its hub command names
+/// and the member keeps (`CoreMember.rootForwarder`), as the relay is the
+/// group's setting, which the root writes; every device meets the others
+/// there.
 public enum AwayOn06 {
-    /// What the user chose for the hub: whether it is on, its forwarder,
-    /// how its tunnel hides and the home networks where it publishes itself.
+    /// What the user chose for the hub: whether it is on, how its tunnel
+    /// hides and the home networks where it publishes itself.
     public struct Prefs: Codable, Equatable, Sendable {
         public var on = false
-        public var forwarder: HubState.Forwarder?
         public var disguise = HubOnPhone.Disguise.obfuscate.rawValue
         public var homes: [String] = []
 
-        public init(on: Bool = false, forwarder: HubState.Forwarder? = nil, disguise: HubOnPhone.Disguise = .obfuscate, homes: [String] = []) {
-            (self.on, self.forwarder, self.disguise, self.homes) = (on, forwarder, disguise.rawValue, homes)
+        public init(on: Bool = false, disguise: HubOnPhone.Disguise = .obfuscate, homes: [String] = []) {
+            (self.on, self.disguise, self.homes) = (on, disguise.rawValue, homes)
         }
 
         /// How the hub's tunnel hides.
@@ -54,14 +55,13 @@ public enum AwayOn06 {
     public static let homePort: UInt16 = 8764
 
     /// Has the member serve as a hub with the user's settings, as the
-    /// phone of 0.5 was: through the forwarder when there is one (VLESS
-    /// there, unless the tunnel is plain), or at home only, at homeAddrs.
+    /// phone of 0.5 was: through the forwarder the root set when there is
+    /// one (byRoot; the member takes it itself, VLESS there unless the
+    /// tunnel is plain), or at home only, at homeAddrs.
     @discardableResult
-    public static func serve(_ node: CoreMember, _ p: Prefs, homeAddrs: [String]) throws -> CoreMember.AwayState? {
-        let fw = p.forwarder
-        return try node.serveAsHub(port: fw == nil ? homePort : 0, addrs: fw == nil ? homeAddrs.map { "\($0):\(homePort)" } : [],
-                                   forwarder: fw?.endpoint ?? "", key: fw?.pin ?? "",
-                                   obfuscateOff: p.hides == .plain, vlessOff: p.hides != .vless)
+    public static func serve(_ node: CoreMember, _ p: Prefs, homeAddrs: [String], byRoot: CoreMember.RootForwarder?) throws -> CoreMember.AwayState? {
+        try node.serveAsHub(port: byRoot == nil ? homePort : 0, addrs: byRoot == nil ? homeAddrs.map { "\($0):\(homePort)" } : [],
+                            obfuscateOff: p.hides == .plain, vlessOff: p.hides != .vless)
     }
 
     /// Where sync away from home stands, as Settings shows it: off, or on
@@ -76,16 +76,17 @@ public enum AwayOn06 {
     }
 
     /// Where the hub stands, as Settings and Home show it, with the reason
-    /// it failed: paused while the app is not in front; at home only
-    /// without a forwarder; registered once the forwarder took it.
-    public static func hubStatus(_ p: Prefs, _ a: CoreMember.AwayState?, paused: Bool) -> (HubOnPhone.Status, String?) {
+    /// it failed: paused while the app is not in front; at home only while
+    /// the root set no forwarder (forwarder false); registered once the
+    /// forwarder took it.
+    public static func hubStatus(_ p: Prefs, _ a: CoreMember.AwayState?, paused: Bool, forwarder: Bool) -> (HubOnPhone.Status, String?) {
         guard p.on else { return (.off, nil) }
         if paused { return (.paused, nil) }
         guard let a, a.hub else {
             if let a, !a.error.isEmpty { return (.failed, reason(a.error, a.detail)) }
             return (.registering, nil)
         }
-        if p.forwarder == nil { return (.homeOnly, nil) }
+        if !forwarder { return (.homeOnly, nil) }
         guard let f = a.forwarder else { return (.registering, nil) }
         if f.registered { return (.registered, nil) }
         if !f.error.isEmpty { return (.failed, reason(f.error, f.detail)) }

@@ -385,14 +385,22 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** On a group of 0.6: sync away from home as the member runs it, null while it is off. */
     fun awayStatus(): AwayState? = AwayState.of(call("away_status"))
 
+    /** The forwarder the group's root set for this phone as a hub: its address and its key's pin. */
+    data class RootForwarder(val endpoint: String, val key: String)
+
+    /** On a group of 0.6: the forwarder the group's root set for this phone as a hub, which it serves through; null while the root set none. */
+    fun rootForwarder(): RootForwarder? = call("away_status").optObject("root_forwarder")?.let { f ->
+        RootForwarder(f.optString("endpoint") ?: "", f.optString("key") ?: "")
+    }
+
     /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
     fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
 
     /**
      * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key), with the
      * computers' hub: reached away from home through the forwarder at forwarder (`host:port`, its key's pin key or
-     * `default` for the project's), or at addrs ("ip:port") on the UDP port (0: any free one), hidden as obfuscateOff
-     * and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
+     * `default` for the project's; none given: the one the root set, [rootForwarder]), or at addrs ("ip:port") on the
+     * UDP port (0: any free one), hidden as obfuscateOff and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
      */
     fun serveAsHub(
         port: Int = 0,
@@ -419,6 +427,15 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun setRelays(relays: List<String>, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
         root(Wire.obj("action" to Wire.str("relay"), "relays" to JsonArray(relays.map { JsonPrimitive(it) })), public, sign)
             .optArray("relays")?.map { (it as JsonPrimitive).content } ?: emptyList()
+
+    /**
+     * On the root of a group of 0.6: names the forwarder of device, an admin phone or a computer that may be a hub, at
+     * forwarder (`host:port`, or `default` for the project's) with its key's pin key, which the device takes as its
+     * forwarder setting and serves through once its hub is on. The device's answer: done, refused or failed, and why.
+     */
+    fun nameForwarder(device: String, forwarder: String, key: String, public: ByteArray, sign: (ByteArray) -> ByteArray): Pair<String, String> =
+        root(Wire.obj("action" to Wire.str("forwarder"), "device" to Wire.str(device), "forwarder" to Wire.str(forwarder), "key" to Wire.str(key)), public, sign)
+            .let { (it.optString("status") ?: "") to (it.optString("reason") ?: "") }
 
     /** Closes the port [listen] opened for [what], or every one with null. */
     fun unlisten(what: Listen? = null) {

@@ -521,6 +521,9 @@ final class AppModel: ObservableObject {
         /// The computer that is always on which the app suggests as the
         /// hub, unless the user chose to keep the phone.
         var suggested: Target?
+        /// The forwarder is the group's root's setting (a group of 0.6),
+        /// which Settings shows and does not edit.
+        var forwarderByRoot = false
 
         struct Target: Equatable, Identifiable {
             let id: String

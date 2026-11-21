@@ -84,7 +84,7 @@ struct Hub {
   }
 
   async hub(on: boolean, anyway: boolean): Promise<void> {
-    if (on && !this.pair(this.forwarder, this.forwarderKey)) {
+    if (on && !app.isV06() && !this.pair(this.forwarder, this.forwarderKey)) {
       this.error = t('hub_bad_forwarder');
       return;
     }
@@ -185,17 +185,26 @@ struct Hub {
           ErrorText({ text: app.member.hubError })
 
           this.section(t('hub_forwarder'))
-          this.note(t('hub_forwarder_project'))
-          TextInput({ placeholder: $r('app.string.hub_forwarder_address'), text: this.forwarder })
-            .onChange((v: string) => {
-              this.forwarder = v;
-            })
-          TextInput({ placeholder: $r('app.string.hub_forwarder_key'), text: this.forwarderKey })
-            .maxLength(KEY_LENGTH)
-            .onChange((v: string) => {
-              this.forwarderKey = v;
-            })
-          this.note(t('hub_forwarder_back'))
+          // On a group of 0.6 the forwarder is the root's setting: shown, not edited.
+          if (app.isV06()) {
+            this.note(t(app.member.rootForwarder.length > 0 ? 'hub_forwarder_by_root' : 'hub_forwarder_none_by_root'))
+            if (app.member.rootForwarder.length > 0) {
+              Text(app.member.rootForwarder).fontSize(15)
+              Text(app.member.rootForwarderKey).fontSize(13).fontFamily('monospace').fontColor($r('app.color.secondary'))
+            }
+          } else {
+            this.note(t('hub_forwarder_project'))
+            TextInput({ placeholder: $r('app.string.hub_forwarder_address'), text: this.forwarder })
+              .onChange((v: string) => {
+                this.forwarder = v;
+              })
+            TextInput({ placeholder: $r('app.string.hub_forwarder_key'), text: this.forwarderKey })
+              .maxLength(KEY_LENGTH)
+              .onChange((v: string) => {
+                this.forwarderKey = v;
+              })
+            this.note(t('hub_forwarder_back'))
+          }
 
           this.section(t('hub_disguise'))
           this.note(t('hub_disguise_body'))

@@ -206,7 +206,9 @@
     <string name="hub_forwarder">转发器</string>
     <string name="hub_forwarder_address">地址，例如 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">要改回项目的转发器，请清空两个字段并保存。</string>
+    <string name="hub_forwarder_by_root">群组的根设备为这个中心节点设置转发器；离家的设备通过它连接到这部手机。</string>
     <string name="hub_forwarder_key">密钥，44 个字符</string>
+    <string name="hub_forwarder_none_by_root">群组的根设备没有为这部手机设置转发器，因此它只在家中充当中心节点。</string>
     <string name="hub_forwarder_project">通过项目在 cbb.tools 的转发器从远方访问。要使用你自己的转发器，请输入它的地址和密钥。</string>
     <string name="hub_forwarder_save">保存转发器</string>
     <string name="hub_home_background">这部手机是中心节点，在后台也是。</string>

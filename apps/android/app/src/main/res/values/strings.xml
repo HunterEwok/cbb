@@ -209,7 +209,9 @@
     <string name="hub_forwarder">Forwarder</string>
     <string name="hub_forwarder_address">Address, such as 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">To go back to the project\'s forwarder, empty both fields and save.</string>
+    <string name="hub_forwarder_by_root">The group\'s root sets this hub\'s forwarder; devices away from home reach this phone through it.</string>
     <string name="hub_forwarder_key">Key, 44 characters</string>
+    <string name="hub_forwarder_none_by_root">The group\'s root set no forwarder for this phone, so it serves as the hub at home only.</string>
     <string name="hub_forwarder_project">Reached from afar through the project\'s forwarder at cbb.tools. To use your own, enter its address and key.</string>
     <string name="hub_forwarder_save">Save the forwarder</string>
     <string name="hub_home_background">This phone is the hub, in the background too.</string>

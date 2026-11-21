@@ -206,7 +206,9 @@
     <string name="hub_forwarder">مُعيد التوجيه</string>
     <string name="hub_forwarder_address">العنوان، مثل 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">للعودة إلى مُعيد توجيه المشروع، أفرغ الحقلين واحفظ.</string>
+    <string name="hub_forwarder_by_root">يعيّن جذر المجموعة مُعيد التوجيه لهذا المحور؛ وتصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف من خلاله.</string>
     <string name="hub_forwarder_key">المفتاح، 44 حرفًا</string>
+    <string name="hub_forwarder_none_by_root">لم يعيّن جذر المجموعة مُعيد توجيه لهذا الهاتف، لذا يعمل محورًا في المنزل فقط.</string>
     <string name="hub_forwarder_project">يمكن الوصول إليه من بعيد عبر مُعيد التوجيه الخاص بالمشروع على cbb.tools. لاستخدام مُعيد توجيهك، أدخل عنوانه ومفتاحه.</string>
     <string name="hub_forwarder_save">حفظ مُعيد التوجيه</string>
     <string name="hub_home_background">هذا الهاتف هو المحور، في الخلفية أيضًا.</string>

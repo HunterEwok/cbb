@@ -206,7 +206,9 @@
     <string name="hub_forwarder">Форвардер</string>
     <string name="hub_forwarder_address">Адрес, например 198.51.100.9:8764</string>
     <string name="hub_forwarder_back">Чтобы вернуться к форвардеру проекта, очистите оба поля и сохраните.</string>
+    <string name="hub_forwarder_by_root">Форвардер этого хаба задаёт корень группы; устройства вне дома видят этот телефон через него.</string>
     <string name="hub_forwarder_key">Ключ, 44 символа</string>
+    <string name="hub_forwarder_none_by_root">Корень группы не задал форвардер для этого телефона, поэтому он работает хабом только дома.</string>
     <string name="hub_forwarder_project">Издалека хаб доступен через форвардер проекта на cbb.tools. Чтобы использовать свой, введите его адрес и ключ.</string>
     <string name="hub_forwarder_save">Сохранить форвардер</string>
     <string name="hub_home_background">Этот телефон — хаб, и в фоне тоже.</string>

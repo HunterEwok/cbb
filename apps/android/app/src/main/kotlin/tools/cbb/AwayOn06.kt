@@ -16,16 +16,17 @@ import kotlinx.serialization.json.jsonPrimitive
  * group of 0.6 (docs/apps.md, "Away from home"). The Live member runs the
  * tunnel, the hub and the link to the relay in the app's process, in user
  * space as before, and keeps their keys and clients itself; the app keeps
- * only what the user chose for the hub: whether it is on, its forwarder,
- * how its tunnel hides, whether it runs in the background and the home
- * networks where it publishes itself. The relay is the group's setting,
- * which the root writes; every device meets the others there.
+ * only what the user chose for the hub: whether it is on, how its tunnel
+ * hides, whether it runs in the background and the home networks where it
+ * publishes itself. The hub's forwarder is the root's setting, which its
+ * hub command names and the member keeps (CoreMember.rootForwarder), as
+ * the relay is the group's setting, which the root writes; every device
+ * meets the others there.
  */
 class AwayOn06(private val file: SealedFile, private val log: (String, Throwable?) -> Unit) {
     /** What the user chose for the hub. */
     data class Prefs(
         val on: Boolean = false,
-        val forwarder: HubState.Forwarder? = null,
         val disguise: HubOnPhone.Disguise = HubOnPhone.Disguise.OBFUSCATE,
         val background: Boolean = false,
         val homes: List<String> = emptyList(),
@@ -33,7 +34,6 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
         fun encode(): ByteArray = JsonObject(
             mapOf(
                 "on" to JsonPrimitive(on),
-                "forwarder" to (forwarder?.let { JsonObject(mapOf("endpoint" to JsonPrimitive(it.endpoint), "pin" to JsonPrimitive(it.pin))) } ?: JsonPrimitive(null as String?)),
                 "disguise" to JsonPrimitive(disguise.name),
                 "background" to JsonPrimitive(background),
                 "homes" to JsonArray(homes.map { JsonPrimitive(it) }),
@@ -44,14 +44,8 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
             /** The choices in b, or null when they are not ones this version wrote. */
             fun decode(b: ByteArray): Prefs? = runCatching {
                 val o = Json.parseToJsonElement(b.toString(Charsets.UTF_8)) as JsonObject
-                val fw = (o["forwarder"] as? JsonObject)?.let { f ->
-                    val ep = (f["endpoint"] as? JsonPrimitive)?.content ?: return null
-                    val pin = (f["pin"] as? JsonPrimitive)?.content ?: return null
-                    HubState.Forwarder(ep, pin)
-                }
                 Prefs(
                     on = o["on"]?.jsonPrimitive?.booleanOrNull ?: false,
-                    forwarder = fw,
                     disguise = (o["disguise"] as? JsonPrimitive)?.content?.let { d -> HubOnPhone.Disguise.entries.firstOrNull { it.name == d } }
                         ?: HubOnPhone.Disguise.OBFUSCATE,
                     background = o["background"]?.jsonPrimitive?.booleanOrNull ?: false,
@@ -78,8 +72,6 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
 
     fun setOn(on: Boolean, home: String?) = change { p -> p.copy(on = on, homes = if (on) withHome(p.homes, home) else p.homes) }
 
-    fun setForwarder(fw: HubState.Forwarder?) = change { it.copy(forwarder = fw) }
-
     fun setDisguise(d: HubOnPhone.Disguise) = change { it.copy(disguise = d) }
 
     fun setBackground(on: Boolean) = change { it.copy(background = on) }
@@ -94,18 +86,16 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
 
     /**
      * Makes the member a hub with the user's settings, as the phone of 0.5
-     * was: through the forwarder when there is one (VLESS there, unless the
-     * tunnel is plain), or at home only. A hub at home only has no address
-     * away from home, so the member takes it on its home port's address.
+     * was: through the forwarder the root set when there is one (byRoot;
+     * the member takes it itself, VLESS there unless the tunnel is plain),
+     * or at home only. A hub at home only has no address away from home, so
+     * the member takes it on its home port's address.
      */
-    fun serve(n: CoreMember, homeAddrs: List<String>): CoreMember.AwayState? {
+    fun serve(n: CoreMember, homeAddrs: List<String>, byRoot: CoreMember.RootForwarder?): CoreMember.AwayState? {
         val p = hub
-        val fw = p.forwarder
         return n.serveAsHub(
-            port = if (fw == null) HOME_PORT else 0,
-            addrs = if (fw == null) homeAddrs else emptyList(),
-            forwarder = fw?.endpoint ?: "",
-            key = fw?.pin ?: "",
+            port = if (byRoot == null) HOME_PORT else 0,
+            addrs = if (byRoot == null) homeAddrs else emptyList(),
             obfuscateOff = p.disguise == HubOnPhone.Disguise.PLAIN,
             vlessOff = p.disguise != HubOnPhone.Disguise.VLESS,
         )
@@ -132,14 +122,14 @@ class AwayOn06(private val file: SealedFile, private val log: (String, Throwable
         /**
          * Where the hub stands, as Settings and Home show it, with the
          * reason it failed: paused while the app is in the background
-         * without leave to run there; at home only without a forwarder;
-         * registered once the forwarder took it.
+         * without leave to run there; at home only while the root set no
+         * forwarder (forwarder false); registered once the forwarder took it.
          */
-        fun hubStatus(p: Prefs, a: CoreMember.AwayState?, paused: Boolean): Pair<HubOnPhone.Status, String?> {
+        fun hubStatus(p: Prefs, a: CoreMember.AwayState?, paused: Boolean, forwarder: Boolean): Pair<HubOnPhone.Status, String?> {
             if (!p.on) return HubOnPhone.Status.OFF to null
             if (paused) return HubOnPhone.Status.PAUSED to null
             if (a == null || !a.hub) return if (a != null && a.error.isNotEmpty()) HubOnPhone.Status.FAILED to reason(a.error, a.detail) else HubOnPhone.Status.REGISTERING to null
-            if (p.forwarder == null) return HubOnPhone.Status.HOME_ONLY to null
+            if (!forwarder) return HubOnPhone.Status.HOME_ONLY to null
             val f = a.forwarder ?: return HubOnPhone.Status.REGISTERING to null
             return when {
                 f.registered -> HubOnPhone.Status.REGISTERED to null
