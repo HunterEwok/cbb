@@ -6,8 +6,9 @@ import Sailfish.Silica 1.0
 
 // Moving the group's main device to this phone with the recovery key, on
 // 0.6 (docs/apps.md, "Changing the main device"): the sheet's text or its QR
-// code's text typed or pasted (the phone has no camera, and no YubiKey path
-// yet: docs/parity.md), then the list of who stays, which the core writes
+// code's text typed or pasted (the phone has no camera), or the secret a
+// YubiKey plugged into the USB-C port opens (app.openCard, through the
+// system's pcscd), then the list of who stays, which the core writes
 // and the person only unticks (this phone is never in it), then the admin
 // PIN, after which the admin key in the TEE becomes the root key. The old
 // main device starts unticked. The key stays on the page only until the
@@ -19,6 +20,8 @@ Page {
     property bool waiting: false
     property var leaveOut: []
     property bool overWaiting: false
+    property bool askingPin: false
+    property string note: ""
 
     Component.onDestruction: page.recovery = null
 
@@ -33,7 +36,10 @@ Page {
 
     function start(text) {
         var t = text.trim()
-        var r = t.indexOf("cbb://") === 0 ? { "qr": t } : { "text": t }
+        startWith(t.indexOf("cbb://") === 0 ? { "qr": t } : { "text": t })
+    }
+
+    function startWith(r) {
         page.leaveOut = oldRoots()
         page.pending = r
         app.changePreview(r, page.leaveOut)
@@ -77,6 +83,13 @@ Page {
             page.waiting = waiting
         }
         onRootChangedHere: if (ok) pageStack.pop()
+        onCardOpened: {
+            if (!ok)
+                return
+            page.note = qsTr("The YubiKey opened the recovery key.")
+            // The secret goes to the core for this change only.
+            page.startWith({ "secret": secret })
+        }
     }
 
     RemorsePopup { id: remorse }
@@ -117,6 +130,49 @@ Page {
                 text: qsTr("Next")
                 enabled: !app.busy && key.text.trim() !== ""
                 onClicked: page.start(key.text)
+            }
+
+            Button {
+                visible: page.recovery === null && !page.askingPin
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Use a YubiKey instead")
+                enabled: !app.busy
+                onClicked: page.askingPin = true
+            }
+
+            Label {
+                visible: page.recovery === null && page.askingPin
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.highlightColor
+                text: qsTr("Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.")
+            }
+
+            PasswordField {
+                id: pin
+                visible: page.recovery === null && page.askingPin
+                width: parent.width
+                label: qsTr("The YubiKey's PIN")
+                placeholderText: label
+                maximumLength: 8
+            }
+
+            Button {
+                visible: page.recovery === null && page.askingPin
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Continue")
+                enabled: !app.busy && pin.text.length >= 6
+                onClicked: { var p = pin.text; pin.text = ""; page.askingPin = false; app.openCard(p) }
+            }
+
+            Label {
+                visible: page.note !== ""
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                text: page.note
             }
 
             Label {

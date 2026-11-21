@@ -256,6 +256,10 @@
         <translation>Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>Continuar</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>Hacer de este teléfono el dispositivo principal</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>Siguiente</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Conecta la YubiKey al puerto USB-C, escribe su PIN y tócala cuando parpadee.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>Se queda, ya sin ser administrador: hazlo administrador de nuevo más tarde</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>La YubiKey abrió la clave de recuperación.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>El PIN de la YubiKey</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>El texto de la clave de recuperación, como en la hoja</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>No se puede deshacer. El PIN de administrador lo confirma, y los dispositivos del grupo siguen a este teléfono en cuanto se conectan.</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>Usar una YubiKey en su lugar</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>Conecta el teléfono a la Wi-Fi de casa para añadir un dispositivo.</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>No hay ninguna YubiKey conectada. Conéctala al puerto USB-C e inténtalo de nuevo.</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>Solo un administrador crea invitaciones: un teléfono administrador aquí, o cbb invite en un ordenador administrador.</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>Algo se rompió en CBB. Vuelve a empezar.</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>La YubiKey no respondió como se esperaba. Vuelve a conectarla e inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>El PIN de la YubiKey está bloqueado. Desbloquéalo con su PUK en Yubico Authenticator y vuelve a intentarlo.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>Primero hace falta el PIN de administrador.</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>La app no puede usar la clave de administración de esta YubiKey. Usa la hoja impresa.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>El elemento seguro del teléfono guarda una clave dañada.</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>Esta YubiKey ya guarda una clave de recuperación. Usa otra YubiKey.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>Esta YubiKey no contiene ninguna clave de recuperación.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>Esta YubiKey guarda otra cosa en el lugar de la clave de recuperación. Usa otra YubiKey.</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>Esta YubiKey tiene un firmware anterior al 5.3, que la clave de recuperación necesita. Usa la hoja impresa.</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>Esta compilación de CBB está dañada.</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>La clave de administrador de este teléfono es anterior al PIN de administrador. Sal del grupo y vuelve a unirte.</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>Hay dos YubiKey conectadas. Deja solo una e inténtalo de nuevo.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>PIN incorrecto. Tras tres intentos fallidos la YubiKey bloquea su PIN.</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>Ya la anoté</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>Conservar su clave de fábrica</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>Crear una nueva clave de recuperación</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>Crear una clave de recuperación</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Conecta la YubiKey al puerto USB-C, escribe su PIN y tócala cuando parpadee.</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>Guardarla en una YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>Eliminando la clave de recuperación</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>Reemplazar su clave de fábrica</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>Reemplazando la clave de recuperación</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>El PIN de la YubiKey</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos.</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

@@ -24,13 +24,15 @@ made with 0.5 is set up again once. The details follow.
   comes with 0.7 (D-125). Every phone app has the screen ("Move the group to this phone"):
   the iPhone, Android and HarmonyOS apps take the sheet or a YubiKey over NFC and seal the
   sheet onto a YubiKey after asking whether its factory management key is replaced; the
-  Aurora app takes the sheet. The iPhone and Android kits' own PIV code and their restore
+  Aurora app takes the sheet or a YubiKey on USB-C. The iPhone and Android kits' own PIV code and their restore
   on the Start screen are gone: the core speaks PIV for them.
   `cbb_piv` also reaches a YubiKey plugged into the phone's USB-C port: with the transport
   `ccid_bulk` the app only moves the bytes of the key's CCID interface and the core frames
   each APDU (`member/src/piv/ccid.rs`). The Android and HarmonyOS apps take a YubiKey
   plugged into USB-C as well as one held to NFC, whichever comes first; the iPhone app takes
-  one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC.
+  one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC. The
+  Aurora app reaches a YubiKey plugged into USB-C through the system's pcscd, the core being its
+  client (`cbb_piv`'s transport `pcsc`).
 - In a group of 0.6 the root phone can add a watch with the key the watch made and a member
   key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
   signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its

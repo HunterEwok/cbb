@@ -202,9 +202,18 @@ public:
     // main device"): changePreview asks who stays with leaveOut unticked,
     // signing nothing (changePreviewed); changeRoot, after the admin PIN,
     // makes the admin key in the TEE the root key and signs the change
-    // (rootChangedHere). Aurora takes the sheet only (docs/parity.md).
+    // (rootChangedHere). The recovery is the sheet, or the secret a YubiKey
+    // on USB-C opened (openCard).
     Q_INVOKABLE void changePreview(const QVariantMap &recovery, const QStringList &leaveOut);
     Q_INVOKABLE void changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, bool overWaiting);
+    // The recovery key on a YubiKey plugged into the USB-C port, through the
+    // system's pcscd (cbb_piv's transport pcsc; docs/apps.md): openCard
+    // opens it after the PIN and a touch, for changeRoot's recovery
+    // {"secret"} (cardOpened); sealCard seals the sheet just shown onto it,
+    // replacing a factory management key only when replaceDefault
+    // (cardSealed).
+    Q_INVOKABLE void openCard(const QString &pin);
+    Q_INVOKABLE void sealCard(const QString &pin, bool replaceDefault);
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
     // The root's own records, built and signed in the core (cbb_core::root)
@@ -247,6 +256,8 @@ signals:
     void managed(const QString &action, const QString &device, bool ok);
     void changePreviewed(bool ok, const QVariantList &rows, bool waiting);
     void rootChangedHere(bool ok);
+    void cardOpened(bool ok, const QString &secret);
+    void cardSealed(bool ok, bool defaultKey);
     void claimChanged();
     void arrangementChanged();
     void adminPinChanged();

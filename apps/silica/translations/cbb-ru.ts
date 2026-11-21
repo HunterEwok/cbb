@@ -256,6 +256,10 @@
         <translation>Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>Продолжить</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>Сделать этот телефон главным устройством</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>Далее</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Вставьте YubiKey в порт USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>Остаётся, но уже не администратор: сделайте его администратором позже</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>YubiKey открыл ключ восстановления.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>PIN YubiKey</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>Текст ключа восстановления, как на листе</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>Это нельзя отменить. PIN-код администратора подтверждает это, и устройства группы переходят к этому телефону, как только подключатся.</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>Использовать YubiKey</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>Подключите телефон к домашней сети Wi-Fi, чтобы добавить устройство.</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>YubiKey не вставлен. Вставьте его в порт USB-C и попробуйте снова.</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>Что-то в CBB сломалось. Запускаем заново.</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>YubiKey ответил не так, как ожидалось. Вставьте его заново и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>PIN YubiKey заблокирован. Разблокируйте его PUK-кодом в Yubico Authenticator и попробуйте снова.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>Сначала нужен PIN администратора.</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>Приложение не может использовать ключ управления этого YubiKey. Используйте распечатанный лист.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>В защищённом элементе телефона повреждённый ключ.</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>На этом YubiKey уже есть ключ восстановления. Используйте другой YubiKey.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>На этом YubiKey нет ключа восстановления.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>На этом YubiKey в месте для ключа восстановления хранится что-то другое. Используйте другой YubiKey.</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>Прошивка этого YubiKey старше 5.3, а ключу восстановления нужна 5.3. Используйте распечатанный лист.</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>Эта сборка CBB повреждена.</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>Ключ администратора на этом телефоне старше PIN администратора. Покиньте группу и вступите в неё снова.</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>Вставлено два YubiKey. Оставьте только один и попробуйте снова.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>Неверный PIN. После трёх неверных попыток YubiKey блокирует PIN.</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>Я записал ключ</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>Оставить заводской ключ</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>Создать новый ключ восстановления</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>Создать ключ восстановления</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Вставьте YubiKey в порт USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>Записать на YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>Удаляем ключ восстановления</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>Заменить заводской ключ</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>Заменяем ключ восстановления</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>PIN YubiKey</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>Ключ восстановления на YubiKey, но у него остался заводской ключ управления: тот, кто его держит, может стереть ключ без PIN-кода. Сохраните и лист.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>Ключ восстановления на YubiKey. YubiKey и лист хранят один и тот же ключ: храните оба, в разных местах.</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

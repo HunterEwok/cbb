@@ -256,6 +256,10 @@
         <translation>تغيير للجهاز الرئيسي في الطريق بالفعل، ولم تصل كل سجلاته بعد. اتصل بأجهزتك أولًا؛ ولا تكتب فوقه إلا إذا كان ذلك التغيير لن يصل أبدًا، مثلًا لأن الهاتف الذي أجراه قد فُقد.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>متابعة</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>اجعل هذا الهاتف الجهاز الرئيسي</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>التالي</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>أدخل YubiKey في منفذ USB-C، واكتب رمز PIN الخاص به، ثم المسه عندما يومض.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>يبقى، لكنه لم يعد مشرفًا: اجعله مشرفًا مرة أخرى لاحقًا</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>فتح YubiKey مفتاح الاسترداد.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>الرقم السري لـ YubiKey</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>نص مفتاح الاسترداد كما في الورقة</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>لا يمكن التراجع عن ذلك. يؤكده رمز PIN للمسؤول، وتتبع أجهزة المجموعة هذا الهاتف فور اتصالها.</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>استخدام YubiKey بدلًا من ذلك</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>صِل الهاتف بشبكة Wi-Fi المنزلية لإضافة جهاز.</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>لا يوجد YubiKey موصول. أدخله في منفذ USB-C وحاول مرة أخرى.</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>لا ينشئ الدعوة إلا مشرف: هاتف مشرف هنا، أو cbb invite على حاسوب مشرف.</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>حدث عطل في CBB. يُعاد تشغيله الآن.</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>لم يستجب YubiKey كما هو متوقع. أعد توصيله وحاول مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>الرقم السري لـ YubiKey محظور. ألغِ حظره بالـ PUK الخاص به في Yubico Authenticator، ثم حاول مرة أخرى.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>يلزم رمز PIN للمشرف أولًا.</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>لا يستطيع التطبيق استخدام مفتاح الإدارة لهذا الـ YubiKey. استخدم الورقة المطبوعة بدلًا منه.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>يحتوي العنصر الآمن في الهاتف على مفتاح تالف.</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>يحمل هذا الـ YubiKey مفتاح استرداد بالفعل. استخدم YubiKey آخر.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>لا يحمل هذا الـ YubiKey أي مفتاح استرداد.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>يحمل هذا الـ YubiKey شيئًا آخر في المكان المخصص لمفتاح الاسترداد. استخدم YubiKey آخر.</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>إصدار البرنامج الثابت لهذا الـ YubiKey أقدم من 5.3 الذي يحتاجه مفتاح الاسترداد. استخدم الورقة المطبوعة بدلًا منه.</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>هذا الإصدار من CBB معطوب.</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>مفتاح المشرف في هذا الهاتف أقدم من رمز PIN للمشرف. غادر المجموعة وانضم إليها مجددًا.</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>يوجد مفتاحا YubiKey موصولان. أبقِ واحدًا فقط وحاول مرة أخرى.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>رقم سري خاطئ. بعد ثلاث محاولات خاطئة يحظر YubiKey رقمه السري.</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>لقد كتبته</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>الإبقاء على مفتاح المصنع</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>إنشاء مفتاح استرداد جديد</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>إنشاء مفتاح استرداد</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>أدخل YubiKey في منفذ USB-C، واكتب رمز PIN الخاص به، ثم المسه عندما يومض.</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>وضعه على YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>جارٍ إزالة مفتاح الاسترداد</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>استبدال مفتاح المصنع</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>جارٍ استبدال مفتاح الاسترداد</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>الرقم السري لـ YubiKey</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين.</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

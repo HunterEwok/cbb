@@ -256,6 +256,10 @@
         <translation>मुख्य डिवाइस का एक बदलाव पहले से रास्ते में है, और उसके सारे रिकॉर्ड अभी नहीं आए हैं। पहले अपने डिवाइस से जुड़ें; उसके ऊपर तभी लिखें जब वह बदलाव कभी नहीं आएगा, जैसे कि उसे करने वाला फ़ोन खो गया हो।</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>जारी रखें</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>इस फ़ोन को मुख्य डिवाइस बनाएँ</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>आगे</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>YubiKey को USB-C पोर्ट में लगाएँ, उसका PIN लिखें, फिर चमकने पर उसे छुएँ।</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>रहेगा, पर एडमिन नहीं रहेगा: बाद में फिर से एडमिन बनाएँ</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>YubiKey ने रिकवरी कुंजी खोल दी।</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>YubiKey का PIN</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>रिकवरी कुंजी का पाठ, जैसा शीट पर है</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>इसे पूर्ववत नहीं किया जा सकता। व्यवस्थापक PIN इसकी पुष्टि करता है, और समूह के डिवाइस जुड़ते ही इस फ़ोन का अनुसरण करते हैं।</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>इसकी जगह YubiKey इस्तेमाल करें</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>डिवाइस जोड़ने के लिए फ़ोन को घर के Wi-Fi से जोड़ें।</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>कोई YubiKey लगी नहीं है। उसे USB-C पोर्ट में लगाएँ और फिर से कोशिश करें।</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>निमंत्रण केवल एडमिन बनाता है: यहाँ एक एडमिन फ़ोन, या एडमिन कंप्यूटर पर cbb invite।</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>CBB में कुछ टूट गया। यह फिर से शुरू हो रहा है।</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>YubiKey ने उम्मीद के मुताबिक जवाब नहीं दिया। उसे फिर से लगाएँ और दोबारा कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>YubiKey का PIN ब्लॉक है। Yubico Authenticator में उसके PUK से इसे अनब्लॉक करें, फिर दोबारा कोशिश करें।</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>पहले एडमिन PIN चाहिए।</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>ऐप इस YubiKey की प्रबंधन कुंजी का उपयोग नहीं कर सकता। इसके बजाय छपी हुई शीट का उपयोग करें।</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>फ़ोन के सुरक्षित तत्व में एक खराब कुंजी है।</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>इस YubiKey में पहले से एक रिकवरी कुंजी है। कोई दूसरा YubiKey उपयोग करें।</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>इस YubiKey में कोई रिकवरी कुंजी नहीं है।</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>इस YubiKey में रिकवरी कुंजी की जगह कुछ और रखा है। कोई दूसरा YubiKey उपयोग करें।</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>इस YubiKey का फ़र्मवेयर 5.3 से पुराना है, जिसकी रिकवरी कुंजी को ज़रूरत है। इसके बजाय छपी हुई शीट का उपयोग करें।</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>CBB का यह बिल्ड खराब है।</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और फिर से जुड़ें।</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>दो YubiKey लगी हैं। केवल एक रहने दें और फिर से कोशिश करें।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>ग़लत PIN। तीन ग़लत कोशिशों के बाद YubiKey अपना PIN ब्लॉक कर देती है।</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>मैंने लिख लिया</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>फ़ैक्टरी कुंजी रहने दें</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>नई पुनर्प्राप्ति कुंजी बनाएँ</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>पुनर्प्राप्ति कुंजी बनाएँ</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>YubiKey को USB-C पोर्ट में लगाएँ, उसका PIN लिखें, फिर चमकने पर उसे छुएँ।</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>इसे YubiKey पर रखें</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>पुनर्प्राप्ति कुंजी हटाई जा रही है</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>फ़ैक्टरी कुंजी बदलें</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>पुनर्प्राप्ति कुंजी बदली जा रही है</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>YubiKey का PIN</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>समूह के पास पुनर्प्राप्ति कुंजी है। इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन इससे समूह संभाल लेता है।</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

@@ -256,6 +256,10 @@
         <translation>Mabadiliko ya kifaa kikuu tayari yako njiani, na rekodi zake hazijafika zote. Unganisha vifaa vyako kwanza; andika juu yake tu ikiwa mabadiliko hayo hayatafika kamwe, kwa mfano kwa sababu simu iliyoyafanya imepotea.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>Endelea</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>Fanya simu hii kuwa kifaa kikuu</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>Endelea</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Chomeka YubiKey kwenye mlango wa USB-C, andika PIN yake, kisha uiguse inapomweka.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>Kinabaki, si msimamizi tena: kifanye msimamizi tena baadaye</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>YubiKey imefungua ufunguo wa urejeshaji.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>PIN ya YubiKey</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>Maandishi ya ufunguo wa urejeshaji, kama yalivyo kwenye karatasi</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>Hili haliwezi kutenduliwa. PIN ya msimamizi inalithibitisha, na vifaa vya kikundi vinafuata simu hii mara vinapounganishwa.</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>Tumia YubiKey badala yake</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>Unganisha simu kwenye Wi-Fi ya nyumbani ili kuongeza kifaa.</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>Hakuna YubiKey iliyochomekwa. Ichomeke kwenye mlango wa USB-C na ujaribu tena.</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>Ni msimamizi pekee anayeunda mwaliko: simu ya msimamizi hapa, au cbb invite kwenye kompyuta ya msimamizi.</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>Kuna kitu kimeharibika katika CBB. Kinaanza upya.</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>YubiKey haikujibu kama ilivyotarajiwa. Ichomeke tena na ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>PIN ya YubiKey imezuiwa. Ifungue kwa PUK yake katika Yubico Authenticator, kisha ujaribu tena.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>PIN ya msimamizi inahitajika kwanza.</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>Programu haiwezi kutumia ufunguo wa usimamizi wa YubiKey hii. Tumia karatasi iliyochapishwa badala yake.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>Kipengele salama cha simu kina ufunguo ulioharibika.</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>YubiKey hii tayari ina ufunguo wa urejeshaji. Tumia YubiKey nyingine.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>YubiKey hii haina ufunguo wa urejeshaji.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>YubiKey hii ina kitu kingine mahali ufunguo wa urejeshaji unapokaa. Tumia YubiKey nyingine.</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>YubiKey hii ina programu dhibiti ya zamani kuliko 5.3, ambayo ufunguo wa urejeshaji unahitaji. Tumia karatasi iliyochapishwa badala yake.</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>Muundo huu wa CBB umeharibika.</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena.</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>YubiKey mbili zimechomekwa. Acha moja tu na ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>PIN si sahihi. Baada ya majaribio matatu yasiyo sahihi YubiKey huzuia PIN yake.</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>Nimeuandika</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>Acha ufunguo wa kiwandani</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>Unda ufunguo mpya wa kurejesha</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>Unda ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Chomeka YubiKey kwenye mlango wa USB-C, andika PIN yake, kisha uiguse inapomweka.</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>Uweke kwenye YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>Inaondoa ufunguo wa kurejesha</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>Badilisha ufunguo wa kiwandani</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>Inabadilisha ufunguo wa kurejesha</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>PIN ya YubiKey</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti.</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

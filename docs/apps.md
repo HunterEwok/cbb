@@ -1536,9 +1536,12 @@ the app on real devices.
   `CBB_NFC=1` asks the team's profile for it. A YubiKey in an iPhone's USB-C port goes through
   CryptoTokenKit (`App/YubiKeyUsb.swift`), where iOS drives the CCID interface and the app
   sends whole APDUs; when iOS gives the app no slot manager the app stays with NFC. Whether
-  iOS asks for an entitlement for it is left to the real-card test before rc.1. The Aurora
-  app takes the sheet only for now: the R570E's pcscd takes a plugged YubiKey and its socket
-  is open inside the sandbox, so the app's path goes through pcscd (docs/parity.md).
+  iOS asks for an entitlement for it is left to the real-card test before rc.1. On Aurora OS
+  the system's pcscd takes a YubiKey plugged into the USB-C port itself (the R570E's
+  ifd-ccid lists the YubiKey, and pcscd's socket is open inside the sandbox), so the app
+  passes the transport `pcsc` and the core is pcscd's client (`PivThread` in `src/app.cpp`):
+  the sheet page seals onto it and the change-root screen opens it; not yet tried with a real
+  card on the phone (docs/parity.md).
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

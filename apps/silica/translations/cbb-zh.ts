@@ -256,6 +256,10 @@
         <translation>一次主设备更换已在途中，其记录尚未全部到达。请先连接你的设备；只有在那次更换永远不会到达时才覆盖它，例如发起它的手机已丢失。</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>继续</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>把这部手机设为主设备</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>下一步</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>把 YubiKey 插入 USB-C 接口，输入它的 PIN，在它闪烁时触摸它。</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>留下，但不再是管理员：之后可再设为管理员</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>YubiKey 已打开恢复密钥。</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>YubiKey 的 PIN</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>恢复密钥的文字，与纸上一致</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>此操作无法撤销。管理员 PIN 会确认它，群组的设备一连接就会跟随这部手机。</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>改用 YubiKey</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>请将手机连接到家中的 Wi-Fi 以添加设备。</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>没有插入 YubiKey。请把它插入 USB-C 接口后重试。</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>只有管理员可以创建邀请：这里的管理员手机，或管理员电脑上的 cbb invite。</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>CBB 出了点问题，正在重新启动。</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>YubiKey 的响应不符合预期。请重新插入后重试。</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>YubiKey 的 PIN 已被锁定。请在 Yubico Authenticator 中用 PUK 解锁，然后重试。</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>需要先输入管理员 PIN。</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>应用无法使用此 YubiKey 的管理密钥。请改用打印的纸。</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>手机的安全元件中有一个损坏的密钥。</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>此 YubiKey 已保存了一个恢复密钥。请使用另一个 YubiKey。</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>此 YubiKey 中没有恢复密钥。</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>此 YubiKey 在存放恢复密钥的位置保存了其他内容。请使用另一个 YubiKey。</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>此 YubiKey 的固件早于恢复密钥所需的 5.3。请改用打印的纸。</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>此 CBB 版本已损坏。</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>插入了两个 YubiKey。只保留一个后重试。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>PIN 错误。连续三次错误后 YubiKey 会锁定其 PIN。</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>我已抄下</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>保留出厂密钥</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>创建新的恢复密钥</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>创建恢复密钥</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>把 YubiKey 插入 USB-C 接口，输入它的 PIN，在它闪烁时触摸它。</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>存入 YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>正在移除恢复密钥</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>替换出厂密钥</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>正在替换恢复密钥</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>YubiKey 的 PIN</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>

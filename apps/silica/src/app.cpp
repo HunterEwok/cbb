@@ -146,6 +146,60 @@ private:
     }
 };
 
+// Runs a step of the recovery key on a YubiKey off the GUI thread: the
+// core is the client of the system's pcscd (cbb_piv's transport pcsc), which
+// takes a YubiKey plugged into the USB-C port itself, and waits through the
+// card's touch.
+class PivThread : public QThread
+{
+public:
+    QJsonObject request; // without transport
+    QJsonObject answer;
+    Failure failure;
+
+protected:
+    void run() override
+    {
+        request.insert(QStringLiteral("transport"), QStringLiteral("pcsc"));
+        const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
+        size_t len = 0;
+        answer = Core::take(cbb_piv(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), noCard, nullptr, &len),
+                            len, QStringLiteral("yubikey"), &failure);
+        if (!failure.isNull())
+            failure.message = shownFor(failure.message, failure.details);
+    }
+
+private:
+    // With pcsc the core never calls the app's card; the ABI still wants one.
+    static int32_t noCard(void *, const uint8_t *, size_t, uint8_t *, size_t, size_t *) { return 1; }
+
+    // The core's refusal in the user's words (member/src/piv.rs and
+    // piv/recovery.rs); its own words stay in the details.
+    static QString shownFor(const QString &m, const QString &details)
+    {
+        const QString d = m + QLatin1Char(' ') + details;
+        if (d.contains(QStringLiteral("PIN is blocked")))
+            return QCoreApplication::translate("Errors", "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.");
+        if (d.contains(QStringLiteral("wrong PIN")) || d.contains(QStringLiteral("PIN has 6 to 8")))
+            return QCoreApplication::translate("Errors", "Wrong PIN. After three wrong tries the YubiKey blocks its PIN.");
+        if (d.contains(QStringLiteral("firmware 5.3")))
+            return QCoreApplication::translate("Errors", "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.");
+        if (d.contains(QStringLiteral("holds no recovery key")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds no recovery key.");
+        if (d.contains(QStringLiteral("already holds a recovery key")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds a recovery key already. Use another YubiKey.");
+        if (d.contains(QStringLiteral("already holds something")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.");
+        if (d.contains(QStringLiteral("management key")))
+            return QCoreApplication::translate("Errors", "The app cannot use this YubiKey's management key. Use the printed sheet instead.");
+        if (d.contains(QStringLiteral("two YubiKeys")))
+            return QCoreApplication::translate("Errors", "Two YubiKeys are plugged in. Leave only one and try again.");
+        if (d.contains(QStringLiteral("no YubiKey found")))
+            return QCoreApplication::translate("Errors", "No YubiKey is plugged in. Plug it into the USB-C port and try again.");
+        return QCoreApplication::translate("Errors", "The YubiKey did not answer as expected. Plug it in again and try again.");
+    }
+};
+
 // Asks the key store about the admin PIN, or hands it one, off the GUI
 // thread: the TEE takes a few hundred milliseconds.
 class PinThread : public QThread
@@ -715,6 +769,64 @@ void App::handOver(const QString &device)
     if (!m_member.root)
         return;
     runManage(QStringLiteral("hand_over"), device, QJsonObject(), nullptr);
+}
+
+void App::openCard(const QString &pin)
+{
+    if (m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new PivThread;
+    thread->request = QJsonObject{{QStringLiteral("op"), QStringLiteral("open")}, {QStringLiteral("pin"), pin}};
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const QString secret = thread->answer.value(QStringLiteral("secret")).toString();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull() || secret.isEmpty()) {
+            show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The YubiKey did not answer as expected. Plug it in again and try again."), QStringLiteral("yubikey: open answered no secret")} : failure));
+            emit cardOpened(false, QString());
+            return;
+        }
+        // The secret goes to the core for one change of root, and the page drops it.
+        show(QString());
+        emit cardOpened(true, secret);
+    });
+    thread->start();
+}
+
+void App::sealCard(const QString &pin, bool replaceDefault)
+{
+    if (!m_member.root || m_recoveryText.isEmpty() || m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new PivThread;
+    thread->request = QJsonObject{
+        {QStringLiteral("op"), QStringLiteral("seal")},
+        {QStringLiteral("pin"), pin},
+        {QStringLiteral("recovery"), QJsonObject{{QStringLiteral("text"), m_recoveryText}}},
+        {QStringLiteral("replace_default"), replaceDefault},
+    };
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const bool defaultKey = thread->answer.value(QStringLiteral("default_key")).toBool();
+        const bool replaced = thread->answer.value(QStringLiteral("replaced")).toBool();
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit cardSealed(false, false);
+            return;
+        }
+        Errors::log(QStringLiteral("yubikey: sealed, factory key %1, replaced %2").arg(defaultKey).arg(replaced));
+        show(QString());
+        emit cardSealed(true, defaultKey);
+    });
+    thread->start();
 }
 
 void App::makeRecovery()

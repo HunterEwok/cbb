@@ -256,6 +256,10 @@
         <translation>שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation>המשך</translation>
+    </message>
+    <message>
         <source>Make this phone the main device</source>
         <translation>להפוך את הטלפון הזה למכשיר הראשי</translation>
     </message>
@@ -270,6 +274,10 @@
     <message>
         <source>Next</source>
         <translation>הבא</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>חברו את ה-YubiKey ליציאת ה-USB-C, הקלידו את קוד ה-PIN שלו וגעו בו כשהוא מהבהב.</translation>
     </message>
     <message>
         <source>Removed</source>
@@ -292,12 +300,24 @@
         <translation>נשאר, אבל כבר לא מנהל: הפכו אותו למנהל שוב מאוחר יותר</translation>
     </message>
     <message>
+        <source>The YubiKey opened the recovery key.</source>
+        <translation>ה-YubiKey פתח את מפתח השחזור.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>ה-PIN של ה-YubiKey</translation>
+    </message>
+    <message>
         <source>The recovery key's text, as on the sheet</source>
         <translation>הטקסט של מפתח השחזור, כמו בדף</translation>
     </message>
     <message>
         <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
         <translation>אי אפשר לבטל את זה. קוד ה-PIN של המנהל מאשר זאת, ומכשירי הקבוצה עוברים לטלפון הזה ברגע שהם מתחברים.</translation>
+    </message>
+    <message>
+        <source>Use a YubiKey instead</source>
+        <translation>שימוש ב-YubiKey במקום</translation>
     </message>
     <message>
         <source>Who stays in the group</source>
@@ -588,6 +608,10 @@
         <translation>חברו את הטלפון ל-Wi-Fi הביתי כדי להוסיף מכשיר.</translation>
     </message>
     <message>
+        <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
+        <translation>לא מחובר YubiKey. חברו אותו ליציאת ה-USB-C ונסו שוב.</translation>
+    </message>
+    <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
         <translation>רק מנהל יוצר הזמנה: טלפון מנהל כאן, או cbb invite במחשב מנהל.</translation>
     </message>
@@ -608,8 +632,20 @@
         <translation>משהו ב-CBB נשבר. הוא מופעל מחדש.</translation>
     </message>
     <message>
+        <source>The YubiKey did not answer as expected. Plug it in again and try again.</source>
+        <translation>ה-YubiKey לא ענה כמצופה. חברו אותו מחדש ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.</source>
+        <translation>ה-PIN של ה-YubiKey חסום. שחררו אותו עם ה-PUK שלו ב-Yubico Authenticator ונסו שוב.</translation>
+    </message>
+    <message>
         <source>The admin PIN is needed first.</source>
         <translation>קודם צריך את קוד ה-PIN של המנהל.</translation>
+    </message>
+    <message>
+        <source>The app cannot use this YubiKey's management key. Use the printed sheet instead.</source>
+        <translation>האפליקציה לא יכולה להשתמש במפתח הניהול של ה-YubiKey הזה. השתמש בדף המודפס במקום.</translation>
     </message>
     <message>
         <source>The claim to take the group over became void; the phone stays an admin.</source>
@@ -708,6 +744,22 @@
         <translation>הרכיב המאובטח של הטלפון מחזיק מפתח פגום.</translation>
     </message>
     <message>
+        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
+        <translation>ה-YubiKey הזה כבר מחזיק מפתח שחזור. השתמש ב-YubiKey אחר.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds no recovery key.</source>
+        <translation>ה-YubiKey הזה לא מחזיק מפתח שחזור.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
+        <translation>ה-YubiKey הזה מחזיק משהו אחר במקום שבו נשמר מפתח השחזור. השתמש ב-YubiKey אחר.</translation>
+    </message>
+    <message>
+        <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
+        <translation>הקושחה של ה-YubiKey הזה ישנה מ-5.3, שמפתח השחזור צריך. השתמש בדף המודפס במקום.</translation>
+    </message>
+    <message>
         <source>This build of CBB is broken.</source>
         <translation>גרסת ה-CBB הזו פגומה.</translation>
     </message>
@@ -730,6 +782,14 @@
     <message>
         <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
         <translation>מפתח המנהל בטלפון הזה ישן יותר מ-PIN המנהל. צאו מהקבוצה והצטרפו אליה שוב.</translation>
+    </message>
+    <message>
+        <source>Two YubiKeys are plugged in. Leave only one and try again.</source>
+        <translation>מחוברים שני YubiKey. השאירו רק אחד ונסו שוב.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. After three wrong tries the YubiKey blocks its PIN.</source>
+        <translation>PIN שגוי. אחרי שלושה ניסיונות שגויים ה-YubiKey חוסם את ה-PIN שלו.</translation>
     </message>
 </context>
 <context>
@@ -1454,12 +1514,24 @@
         <translation>רשמתי אותו</translation>
     </message>
     <message>
+        <source>Keep its factory key</source>
+        <translation>להשאיר את מפתח היצרן</translation>
+    </message>
+    <message>
         <source>Make a new recovery key</source>
         <translation>יצירת מפתח שחזור חדש</translation>
     </message>
     <message>
         <source>Make a recovery key</source>
         <translation>יצירת מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>חברו את ה-YubiKey ליציאת ה-USB-C, הקלידו את קוד ה-PIN שלו וגעו בו כשהוא מהבהב.</translation>
+    </message>
+    <message>
+        <source>Put it on a YubiKey</source>
+        <translation>לשים ב-YubiKey</translation>
     </message>
     <message>
         <source>Recovery key</source>
@@ -1474,12 +1546,32 @@
         <translation>מסיר את מפתח השחזור</translation>
     </message>
     <message>
+        <source>Replace its factory key</source>
+        <translation>להחליף את מפתח היצרן</translation>
+    </message>
+    <message>
         <source>Replacing the recovery key</source>
         <translation>מחליף את מפתח השחזור</translation>
     </message>
     <message>
+        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
+        <translation>ה-YubiKey שומר את אותו מפתח כמו הדף הזה, מאחורי קוד ה-PIN שלו ונגיעה. אם עדיין יש לו מפתח ניהול של היצרן, כל אחד יכול לברר את המפתח הזה ולמחוק את מפתח השחזור בלי קוד ה-PIN; האפליקציה יכולה להחליף אותו במפתח שקוד ה-PIN מגן עליו.</translation>
+    </message>
+    <message>
+        <source>The YubiKey's PIN</source>
+        <translation>ה-PIN של ה-YubiKey</translation>
+    </message>
+    <message>
         <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
         <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
+        <translation>מפתח השחזור נמצא על ה-YubiKey, שנשאר עם מפתח הניהול של היצרן: מי שמחזיק בו יכול למחוק את המפתח בלי קוד ה-PIN. שמור גם את הדף.</translation>
+    </message>
+    <message>
+        <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
+        <translation>מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים.</translation>
     </message>
     <message>
         <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
