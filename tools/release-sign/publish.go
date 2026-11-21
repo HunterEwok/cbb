@@ -89,7 +89,8 @@ func (s *signing) flags(fs *flag.FlagSet) {
 	fs.Func("channel", "NAME=KEY.pem of a key that renews the channel file, added to keys.json (repeatable)", add(release.UseChannel))
 	fs.Func("forwarder", "ADDRESS=KEY.pem of the project's forwarder (cbb.tools:8764), whose pin hubs then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UseForwarder))
 	fs.Func("relay", "ADDRESS=KEY.pem of the project's relay (cbb.tools:8765), whose pin its members then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UseRelay))
-	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen, or a forwarder's or relay's key's pin (repeatable)", func(v string) error {
+	fs.Func("push", "ADDRESS=KEY.pem of the project's push service (cbb.tools:8767), whose pin its members then accept, added to keys.json (repeatable: the old and the new key while it changes)", add(release.UsePush))
+	fs.Func("drop", "the NAME of a key keys.json drops, lost or stolen, or a forwarder's, relay's or push service's key's pin (repeatable)", func(v string) error {
 		s.drop = append(s.drop, v)
 		return nil
 	})
@@ -468,7 +469,7 @@ func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, e
 		}
 	}
 	// A key that signs is dropped whole: the pin of either half drops both.
-	// A forwarder's or relay's pins are dropped one by one.
+	// A forwarder's, relay's or push service's pins are dropped one by one.
 	type signerOf struct{ name, use string }
 	useOf := func(key release.Key) string {
 		if key.Use == "" {
@@ -482,7 +483,7 @@ func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, e
 	}
 	whole := map[signerOf]bool{}
 	for _, key := range k.Keys {
-		if u := useOf(key); u != release.UseForwarder && u != release.UseRelay && pinned(key) {
+		if u := useOf(key); !release.IsPin(u) && pinned(key) {
 			whole[signerOf{key.Name, u}] = true
 		}
 	}
@@ -534,7 +535,7 @@ func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, e
 		}
 		// A name and use is one key: another key's name is refused, so
 		// that no half of the two counts as the other's.
-		if u := useOf(m); u != release.UseForwarder && u != release.UseRelay {
+		if u := useOf(m); !release.IsPin(u) {
 			for _, key := range next.Keys {
 				if key.Name == m.Name && useOf(key) == u && !holdsHalfOf(key, own, s.extra, m) {
 					return release.File{}, fmt.Errorf("keys.json %d has another key named %q (%s): drop it first (-drop %q) or give the new key another name", k.Seq, m.Name, u, m.Name)

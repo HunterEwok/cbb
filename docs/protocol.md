@@ -4283,6 +4283,10 @@ only to sign; on a server, an encrypted credential of the service that signs
 - **The project's relay's keys**, P-256, the same with `use` `relay` and the relay's address
   as `name` (`cbb.tools:8765`); a device on the project's relay takes their pins (section 14,
   "The project's relay").
+- **The project's push service's keys**, P-256, the same with `use` `push` and the service's
+  address as `name` (`cbb.tools:8767`): no pin is built in, so a group shows the service a
+  face, and its members send to it, only once a `keys.json` they hold lists one
+  (`release-sign -push`; [design.md](design.md), "Push").
 
 ### The envelope
 
@@ -4305,7 +4309,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 
 | `type` | Signed by | Fields |
 |--------|-----------|--------|
-| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 64 of `{alg` (from 1: `1` a P-256 half, `4` an SLH-DSA-SHA2-128s half), `key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel`, `forwarder` or `relay`)`}`, the two halves of one key under the same `name` and `use` |
+| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 64 of `{alg` (from 1: `1` a P-256 half, `4` an SLH-DSA-SHA2-128s half), `key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel`, `forwarder`, `relay` or `push`)`}`, the two halves of one key under the same `name` and `use` |
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
 | `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}`, `relays` (optional): at most 16 of `{name` (the relay, `host:port`, each once), `endpoints` (optional): at most 8 `host:port` where it is reached now`}` |

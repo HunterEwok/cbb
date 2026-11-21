@@ -47,7 +47,15 @@ const (
 	// UseRelay is the key of a blind relay the project runs, named by its
 	// address: no signer, but the pin its members accept from it.
 	UseRelay = "relay"
+	// UsePush is the key of the push service the project runs, named by
+	// its address: no signer, but the pin the members accept from it.
+	UsePush = "push"
 )
+
+// IsPin reports whether keys of use u are a server's pins, which sign
+// nothing: one P-256 key each, and several under one name while a key
+// changes.
+func IsPin(u string) bool { return u == UseForwarder || u == UseRelay || u == UsePush }
 
 const (
 	formatVersion = 1
@@ -464,12 +472,12 @@ func decodeKeys(data []byte) (Keys, error) {
 		}
 		// A key that signs is its halves under one name and use, one of
 		// each algorithm: two halves of one algorithm there would make
-		// one key of two. Pins of forwarders and relays may repeat.
+		// one key of two. Pins of the servers may repeat.
 		u := key.Use
 		if u == "" {
 			u = UseRelease
 		}
-		if u == UseForwarder || u == UseRelay {
+		if IsPin(u) {
 			continue
 		}
 		h := half{key.Name, u, key.Alg}
@@ -727,6 +735,9 @@ func (k Keys) Forwarders(name string) [][]byte { return k.named(UseForwarder, na
 
 // Relays returns the keys certified as the relay at name.
 func (k Keys) Relays(name string) [][]byte { return k.named(UseRelay, name) }
+
+// Pushes returns the keys certified as the push service at name.
+func (k Keys) Pushes(name string) [][]byte { return k.named(UsePush, name) }
 
 func (k Keys) named(use, name string) [][]byte {
 	var out [][]byte

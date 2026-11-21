@@ -16,6 +16,10 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- `release-sign -push ADDRESS=KEY.pem` lists the project's push service's key in `keys.json`
+  (use `push`), as `-relay` and `-forwarder` list theirs: the members show the service a face
+  only once a `keys.json` names it, since no pin of it is built in. Two such pins may stand
+  under one name while the key changes.
 - The member's push sender is tested end to end on the records of 0.6: members of a group, a
   push service with a fake platform, and a device that registers, goes away and gets one
   body for a copy and one for a removal, each opened under its registration.
