@@ -2014,54 +2014,6 @@ func TestAloneRootless(t *testing.T) {
 	}
 }
 
-// udpRelayPort is a UDP port that passes every datagram to a port on 127.0.0.1
-// and the answers back to the last sender, as cbb next link -udp does
-// through the Next's ESP; n counts the datagrams it passed out.
-type udpRelayPort struct {
-	addr string
-	n    atomic.Int64
-}
-
-func udpRelay(t *testing.T, to int) *udpRelayPort {
-	t.Helper()
-	in, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: to})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { in.Close(); out.Close() })
-	r := &udpRelayPort{addr: in.LocalAddr().String()}
-	var last atomic.Pointer[net.UDPAddr]
-	go func() {
-		buf := make([]byte, 2048)
-		for {
-			n, from, err := in.ReadFromUDP(buf)
-			if err != nil {
-				return
-			}
-			last.Store(from)
-			r.n.Add(1)
-			out.Write(buf[:n])
-		}
-	}()
-	go func() {
-		buf := make([]byte, 2048)
-		for {
-			n, err := out.Read(buf)
-			if err != nil {
-				return
-			}
-			if a := last.Load(); a != nil {
-				in.WriteToUDP(buf[:n], a)
-			}
-		}
-	}()
-	return r
-}
-
 // TestFFIPhoneRemoves has the root phone remove a computer it is connected
 // to, as the Android app's GroupTest.a8_renameAndRemove does: the removed
 // computer must hear it was removed, though the phone ends the connection

@@ -74,7 +74,7 @@ type HubConfig struct {
 	// that lists this hub's server key (docs/protocol.md, section 18), an
 	// envelope, and HubCert the certificate of that server key, which
 	// names no device; both are asked at each registration. Without a
-	// credential the hub waits (NotListed).
+	// credential the hub waits (ErrNotListed).
 	Credentials func() [][]byte
 	HubCert     func() (tls.Certificate, error)
 
@@ -134,9 +134,9 @@ var helloUnseen atomic.Int64
 
 func init() { helloUnseen.Store(int64(20 * time.Second)) }
 
-// NotListed is why a hub does not register yet: its group's credentials
+// ErrNotListed is why a hub does not register yet: its group's credentials
 // for the forwarder's face do not list its server key.
-var NotListed = errors.New("the group's credentials for the forwarder do not list this hub yet")
+var ErrNotListed = errors.New("the group's credentials for the forwarder do not list this hub yet")
 
 // errNewCredential ends a registration when the group's hubs' credential
 // changed, so that the hub registers again at once with the new one, and
@@ -206,7 +206,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		creds = cfg.Credentials()
 	}
 	if len(creds) == 0 {
-		return NotListed
+		return ErrNotListed
 	}
 	cert, err := cfg.HubCert()
 	if err != nil {

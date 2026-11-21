@@ -737,22 +737,3 @@ func echoThrough(cl *tunnel.Client, msg string) error {
 	}
 	return nil
 }
-
-// echoThroughPort dials the loopback port a dial event named and checks
-// that the other end echoes a line.
-func echoThroughPort(t *testing.T, port any) {
-	t.Helper()
-	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(port)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer c.Close()
-	msg := "hello from the phone\n"
-	c.SetDeadline(time.Now().Add(15 * time.Second))
-	if _, err := c.Write([]byte(msg)); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := bufio.NewReader(c).ReadString('\n'); err != nil || got != msg {
-		t.Fatalf("the phone's dial: %q, %v", got, err)
-	}
-}

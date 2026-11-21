@@ -64,19 +64,6 @@ func (h *hub) txtOf(id string) []string {
 	}
 }
 
-// anyPublishes says whether a member publishes the TXT string kv by mDNS.
-func (h *hub) anyPublishes(kv string) bool {
-	h.found("")
-	realBrowse.mu.Lock()
-	defer realBrowse.mu.Unlock()
-	for _, p := range realBrowse.peers {
-		if slices.Contains(p.TXT, kv) {
-			return true
-		}
-	}
-	return false
-}
-
 // found is the member with this device ID that mDNS finds: one browser runs
 // for all the tests.
 func (h *hub) found(id string) (mdns.Peer, bool) {

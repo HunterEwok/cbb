@@ -22,13 +22,6 @@ const (
 	projectRelayHost = "cbb.tools:8765"
 )
 
-// signRelayKeys signs entry points under a keys.json at keysSeq that
-// certifies the given keys as the project's relay's.
-func (s *releaseSigner) signRelayKeys(t *testing.T, seq uint64, relays ...relay.Keys) string {
-	t.Helper()
-	return s.signRelay(t, seq, nil, relays...)
-}
-
 // signRelay does the same with the addresses entries.json gives the relay.
 func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, relays ...relay.Keys) string {
 	t.Helper()
