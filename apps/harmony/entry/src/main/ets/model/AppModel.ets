@@ -6,6 +6,7 @@
 // recovery sheet, taking the group over, the settings. One for the app, as
 // the Aurora app's App.
 
+import { common } from '@kit.AbilityKit';
 import cbb from 'libcbb_napi.so';
 import { preferences } from '@kit.ArkData';
 import { deviceInfo } from '@kit.BasicServicesKit';
@@ -13,6 +14,7 @@ import { util } from '@kit.ArkTS';
 import { call, read, Result } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure, forget } from '../core/Keys';
+import { cardFailure, withCard } from '../common/YubiKey';
 import { Joined, Membership, sealSecret } from '../core/Membership';
 import { OS, osVersion, phoneName, STORE } from '../core/Phone';
 import { t } from '../core/Text';
@@ -48,6 +50,31 @@ export interface CommandResult {
   reason?: string;
 }
 
+// What sealing the recovery key onto a YubiKey did (cbb_piv seal).
+interface Sealed {
+  default_key?: boolean;
+  replaced?: boolean;
+  warning?: string;
+}
+
+interface Opened {
+  secret?: string;
+}
+
+// A device in the "who stays" list of a change of root.
+export interface ChangeRow {
+  device: string;
+  name: string;
+  os: string;
+  outcome: string;
+  frozen: boolean;
+}
+
+export interface ChangePreview {
+  rows: ChangeRow[];
+  waiting: boolean;
+}
+
 export interface ManageAnswer {
   result?: CommandResult;
   root_ca?: string;
@@ -55,6 +82,7 @@ export interface ManageAnswer {
   recorded?: number;
   below?: string[];
   text?: string;
+  qr?: string;
   modules?: string[];
   state?: string;
   left_ms?: number;
@@ -100,6 +128,8 @@ export class AppModel {
   // The recovery sheet the root just made, shown once.
   @Trace recoveryText: string = '';
   @Trace recoveryModules: string[] = [];
+  // The sheet's QR code text, which sealing it onto a YubiKey takes.
+  recoveryQr: string = '';
   // The admins and hubs the key level set last does not let in.
   @Trace belowLevel: string[] = [];
   // Bumped when the user's arrangement of the tiles changes.
@@ -345,6 +375,7 @@ export class AppModel {
     this.membership = m;
     this.recoveryText = (group.ok.recovery?.text ?? []).join('\n');
     this.recoveryModules = group.ok.recovery?.modules ?? [];
+    this.recoveryQr = group.ok.recovery?.qr ?? '';
     return undefined;
   }
 
@@ -452,6 +483,7 @@ export class AppModel {
     if (a !== undefined) {
       this.recoveryText = a.text ?? '';
       this.recoveryModules = a.modules ?? [];
+      this.recoveryQr = a.qr ?? '';
     }
   }
 
@@ -459,6 +491,112 @@ export class AppModel {
   forgetRecovery(): void {
     this.recoveryText = '';
     this.recoveryModules = [];
+    this.recoveryQr = '';
+  }
+
+  // Seals the sheet's recovery key onto a YubiKey held to the phone, after
+  // its PIN (cbb_piv seal; docs/protocol.md, "The recovery key on a YubiKey
+  // (0.6)"); replaceDefault is the person's consent to replace a factory
+  // management key. Answers what to tell the person, or shows the failure.
+  async sealOnCard(context: common.UIAbilityContext, pin: string, replaceDefault: boolean): Promise<string> {
+    if (this.recoveryQr.length === 0 || this.busy) {
+      return '';
+    }
+    this.busy = true;
+    const request: Record<string, Object> = {
+      'op': 'seal', 'pin': pin, 'recovery': { 'qr': this.recoveryQr } as Record<string, Object>,
+      'replace_default': replaceDefault
+    };
+    const run = await withCard(context, () => cbb.piv(JSON.stringify(request)));
+    this.busy = false;
+    const failure = run.failure ?? read<Sealed>(run.answer, 'yubikey: seal').failure;
+    if (failure !== undefined) {
+      this.show(Errors.shown(run.failure !== undefined ? failure : cardFailure(failure)));
+      return '';
+    }
+    const sealed = read<Sealed>(run.answer, 'yubikey: seal').ok as Sealed;
+    Errors.log(`yubikey: sealed, factory key ${sealed.default_key === true}, replaced ${sealed.replaced === true}`);
+    this.show('');
+    return sealed.default_key === true ? t('yubikey_sealed_default_key') : t('yubikey_sealed');
+  }
+
+  // Opens the recovery key on a YubiKey held to the phone, after its PIN
+  // and a touch, for a change of root: the secret in base64, or undefined
+  // with the failure shown. The caller drops it after that one change.
+  async openCard(context: common.UIAbilityContext, pin: string): Promise<string | undefined> {
+    if (this.busy) {
+      return undefined;
+    }
+    this.busy = true;
+    const request: Record<string, Object> = { 'op': 'open', 'pin': pin };
+    const run = await withCard(context, () => cbb.piv(JSON.stringify(request)));
+    this.busy = false;
+    if (run.failure !== undefined) {
+      this.show(Errors.shown(run.failure));
+      return undefined;
+    }
+    const r = read<Opened>(run.answer, 'yubikey: open');
+    if (r.ok === undefined) {
+      this.show(Errors.shown(cardFailure(r.failure as Failure)));
+      return undefined;
+    }
+    this.show('');
+    return r.ok.secret;
+  }
+
+  // Who stays after this phone becomes the root with the recovery key
+  // (manage change_preview), leaveOut unticked; undefined with the failure
+  // shown. Nothing is signed.
+  async changePreview(recovery: Record<string, Object>, leaveOut: string[]): Promise<ChangePreview | undefined> {
+    if (!this.member.running) {
+      return undefined;
+    }
+    const r = await this.member.manage<ChangePreview>({
+      'action': 'change_preview', 'device': '', 'public': '', 'recovery': recovery, 'leave_out': leaveOut
+    } as Record<string, Object>);
+    if (r.ok === undefined) {
+      this.show(Errors.shown(r.failure as Failure));
+      return undefined;
+    }
+    this.show('');
+    return r.ok;
+  }
+
+  // Makes this phone the group's root with the recovery key (manage
+  // change_root, rule 33): the admin key in HUKS, behind the fingerprint,
+  // the face or the PIN, becomes the root key and signs the change with
+  // the recovery key; the devices in leaveOut go in the same act.
+  async changeRoot(recovery: Record<string, Object>, leaveOut: string[], overWaiting: boolean): Promise<boolean> {
+    const m = this.membership;
+    if (m === undefined || m.isRoot() || this.busy || !this.member.running) {
+      return false;
+    }
+    this.busy = true;
+    const key = await ensure('admin');
+    if (key.ok === undefined) {
+      this.busy = false;
+      this.show(Errors.shown(key.failure as Failure));
+      return false;
+    }
+    const r = await this.member.manage<ManageAnswer>({
+      'action': 'change_root', 'device': '', 'public': key.ok.public, 'recovery': recovery, 'leave_out': leaveOut,
+      'over_waiting': overWaiting
+    } as Record<string, Object>);
+    this.busy = false;
+    if (r.ok === undefined) {
+      this.show(Errors.shown(r.failure as Failure));
+      return false;
+    }
+    const next = m.copy();
+    next.member.root = true;
+    next.member.admin_ca = undefined;
+    next.member.claim = undefined;
+    if (!this.keep(next)) {
+      return false;
+    }
+    Errors.log("change root: this phone is the group's root now, by the recovery key");
+    this.show('');
+    return true;
   }
 
   async removeRecovery(): Promise<void> {

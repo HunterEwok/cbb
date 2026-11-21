@@ -1526,8 +1526,8 @@ the app on real devices.
   NFC tag's IsoDep (`YubiKey.ets`); on the iPhone it is Core NFC's sheet
   (`App/YubiKeyNfc.swift`), which needs the NFC entitlement of the Apple developer account:
   a build signed ad hoc cannot read the YubiKey, and `device.sh` with `CBB_NFC=1` asks the
-  team's profile for it. The Aurora app has no NFC card path and takes the sheet only
-  (docs/parity.md).
+  team's profile for it. The Aurora app takes the sheet only for now: the phone has
+  no NFC card path, and a YubiKey on USB-C through pcscd is not yet checked (docs/parity.md).
 - `apps/android/` — the Gradle project (Kotlin, Compose), built and tested in CI on Linux;
   the app's `src/full` and `src/fdroid` hold what its two builds do differently, and
   `packaging/fdroid` the F-Droid recipe.

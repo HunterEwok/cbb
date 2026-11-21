@@ -167,7 +167,9 @@ export struct DeviceDetail {
                 })
               }
               if (this.acts(this.device() as DeviceInfo)) {
-                if ((this.device() as DeviceInfo).root === true && !app.isRoot() && app.claimState.length === 0) {
+                // On 0.6 the root changes only with the recovery key (pages/ChangeRoot, D-117).
+                if ((this.device() as DeviceInfo).root === true && !app.isRoot() && app.claimState.length === 0 &&
+                  app.membership?.isV06() !== true) {
                   this.action(t('device_take_over'), true, () => {
                     // Before this device becomes the group's main device: how well it guards the group.
                     const weak = guardsLikeAPhone() ? '' : `\n\n${t('key_guard_weak')}`;

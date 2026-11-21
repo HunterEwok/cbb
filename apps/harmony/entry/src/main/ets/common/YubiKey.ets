@@ -31,20 +31,18 @@ export function cardFailure(f: Failure): Failure {
   let shown = t('error_yubikey');
   if (d.includes('PIN is blocked')) {
     shown = t('error_yubikey_blocked');
-  } else if (d.includes('wrong PIN')) {
+  } else if (d.includes('wrong PIN') || d.includes('PIN has 6 to 8')) {
     shown = t('error_yubikey_wrong_pin');
-  } else if (d.includes('PIN has 6 to 8')) {
-    shown = t('error_yubikey_wrong_pin');
-  } else if (d.includes('management key is not the factory')) {
-    shown = t('error_yubikey_management_key');
-  } else if (d.includes('firmware 5.7')) {
+  } else if (d.includes('firmware 5.3')) {
     shown = t('error_yubikey_old');
-  } else if (d.includes('retired PIV slot of this YubiKey is in use')) {
-    shown = t('error_yubikey_full');
   } else if (d.includes('holds no recovery key')) {
     shown = t('error_yubikey_no_key');
-  } else if (d.includes('PIV application') || d.includes('no PIV')) {
-    shown = t('error_yubikey_no_piv');
+  } else if (d.includes('already holds a recovery key')) {
+    shown = t('error_yubikey_holds_one');
+  } else if (d.includes('already holds something')) {
+    shown = t('error_yubikey_taken');
+  } else if (d.includes('management key')) {
+    shown = t('error_yubikey_management_key');
   }
   return new Failure(shown, `${f.details} (${f.message})`);
 }
@@ -101,7 +99,7 @@ export async function withCard(context: common.UIAbilityContext, work: () => Pro
     try {
       iso = tag.getIsoDep(info);
     } catch (e) {
-      run.failure = new Failure(t('error_yubikey_no_piv'), `yubikey: no IsoDep: ${String(e)}`);
+      run.failure = new Failure(t('error_yubikey'), `yubikey: no IsoDep: ${String(e)}`);
       return run;
     }
     iso.connect();

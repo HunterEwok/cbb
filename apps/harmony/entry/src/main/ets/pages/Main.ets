@@ -72,6 +72,8 @@ function settingsLabel(key: string): string {
       return t('settings_notifications');
     case 'p:recovery':
       return t('recovery_title');
+    case 'p:change_root':
+      return t('change_root');
     case 'p:hub':
       return t('hub_title');
     case 's:group':
@@ -144,6 +146,8 @@ struct Main {
     const rows: string[] = ['s:general', 's:notifications'];
     if (app.isRoot()) {
       rows.push('p:recovery');
+    } else if (app.membership?.isV06() === true && app.member.running) {
+      rows.push('p:change_root');
     }
     if (app.member.running) {
       rows.push('p:hub');
@@ -176,6 +180,8 @@ struct Main {
     this.drawer = false;
     if (section === 'p:recovery') {
       router.pushUrl({ url: 'pages/Recovery' });
+    } else if (section === 'p:change_root') {
+      router.pushUrl({ url: 'pages/ChangeRoot' });
     } else if (section === 'p:hub') {
       router.pushUrl({ url: 'pages/Hub' });
     } else if (section !== this.section) {
@@ -457,6 +463,8 @@ struct Main {
     }
     if (app.isRoot()) {
       items.push({ value: t('recovery_title'), action: () => { router.pushUrl({ url: 'pages/Recovery' }); } });
+    } else if (app.membership?.isV06() === true && app.member.running) {
+      items.push({ value: t('change_root'), action: () => { router.pushUrl({ url: 'pages/ChangeRoot' }); } });
     }
     items.push({ value: t('settings_title'), action: () => { router.pushUrl({ url: 'pages/Settings' }); } });
     return items;

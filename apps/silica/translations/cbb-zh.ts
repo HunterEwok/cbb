@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>一次主设备更换已在途中，其记录尚未全部到达。请先连接你的设备；只有在那次更换永远不会到达时才覆盖它，例如发起它的手机已丢失。</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>把这部手机设为主设备</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>正在把这部手机设为主设备</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>把群组移到这部手机</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>下一步</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>已移除</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>留下</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>留下，仍是管理员</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>留下，冻结到你解冻为止</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>留下，但不再是管理员：之后可再设为管理员</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>恢复密钥的文字，与纸上一致</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>此操作无法撤销。管理员 PIN 会确认它，群组的设备一连接就会跟随这部手机。</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>谁留在群组里</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>用群组的恢复密钥，这部手机可以成为主设备，例如旧的主设备丢失时。</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>用新的更换覆盖它</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>已创建</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>把群组移到这部手机</translation>
     </message>
     <message>
         <source>No time</source>

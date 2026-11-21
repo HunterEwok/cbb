@@ -94,10 +94,16 @@ public:
     QJsonObject answer;
     Failure failure;
     Core::AdminSign sign; // whether the admin key waited for its PIN
+    bool keyless = false; // a step that signs nothing, as change_preview
 
 protected:
     void run() override
     {
+        if (keyless) {
+            request.insert(QStringLiteral("public"), QString());
+            answer = call();
+            return;
+        }
         const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
         if (key.state != KeyStore::State::Ready) {
             sign.pinNeeded = key.pinNeeded;
@@ -545,6 +551,90 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
             done(answer);
         m_node.pollDevices();
         emit managed(action, device, true);
+    });
+    thread->start();
+}
+
+void App::changePreview(const QVariantMap &recovery, const QStringList &leaveOut)
+{
+    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->keyless = true;
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), QStringLiteral("change_preview")},
+        {QStringLiteral("device"), QString()},
+        {QStringLiteral("recovery"), QJsonObject::fromVariantMap(recovery)},
+        {QStringLiteral("leave_out"), QJsonArray::fromStringList(leaveOut)},
+    };
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const Failure failure = thread->failure;
+        const QJsonObject answer = thread->answer;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit changePreviewed(false, QVariantList(), false);
+            return;
+        }
+        show(QString());
+        emit changePreviewed(true, answer.value(QStringLiteral("rows")).toArray().toVariantList(),
+                             answer.value(QStringLiteral("waiting")).toBool());
+    });
+    thread->start();
+}
+
+void App::changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, bool overWaiting)
+{
+    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+        return;
+    // The admin key in the TEE, behind its PIN, becomes the root key.
+    if (askPin([this, recovery, leaveOut, overWaiting]() { changeRoot(recovery, leaveOut, overWaiting); },
+               [this]() { emit rootChangedHere(false); }))
+        return;
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new ManageThread;
+    thread->member = m_node.handle();
+    thread->request = QJsonObject{
+        {QStringLiteral("action"), QStringLiteral("change_root")},
+        {QStringLiteral("device"), QString()},
+        {QStringLiteral("recovery"), QJsonObject::fromVariantMap(recovery)},
+        {QStringLiteral("leave_out"), QJsonArray::fromStringList(leaveOut)},
+        {QStringLiteral("over_waiting"), overWaiting},
+    };
+    connect(thread, &QThread::finished, this, [this, thread, recovery, leaveOut, overWaiting]() {
+        const Failure failure = thread->failure;
+        const bool pinNeeded = thread->sign.pinNeeded;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (!failure.isNull() && pinNeeded
+            && askPin([this, recovery, leaveOut, overWaiting]() { changeRoot(recovery, leaveOut, overWaiting); },
+                      [this]() { emit rootChangedHere(false); }))
+            return;
+        if (!failure.isNull()) {
+            show(Errors::shown(failure));
+            emit rootChangedHere(false);
+            return;
+        }
+        Membership next = m_member;
+        next.root = true;
+        next.adminCa.clear();
+        next.claim.clear();
+        if (!keep(next)) {
+            emit rootChangedHere(false);
+            return;
+        }
+        Errors::log(QStringLiteral("change root: this phone is the group's root now, by the recovery key"));
+        show(QString());
+        m_node.pollDevices();
+        emit groupChanged();
+        emit rootChangedHere(true);
     });
     thread->start();
 }

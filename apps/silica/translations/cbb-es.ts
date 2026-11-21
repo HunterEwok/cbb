@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>Hacer de este teléfono el dispositivo principal</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>Este teléfono pasa a ser el dispositivo principal</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Pasar el grupo a este teléfono</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>Siguiente</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>Quitado</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>Se queda</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>Se queda, y sigue siendo administrador</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>Se queda, congelado hasta que lo descongeles</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>Se queda, ya sin ser administrador: hazlo administrador de nuevo más tarde</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>El texto de la clave de recuperación, como en la hoja</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>No se puede deshacer. El PIN de administrador lo confirma, y los dispositivos del grupo siguen a este teléfono en cuanto se conectan.</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>Quién se queda en el grupo</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>Con la clave de recuperación del grupo, este teléfono pasa a ser el dispositivo principal, por ejemplo cuando se pierde el anterior.</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>Escribir un cambio nuevo encima</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>Creada</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Pasar el grupo a este teléfono</translation>
     </message>
     <message>
         <source>No time</source>

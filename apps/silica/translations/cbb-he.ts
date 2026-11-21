@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד.</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>להפוך את הטלפון הזה למכשיר הראשי</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>הטלפון הזה הופך למכשיר הראשי</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>להעביר את הקבוצה לטלפון הזה</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>הבא</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>מוסר</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>נשאר</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>נשאר, ונשאר מנהל</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>נשאר, מוקפא עד שתפשירו אותו</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>נשאר, אבל כבר לא מנהל: הפכו אותו למנהל שוב מאוחר יותר</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>הטקסט של מפתח השחזור, כמו בדף</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>אי אפשר לבטל את זה. קוד ה-PIN של המנהל מאשר זאת, ומכשירי הקבוצה עוברים לטלפון הזה ברגע שהם מתחברים.</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>מי נשאר בקבוצה</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>בעזרת מפתח השחזור של הקבוצה, הטלפון הזה הופך למכשיר הראשי, למשל כשהקודם אבד.</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>לכתוב מעליו שינוי חדש</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>נוצר</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>להעביר את הקבוצה לטלפון הזה</translation>
     </message>
     <message>
         <source>No time</source>

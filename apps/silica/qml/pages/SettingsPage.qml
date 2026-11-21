@@ -150,6 +150,13 @@ Page {
                 value: app.member.rootView.recovery ? qsTr("Made") : qsTr("None")
                 onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
             }
+            Button {
+                visible: !app.root && app.group06 && app.member.running
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Move the group to this phone")
+                enabled: !app.busy
+                onClicked: pageStack.push(Qt.resolvedUrl("ChangeRootPage.qml"))
+            }
             // A member phone that joined without an admin key makes it now,
             // for the root's "Make an admin".
             Button {

@@ -9,6 +9,7 @@
     "pages/JoinWindow",
     "pages/Invite",
     "pages/Recovery",
+    "pages/ChangeRoot",
     "pages/Settings",
     "pages/Arrange",
     "pages/Collection",

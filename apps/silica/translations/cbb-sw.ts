@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>Mabadiliko ya kifaa kikuu tayari yako njiani, na rekodi zake hazijafika zote. Unganisha vifaa vyako kwanza; andika juu yake tu ikiwa mabadiliko hayo hayatafika kamwe, kwa mfano kwa sababu simu iliyoyafanya imepotea.</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>Fanya simu hii kuwa kifaa kikuu</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>Kuifanya simu hii kuwa kifaa kikuu</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Hamishia kikundi kwenye simu hii</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>Endelea</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>Kinaondolewa</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>Kinabaki</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>Kinabaki, na kinabaki msimamizi</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>Kinabaki, kimegandishwa hadi ukiyeyushe</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>Kinabaki, si msimamizi tena: kifanye msimamizi tena baadaye</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>Maandishi ya ufunguo wa urejeshaji, kama yalivyo kwenye karatasi</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>Hili haliwezi kutenduliwa. PIN ya msimamizi inalithibitisha, na vifaa vya kikundi vinafuata simu hii mara vinapounganishwa.</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>Nani anabaki kwenye kikundi</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>Kwa ufunguo wa urejeshaji wa kikundi, simu hii inakuwa kifaa kikuu, kwa mfano kifaa cha zamani kikipotea.</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>Andika mabadiliko mapya juu yake</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>Umeundwa</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Hamishia kikundi kwenye simu hii</translation>
     </message>
     <message>
         <source>No time</source>

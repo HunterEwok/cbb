@@ -21,7 +21,11 @@ made with 0.5 is set up again once. The details follow.
   (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);
   the root phone seals the sheet's secret onto a YubiKey through the core (`cbb_piv`'s
   `inspect`, `seal` and `open`). Restoring a group on a new phone that is in no group yet
-  comes with 0.7 (D-125).
+  comes with 0.7 (D-125). Every phone app has the screen ("Move the group to this phone"):
+  the iPhone, Android and HarmonyOS apps take the sheet or a YubiKey over NFC and seal the
+  sheet onto a YubiKey after asking whether its factory management key is replaced; the
+  Aurora app takes the sheet. The iPhone and Android kits' own PIV code and their restore
+  on the Start screen are gone: the core speaks PIV for them.
 - In a group of 0.6 the root phone can add a watch with the key the watch made and a member
   key nobody keeps (the manage action `add_watch`, D-124); the watch shows the group but
   signs nothing from the wrist, and the Apple Watch, Wear OS and HarmonyOS apps say that its

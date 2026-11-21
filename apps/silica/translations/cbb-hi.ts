@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>मुख्य डिवाइस का एक बदलाव पहले से रास्ते में है, और उसके सारे रिकॉर्ड अभी नहीं आए हैं। पहले अपने डिवाइस से जुड़ें; उसके ऊपर तभी लिखें जब वह बदलाव कभी नहीं आएगा, जैसे कि उसे करने वाला फ़ोन खो गया हो।</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>इस फ़ोन को मुख्य डिवाइस बनाएँ</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>इस फ़ोन को मुख्य डिवाइस बनाया जा रहा है</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>समूह को इस फ़ोन पर ले आएँ</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>आगे</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>हटाया जाएगा</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>रहेगा</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>रहेगा, और एडमिन बना रहेगा</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>रहेगा, जब तक आप अनफ़्रीज़ न करें तब तक फ़्रीज़ रहेगा</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>रहेगा, पर एडमिन नहीं रहेगा: बाद में फिर से एडमिन बनाएँ</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>रिकवरी कुंजी का पाठ, जैसा शीट पर है</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>इसे पूर्ववत नहीं किया जा सकता। व्यवस्थापक PIN इसकी पुष्टि करता है, और समूह के डिवाइस जुड़ते ही इस फ़ोन का अनुसरण करते हैं।</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>समूह में कौन रहेगा</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>समूह की रिकवरी कुंजी से यह फ़ोन मुख्य डिवाइस बन जाता है, जैसे जब पुराना खो जाए।</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>उसके ऊपर नया बदलाव लिखें</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>बनाई गई</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>समूह को इस फ़ोन पर ले आएँ</translation>
     </message>
     <message>
         <source>No time</source>

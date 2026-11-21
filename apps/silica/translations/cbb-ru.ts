@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян.</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>Сделать этот телефон главным устройством</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>Этот телефон становится главным устройством</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Перенести группу на этот телефон</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>Далее</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>Удалено</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>Остаётся</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>Остаётся и остаётся администратором</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>Остаётся, заморожено, пока вы его не разморозите</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>Остаётся, но уже не администратор: сделайте его администратором позже</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>Текст ключа восстановления, как на листе</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>Это нельзя отменить. PIN-код администратора подтверждает это, и устройства группы переходят к этому телефону, как только подключатся.</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>Кто остаётся в группе</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>С ключом восстановления группы этот телефон становится главным устройством, например когда прежнее потеряно.</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>Записать поверх новую смену</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>Создан</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>Перенести группу на этот телефон</translation>
     </message>
     <message>
         <source>No time</source>

@@ -40,6 +40,8 @@ class App : public QObject
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(bool root READ root NOTIFY groupChanged)
+    // The group is one of 0.6, whose root changes only with the recovery key.
+    Q_PROPERTY(bool group06 READ group06 NOTIFY groupChanged)
     // Whether the member's hellos offer the root this phone's admin key,
     // for the root's "Make an admin".
     Q_PROPERTY(bool adminOffered READ adminOffered NOTIFY groupChanged)
@@ -109,6 +111,7 @@ public:
     // Whether the group's root made this phone an admin.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
+    bool group06() const { return m_member.isV06(); }
     bool adminOffered() const { return !m_member.isAdmin() && !m_member.adminOffer.isEmpty(); }
     QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
     double claimLeftMs() const { return double(m_claimLeftMs); }
@@ -194,6 +197,14 @@ public:
     // phone or else after the group's delay; the claim is then checked
     // every minute until it makes this phone the root, off the GUI thread.
     Q_INVOKABLE void takeOver(const QString &device);
+    // On 0.6, moving the group's main device to this phone with the
+    // recovery key, the sheet's {qr} or {text} (docs/apps.md, "Changing the
+    // main device"): changePreview asks who stays with leaveOut unticked,
+    // signing nothing (changePreviewed); changeRoot, after the admin PIN,
+    // makes the admin key in the TEE the root key and signs the change
+    // (rootChangedHere). Aurora takes the sheet only (docs/parity.md).
+    Q_INVOKABLE void changePreview(const QVariantMap &recovery, const QStringList &leaveOut);
+    Q_INVOKABLE void changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, bool overWaiting);
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
     // The root's own records, built and signed in the core (cbb_core::root)
@@ -234,6 +245,8 @@ signals:
     void settingsChanged();
     // ok: the change is in the group's records or the device took the command.
     void managed(const QString &action, const QString &device, bool ok);
+    void changePreviewed(bool ok, const QVariantList &rows, bool waiting);
+    void rootChangedHere(bool ok);
     void claimChanged();
     void arrangementChanged();
     void adminPinChanged();

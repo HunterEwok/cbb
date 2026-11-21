@@ -250,6 +250,69 @@
     </message>
 </context>
 <context>
+    <name>ChangeRootPage</name>
+    <message>
+        <source>A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</source>
+        <translation>تغيير للجهاز الرئيسي في الطريق بالفعل، ولم تصل كل سجلاته بعد. اتصل بأجهزتك أولًا؛ ولا تكتب فوقه إلا إذا كان ذلك التغيير لن يصل أبدًا، مثلًا لأن الهاتف الذي أجراه قد فُقد.</translation>
+    </message>
+    <message>
+        <source>Make this phone the main device</source>
+        <translation>اجعل هذا الهاتف الجهاز الرئيسي</translation>
+    </message>
+    <message>
+        <source>Making this phone the main device</source>
+        <translation>جعل هذا الهاتف الجهاز الرئيسي</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>نقل المجموعة إلى هذا الهاتف</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>التالي</translation>
+    </message>
+    <message>
+        <source>Removed</source>
+        <translation>يُزال</translation>
+    </message>
+    <message>
+        <source>Stays</source>
+        <translation>يبقى</translation>
+    </message>
+    <message>
+        <source>Stays, and stays an admin</source>
+        <translation>يبقى، ويبقى مشرفًا</translation>
+    </message>
+    <message>
+        <source>Stays, frozen until you unfreeze it</source>
+        <translation>يبقى، مجمّدًا حتى تلغي تجميده</translation>
+    </message>
+    <message>
+        <source>Stays, no longer an admin: make it an admin again later</source>
+        <translation>يبقى، لكنه لم يعد مشرفًا: اجعله مشرفًا مرة أخرى لاحقًا</translation>
+    </message>
+    <message>
+        <source>The recovery key's text, as on the sheet</source>
+        <translation>نص مفتاح الاسترداد كما في الورقة</translation>
+    </message>
+    <message>
+        <source>This cannot be undone. The admin PIN confirms it, and the group's devices follow this phone as soon as they connect.</source>
+        <translation>لا يمكن التراجع عن ذلك. يؤكده رمز PIN للمسؤول، وتتبع أجهزة المجموعة هذا الهاتف فور اتصالها.</translation>
+    </message>
+    <message>
+        <source>Who stays in the group</source>
+        <translation>من يبقى في المجموعة</translation>
+    </message>
+    <message>
+        <source>With the group's recovery key, this phone becomes the main device, for example when the old one is lost.</source>
+        <translation>بمفتاح استرداد المجموعة، يصبح هذا الهاتف الجهاز الرئيسي، مثلًا عند فقدان الجهاز السابق.</translation>
+    </message>
+    <message>
+        <source>Write a new change over it</source>
+        <translation>اكتب تغييرًا جديدًا فوقه</translation>
+    </message>
+</context>
+<context>
     <name>CollectionNameDialog</name>
     <message>
         <source>Make</source>
@@ -1594,6 +1657,10 @@
     <message>
         <source>Made</source>
         <translation>تم إنشاؤه</translation>
+    </message>
+    <message>
+        <source>Move the group to this phone</source>
+        <translation>نقل المجموعة إلى هذا الهاتف</translation>
     </message>
     <message>
         <source>No time</source>
