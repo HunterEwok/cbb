@@ -71,6 +71,10 @@ scans a QR code only from an injected image. The bench tests what works there (t
 pairing with an injected QR image, sync with members it dials by address); what needs a
 real phone (mDNS discovery, the foreground service on a real battery saver, the
 accessibility overlay) stays in the README's status table as "not yet" until there is one.
+The phone suite starts the emulator with `-feature -WiFiPacketStream`: its Wi-Fi then runs
+through the emulator's own user-mode network, and the console's UDP redirects, which go to
+10.0.2.15, reach the phone (the bench gives Wi-Fi that address too); with the Wi-Fi of
+emulator 36.5 and later they never arrive.
 
 Two group layouts are tested, because both exist for users:
 

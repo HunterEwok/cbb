@@ -563,6 +563,13 @@ class GroupTest {
             model.group.devices.any { it.name == guest }
         }
         assertEquals("off before it is turned on", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
+        runBlocking { model.setAway(true) }
+        assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
+        // The hub's offer comes over the phone's connection with it.
+        until(60, "the phone holds $hub's offer; the app says ${model.away}") {
+            runBlocking { model.refresh() }
+            model.away?.status == AwayFromHome.Status.AT_HOME
+        }
         // The bench lets the phone reach every member over the emulator's
         // host, so the phone stays connected to the hub directly and counts
         // itself at home with it. Away from home it has no such path: the
@@ -577,10 +584,8 @@ class GroupTest {
         }
     }
 
-    /** c2 from sync away from home on: the phone through hub's tunnel, guest behind it. */
+    /** c2 once the phone holds the hub's offer: the phone through hub's tunnel, guest behind it. */
     private fun awayThrough(hub: String, guest: String) {
-        runBlocking { model.setAway(true) }
-        assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
         val status = { runBlocking { model.refresh() }; model.away }
         until(120, "the phone connected through $hub's tunnel; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
         // The phone's devices list marks the computer as the hub it reaches.
