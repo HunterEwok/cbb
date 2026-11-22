@@ -185,7 +185,7 @@ fn close_hint() -> String {
 /// 0.
 pub(crate) fn hub_port_for(a: Option<&Away>) -> i64 {
     match a {
-        Some(a) if a.hub && !a.endpoints.is_empty() => a.port,
+        Some(a) if crate::awaynet::own_address(a) => a.port,
         _ => 0,
     }
 }

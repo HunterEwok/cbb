@@ -88,10 +88,18 @@ pub(crate) fn grant_for(a: Option<&Away>, cgnat: bool) -> Grant {
         }
     }
     g.addrs.sort();
-    if a.hub && !a.endpoints.is_empty() {
+    if own_address(a) {
         g.hub_port = a.port;
     }
     g
+}
+
+/// The device is a hub that its clients reach at an address of its own,
+/// not only through its forwarder: the status lists the forwarder's
+/// endpoint among the hub's.
+pub(crate) fn own_address(a: &Away) -> bool {
+    let forwarder = a.forwarder.as_ref().map(|f| f.endpoint.as_str());
+    a.hub && a.endpoints.iter().any(|e| Some(e.as_str()) != forwarder)
 }
 
 /// One system's way of keeping the service on the home network and the
@@ -541,6 +549,19 @@ mod tests {
         // A hub reached only through its forwarder answers nobody else.
         let a = Away { hub: true, port: 8764, allow: vec!["198.51.100.9".into()], ..Default::default() };
         assert_eq!(grant_for(Some(&a), false).hub_port, 0);
+        // The status lists the forwarder's endpoint among the hub's.
+        let a = Away {
+            hub: true,
+            port: 8764,
+            endpoints: vec!["198.51.100.9:8764".into()],
+            allow: vec!["198.51.100.9".into()],
+            forwarder: Some(crate::control::Forwarder { endpoint: "198.51.100.9:8764".into(), ..Default::default() }),
+            ..Default::default()
+        };
+        assert_eq!(grant_for(Some(&a), false).hub_port, 0, "a hub reached only through its forwarder");
+        assert_eq!(crate::hubport::hub_port_for(Some(&a)), 0);
+        let a = Away { endpoints: vec!["203.0.113.7:8764".into(), "198.51.100.9:8764".into()], ..a };
+        assert_eq!(grant_for(Some(&a), false).hub_port, 8764, "and at its own address too");
     }
 
     /// A unit in a temporary folder, its systemctl calls recorded.
