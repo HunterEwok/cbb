@@ -378,6 +378,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun newGroup06(): Core.RecoverySheet {
         check(!hasGroup) { "this phone is in a group already" }
         if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+        Log.i(TAG, "making a group of 0.6")
         return withContext(Dispatchers.IO) {
             val root = newRootKey("", R.string.reason_add, Prompts(1))
             val member = memberSigner()
@@ -386,6 +387,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 nodeDir, PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, root.publicKeyDER, member.publicKeyDER, root::signDigest,
             )
             adopt(PhoneGroup.of(made.device, made.group, root = true))
+            Log.i(TAG, "made the group")
             Core.RecoverySheet(made.recoveryQR, made.recoveryText.flatMap { it.split(" ") }.joinToString("-"), ByteArray(0))
         }
     }
@@ -409,6 +411,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             if (hosts.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
             CorePairing.Window(n, signer.publicKeyDER, hosts, sign = signer::signDigest) to port
         }
+        Log.i(TAG, "the window is open on port $port")
         val announced = NsdPublisher(context, g.device, port, Discovery.windowTXT(g.tag, w.fingerprint, w.id))
         announced.start()
         try {

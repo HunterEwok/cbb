@@ -277,7 +277,11 @@ class GroupTest {
      * the window shows. Fails with what cbb pair printed and the app's state.
      */
     private fun joinWindow(dev: String) {
-        until(60, "the phone's pairing window open; the app says ${model.message}") { model.windowQr != null && model.windowDigits != null }
+        try {
+            until(60, "the phone's pairing window open") { model.windowQr != null && model.windowDigits != null }
+        } catch (e: AssertionError) {
+            throw AssertionError("${e.message}\n${appState()}")
+        }
         InstrumentationRegistry.getInstrumentation().runOnMainSync { model.newSheet = null }
         val out = try {
             Bench.joinWindow(dev, model.windowQr!!, model.windowDigits!!)
