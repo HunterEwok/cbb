@@ -211,6 +211,9 @@ def slh_sign(seeds, items):
     Python has no SLH-DSA of its own here; the Rust core checks these with
     another implementation (RustCrypto's slh-dsa)."""
     global _SLH_SIGNER
+    if _SLH_SIGNER is None and os.environ.get("CBB_SLH_SIGNER"):
+        # A signer built beforehand, as CI does where gen.py runs without Go.
+        _SLH_SIGNER = os.environ["CBB_SLH_SIGNER"]
     if _SLH_SIGNER is None:
         here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check")
         _SLH_SIGNER = os.path.join(tempfile.mkdtemp(), "check")

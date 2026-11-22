@@ -3467,7 +3467,11 @@ jobs:
         run: |
           out="$RUNNER_TEMP/format"
           mkdir -p "$out"
-          docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -w /src python:3.13-slim sh -euc '
+          # The SLH-DSA signer gen.py otherwise builds with Go, which the
+          # container has not: built here, static.
+          (cd testdata/format/check && CGO_ENABLED=0 go build -o "$RUNNER_TEMP/slh-signer" .)
+          docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -v "$RUNNER_TEMP/slh-signer:/usr/local/bin/slh-signer:ro" \
+            -e CBB_SLH_SIGNER=/usr/local/bin/slh-signer -w /src python:3.13-slim sh -euc '
             pip install -q --no-cache-dir --root-user-action=ignore cryptography==50.0.1
             python3 -I testdata/format/gen.py /out'
           # The files gen.py writes; bounds.json, push.json and the mutants
