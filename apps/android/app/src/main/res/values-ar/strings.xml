@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">تعذّر جلب الصورة من الحواسيب. انسخها هناك مجددًا، ثم حاول مرة أخرى.</string>
     <string name="error_join">تعذّر الانضمام إلى مجموعة الهاتف الآخر. حاول مرة أخرى.</string>
     <string name="error_muted">كتم مشرف هذا الهاتف، لذا تبقى نسخه عليه.</string>
-    <string name="error_needs_root">لم يفتح هذا الحاسوب نافذته لهاتف. شغّل cbb pair -admin على الحاسوب الذي أنشأ المجموعة.</string>
     <string name="error_nfc_off">NFC متوقف. شغّله في إعدادات الهاتف، ثم حاول مرة أخرى.</string>
     <string name="error_no_answer">لم يُجب الحاسوب. قد يكون غير متصل، أو يشغّل إصدارًا أقدم من CBB.</string>
     <string name="error_no_biometric">أضف بصمة أو وجهًا على هذا الهاتف أولًا: على Android 10 تحتاج مفاتيح المجموعة إلى ذلك.</string>
     <string name="error_no_network">صِل هذا الهاتف بشبكة Wi-Fi المنزلية، ثم حاول مجددًا.</string>
     <string name="error_no_nfc">لا يحتوي هذا الهاتف على NFC ولا على منفذ USB يقبل YubiKey.</string>
     <string name="error_no_screen_lock">اضبط قفل الشاشة على هذا الهاتف أولًا: تحتاجه مفاتيح المجموعة.</string>
-    <string name="error_no_window">لا يوجد حاسوب ينتظر هاتفًا. شغّل cbb pair -admin على الحاسوب الذي أنشأ المجموعة، ثم حاول مرة أخرى.</string>
+    <string name="error_no_window">لا يعرض أي جهاز من مجموعتك ستة أرقام على هذه الشبكة. على هاتف من المجموعة اضغط +، أو على حاسوب اختر «إضافة جهاز»، ثم حاول مرة أخرى.</string>
     <string name="error_not_admin">هاتف المشرف وحده يمكنه فعل هذا.</string>
     <string name="error_not_authenticated">لم تُؤكَّد البصمة أو الوجه أو قفل الشاشة، لذا لم يتغير شيء.</string>
     <string name="error_not_confirmed">انضم الحاسوب لكنه لم يؤكد ذلك. تحقق من cbb status عليه.</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">ثُبّت هذا الحاسوب دون root، لذا يمكن لأي من برامجه قراءة مفاتيحه. لا يمكن أن يكون مشرفًا أبدًا.</string>
     <string name="error_timed_out">لم يمسح أي هاتف الرمز خلال خمس دقائق. حاول مرة أخرى.</string>
     <string name="error_too_many_codes">رموز خاطئة كثيرة جدًا. حاول مرة أخرى برمز جديد.</string>
-    <string name="error_two_windows">حاسوبان ينتظران جهازًا في الوقت نفسه. أغلق cbb pair على أحدهما، ثم حاول مرة أخرى.</string>
+    <string name="error_two_windows">يعرض جهازان من مجموعتك ستة أرقام في الوقت نفسه. أغلق «إضافة جهاز» على أحدهما، ثم حاول مرة أخرى.</string>
     <string name="error_unreachable">تعذّر الوصول إلى الحاسوب. هل هو على الشبكة نفسها التي عليها هذا الهاتف، وهل يسمح جداره الناري لـCBB؟</string>
     <string name="error_wrong_code">الرمز غير مطابق. شغّل cbb pair على الحاسوب مرة أخرى وامسح الرمز الجديد.</string>
     <string name="error_yubikey">لم يُجب YubiKey كما هو متوقع. أبقِه ثابتًا على الهاتف وحاول مرة أخرى.</string>

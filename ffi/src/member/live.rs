@@ -626,7 +626,7 @@ impl Phone {
             }
             "away_status" => Ok(self.away_answer()),
             "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
-            "why" => Ok(json!({ "why": self.why() })),
+            "why" => Ok(json!({ "why": self.why(away_arg(&arg("away"))?) })),
             // The revocation list of Android attestations the app fetched,
             // and how many peers' evidence waits for the root key.
             "attest_status" => {
@@ -643,6 +643,29 @@ impl Phone {
             "evidence" => {
                 let list = arg("evidence").as_array().cloned().unwrap_or_default();
                 l.set_own_evidence(&list)?;
+                done()
+            }
+            // The tiles to draw, and the person's change of their order
+            // (docs/apps.md, "What the member shows"); the view's
+            // warnings are why's reasons.
+            "view" | "arrange" => {
+                let op: Option<cbb_core::arrange::Op> = if op == "arrange" {
+                    Some(serde_json::from_value(arg("arrange")).map_err(|e| Error::msg(format!("arrange: {e}")))?)
+                } else {
+                    None
+                };
+                let tiles = cbb_member::view::Tiles::new(&self.dir);
+                let mut view = tiles.view(&l.tag(), self.devices(), op.as_ref())?;
+                view.warnings = self.why(away_arg(&arg("away"))?);
+                Ok(json!({ "view": view }))
+            }
+            "notices" => Ok(json!({ "notices": self.notices() })),
+            // A notice the person hid: the set keeps it dismissed.
+            "dismiss" => {
+                let id = arg("id");
+                let id = id.as_str().and_then(record_id).ok_or_else(|| Error::msg("dismiss needs a notice's id"))?;
+                lock(&l.mesh.set()).dismiss(&id);
+                l.mesh.changed()?;
                 done()
             }
             "check_command" | "answer" => Err(not_yet("a command for this phone")),
@@ -708,8 +731,9 @@ impl Phone {
     }
 
     /// Why the phone does not sync: the facts its member and the group's
-    /// records give.
-    fn why(&self) -> Vec<cbb_core::why::Reason> {
+    /// records give; away, where a tunnel the app runs itself stands, in
+    /// place of the member's own.
+    fn why(&self, away: Option<cbb_core::why::AwayFacts>) -> Vec<cbb_core::why::Reason> {
         let l = &self.live;
         let devices = self.devices();
         let st = l.mesh.state();
@@ -729,9 +753,69 @@ impl Phone {
             ..Default::default()
         };
         let mut facts = cbb_member::why::facts(&status, &devices);
+        if away.is_some() {
+            facts.away = away;
+        }
         cbb_core::why::group_facts(&mut facts, &st, &me);
         facts.checkpoint_stuck = !lock(&l.mesh.set()).stuck_checkpoints().is_empty();
         cbb_core::why::diagnose(&facts, cbb_member::uptime::wall_ms())
+    }
+
+    /// The member's notices about the group (docs/apps.md, "Notices"), as
+    /// the apps show them: `{id, kind, args, dismissable}`. Only the
+    /// notices of removed devices that count again (`returned_after_removal`,
+    /// by the removal's or the change's record ID) may be hidden; the
+    /// others stay until what they say is over.
+    fn notices(&self) -> Vec<Value> {
+        let l = &self.live;
+        // Mesh::is_root reads the set under its lock: asked before taking it.
+        let root = l.mesh.is_root();
+        let held = l.mesh.set();
+        let set = lock(&held);
+        let st = set.state();
+        let me = l.mesh.device();
+        let device_of = |k: &cbb_core::records::KeyHash| {
+            st.devices.iter().find(|d| d.key.hash() == *k || d.admin.as_ref() == Some(k)).map(|d| id_text(&d.id))
+        };
+        let notice = |id: String, kind: &str, args: Value, dismissable: bool| json!({ "id": id, "kind": kind, "args": args, "dismissable": dismissable });
+        let mut out = Vec::new();
+        if set.change_arriving(&st).is_some() {
+            out.push(notice("change_arriving".into(), "change_arriving", json!({}), false));
+        }
+        if !set.removals_waiting(&st).is_empty() {
+            out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
+        }
+        if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| root) {
+            let percent = w.waiting_units.saturating_mul(100) / w.room.cap.max(1);
+            out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
+        }
+        let own_admin = st.devices.iter().find(|d| d.id == me).and_then(|d| d.admin);
+        if let Some(o) = own_admin.and_then(|k| set.ack_owed(&st, &k, wall_ms_u64())) {
+            out.push(notice(
+                "ack_owed".into(),
+                "ack_owed",
+                json!({ "removals": o.removals, "days_left": o.days_left }),
+                false,
+            ));
+        }
+        for f in set.frozen_holding(&st) {
+            let d = id_text(&f.device);
+            out.push(notice(format!("frozen_holding:{d}"), "frozen_holding", json!({ "device": d }), false));
+        }
+        if !set.stuck_checkpoints().is_empty() {
+            out.push(notice("checkpoint_stuck".into(), "checkpoint_stuck", json!({}), false));
+        }
+        for (id, keys) in set.notices(&st) {
+            let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
+            let Some(first) = devices.first() else { continue };
+            out.push(notice(
+                certs::b64::encode(&id.0),
+                "returned_after_removal",
+                json!({ "device": first, "devices": devices.len() }),
+                true,
+            ));
+        }
+        out
     }
 
     /// Sync away from home as the away ops answer it: its state, null
@@ -1262,6 +1346,26 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
 /// The forwarder the group's root set for this phone as a hub, in the
 /// phone's folder: the root's hub command names it, and the root
 /// makes the blind credentials the forwarder asks of it.
+/// The share of the root's room that removals waiting for admins take
+/// before the root phone says so (docs/apps.md, "Notices").
+const ROOT_ROOM_WARN_PERCENT: u64 = 50;
+
+/// The app's own tunnel as why takes it (`away`), none when it is null.
+fn away_arg(v: &Value) -> Result<Option<cbb_core::why::AwayFacts>> {
+    serde_json::from_value(v.clone()).map_err(|e| Error::msg(format!("away: {e}")))
+}
+
+/// A record's ID in base64, as the notices name it.
+fn record_id(s: &str) -> Option<cbb_core::records::RecordId> {
+    let b = certs::b64::decode_str(s)?;
+    Some(cbb_core::records::RecordId(b.try_into().ok()?))
+}
+
+/// The wall clock in milliseconds, as the records count it.
+fn wall_ms_u64() -> u64 {
+    u64::try_from(cbb_member::uptime::wall_ms()).unwrap_or(0)
+}
+
 const ROOT_FORWARDER: &str = "root_forwarder.json";
 
 /// A forwarder as the root set it: its address and its key's pin.
@@ -1581,6 +1685,77 @@ mod tests {
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The ops the apps' screens read: the tiles and the person's order of
+    /// them, and the group's notices and hiding one.
+    #[test]
+    fn a_phone_answers_its_view_and_notices() {
+        let dir = std::env::temp_dir().join(format!("cbb-ffi-live-view-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
+        let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+        cbb_member::founding::found_with(&dir, &me, now, &|| None).unwrap();
+        let own = Own::load(&dir).unwrap();
+        let device = id_text(&own.device());
+        let member: &'static Signer = Box::leak(Box::new(Signer(own.member.clone())));
+        let req = json!({
+            "dir": dir.to_string_lossy(), "name": "phone", "os": "ios", "device": device,
+            "public": b64(&member.0.public()), "mdns": false,
+        })
+        .to_string();
+        let (m, a) = Member::start(req.as_bytes(), sign, events, member as *const Signer as usize);
+        ok(&a);
+        let m = m.unwrap();
+        let call = |op: &str, args: Value| m.call(json!({ "op": op, "args": args }).to_string().as_bytes());
+
+        // The view: this phone's tile, no others, no order of the person's,
+        // and the reasons why it does not sync as its warnings.
+        let v = ok(&call("view", Value::Null))["view"].clone();
+        assert_eq!(v["tiles"].as_array().unwrap().len(), 1, "{v}");
+        assert_eq!(v["tiles"][0]["device"]["id"], device.as_str(), "{v}");
+        assert_eq!(
+            (v["online"].as_u64(), v["others"].as_u64(), v["custom"].as_bool()),
+            (Some(0), Some(0), Some(false))
+        );
+        let why = ok(&call("why", Value::Null))["why"].clone();
+        assert_eq!(v.get("warnings").cloned().unwrap_or(json!([])), why, "the view warns as why answers");
+        // The app's own tunnel, when it runs one, stands in for the member's.
+        let away = json!({ "away": { "hub": true, "forwarder": true, "error": "no answer" } });
+        let why = ok(&call("why", away.clone()))["why"].clone();
+        let down = why.as_array().unwrap().iter().find(|r| r["code"] == "forwarder_down").cloned();
+        assert_eq!(down.map(|r| r["detail"].clone()), Some(json!("no answer")), "{why}");
+        let v = ok(&call("view", away))["view"].clone();
+        assert!(v["warnings"].as_array().unwrap().iter().any(|r| r["code"] == "forwarder_down"), "{v}");
+        assert!(error(&call("why", json!({ "away": 7 }))).starts_with("away:"));
+        // A collection the person makes is kept, and ungrouping undoes it.
+        let made = json!({ "arrange": { "op": "new", "name": "Desk", "devices": [device] } });
+        let v = ok(&call("arrange", made))["view"].clone();
+        assert_eq!(v["custom"], true, "{v}");
+        assert_eq!(v["tiles"][0]["collection"]["name"], "Desk", "{v}");
+        assert!(dir.join(cbb_member::view::FILE).is_file(), "the order stays in the phone's folder");
+        assert_eq!(ok(&call("view", Value::Null))["view"]["tiles"][0]["collection"]["name"], "Desk");
+        let bad = json!({ "arrange": { "op": "into", "device": device, "collection": "none" } });
+        assert!(m.call(json!({ "op": "arrange", "args": bad }).to_string().as_bytes()).starts_with(b"{\"error\""));
+        assert!(error(&call("arrange", json!({ "arrange": { "op": "fly" } }))).starts_with("arrange:"));
+        let c = ok(&call("view", Value::Null))["view"]["tiles"][0]["collection"]["id"].clone();
+        let v = ok(&call("arrange", json!({ "arrange": { "op": "ungroup", "collection": c } })))["view"].clone();
+        assert_eq!(v["tiles"][0]["device"]["id"], device.as_str(), "{v}");
+
+        // A new group tells nothing; a notice hidden stays hidden in the set.
+        assert_eq!(ok(&call("notices", Value::Null))["notices"], json!([]));
+        assert!(error(&call("dismiss", Value::Null)).contains("a notice's id"));
+        assert!(error(&call("dismiss", json!({ "id": "AAAA" }))).contains("a notice's id"));
+        let id = certs::b64::encode(&[9; 32]);
+        ok(&call("dismiss", json!({ "id": id })));
+        let phone = &*m.0;
+        let rid = record_id(&id).unwrap();
+        assert!(lock(&phone.live.mesh.set()).dismissed().any(|d| *d == rid));
+        assert_eq!(ok(&call("notices", Value::Null))["notices"], json!([]));
+
+        m.stop();
         let _ = std::fs::remove_dir_all(&dir);
     }
 

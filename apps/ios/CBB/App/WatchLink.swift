@@ -94,8 +94,7 @@ final class WatchLink: NSObject {
         s.hasGroup = model.phase == .home
         s.group = s.hasGroup ? model.group.groupTag : nil
         // In a group of 0.6 the watch signs nothing (D-124): no actions.
-        let signs = !model.group.isV06
-        s.signs = s.hasGroup ? signs : nil
+        s.signs = s.hasGroup ? false : nil
         // In the user's order, as the phone's own list has it, the phone
         // among them; a collection's devices one after another.
         let arranged: [(AppModel.Computer, String?)] = model.arranged.flatMap { item -> [(AppModel.Computer, String?)] in

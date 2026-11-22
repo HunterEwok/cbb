@@ -130,7 +130,7 @@ final class AppModelTests: XCTestCase {
     }
 
     func testIPv4AddressesFirst() {
-        XCTAssertEqual(LiveGroup.ordered(["[fd00::5]:8767", "192.168.1.20:8767", "[fe80::1]:8767", "10.0.0.2:8767"]),
+        XCTAssertEqual(LocalAddresses.ordered(["[fd00::5]:8767", "192.168.1.20:8767", "[fe80::1]:8767", "10.0.0.2:8767"]),
                        ["192.168.1.20:8767", "10.0.0.2:8767", "[fd00::5]:8767", "[fe80::1]:8767"])
     }
 
@@ -354,12 +354,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(pending.message)
     }
 
-    func testJoinQRText() {
-        let jc = JoinCode(code: "246802", addrs: ["192.168.1.20:8767", JoinCode.address(host: "fd00::5", port: 8767)], fingerprint: "abc_-")
-        XCTAssertEqual(JoinCode(qr: jc.qrText), jc)
-        XCTAssertTrue(JoinCode(code: JoinCode.newCode(), addrs: [], fingerprint: "").codeIsValid)
-    }
-
     func testPendingGroup() async {
         let m = AppModel()
         XCTAssertEqual(m.phase, .start)
@@ -369,18 +363,17 @@ final class AppModelTests: XCTestCase {
     }
 
     func testSplit() {
-        XCTAssertEqual(LiveGroup.split("192.168.1.20:8767")?.0, "192.168.1.20")
-        XCTAssertEqual(LiveGroup.split("192.168.1.20:8767")?.1, 8767)
-        XCTAssertEqual(LiveGroup.split("[fd00::5]:8767")?.0, "fd00::5")
-        XCTAssertNil(LiveGroup.split("host"))
-        XCTAssertNil(LiveGroup.split(":80"))
+        XCTAssertEqual(LocalAddresses.split("192.168.1.20:8767")?.0, "192.168.1.20")
+        XCTAssertEqual(LocalAddresses.split("192.168.1.20:8767")?.1, 8767)
+        XCTAssertEqual(LocalAddresses.split("[fd00::5]:8767")?.0, "fd00::5")
+        XCTAssertNil(LocalAddresses.split("host"))
+        XCTAssertNil(LocalAddresses.split(":80"))
     }
 
     func testDescribe() {
-        XCTAssertNotEqual(AppModel.describe(PairingMember.Failure.refused(.wrongCode), details: false),
-                          AppModel.describe(PairingMember.Failure.refused(.busy), details: false))
-        XCTAssertEqual(AppModel.describe(LiveGroup.Failure.unreachable, details: false), AppModel.describe(TLSTransport.Failure.closed, details: false))
-        XCTAssertTrue(AppModel.describe(TLSTransport.Failure.closed, details: true).contains("closed"))
+        XCTAssertNotEqual(AppModel.describe(LiveGroup.Failure.noNetwork, details: false),
+                          AppModel.describe(LiveGroup.Failure.timedOut, details: false))
+        XCTAssertTrue(AppModel.describe(LiveGroup.Failure.unreachable, details: true).contains("unreachable"))
     }
 
     func testThemes() {

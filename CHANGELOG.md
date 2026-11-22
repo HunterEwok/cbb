@@ -41,6 +41,12 @@ made with 0.5 is set up again once. The details follow.
   one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC. The
   Aurora app reaches a YubiKey plugged into USB-C through the system's pcscd, the core being its
   client (`cbb_piv`'s transport `pcsc`).
+- A phone's member in a group of 0.6 answers the tiles to draw and the person's order of them
+  (`view`, `arrange`, kept in `arrangement.json`, with why's reasons as the view's warnings),
+  and the group's notices from its records, one of which the person may hide (`notices`,
+  `dismiss`). The kits' calls that nothing in 0.6 answers are gone: `served`, `caller`,
+  `key_made` with the event `need_key`, `recovery_saved`, and the iPhone kit's member ports for
+  a tunnel and a relay.
 - A phone's member in a group of 0.6 registers for push as a computer's member takes it:
   it keeps the signed entry points, reads its face toward the push service from them
   (`push_face`), sends its registration, message `push`, to every member it connects to

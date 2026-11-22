@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">कंप्यूटरों से चित्र नहीं मिल सका। उसे वहाँ फिर से कॉपी करें, फिर दोबारा कोशिश करें।</string>
     <string name="error_join">दूसरे फ़ोन के समूह से नहीं जुड़ा जा सका। दोबारा कोशिश करें।</string>
     <string name="error_muted">एक एडमिन ने इस फ़ोन को म्यूट किया, इसलिए इसकी कॉपी इसी पर रहती हैं।</string>
-    <string name="error_needs_root">इस कंप्यूटर ने फ़ोन के लिए अपनी विंडो नहीं खोली। जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ।</string>
     <string name="error_nfc_off">NFC बंद है। इसे फ़ोन की सेटिंग्स में चालू करें, फिर दोबारा कोशिश करें।</string>
     <string name="error_no_answer">कंप्यूटर ने जवाब नहीं दिया। वह ऑफ़लाइन हो सकता है, या CBB का पुराना संस्करण चला रहा हो सकता है।</string>
     <string name="error_no_biometric">पहले इस फ़ोन पर फ़िंगरप्रिंट या चेहरा जोड़ें: Android 10 पर समूह की कुंजियों को इसकी ज़रूरत है।</string>
     <string name="error_no_network">इस फ़ोन को अपने घर के Wi-Fi से जोड़ें, फिर दोबारा कोशिश करें।</string>
     <string name="error_no_nfc">इस फ़ोन में न NFC है, न ऐसा USB पोर्ट जिसमें YubiKey लगे।</string>
     <string name="error_no_screen_lock">पहले इस फ़ोन पर स्क्रीन लॉक लगाएँ: समूह की कुंजियों को इसकी ज़रूरत है।</string>
-    <string name="error_no_window">कोई कंप्यूटर फ़ोन का इंतज़ार नहीं कर रहा। जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ, फिर दोबारा कोशिश करें।</string>
+    <string name="error_no_window">इस नेटवर्क पर आपके समूह का कोई डिवाइस छह अंक नहीं दिखा रहा है। समूह के किसी फ़ोन पर + टैप करें, या कंप्यूटर पर डिवाइस जोड़ें चुनें, फिर से कोशिश करें।</string>
     <string name="error_not_admin">केवल एडमिन फ़ोन ही यह कर सकता है।</string>
     <string name="error_not_authenticated">फ़िंगरप्रिंट, चेहरे या स्क्रीन लॉक की पुष्टि नहीं हुई, इसलिए कुछ नहीं बदला।</string>
     <string name="error_not_confirmed">कंप्यूटर जुड़ गया पर उसने पुष्टि नहीं की। उस पर cbb status देखें।</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">यह कंप्यूटर बिना रूट के इंस्टॉल है, इसलिए इसका कोई भी प्रोग्राम इसकी कुंजियाँ पढ़ सकता है। यह कभी एडमिन नहीं बन सकता।</string>
     <string name="error_timed_out">पाँच मिनट में किसी फ़ोन ने कोड स्कैन नहीं किया। दोबारा कोशिश करें।</string>
     <string name="error_too_many_codes">बहुत सारे ग़लत कोड। नए कोड के साथ दोबारा कोशिश करें।</string>
-    <string name="error_two_windows">दो कंप्यूटर एक साथ किसी डिवाइस का इंतज़ार कर रहे हैं। उनमें से एक पर cbb pair बंद करें, फिर दोबारा कोशिश करें।</string>
+    <string name="error_two_windows">आपके समूह के दो डिवाइस एक साथ छह अंक दिखा रहे हैं। उनमें से एक पर डिवाइस जोड़ें बंद करें, फिर से कोशिश करें।</string>
     <string name="error_unreachable">कंप्यूटर तक नहीं पहुँच सका। क्या वह इस फ़ोन वाले नेटवर्क पर है, और क्या उसका फ़ायरवॉल CBB को आने देता है?</string>
     <string name="error_wrong_code">कोड मेल नहीं खाया। कंप्यूटर पर cbb pair फिर से चलाएँ और नया कोड स्कैन करें।</string>
     <string name="error_yubikey">YubiKey ने अपेक्षित जवाब नहीं दिया। इसे फ़ोन से सटाकर स्थिर रखें और दोबारा कोशिश करें।</string>

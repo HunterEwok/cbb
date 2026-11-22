@@ -1232,7 +1232,6 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.NO_SCREEN, LiveGroup.Failure.Kind.UNREACHABLE -> R.string.error_unreachable
                 LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
-                LiveGroup.Failure.Kind.NEEDS_ROOT -> R.string.error_needs_root
                 LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave
                 LiveGroup.Failure.Kind.ROOT_LEAVES -> R.string.error_root_leaves
                 LiveGroup.Failure.Kind.HUB_UNREACHABLE -> R.string.error_hub_unreachable

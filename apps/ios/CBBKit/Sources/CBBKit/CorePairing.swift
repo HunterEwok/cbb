@@ -29,56 +29,6 @@ public enum CorePairing {
         }
     }
 
-    /// A group this phone is in, as the core made or joined it: its device
-    /// ID, member certificate and the admin CA that issued it, the group
-    /// CA, the later roots, the records file and, for a phone made an
-    /// admin, its admin CA.
-    public struct Group: Decodable, Equatable, Sendable {
-        public var device: String
-        public var cert: Data
-        public var issuer: Data?
-        public var groupCA: Data
-        public var roots: [Data]
-        public var records: Data
-        public var adminCA: Data?
-
-        enum CodingKeys: String, CodingKey { case device, cert, issuer, groupCA = "group_ca", roots, records, adminCA = "admin_ca" }
-
-        public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            device = try c.decode(String.self, forKey: .device)
-            cert = try c.decode(Data.self, forKey: .cert)
-            issuer = try c.decodeIfPresent(Data.self, forKey: .issuer)
-            groupCA = try c.decode(Data.self, forKey: .groupCA)
-            roots = try c.decodeIfPresent([Data].self, forKey: .roots) ?? []
-            records = try c.decodeIfPresent(Data.self, forKey: .records) ?? Data()
-            adminCA = try c.decodeIfPresent(Data.self, forKey: .adminCA)
-        }
-    }
-
-    /// Makes a group with this phone's root key (cbb_group_new): its root
-    /// CA, this phone's member certificate and its device record. rootPublic
-    /// and publicKey are the root and member keys (SubjectPublicKeyInfo or
-    /// point), store where the member key lives (Records.hardware or
-    /// Records.file), seal the phone's public key for sealed messages;
-    /// signRoot signs a digest with the root key, during this call only.
-    public static func newGroup(name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data, seal: Data?,
-                                signRoot: @escaping (Data) throws -> Data) throws -> Group {
-        struct Request: Encodable {
-            var name: String, os: String, store: String, root_public: Data, `public`: Data, seal: Data?
-        }
-        let request = try JSONEncoder().encode(Request(name: name, os: os, store: store, root_public: try point(rootPublic),
-                                                       public: try point(publicKey), seal: seal))
-        let signer = Signer(signRoot)
-        let raw = Unmanaged.passRetained(signer).toOpaque()
-        defer { Unmanaged<Signer>.fromOpaque(raw).release() }
-        var count = 0
-        let answer: UnsafeMutablePointer<UInt8>? = request.withUnsafeBytes { r in
-            cbb_group_new(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, raw, &count)
-        }
-        return try ok("new group", take(answer, count), as: Group.self)
-    }
-
     /// A group of 0.6 this phone made: its ID, this phone's device ID and
     /// the recovery sheet, which the person keeps and the app keeps nowhere.
     public struct Made: Decodable, Sendable {
@@ -92,15 +42,14 @@ public enum CorePairing {
         public var recovery: Sheet
     }
 
-    /// Makes a group of 0.6 with this phone's root key (cbb_group_new with
-    /// dir): the core writes this phone's record under the root and keeps
+    /// Makes a group of 0.6 with this phone's root key (cbb_group_new): the core writes this phone's record under the root and keeps
     /// the set in dir, where the member then reads it. rootPublic and
     /// publicKey are the root and member keys (SubjectPublicKeyInfo or
     /// point), store where the member key lives (Records.hardware or
     /// Records.file); signRoot signs a digest with the root key, during
     /// this call only.
-    public static func newGroup06(dir: URL, name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data,
-                                  signRoot: @escaping (Data) throws -> Data) throws -> Made {
+    public static func newGroup(dir: URL, name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data,
+                                signRoot: @escaping (Data) throws -> Data) throws -> Made {
         struct Request: Encodable {
             var dir: String, name: String, os: String, store: String, root_public: Data, `public`: Data
         }
@@ -120,7 +69,7 @@ public enum CorePairing {
     /// 12) through member: its guest tunnel opens on this phone when it is
     /// the group's hub, else through a connected hub of the group (hub
     /// names one, empty for any). publicKey is the key sign holds (the admin
-    /// key with adminCA, or the root's key without); sign is called when a device the user confirmed is
+    /// key or the root's key); sign is called when a device the user confirmed is
     /// admitted. expires is in seconds: an hour when 0, a day at most. It
     /// waits for the hub, so the app makes it off its main thread.
     public final class Inviting: @unchecked Sendable {
@@ -160,11 +109,11 @@ public enum CorePairing {
 
         /// kind is the device invited on a group of 0.6: "computer" (or
         /// empty) or "phone".
-        public init(member: CoreMember, publicKey: Data, adminCA: Data?, expires: Int, hub: String = "", kind: String = "",
+        public init(member: CoreMember, publicKey: Data, expires: Int, hub: String = "", kind: String = "",
                     sign: @escaping (Data) throws -> Data) throws {
-            struct Args: Encodable { var `public`: Data, admin_ca: Data?, expires: Int, hub: String, kind: String }
+            struct Args: Encodable { var `public`: Data, expires: Int, hub: String, kind: String }
             struct Answer: Decodable { var invite: String?, expires: Int? }
-            let request = try JSONEncoder().encode(Args(public: try point(publicKey), admin_ca: adminCA, expires: expires, hub: hub,
+            let request = try JSONEncoder().encode(Args(public: try point(publicKey), expires: expires, hub: hub,
                                                         kind: kind))
             let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
             var answer: UnsafeMutablePointer<UInt8>?

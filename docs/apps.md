@@ -97,21 +97,16 @@ they look, so both apps are built to the same plan.
    iPhone). A tap turns sync on this phone on or off; on Android a long press opens the app
    (iOS gives a control no long press of its own), and without a group the tile opens the
    app. On the iPhone, **Share → Copy Beyond Borders** (from any app, and from the
-   text selection menu's Share) sends the text or the link at once: the share extension
-   dials the group's computers with the phone's member key, which it shares with the app
-   through an app group and a keychain access group (both need the Apple developer
-   account; a debug build signed ad hoc has neither, and its extension says there is no
-   group). Share takes an image or files too, up to 50 MB together: the extension stays
-   until a computer fetched them from the phone, at most a minute.
+   text selection menu's Share) takes the text, the link, an image or files, up to 50 MB
+   together: on 0.6 the share extension runs no member of its own, so it puts them in a queue
+   in the app group's folder (`ShareQueue`), says that CBB sends them the next time it is
+   opened, and the app sends them to the group when it starts or comes to the front. The app
+   group needs the Apple developer account; a debug build signed ad hoc has none, and its
+   extension says there is no group. Sending straight from the extension comes with 0.7.
 
-   When the group's records show a likely thief, a card above the button says so
-   (`GroupAlerts` in the iPhone kit, from the core's state; the Android app of 0.6 shows none (D-126); docs/protocol.md, section 10,
-   "Stopping the exchange"): what is stopped (all but the records, or the secrets), why (two
-   admins acting against each other, two claims or a disputed one, a key that signed two
-   histories), a claim to take the group over with the time left, and a newer version of
-   the records that this app cannot read. On the group's root the card offers the decision
-   under Face ID or the fingerprint: remove the device of a claim or one of the two admins,
-   or void both histories; on any other device it says that the root decides.
+   What stops the group (two admins acting against each other, a key that signed two
+   histories, records this app cannot read) shows in "Why it does not sync", as the core's
+   reasons; a phone of 0.6 shows no alerts card of its own (D-126).
 
    **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
    has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
@@ -1464,52 +1459,26 @@ the app on real devices.
 - `apps/ios/` — the app (SwiftUI): `project.yml` describes the Xcode project for XcodeGen
   (`cd apps/ios && xcodegen generate`; the generated project is not committed), built and
   tested on an iPhone simulator in CI without signing; and
-  `apps/ios/CBBKit`, the Swift package with the protocol core (CPace, the pairing
-  frames, the join QR code, the member protocol and the phone's sync engine). It has no UI
-  and runs on Linux too; its tests check it against the vectors that the Go tests write to
-  `testdata/interop/` (`go test ./internal/group ./internal/phone -update` regenerates
-  Go's; the member protocol's and pairing's are fixed), and CI runs it against the Rust `cbb`:
-  pairing and a member connection over real TLS on macOS (`internal/service`, `TestSwift`).
+  `apps/ios/CBBKit`, the Swift package around the Rust core (`CoreMember`, `CorePairing`,
+  Bonjour, the share's media, the recovery card's bytes). It has no UI and runs on Linux
+  too; its tests drive the core's member and pairing (`CoreMemberTests`, `CorePairingTests`,
+  `WindowTests`).
 - The app finds the members by browsing `_cbb._tcp` (CBBKit's
   `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
   (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member
   of its group. iOS asks once for local network access: the Info.plist lists
   `_cbb._tcp` under `NSBonjourServices` and explains the use in
   `NSLocalNetworkUsageDescription`.
-- A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
-  another phone"):
-  it listens on a port the system picks, the core running the TLS, and shows the join QR
-  code with its home network addresses (`LocalAddresses`) and its six digits. While it
-  waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
-  Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
-  of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
-  in "Add a device". The Start screen has one button for it on every phone, "Join a group",
-  answered by any admin of the group, which admits the phone as a member; the root makes it
-  an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
-  `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*` and
-  `cbb_invite_*`). An
-  admin phone that removes the root
-  phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
-  Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the
-  Secure Enclave behind Face ID, the member makes its root CA (`CoreMember.rootCA`) and
-  signs a claim with the phone's admin key (`CoreMember.claim`, after the kit's
-  `PhoneGroup.checkTakeOver`). The claim waits as long as the root decided (72 hours by
-  default, `setTakeoverDelay`), and the root's phone may cancel it (`resolve`). Once the wait
-  is over the app finishes the takeover by itself (`CoreMember.finishTakeover`, which signs
-  nothing while the claim waits, then `PhoneGroup.becameRoot`): as the new root the member
-  signs the phone's certificate from it, its own record, keeps the other admins and removes
-  the lost phone. The kit keeps the records file and asks the Rust core
-  what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
-  same, with its root key in the Keystore behind BiometricPrompt.
-- A phone joins a computer's group as it joins a phone's: "Join a group" shows its QR code
-  and six digits, and the root or an admin computer types the digits after "+" (`cbb pair
-  -qr`, with `-admin` on the root to make the phone an admin).
-- When the root hands the group to this phone (`cbb handover` on the root computer, a
-  `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
-  Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
-  or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
-  (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
-  root; the computer is not removed.
+- A phone joins a group from its Start screen with "Join a group": it scans the QR code an
+  admin of the group shows in "Add a device" (a phone's "+", a computer's "Add a device"), or
+  types the six digits under it, which it finds on the home network by Bonjour (NsdManager
+  on Android, mDNS through the core on Aurora). The window admits the phone as a member; the
+  root makes it an admin later ("Make it an admin" on its device page) when the phone offered
+  an admin key while it joined. The phones make the group, admit and join through the Rust
+  core (each kit's `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*`
+  and `cbb_invite_*`), and every record a phone signs is written by the core after Face ID or
+  the system's biometrics (`CoreMember.act`, docs/core-api.md, `cbb_member_manage`). On 0.6
+  nothing takes the group over or hands it on: only the recovery key changes the root.
 - On a group of 0.6 a phone still in the group changes the root to itself with the
   recovery key ("Move the group to this phone" in its settings; the member's `change_preview`
   and `change_root`, docs/core-api.md, docs/protocol.md, section 10, rule 33). The screen

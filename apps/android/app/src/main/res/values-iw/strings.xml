@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">לא ניתן היה לקבל את התמונה מהמחשבים. העתיקו אותה שם שוב ונסו שוב.</string>
     <string name="error_join">לא ניתן היה להצטרף לקבוצה של הטלפון האחר. נסו שוב.</string>
     <string name="error_muted">מנהל השתיק את הטלפון הזה, ולכן ההעתקות שלו נשארות בו.</string>
-    <string name="error_needs_root">המחשב הזה לא פתח את החלון שלו לטלפון. הריצו cbb pair -admin במחשב שיצר את הקבוצה.</string>
     <string name="error_nfc_off">NFC כבוי. הפעילו אותו בהגדרות הטלפון ונסו שוב.</string>
     <string name="error_no_answer">המחשב לא ענה. ייתכן שהוא לא מחובר, או מריץ גרסה ישנה יותר של CBB.</string>
     <string name="error_no_biometric">הוסיפו קודם טביעת אצבע או פנים בטלפון הזה: ב־Android 10 מפתחות הקבוצה צריכים זאת.</string>
     <string name="error_no_network">חברו את הטלפון הזה ל-Wi-Fi של הבית ונסו שוב.</string>
     <string name="error_no_nfc">בטלפון הזה אין NFC וגם לא יציאת USB שמקבלת YubiKey.</string>
     <string name="error_no_screen_lock">הגדירו קודם נעילת מסך בטלפון הזה: המפתחות של הקבוצה צריכים אותה.</string>
-    <string name="error_no_window">אף מחשב לא ממתין לטלפון. הריצו cbb pair -admin במחשב שיצר את הקבוצה ונסו שוב.</string>
+    <string name="error_no_window">אף מכשיר בקבוצה שלכם לא מציג שש ספרות ברשת הזו. בטלפון של הקבוצה הקישו +, או במחשב בחרו „הוספת מכשיר”, ונסו שוב.</string>
     <string name="error_not_admin">רק טלפון מנהל יכול לעשות זאת.</string>
     <string name="error_not_authenticated">טביעת האצבע, הפנים או נעילת המסך לא אושרו, ולכן שום דבר לא השתנה.</string>
     <string name="error_not_confirmed">המחשב הצטרף אבל לא אישר זאת. בדקו את cbb status בו.</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">המחשב הזה מותקן ללא root, ולכן כל אחת מהתוכנות שלו יכולה לקרוא את המפתחות שלו. הוא לעולם לא יכול להיות מנהל.</string>
     <string name="error_timed_out">אף טלפון לא סרק את הקוד בתוך חמש דקות. נסו שוב.</string>
     <string name="error_too_many_codes">יותר מדי קודים שגויים. נסו שוב עם קוד חדש.</string>
-    <string name="error_two_windows">שני מחשבים ממתינים למכשיר בו-זמנית. סגרו את cbb pair באחד מהם ונסו שוב.</string>
+    <string name="error_two_windows">שני מכשירים בקבוצה שלכם מציגים שש ספרות בו־זמנית. סגרו את „הוספת מכשיר” באחד מהם ונסו שוב.</string>
     <string name="error_unreachable">לא ניתן היה להגיע למחשב. האם הוא באותה רשת כמו הטלפון הזה, והאם חומת האש שלו מאפשרת ל-CBB להיכנס?</string>
     <string name="error_wrong_code">הקוד לא תאם. הריצו שוב cbb pair במחשב וסרקו את הקוד החדש.</string>
     <string name="error_yubikey">ה-YubiKey לא ענה כמצופה. החזיקו אותו יציב צמוד לטלפון ונסו שוב.</string>

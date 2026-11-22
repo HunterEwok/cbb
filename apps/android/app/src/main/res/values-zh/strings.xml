@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">无法从电脑获取图片。请在那边重新复制，然后重试。</string>
     <string name="error_join">无法加入另一部手机的群组。请重试。</string>
     <string name="error_muted">管理员已将这部手机静音，所以它的副本留在本机。</string>
-    <string name="error_needs_root">这台电脑没有为手机打开窗口。请在创建群组的电脑上运行 cbb pair -admin。</string>
     <string name="error_nfc_off">NFC 已关闭。请在手机设置中开启，然后重试。</string>
     <string name="error_no_answer">电脑没有响应。它可能已离线，或运行的是旧版 CBB。</string>
     <string name="error_no_biometric">请先在这部手机上添加指纹或面容：在 Android 10 上，群组的密钥需要它。</string>
     <string name="error_no_network">把这部手机连到家里的 Wi-Fi，然后重试。</string>
     <string name="error_no_nfc">这部手机既没有 NFC，也没有可连接 YubiKey 的 USB 接口。</string>
     <string name="error_no_screen_lock">请先为这部手机设置屏幕锁定：群组的密钥需要它。</string>
-    <string name="error_no_window">没有电脑在等待手机。在创建群组的电脑上运行 cbb pair -admin，然后重试。</string>
+    <string name="error_no_window">此网络上没有你的群组设备在显示六位数字。请在群组的手机上点按 +，或在电脑上选择“添加设备”，然后重试。</string>
     <string name="error_not_admin">只有管理员手机可以执行此操作。</string>
     <string name="error_not_authenticated">指纹、面容或屏幕锁定未确认，因此没有任何更改。</string>
     <string name="error_not_confirmed">电脑已加入但未确认。请在它上面查看 cbb status。</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">这台电脑以无 root 方式安装，因此它的任何程序都能读取它的密钥。它永远不能成为管理员。</string>
     <string name="error_timed_out">五分钟内没有手机扫描代码。请重试。</string>
     <string name="error_too_many_codes">错误代码次数过多。请用新代码重试。</string>
-    <string name="error_two_windows">有两台电脑同时在等待设备。请在其中一台上关闭 cbb pair，然后重试。</string>
+    <string name="error_two_windows">你的群组中有两台设备同时在显示六位数字。请在其中一台上关闭“添加设备”，然后重试。</string>
     <string name="error_unreachable">无法连接到电脑。它是否与这部手机在同一网络，防火墙是否允许 CBB？</string>
     <string name="error_wrong_code">代码不匹配。请在电脑上再次运行 cbb pair 并扫描新代码。</string>
     <string name="error_yubikey">YubiKey 的响应不符合预期。请将它稳稳贴住手机，然后重试。</string>

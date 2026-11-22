@@ -135,7 +135,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
 | `CBB_REAL_FORWARDER` | `TestAwayThroughRealForwarder` | A forwarder on the internet, host:port (`cbb.tools:8764` for the project's): a Rust `cbb` hub registers with it and another, for which no UDP passes, reaches the hub over VLESS with XHTTP and syncs both ways, a check from a network that blocks WireGuard; without it the test is skipped. |
 | `CBB_REAL_FORWARDER_PIN` | `TestAwayThroughRealForwarder` | That forwarder's pin, base64, when it is not the project's. |
-| `CBB_INTEROP_OUT` | the Swift kit's tests, Go's interop tests | A directory where the Swift kit writes fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
+| `CBB_INTEROP_OUT` | Go's interop tests | A directory Go reads the Swift kit's vectors of 0.5 from instead of `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
 | `CBB_TEST_AHEAD_FILE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs. A release's build does not read it. Never set by hand. |
@@ -154,9 +154,6 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_REQUIRE_IPV6` | cbb-push's tests | `1` makes the dual-stack payer test fail instead of skip on a machine without IPv6 loopback (`cargo test -p cbb-member pushd`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
-| `CBB_WRITE_INTEROP` | the Swift kit's certificate tests | Writes the certificates that Go's `TestSwiftCertificates` checks. |
-| `CBB_SWIFT_INTEROP` | Go's interop tests | The `cbb-interop` tool, which plays the phone in Go tests over plain TCP. |
-| `CBB_SWIFT_INTEROP_TLS` | Go's interop tests, on macOS | The same tool for the tests over real TLS, with a key in the keychain. |
 | `CBB_TEAM` | `apps/ios/device.sh` | The Apple team that signs the iPhone app for your own phone, its 10-character ID; without it the script takes the Personal Team of the Apple ID signed in to Xcode. |
 | `CBB_DEVICE` | `apps/ios/device.sh` | The iPhone to install on, its identifier, when more than one is connected. |
 | `CBB_BUNDLE_ID` | `apps/ios/device.sh` | The app's bundle identifier for that build, `dev.<team>.cbb` by default, so that it never takes the release one. |

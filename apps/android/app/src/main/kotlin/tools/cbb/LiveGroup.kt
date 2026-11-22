@@ -92,7 +92,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     class Muted : Exception("an admin muted this phone: its copies do not reach the group")
 
     class Failure(val kind: Kind, cause: Throwable? = null) : Exception(kind.name, cause) {
-        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NEEDS_ROOT, NO_GROUP, ROOT_LEAVES, HUB_UNREACHABLE }
+        enum class Kind { UNREACHABLE, NOT_CONFIRMED, NO_NETWORK, TIMED_OUT, TOO_MANY_WRONG_CODES, NOT_ADMIN, NO_COMPUTERS, NO_SCREEN, NO_WINDOW, TWO_WINDOWS, NO_GROUP, ROOT_LEAVES, HUB_UNREACHABLE }
     }
 
     /** A device of the group, as the screens show it: a computer, or this phone. */
@@ -1384,7 +1384,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 rootChanged = RootChange(nameOf(e.from), nameOf(e.to), e.seq)
                 onRecords?.invoke()
             }
-            is CoreMember.Event.NeedKey -> Log.i(TAG, "the node asks for a ${e.kind} key")
             is CoreMember.Event.KeyDone -> Log.i(TAG, "the node no longer needs a key")
         }
     }

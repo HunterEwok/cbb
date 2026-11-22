@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import CBBKit
-import Network
 import os
 import SwiftUI
 import UIKit
@@ -9,11 +8,10 @@ import UniformTypeIdentifiers
 
 private let log = Logger(subsystem: "tools.cbb", category: "share")
 
-/// Share and the text selection menu's Share: sends the text, the link, an
-/// image or files to the group's computers at home, as the app's Home
-/// button sends the clipboard (docs/apps.md, "Share"). It dials the
-/// computers it finds with the phone's own member key and closes once they
-/// have it: for an image or files, once they fetched them from the phone.
+/// Share and the text selection menu's Share: hands the text, the link, an
+/// image or files to the app, which sends them to the group as its Home
+/// button sends the clipboard, the next time it runs (docs/apps.md,
+/// "Share").
 final class ShareViewController: UIViewController {
     private let model = ShareModel()
 
@@ -31,7 +29,8 @@ final class ShareViewController: UIViewController {
         Task { @MainActor in
             await model.send(items)
             if case .sent = model.state {
-                try? await Task.sleep(for: .seconds(1))
+                // Long enough to read that the app sends it.
+                try? await Task.sleep(for: .seconds(3))
                 extensionContext?.completeRequest(returningItems: nil)
             }
         }
@@ -65,9 +64,6 @@ final class ShareModel: ObservableObject {
             let summary: String
             switch error {
             case OneShot.Failure.noGroup: summary = String(localized: "This phone is in no group yet: open CBB to make one or join one.")
-            case OneShot.Failure.noKey: summary = String(localized: "Open CBB once, then share again.")
-            case OneShot.Failure.noComputers: summary = String(localized: "No computer of your group answered. Are they on, and is this phone on the home network?")
-            case OneShot.Failure.notFetched: summary = String(localized: "The computers did not fetch it within a minute. Try again, or send fewer files.")
             default: summary = String(localized: "Sending failed.")
             }
             let detail = String(reflecting: error)
@@ -153,10 +149,9 @@ struct ShareView: View {
             switch model.state {
             case .sending:
                 ProgressView()
-                Text("Sending to your computers…")
             case .sent:
                 Image(systemName: "checkmark.circle").font(.largeTitle)
-                Text("Sent to your computers.")
+                Text("CBB sends it to your devices the next time you open it.").multilineTextAlignment(.center)
             case .failed(let message):
                 Image(systemName: "exclamationmark.triangle").font(.largeTitle)
                 Text(verbatim: message).multilineTextAlignment(.center)
@@ -170,12 +165,14 @@ struct ShareView: View {
     }
 }
 
-/// One send: the phone's member in the core, in a folder of its own,
-/// dials the computers of the group that browsing finds, as the app does,
-/// and hands them the text, or the images or files, once one is connected.
+/// One share, handed to the app: the extension checks there is a group
+/// and keeps what was shared in the app group (ShareQueue); the app's
+/// member sends it the next time the app runs. The extension runs no member
+/// of its own, since two members with one device key would fight over the
+/// group's state.
 @MainActor
 enum OneShot {
-    enum Failure: Error { case noGroup, noKey, noComputers, notFetched }
+    enum Failure: Error { case noGroup }
 
     /// What Share sends: a text, or images or files.
     enum What {
@@ -183,74 +180,13 @@ enum OneShot {
         case media([CoreMember.Part])
     }
 
-    /// Holds the browser for its own callback, which resolves the members
-    /// it finds.
-    private final class BrowserRef: @unchecked Sendable { var browser: BonjourBrowser? }
-
-    static func send(_ what: What, wait: Duration = .seconds(8), fetchWait: Duration = .seconds(60)) async throws {
-        guard let g = try PhoneGroup.load(from: Shared.groupFile) else { throw Failure.noGroup }
-        guard let key = try KeychainIdentity.loadKey(label: Shared.memberLabel) else { throw Failure.noKey }
-        let signer = try SecKeySigner(key)
-        // A folder of its own: the app's member keeps the other, and may run.
-        let dir = Shared.groupFile.deletingLastPathComponent().appendingPathComponent("share-member", isDirectory: true)
-        try? FileManager.default.removeItem(at: dir)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let node = try CoreMember(.init(dir: dir, name: UIDevice.current.name, osVersion: UIDevice.current.systemVersion, device: g.device,
-                                        publicKeyDER: signer.publicKeyDER, seal: try SealKey.secret(), cert: g.memberCert,
-                                        issuer: g.memberIssuer, groupCA: g.groupCA, roots: g.trusted)) { try signer.signature(digest: $0) }
-        defer { node.stop() }
-        try node.addRecords(g.records.records)
-        // The members browsing finds, and those at the addresses they had
-        // when admitted, only the group's devices.
-        // Never this phone itself, which as a hub announces itself.
-        let devices = Set(g.devices.map(\.id)).subtracting([g.device]), known = g.addresses, tag = g.tag
-        let ref = BrowserRef()
-        let browser = BonjourBrowser { found in
-            Task {
-                let members = Discovery.withKnown(found, known: Set(known.keys), group: tag).filter { $0.group == tag && devices.contains($0.device) }
-                for m in members {
-                    let resolved = found.contains { $0.device == m.device } ? await ref.browser?.addresses(of: m.device) ?? [] : []
-                    let addrs = resolved + JoinCode.ordered(known[m.device] ?? []).filter { !resolved.contains($0) && LiveShare.numeric($0) }
-                    if !addrs.isEmpty { try? node.found(m.device, addrs: addrs, device: m.device) }
-                }
-            }
+    static func send(_ what: What) async throws {
+        guard try PhoneGroup.load(from: Shared.groupFile) != nil else { throw Failure.noGroup }
+        switch what {
+        case let .text(text):
+            try ShareQueue.add(text: text)
+        case let .media(parts):
+            try ShareQueue.add(parts: parts.compactMap { p in p.data.map { ($0, p.type, p.path) } })
         }
-        ref.browser = browser
-        browser.start()
-        defer { browser.stop() }
-        for (d, addrs) in known where devices.contains(d) {
-            let a = JoinCode.ordered(addrs).filter(LiveShare.numeric)
-            if !a.isEmpty { try? node.found(d, addrs: a, device: d) }
-        }
-        let online = try await node.wait(timeout: wait)
-        var fetched = true
-        if online {
-            switch what {
-            case let .text(text):
-                try node.copy(text, board: false)
-                // The copy goes out on the connections; give them a moment.
-                try? await Task.sleep(for: .seconds(1))
-            case let .media(parts):
-                let c = try node.copyMedia(parts)
-                // The computers fetch the copy's sealed blob from this phone.
-                let end = ContinuousClock.now + fetchWait
-                func done() -> Bool { (try? node.served(c.id)).map { $0.size == 0 || $0.served >= $0.size } ?? true }
-                while !done(), ContinuousClock.now < end { try? await Task.sleep(for: .milliseconds(200)) }
-                fetched = done()
-                try? await Task.sleep(for: .milliseconds(500))
-            }
-        }
-        if !online { throw Failure.noComputers }
-        if !fetched { throw Failure.notFetched }
-    }
-}
-
-/// What the share's member dials.
-enum LiveShare {
-    /// Whether addr is host:port with an IP address, as the member dials.
-    static func numeric(_ addr: String) -> Bool {
-        guard let (host, _) = JoinCode.split(addr) else { return false }
-        return IPv4Address(host) != nil || IPv6Address(host) != nil
     }
 }

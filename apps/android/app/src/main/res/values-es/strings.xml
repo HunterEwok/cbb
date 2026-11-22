@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">No se pudo obtener la imagen de los ordenadores. Cópiala allí de nuevo y vuelve a intentarlo.</string>
     <string name="error_join">No se pudo unir al grupo del otro teléfono. Vuelve a intentarlo.</string>
     <string name="error_muted">Un administrador silenció este teléfono, así que sus copias se quedan en él.</string>
-    <string name="error_needs_root">Este ordenador no abrió su ventana para un teléfono. Ejecuta cbb pair -admin en el ordenador que creó el grupo.</string>
     <string name="error_nfc_off">El NFC está desactivado. Actívalo en los ajustes del teléfono y vuelve a intentarlo.</string>
     <string name="error_no_answer">El ordenador no respondió. Puede estar desconectado o tener una versión antigua de CBB.</string>
     <string name="error_no_biometric">Primero añade una huella o una cara en este teléfono: en Android 10 las claves del grupo lo necesitan.</string>
     <string name="error_no_network">Conecta este teléfono al Wi-Fi de casa y vuelve a intentarlo.</string>
     <string name="error_no_nfc">Este teléfono no tiene NFC ni un puerto USB que admita una YubiKey.</string>
     <string name="error_no_screen_lock">Primero pon un bloqueo de pantalla en este teléfono: las claves del grupo lo necesitan.</string>
-    <string name="error_no_window">Ningún ordenador espera un teléfono. Ejecuta cbb pair -admin en el ordenador que creó el grupo y vuelve a intentarlo.</string>
+    <string name="error_no_window">Ningún dispositivo de tu grupo muestra seis dígitos en esta red. En un teléfono del grupo, toca +, o en un ordenador elige Añadir un dispositivo, y vuelve a intentarlo.</string>
     <string name="error_not_admin">Solo un teléfono administrador puede hacer esto.</string>
     <string name="error_not_authenticated">No se confirmó la huella, la cara ni el bloqueo de pantalla, así que nada cambió.</string>
     <string name="error_not_confirmed">El ordenador se unió pero no lo confirmó. Revisa cbb status en él.</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">Este ordenador está instalado sin root, así que cualquiera de sus programas puede leer sus claves. Nunca puede ser administrador.</string>
     <string name="error_timed_out">Ningún teléfono escaneó el código en cinco minutos. Vuelve a intentarlo.</string>
     <string name="error_too_many_codes">Demasiados códigos incorrectos. Vuelve a intentarlo con un código nuevo.</string>
-    <string name="error_two_windows">Dos ordenadores esperan un dispositivo a la vez. Cierra cbb pair en uno de ellos y vuelve a intentarlo.</string>
+    <string name="error_two_windows">Dos dispositivos de tu grupo muestran seis dígitos a la vez. Cierra Añadir un dispositivo en uno de ellos y vuelve a intentarlo.</string>
     <string name="error_unreachable">No se pudo llegar al ordenador. ¿Está en la misma red que este teléfono y su cortafuegos deja pasar a CBB?</string>
     <string name="error_wrong_code">El código no coincide. Vuelve a ejecutar cbb pair en el ordenador y escanea el código nuevo.</string>
     <string name="error_yubikey">La YubiKey no respondió como se esperaba. Mantenla quieta contra el teléfono y vuelve a intentarlo.</string>

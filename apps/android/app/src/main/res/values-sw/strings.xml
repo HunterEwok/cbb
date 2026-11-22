@@ -135,14 +135,13 @@
     <string name="error_image_unavailable">Haikuweza kupata picha kutoka kwa kompyuta. Inakili huko tena, kisha ujaribu tena.</string>
     <string name="error_join">Haikuweza kujiunga na kikundi cha simu nyingine. Jaribu tena.</string>
     <string name="error_muted">Msimamizi amenyamazisha simu hii, kwa hiyo nakala zake hubaki ndani yake.</string>
-    <string name="error_needs_root">Kompyuta hii haikufungua dirisha lake kwa simu. Endesha cbb pair -admin kwenye kompyuta iliyounda kikundi.</string>
     <string name="error_nfc_off">NFC imezimwa. Iwashe katika mipangilio ya simu, kisha ujaribu tena.</string>
     <string name="error_no_answer">Kompyuta haikujibu. Huenda iko nje ya mtandao, au inaendesha toleo la zamani la CBB.</string>
     <string name="error_no_biometric">Kwanza ongeza alama ya kidole au uso kwenye simu hii: kwenye Android 10 funguo za kikundi zinahitaji hilo.</string>
     <string name="error_no_network">Unganisha simu hii na Wi-Fi ya nyumbani, kisha ujaribu tena.</string>
     <string name="error_no_nfc">Simu hii haina NFC wala mlango wa USB unaopokea YubiKey.</string>
     <string name="error_no_screen_lock">Weka kufuli ya skrini kwenye simu hii kwanza: funguo za kikundi zinaihitaji.</string>
-    <string name="error_no_window">Hakuna kompyuta inayosubiri simu. Endesha cbb pair -admin kwenye kompyuta iliyounda kikundi, kisha ujaribu tena.</string>
+    <string name="error_no_window">Hakuna kifaa cha kikundi chako kinachoonyesha tarakimu sita kwenye mtandao huu. Kwenye simu ya kikundi, gusa +, au kwenye kompyuta chagua Ongeza kifaa, kisha ujaribu tena.</string>
     <string name="error_not_admin">Simu ya msimamizi pekee inaweza kufanya hivi.</string>
     <string name="error_not_authenticated">Alama ya kidole, uso au kufuli ya skrini haikuthibitishwa, kwa hivyo hakuna kilichobadilika.</string>
     <string name="error_not_confirmed">Kompyuta ilijiunga lakini haikuthibitisha. Kagua cbb status kwenye kompyuta hiyo.</string>
@@ -155,7 +154,7 @@
     <string name="error_rootless">Kompyuta hii imesakinishwa bila root, kwa hivyo programu yake yoyote inaweza kusoma funguo zake. Haiwezi kamwe kuwa msimamizi.</string>
     <string name="error_timed_out">Hakuna simu iliyochanganua msimbo ndani ya dakika tano. Jaribu tena.</string>
     <string name="error_too_many_codes">Misimbo mingi mno isiyo sahihi. Jaribu tena kwa msimbo mpya.</string>
-    <string name="error_two_windows">Kompyuta mbili zinasubiri kifaa kwa wakati mmoja. Funga cbb pair kwenye moja yao, kisha ujaribu tena.</string>
+    <string name="error_two_windows">Vifaa viwili vya kikundi chako vinaonyesha tarakimu sita kwa wakati mmoja. Funga Ongeza kifaa kwenye kimoja wapo, kisha ujaribu tena.</string>
     <string name="error_unreachable">Haikuweza kufikia kompyuta. Je, iko kwenye mtandao mmoja na simu hii, na ngome yake inaruhusu CBB?</string>
     <string name="error_wrong_code">Msimbo haukulingana. Endesha cbb pair kwenye kompyuta tena na uchanganue msimbo mpya.</string>
     <string name="error_yubikey">YubiKey haikujibu kama ilivyotarajiwa. Ishikilie bila kusogea dhidi ya simu na ujaribu tena.</string>

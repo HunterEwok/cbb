@@ -2,11 +2,43 @@
 
 import Foundation
 
-/// This device's addresses on the home network, for the join QR code a
-/// phone shows (docs/protocol.md, section 6, "The joiner listens"): private
-/// IPv4 addresses first, then unique local IPv6 ones, never loopback,
-/// link-local or a cellular carrier's address, at most four.
+/// This device's addresses on the home network, for the pairing window a
+/// phone opens (docs/protocol.md, "Pairing in 0.6"): private IPv4 addresses
+/// first, then unique local IPv6 ones, never loopback, link-local or a
+/// cellular carrier's address, at most four.
 public enum LocalAddresses {
+    /// At most this many addresses are kept.
+    public static let maxAddrs = 4
+
+    /// Whether a host:port, or [IPv6]:port, has a port.
+    static func hasPort(_ a: String) -> Bool {
+        guard let i = a.lastIndex(of: ":"), let port = UInt16(a[a.index(after: i)...]), port > 0 else { return false }
+        let host = a[..<i]
+        if host.hasPrefix("[") { return host.hasSuffix("]") }
+        return !host.isEmpty && !host.contains(":")
+    }
+
+    /// host and port of "host:port" or "[IPv6]:port".
+    public static func split(_ addr: String) -> (String, UInt16)? {
+        guard let i = addr.lastIndex(of: ":"), let port = UInt16(addr[addr.index(after: i)...]) else { return nil }
+        var host = String(addr[..<i])
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        return host.isEmpty ? nil : (host, port)
+    }
+
+    /// The addresses to try, IPv4 first: a home network reaches those most
+    /// surely, and each that fails costs its timeout.
+    public static func ordered(_ addrs: [String]) -> [String] {
+        addrs.filter { !$0.hasPrefix("[") } + addrs.filter { $0.hasPrefix("[") }
+    }
+
+    /// Whether a host:port, or [IPv6]:port, is on a home network: a private
+    /// IPv4 or unique local IPv6 address.
+    public static func isHome(_ a: String) -> Bool {
+        guard hasPort(a), let (host, _) = split(a) else { return false }
+        return a.hasPrefix("[") ? isHome(ipv6: host) : isHome(ipv4: host)
+    }
+
     public static func current() -> [String] {
         #if canImport(Darwin)
         var head: UnsafeMutablePointer<ifaddrs>?
@@ -32,9 +64,9 @@ public enum LocalAddresses {
                 continue
             }
         }
-        return Array((v4 + v6).prefix(JoinCode.maxAddrs))
+        return Array((v4 + v6).prefix(maxAddrs))
         #else
-        return [] // only the phone shows a join QR code
+        return [] // only the phone opens a pairing window
         #endif
     }
 

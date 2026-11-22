@@ -188,9 +188,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
          */
         class RootChanged(val from: String, val to: String, val seq: Long) : Event()
 
-        /** The member needs a key of the phone's, kind spare_admin: the app makes it and answers with [keyMade] and the token. */
-        class NeedKey(val token: Long, val kind: String) : Event()
-
         /** The member no longer needs the key public: the app may delete it. */
         class KeyDone(val public: ByteArray) : Event()
 
@@ -475,16 +472,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         call("dismiss", Wire.obj("id" to Wire.str(id)))
     }
 
-    /** Tells the member the person kept the recovery key, on a sheet or on a YubiKey ("sheet" or "yubikey"). */
-    fun recoverySaved(how: String) {
-        call("recovery_saved", Wire.obj("how" to Wire.str(how)))
-    }
-
-    /** Answers [Event.NeedKey]: the app made the key whose point (or DER public key) is public. */
-    fun keyMade(token: Long, public: ByteArray) {
-        call("key_made", Wire.obj("token" to Wire.num(token), "public" to Wire.bytes(point(public))))
-    }
-
     /**
      * Who stays after a change of root with the recovery key, before anything is signed: the
      * core writes the list; leaveOut are the devices the person unticked. The recovery keys
@@ -702,7 +689,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                 "state" -> o.optObject("state")?.let { Event.State(GroupState.fromJson(it)) }
                 "notice" -> o.optObject("notice")?.let { Event.NoticeAdded(Notice.fromJson(it)) }
                 "root_changed" -> Event.RootChanged(o.optString("from") ?: "", o.optString("to") ?: "", o.optLong("seq") ?: 0)
-                "need_key" -> Event.NeedKey(o.optLong("token") ?: return null, o.optString("kind") ?: return null)
                 "key_done" -> Event.KeyDone(o.optBytes("public") ?: return null)
                 "panic" -> Event.Panic(o.optString("details") ?: "")
                 else -> null

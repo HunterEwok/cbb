@@ -11780,52 +11780,6 @@
         }
       }
     },
-    "No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يوجد حاسوب ينتظر هاتفًا. شغّل cbb pair -admin على الحاسوب الذي أنشأ المجموعة، ثم حاول مرة أخرى."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ningún ordenador espera un teléfono. Ejecuta cbb pair -admin en el ordenador que creó el grupo y vuelve a intentarlo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אף מחשב לא ממתין לטלפון. הריצו cbb pair -admin במחשב שיצר את הקבוצה ונסו שוב."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कोई कंप्यूटर फ़ोन का इंतज़ार नहीं कर रहा। जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ, फिर दोबारा कोशिश करें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ни один компьютер не ждёт телефон. Выполните cbb pair -admin на компьютере, который создал группу, и попробуйте снова."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hakuna kompyuta inayosubiri simu. Endesha cbb pair -admin kwenye kompyuta iliyounda kikundi, kisha ujaribu tena."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有电脑在等待手机。在创建群组的电脑上运行 cbb pair -admin，然后重试。"
-          }
-        }
-      }
-    },
     "No computers connected.": {
       "localizations": {
         "ar": {
@@ -11914,6 +11868,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "此网络中没有群组的设备。"
+          }
+        }
+      }
+    },
+    "No device of your group shows six digits on this network. On a phone of the group, tap +, or on a computer choose Add a device, then try again.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يعرض أي جهاز من مجموعتك ستة أرقام على هذه الشبكة. على هاتف من المجموعة اضغط +، أو على حاسوب اختر «إضافة جهاز»، ثم حاول مرة أخرى."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún dispositivo de tu grupo muestra seis dígitos en esta red. En un teléfono del grupo, toca +, o en un ordenador elige Añadir un dispositivo, y vuelve a intentarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אף מכשיר בקבוצה שלכם לא מציג שש ספרות ברשת הזו. בטלפון של הקבוצה הקישו +, או במחשב בחרו „הוספת מכשיר”, ונסו שוב."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस नेटवर्क पर आपके समूह का कोई डिवाइस छह अंक नहीं दिखा रहा है। समूह के किसी फ़ोन पर + टैप करें, या कंप्यूटर पर डिवाइस जोड़ें चुनें, फिर से कोशिश करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ни одно устройство вашей группы не показывает шесть цифр в этой сети. На телефоне группы нажмите +, а на компьютере выберите «Добавить устройство», затем попробуйте снова."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hakuna kifaa cha kikundi chako kinachoonyesha tarakimu sita kwenye mtandao huu. Kwenye simu ya kikundi, gusa +, au kwenye kompyuta chagua Ongeza kifaa, kisha ujaribu tena."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此网络上没有你的群组设备在显示六位数字。请在群组的手机上点按 +，或在电脑上选择“添加设备”，然后重试。"
           }
         }
       }
@@ -12884,52 +12884,6 @@
         }
       }
     },
-    "On the computer that created the group, run cbb pair -admin, then type the six-digit code it shows. Keep this phone on the same network.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الحاسوب الذي أنشأ المجموعة، شغّل cbb pair -admin، ثم اكتب الرمز المكوّن من ستة أرقام الذي يعرضه. أبقِ هذا الهاتف على الشبكة نفسها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En el ordenador que creó el grupo, ejecuta cbb pair -admin y escribe el código de seis dígitos que muestra. Mantén este teléfono en la misma red."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "במחשב שיצר את הקבוצה, הריצו cbb pair -admin, ואז הקלידו את הקוד בן שש הספרות שהוא מציג. השאירו את הטלפון הזה באותה רשת."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ, फिर वह जो छह अंकों का कोड दिखाए उसे लिखें। इस फ़ोन को उसी नेटवर्क पर रखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На компьютере, который создал группу, выполните cbb pair -admin и введите шестизначный код, который он покажет. Телефон должен быть в той же сети."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye kompyuta iliyounda kikundi, endesha cbb pair -admin, kisha uandike msimbo wa tarakimu sita inaoonyesha. Weka simu hii kwenye mtandao huo huo."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在创建群组的电脑上运行 cbb pair -admin，然后输入它显示的六位数代码。让这部手机保持在同一网络中。"
-          }
-        }
-      }
-    },
     "On the group's hub, run cbb invite and send the file it makes through a channel you trust. On the new device, run cbb pair -invite with that file.": {
       "localizations": {
         "ar": {
@@ -13294,6 +13248,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "只有管理员手机可以执行此操作。"
+          }
+        }
+      }
+    },
+    "Only the group's main device sets the group's relay.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجهاز الرئيسي للمجموعة وحده يضبط مُرحِّل المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo el dispositivo principal del grupo configura el relé del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "רק המכשיר הראשי של הקבוצה קובע את הממסר של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का रिले केवल समूह का मुख्य डिवाइस सेट करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретранслятор группы задаёт только главное устройство группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kikuu cha kikundi pekee ndicho huweka relei ya kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有群组的主设备可以设置群组的中继。"
           }
         }
       }
@@ -20612,52 +20612,6 @@
         }
       }
     },
-    "The computer's group could not be joined. Run cbb pair -admin on it again.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تعذّر الانضمام إلى مجموعة الحاسوب. شغّل cbb pair -admin عليه مرة أخرى."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo unir al grupo del ordenador. Vuelve a ejecutar cbb pair -admin en él."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לא ניתן היה להצטרף לקבוצה של המחשב. הריצו שוב cbb pair -admin בו."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "कंप्यूटर के समूह से नहीं जुड़ा जा सका। उस पर cbb pair -admin फिर से चलाएँ।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось войти в группу компьютера. Выполните на нём cbb pair -admin ещё раз."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Haikuweza kujiunga na kikundi cha kompyuta. Endesha cbb pair -admin kwenye kompyuta hiyo tena."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法加入电脑的群组。请在它上面再次运行 cbb pair -admin。"
-          }
-        }
-      }
-    },
     "The connection server does not take this base.": {
       "localizations": {
         "ar": {
@@ -23832,52 +23786,6 @@
         }
       }
     },
-    "This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يفتح هذا الحاسوب نافذته لهاتف. شغّل cbb pair -admin على الحاسوب الذي أنشأ المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este ordenador no abrió su ventana para un teléfono. Ejecuta cbb pair -admin en el ordenador que creó el grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "המחשב הזה לא פתח את החלון שלו לטלפון. הריצו cbb pair -admin במחשב שיצר את הקבוצה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इस कंप्यूटर ने फ़ोन के लिए अपनी विंडो नहीं खोली। जिस कंप्यूटर ने समूह बनाया उस पर cbb pair -admin चलाएँ।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Этот компьютер не открыл окно для телефона. Выполните cbb pair -admin на компьютере, который создал группу."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kompyuta hii haikufungua dirisha lake kwa simu. Endesha cbb pair -admin kwenye kompyuta iliyounda kikundi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这台电脑没有为手机打开窗口。请在创建群组的电脑上运行 cbb pair -admin。"
-          }
-        }
-      }
-    },
     "This computer has not met its group on this network.": {
       "localizations": {
         "ar": {
@@ -26684,48 +26592,48 @@
         }
       }
     },
-    "Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.": {
+    "Two devices of your group show six digits at once. Close Add a device on one of them, then try again.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حاسوبان ينتظران جهازًا في الوقت نفسه. أغلق cbb pair على أحدهما، ثم حاول مرة أخرى."
+            "value": "يعرض جهازان من مجموعتك ستة أرقام في الوقت نفسه. أغلق «إضافة جهاز» على أحدهما، ثم حاول مرة أخرى."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dos ordenadores esperan un dispositivo a la vez. Cierra cbb pair en uno de ellos y vuelve a intentarlo."
+            "value": "Dos dispositivos de tu grupo muestran seis dígitos a la vez. Cierra Añadir un dispositivo en uno de ellos y vuelve a intentarlo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שני מחשבים ממתינים למכשיר בו-זמנית. סגרו את cbb pair באחד מהם ונסו שוב."
+            "value": "שני מכשירים בקבוצה שלכם מציגים שש ספרות בו־זמנית. סגרו את „הוספת מכשיר” באחד מהם ונסו שוב."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "दो कंप्यूटर एक साथ किसी डिवाइस का इंतज़ार कर रहे हैं। उनमें से एक पर cbb pair बंद करें, फिर दोबारा कोशिश करें।"
+            "value": "आपके समूह के दो डिवाइस एक साथ छह अंक दिखा रहे हैं। उनमें से एक पर डिवाइस जोड़ें बंद करें, फिर से कोशिश करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сразу два компьютера ждут устройство. Закройте cbb pair на одном из них и попробуйте снова."
+            "value": "Два устройства вашей группы одновременно показывают шесть цифр. Закройте «Добавить устройство» на одном из них и попробуйте снова."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kompyuta mbili zinasubiri kifaa kwa wakati mmoja. Funga cbb pair kwenye moja yao, kisha ujaribu tena."
+            "value": "Vifaa viwili vya kikundi chako vinaonyesha tarakimu sita kwa wakati mmoja. Funga Ongeza kifaa kwenye kimoja wapo, kisha ujaribu tena."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有两台电脑同时在等待设备。请在其中一台上关闭 cbb pair，然后重试。"
+            "value": "你的群组中有两台设备同时在显示六位数字。请在其中一台上关闭“添加设备”，然后重试。"
           }
         }
       }

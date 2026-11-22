@@ -33,7 +33,6 @@
     "state": {"type": "state", "state": {"group": "q83vEjRWeJCrze8SNFZ4kA==", "stop": "full", "halted": true, "devices": []}},
     "notice": {"type": "notice", "notice": {"id": "n4", "kind": "recovery_not_saved", "args": {}, "dismissable": false}},
     "root_changed": {"type": "root_changed", "from": "01010101010101010101010101010101", "to": "02020202020202020202020202020202", "seq": 2, "record": "AAEC"},
-    "need_key": {"type": "need_key", "kind": "spare_admin", "token": 7},
     "key_done": {"type": "key_done", "public": "BAAB"}
   }
 }

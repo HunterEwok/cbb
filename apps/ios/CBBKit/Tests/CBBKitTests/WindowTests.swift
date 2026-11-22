@@ -32,16 +32,17 @@ final class WindowTests: XCTestCase {
     func testAPhoneThatMadeItsGroupLetsANewPhoneJoinByItsWindow() throws {
         let root = SoftwareSigner(), key = SoftwareSigner()
         let dir = temporary("root")
-        let made = try CorePairing.newGroup06(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
-                                              publicKey: key.publicKeyDER) { try root.signature(digest: $0) }
+        let made = try CorePairing.newGroup(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
+                                            publicKey: key.publicKeyDER) { try root.signature(digest: $0) }
         XCTAssertEqual(made.recovery.text.count, 4)
         XCTAssertFalse(made.recovery.qr.isEmpty)
         // Once only.
-        XCTAssertThrowsError(try CorePairing.newGroup06(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
-                                                        publicKey: key.publicKeyDER) { try root.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.newGroup(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
+                                                      publicKey: key.publicKeyDER) { try root.signature(digest: $0) })
 
-        let m = try CoreMember(.init(dir: dir, name: "Root phone", device: made.device, publicKeyDER: key.publicKeyDER, seal: CoreGroup.seal,
-                                     cert: Data(), issuer: nil, groupCA: Data(), roots: [])) { try key.signature(digest: $0) }
+        let m = try CoreMember(.init(dir: dir, name: "Root phone", device: made.device, publicKeyDER: key.publicKeyDER)) {
+            try key.signature(digest: $0)
+        }
         addTeardownBlock { m.stop() }
         _ = try m.listen(.home)
         let w = try CorePairing.Window(member: m, publicKey: root.publicKeyDER, addrs: ["127.0.0.1"]) { try root.signature(digest: $0) }
@@ -73,10 +74,11 @@ final class WindowTests: XCTestCase {
     private func root() throws -> (made: CorePairing.Made, member: CoreMember, root: SoftwareSigner) {
         let root = SoftwareSigner(), key = SoftwareSigner()
         let dir = temporary("root")
-        let made = try CorePairing.newGroup06(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
-                                              publicKey: key.publicKeyDER) { try root.signature(digest: $0) }
-        let m = try CoreMember(.init(dir: dir, name: "Root phone", device: made.device, publicKeyDER: key.publicKeyDER, seal: CoreGroup.seal,
-                                     cert: Data(), issuer: nil, groupCA: Data(), roots: [])) { try key.signature(digest: $0) }
+        let made = try CorePairing.newGroup(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: root.publicKeyDER,
+                                            publicKey: key.publicKeyDER) { try root.signature(digest: $0) }
+        let m = try CoreMember(.init(dir: dir, name: "Root phone", device: made.device, publicKeyDER: key.publicKeyDER)) {
+            try key.signature(digest: $0)
+        }
         addTeardownBlock { m.stop() }
         return (made, m, root)
     }

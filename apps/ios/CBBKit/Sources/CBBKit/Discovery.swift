@@ -30,7 +30,7 @@ public enum Discovery {
     /// strings are "key=value", keys matched without regard to case, the
     /// value what follows the first "=". Unknown keys are ignored.
     public static func member(instance: String, txt: [String]) -> FoundMember? {
-        guard GroupCertificates.isDeviceID(instance) else { return nil }
+        guard Records.isDeviceID(instance) else { return nil }
         var fields: [String: String] = [:]
         for s in txt {
             let (k, v) = s.firstIndex(of: "=").map { (String(s[..<$0]), String(s[s.index(after: $0)...])) } ?? (s, "")

@@ -44,3 +44,55 @@ enum Shared {
         #endif
     }
 }
+
+/// What Share hands the app (docs/apps.md, "Share"): a text, or images or
+/// files, kept in the app group until the app's member sends it, the next
+/// time the app runs. The extension runs no member of its own: two members
+/// with one device key would fight over the group's state.
+enum ShareQueue {
+    /// One shared item: a text, or parts, each a file of the item's folder
+    /// with its type (one image) or its path (files).
+    struct Item: Codable, Equatable {
+        struct Part: Codable, Equatable {
+            var file: String
+            var type: String?
+            var path: String?
+        }
+        var text: String?
+        var parts: [Part] = []
+    }
+
+    static var dir: URL { Shared.groupFile.deletingLastPathComponent().appendingPathComponent("share-queue", isDirectory: true) }
+
+    /// Keeps a text, or parts as (bytes, type, path), for the app to send.
+    static func add(text: String? = nil, parts: [(Data, String?, String?)] = [], in dir: URL = dir) throws {
+        // Named by time, so the app sends them in order.
+        let name = String(format: "%013.0f-", Date().timeIntervalSince1970 * 1000) + UUID().uuidString
+        let tmp = dir.appendingPathComponent("." + name, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        var item = Item(text: text)
+        for (i, (data, type, path)) in parts.enumerated() {
+            try data.write(to: tmp.appendingPathComponent("\(i)"), options: .completeFileProtectionUntilFirstUserAuthentication)
+            item.parts.append(.init(file: "\(i)", type: type, path: path))
+        }
+        try JSONEncoder().encode(item).write(to: tmp.appendingPathComponent("item.json"))
+        // Whole or not at all: the app reads only folders without the dot.
+        try FileManager.default.moveItem(at: tmp, to: dir.appendingPathComponent(name, isDirectory: true))
+    }
+
+    /// The items waiting, oldest first, each with its folder.
+    static func items(in dir: URL = dir) -> [(folder: URL, item: Item)] {
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).filter { !$0.hasPrefix(".") }.sorted()
+        return names.compactMap { name in
+            let folder = dir.appendingPathComponent(name, isDirectory: true)
+            guard let data = try? Data(contentsOf: folder.appendingPathComponent("item.json")),
+                  let item = try? JSONDecoder().decode(Item.self, from: data) else {
+                try? FileManager.default.removeItem(at: folder)
+                return nil
+            }
+            return (folder, item)
+        }
+    }
+
+    static func remove(_ folder: URL) { try? FileManager.default.removeItem(at: folder) }
+}

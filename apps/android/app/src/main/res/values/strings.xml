@@ -137,14 +137,13 @@
     <string name="error_image_unavailable">Could not get the image from the computers. Copy it there again, then try again.</string>
     <string name="error_join">The other phone\'s group could not be joined. Try again.</string>
     <string name="error_muted">An admin muted this phone, so its copies stay on it.</string>
-    <string name="error_needs_root">This computer did not open its window for a phone. Run cbb pair -admin on the computer that created the group.</string>
     <string name="error_nfc_off">NFC is off. Turn it on in the phone\'s settings, then try again.</string>
     <string name="error_no_answer">The computer did not answer. It may be offline, or run an older version of CBB.</string>
     <string name="error_no_biometric">Add a fingerprint or face on this phone first: on Android 10 the group\'s keys need one.</string>
     <string name="error_no_network">Connect this phone to your home Wi-Fi, then try again.</string>
     <string name="error_no_nfc">This phone has neither NFC nor a USB port that takes a YubiKey.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
-    <string name="error_no_window">No computer is waiting for a phone. Run cbb pair -admin on the computer that created the group, then try again.</string>
+    <string name="error_no_window">No device of your group shows six digits on this network. On a phone of the group, tap +, or on a computer choose Add a device, then try again.</string>
     <string name="error_not_admin">Only an admin phone can do this.</string>
     <string name="error_not_authenticated">The fingerprint, face or screen lock was not confirmed, so nothing changed.</string>
     <string name="error_not_confirmed">The computer joined but did not confirm it. Check cbb status on it.</string>
@@ -157,7 +156,7 @@
     <string name="error_rootless">This computer is installed without root, so any of its programs can read its keys. It can never be an admin.</string>
     <string name="error_timed_out">No phone scanned the code in five minutes. Try again.</string>
     <string name="error_too_many_codes">Too many wrong codes. Try again with a new code.</string>
-    <string name="error_two_windows">Two computers are waiting for a device at once. Close cbb pair on one of them, then try again.</string>
+    <string name="error_two_windows">Two devices of your group show six digits at once. Close Add a device on one of them, then try again.</string>
     <string name="error_unreachable">Could not reach the computer. Is it on the same network as this phone, and does its firewall let CBB in?</string>
     <string name="error_wrong_code">The code did not match. Run cbb pair on the computer again and scan the new code.</string>
     <string name="error_yubikey">The YubiKey did not answer as expected. Hold it still against the phone and try again.</string>
