@@ -385,11 +385,6 @@
    {
     "lang": "rust",
     "file": "core/src/vectors.rs",
-    "name": "go_authority"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
     "name": "hlc_ahead"
    }
   ]
@@ -411,11 +406,6 @@
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -445,11 +435,6 @@
    {
     "lang": "rust",
     "file": "core/src/vectors.rs",
-    "name": "go_authority"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
     "name": "hlc_ahead"
    }
   ]
@@ -475,11 +460,6 @@
    {
     "lang": "rust",
     "file": "core/src/vectors.rs",
-    "name": "go_authority"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
     "name": "hlc_ahead"
    }
   ]
@@ -501,11 +481,6 @@
     "lang": "rust",
     "file": "member/src/nettest/relay.rs",
     "name": "notes_of_the_watch"
-   },
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_authority"
    },
    {
     "lang": "rust",
@@ -1918,11 +1893,6 @@
   "id": "cbb-audit-66",
   "tests": [
    {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -1933,11 +1903,6 @@
   "id": "cbb-audit-67",
   "tests": [
    {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -1947,11 +1912,6 @@
  {
   "id": "cbb-audit-68",
   "tests": [
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_envelopes"
-   },
    {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
@@ -2438,11 +2398,6 @@
   "id": "cbb-audit-81",
   "tests": [
    {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admin"
-   },
-   {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
     "name": "testTheRootSignsItsOwnRecordsInTheCore"
@@ -2452,11 +2407,6 @@
  {
   "id": "cbb-audit-85",
   "tests": [
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admins"
-   },
    {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
@@ -2482,11 +2432,6 @@
  {
   "id": "cbb-audit-90",
   "tests": [
-   {
-    "lang": "rust",
-    "file": "core/src/vectors.rs",
-    "name": "go_removed_admins"
-   },
    {
     "lang": "swift",
     "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
