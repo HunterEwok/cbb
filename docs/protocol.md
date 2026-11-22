@@ -28,7 +28,7 @@ marks a known difference.
 ### Contents
 
 - [1. Identifiers, names and ports](#1-identifiers-names-and-ports)
-- [2. Certificates](#2-certificates)
+- [2. Keys](#2-keys)
 - [3. Discovery (mDNS)](#3-discovery-mdns)
 - [4. Member protocol](#4-member-protocol)
 - [5. Sync semantics](#5-sync-semantics)
@@ -59,12 +59,12 @@ keep the group safe. Sentences in the plain present tense describe what the code
 repository does; another implementation may do it differently where nothing marked with
 these words depends on it.
 
-- **Peer, member.** A member is a device of the group: in 0.6 a device whose key the records
-  name (section 10), in 0.5 one with a member certificate. That is a member with the role
+- **Peer, member.** A member is a device of the group: a device whose key the records name
+  (section 10). That is a member with the role
   `member` (a computer, board or router with the service or the firmware, section 4,
   "Capabilities"), or a phone with the app. A peer is the other end of a connection.
-- **CBOR (0.6).** Every message, record, statement, command, grant, credential and copy header
-  of 0.6 is one CBOR data item ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) in one
+- **CBOR.** Every message, record, statement, command, grant, credential and copy header
+  is one CBOR data item ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) in one
   profile, which one reader in the core implements for every platform (`format::cbor`;
   `cbb inspect` prints any item with its field names). Each rule has a name, which the vectors
   cite:
@@ -93,7 +93,7 @@ these words depends on it.
   With these rules every value has exactly one encoding, so a reader that checks them knows
   that encoding what it read gives the bytes it got, without encoding again to compare. Writers
   sort map keys by number.
-- **Fields (0.6).** Every object is a map whose keys are field numbers. Each row of a kind's
+- **Fields.** Every object is a map whose keys are field numbers. Each row of a kind's
   table gives a field's number, its CBOR type, whether it is needed, its values and its default.
   Two rules hold for every object:
   - `form/default`: a field whose value is its row's default is left out, and an object with it
@@ -105,7 +105,7 @@ these words depends on it.
 
   An array that a row calls *sorted* is sorted bytewise by each element's encoding (bytes of one
   length by their bytewise order, an array element by its first element), each value once.
-- **Common values (0.6).**
+- **Common values.**
   - A **Key** is the array `[alg, pub]`: `alg` 1 ES256 (an uncompressed P-256 point of 65
     bytes, signatures of 64 bytes `r ‖ s` with a low `s`), 2 X-Wing (1216
     bytes, [format](format.md), section 10.2), 3 X25519 (32 bytes, WireGuard), 4 SLH-DSA-SHA2-128s
@@ -114,14 +114,15 @@ these words depends on it.
     `keys/slh-dsa`; one that is not `[alg, pub]` is `keys/shape`.
   - A **key hash** is the SHA-256 of a Key's encoding, 32 bytes. A **device ID** is the first 16
     bytes of the key hash of the device's member key, so nobody can take another device's ID
-    without its key. A **group ID** is the first 16 bytes of the key hash of the group's first
-    root key.
+    without its key. A **group ID** is the first 16 bytes of SHA-256(`cbb group v3` ‖ 0x00 ‖ the
+    encodings of the group's first root key and of the recovery key's two halves)
+    ([format](format.md), section 2).
   - A **record ID** (and a statement's or credential's ID) is the SHA-256 of the body's bytes;
     the signatures are not in it. A copy's, command's or invitation's ID is 16 random bytes.
   - A **time** is Unix milliseconds, for display and for devices with clocks only: no rule of the
     records reads it. A **duration** is milliseconds. A **hybrid time** is `[wall_ms, logical]`,
     `logical` at most 2^32 − 1, and `[0, 0]` is refused.
-- **Signed objects (0.6).** A signed object travels as an envelope `[body, sig]`, or
+- **Signed objects.** A signed object travels as an envelope `[body, sig]`, or
   `[body, sig, sig2]` exactly when the body names a second signer `signer2` (field 8)
   (`format::envelope`). The body is the encoding of the object's map, as bytes, so that it is
   signed and passed on unchanged; it is an item of the profile itself. `sig` is the ES256
@@ -152,9 +153,11 @@ these words depends on it.
   key it does not know there, whatever its value, and the signature covers it. The records that
   remove, freeze, claim, resolve or hand over are written with the fields of 0.6 alone, so that
   every version from 0.6 on applies them.
-- **Frames (0.6).** Every channel of 0.6 carries the frames of section 4, "The member protocol
-  in 0.6": a 4-byte length on a grid, one CBOR map with its type in field 0 and its padding in
-  field 1, each channel with its own limit.
+- **Frames.** Every channel between devices, and between a device and a server, carries the
+  frames of section 4, "Frames" ([format](format.md), section 9.1): a 4-byte length on a grid,
+  one CBOR map with its type in field 0 and its padding in field 1, each channel with its own
+  limit. Only the local control socket (section 8), which never leaves the machine, has framing
+  of its own.
 - **Time.** Times on the wire are Unix milliseconds (`_ms`), and durations integer
   milliseconds, unless a field says otherwise. Local durations (ages, windows, timeouts) are
   measured on a clock that counts the time the machine sleeps and does not jump when the
@@ -163,10 +166,11 @@ these words depends on it.
 - **Source.** Each section names the code that implements it, so that a reader can check a
   detail there.
 
-#### Until the switch to the core (wave 5)
+#### JSON and text
 
-The service in `member/`, `cbb-helper` and the apps still speak 0.5's JSON, which these
-conventions describe; wave 5 moves them to the CBOR above.
+The signed release files and entry points (section 16), the local control socket (section 8)
+and the manifest of images or files a watcher hands the service are JSON, read by these rules;
+so are the texts a person or a server reads (a link, a pin).
 
 - **JSON.** [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259) objects. A receiver MUST
   ignore fields it does not know, unless a section says otherwise.
@@ -175,20 +179,19 @@ conventions describe; wave 5 moves them to the CBOR above.
   ([RFC 4648](https://www.rfc-editor.org/rfc/rfc4648), section 4; Go's encoding of
   `[]byte`): no line breaks, no base64url, the padding there, zero bits after the last
   byte. In a URL's query each `+`, `/` and `=` is percent-encoded, and a reader decodes only
-  percent escapes, never a `+` as a space. Three kinds of value stay in lowercase hex: the
-  identifiers (device IDs, event and command IDs, group and period tags), which compare as
+  percent escapes, never a `+` as a space. Two kinds of value are in lowercase hex: the
+  identifiers in text (device IDs, copy and command IDs, group tags), which compare as
   strings; and the SHA-256 of a file (release files, Docker digests), which `sha256sum`
   prints.
-- **Fingerprints.** A key has one fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER),
-  in standard base64, 44 characters, the same as a record's key hash (section 10). The
-  join QR code, the confirmation of a joining device, a forwarder's or a relay's pin and a
-  device's pseudonym at a relay all use it.
-- **Signed bodies.** The body of a record (section 10), of a command (section 15), of a
-  release file (section 16) and of a server credential (section 18) is signed as bytes and
-  passed on unchanged, so every member MUST read it alike; a copy's manifest ([format](format.md),
-  section 10.3) is read by the same rules, in their canonical form, although nobody signs it. A receiver
-  MUST refuse a body that breaks any of these rules, before it reads a field, and so MUST
-  a signer's own code before it signs. Each rule has a name, which the vectors cite:
+- **Fingerprints.** A TLS key outside the records (a forwarder's or a relay's, whose
+  fingerprint is its pin, or the key of the ESP32 firmware's certificate, section 7) has one
+  fingerprint: SHA-256 over its SubjectPublicKeyInfo (DER), in standard base64. A device's key
+  in the records is named by its key hash (above).
+- **Signed bodies.** The body of a release file (section 16) is signed as bytes and passed on
+  unchanged, so every member MUST read it alike; a manifest in JSON is read by the same rules,
+  although nobody signs it. A receiver MUST refuse a body that breaks any of these rules,
+  before it reads a field, and so MUST a signer's own code before it signs. Each rule has a
+  name, which the vectors cite:
   - `form/object`: the body is one JSON object in UTF-8, with nothing but whitespace (space,
     tab, CR, LF; not a form feed) around it; no byte order mark, no comma after the last
     member, nothing after the object.
@@ -208,69 +211,19 @@ conventions describe; wave 5 moves them to the CBOR above.
     a field's own row may refuse them.
   - `form/depth`: arrays and objects nest at most 16 deep below the body's object.
   - `form/unknown`: a member the body's kind does not know is ignored, whatever its value, but
-    it still follows every rule above. A record refuses it instead (below).
-  - The fields every body of its kind has are there: `v`, `alg`, `type`, `group`, `signer`,
-    `seq` and `time_ms` in a record; `v`, `type`, `group`, `by`, `to`, `id`, `time_ms` and `expires_ms` in a command;
-    `v`, `type`, `group`, `version` and `expires_ms` in a server credential; `v`, `type` and
-    every field its table does not call optional in a release file.
+    it still follows every rule above.
+  - The fields every release file has are there: `v`, `type` and every field its table does not
+    call optional.
   - Bytes are standard base64 with padding in its one form: decoding and encoding again
     gives the same string (no line breaks, no missing padding, no base64url, zero bits
     after the last byte).
 
-  A record (section 10) is read more strictly still, in one canonical form, so that encoding
-  what a receiver read gives the bytes it received:
-  - `form/unknown`: a member the record's type does not name refuses the body. A new field
-    needs a new `v`.
-  - `form/empty`: an optional field whose value is empty (`""`, `[]`, `{}` or `false`) MUST be
-    left out, and a body with such a field is refused. An integer is never empty: where its
-    row allows 0, 0 is written.
-  - `form/canonical`: the body is exactly the bytes a receiver gets when it encodes what it
-    read again: no whitespace anywhere, outside strings; the members of every object sorted
-    by name, bytewise; integers as `0` or `-?[1-9][0-9]*`; in a string, `"` and `\` escaped
-    as `\"` and `\\`, each character below U+0020 as `\u00` and two lower-case hex digits,
-    and nothing else escaped (no `\/`, `\n` or `\t`, no `\u` for any other character),
-    every other character as its UTF-8; arrays in the order the field's row gives (a row
-    that says "sorted" means sorted bytewise by each value's string, for a key hash or record
-    ID its base64, or by the string field the row names, each value once); bytes as above.
-
-  A receiver checks a body in this order: its size (`size/records`, 8 KiB and 64 KiB for a
-  checkpoint, section 10; `size/commands`, section 15; `size/releases`, 256 KiB, section 16;
-  `size/credentials`, 16 KiB, section 18) before anything else; then these rules, and for a
-  record its canonical form (it encodes the value it parsed and compares bytes); then each
-  field against its row in the tables of its kind ("Field rows" in section 10 and "The command"
-  in section 15); then the group, the signature and the rules of evaluation. A body that
-  fails a step is refused there, so a member never verifies a signature over a body it
-  cannot read alike, and never evaluates a record whose fields another member reads
-  otherwise. `cbb`'s `strict` and `Strict` in the Kotlin kit implement these rules. Every one of them gives the same verdict on the vectors in
-  `testdata/interop/strict.json`, written by hand, and in
-  `testdata/interop/strict-generated-*.json`, written from these rules and the tables, and in
-  `testdata/interop/strict-files.json`, written the same way for server credentials and
-  release files: a
-  valid body of every kind and, for every field, the body
-  without it, with a value of each other JSON type, `null`, written twice, its name in upper
-  case or escaped, its numbers or strings in each form these rules refuse (for the fields every
-  kind of a section has, on one kind only), and the values at the ends of its row's range. Each vector names its rule (`form/...`, `size/...`, or
-  `records/<type>/<field>`, `commands/<type>/<field>`, `manifests/<field>`,
-  `credentials/<type>/<field>` and `releases/<type>/<field>` for a row of a table) and whether
-  a member takes the body, and in strict-files.json its `kind`; a vector with `pad` has `pad` bytes `a`
-  inserted at the offset `pad_at` of its body. The tests fail when the file is not what the
-  tables give, and when any implementation reads a vector otherwise. Record bodies are read
-  by `cbb_core::authority` alone (the phones through the core), and
-  only in their canonical form with no member their type does not know, so a record vector
-  that another kind takes with whitespace or an unknown member is refused; strict-generated-*.json
-  also holds the canonical form's own cases (`form/canonical`) and the sizes of a record and a
-  checkpoint. The records of `strict.json` and of `strict-mutants-*.json` are of version 1,
-  which every member refuses whatever the vector says.
-- **Frames.** Every channel of this document between devices, and between a device and a
-  server, carries the same frames: a 4-byte big-endian length, then that many bytes of one
-  JSON object in UTF-8, with no newline after it. A length of 0, or over the channel's limit,
-  closes the connection, and so does a frame that is not a JSON object. The member protocol
-  (section 4) adds binary chunk frames, marked by the length's top bit; pairing (section 6),
-  the forwarder (section 13) and the relay (section 14) use the frames as they are, each with
-  its own limit. A receiver reads exactly one frame and nothing after it, so another protocol
-  may follow on the connection (the member protocol after the relay's `ok`). Go's
-  `internal/frame` implements them. Only the local control socket (section 8), which never
-  leaves the machine, has framing of its own.
+  A receiver checks a body's size first (`size/releases`, 256 KiB, section 16), then these
+  rules, then each field against its row, then the signature. `cbb_core::strict` implements
+  them, and `testdata/interop/strict-files.json` holds a valid release file of every kind and,
+  for every field, the body without it, with a value of each other JSON type, `null`, written
+  twice, and its numbers or strings in each form these rules refuse, each vector with its rule
+  and whether a member takes the body.
 
 ## 1. Identifiers, names and ports
 
@@ -297,49 +250,26 @@ close a connection that did not arrive on such an interface from its own network
 32 connections to the member port may be in their TLS handshake or in a pairing attempt at
 once; more are closed at accept. An implementation SHOULD bound them likewise.
 
-## 2. Certificates
+## 2. Keys
 
-All keys are ECDSA P-256; all signatures are ECDSA with SHA-256 (Go's default for P-256).
-Serial numbers are random. Source: `core/src/certs.rs`, `core/src/issue.rs`.
+Source: `core/src/records/key.rs`, `core/src/format/container.rs`, `core/src/keystore`,
+`core/src/seal.rs`. A group has no certificates: its records name keys (section 10), and every
+key is a Key of the Conventions.
 
-| Certificate | Subject CN | SAN | Validity | Extensions |
-|-------------|-----------|-----|----------|------------|
-| Group root CA | `cbb group root YYYY-MM-DD` (UTC creation date) | none | NotBefore = creation - 24 h; NotAfter = creation + 20 years | CA, path length 1 (MaxPathLen 1); key usage certSign, cRLSign |
-| Member certificate (from the group CA) | the device ID | DNS `cb-<device ID>.local`, exactly one | NotBefore = the group CA's NotBefore; NotAfter = min(issue + 2 years, CA NotAfter) | key usage digitalSignature; EKU serverAuth and clientAuth; not a CA |
-| Joiner's self-signed certificate (pairing only) | the joiner's new device ID | none | 1970-01-01T00:00:00Z to 9999-12-31T23:59:59Z | none set |
+| Key | Algorithm | Held by | What it does |
+|---|---|---|---|
+| Member key | ES256 (P-256) | every device | its device ID is the first 16 bytes of its key hash; it proves the device in TLS (section 4) and signs its copies, its keys statements and its intro; in hardware where the device has it (section 17) |
+| Seal keys | X-Wing | every device that reads copies | one an epoch, named in the device's keys statement ([format](format.md), section 5); a copy's key and a sealed command are sealed to it |
+| Admin key | ES256 | the root and the admins, on a device with the capability `admin` | signs records and commands as far as the records let that key (section 10) |
+| Recovery key | ES256 and SLH-DSA-SHA2-128s | the person, on paper or a YubiKey | takes the group back (section 9); with the first root key it gives the Group ID |
+| Tunnel key | X25519 | a device away from home, and a hub | WireGuard (section 11) |
 
-A device has one key, which its member certificate certifies. A CA MUST NOT issue when the
-local clock is outside its own validity. The computer that creates a group is its **root**:
-it makes the group root CA (the `group_ca` that names the group, as a phone does, section 9)
-and holds its key. The admins it makes (section 10, "Admins") hold an admin CA under the
-root; every other member holds neither. A group CA MUST have path length 1. A group made before
-0.4 had a group CA with path length 0 (`cbb group CA YYYY-MM-DD`), whose key every
-Linux and Windows member held; such groups went with records of version 1, and a member that
-finds one leaves it at start, as section 10 says of version 1, and the group is set up again. The joiner's certificate carries the key that the member certifies in the welcome
-(section 6).
-
-Checking a member certificate (`checkPeer`, `DeviceOf`): the chain MUST verify to the group
-CA at the time max(now, group CA NotBefore), so a device whose clock is behind still accepts
-it, while an expired certificate is rejected. The subject CN MUST be a device ID, and the
-certificate MUST carry exactly one DNS name, `cb-<that ID>.local`.
-
-Renewal rules (`Identity.Renew`): a member certificate SHOULD be renewed when less than 240 days
-remain; it is not renewed when it already ends with its CA.
-
-When renewal runs: a member that holds a CA key (the root or an admin) checks its own certificates when the group
-starts and every 12 hours, saves renewed ones and presents them on new connections at once
-(running connections keep theirs). It renews the certificates of other members too: when a
-peer's hello arrives, and every 12 hours for the running connections, it checks the
-certificate the peer presented in the handshake and, when it is due, sends a `cert` message
-(section 4) with a new certificate for the same device ID and key, at most once per
-connection. A member without the CA keys MUST keep a certificate from a `cert` message only when
-it verifies to the group CA (or to one of the group's roots, through the message's `issuer`
-when present, section 10), names its own device ID and key, has client and server use, ends
-later than its current one, is not refused by the records and was not issued by a CA whose
-key the records revoke (a removed admin's or an old root's certificates stay valid for the
-devices its removal keeps, but it renews none); otherwise it MUST ignore it, and SHOULD log
-that. A certificate that has
-already expired cannot be renewed this way, since the handshake fails; the device pairs again.
+TLS needs a certificate, so each side presents the key container of its member key
+([format](format.md), section 12): a fixed template that holds the key alone, which a reader
+checks byte for byte and never as a certificate. Two certificates remain, outside the group:
+the one a device registers with on a forwarder or a relay, of its server key, which names
+neither a device nor a group (section 18; `internal/group`, `ServerCertificate`), and the
+certificates of the ESP32 firmware (section 7).
 
 ## 3. Discovery (mDNS)
 

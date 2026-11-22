@@ -1143,3 +1143,4 @@ internal/group/tls_test.go TestMemberHandshakeRejects D-130: it tested Go's memb
 internal/group/tls_test.go TestMemberHandshakeWithClockBehind D-130: it tested Go's member TLS of 0.5 on a group CA, which no Go program speaks in 0.6; member TLS is the core's (core/src/tls), tested there
 internal/group/verdict_test.go TestVerdicts D-130: Go's verdicts on records and commands of 0.5 left the differential run with Go's records; the core and the Kotlin kit still compare (.github/differential.sh)
 internal/group/watch_test.go TestGoWatchVectors D-130: it tested Go's records, certificates or commands of 0.5 (internal/group's group state), which no Go program keeps in 0.6; the group's state is the core's (core/src/records), tested there
+internal/frame/frame_test.go TestRoundTripAndLimits D-130: it tested the JSON frames of 0.5, which no channel of 0.6 carries; the frames of 0.6 are the core's (core/src/format/frame.rs), tested there
