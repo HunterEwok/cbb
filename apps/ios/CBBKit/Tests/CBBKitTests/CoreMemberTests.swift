@@ -347,8 +347,8 @@ final class CoreMemberTests: XCTestCase {
     }
 
     /// The root phone's calls for away from home and the group's servers, alone in its group: its first period of
-    /// server credentials is due, and the relay its root key sets renews them; it is no hub, so it serves none and is
-    /// named no forwarder; push and the notices answer, and the member port closes.
+    /// server credentials is due, and the relay its root key sets renews them; it names no forwarder for itself, and it
+    /// may be a hub without an admin key, as the root's own device; push and the notices answer, and the member port closes.
     func testTheRootPhonesAwayCalls() throws {
         let (phone, rootKey) = try rootPhone()
         let m = phone.member
@@ -365,9 +365,10 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(try m.setRelays(["127.0.0.1:9 \(pin)"], public: pub, sign: root), ["127.0.0.1:9"])
         XCTAssertEqual(try m.periods(), CoreMember.Periods(), "the relay's root key renewed the credentials")
         XCTAssertEqual(try m.renewPeriod(public: pub, sign: root), CoreMember.Periods())
-        refused("the root is no hub") { _ = try m.nameForwarder("Root phone", forwarder: "127.0.0.1:1", key: pin, public: pub, sign: root) }
+        refused("the root names no forwarder for its own phone") { _ = try m.nameForwarder("Root phone", forwarder: "127.0.0.1:1", key: pin, public: pub, sign: root) }
         XCTAssertNil(try m.rootForwarder())
-        refused("a phone without an admin key is no hub") { _ = try m.serveAsHub(port: 0, addrs: ["127.0.0.1:9"]) }
+        XCTAssertEqual(try m.serveAsHub(port: 0, addrs: ["127.0.0.1:9"])?.hub, true, "the root's phone may be a hub")
+        XCTAssertNotEqual(try m.stopHub()?.hub, true, "the root's phone stops being a hub")
         refused("a phone that is no hub cannot stop being one") { _ = try m.stopHub() }
         let on = try m.setAway(true)
         XCTAssertEqual(try m.awayStatus()?.isOn, on?.isOn)

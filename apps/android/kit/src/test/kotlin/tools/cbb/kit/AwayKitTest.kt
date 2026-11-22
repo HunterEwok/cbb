@@ -144,7 +144,7 @@ class AwayKitTest {
         val pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
         val fw = "127.0.0.1:${freeUDP()}"
         assertFailsWith<Core.Refusal>("an admin key is no root key") { g.a.nameForwarder("Root phone", fw, pin, g.aAdmin.publicKeyDER, g.aAdmin::signDigest) }
-        assertFailsWith<Core.Refusal>("the root is no hub") { g.r.nameForwarder("Root phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }
+        assertFailsWith<Core.Refusal>("the root names no forwarder for its own phone") { g.r.nameForwarder("Root phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }
         assertNull(g.a.rootForwarder())
         val named = waitFor("the admin phone never took the root's forwarder") {
             runCatching { g.r.nameForwarder("Admin phone", fw, pin, g.rootKey.publicKeyDER, g.rootKey::signDigest) }.getOrNull()?.takeIf { it.first == "done" }
@@ -158,13 +158,13 @@ class AwayKitTest {
         assertEquals(fw, hub.forwarder?.endpoint)
     }
 
-    /** What the member refuses: a phone the records do not make a hub, a hub with no way to it, and bad addresses. */
+    /** What the member refuses: a hub with no way to it, and bad addresses. The root's phone may be a hub without an admin key. */
     @Test
     fun theMemberRefusesABadHub() {
         val g = Group()
-        // The root phone holds no admin key, so the records make it no hub.
-        val notHub = assertFailsWith<Core.Refusal> { g.r.serveAsHub(freeUDP(), listOf("127.0.0.1:9")) }
-        assertTrue(notHub.message.orEmpty().contains("do not make this phone a hub"), notHub.message)
+        // The root phone holds no admin key, and the records make it a hub all the same (protocol section 11, "Several hubs").
+        assertTrue(g.r.serveAsHub(freeUDP(), listOf("127.0.0.1:9"))?.hub == true, "the root's phone may be a hub")
+        assertTrue(g.r.stopHub()?.hub != true, "the root's phone stops being a hub")
         val port = freeUDP()
         g.serve { g.a.serveAsHub(port, listOf("127.0.0.1:$port")) }
         assertFailsWith<Core.Refusal>("no address and no forwarder") { g.a.serveAsHub(port) }
