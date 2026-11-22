@@ -66,8 +66,8 @@ Tap a device to see its kind, system, version and role. On an admin phone you ca
   scan the code. The first phone, the root, makes it an admin, so that losing one phone
   loses nothing.
 - **A lost phone**: on your other phone, remove it in the devices list. The computers stay
-  in the group; if the lost phone was the root, the other phone takes the group over in the
-  same step. More in [if a device is lost or stolen](lost-device.md).
+  in the group; if the lost phone was the root, open the recovery on the other phone instead and
+  give it the recovery key, which leaves the lost phone out. More in [if a device is lost or stolen](lost-device.md).
 
 ### Settings
 
@@ -89,7 +89,8 @@ latest events, and the switch for sync away from home. They work through the pai
 The Mac app and the tray app for Linux and Windows show the same things as the phone: the
 devices as tiles, a list or orbits, a device's details, **Send the clipboard** and
 **Fetch**, and the switch for sync away from home. Changes to the group (rename, remove,
-make an admin) ask for the administrator's password. Adding a device still runs in the
-terminal (`sudo cbb pair`). The service keeps syncing whether the app is open or not.
+make an admin) ask for the administrator's password. **+** opens a pairing window with a QR
+code and six digits for a new device, and in no group **Join a group** joins a window by its
+six digits. The service keeps syncing whether the app is open or not.
 
 When something does not work, see [Troubleshooting](troubleshooting.md).
