@@ -264,6 +264,10 @@ jobs:
           CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/e2e/cbb"
           sudo chown -R "$(id -u)" "$RUNNER_TEMP/e2e-cover"
           go tool covdata textfmt -i "$RUNNER_TEMP/e2e-cover" -o cover-go-e2e.out
+      - name: the desktop connector against that cbb's service
+        env:
+          CBB_TEST_RUST_SERVICE: ${{ runner.temp }}/e2e/cbb
+        run: go test -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-go-linux-all
