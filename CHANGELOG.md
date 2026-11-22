@@ -910,6 +910,8 @@ made with 0.5 is set up again once. The details follow.
 - A request that comes while the Rust service is still reading its group's files hears that
   they do not open as soon as that is known, rather than that the device is still starting
   (`TestBrokenGroupFiles`).
+- A device that asked a starting hub for its offer before the hub had made its keys for the
+  forwarder's period connects again and takes the offer with them (`TestHubKeyRotation`).
 - The Rust member no longer can deadlock when a renewed certificate and new records come at
   once (seen in `TestAloneTakeover`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when

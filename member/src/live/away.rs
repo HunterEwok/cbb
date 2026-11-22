@@ -584,23 +584,36 @@ fn serve_hub(w: &Weak<Live>) {
                     l.logf("cbb: the hub stopped");
                 }
             }
-            (Some(_), None) if away.rotate_live(&l.hub_period(&away)).1 => {
+            (Some(s), None) => {
                 // The keys for the period are made before the hub listens,
                 // so that its first clients get the offer it serves with.
-            }
-            (Some(s), None) => match l.start_hub(&away, s) {
-                Ok(r) => {
-                    l.note_own_forwarder(&away);
-                    *l.hub.lock().unwrap() = Some(r);
-                    // A hub that moves away, ordered before it served,
-                    // serves its clients but tells the other hubs nothing:
-                    // it said it stopped, so that the new one serves.
-                    if l.handoff.lock().unwrap().is_none() {
-                        l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                // A client that took an offer before them (its `tunnel`
+                // came as soon as it saw this device is a hub) connects
+                // again and takes the new one.
+                let (changed, switched) = away.rotate_live(&l.hub_period(&away));
+                if changed {
+                    let connected = l.mesh.connected();
+                    for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
+                        l.mesh.disconnect(d);
                     }
                 }
-                Err(e) => away.failed(Some(&e)),
-            },
+                if !switched {
+                    match l.start_hub(&away, s) {
+                        Ok(r) => {
+                            l.note_own_forwarder(&away);
+                            *l.hub.lock().unwrap() = Some(r);
+                            // A hub that moves away, ordered before it
+                            // served, serves its clients but tells the other
+                            // hubs nothing: it said it stopped, so that the
+                            // new one serves.
+                            if l.handoff.lock().unwrap().is_none() {
+                                l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                            }
+                        }
+                        Err(e) => away.failed(Some(&e)),
+                    }
+                }
+            }
             (Some(_), Some((h, report))) => {
                 // A new period of the forwarder's face: the next key, and
                 // the hub serves with it once due, starting again.
