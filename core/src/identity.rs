@@ -77,7 +77,7 @@ pub fn signing_key(pkcs8: &[u8]) -> Result<SigningKey> {
 }
 
 /// Signs data with a PKCS #8 P-256 key: ECDSA with SHA-256, DER, as a
-/// member signs its copies (docs/protocol.md, section 4, "Sealing").
+/// member signs its copies (docs/format.md, section 10.2).
 pub fn sign(pkcs8: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     use p256::ecdsa::signature::Signer as _;
     let sig: p256::ecdsa::Signature = signing_key(pkcs8)?.sign(data);

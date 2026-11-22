@@ -26,7 +26,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/strict"
 )
 
-// A copy sealed end to end (docs/protocol.md, section 4, "Event"): the
+// A copy sealed end to end (docs/format.md, section 10): the
 // device that copies seals it to the devices of the group that read
 // copies and signs it, so the members that pass it on, a hub among them,
 // neither read nor change it. The same is in the Rust core
@@ -191,7 +191,7 @@ func OpenSegment(key []byte, i uint64, last bool, sealed []byte) ([]byte, error)
 
 // SealBlob seals the n bytes of parts that src gives, one after another,
 // into a blob under the copy's key, which it writes to dst, and returns
-// the blob's size and SHA-256 (docs/protocol.md, section 4, "The blob").
+// the blob's size and SHA-256 (docs/format.md, section 10.2, "The blob").
 func SealBlob(key []byte, src io.Reader, n int64, dst io.Writer) (*Blob, error) {
 	if n <= 0 || n > MaxMedia {
 		return nil, fmt.Errorf("clip: a blob of %d bytes", n)

@@ -387,7 +387,7 @@ impl Drop for Engine {
 }
 
 /// Seals an event this member makes to the group's readers and signs it
-/// (docs/protocol.md, section 4, "Sealing").
+/// (docs/format.md, section 10.2).
 pub type SealFn = Box<dyn Fn(&Event) -> Result<Sealed> + Send + Sync>;
 
 impl Engine {
@@ -669,7 +669,7 @@ impl Engine {
 
     /// Makes a media event from a deliberate action: images or files, with
     /// their plain-text alternative or "", whose blob the caller sealed
-    /// under key (docs/protocol.md, section 4, "The blob"). On a member
+    /// under key (docs/format.md, section 10.2, "The blob"). On a member
     /// that takes media, as send, the outcome tells whether they go to its
     /// own clipboard; on another, it never writes them.
     pub fn send_media(

@@ -472,7 +472,7 @@ struct SegmentArgs {
 }
 
 /// `seal_segment` and `open_segment`: one segment of a copy's blob
-/// (docs/protocol.md, section 4, "The blob").
+/// (docs/format.md, section 10.2, "The blob").
 fn segment(a: SegmentArgs, seal: bool) -> Result<Vec<u8>, Refusal> {
     let key: [u8; crate::copy::KEY_SIZE] = a
         .key

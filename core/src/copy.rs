@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! Copies sealed end to end (docs/protocol.md, section 4, "Event"): the
+//! Copies sealed end to end (docs/format.md, section 10): the
 //! device that copies seals each copy to the devices of the group that read
 //! copies and signs it, so the members that pass it on, a hub among them,
 //! neither read nor change it. This module seals, checks and opens a copy

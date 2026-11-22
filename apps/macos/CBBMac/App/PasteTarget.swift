@@ -183,7 +183,7 @@ struct FetchedCopy {
     }
 
     /// Where the copy's path goes under root: the service checked its
-    /// names (docs/protocol.md, section 4, "Media"), and none leaves root.
+    /// names (docs/format.md, section 10.3), and none leaves root.
     static func place(_ path: String, in root: URL) throws -> URL {
         let names = path.split(separator: "/", omittingEmptySubsequences: false)
         guard !names.isEmpty, names.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {

@@ -18,8 +18,8 @@ import (
 	"github.com/HunterEwok/cbb/internal/jsonnum"
 )
 
-// Images and files (design.md, "Images and files"; docs/protocol.md,
-// section 4, "Media"). A media event carries a manifest instead of the
+// Images and files (design.md, "Images and files"; docs/format.md,
+// section 10.3). A media event carries a manifest instead of the
 // bytes: each part's type or path, size and SHA-256. The manifest is small,
 // so it travels in events and hellos like a text and the sync model applies
 // unchanged; the members that want the content fetch it by its hashes.
@@ -72,7 +72,7 @@ func (m *Manifest) UnmarshalJSON(data []byte) error {
 }
 
 // ParseManifest reads a manifest received from another member
-// (docs/protocol.md, section 4, "Media"): in the strict form of signed
+// (docs/format.md, section 10.3): in the strict form of signed
 // bodies and in its canonical form, with no member its table does not
 // name, and valid, as the Rust core reads it.
 func ParseManifest(b []byte) (*Manifest, error) {

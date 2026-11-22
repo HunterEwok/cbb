@@ -1176,8 +1176,8 @@ multiple of 16 KiB, and cover traffic cannot hide a large transfer.
 
 #### Order of work
 
-All six steps below are built (docs/protocol.md, section 4, "Media" and "Content", and the
-watcher protocol in section 8). The desktop agent fetches a copy's files
+All six steps below are built ([format](format.md), section 10.3; docs/protocol.md, section 4,
+"Content", and the watcher protocol in its section 8). The desktop agent fetches a copy's files
 over the control socket and saves them in the user's cache (`~/.cache/cbb/received`,
 `~/Library/Caches` on a Mac, `%LocalAppData%` on Windows), a folder for each copy readable
 only by the user; it empties the folder when it starts. A Flatpak app gets written files

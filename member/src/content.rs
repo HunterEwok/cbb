@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The sealed blobs of copies with images or files, as a phone's member
-//! keeps them (docs/protocol.md, section 4, "The blob" and "Content"): it
+//! keeps them (docs/format.md, section 10.2, and docs/protocol.md, section 4, "Content"): it
 //! seals the parts the app hands it into a blob, keeps the blobs it made or
 //! fetched whole and checked, serves them to the members that ask, and
 //! opens a fetched one into the app's folder, each part checked against

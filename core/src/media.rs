@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The manifest of a media event: images or files (docs/protocol.md,
-//! section 4, "Media"). The core never fetches the content; it takes
+//! The manifest of a media event: images or files (docs/format.md,
+//! section 10.3). The core never fetches the content; it takes
 //! the event, so that the group converges, and its plain-text alternative.
 //! It checks the manifest as Go's package clip does, since it passes the
 //! event on.
@@ -93,7 +93,7 @@ impl Manifest {
 
     /// Reads a manifest received from another member: in the strict form
     /// of signed bodies and in its canonical form, with no member its
-    /// table does not name (docs/protocol.md, section 4, "Media"), and
+    /// table does not name (docs/format.md, section 10.3), and
     /// valid.
     pub fn parse(data: &[u8]) -> Result<Manifest> {
         crate::strict::check_canonical(data, &["parts", "size"])
