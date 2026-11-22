@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+//
+// DevEco Studio's Previewer loads no native module, so it takes this stand-in
+// for libcbb_napi.so: the pages then show as on a phone in no group.
+{
+  "libcbb_napi.so": {
+    "source": "src/mock/Libcbb_napi.mock.ets"
+  }
+}

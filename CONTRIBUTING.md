@@ -271,7 +271,10 @@ signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter 
 OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
 before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
 runs its host test and `check.sh`, which checks both modules, the phone's `entry` and the
-watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+watch's `wearable`. DevEco Studio's Previewer loads no native module and takes the stand-in in
+`entry/src/mock/` instead, which answers every request with an error, so the pages show as on a
+phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
+`wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator.
 
 ```sh
