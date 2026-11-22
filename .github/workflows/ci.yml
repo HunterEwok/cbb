@@ -2969,6 +2969,13 @@ jobs:
         run: |
           mkdir -p target/llvm-cov-target
           tar -I zstd -xf "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" -C target/llvm-cov-target
+          # Cargo keeps each test binary in build/<package>/<hash>/out, and
+          # cargo-llvm-cov reads such a directory as a build script's output,
+          # and passes it by, unless a fingerprint directory beside it shows
+          # the new layout. The archive holds no fingerprints: mark each unit.
+          for d in target/llvm-cov-target/target/debug/build/*/*/out; do
+            mkdir -p "${d%/out}/fingerprint"
+          done
           for d in "$RUNNER_TEMP"/profiles/*/; do
             part=$(basename "$d")
             for f in "$d"*.profraw; do
