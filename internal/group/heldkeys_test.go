@@ -47,7 +47,11 @@ func TestHardwareOff(t *testing.T) {
 	if b, err := (Sealer{}).Seal([]byte("secret")); b != nil || err != nil {
 		t.Errorf("Seal with CBB_TPM off: %v, %v", b, err)
 	}
-	if _, held := HeldOf(newGroup(t).Key); held {
+	key, err := NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, held := HeldOf(key); held {
 		t.Error("a key in a file is held by hardware")
 	}
 }

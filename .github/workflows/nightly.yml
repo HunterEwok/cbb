@@ -55,8 +55,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { package: ./internal/group, target: FuzzRecordBody }
-          - { package: ./internal/group, target: FuzzCommand }
           - { package: ./internal/forward, target: FuzzForwardWire }
           - { package: ./internal/forward, target: FuzzRegister }
           - { package: ./internal/blind, target: FuzzCredential }
@@ -273,41 +271,6 @@ jobs:
           path: mutants.out/
           if-no-files-found: ignore
 
-  mutants-go:
-    name: gremlins (internal/authority)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: mutate the rules
-        run: |
-          go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash \
-            --output gremlins.json ./internal/authority | tee gremlins.txt || true
-          {
-            echo "### gremlins, internal/authority"
-            echo '```'
-            grep -E 'LIVED|Killed:|Mutator coverage|Test efficacy' gremlins.txt || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: mutants-go
-          path: |
-            gremlins.json
-            gremlins.txt
-          if-no-files-found: ignore
-
-  # The unsafe code of the Rust service and the phones' library
-  # (docs/testing.md, "Unsafe code"): Miri checks the C functions of ffi
-  # pointer by pointer; AddressSanitizer runs the Rust tests and Go's tests
-  # of the service against a cbb built with it, which reaches the system
-  # calls Miri cannot.
   reproducible:
     name: reproducible build (${{ matrix.target }})
     runs-on: ubuntu-latest

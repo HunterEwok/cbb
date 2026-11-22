@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/HunterEwok/cbb/internal/authority"
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
@@ -85,7 +84,7 @@ func TestRestoredAdminSignsAgain(t *testing.T) {
 	b = restartService(t, &h, b)
 	waitFor(t, "the root sees two histories", func() bool {
 		for _, c := range pi.status(t).Conflicts {
-			if c.Kind == authority.ConflictTwoHistories {
+			if c.Kind == "two_histories" {
 				return true
 			}
 		}
@@ -99,7 +98,7 @@ func TestRestoredAdminSignsAgain(t *testing.T) {
 	}
 	waitFor(t, "the admin signs its hubs table again and the group goes on", func() bool {
 		st := pi.status(t)
-		return (st.Stop == "" || st.Stop == authority.StopNone) && len(st.Conflicts) == 0 && only(pi, aID)() && only(b, aID)()
+		return (st.Stop == "" || st.Stop == "none") && len(st.Conflicts) == 0 && only(pi, aID)() && only(b, aID)()
 	})
 	if !a.logged("signed 1 of its records again") {
 		t.Error("the admin did not say it signed its record again")

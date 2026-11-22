@@ -6,6 +6,7 @@ package service
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/actions"
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 )
 
@@ -107,7 +107,7 @@ func TestLeave(t *testing.T) {
 	}
 	waitFor(t, "the pi is alone", func() bool { return listed(pi.devices(t)) == "pi" })
 	leaveOn(t, pi)
-	if _, err := group.Load(pi.dir); !errors.Is(err, group.ErrNoGroup) {
+	if _, err := os.Stat(filepath.Join(pi.dir, "group.cbor")); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the root's group after leave: %v", err)
 	}
 }
@@ -201,19 +201,10 @@ func TestRemovedWhileAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the laptop has the removal", func() bool { return listed(laptop.devices(t)) == "laptop pi" })
-	if pi.on06() {
-		removedWhileAway06(t, &h, pi, laptop, deck)
-		return
-	}
-	deck = restartService(t, &h, deck)
-	waitUpTo(t, 30*time.Second, "the deck says it was removed", func() bool { return deck.status(t).Removed })
-	waitFor(t, "the removed deck keeps no connection", func() bool { return len(deck.status(t).Peers) == 0 })
-	if laptop.status(t).Removed || pi.status(t).Removed {
-		t.Error("a member the root did not remove says it was removed")
-	}
+	removedWhileAway06(t, &h, pi, laptop, deck)
 }
 
-// removedWhileAway06 is TestRemovedWhileAway on the records of 0.6, by the
+// removedWhileAway06 is the rest of TestRemovedWhileAway, by the
 // owner's rule: a removed device need not learn of its removal; the group
 // refuses it and gives it no device list. So the members refuse its hello
 // and keep no connection with it, no copy crosses either way, and it gets

@@ -1123,47 +1123,19 @@ func TestAloneMember(t *testing.T) {
 		}
 		return false
 	})
-	// The small device offers its key for sealed messages, and the root
-	// records it, so the command below is sealed to it. On the records of
-	// 0.6 the key comes in the device's own statement, which the root
-	// keeps beside the records: the command goes once the root has it.
-	sealedOff := func() bool {
+	// The small device offers its key for sealed messages in its own
+	// statement, which the root keeps beside the records: the root's
+	// command, sealed to that key, goes once the root has it.
+	waitFor(t, "the root commands the small device, sealed to its key", func() bool {
 		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, "")
 		return err == nil
-	}
-	if pi.on06() {
-		waitFor(t, "the root commands the small device, sealed to its key", sealedOff)
-	} else {
-		waitFor(t, "the root records the small device's key for sealed messages", func() bool {
-			id, err := group.Load(pi.dir)
-			if err != nil {
-				return false
-			}
-			recs, err := group.LoadRecords(pi.dir, id.GroupCA.Cert)
-			if err != nil {
-				return false
-			}
-			for _, d := range recs.Devices() {
-				if string(d.ID) == st.Device {
-					return len(d.Seal) > 0
-				}
-			}
-			return false
-		})
-		if !sealedOff() {
-			t.Fatal("the root's sync command did not go")
-		}
-	}
+	})
 	if m := small.status(t).Mode; m != "own" {
 		t.Errorf("after the root's command the small device's mode is %q, want own", m)
 	}
-	opened := "opened a sealed mode command"
-	if pi.on06() {
-		// A command of 0.6 with orders is always sealed (format section
-		// 6); the device says what it carried out.
-		opened = "turned sync off here"
-	}
-	if !small.logged(opened) {
+	// A command with orders is always sealed (format section 6); the
+	// device says what it carried out.
+	if !small.logged("turned sync off here") {
 		t.Error("the small device did not open the command sealed to it")
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {

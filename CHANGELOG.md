@@ -2985,6 +2985,11 @@ made with 0.5 is set up again once. The details follow.
   a relayed join (G8), another system in the hello (G35), an event sent again (Y15) and fuzzed
   member frames (S20); the cases stay in the catalogue until the bench plays a member of 0.6
   (D-130).
+- Go's records of 0.5: `internal/authority`, and in `internal/group` the group CA, the
+  identity file, records, commands, copies' checks, server credentials, member TLS and the
+  secret for sealed commands, with their tests, the nightly's fuzz targets and mutation run
+  on them and Go's side of the differential run. `internal/group` keeps the keys and the
+  names Go's parts share (D-130).
 - The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's

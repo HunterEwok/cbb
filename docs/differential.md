@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Differential fuzzing
 
-For engineers and security reviewers: how CI checks that the three implementations (Go, the
-Rust core of `cbb` and the Kotlin kit) read what comes from the network
+For engineers and security reviewers: how CI checks that the implementations (the Rust core
+of `cbb`, the Kotlin kit, and Go for the release files) read what comes from the network
 alike, and how a case they read differently becomes a test vector.
 
 The interop vectors ([testing](testing.md#interop-vectors)) fix the verdict on bodies chosen
@@ -26,8 +26,7 @@ the same record set of the same signed records in any order and subset.
   computers, watches and the others), each as it is and changed: some of its records, in
   another order, some twice, one with its chain dropped or its signature or body changed.
 - Each implementation has a **verdict test** that reads a corpus and writes one line per
-  case: Go's `TestVerdicts` in `internal/group` (and in `internal/release` for the release
-  files), the Rust core's `command::verdicts` and the Kotlin kit's `VerdictTest`. The
+  case: Go's `TestVerdicts` in `internal/release` (the release files), the Rust core's `command::verdicts` and the Kotlin kit's `VerdictTest`. The
   iPhone kit has no verdict test: it reads what comes from the network only through the
   Rust core (D-126). Without a corpus each runs on a small one of its own, so the normal
   test runs keep it working.
@@ -61,8 +60,7 @@ kits), so a reader that fails in another way also shows as a difference.
   changed bodies and 500 record sets on every pull request that changes Go, `cbb`,
   the kits or the tools.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
-  and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
-  (`internal/group`), `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
+  and the native fuzz targets for ten minutes each: Go's `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
   registration and the forwarder's answers of `cbb-forward/3`, seeded from
   `testdata/format/messages3.json`), `FuzzCredential` (`internal/blind`, the forwarder's
   reader of the format's profile, frames and credentials, seeded from
@@ -105,18 +103,16 @@ To run the nightly's corpus of a seed: `sh .github/differential.sh SEED 200000 5
 One implementation alone, with a corpus from `go run ./tools/difffuzz gen -o corpus.jsonl`:
 
 ```sh
-CBB_VERDICTS=$PWD/corpus.jsonl CBB_VERDICTS_OUT=$PWD/go.txt go test ./internal/group -run '^TestVerdicts$'
+CBB_VERDICTS=$PWD/corpus.jsonl CBB_VERDICTS_OUT=$PWD/go-release.txt go test ./internal/release -run '^TestVerdicts$'
 ```
 
-and `go run ./tools/difffuzz compare -corpus corpus.jsonl go=go.txt,go-release.txt rust=rust.txt`
+and `go run ./tools/difffuzz compare -corpus corpus.jsonl go=go-release.txt rust=rust.txt`
 compares any of them.
 
 ## When a case is read differently
 
 1. Find the row of the protocol's tables that decides it. When the protocol says nothing, the
    rule is a decision of the protocol, not of the implementation that happens to be right.
-2. Add the case to the generator of `strict-generated-*.json` or `strict-files.json`
-   (`internal/group/strictgen_test.go`, `strictgen_files_test.go`) under that rule, or, for a
-   record set, to the Go test that writes the set's vector, and write the file again
-   (`go test ./internal/group -run TestStrictGenerated -update`).
+2. Add the case to `strict-generated-*.json`, `strict-files.json` or the set's vector under
+   that rule, with the verdict the rule gives.
 3. Fix every implementation that reads it otherwise in the same pull request.

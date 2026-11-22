@@ -240,12 +240,11 @@ conventions describe; wave 5 moves them to the CBOR above.
   in section 15); then the group, the signature and the rules of evaluation. A body that
   fails a step is refused there, so a member never verifies a signature over a body it
   cannot read alike, and never evaluates a record whose fields another member reads
-  otherwise. Go's `checkStrict`, `cbb`'s `strict`, and `Strict` in both phone kits
-  implement these rules. Every one of them gives the same verdict on the vectors in
+  otherwise. `cbb`'s `strict` and `Strict` in the Kotlin kit implement these rules. Every one of them gives the same verdict on the vectors in
   `testdata/interop/strict.json`, written by hand, and in
-  `testdata/interop/strict-generated-*.json`, which Go's `TestStrictGenerated` writes from
-  these rules and the tables, and in `testdata/interop/strict-files.json`, which
-  `TestStrictGeneratedFiles` writes the same way for server credentials and release files: a
+  `testdata/interop/strict-generated-*.json`, written from these rules and the tables, and in
+  `testdata/interop/strict-files.json`, written the same way for server credentials and
+  release files: a
   valid body of every kind and, for every field, the body
   without it, with a value of each other JSON type, `null`, written twice, its name in upper
   case or escaped, its numbers or strings in each form these rules refuse (for the fields every
@@ -255,7 +254,7 @@ conventions describe; wave 5 moves them to the CBOR above.
   a member takes the body, and in strict-files.json its `kind`; a vector with `pad` has `pad` bytes `a`
   inserted at the offset `pad_at` of its body. The tests fail when the file is not what the
   tables give, and when any implementation reads a vector otherwise. Record bodies are read
-  by `internal/authority` and `cbb_core::authority` alone (the phones through the core), and
+  by `cbb_core::authority` alone (the phones through the core), and
   only in their canonical form with no member their type does not know, so a record vector
   that another kind takes with whitespace or an unknown member is refused; strict-generated-*.json
   also holds the canonical form's own cases (`form/canonical`) and the sizes of a record and a
@@ -276,7 +275,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 
 | Item | Value | Source |
 |------|-------|--------|
-| Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `internal/group/cert.go` |
+| Device ID | 128 random bits as exactly 32 lowercase hex characters (`[0-9a-f]{32}`) | `core/src/certs.rs` |
 | Event ID | same format as a device ID, random per event | `internal/clip/clip.go` |
 | Group tag | on the records of 0.6, the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters; in a group of 0.5, the first 8 bytes of SHA-256 over the group CA certificate (DER) | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
@@ -300,9 +299,7 @@ once; more are closed at accept. An implementation SHOULD bound them likewise.
 ## 2. Certificates
 
 All keys are ECDSA P-256; all signatures are ECDSA with SHA-256 (Go's default for P-256).
-Serial numbers are random. Go also adds subject and authority key identifiers; peers do not
-rely on them. Source: `internal/group/cert.go`, `internal/group/tls.go`, `core/src/certs.rs`,
-`core/src/issue.rs`.
+Serial numbers are random. Source: `core/src/certs.rs`, `core/src/issue.rs`.
 
 | Certificate | Subject CN | SAN | Validity | Extensions |
 |-------------|-----------|-----|----------|------------|
@@ -910,7 +907,7 @@ device ID, opens `K` with its `seal` secret and `h`, and opens `payload`. A copy
 no wrap for it, or that does not open, it still keeps and passes on by the rules of section
 5, since the others may read theirs, but never writes to its clipboard.
 
-Go (`internal/clip`, `internal/group/copy.go`) and the Rust core (`cbb_core::copy`) are
+Go (`internal/clip`) and the Rust core (`cbb_core::copy`) are
 checked against each other on `copies-go.json`, `copies-rust.json` and `go-copy-checks.json`.
 
 #### What the members in between see
@@ -1986,9 +1983,8 @@ the subsections under "Until the switch to the core (wave 5)", describe 0.5's ve
 
 The wire side of "Admin phones, the devices list and revocation" in
 [design.md](design.md). The group's authority records are of version 2: one rule evaluates
-a set of them into the group's state ("The state"), and it is written twice, in Go
-(`internal/authority`, with the record set in `internal/group/records.go`) for the
-computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for
+a set of them into the group's state ("The state"), and it is written in Rust
+(`cbb_core::authority` and `cbb_core::group`, `core/`) for
 `cbb` and, through the core's entry point ([core-api.md](core-api.md)), for both
 phone apps, which sign records with the Secure Enclave or the Keystore (`Records.swift`;
 the Android kit through the core's member, `CoreMember.act`) but evaluate none themselves. Go's release builds evaluate
@@ -2348,8 +2344,7 @@ Being settled.
 ### Until the switch to the core (wave 5)
 
 The subsections that follow, from "Admin CA and chains" to "Exchange in the member protocol",
-describe 0.5's records (`v:2`, JSON) and certificates, which `internal/authority`,
-`cbb_core::authority` and `member/` implement until wave 5.
+describe 0.5's records (`v:2`, JSON) and certificates, which `cbb_core::authority` reads.
 
 ### Admin CA and chains
 
@@ -4856,9 +4851,8 @@ serial number the last one revoked until its maintainer looks.
 What a forwarder and a relay check in place of the group's records, so that no device ID,
 name, system, root or date leaves the group, and a server cannot follow a group or a device
 from one month to the next ([design.md](design.md), D-67 and D-75). Implemented in Go
-(`internal/group/credential.go` and `serverkeys.go`, `internal/forward`,
-`internal/service/credentials.go`), and in Rust for the relay (`member/src/relayd`). The vectors in `testdata/interop/v2-credentials.json`
-(Go's `TestGoCredentialVectors`) give a group's records, the lists its credentials must hold,
+(`internal/forward`), and in Rust for the relay (`member/src/relayd`). The vectors in `testdata/interop/v2-credentials.json`
+(written by Go's records of 0.5) give a group's records, the lists its credentials must hold,
 a period with its server credentials, its hubs' and members' credentials, and sets a server
 refuses. `cbb`'s core reads and checks them as Go does (`core/src/credential.rs`:
 the lists, the signatures and types, and a server's check), and passes the vectors; it

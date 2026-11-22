@@ -355,10 +355,10 @@ The phones run no tunnel of their own beside the member: the Live member runs sy
 home, the hub and the relay link (decisions.md, D-123). The feature `tunnel` builds the member's own tunnel
 into the library (`cbb-member/tunnel`).
 
-The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core: they run
-Go's own `internal/authority`, `internal/clip` and `internal/group`, which the interop
-vectors and the differential run (`.github/differential.sh`) keep byte for byte the same as
-the core's.
+The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core and keep
+no group state of their own: Go's `internal/clip`, which the interop vectors keep byte for
+byte the same as the core's, reads the copies, and `internal/group` holds only the keys and
+names they share.
 
 ## Operations
 

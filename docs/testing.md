@@ -438,7 +438,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | Part | What counts | Measured by |
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
-| `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
+| `go-core` | the same, in `internal/group`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
@@ -515,12 +515,10 @@ Miri cannot.
 Coverage says a line ran; mutation testing says whether a test would notice if it were wrong.
 The nightly workflow changes the records' code one place at a time (drops a check, turns `<`
 into `<=`, returns early) and runs the tests against each change: `cargo mutants` on
-`core/src/authority.rs` and `strict.rs`, in eight shards, and `gremlins` on
-`internal/authority`. A change that every test still passes is listed as missed, in the run's
+`core/src/authority.rs` and `strict.rs`, in eight shards. A change that every test still passes is listed as missed, in the run's
 summary and its artifacts. The Rust job fails on a survivor that `tools/mutants/missed.txt`
 does not name (no new survivor, from the first day); the list holds the records' baseline of
-2026-11-11, and each of those gets a test or a note why it cannot matter. `gremlins` reports
-and does not fail yet.
+2026-11-11, and each of those gets a test or a note why it cannot matter.
 
 The service's readers of outside input already fail on a new one: `cargo mutants` on the
 control socket's messages (`member/src/control.rs`), the pairing window
@@ -538,7 +536,6 @@ To run them locally:
 cargo mutants --in-place -p cbb-core -f core/src/authority.rs -f core/src/strict.rs
 cargo mutants --in-place -p cbb-member -f member/src/control.rs -f member/src/window.rs
 tools/mutants/check.sh mutants.out/missed.txt tools/mutants/missed.txt
-go run github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0 unleash ./internal/authority
 ```
 
 ## Not tested yet

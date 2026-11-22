@@ -5,6 +5,8 @@ package group
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -246,4 +248,17 @@ func (Sealer) Unseal(b *keyseal.Blob) ([]byte, error) {
 		return nil, fmt.Errorf("opening the TPM that sealed the key: %w", err)
 	}
 	return t.Unseal(*b.TPM)
+}
+
+// parseKey reads a P-256 private key in PKCS #8.
+func parseKey(der []byte) (*ecdsa.PrivateKey, error) {
+	k, err := x509.ParsePKCS8PrivateKey(der)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := k.(*ecdsa.PrivateKey)
+	if !ok || key.Curve != elliptic.P256() {
+		return nil, errors.New("group: a key is not a P-256 key")
+	}
+	return key, nil
 }

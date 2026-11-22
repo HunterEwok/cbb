@@ -4,11 +4,11 @@
 package group
 
 import (
+	"crypto"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/HunterEwok/cbb/internal/tpmkey/tpmtest"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -21,56 +21,35 @@ func useTPM(t *testing.T) {
 	t.Cleanup(ReopenTPM)
 }
 
-// TestKeysInTPM checks that a new identity's member key and a computer's
-// admin key go into the TPM, are saved as blobs, load again, and that
-// CBB_TPM=off keeps new keys in the file.
+// TestKeysInTPM checks that a new device key goes into the TPM, that its
+// held form loads the same key again, and that CBB_TPM=off keeps new keys
+// in a file.
 func TestKeysInTPM(t *testing.T) {
 	useTPM(t)
-	id, err := Create(time.Now())
+	k, err := NewDeviceKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if KeyStoreOf(id.Key) != StoreHardware {
-		t.Fatal("the member key is not in the TPM")
+	if KeyStoreOf(k) != StoreHardware {
+		t.Fatal("the device key is not in the TPM")
 	}
-	dir := t.TempDir()
-	if err := id.Save(dir); err != nil {
-		t.Fatal(err)
+	held, ok := HeldOf(k)
+	if !ok {
+		t.Fatal("a key in the TPM has no held form")
 	}
-	data, _ := os.ReadFile(filepath.Join(dir, FileName))
-	if !strings.Contains(string(data), `"key_tpm"`) || strings.Contains(string(data), `"key":`) {
-		t.Errorf("the identity file keeps the member key as %s", data)
-	}
-	got, err := Load(dir)
+	got, err := held.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if KeyStoreOf(got.Key) != StoreHardware || !SameKey(got.Key, id.Key.Public()) {
-		t.Fatal("the loaded member key is not the TPM's")
+	if KeyStoreOf(got) != StoreHardware || !got.Public().(interface{ Equal(crypto.PublicKey) bool }).Equal(k.Public()) {
+		t.Fatal("the loaded key is not the TPM's")
 	}
-	// The root's member certificate renews with the key in the TPM.
-	if _, _, err := got.Renew(time.Now().AddDate(1, 6, 0)); err != nil {
-		t.Fatal(err)
-	}
-
-	pg := newPhoneGroup(t)
-	pending, err := adminIdentity(t, pg, nil).WithAdminKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if KeyStoreOf(pending.AdminKey) != StoreHardware {
-		t.Error("the admin key is not in the TPM")
-	}
-	if err := pending.Save(dir); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := Load(dir); err != nil || KeyStoreOf(got.AdminKey) != StoreHardware {
-		t.Errorf("the admin key did not load from the TPM: %v", err)
+	if NewHardwareKey() == nil {
+		t.Errorf("no hardware key with a TPM: %s", WhyNotHardware())
 	}
 
 	t.Setenv(TPMEnv, "off")
-	k, err := NewDeviceKey()
-	if err != nil || KeyStoreOf(k) != StoreFile {
+	if k, err = NewDeviceKey(); err != nil || KeyStoreOf(k) != StoreFile {
 		t.Errorf("CBB_TPM=off made a key in the %s", KeyStoreOf(k))
 	}
 }

@@ -41,7 +41,7 @@ security audit, each time through one of these properties. Version 2 removes the
 ## Evaluation in one place
 
 The rules are evaluated by a pure function from the record set to the group's **state**
-(protocol.md, section 10, "The state"). It is written twice: in Go (`internal/group`) for the computers, and in
+(protocol.md, section 10, "The state"). It is written in
 Rust (`cbb_core`, `core/`) for `cbb` and, through bindings, for both phone
 apps, which no longer evaluate records themselves. The vectors and the differential run
 compare the whole state, not single answers.
@@ -63,8 +63,7 @@ Every rule of version 2 is in [protocol.md](protocol.md), section 10:
 ## Vectors and tests
 
 - `testdata/interop/v2-records.json` (and `v2-flood.json`, the sets at the limit on records
-  and the checkpoint edges, apart for the size of a file), written by Go (`go test ./internal/authority -run
-  TestV2Vectors -update`, from the evaluation tests' scenarios): record sets with the expected state, at
+  and the checkpoint edges, apart for the size of a file), written by Go's records of 0.5 from its evaluation tests' scenarios: record sets with the expected state, at
   least the cases of the audit findings of version 1 (each with every order): an admin that
   removes another after a claim took effect (X1 and X2 of the second verification), two admin
   phones that remove each other crossed and in order, a chain of three claims, a claim
@@ -81,13 +80,10 @@ Every rule of version 2 is in [protocol.md](protocol.md), section 10:
   over a megabyte of vectors.)
 - `testdata/interop/strict-generated-*.json`, written from the tables of protocol.md: every
   record type of version 2, each field against its row, the canonical form and the sizes,
-  read alike by `internal/authority` and `cbb_core::authority`. The records of `strict.json`
+  read by `cbb_core::authority`. The records of `strict.json`
   and of `strict-mutants-*.json` are of version 1 and are all refused.
-- An order-independence fuzz in Go: random sets over a few phones, computers and roots,
-  evaluated in several orders, batch and one by one, checking the same state, no hang and an
-  iteration limit.
-- The differential run ([differential.md](differential.md)) compares the state bytes of Go
-  and Rust, and the strict verdicts of all four, manifests included.
+- The differential run ([differential.md](differential.md)) compares the strict verdicts of
+  the Rust core and the Kotlin kit, manifests included.
 - [`docs/model/claims.qnt`](model/claims.qnt) states the rules for claims of "Handing the
   group over" in Quint, and CI's `model` job checks its scenarios and, over random runs of
   signing, syncing and waiting by the root, two admins and their claimed roots, the promises
