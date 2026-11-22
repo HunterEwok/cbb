@@ -110,7 +110,6 @@ line here with every new function, and a case for it in the catalogue.
 | G.26 | cbb without its helper joins by QR code (`cbb pair`, `-addr`) | G10 |
 | G.27 | The Nano joins by the phone | G10, H11 |
 | G.28 | A QR code of another session refused | G10 |
-| G.29 | The joining computer listens for the phone | G17 |
 | G.30 | A second phone joins and becomes an admin | G11 |
 | G.31 | The iPad joins as a phone | G11, H15 |
 | G.32 | `cbb invite`, `-for`, `-o` | G12, G13 |

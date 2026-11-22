@@ -111,7 +111,6 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"I8-update", func() { updates(ctx, r, f, timeout) }},
 		{"O9-cache", func() { cache(ctx, r, f, timeout) }},
 		{"O15-fetch-limits", func() { fetchLimits(ctx, r, f, timeout) }},
-		{"G17-joiner-listens", func() { joinerListens(ctx, r, f, timeout) }},
 		{"G8-relay", func() { pairRelay(ctx, r, f, timeout) }},
 		{"U9-small", func() { smallDevice(ctx, r, f, timeout) }},
 		{"D9-subnets", func() { acrossSubnets(ctx, r, f, timeout) }},

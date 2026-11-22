@@ -57,7 +57,7 @@ var automated = map[string][]string{
 	"Y22": {"fleet"}, "Y23": {"fleet"}, "G34": {"fleet"}, "K9": {"fleet"},
 	"Y33": {"fleet"}, "D16": {"fleet"}, "G35": {"fleet"}, "U11": {"fleet"}, "T17": {"fleet"}, "T19": {"fleet"}, "G13": {"fleet"}, "D17": {"fleet"}, "D3": {"fleet"}, "D14": {"fleet"}, "D13": {"fleet"}, "Y15": {"fleet"}, "G16": {"fleet"}, "G40": {"fleet"}, "K3": {"fleet"},
 	"E1": {"fleet"}, "E2": {"fleet"}, "E4": {"fleet"}, "O7": {"fleet"}, "O8": {"fleet"},
-	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G17": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
+	"S17": {"fleet"}, "S23": {"fleet"}, "G31": {"fleet"}, "G32": {"fleet"}, "K14": {"fleet"}, "K11": {"fleet"}, "G41": {"fleet"}, "Y6": {"fleet"}, "I3": {"fleet"}, "I8": {"fleet"}, "I9": {"fleet"}, "I10": {"fleet"}, "I11": {"fleet"}, "I12": {"fleet"}, "I2": {"fleet"}, "I4": {"fleet"}, "I6": {"fleet"}, "I7": {"fleet"}, "O9": {"fleet"}, "U9": {"fleet"}, "O6": {"fleet"}, "O15": {"fleet"}, "G8": {"fleet"}, "S22": {"fleet"}, "I1": {"fleet"},
 	"I5": {"fleet"}, "I20": {"fleet"}, "S12": {"fleet"}, "G15": {"fleet"}, "S7": {"fleet"}, "S6": {"fleet"}, "H5": {"fleet"},
 	"M8": {"fleet"}, "M9": {"fleet"}, "M10": {"fleet"},
 	"W44": {"fleet"}, "W45": {"fleet"}, "W46": {"time"}, "W47": {"time"}, "W48": {"fleet"}, "S25": {"fleet"}, "S26": {"fleet"}, "W43": {"fleet"}, "Y36": {"fleet"},
@@ -86,8 +86,7 @@ var automated = map[string][]string{
 	// test (tools/e2e/upgrade.sh), and a Go test admits a device by the code it shows.
 	"I26": {"ci"}, "I27": {"ci"}, "G44": {"ci"},
 	// The phone kits' tests and the Go tests that read what they sign: the
-	// Swift and Kotlin phones admit a Go joiner by its QR code (G10, the fleet's
-	// G17 the refusals), a takeover (G28), a computer made an admin (G36), the
+	// Swift and Kotlin phones admit a Go joiner by its QR code (G10), a takeover (G28), a computer made an admin (G36), the
 	// watch's shared vectors (G38), the attestation and EK chains (K10).
 	"G10": {"ci"}, "G28": {"ci"}, "G36": {"ci", "phone"}, "G38": {"ci"}, "K10": {"ci"},
 	// The published workflow's check of every release (release-check).

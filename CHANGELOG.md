@@ -2978,6 +2978,8 @@ made with 0.5 is set up again once. The details follow.
 - `cbb`'s join of 0.5 as a device that listens (`pair::listen`, `pair::join`), its mDNS
   announcement (`j=1`) and its search for one by the code alone; `cbb` joins through a
   pairing window (D-130).
+- Go's reader of the join QR code of 0.5 (`internal/phone`) and the bench's case of a
+  computer that listens for the phone (G17), with the forge's `qr:` case (D-130).
 - The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's

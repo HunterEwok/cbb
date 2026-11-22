@@ -1642,12 +1642,12 @@ keeps at most the first four addresses and drops one it cannot read; a text with
 without an address is not a window's QR code. Nothing in it is secret: the code both persons
 compare binds the session.
 
-### The join QR code until the switch (wave 5)
+### The join QR code of the ESP32 firmware
 
-Source: `internal/phone/joinqr.go`, the kits' `JoinCode`.
+Source: `core/src/pair.rs` (`join_qr`, `parse_join_qr`).
 
-The QR code that a joining device shows (section 6, "The joiner listens"), and that the
-phone apps scan, carries a URL:
+The QR code that the ESP32 firmware shows while it waits to join (section 6, "The joiner
+listens"; it joins by a pairing window from 0.7) carries a URL:
 
 ```
 cbb://join?code=123456&addr=192.168.1.20:8764&addr=[fd00::20]:8764&fp=<fingerprint>
@@ -1662,8 +1662,7 @@ cbb://join?code=123456&addr=192.168.1.20:8764&addr=[fd00::20]:8764&fp=<fingerpri
 The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the
 host `join` without regard to case, decodes only percent escapes, never a `+` as a space,
 ignores fields it does not know, keeps at most the first four addresses and drops an address
-without a port; a text without `code` is not a join QR code. The same text, pasted, joins a
-phone without a camera.
+without a port; a text without `code` is not a join QR code.
 
 ## 8. Local control socket
 

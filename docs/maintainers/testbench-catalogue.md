@@ -113,7 +113,6 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G14 | An invitation made and served by a phone that is the hub, and used on a phone | ui | |
 | G15 | Joining with the hub's addresses only: the service may reach them for the join and a failed join takes them back | real | |
 | G16 | The joiner's identity is replaced in one step: the joiner killed at each step (before the welcome, after the certificate, before it confirms) leaves no half-joined device, and the window says whether it was stored | fleet | |
-| G17 | The joining computer listens for the phone (QR): only during the join, only for the phone named in the code | fleet | |
 
 ### 2.2 Admins, the root and removal
 
