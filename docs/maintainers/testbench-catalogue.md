@@ -255,7 +255,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | M7 | The phones' automatic paths follow sync: Android's service writes and its accessibility service sends only while sync is on; the iPhone writes a live copy only while sync is on | ui | |
 | M8 | `cbb sync off` on a device: `cbb status` says so; it lasts across a restart; `cbb copy` still sends; `cbb sync on` ends it; `-for` ends it by itself | fleet | |
 | M9 | An admin's `cbb mute -on DEVICE`: the device's copies reach no one, every devices list says it is muted, its own user (no admin) cannot end it, another admin can (the last command counts, even a shorter mute after a longer one), `-for` ends it by itself; a mute of a device that cannot be reached is refused with why; a device that is no admin mutes no one | fleet | |
-| M10 | `cbb incoming`: the root or an admin sets how long a copy from another device stays live, every member shows it; out of 5s to 1h, or from a device that is no admin, refused; a device cut off for 10 seconds writes the copy made meanwhile with a window of 1m, not with one of 5s | fleet | |
+| M10 | `cbb ttl`: the root or an admin sets how long a copy and a secret live in the group, every member shows it; a copy out of 1m to 1h, a secret out of 5s to 1m, or a setting from a device that is no admin, refused; a device cut off for 10 seconds writes the secret made meanwhile while secrets live 1m, not while they live 5s | fleet | |
 
 ## 7. Images, files and formatted text (O)
 

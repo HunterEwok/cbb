@@ -17,7 +17,9 @@ use crate::live::{self, Live, not_yet};
 use crate::own::Own;
 use crate::roster::{self, id_text};
 use crate::writers;
-use cbb_core::records::body::{MAX_INCOMING_MS, MIN_INCOMING_MS};
+use cbb_core::records::body::{
+    DEFAULT_COPY_TTL_MS, DEFAULT_SECRET_TTL_MS, MAX_COPY_TTL_MS, MAX_SECRET_TTL_MS, MIN_COPY_TTL_MS, MIN_SECRET_TTL_MS,
+};
 use cbb_core::secret::Zeroizing;
 use p256::pkcs8::EncodePrivateKey as _;
 
@@ -338,7 +340,8 @@ impl Service {
                 _ => "hardware",
             }
             .into(),
-            incoming_ms: st.incoming_ms.map_or(cbb_core::authority::DEFAULT_INCOMING, |ms| ms as i64),
+            ttl_ms: st.ttl_ms.unwrap_or(DEFAULT_COPY_TTL_MS) as i64,
+            secret_ttl_ms: st.secret_ttl_ms.unwrap_or(DEFAULT_SECRET_TTL_MS) as i64,
             unreached: live.unreached(),
             port: self.port.lock().unwrap().map_or(0, i64::from),
             quiet: live.networks().map(|n| n.unknown()).unwrap_or_default(),
@@ -555,7 +558,7 @@ impl Service {
                     .write(|set, k| writers::set_hubs(set, k, &h.hubs, now))
                     .map(|_| control::reply(Header::default(), Vec::new()))
             }
-            "incoming" => self.live_incoming(live, &h.value),
+            "ttl" => self.live_ttl(live, &h.value),
             control::op::KEY_LEVEL => self.live_key_level(live, &h.value),
             control::op::MAKE_ADMIN => self.live_make_admin(live, h),
             control::op::RECOVER => self.live_recover(live, h, &m.payload),
@@ -870,17 +873,18 @@ impl Service {
         Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
     }
 
-    /// cbb incoming: how long a copy from another device stays live.
-    fn live_incoming(&self, live: &Live, value: &str) -> Result<Message> {
-        let ms = crate::go_duration_ms(value.trim())
-            .and_then(|ms| u64::try_from(ms).ok())
-            .filter(|ms| (MIN_INCOMING_MS..=MAX_INCOMING_MS).contains(ms))
-            .ok_or_else(|| Error::msg("how long an incoming copy stays live is a duration from 5s to 1h, as 1m"))?;
+    /// cbb ttl: the group's lifetimes of an ordinary copy and of a
+    /// secret, which every member's copies carry (D-129): "COPY [SECRET]",
+    /// durations, where "-" keeps one.
+    fn live_ttl(&self, live: &Live, value: &str) -> Result<Message> {
+        let (ttl_ms, secret_ttl_ms) = ttl_values(value)?;
         let now = uptime::wall_ms().max(0) as u64;
-        live.mesh.write(|set, k| writers::set_incoming(set, k, ms, now))?;
+        live.mesh.write(|set, k| writers::set_ttl(set, k, ttl_ms, secret_ttl_ms, now))?;
+        let st = live.mesh.state();
         (self.log)(&format!(
-            "cbb: a copy from another device now stays live for {} after it arrives",
-            crate::cli::go_duration(ms as i64)
+            "cbb: a copy now lives {} in the group, a secret {}",
+            crate::cli::go_duration(st.ttl_ms.unwrap_or(DEFAULT_COPY_TTL_MS) as i64),
+            crate::cli::go_duration(st.secret_ttl_ms.unwrap_or(DEFAULT_SECRET_TTL_MS) as i64)
         ));
         Ok(control::reply(Header::default(), Vec::new()))
     }
@@ -1280,6 +1284,30 @@ fn away_status(live: &Live) -> Option<control::Away> {
     live.away_status()
 }
 
+/// The two lifetimes cbb ttl sets: "COPY [SECRET]", each a duration within
+/// its bounds or "-" to keep the group's.
+pub(crate) fn ttl_values(value: &str) -> Result<(Option<u64>, Option<u64>)> {
+    const COPY: &str = "a copy lives from 1m to 1h, as 5m";
+    const SECRET: &str = "a secret lives from 5s to 1m, as 30s";
+    let one = |v: &str, lo: u64, hi: u64, why: &str| -> Result<Option<u64>> {
+        if v == "-" {
+            return Ok(None);
+        }
+        crate::go_duration_ms(v)
+            .and_then(|ms| u64::try_from(ms).ok())
+            .filter(|ms| (lo..=hi).contains(ms))
+            .map(Some)
+            .ok_or_else(|| Error::msg(why))
+    };
+    match value.split_whitespace().collect::<Vec<_>>()[..] {
+        [c] => Ok((one(c, MIN_COPY_TTL_MS, MAX_COPY_TTL_MS, COPY)?, None)),
+        [c, s] => {
+            Ok((one(c, MIN_COPY_TTL_MS, MAX_COPY_TTL_MS, COPY)?, one(s, MIN_SECRET_TTL_MS, MAX_SECRET_TTL_MS, SECRET)?))
+        }
+        _ => Err(Error::msg("cbb ttl takes the lifetime of a copy and, after it, of a secret")),
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -1304,7 +1332,7 @@ const FROZEN: &str = "another admin froze this computer's admin key: it changes 
 fn writes(h: &Header, other: bool) -> bool {
     match h.op.as_str() {
         "rename" | "remove" | "freeze" | "thaw" | "resolve" | "hubs" => true,
-        "incoming" => !h.value.is_empty(),
+        "ttl" => !h.value.is_empty(),
         "mute" | "unmute" | "sync" | "away" | "action_on" | "actions_off" | "paste_receive" | "paste_on" => other,
         _ => false,
     }
@@ -1338,9 +1366,7 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
         "key_level" if !root => "only the group's root sets the key level",
         _ if !admin && frozen && writes(h, other) => FROZEN,
         "rename" | "remove" | "freeze" | "thaw" | "resolve" if !admin => NOT_ADMIN,
-        "incoming" if !admin && !h.value.is_empty() => {
-            "only the group's root or an admin sets how long an incoming copy stays live"
-        }
+        "ttl" if !admin && !h.value.is_empty() => "only the group's root or an admin sets how long a copy lives",
         "hubs" if !admin => "only the group's root or an admin that may be a hub sets the main hubs",
         "mute" | "unmute" if !admin && other => MUTE_NOT_ADMIN,
         "sync" if !admin && other => {

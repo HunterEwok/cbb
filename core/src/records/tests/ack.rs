@@ -202,7 +202,7 @@ fn the_person_takes_a_lagging_admin_back_when_the_room_fills() {
     let mut g = g;
     let mut extra = Vec::new();
     for i in 0..9 {
-        let r = g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+        let r = g.root_rec(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000 + i, seen: vec![] });
         small.units(r.id(), 1);
         extra.push(r);
     }
@@ -679,8 +679,8 @@ fn no_ack_is_due_while_the_group_is_stopped() {
     g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     assert!(set.ack_due(&set.state(), &a.hash));
-    let r = g.root_rec(Kind::Copies { incoming_ms: 50_000, seen: vec![] });
-    let twin = root_twin(&g, &r, Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    let r = g.root_rec(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 110_000, seen: vec![] });
+    let twin = root_twin(&g, &r, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 60_000, seen: vec![] });
     g.recs.push(twin);
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();

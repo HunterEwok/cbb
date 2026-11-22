@@ -525,7 +525,7 @@ def record_vectors():
                               15: [[2, "relay.example.org:8765", hashlib.sha256(b"relay pin").digest()],
                                    [2, "relay2.example.org:443", hashlib.sha256(b"relay 2 pin").digest()],
                                    [9, "relay.example.org:8765", hashlib.sha256(b"later").digest()]]})
-    add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
+    add("copies", ADMIN, 8, {10: 300000, 11: seen_of(ROOT), 12: 30000})
     # hubs keep the user's order (not sorted), each once
     add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True), 11: seen_of(ADMIN)})
     add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]), 11: seen_of(ADMIN, ROOT)})
@@ -752,19 +752,22 @@ def record_vectors():
         ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),
         ("thaw without its seen", "records/thaw/seen", 4, {10: [i1]}),
         ("hubs seen with one key twice", "records/hubs/seen", 10, {10: [LAPTOP.id16], 11: [sa, [sa[0], 3, i2]]}),
-        ("copies seen entry without its record ID", "records/copies/seen", 8, {10: 30000, 11: [sa[:2]]}),
-        ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
+        ("copies seen entry without its record ID", "records/copies/seen", 8, {10: 300000, 11: [sa[:2]]}),
+        ("copies without its seen", "records/copies/seen", 8, {10: 300000}),
         ("acknowledgement without its seen", "records/ack/seen", 14, {}),
         ("acknowledgement with an empty seen", "records/ack/seen", 14, {10: []}),
         ("acknowledgement seen out of order", "records/ack/seen", 14, {10: [sb, sa]}),
         ("acknowledgement seen entry without its record ID", "records/ack/seen", 14, {10: [sa[:2]]}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
-    # the bounds of a copies record's incoming time and of settings'
+    # the bounds of a copies record's two lifetimes and of settings'
     # servers (the registry, bounds.json): one past each is refused
-    for name, ms in [("copies incoming_ms one below its least", BOUND["records::body::MIN_INCOMING_MS"] - 1),
-                     ("copies incoming_ms one past its most", BOUND["records::body::MAX_INCOMING_MS"] + 1)]:
-        bad_body(name, "records/copies/incoming_ms", rec(ROOT, 90, 8, {10: ms, 11: [sa]}))
+    for name, ms in [("copies ttl_ms one below its least", BOUND["records::body::MIN_COPY_TTL_MS"] - 1),
+                     ("copies ttl_ms one past its most", BOUND["records::body::MAX_COPY_TTL_MS"] + 1)]:
+        bad_body(name, "records/copies/ttl_ms", rec(ROOT, 90, 8, {10: ms, 11: [sa]}))
+    for name, ms in [("copies secret_ttl_ms one below its least", BOUND["records::body::MIN_SECRET_TTL_MS"] - 1),
+                     ("copies secret_ttl_ms one past its most", BOUND["records::body::MAX_SECRET_TTL_MS"] + 1)]:
+        bad_body(name, "records/copies/secret_ttl_ms", rec(ROOT, 90, 8, {10: 300000, 11: [sa], 12: ms}))
     servers = [[2, f"relay{i}.example.org:443", hashlib.sha256(b"server %d" % i).digest()]
                for i in range(BOUND["records::body::MAX_SERVERS"] + 1)]
     bad_body("settings with one server past its most", "records/settings/servers",
@@ -3434,7 +3437,7 @@ def content_rule(b):
             return rule
     if 7 in c and not isinstance(c[7], bytes):
         return "content/data"
-    if c.get(3, 1) > 4:
+    if 3 in c and not (BOUND["content::MIN_TTL_MS"] <= c[3] <= BOUND["content::MAX_TTL_MS"]):
         return "content/ttl"
     if c.get(4, 1) > 2:
         return "content/via"
@@ -3678,7 +3681,7 @@ def wave4_vectors():
     tree = {1: 5, 2: [{2: "docs", 3: 1}, {2: "docs/a.txt", 4: 5, 5: sha(b"a")}]}
     cases = [
         ("text", {0: 1, 5: "hello"}),
-        ("secret text with a ttl", {0: 1, 2: 1, 3: 1, 5: "hunter2"}),
+        ("secret text with a ttl", {0: 1, 2: 1, 3: 60000, 5: "hunter2"}),
         ("secret image with its text", {0: 2, 2: 1, 5: "alt", 6: png}),
         ("files from a phone", {0: 3, 4: 1, 6: tree}),
         ("a device's state", {0: 4, 7: enc({1: 21})}),
@@ -3689,7 +3692,8 @@ def wave4_vectors():
         ("a critical field of a later version", {0: 1, 5: "x", 40: 1}),
         ("type 0", {0: 0}),
         ("flags 0 written", {0: 1, 2: 0, 5: "x"}),
-        ("ttl 5", {0: 1, 3: 5, 5: "x"}),
+        ("ttl one below its least", {0: 1, 3: BOUND["content::MIN_TTL_MS"] - 1, 5: "x"}),
+        ("ttl one past its most", {0: 1, 3: BOUND["content::MAX_TTL_MS"] + 1, 5: "x"}),
         ("via 3", {0: 1, 4: 3, 5: "x"}),
         ("text without text", {0: 1}),
         ("empty text", {0: 1, 5: ""}),

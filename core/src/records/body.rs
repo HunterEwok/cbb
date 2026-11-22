@@ -139,9 +139,15 @@ pub const LEVEL_PROVEN: u64 = 1;
 pub const LEVEL_HARDWARE: u64 = 2;
 pub const LEVEL_FILES: u64 = 3;
 
-/// The settings' defaults.
-pub const MIN_INCOMING_MS: u64 = 5_000;
-pub const MAX_INCOMING_MS: u64 = 3_600_000;
+/// The lifetimes a copies record sets, which every sender puts in its
+/// copies' `ttl`: an ordinary copy's from a minute to an hour, 5 minutes
+/// by default; a secret's from 5 seconds to a minute, a minute by default.
+pub const MIN_COPY_TTL_MS: u64 = 60_000;
+pub const MAX_COPY_TTL_MS: u64 = 3_600_000;
+pub const DEFAULT_COPY_TTL_MS: u64 = 300_000;
+pub const MIN_SECRET_TTL_MS: u64 = 5_000;
+pub const MAX_SECRET_TTL_MS: u64 = 60_000;
+pub const DEFAULT_SECRET_TTL_MS: u64 = 60_000;
 pub const MAX_KEYS: usize = 256;
 pub const MAX_HUBS: usize = 16;
 pub const MAX_SERVERS: usize = 16;
@@ -178,7 +184,11 @@ pub enum Kind {
     Resolve(Vec<RecordId>),
     Settings(Box<Settings>),
     Copies {
-        incoming_ms: u64,
+        /// An ordinary copy's lifetime (field 10).
+        ttl_ms: u64,
+        /// A secret's lifetime (field 12); 0 when absent, for
+        /// [`DEFAULT_SECRET_TTL_MS`].
+        secret_ttl_ms: u64,
         seen: Vec<Seen>,
     },
     Checkpoint {
@@ -484,9 +494,12 @@ impl Body {
                 }
             }
             Kind::Settings(s) => held |= check_settings(s)?,
-            Kind::Copies { incoming_ms, seen } => {
-                if !(MIN_INCOMING_MS..=MAX_INCOMING_MS).contains(incoming_ms) {
-                    return Err(field(t, "incoming_ms"));
+            Kind::Copies { ttl_ms, secret_ttl_ms, seen } => {
+                if !(MIN_COPY_TTL_MS..=MAX_COPY_TTL_MS).contains(ttl_ms) {
+                    return Err(field(t, "ttl_ms"));
+                }
+                if *secret_ttl_ms != 0 && !(MIN_SECRET_TTL_MS..=MAX_SECRET_TTL_MS).contains(secret_ttl_ms) {
+                    return Err(field(t, "secret_ttl_ms"));
                 }
                 check_seen(seen, t)?;
             }
@@ -596,9 +609,12 @@ impl Body {
             }
             Kind::Resolve(v) => m.push((10, ids(v))),
             Kind::Settings(s) => encode_settings(&mut m, s),
-            Kind::Copies { incoming_ms, seen: s } => {
-                m.push((10, Value::Uint(*incoming_ms)));
+            Kind::Copies { ttl_ms, secret_ttl_ms, seen: s } => {
+                m.push((10, Value::Uint(*ttl_ms)));
                 m.push((11, seen(s)));
+                if *secret_ttl_ms != 0 {
+                    m.push((12, Value::Uint(*secret_ttl_ms)));
+                }
             }
             Kind::Checkpoint { heads, keep } => {
                 let heads = heads
@@ -678,8 +694,9 @@ impl Body {
             }
             TYPE_SETTINGS => (Kind::settings(read_settings(&r)?), &[11, 12, 14, 15], &[10, 13]),
             TYPE_COPIES => {
-                let incoming_ms = r.need_uint(10, f("incoming_ms"))?;
-                (Kind::Copies { incoming_ms, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+                let ttl_ms = r.need_uint(10, f("ttl_ms"))?;
+                let secret_ttl_ms = r.opt_uint(12, 0, f("secret_ttl_ms"))?;
+                (Kind::Copies { ttl_ms, secret_ttl_ms, seen: read_seen(&r, f("seen"))? }, &[10, 11, 12], &[])
             }
             TYPE_CHECKPOINT => {
                 let heads = r.need_list(10, f("heads"), |v| match v.as_array() {

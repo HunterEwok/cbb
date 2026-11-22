@@ -440,7 +440,7 @@ fn a_secret_past_its_lifetime_is_not_sealed_again() {
     let state = w.g.state();
     let s = w.sealing();
     let mut secret = Content::text("pin", true);
-    secret.ttl = 2; // ten minutes
+    secret.ttl = 600_000; // ten minutes
     let rs = readers(&state, &s, &secret, &w.id("phone"), &[], None);
     let mut kept = Kept::new(made(1), secret.clone(), &rs);
     let wall = u64::try_from(kept.made.time.wall).unwrap();

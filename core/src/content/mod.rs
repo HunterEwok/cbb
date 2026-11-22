@@ -39,8 +39,10 @@ pub const FLAG_SECRET: u64 = 1;
 /// The flags 0.6 knows.
 pub const KNOWN_FLAGS: u64 = FLAG_SECRET;
 
-/// The fixed lifetimes of `ttl`: one minute, ten minutes, one hour, one day.
-pub const TTLS_MS: [u64; 4] = [60_000, 600_000, 3_600_000, 86_400_000];
+/// The bounds of `ttl`, in milliseconds: from 5 seconds (the shortest
+/// lifetime of a secret) to an hour (the longest of an ordinary copy).
+pub const MIN_TTL_MS: u64 = 5_000;
+pub const MAX_TTL_MS: u64 = 3_600_000;
 
 /// The largest device state.
 pub const MAX_STATE: usize = 4 << 10;
@@ -77,7 +79,8 @@ pub struct Content {
     pub kind: u64,
     /// The flags (field 2), bits.
     pub flags: u64,
-    /// The lifetime, 1 to 4 (field 3); 0 for the group's `incoming_ms`.
+    /// The lifetime in milliseconds that its sender set, from the group's
+    /// `copies` record (field 3); 0 for none, when the group's applies.
     pub ttl: u64,
     /// 1 phone, 2 universal clipboard (field 4); 0 for a copy.
     pub via: u64,
@@ -120,10 +123,9 @@ impl Content {
         !self.unknown && matches!(self.kind, TYPE_TEXT | TYPE_MEDIA | TYPE_FILES)
     }
 
-    /// The lifetime its `ttl` names, or None for the group's.
+    /// The lifetime its `ttl` gives, or None for the group's.
     pub fn ttl_ms(&self) -> Option<u64> {
-        let i = usize::try_from(self.ttl.checked_sub(1)?).ok()?;
-        TTLS_MS.get(i).copied()
+        (self.ttl != 0).then_some(self.ttl)
     }
 
     /// Checks the rows between fields: what [`Content::read`] refuses.
@@ -131,7 +133,7 @@ impl Content {
         if self.kind == 0 || self.kind > cbor::MAX_INT {
             return Err(RULE_TYPE);
         }
-        if self.ttl > TTLS_MS.len() as u64 {
+        if self.ttl != 0 && !(MIN_TTL_MS..=MAX_TTL_MS).contains(&self.ttl) {
             return Err(RULE_TTL);
         }
         if self.via > 2 {

@@ -174,14 +174,14 @@ fn a_removed_frozen_or_forked_key_commands_nothing() {
     // Two histories: the admin key signs two records with one seq.
     let mut w = World::new();
     let admin = k("desk admin");
-    for ms in [10_000, 20_000] {
+    for ms in [70_000, 80_000] {
         let body = Body {
             group: w.g.gid,
             signer: admin.hash,
             seq: 1,
             prev: None,
             time_ms: 0,
-            kind: Kind::Copies { incoming_ms: ms, seen: vec![] },
+            kind: Kind::Copies { secret_ttl_ms: 0, ttl_ms: ms, seen: vec![] },
             held: false,
         };
         let _ = w.g.set.insert(Record::sign(body, &admin).unwrap());

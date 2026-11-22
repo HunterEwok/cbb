@@ -280,7 +280,7 @@ fn a_sleeper_takes_the_change_from_a_peer_it_does_not_know() {
         seq,
         prev: None,
         time_ms: 0,
-        kind: Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+        kind: Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] },
         held: false,
     };
     let junk: Vec<Record> = vec![

@@ -654,7 +654,7 @@ fn every_kind_of_record_in_any_order() {
     g.rec(&k("admin a"), Kind::Revoke(removal(&[k("lamp").hash], seen.clone())));
     let f = g.rec(&k("admin a"), Kind::Freeze(removal(&[k("admin b").hash], seen)));
     g.rec(&k("admin a"), Kind::Thaw { ids: vec![f.id()], seen: g.seen() });
-    let conflict = g.rec(&k("admin b"), Kind::Copies { incoming_ms: 9_000, seen: g.seen() });
+    let conflict = g.rec(&k("admin b"), Kind::Copies { secret_ttl_ms: 0, ttl_ms: 69_000, seen: g.seen() });
     g.root_rec(Kind::Resolve(vec![conflict.id()]));
     g.root_rec(Kind::settings(Settings { min_rules: 3, ..Settings::default() }));
     g.root_rec(Kind::Hubs { hubs: vec![k("laptop").key.device_id()], seen: g.seen() });
@@ -736,7 +736,7 @@ fn a_head_naming_an_earlier_root_is_void() {
 fn the_retired_types_and_power_refuse() {
     let g = base();
     for t in RETIRED_TYPES {
-        let r = raw(&g, &k("root"), Kind::Copies { incoming_ms: 5_000, seen: vec![] }, |m| {
+        let r = raw(&g, &k("root"), Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000, seen: vec![] }, |m| {
             for (key, v) in m.iter_mut() {
                 if *key == 1 {
                     *v = crate::format::cbor::Value::Uint(*t);
@@ -845,7 +845,7 @@ fn what_waits_is_bounded_and_goes_with_a_fork() {
     let n1 = k("n1");
     let mut early = Vec::new();
     for _ in 0..(crate::records::keep::ceiling(true) + 8) {
-        early.push(g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }));
+        early.push(g.rec(&n1, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }));
     }
     let mut set = set_of(&g.root.key);
     set.insert_all(g.recs.iter().filter(|r| r.body().signer != n1.hash).cloned());
@@ -884,7 +884,7 @@ fn what_waits_for_two_roots_shares_one_room() {
     let (n1, n2) = (k("n1"), k("n2"));
     let ceiling = crate::records::keep::ceiling(true);
     let many = |g: &mut G, by: &K, n: u64| -> Vec<Record> {
-        (0..n).map(|_| g.rec(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] })).collect()
+        (0..n).map(|_| g.rec(by, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] })).collect()
     };
     let second = many(&mut g, &n2, ceiling);
     let first = many(&mut g, &n1, ceiling / 2);
@@ -1527,11 +1527,11 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
     }
     for a in &admins {
         for _ in 0..MAX_ADMIN_RECORDS {
-            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+            g.rec(a, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
         }
     }
     while g.heads[&root.hash].0 < MAX_ROOT_RECORDS as u64 {
-        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        g.root_rec(Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
     }
     let from = g.recs.clone();
     let mut m = set_of(&g.root.key);
@@ -1546,7 +1546,7 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
         assert_eq!(m.insert(r.clone()), Ok(Added::Waiting));
     }
     for _ in 0..64 {
-        let r = g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        let r = g.rec(&n1, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
         assert_eq!(m.insert(r), Ok(Added::Waiting));
     }
     // More IDs than the old profile's 4096 items, and they go as one
@@ -1566,7 +1566,7 @@ fn many_admins() -> (G, Vec<K>) {
     let admins: Vec<K> = (0..250).map(|i| k(&format!("admin {i}"))).collect();
     for (i, a) in admins.iter().enumerate() {
         g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
-        g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        g.rec(a, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
     }
     (g, admins)
 }
@@ -1628,7 +1628,7 @@ fn a_key_a_removal_does_not_name_is_untouched() {
     let (mut g, admins) = many_admins();
     let x = &admins[3];
     let from = g.recs.clone();
-    let later = g.rec(x, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    let later = g.rec(x, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 1, seen: vec![] });
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("laptop").hash]);
     let mut a = set_of(&g.root.key);
     sync_all(&mut a, &g.recs, &g.lists);
@@ -2271,8 +2271,9 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
     let n1 = k("n1");
     let ceiling = crate::records::keep::ceiling(true);
     let cp1 = w1.first.last().unwrap().id();
-    let many: Vec<Record> =
-        (0..ceiling).map(|_| g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] })).collect();
+    let many: Vec<Record> = (0..ceiling)
+        .map(|_| g.rec(&n1, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }))
+        .collect();
     let mut live = set_of(&g.root.key);
     sync_all(&mut live, &g.recs, &g.lists);
     assert_eq!(live.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);

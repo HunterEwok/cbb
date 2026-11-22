@@ -329,7 +329,7 @@ fn an_admins_record_reaches_the_root_on_a_kept_connection() {
     assert_eq!(sr.digest(), sd.digest());
     // d writes as an admin, twice; only its hello goes each time.
     let st = sd.state();
-    sd.write_record(&st, &ad, Kind::Copies { incoming_ms: 30_000, seen: Vec::new() }, 4).unwrap();
+    sd.write_record(&st, &ad, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 90_000, seen: Vec::new() }, 4).unwrap();
     let h = hello(&sd);
     flow((&mut sr, &mut xr), (&mut sd, &mut xd), vec![(false, h)]);
     assert_eq!(sr.digest(), sd.digest(), "the root takes the admin's first record");

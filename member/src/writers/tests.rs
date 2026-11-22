@@ -88,11 +88,14 @@ fn the_root_removes_freezes_thaws_and_renames() {
 }
 
 #[test]
-fn the_root_sets_the_window_hubs_and_settings() {
+fn the_root_sets_the_lifetimes_hubs_and_settings() {
     let (o, mut set) = group("group");
     let root = o.root.clone().unwrap();
-    set_incoming(&mut set, &*root, 30_000, T + 10).unwrap();
-    assert_eq!(set.state().incoming_ms, Some(30_000));
+    set_ttl(&mut set, &*root, Some(120_000), None, T + 8).unwrap();
+    assert_eq!((set.state().ttl_ms, set.state().secret_ttl_ms), (Some(120_000), None));
+    set_ttl(&mut set, &*root, None, Some(30_000), T + 9).unwrap();
+    assert_eq!((set.state().ttl_ms, set.state().secret_ttl_ms), (Some(120_000), Some(30_000)), "each keeps the other");
+    assert!(set_ttl(&mut set, &*root, None, Some(90_000), T + 10).is_err(), "a secret lives a minute at most");
     set_hubs(&mut set, &*root, &["laptop".to_string()], T + 11).unwrap();
     let st = set.state();
     assert_eq!(st.hubs, vec![find(&st, "laptop").unwrap().id]);

@@ -184,9 +184,9 @@ Commands:
   keys [proven|hardware|files]
                           Show or set which keys may be the group's root, an admin or a hub
                           (on the root; hardware by default, files for a root with a key in a file).
-  incoming [duration]     Show or set how long a copy from another device stays live after it
-                          arrives, 5s to 1h (on the root or an admin; 1m by default): it goes
-                          into the clipboard until then, and never after.
+  ttl [copy [secret]]     Show or set how long a copy lives in the group: an ordinary copy 1m to
+                          1h (5m by default), a secret 5s to 1m (1m by default); on the root or
+                          an admin, and every device's copies then carry it; - keeps one.
   recovery [-yubikey] [-leave <name or ID>]...
                           Make this computer the group's root with the recovery key, typed
                           from the sheet or sealed on a YubiKey, when the root is lost;
@@ -344,7 +344,7 @@ pub fn main() {
                 "rename" => cli::rename(&g, rest),
                 "takeover" => cli::takeover(&g, rest),
                 "keys" => cli::keys(&g, rest),
-                "incoming" => cli::incoming(&g, rest),
+                "ttl" => cli::ttl(&g, rest),
                 "handover" => cli::handover(&g, rest),
                 "freeze" | "unfreeze" => cli::freeze(&g, rest, cmd == "freeze"),
                 "resolve" => cli::resolve(&g, rest),

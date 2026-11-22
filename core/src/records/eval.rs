@@ -248,7 +248,12 @@ pub struct State {
     pub settings: Settings,
     /// The settings ask for newer rules than these: no secrets here.
     pub too_old: bool,
-    pub incoming_ms: Option<u64>,
+    /// The ordinary copy's lifetime of the copies record that counts, if
+    /// any (`DEFAULT_COPY_TTL_MS` without one).
+    pub ttl_ms: Option<u64>,
+    /// The secret's lifetime of that record, if it sets one
+    /// (`DEFAULT_SECRET_TTL_MS` without one).
+    pub secret_ttl_ms: Option<u64>,
     /// The group's recovery key.
     pub recovery: KeyHash,
     /// The records that count.
@@ -3202,9 +3207,10 @@ impl<'e, 'a> Epoch<'e, 'a> {
             s.hubs = h.iter().filter(|d| s.device(d).is_some_and(|d| d.rights & RIGHT_HUB != 0)).copied().collect();
         }
         if let Some(best) = self.best(|k| matches!(k, Kind::Copies { .. }))
-            && let Kind::Copies { incoming_ms, .. } = &self.r(best).b().kind
+            && let Kind::Copies { ttl_ms, secret_ttl_ms, .. } = &self.r(best).b().kind
         {
-            s.incoming_ms = Some(*incoming_ms);
+            s.ttl_ms = Some(*ttl_ms);
+            s.secret_ttl_ms = (*secret_ttl_ms != 0).then_some(*secret_ttl_ms);
         }
         s.settings = self.settings.clone();
         s.too_old = self.settings.rules() > RULES_VERSION;

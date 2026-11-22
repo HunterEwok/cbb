@@ -34,8 +34,8 @@ fn fork_after_admin_admission(before: bool) -> (State, State, RecordSet, Record,
             g.push(r.clone());
         }
     }
-    let r = g.root_rec(Kind::Copies { incoming_ms: 50_000, seen: vec![] });
-    let twin = root_twin(&g, &r, Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    let r = g.root_rec(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 110_000, seen: vec![] });
+    let twin = root_twin(&g, &r, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 60_000, seen: vec![] });
     // The admin's side: everything but r, and the twin.
     let mut side: Vec<Record> = g.recs.iter().filter(|q| q.id() != r.id()).cloned().collect();
     side.push(twin.clone());

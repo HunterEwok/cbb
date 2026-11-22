@@ -22,7 +22,7 @@ use cbb_core::records::body::CAP_DIALS;
 use cbb_core::records::{DeviceId, State};
 use cbb_core::rule::Verdict;
 
-use crate::board::{Board, LIVE_WINDOW_MS};
+use crate::board::{Board, COPY_TTL_MS, SECRET_TTL_MS};
 use crate::content::Source;
 use crate::discovery::{Admit, Dialed, Peers};
 use crate::error::{Error, Result};
@@ -31,7 +31,7 @@ use crate::networks::Networks;
 use crate::own::Own;
 use crate::pair::home_address;
 use crate::roster::id_text;
-use crate::sealed::Blob;
+use crate::sealed::{Blob, Lifetimes};
 use crate::uptime;
 
 /// What a hub that only passes copies on refuses.
@@ -308,10 +308,12 @@ impl Live {
         tag(&self.mesh.state())
     }
 
-    /// What follows from the records: the window for incoming copies.
+    /// What follows from the records: the lifetimes the root set, which
+    /// this member's copies carry and its own copies are judged by.
     fn settle(&self, state: &State) {
-        let (_, secret_ms) = self.board.lifetimes();
-        self.board.set_lifetimes(state.incoming_ms.unwrap_or(LIVE_WINDOW_MS), secret_ms);
+        let (ttl_ms, secret_ms) = (state.ttl_ms.unwrap_or(COPY_TTL_MS), state.secret_ttl_ms.unwrap_or(SECRET_TTL_MS));
+        self.board.set_lifetimes(ttl_ms, secret_ms);
+        self.mesh.set_lifetimes(Lifetimes { secret_ms, ttl_ms });
         // The group's last copy, made on a device removed since, no longer
         // counts here and is never written later (docs/protocol.md,
         // section 10, "The copies setting").
@@ -356,7 +358,7 @@ impl Live {
             media: c.manifest.clone(),
             blob: a.blob,
             from: a.from,
-            ttl: secret.then(|| Duration::from_millis(secret_ms.saturating_sub(a.age_ms))),
+            ttl: secret.then(|| Duration::from_millis(c.ttl_ms().unwrap_or(secret_ms).saturating_sub(a.age_ms))),
         };
         if let Some(f) = &*self.on_write.read().unwrap() {
             f(w);
@@ -450,6 +452,8 @@ impl Live {
                 Via::Universal => 2,
                 _ => 0,
             },
+            // The group's lifetime of ordinary copies, as Board::content.
+            ttl: self.board.lifetimes().0,
             ..Content::default()
         };
         let m = self.mesh.copy_media(&c, parts, send)?;

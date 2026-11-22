@@ -225,12 +225,12 @@ impl Builder {
     }
 
     fn fill(&mut self, by: &NamedKey, i: usize, root: bool) {
-        let incoming_ms = MIN_INCOMING_MS + (self.next() % (MAX_INCOMING_MS - MIN_INCOMING_MS));
+        let ttl_ms = MIN_COPY_TTL_MS + (self.next() % (MAX_COPY_TTL_MS - MIN_COPY_TTL_MS));
         if root && i % 4 == 3 {
             let s = Settings { shared: i % 8 == 3, ..Settings::default() };
             self.rec(by, Kind::settings(s));
         } else {
-            self.rec(by, Kind::Copies { incoming_ms, seen: Vec::new() });
+            self.rec(by, Kind::Copies { secret_ttl_ms: 0, ttl_ms, seen: Vec::new() });
         }
     }
 }

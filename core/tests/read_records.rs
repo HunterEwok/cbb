@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Seen};
+use cbb_core::records::body::{Device, Head, MIN_COPY_TTL_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Seen};
 use cbb_core::records::key::group_id;
 use cbb_core::records::set::TAKE_BACK_FIRST;
 use cbb_core::records::{Body, Key, KeyHash, Kind, Record, RecordId, RecordSet};
@@ -101,7 +101,7 @@ fn root_with_dead_checkpoints(n: usize, ids: usize) -> (RecordSet, K, G) {
     d.powers = 0x1ff & !64;
     let r = g.sign(&root, Kind::device(d));
     set.insert(r).unwrap();
-    let r = g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    let r = g.sign(&root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
     set.insert(r).unwrap();
     for c in 0..n {
         let (seq, id) = g.heads[&root.hash];
@@ -279,7 +279,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
         };
         let mut g = G { gid: group_id(&root.key, &recovery), heads: BTreeMap::new(), t: 0 };
         let mut set = RecordSet::new(root.key.clone(), recovery);
-        let r = g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        let r = g.sign(&root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
         set.insert(r).unwrap();
         for c in 0..10usize {
             let (seq, id) = g.heads[&root.hash];
@@ -374,7 +374,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
         at.insert("pruned removal", (rm.body().seq, before));
         let rm_id = rm.id();
         let _ = set.insert(rm);
-        let r = g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+        let r = g.sign(&root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 1, seen: vec![] });
         at.insert("prev pruned", (r.body().seq, Some(rm_id)));
         let _ = set.insert(r);
         for i in 4..6u32 {
@@ -436,7 +436,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
         );
         let (rm_seq, rm_prev) = (rm.body().seq, before);
         recs.push(rm);
-        recs.push(g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] }));
+        recs.push(g.sign(&root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 1, seen: vec![] }));
         for i in 4..6u32 {
             let dk = k(&format!("order dev {i}"));
             recs.push(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER))));
@@ -1933,7 +1933,7 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
 /// with the admissions of the keys it names, as the fold always did.
 fn shown(set: &RecordSet) -> String {
     let s = set.state();
-    format!("{:?} {:?} {:?} {:?} {:?} {:?}", s.devices, s.settings, s.incoming_ms, s.hubs, s.stop, s.conflicts)
+    format!("{:?} {:?} {:?} {:?} {:?} {:?}", s.devices, s.settings, s.ttl_ms, s.hubs, s.stop, s.conflicts)
 }
 
 /// The root renames one device thirty times and sets how long copies stay
@@ -1956,8 +1956,9 @@ fn a_checkpoint_keeps_the_newest_of_what_the_root_set_again() {
     let names: Vec<Record> = (0..30)
         .map(|i| write(&mut set, Kind::device(Device::new(dk.key.clone(), &format!("name {i}"), ROLE_MEMBER))))
         .collect();
-    let copies: Vec<Record> =
-        (0..10).map(|i| write(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })).collect();
+    let copies: Vec<Record> = (0..10)
+        .map(|i| write(&mut set, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + i, seen: vec![] }))
+        .collect();
     // The root's newest record is its head; one more puts these below it.
     write(&mut set, Kind::device(Device::new(k("one more").key.clone(), "dev", ROLE_MEMBER)));
     let before = shown(&set);

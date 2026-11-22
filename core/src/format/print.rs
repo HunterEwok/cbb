@@ -199,7 +199,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
             .get(i)
             .copied()
             .filter(|n| !n.is_empty()),
-        8 => ["incoming_ms", "seen"].get(i).copied(),
+        8 => ["ttl_ms", "seen", "secret_ttl_ms"].get(i).copied(),
         9 => ["heads", "keep"].get(i).copied(),
         10 => ["hubs", "seen"].get(i).copied(),
         14 => ["seen", "spare"].get(i).copied(),

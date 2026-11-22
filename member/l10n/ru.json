@@ -17,7 +17,7 @@
  "Whoever invited you sees it on the hub and admits this device if it matches.": "Тот, кто вас пригласил, видит его на хабе и принимает это устройство, если отпечаток совпадает.",
  "Waiting for them; press Ctrl+C to give up.": "Ждём его; Ctrl+C, чтобы отказаться.",
  "A claim to take the group over now waits {} on each member, from when it first holds the claim.": "Захват группы теперь ждёт {} на каждом участнике, с момента, когда тот впервые получил заявку.",
- "A copy from another device goes into the clipboard for {} after it arrives; after that this device keeps its own clipboard, however old.": "Копия с другого устройства попадает в буфер обмена на {} после прихода; потом это устройство оставляет свой буфер обмена, каким бы старым он ни был.",
+ "A copy lives {} in the group and a secret {}: a device that always listens holds it until then, and a phone shows it until then.": "Копия живёт в группе {}, а секрет {}: постоянно слушающее устройство держит её до этого срока, а телефон до этого срока её показывает.",
  "A device that joins with an invitation syncs away from home through the\ngroup's hub, so sync away from home is turned on here.\n": "Устройство, которое входит по приглашению, синхронизируется вне дома через\nхаб группы, поэтому синхронизация вне дома здесь включается.\n",
  "Add a device: cbb pair here opens a pairing window; on the new computer type its six digits (cbb pair -code), or scan its QR code with the new phone.": "Добавить устройство: cbb pair здесь открывает окно подключения; на новом компьютере введите его шесть цифр (cbb pair -code) или отсканируйте его QR-код новым телефоном.",
  "Automatic updates are off; cbb update installs a release by hand.": "Автоматические обновления выключены; cbb update ставит выпуск вручную.",

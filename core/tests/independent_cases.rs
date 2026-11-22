@@ -19,7 +19,7 @@ fn base(tag: &str, n: usize) -> (RecordSet, K, u64) {
     let mut t = 5_000u64;
     t += 500;
     let st = set.state();
-    set.write_record(&st, &r, Kind::Copies { incoming_ms: 30_000, seen: vec![] }, t).unwrap();
+    set.write_record(&st, &r, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 90_000, seen: vec![] }, t).unwrap();
     for i in 0..n {
         t += 500;
         let st = set.state();

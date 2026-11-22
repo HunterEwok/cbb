@@ -541,16 +541,21 @@ pub fn recover_with(
     written.map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
 }
 
-/// Sets how long a copy from another device stays live on each member.
-pub fn set_incoming(
+/// Sets the group's lifetimes, which every member's copies carry: of an
+/// ordinary copy and of a secret, in milliseconds; None keeps the one the
+/// group has (D-129).
+pub fn set_ttl(
     set: &mut RecordSet,
     signer: &dyn ExternalKey,
-    incoming_ms: u64,
+    ttl_ms: Option<u64>,
+    secret_ttl_ms: Option<u64>,
     now_ms: u64,
 ) -> Result<Vec<Record>> {
     let st = set.state();
-    set.write_record(&st, signer, Kind::Copies { incoming_ms, seen: Vec::new() }, now_ms)
-        .map_err(|e| Error::msg(format!("cannot set the window for incoming copies: {e}")))
+    let ttl_ms = ttl_ms.or(st.ttl_ms).unwrap_or(cbb_core::records::body::DEFAULT_COPY_TTL_MS);
+    let secret_ttl_ms = secret_ttl_ms.or(st.secret_ttl_ms).unwrap_or(0);
+    set.write_record(&st, signer, Kind::Copies { secret_ttl_ms, ttl_ms, seen: Vec::new() }, now_ms)
+        .map_err(|e| Error::msg(format!("cannot set the lifetimes of copies: {e}")))
 }
 
 /// Names the group's hubs, by the devices a person names, each with the

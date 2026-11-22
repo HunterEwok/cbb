@@ -414,9 +414,12 @@ pub struct Status {
     /// TPM or a Secure Enclave.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key_problem: String,
-    /// How long a copy from another device stays live after it arrives.
+    /// How long a copy lives in the group, by the root's word (D-129).
     #[serde(default, skip_serializing_if = "is_zero_i")]
-    pub incoming_ms: i64,
+    pub ttl_ms: i64,
+    /// How long a secret lives in the group.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub secret_ttl_ms: i64,
     /// The claims to take the group over that wait or stop the group.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub claims: Vec<Claim>,

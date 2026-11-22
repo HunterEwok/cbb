@@ -36,7 +36,7 @@ fn every_type_reads_back_padded_to_a_step() {
         Content::text("hello", false),
         Content::text("hunter2", true),
         Content { kind: TYPE_MEDIA, manifest: Some(png()), text: Some("alt".into()), ..Content::default() },
-        Content { kind: TYPE_FILES, manifest: Some(files()), ttl: 2, via: 1, ..Content::default() },
+        Content { kind: TYPE_FILES, manifest: Some(files()), ttl: 600_000, via: 1, ..Content::default() },
         Content::state(&[0xa1, 0x01, 0x02]),
     ];
     for c in cases {
@@ -175,13 +175,19 @@ fn rows_and_rows_between_fields() {
     assert_eq!(Content::read(&b), Err(crate::format::copy::RULE_CONTENT_PAD));
 }
 
+// refuses: content/ttl
 #[test]
-fn ttl_names_one_of_four_lifetimes() {
+fn ttl_is_milliseconds_within_its_bounds() {
     let mut c = Content::text("x", true);
     assert_eq!(c.ttl_ms(), None);
-    for (i, ms) in TTLS_MS.iter().enumerate() {
-        c.ttl = i as u64 + 1;
-        assert_eq!(c.ttl_ms(), Some(*ms));
+    for ms in [MIN_TTL_MS, 60_000, MAX_TTL_MS] {
+        c.ttl = ms;
+        assert_eq!(c.ttl_ms(), Some(ms));
+        assert_eq!(c.check(), Ok(()));
+    }
+    for ms in [1, MIN_TTL_MS - 1, MAX_TTL_MS + 1] {
+        c.ttl = ms;
+        assert_eq!(c.check(), Err(RULE_TTL), "{ms}");
     }
 }
 

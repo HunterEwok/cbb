@@ -167,7 +167,7 @@ fn random_group(seed: u64) -> G {
             let mine: Vec<Record> = g.recs.iter().filter(|r| r.body().signer == root.hash).cloned().collect();
             if let Some(r) = mine.get(rng.below(mine.len())) {
                 let b = r.body();
-                let kind = Kind::Copies { incoming_ms: MIN_INCOMING_MS + 7 + step as u64, seen: vec![] };
+                let kind = Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 7 + step as u64, seen: vec![] };
                 let body =
                     Body { group: g.gid, signer: b.signer, seq: b.seq, prev: b.prev, time_ms: 0, kind, held: false };
                 let twin = crate::testkit::sign_by(body, &root);
@@ -184,7 +184,7 @@ fn random_group(seed: u64) -> G {
                 g.device(&a, &k(&format!("admin device {seed} {step}")), "d", |_| {});
             }
             6 => {
-                g.rec(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + step as u64, seen: vec![] });
+                g.rec(&root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + step as u64, seen: vec![] });
             }
             _ => {
                 let Some(&(seq, id)) = g.heads.get(&root.hash) else { continue };
@@ -294,7 +294,7 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
             }
         } else {
             let a = &admins[i % admins.len()];
-            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i as u64, seen: vec![] });
+            g.rec(a, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + i as u64, seen: vec![] });
         }
     }
     let key_of = |r: &Record| -> Key {
@@ -368,9 +368,9 @@ fn a_record_the_counting_checkpoint_left_out_waits_for_the_one_above_that_keeps_
     let root = k("root");
     let admin = k("admin 0");
     let admission = g.admin(&k("phone 0"), &admin, POWER_ADMIT);
-    let copies = g.rec(&admin, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    let copies = g.rec(&admin, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] });
     // The admin's head, an anchor of both checkpoints.
-    let newer = g.rec(&admin, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    let newer = g.rec(&admin, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 1, seen: vec![] });
     // Each checkpoint covers the root's line and the admin's.
     let checkpoint = |g: &mut G, keep: Vec<RecordId>| {
         let mut heads: Vec<Head> = [root.hash, admin.hash]

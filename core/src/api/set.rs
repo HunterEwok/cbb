@@ -388,7 +388,10 @@ enum WriteKind {
         shared: bool,
     },
     Copies {
-        incoming_ms: u64,
+        ttl_ms: u64,
+        /// 0 for none: the default, a minute.
+        #[serde(default)]
+        secret_ttl_ms: u64,
     },
     Hubs {
         /// Device IDs, base64.
@@ -497,7 +500,7 @@ impl WriteKind {
             WriteKind::Settings { key_level, min_rules, shared } => {
                 Kind::settings(Settings { key_level, min_rules, shared, servers: Vec::new() })
             }
-            WriteKind::Copies { incoming_ms } => Kind::Copies { incoming_ms, seen: Vec::new() },
+            WriteKind::Copies { ttl_ms, secret_ttl_ms } => Kind::Copies { secret_ttl_ms, ttl_ms, seen: Vec::new() },
             WriteKind::Hubs { hubs } => Kind::Hubs {
                 hubs: hubs
                     .iter()
@@ -862,8 +865,11 @@ fn view(set: &RecordSet, st: &State) -> Map<String, Value> {
     m.insert("halted".into(), Value::Bool(st.halted()));
     m.insert("too_old".into(), Value::Bool(st.too_old));
     m.insert("update_needed".into(), Value::Bool(st.update_needed));
-    if let Some(ms) = st.incoming_ms {
-        m.insert("incoming_ms".into(), Value::from(ms));
+    if let Some(ms) = st.ttl_ms {
+        m.insert("ttl_ms".into(), Value::from(ms));
+    }
+    if let Some(ms) = st.secret_ttl_ms {
+        m.insert("secret_ttl_ms".into(), Value::from(ms));
     }
     let conflicts: Vec<Value> = st
         .conflicts

@@ -137,10 +137,14 @@ struct ManageArgs {
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
-    /// With incoming: how long a copy from another device stays live, in
-    /// milliseconds.
+    /// With ttl: the group's lifetime of an ordinary copy, in
+    /// milliseconds; absent keeps the group's.
     #[serde(default)]
-    incoming_ms: u64,
+    ttl_ms: Option<u64>,
+    /// With ttl: the group's lifetime of a secret, in milliseconds; absent
+    /// keeps the group's.
+    #[serde(default)]
+    secret_ttl_ms: Option<u64>,
     /// With forwarder, on the root: the hub's forwarder, `host:port` or
     /// `default` for the project's, and its key's pin in base64 (`key`).
     #[serde(default)]
@@ -894,11 +898,13 @@ impl Phone {
                     self.renew_by(&key);
                     return Ok(r);
                 }
-                // How long a copy from another device stays live on each
-                // member, which any admin sets (format, "copies").
-                "incoming" => {
-                    mesh.write_by(&key, |set, k| writers::set_incoming(set, k, a.incoming_ms, now))?;
-                    return Ok(json!({ "incoming_ms": a.incoming_ms }));
+                // The group's lifetimes of copies, which every member's
+                // copies carry, set by the root or an admin (format,
+                // "copies").
+                "ttl" => {
+                    mesh.write_by(&key, |set, k| writers::set_ttl(set, k, a.ttl_ms, a.secret_ttl_ms, now))?;
+                    let st = mesh.state();
+                    return Ok(json!({ "ttl_ms": st.ttl_ms, "secret_ttl_ms": st.secret_ttl_ms }));
                 }
                 "hubs" => {
                     mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
@@ -1629,7 +1635,8 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
         "too_old": st.too_old,
         "change_arriving": st.first_missing.is_some() || st.list_missing.is_some(),
         "key_level": level_name(st.settings.level()),
-        "incoming_ms": st.incoming_ms,
+        "ttl_ms": st.ttl_ms,
+        "secret_ttl_ms": st.secret_ttl_ms,
         "devices": devices,
     })
 }
@@ -1812,10 +1819,13 @@ mod tests {
         // copies, which an admin sets with a copies record.
         let g = ok(&call("group", Value::Null));
         assert_eq!(g["key_level"], "files", "the test's group keeps its keys in files");
-        assert_eq!(g["incoming_ms"], Value::Null);
-        let incoming = json!({ "action": "incoming", "incoming_ms": 120_000, "public": b64(&root.0.public()) });
-        assert_eq!(ok(&m.manage(incoming.to_string().as_bytes(), sign, ctx(root)))["incoming_ms"], 120_000);
-        assert_eq!(ok(&call("group", Value::Null))["incoming_ms"], 120_000);
+        assert_eq!((&g["ttl_ms"], &g["secret_ttl_ms"]), (&Value::Null, &Value::Null));
+        let ttl = json!({ "action": "ttl", "ttl_ms": 120_000, "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(ttl.to_string().as_bytes(), sign, ctx(root)))["ttl_ms"], 120_000);
+        let secret = json!({ "action": "ttl", "secret_ttl_ms": 30_000, "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(secret.to_string().as_bytes(), sign, ctx(root)))["secret_ttl_ms"], 30_000);
+        let g = ok(&call("group", Value::Null));
+        assert_eq!((&g["ttl_ms"], &g["secret_ttl_ms"]), (&json!(120_000), &json!(30_000)));
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");

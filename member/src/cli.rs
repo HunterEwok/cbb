@@ -105,27 +105,27 @@ fn status_in_group(g: &Global) -> Result<crate::control::Status> {
     m.header.status.filter(|s| !s.group.is_empty()).ok_or_else(|| Error::msg(tr!("this device is in no group")))
 }
 
-/// cbb incoming: shows or sets how long a copy from another device stays
-/// live after it arrives.
-pub(crate) fn incoming(g: &Global, args: &[String]) -> Result<()> {
-    const USE: &str = "cbb incoming [duration], from 5s to 1h, as 1m";
+/// cbb ttl: shows or sets how long a copy lives in the group: an ordinary
+/// copy and a secret, which every device's copies carry (D-129).
+pub(crate) fn ttl(g: &Global, args: &[String]) -> Result<()> {
+    const USE: &str = "cbb ttl [copy [secret]]: a copy 1m to 1h, a secret 5s to 1m, - keeps one, as cbb ttl 10m 30s";
     match args {
-        [] => {
-            let s = status_in_group(g)?;
-            println!("{}", incoming_line(s.incoming_ms));
-        }
-        [a] if !help_flag(a) => {
-            let ms = crate::go_duration_ms(a).ok_or_else(|| usage(USE))?;
-            ask(g, Header { value: a.clone(), ..header("incoming") })?;
-            println!("{}", incoming_line(ms));
+        [] => {}
+        [a, ..] if help_flag(a) => return Err(usage(USE)),
+        [_] | [_, _] => {
+            let value = args.join(" ");
+            crate::service::on_live::ttl_values(&value).map_err(|e| usage(format!("{USE}: {e}")))?;
+            ask(g, Header { value, ..header("ttl") })?;
         }
         _ => return Err(usage(USE)),
     }
+    let s = status_in_group(g)?;
+    println!("{}", ttl_line(s.ttl_ms, s.secret_ttl_ms));
     Ok(())
 }
 
-/// What happens to a copy from another device (Go's incomingLine).
-fn incoming_line(ms: i64) -> String {
+/// A duration as a person reads it: 5m, 1h, 1m30s.
+fn short_duration(ms: i64) -> String {
     let mut s = go_duration(ms);
     if s.ends_with("m0s") {
         s.truncate(s.len() - 2);
@@ -133,9 +133,15 @@ fn incoming_line(ms: i64) -> String {
     if s.ends_with("h0m") {
         s.truncate(s.len() - 2);
     }
+    s
+}
+
+/// How long a copy and a secret live in the group.
+fn ttl_line(ms: i64, secret_ms: i64) -> String {
     tr!(
-        "A copy from another device goes into the clipboard for {} after it arrives; after that this device keeps its own clipboard, however old.",
-        s
+        "A copy lives {} in the group and a secret {}: a device that always listens holds it until then, and a phone shows it until then.",
+        short_duration(ms),
+        short_duration(secret_ms)
     )
 }
 
@@ -556,11 +562,10 @@ mod tests {
     }
 
     #[test]
-    fn incoming_line_drops_zero_units() {
-        assert!(incoming_line(60_000).contains(" for 1m after"));
-        assert!(incoming_line(3_600_000).contains(" for 1h after"));
-        assert!(incoming_line(5_000).contains(" for 5s after"));
-        assert!(incoming_line(90_000).contains(" for 1m30s after"));
+    fn ttl_line_drops_zero_units() {
+        assert!(ttl_line(60_000, 5_000).contains(" 1m in the group and a secret 5s:"));
+        assert!(ttl_line(3_600_000, 60_000).contains(" 1h in the group and a secret 1m:"));
+        assert!(ttl_line(90_000, 30_000).contains(" 1m30s in the group and a secret 30s:"));
     }
 
     #[test]

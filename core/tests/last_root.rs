@@ -323,7 +323,7 @@ fn settings_hubs_and_copies_are_carried() {
     let (old, st) = (member.state(), g.set.state());
     assert_eq!(st.settings, old.settings, "settings");
     assert_eq!(st.hubs, old.hubs, "hubs");
-    assert_eq!(st.incoming_ms, old.incoming_ms, "copies");
+    assert_eq!(st.ttl_ms, old.ttl_ms, "copies");
 }
 
 /// L4.3: a full group (256 devices with settings, hubs and copies) fits
