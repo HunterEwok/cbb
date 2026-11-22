@@ -361,16 +361,29 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val gs = n?.let { runCatching { it.group() }.onFailure { e -> Log.w(TAG, "the member's group", e) }.getOrNull() } ?: return emptyList()
         g.admin = gs.me.admin
         val peers = runCatching { n.peers() }.getOrNull().orEmpty().associateBy { it.device }
+        // The hub whose offer this phone keeps: in use while its tunnel
+        // runs, or while the phone reaches it at home, as on the iPhone.
+        // The members a connected computer reaches for this phone, as the
+        // hub away from home does (docs/protocol.md, section 4, "Reach").
+        val reached = peers.values.flatMap { it.reach }.toSet()
+        val a = awayState06
+        val away = a?.takeIf { !it.hub && it.hubDevice.isNotEmpty() }
         return gs.devices.map {
             val p = peers[it.device]
             val self = it.device == g.device
             Device(
-                id = it.device, name = it.name, online = self || p != null, role = if (it.role == "computer") "member" else it.role,
+                id = it.device, name = it.name, online = self || p != null || it.device in reached, role = if (it.role == "computer") "member" else it.role,
                 os = it.os.ifEmpty { null }, isSelf = self, admin = it.admin, isRoot = it.device == gs.rootDevice,
                 canMakeAdmin = gs.isRoot && !self && it.offersAdmin,
                 keysInFile = p?.keyStore == KitRecords.FILE, frozen = it.frozen,
                 device = if (self) ownDevice.cleaned else null, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
-                hub = if (it.hub) HubMark.HUB else null,
+                hub = when {
+                    self && a?.hub == true -> HubMark.HUB
+                    away?.hubDevice == it.device && (away.through || p != null) -> HubMark.IN_USE
+                    it.hub || away?.hubDevice == it.device -> HubMark.HUB
+                    else -> null
+                },
+                throughHub = !self && p == null && it.device in reached,
                 muted = if (self) Hold.of(mutedUntilMS) else if (p?.muted == true) Hold(null) else null,
                 syncOff = if (self) syncOffUntilMS?.let(Hold::of) else null,
             )
