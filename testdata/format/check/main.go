@@ -591,6 +591,11 @@ func main() {
 								return nil, errors.New("form/critical")
 							}
 						}
+						if s2, ok := pre[uint64(8)]; ok {
+							if b, isBytes := s2.([]byte); !isBytes || len(b) != 32 {
+								return nil, errors.New("grants/signer2")
+							}
+						}
 						typ, _ := pre[uint64(1)].(uint64)
 						gr, _ := pre[uint64(2)].([]byte)
 						lf, _ := pre[uint64(10)].([]byte)

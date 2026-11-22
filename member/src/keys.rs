@@ -97,6 +97,10 @@ impl Sealed {
 /// group.Sealer; None where secrets stay in files: no helper beside cbb,
 /// or no TPM or Secure Enclave that seals.
 pub fn seal(secret: &[u8]) -> Result<Option<Sealed>> {
+    #[cfg(test)]
+    if FILES_ONLY.with(std::cell::Cell::get) {
+        return Ok(None);
+    }
     #[cfg(target_os = "macos")]
     {
         // As Go's group.Sealer: CBB_TPM=off keeps secrets in files, and an
@@ -198,6 +202,18 @@ impl ExternalKey for EnclaveKey {
     fn held(&self) -> Option<HeldKey> {
         Some(HeldKey::SecureEnclave(self.0.blob()))
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static FILES_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Keeps the secrets this test thread seals in files, as on a device
+/// without the hardware: for a test of the files' own form.
+#[cfg(test)]
+pub fn files_only_on_this_thread() {
+    FILES_ONLY.with(|f| f.set(true));
 }
 
 /// Whether CBB_TPM=off keeps new keys and secrets out of the hardware, as

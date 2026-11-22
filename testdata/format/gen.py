@@ -1036,6 +1036,9 @@ def grant_vectors(admin_record):
     root_bad("grant of another type", "grants/shape", {**g, 1: 2})
     root_bad("grant with an unknown critical field", "form/critical", {**g, 200: 1})
     root_bad("grant with field 9", "form/critical", {**g, 9: 1})
+    two = {**g, 3: ROOT.hash}
+    genv, _, _ = envelope2("grant", ROOT, two, signer2=SIG2_HASH[:31])
+    bad("a second signer's hash of 31 bytes", "grants/signer2", message(genv), L)
     root_bad("root grant naming a grant it replaces", "grants/replaces", {**g, 18: sha(b"some grant")})
     root_bad("grant with recovery seq 0 written", "form/default", {**g, 19: 0})
     root_bad("grant made under a recovery seq the leaf does not know", "grants/recovery", {**g, 19: 1})
@@ -3470,13 +3473,18 @@ def command_rule(env_b):
         env = dec(env_b)
     except Bad as e:
         return e.rule
-    if not (isinstance(env, list) and len(env) == 2 and all(isinstance(x, bytes) for x in env)):
+    if not (isinstance(env, list) and len(env) in (2, 3) and all(isinstance(x, bytes) for x in env)):
         return "env/shape"
     if len(env[0]) > 2 << 20:
         return "env/size"
     m = dec(env[0])
-    if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 10, 11, 13, 14, 15) for k in m):
+    # A second signature goes with signer2 (key 8) and only with it.
+    if (8 in m) != (len(env) == 3):
+        return "env/shape"
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 8, 10, 11, 13, 14, 15) for k in m):
         return "form/critical"
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "commands/signer2"
     t = m.get(1)
     if not (isinstance(t, int) and 1 <= t <= 10):
         return "commands/type"
@@ -3787,6 +3795,11 @@ def wave4_vectors():
     ]:
         env, b = envelope("command", ADMIN, m)
         commands.append({"name": name, "verdict": command_rule(env), "diag": diag(m), "envelope": env.hex()})
+    for name, signer2 in [("a second signer", SIG2_HASH), ("a second signer's hash of 31 bytes", SIG2_HASH[:31])]:
+        m = body(4, {})
+        env, _, _ = envelope2("command", ADMIN, m, sig2=fake("a short second signature", 64), signer2=signer2)
+        commands.append({"name": name, "verdict": command_rule(env), "diag": diag({**m, 8: signer2}),
+                         "envelope": env.hex()})
     out["commands"] = commands
 
     orders = []
