@@ -448,6 +448,7 @@
     <string name="reason_take_over">Tomar el grupo del teléfono perdido</string>
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_unmute">Quitar el silencio a un dispositivo</string>
+    <string name="recovery_06">Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</string>
     <string name="recovery_body">Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo toma el grupo con ella.</string>
     <string name="recovery_done">Hecho</string>
     <string name="recovery_done_body">Este teléfono olvida ahora la clave. Para obtener otra hoja, crea una clave de recuperación nueva.</string>

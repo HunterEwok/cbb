@@ -160,10 +160,6 @@ class AppModel(private val app: Context) {
     var incomingNote by mutableStateOf<Note?>(null)
         private set
 
-    /** When the group's recovery key was made, on the root phone while the group has one. */
-    var recoveryMade by mutableStateOf<java.time.Instant?>(null)
-        private set
-
     /** What the last change to the recovery key said. */
     var recoveryNote by mutableStateOf<Note?>(null)
 
@@ -582,7 +578,6 @@ class AppModel(private val app: Context) {
         notices = withContext(Dispatchers.IO) { group.notices }
         rootChanged = group.rootChanged
         removed = withContext(Dispatchers.IO) { group.removed }
-        recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
         incomingMS = if (admin) withContext(Dispatchers.IO) { group.incomingMS } else null
         notifier.observe(d)
@@ -1040,24 +1035,6 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Makes the group's recovery key and returns its sheet, which only the
-     * screen that shows it keeps; null when it failed, with recoveryNote
-     * saying why.
-     */
-    suspend fun makeRecovery(): Core.RecoverySheet? {
-        val sheet = try {
-            group.makeRecovery().also { recoveryNote = null }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            recoveryNote = describe(e)
-            null
-        }
-        update()
-        return sheet
-    }
-
-    /**
      * Seals the recovery key of sheet (its QR code) onto a YubiKey held to
      * the phone, after its PIN; replaceDefault is the person's consent to
      * replace a factory management key. It returns what to tell the person.
@@ -1089,19 +1066,6 @@ class AppModel(private val app: Context) {
         null
     } finally {
         cardPrompt = null
-    }
-
-    /** Removes the group's recovery key. */
-    suspend fun removeRecovery() {
-        recoveryNote = try {
-            group.removeRecovery()
-            Note(R.string.recovery_removed)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
     }
 
     /** Sets which keys may be the group's admins and hubs. */

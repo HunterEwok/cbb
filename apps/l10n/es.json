@@ -573,6 +573,7 @@
   "Made": "Creada",
   "Made on %1$s.": "Creada el %1$s.",
   "Made on %@.": "Creada el %@.",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.",
   "Make": "Crear",
   "Make %1$s an admin?": "¿Hacer administrador a %1$s?",
   "Make %@ a hub?": "¿Convertir %@ en hub?",

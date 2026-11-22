@@ -448,6 +448,7 @@
     <string name="reason_take_over">تولّي المجموعة من الهاتف المفقود</string>
     <string name="reason_unfreeze">إلغاء تجميد حاسوب مشرف</string>
     <string name="reason_unmute">إلغاء كتم جهاز</string>
+    <string name="recovery_06">أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.</string>
     <string name="recovery_body">ورقة تطبعها وتحفظها بعيدًا عن هواتفك. إذا فُقد الهاتف الرئيسي للمجموعة، يتولى جهاز آخر من المجموعة أمرها بها.</string>
     <string name="recovery_done">تم</string>
     <string name="recovery_done_body">ينسى هذا الهاتف المفتاح الآن. للحصول على ورقة مرة أخرى، أنشئ مفتاح استرداد جديدًا.</string>

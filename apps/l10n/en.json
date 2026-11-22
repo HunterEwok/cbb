@@ -575,6 +575,7 @@
   "Made": {"in": ["aurora:SettingsPage", "harmony:recovery_made"]},
   "Made on %1$s.": {"in": ["android:recovery_made"]},
   "Made on %@.": {"in": ["ios"]},
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": {"in": ["android:recovery_06"]},
   "Make": {"in": ["aurora:CollectionNameDialog", "aurora:NewGroupPage"]},
   "Make %1$s an admin?": {"in": ["android:make_admin_title"]},
   "Make %@ a hub?": {"in": ["mac"]},

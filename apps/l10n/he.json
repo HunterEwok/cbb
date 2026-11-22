@@ -573,6 +573,7 @@
   "Made": "נוצר",
   "Made on %1$s.": "נוצר ב-%1$s.",
   "Made on %@.": "נוצר ב-%@.",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.",
   "Make": "יצירה",
   "Make %1$s an admin?": "להפוך את %1$s למנהל?",
   "Make %@ a hub?": "להפוך את %@ לרכזת?",

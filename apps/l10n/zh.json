@@ -573,6 +573,7 @@
   "Made": "已创建",
   "Made on %1$s.": "创建于 %1$s。",
   "Made on %@.": "创建于 %@。",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。",
   "Make": "创建",
   "Make %1$s an admin?": "让 %1$s 成为管理员？",
   "Make %@ a hub?": "让 %@ 成为中心节点？",

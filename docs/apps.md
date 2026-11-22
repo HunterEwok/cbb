@@ -44,7 +44,10 @@ they look, so both apps are built to the same plan.
    On 0.6 (every phone app) the new device always dials
    (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
    without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
-   set kept where the member runs) and shows its recovery sheet once; on the root phone, or a
+   set kept where the member runs) and shows its recovery sheet once. The recovery key is part
+   of the group's ID, so nothing makes a new one or removes it later: Settings on the root only
+   says so, and a lost sheet means that the main device can never change, so the way out is a
+   new group (D-126). On the root phone, or a
    phone the records name an admin, it then opens the home window: its QR code and six digits
    on screen, announced by NSD (Bonjour on the iPhone) with `p=1`, `f` and `i` (never the
    digits), open for five minutes. **Join a group** opens the camera and dials the window of the

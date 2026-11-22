@@ -451,6 +451,7 @@
     <string name="reason_take_over">Take the group over from the lost phone</string>
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_unmute">Unmute a device</string>
+    <string name="recovery_06">Made with the group, and its sheet was shown once. Without the sheet the group\'s main device cannot change: if the sheet is lost, make a new group.</string>
     <string name="recovery_body">A sheet to print and keep away from your phones. If the group\'s main phone is lost, another device of the group takes the group over with it.</string>
     <string name="recovery_done">Done</string>
     <string name="recovery_done_body">This phone forgets the key now. To get a sheet again, make a new recovery key.</string>

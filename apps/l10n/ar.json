@@ -573,6 +573,7 @@
   "Made": "تم إنشاؤه",
   "Made on %1$s.": "أُنشئ في %1$s.",
   "Made on %@.": "أُنشئ في %@.",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.",
   "Make": "إنشاء",
   "Make %1$s an admin?": "جعل %1$s مشرفًا؟",
   "Make %@ a hub?": "جعل %@ محورًا؟",

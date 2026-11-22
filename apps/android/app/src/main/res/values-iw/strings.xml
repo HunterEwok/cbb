@@ -448,6 +448,7 @@
     <string name="reason_take_over">השתלטות על הקבוצה מהטלפון שאבד</string>
     <string name="reason_unfreeze">הפשרת מחשב מנהל</string>
     <string name="reason_unmute">ביטול השתקה של מכשיר</string>
+    <string name="recovery_06">נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</string>
     <string name="recovery_body">דף להדפסה ולשמירה הרחק מהטלפונים שלך. אם הטלפון הראשי של הקבוצה אבד, מכשיר אחר בקבוצה משתלט על הקבוצה בעזרתו.</string>
     <string name="recovery_done">סיום</string>
     <string name="recovery_done_body">הטלפון הזה שוכח עכשיו את המפתח. כדי לקבל דף שוב, צרו מפתח שחזור חדש.</string>

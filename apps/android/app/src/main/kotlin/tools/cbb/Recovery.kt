@@ -70,64 +70,20 @@ import java.time.format.FormatStyle
 
 /**
  * Settings' recovery key, on the root phone (docs/protocol.md, section 10,
- * "The recovery key"): whether the group has one and since when, making a
- * new one, which shows its sheet once, and removing it.
+ * "The recovery key"): on a group of 0.6 the key is made with the group and
+ * fixed in its ID, its sheet shown once at founding; nothing makes or
+ * removes it later (D-126).
  */
 @Composable
 internal fun RecoverySection(model: AppModel) {
     val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var asking by remember { mutableStateOf<Int?>(null) }
-    // The sheet just made, while it shows; nothing keeps it after.
-    var sheet by remember { mutableStateOf<Pair<Core.RecoverySheet, Instant>?>(null) }
-    fun make() {
-        busy = true
-        scope.launch {
-            sheet = model.makeRecovery()?.let { it to Instant.now() }
-            busy = false
-        }
-    }
     Section(stringResource(R.string.recovery_title)) {
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            val made = model.recoveryMade
-            if (made != null) {
-                Text(stringResource(R.string.recovery_made, longDate(made)), fontWeight = FontWeight.SemiBold)
-                QuietButton(stringResource(R.string.recovery_make_new), onClick = { asking = R.string.recovery_replace_title }, enabled = !busy)
-                TextButton(onClick = { asking = R.string.recovery_remove_title }, enabled = !busy) {
-                    Text(stringResource(R.string.recovery_remove), color = palette.danger)
-                }
-            } else {
-                Text(stringResource(R.string.recovery_none), color = palette.textDim)
-                AccentButton(stringResource(R.string.recovery_make), onClick = ::make, enabled = !busy)
-            }
+            Text(stringResource(R.string.recovery_06), color = palette.textDim)
             model.recoveryNote?.let { NoteText(it) }
             Tip(R.string.recovery_body)
         }
     }
-    when (asking) {
-        R.string.recovery_replace_title -> Confirm(
-            stringResource(R.string.recovery_replace_title),
-            stringResource(R.string.recovery_replace_body),
-            stringResource(R.string.recovery_replace_action),
-            dismiss = { asking = null },
-            confirm = ::make,
-        )
-        R.string.recovery_remove_title -> Confirm(
-            stringResource(R.string.recovery_remove_title),
-            stringResource(R.string.recovery_remove_body),
-            stringResource(R.string.remove),
-            dismiss = { asking = null },
-            confirm = {
-                busy = true
-                scope.launch {
-                    model.removeRecovery()
-                    busy = false
-                }
-            },
-        )
-    }
-    sheet?.let { (s, at) -> RecoverySheetDialog(s, at, model) { sheet = null } }
 }
 
 /**

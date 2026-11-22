@@ -1121,21 +1121,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         return WatchState.Admission(device, ByteArray(0), groupTag ?: "")
     }
 
-    /** When the group's recovery key was made; the records of 0.6 do not say. */
-    val recoveryMade: Instant? get() = null
-
-    /**
-     * Makes the group's recovery key: the root key, after the fingerprint,
-     * the face or the screen lock, issues it an admin CA and signs the
-     * `recovery` record, which every member gets. The key itself leaves
-     * only on its sheet.
-     */
-    suspend fun makeRecovery(): Core.RecoverySheet {
-        if (!isRoot) throw PhoneGroup.Failure("only the root makes the recovery key")
-        val root = caSigner(R.string.reason_make_recovery, prompts = Prompts(2))
-        return rootRecord(root) { m, public, sign -> m.makeRecovery(public, sign) }
-    }
-
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
     val keyLevel: String? get() = if (!isRoot) null else currentNode?.let { n -> runCatching { n.group().keyLevel }.getOrNull() }
 
@@ -1187,13 +1172,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     suspend fun openCard(pin: String, plugged: () -> Unit = {}): ByteArray {
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
         return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.open(card, pin) }
-    }
-
-    /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
-    suspend fun removeRecovery() {
-        if (!isRoot) throw PhoneGroup.Failure("only the root removes the recovery key")
-        val root = caSigner(R.string.reason_remove_recovery)
-        rootRecord(root) { m, public, sign -> m.removeRecovery(public, sign) }
     }
 
     /**

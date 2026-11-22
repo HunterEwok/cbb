@@ -448,6 +448,7 @@
     <string name="reason_take_over">Chukua kikundi kutoka kwa simu iliyopotea</string>
     <string name="reason_unfreeze">Fungua ugandishaji wa kompyuta ya msimamizi</string>
     <string name="reason_unmute">Ondoa unyamazishaji wa kifaa</string>
+    <string name="recovery_06">Ulitengenezwa pamoja na kikundi, na karatasi yake ilionyeshwa mara moja tu. Bila karatasi hiyo kifaa kikuu cha kikundi hakiwezi kubadilishwa: karatasi ikipotea, unda kikundi kipya.</string>
     <string name="recovery_body">Karatasi ya kuchapisha na kuweka mbali na simu zako. Simu kuu ya kikundi ikipotea, kifaa kingine cha kikundi kinachukua kikundi kwa karatasi hii.</string>
     <string name="recovery_done">Imekamilika</string>
     <string name="recovery_done_body">Simu hii inasahau ufunguo sasa. Ili kupata karatasi tena, unda ufunguo mpya wa urejeshaji.</string>

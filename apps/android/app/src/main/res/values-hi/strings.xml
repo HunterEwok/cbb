@@ -448,6 +448,7 @@
     <string name="reason_take_over">खोए फ़ोन से समूह अपने हाथ में लें</string>
     <string name="reason_unfreeze">किसी एडमिन कंप्यूटर को अनफ़्रीज़ करें</string>
     <string name="reason_unmute">किसी डिवाइस को अनम्यूट करें</string>
+    <string name="recovery_06">समूह के साथ ही बनी, और इसकी शीट सिर्फ़ एक बार दिखाई गई। शीट के बिना समूह का मुख्य डिवाइस नहीं बदला जा सकता: अगर शीट खो जाए, तो नया समूह बनाएँ।</string>
     <string name="recovery_body">प्रिंट करके अपने फ़ोनों से दूर रखने के लिए एक शीट। अगर समूह का मुख्य फ़ोन खो जाए, तो समूह का कोई दूसरा डिवाइस इससे समूह को संभाल लेता है।</string>
     <string name="recovery_done">हो गया</string>
     <string name="recovery_done_body">यह फ़ोन अब कुंजी भूल जाता है। फिर से शीट पाने के लिए, नई रिकवरी कुंजी बनाएँ।</string>

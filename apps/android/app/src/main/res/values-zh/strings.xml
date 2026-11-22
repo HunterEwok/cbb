@@ -448,6 +448,7 @@
     <string name="reason_take_over">从丢失的手机接管群组</string>
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_unmute">取消设备静音</string>
+    <string name="recovery_06">随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</string>
     <string name="recovery_body">一张要打印出来并与手机分开保管的纸。如果群组的主手机丢失，群组中的另一台设备可以用它接管群组。</string>
     <string name="recovery_done">完成</string>
     <string name="recovery_done_body">这部手机现在会忘记该密钥。要再次获取恢复单，请生成新的恢复密钥。</string>

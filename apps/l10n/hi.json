@@ -573,6 +573,7 @@
   "Made": "बनाई गई",
   "Made on %1$s.": "%1$s को बनाया गया।",
   "Made on %@.": "%@ को बनाया गया।",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "समूह के साथ ही बनी, और इसकी शीट सिर्फ़ एक बार दिखाई गई। शीट के बिना समूह का मुख्य डिवाइस नहीं बदला जा सकता: अगर शीट खो जाए, तो नया समूह बनाएँ।",
   "Make": "बनाएँ",
   "Make %1$s an admin?": "%1$s को एडमिन बनाएँ?",
   "Make %@ a hub?": "%@ को हब बनाएँ?",

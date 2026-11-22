@@ -2898,6 +2898,9 @@ made with 0.5 is set up again once. The details follow.
   interop player (`InteropMain`, `interopScript`). A phone with a group from before 0.6
   shows a screen that says so and offers Leave, which alone deletes the old files; it never
   deletes them by itself.
+- Making and removing the recovery key on the Android root phone: on a group of 0.6 the key is
+  part of the group's ID and its sheet is shown once when the group is made, so Settings only
+  says so; a lost sheet means a new group.
 - The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
   member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
   and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,

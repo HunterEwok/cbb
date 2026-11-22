@@ -573,6 +573,7 @@
   "Made": "Создан",
   "Made on %1$s.": "Сделан %1$s.",
   "Made on %@.": "Сделан %@.",
+  "Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.": "Сделан вместе с группой, его лист был показан один раз. Без листа главное устройство группы не сменить: если лист потерян, создайте новую группу.",
   "Make": "Создать",
   "Make %1$s an admin?": "Сделать %1$s админом?",
   "Make %@ a hub?": "Сделать %@ хабом?",

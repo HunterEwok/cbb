@@ -548,21 +548,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         act(Wire.obj("action" to Wire.str("incoming"), "incoming_ms" to Wire.num(ms)), public, sign)
     }
 
-    /** Makes the group's recovery key, which replaces the one before it, and returns its sheet; nothing of the key stays in the core. */
-    fun makeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray): Core.RecoverySheet {
-        val a = act(Wire.obj("action" to Wire.str("make_recovery")), public, sign)
-        return Core.RecoverySheet(
-            a.optString("qr") ?: throw Core.Mismatch("the member's recovery sheet has no qr"),
-            a.optString("text") ?: throw Core.Mismatch("the member's recovery sheet has no text"),
-            a.optBytes("admin") ?: throw Core.Mismatch("the member's recovery sheet has no admin"),
-        )
-    }
-
-    /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
-    fun removeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray) {
-        act(Wire.obj("action" to Wire.str("remove_recovery")), public, sign)
-    }
-
     /**
      * The action of an admin or the root (cbb_member_manage): request with
      * the point of the key public, the phone's admin key or the root's,
