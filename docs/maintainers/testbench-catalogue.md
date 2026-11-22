@@ -152,7 +152,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G41 | Every pair of joiner kind, admitter kind and path joins, syncs both ways, is removed and is then refused | fleet, real | |
 | G42 | Leave and come back: a device removed, reset and joined again under the same name gets a new device ID, and the old one stays removed | real, fleet | |
 | G43 | Groups side by side: two and ten groups on one network; no text, record or device crosses; neither pairs into the other without a code [S13] | fleet | |
-| G44 | A new device shows a code and a computer of the group types it: the device that waits announces itself by mDNS (TXT `j=1` and its fingerprint); `cbb pair -qr` with the six digits finds it and admits it; cbb without its helper, the iPhone, the Android phone and the Aurora phone announce themselves while they wait; a device of another fingerprint or a wrong code is refused | fleet, ui | |
+| G44 | A new device types a pairing window's six digits: `cbb pair` on the root or an admin opens the window and announces it by mDNS; `cbb pair -code` on a new computer, cbb without its helper included, and the Aurora phone find it and join; a wrong code is refused, and the window takes at most three wrong guesses | fleet, ui | |
 
 ## 3. Certificates and keys (K)
 

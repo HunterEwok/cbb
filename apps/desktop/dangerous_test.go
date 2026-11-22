@@ -103,7 +103,7 @@ func (w *window) dangerous(t *testing.T) {
 // meets them.
 var dangerousScreens = []dangerousScreen{
 	{
-		id: "join-digits", title: "Joining a group: the six digits the phone compares",
+		id: "join-digits", title: "Joining a group: the six digits of the group's pairing window",
 		setUp: func(w *window, _ string) {
 			w.svc.mu.Lock()
 			w.svc.status.Group = ""
@@ -112,12 +112,11 @@ var dangerousScreens = []dangerousScreen{
 			w.eval(fmt.Sprintf(`(() => { const s = document.createElement("style"); s.textContent = %q; document.head.append(s); return document.fonts.ready.then(() => true); })()`, screenshotStyle), nil)
 			w.wait(`$q("#join") && !$q("#join").disabled`)
 			w.eval(`$click("#join")`, nil)
-			w.wait(`$q("#join-dialog").open && $q("#join-digits").textContent === "123 456"`)
+			w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden`)
 		},
 		tearDown: func(w *window) {
-			w.eval(`$q("#join-dialog").close(); true`, nil)
-			w.wait(`!$q("#join-dialog").open`)
-			w.desk.Load().CancelJoin()
+			w.eval(`$q("#confirm").close(); true`, nil)
+			w.wait(`!$q("#confirm").open`)
 			w.svc.mu.Lock()
 			w.svc.status.Group = "cbb-7f3a"
 			w.svc.mu.Unlock()
@@ -246,9 +245,10 @@ func fakeDangerousRun(args []string, _ string, _ bool) error {
 	var file string
 	var line any
 	switch {
-	case len(args) == 3 && args[0] == "pair" && args[1] == "-app":
+	case len(args) >= 3 && args[0] == "pair" && args[1] == "-app":
 		file = args[2]
-		line = map[string]any{"qr": "cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA", "expires": 300, "port": 8764}
+		line = appWindow{Code: "123456", QR: "cbb://pair?addr=192.168.1.20:8764&fp=1111111111111111111111111111111111111111111111111111111111111111&i=22222222222222222222222222222222&c=123456",
+			Address: "192.168.1.20:8764", Expires: 300}
 	case len(args) >= 4 && args[0] == "invite":
 		for i := range args[:len(args)-1] {
 			if args[i] == "-app" {

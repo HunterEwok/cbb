@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	השירות לא ענה תוך 10 ש
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB רץ ביציאת TCP %s. להסרה: sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: הוא מופיע תחת System > Diagnostics > Services, והכללים שלו נשמרים בכל טעינה מחדש של המסנן.
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense אינו נתמך: עדכון של pfSense עלול להסיר את CBB; הרץ את תוכנית ההתקנה שוב אחרי עדכון.
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	הבא: הרץ cbb pair כ-root וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון; בלי האפליקציה, ראה docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	הבא: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ כאן cbb pair -code כ-root והקלד את שש הספרות שהוא מציג.
 CBB is removed, with this device's keys; it left its group.	CBB הוסר, יחד עם המפתחות של המכשיר הזה; הוא עזב את הקבוצה שלו.
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/var/db/cbb להתקנה מחדש; --purge מסיר אותם.
 --port needs a port number	--port צריך מספר יציאה
@@ -110,8 +110,7 @@ the desktop agent did not start; it starts at your next login	סוכן שולח�
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB רץ כל עוד אתה מחובר. כדי שימשיך לרוץ אחרי שתתנתק, מנהל מערכת מריץ: sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB רץ עבור %s ביציאת TCP %s, מותקן בלי root: הוא לעולם לא יוכל להיות השורש של הקבוצה, מנהל או הרכזת. אם חומת אש מגבילה כאן חיבורים נכנסים, מנהל מערכת מאפשר TCP %s ו-UDP 5353 מהרשת הביתית. להסרה: %s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	להעתקה והדבקה ב-tmux, הוסף את השורה הזו ל-~/.tmux.conf: source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	הבא: ראה member/README.md; בקצרה, %s pair כאן, וסרוק את קוד ה-QR שלו באפליקציית הטלפון.
-Next: run %s pair and scan its QR code with the CBB app on your phone.	הבא: הרץ %s pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	הבא: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ כאן %s pair -code והקלד את שש הספרות שהוא מציג.
 this archive has no install-rootless.sh, so it cannot install without root	בארכיון הזה אין install-rootless.sh, לכן אי אפשר להתקין בלי root
 systemd is required	נדרש systemd
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	קיים כאן חשבון בשם cbb שאינו של השירות הזה (ההערה שלו אינה "cbb service"); הוא היה מקבל את המפתחות של הקבוצה. שנה את שמו או הסר אותו, ואז הרץ install.sh שוב.
@@ -125,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	עוזר uinput ל
 the desktop agent of %s did not start again; it starts at their next login	סוכן שולחן העבודה של %s לא הופעל מחדש; הוא יופעל בכניסה הבאה שלו
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow נכשל; הרץ sudo cbb global allow כשהשירות רץ.
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB רץ ביציאת TCP %s. להסרה: sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	הבא: ראה member/README.md; בקצרה, sudo -u cbb %s pair כאן, וסרוק את קוד ה-QR שלו באפליקציית הטלפון.
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	הבא: הרץ sudo %s pair וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון; בלי האפליקציה, ראה docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	הבא: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ כאן sudo -u cbb %s pair -code והקלד את שש הספרות שהוא מציג.
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	הבא: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ כאן sudo %s pair -code והקלד את שש הספרות שהוא מציג.
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s/cbb להתקנה מחדש; --purge מסיר אותם.
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/var/lib/cbb להתקנה מחדש; --purge מסיר אותם.
 %s does not run on this Mac	%s לא רץ על ה-Mac הזה
@@ -143,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	הכלל שלמעלה נוס
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	לא נוסף כלל חומת אש. CBB עובד רק כל עוד חומת האש מאפשרת את הכלל שלמעלה. כדי להוסיף אותו ידנית, הרץ:
 To let CBB add and manage it, run the installer again with --express.	כדי ש-CBB יוסיף וינהל אותו, הרץ את תוכנית ההתקנה שוב עם --express.
 CBB is running on TCP port %s, in its group.	CBB רץ ביציאת TCP %s, בקבוצה שלו.
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB רץ ביציאת TCP %s. הצטרף לקבוצה: sudo cbb pair, וסרוק את קוד ה-QR שלו בטלפון או הקלד את הקוד מ-cbb pair בשורש של הקבוצה או אצל מנהל; או צור קבוצה: sudo cbb new.
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	CBB רץ ביציאת TCP %s. הצטרף לקבוצה: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ sudo cbb pair -code והקלד את שש הספרות שהוא מציג; או צור קבוצה: sudo cbb new.
 CBB is removed, with this Mac's keys; it left its group.	CBB הוסר, יחד עם המפתחות של ה-Mac הזה; הוא עזב את הקבוצה שלו.
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-%s/state להתקנה מחדש; --purge מסיר אותם.
 this installer is for OpenWrt	תוכנית התקנה זו מיועדת ל-OpenWrt
@@ -154,9 +153,9 @@ the service did not answer within 40 s: %s	השירות לא ענה תוך 40 ש
 see logread -e cbb	ראה logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB רץ ביציאת TCP %s, באזור lan. להסרה: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	חבילות מחוץ למאגרים של OpenWrt אינן נכללות ב-attended sysupgrade (ASU, owut): התקן אותו שוב אחרי שדרוג כזה.
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	הבא: הרץ su -s /bin/sh cbb -c 'cbb pair -name router' וסרוק את קוד ה-QR שלו באפליקציית CBB בטלפון.
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	הבא: פתח חלון צימוד במכשיר של הקבוצה, ואז הרץ כאן su -s /bin/sh cbb -c 'cbb pair -code -name router' והקלד את שש הספרות שהוא מציג.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB הוסר. המפתחות שלו נשארים ב-/etc/cbb להתקנה מחדש; --purge מסיר אותם.
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	המכשיר הזה עדיין לא בשום קבוצה, לכן הוא מתחיל צימוד עכשיו (--no-pair מדלג על זה).
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	המכשיר הזה עדיין לא בשום קבוצה. פתח חלון צימוד במכשיר של הקבוצה (cbb pair שם), ואז הקלד כאן את שש הספרות שהוא מציג (--no-pair מדלג על זה).
 could not record how CBB was installed; cbb update takes it as get.sh	לא ניתן לרשום איך CBB הותקן; cbb update יתייחס לזה כ-get.sh
 automatic updates are on or off, not %s	עדכונים אוטומטיים הם on או off, לא %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB יכול לבדוק פעם ביום אם יש גרסה שהפרויקט חתם ולהתקין אותה; הבדיקה מגלה ל-GitHub את הכתובת של המכשיר הזה, כמו כל הורדה.
@@ -238,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	לא ניתן להעביר עדכונים אוטומטיים למצב %s; הרץ cbb update -auto %s כמנהל.
 CBB %s is running on TCP port %s; %s may use it.	CBB %s רץ ביציאת TCP %s; %s יכול להשתמש בו.
 It stays in its group.	הוא נשאר בקבוצה שלו.
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	הבא, במסוף שנפתח כמנהל: cbb pair, וסרוק את קוד ה-QR שלו בטלפון או הקלד את הקוד מ-cbb pair בשורש של הקבוצה או אצל מנהל; או צור קבוצה: cbb new.
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	הבא, כדי להצטרף לקבוצה: פתח חלון צימוד במכשיר של הקבוצה, ואז במסוף שנפתח כמנהל הרץ cbb pair -code והקלד את שש הספרות שהוא מציג; או צור שם קבוצה: cbb new.
 To remove it: Settings, Apps, CBB, Uninstall.	להסרה: הגדרות, אפליקציות, CBB, הסר התקנה.
 Y	כ
 Yes	כן

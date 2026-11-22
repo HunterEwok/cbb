@@ -240,4 +240,4 @@ case $appliance in
 opnsense) say "OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload." ;;
 pfsense) say "pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one." ;;
 esac
-say "Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md."
+say "Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows."

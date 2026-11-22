@@ -102,17 +102,24 @@ final class CBBMacTests: XCTestCase {
         XCTAssertNil(MacModel.ownMute("me", on: false, me: nil))
     }
 
-    /// What cbb pair -app writes reads as the join's code, and its QR code
-    /// draws.
-    func testJoinCode() throws {
-        let line = #"{"qr":"cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA","expires":300,"port":8764}"#
-        let code = try JSONDecoder().decode(MacModel.JoinCode.self, from: Data(line.utf8))
-        XCTAssertEqual(code.expires, 300)
-        XCTAssertEqual(code.port, 8764)
-        XCTAssertTrue(code.qr.hasPrefix("cbb://join?code=123456"))
-        XCTAssertEqual(code.digits, "123 456")
-        let image = try XCTUnwrap(JoinSheet.qrImage(code.qr))
+    /// What cbb pair -app writes in a group reads as the pairing window,
+    /// and its QR code draws.
+    func testPairingWindow() throws {
+        let line = #"{"code":"654321","qr":"cbb://pair?addr=192.168.1.5:8764&c=654321","address":"192.168.1.5:8764","expires":300}"#
+        let w = try JSONDecoder().decode(MacModel.PairingWindow.self, from: Data(line.utf8))
+        XCTAssertEqual(w.expires, 300)
+        XCTAssertEqual(w.address, "192.168.1.5:8764")
+        XCTAssertEqual(w.digits, "654 321")
+        XCTAssertNil(w.done)
+        let image = try XCTUnwrap(QRCode.image(w.qr))
         XCTAssertGreaterThan(image.size.width, 20)
+        let joined = #"{"code":"654321","qr":"cbb://pair?c=654321","expires":300,"refused":"the code did not match","done":true,"name":"laptop"}"#
+        let j = try JSONDecoder().decode(MacModel.PairingWindow.self, from: Data(joined.utf8))
+        XCTAssertEqual(j.refused, "the code did not match")
+        XCTAssertEqual(j.done, true)
+        XCTAssertEqual(j.name, "laptop")
+        let bad = #"{"code":"12","qr":"x","expires":1}"#
+        XCTAssertNil(try JSONDecoder().decode(MacModel.PairingWindow.self, from: Data(bad.utf8)).digits)
     }
 
     /// The status says a bug report waits, and the service's answer to bug
@@ -142,21 +149,12 @@ final class CBBMacTests: XCTestCase {
         XCTAssertEqual(line, #"CBB_DEBUG=1 '/usr/local/bin/cbb' 'rename' 'ab12' 'Bob'\''s "Mac" $(x)'"#)
         XCTAssertEqual(Admin.shellCommand("/usr/local/bin/cbb", ["global", "on"], answer: true, details: false), "echo yes | '/usr/local/bin/cbb' 'global' 'on'")
         XCTAssertEqual(Admin.appleScript(shell: #"a "b" \c"#), #"do shell script "a \"b\" \\c" with administrator privileges"#)
-        // cbb pair -qr reads the code from a file, never from the command line.
-        XCTAssertEqual(Admin.shellCommand("/usr/local/bin/cbb", ["pair", "-qr"], answer: false, input: "/tmp/in's.txt", details: false),
-                       #"'/usr/local/bin/cbb' 'pair' '-qr' < '/tmp/in'\''s.txt'"#)
+        // cbb pair -code reads the digits from a file, never from the command line.
+        XCTAssertEqual(Admin.shellCommand("/usr/local/bin/cbb", ["pair", "-code"], answer: false, input: "/tmp/in's.txt", details: false),
+                       #"'/usr/local/bin/cbb' 'pair' '-code' < '/tmp/in'\''s.txt'"#)
     }
 
-    /// Only the QR code of a device that listens, with its address and
-    /// fingerprint, is admitted from the app.
-    func testWaitingJoiner() {
-        XCTAssertTrue(MacModel.isWaitingJoiner("cbb://join?code=123456&addr=192.0.2.7:8764&fp=AbC%2Bd%2F0="))
-        XCTAssertFalse(MacModel.isWaitingJoiner("cbb://join?code=123456"))
-        XCTAssertFalse(MacModel.isWaitingJoiner("https://cbb.tools/join?code=1&addr=a:1&fp=x"))
-        XCTAssertFalse(MacModel.isWaitingJoiner(""))
-    }
-
-    /// The six digits a new device shows are typed with or without a space
+    /// The six digits a pairing window shows are typed with or without a space
     /// or a dash between them; anything else is no code.
     func testShownCode() {
         XCTAssertEqual(MacModel.shownCode("123456"), "123456")
@@ -188,8 +186,8 @@ final class CBBMacTests: XCTestCase {
     /// action only the administrator may take.
     func testAdminAsUser() throws {
         XCTAssertTrue(Admin.needsRoot(["update"]))
-        XCTAssertTrue(Admin.needsRoot(["pair", "-app", "/tmp/x.json"]))
-        XCTAssertFalse(Admin.needsRoot(["pair", "-qr"]))
+        XCTAssertTrue(Admin.needsRoot(["pair", "-code"]))
+        XCTAssertFalse(Admin.needsRoot(["pair", "-app", "/tmp/x.json"]))
         XCTAssertFalse(Admin.needsRoot(["remove", "ab12"]))
         XCTAssertEqual(try Admin.userResult(0, printed: "Removed.\n", stderr: ""), .done("Removed."))
         XCTAssertEqual(try Admin.userResult(77, printed: "", stderr: "cbb: only the administrator"), .needsAdmin)

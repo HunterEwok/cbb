@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The command line's admitting commands, as the Go cbb's (cmd/cbb): cbb
-//! pair on the group's root or an admin, which opens a pairing window or
-//! admits a device that shows a code, and cbb invite, a remote invitation
+//! pair on the group's root or an admin, which opens a pairing window, and
+//! cbb invite, a remote invitation
 //! the admin confirms here.
 
 use std::io::{BufRead, Read, Write};
@@ -14,8 +14,8 @@ use crate::error::{Context, Error, Result};
 use crate::sys::UnixStream;
 use crate::{Global, check, flag, open, request};
 
-/// The longest text cbb pair -qr reads: a code, four addresses and a
-/// fingerprint, with room to spare.
+/// The longest line cbb pair -code reads: a window's QR code text, with
+/// its addresses, ID and key, with room to spare.
 const MAX_QR_TEXT: usize = 1024;
 
 /// How long an invitation is valid by default, and at most, as Go's
@@ -58,105 +58,95 @@ fn interactive() -> bool {
     std::io::stdin().is_terminal()
 }
 
-/// cbb pair in a group, on its root or an admin: -qr admits the device
-/// that shows a code, or else a window opens for a new computer; -admin, on
-/// the root, makes the phone that joins an admin.
+/// cbb pair in a group, on its root or an admin: a window opens for a new
+/// device; -admin, on the root, makes the phone that joins an admin; -app
+/// FILE writes the window into an app's file instead of the terminal. -qr
+/// admitted a device that waited for the group to dial it, which is gone
+/// on 0.6 (D-119).
 pub(crate) fn pair(g: &Global, args: &[String]) -> Result<()> {
-    let (mut admins, mut qr) = (false, false);
-    for a in args {
+    let (mut admins, mut app) = (false, None);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
         match flag(a) {
             Some("admin") => admins = true,
-            Some("qr") => qr = true,
+            Some("app") => app = Some(it.next().cloned().ok_or_else(|| usage(PAIR_USAGE))?),
+            Some("qr") => return Err(Error::msg(crate::service::on_live::LISTENING_JOINER_GONE)),
             _ => return Err(usage(PAIR_USAGE)),
         }
     }
-    if !qr {
-        return window(g, admins);
+    match app {
+        Some(app) => window_app(g, admins, &app),
+        None => window(g, admins),
     }
-    // From standard input, never the command line, where other users
-    // could read the code.
-    if interactive() {
-        print!("The code the new device shows, or its QR code's text: ");
-        std::io::stdout().flush().ok();
-    }
-    let text = read_line(MAX_QR_TEXT)?;
-    if let Ok(code) = cbb_core::pair::normalize_code(&text) {
-        println!("Looking for the device that shows the code {} {}...", &code[..3], &code[3..]);
-        let m = request(
-            g,
-            &Message::new(
-                Header { op: "pair".into(), code: code.to_string(), admins, ..Default::default() },
-                Vec::new(),
-            ),
-        )?;
-        println!("{} joined the group.", m.header.name);
-        return Ok(());
-    }
-    let link = cbb_core::pair::parse_join_qr(&text).map_err(|_| {
-        Error::msg("neither the six-digit code nor the QR code of a device that waits to join (cbb://join?...)")
-    })?;
-    if admins {
-        println!("The phone that joins now becomes an admin of the group. It may then add, remove");
-        println!("and renew devices, freeze other admins, choose the hub, and take the group over");
-        println!("from this computer after the takeover delay. Admit only your own phone.");
-        println!();
-    }
-    let (a, b) = link.code.split_at(3.min(link.code.len()));
-    println!("Admitting the device at {} with the code {a} {b}...", link.addrs.join(", "));
-    let h = Header {
-        op: "pair".into(),
-        code: link.code,
-        addrs: link.addrs,
-        fingerprint: link.fingerprint,
-        admins,
-        ..Default::default()
-    };
-    let m = request(g, &Message::new(h, Vec::new()))?;
-    println!("{} joined the group.", m.header.name);
-    Ok(())
 }
 
 /// What cbb pair takes, as Go's pairUsage.
-pub(crate) const PAIR_USAGE: &str = "cbb pair                  in a group: open a pairing window with a six-digit code;
-                                in no group: join by the phone's QR code or a typed code
-       cbb pair -admin          on the group's root: show a code for a phone with the app,
-                                which joins as an admin
-       cbb pair -qr [-admin]    on a group of 0.5 only: admit the device that shows a QR
-                                code and a code and waits, the code or the QR code's text read
-                                from standard input; on 0.6 the new device dials the window
-       cbb pair -code [address:port]   join a pairing window: type the six digits it shows";
+pub(crate) const PAIR_USAGE: &str =
+    "cbb pair [-admin] [-app FILE]   in a group, on its root or an admin: open a pairing
+                                window with six digits and a QR code; -admin, on the root,
+                                makes the phone that joins an admin; -app writes the window
+                                into an app's FILE
+       cbb pair -code [address:port]   in no group: join a pairing window by its six digits
+       cbb pair -invite FILE    in no group: join from afar with an invitation";
 
 /// Opens a pairing window and waits for the device that joins with its
-/// code, as Go's admit.
+/// code.
 fn window(g: &Global, admins: bool) -> Result<()> {
     let (_w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
-    if m.header.kind == HOME_WINDOW {
-        return home_window(g, &mut r, &m);
+    if m.header.kind != HOME_WINDOW {
+        return Err(Error::msg(NO_HOME_WINDOW));
     }
     if admins {
         println!("The phone that joins with this code becomes an admin of the group. It may then");
-        println!("add, remove and renew devices, freeze other admins, choose the hub, and take");
-        println!("the group over from this computer after the takeover delay. Give the code only");
-        println!("to your own phone.");
+        println!("add, remove and renew devices, freeze other admins and choose the hub. Give");
+        println!("the code only to your own phone.");
         println!();
     }
-    let code = &m.header.code;
-    let (a, b) = code.split_at(3.min(code.len()));
-    println!("Pairing code: {a} {b}\n");
-    if admins {
-        println!("In the phone's app, choose to join a computer's group and type the code.");
-    } else {
-        println!("On the new computer run cbb pair and type the code.");
+    home_window(g, &mut r, &m)
+}
+
+/// Why a window that is not of 0.6 opens nothing.
+const NO_HOME_WINDOW: &str = "the service opened no pairing window of a group of 0.6";
+
+/// cbb pair -app FILE: the window as one line of JSON in the app's own
+/// file (code, the six digits; qr, the QR code's text; address; expires,
+/// its seconds), rewritten with refused when a device fails and done and
+/// name when one joins. Removing the file closes the window.
+fn window_app(g: &Global, admins: bool, app: &str) -> Result<()> {
+    let out = std::sync::Mutex::new(crate::open_app_file(app)?);
+    let (_w, mut r, m) = stream(g, Header { op: "pair".into(), admins, ..Default::default() })?;
+    if m.header.kind != HOME_WINDOW {
+        return Err(Error::msg(NO_HOME_WINDOW));
     }
-    if !m.header.address.is_empty() {
-        println!("If it cannot find this one: cbb pair -code {}", m.header.address);
+    let base = serde_json::json!({
+        "code": m.header.code,
+        "qr": m.header.invite,
+        "address": m.header.address,
+        "expires": m.header.expires,
+    });
+    let write = |extra: serde_json::Value| -> Result<()> {
+        let mut line = base.clone();
+        if let (Some(o), Some(e)) = (line.as_object_mut(), extra.as_object()) {
+            o.extend(e.clone());
+        }
+        let mut f = out.lock().unwrap_or_else(|e| e.into_inner());
+        f.set_len(0)
+            .and_then(|_| std::io::Seek::rewind(&mut *f))
+            .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
+            .and_then(|_| f.sync_all())
+            .context("cannot write the pairing window")
+    };
+    write(serde_json::json!({}))?;
+    crate::watch_app_file(app.to_string());
+    loop {
+        let m = check(next(&mut r)?)?;
+        if m.header.done {
+            return write(serde_json::json!({"done": true, "name": m.header.name}));
+        }
+        if m.header.refused {
+            write(serde_json::json!({"refused": m.header.detail}))?;
+        }
     }
-    println!("\nWaiting up to {} minutes. Press Ctrl+C to cancel.", m.header.expires / 60);
-    std::io::stdout().flush().ok();
-    let m = check(next(&mut r)?)?;
-    println!("{} joined the group.", m.header.name);
-    admin_hint(g);
-    Ok(())
 }
 
 /// The kind of the answer that opens a home window of a group of 0.6.

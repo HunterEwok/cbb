@@ -372,5 +372,5 @@ fi
 if [ -f "/Library/Application Support/cbb/state/identity.json" ]; then
 	say "CBB is running on TCP port %s, in its group." "$port"
 else
-	say "CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new." "$port"
+	say "CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new." "$port"
 fi

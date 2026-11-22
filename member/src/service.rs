@@ -284,9 +284,6 @@ pub fn log_line(s: &str) {
     }
 }
 
-/// Runs the service until SIGTERM or SIGINT.
-/// What the user sees when the device's group file cannot be read, as Go's
-/// errBroken.
 /// The operations that need the device's group, which only the member of
 /// 0.6 answers (`on_live`).
 const GROUP_OPS: &[&str] = &[
@@ -326,9 +323,10 @@ const GROUP_OPS: &[&str] = &[
     "actions_off",
     "paste_on",
 ];
+/// What the user sees while the device's group files do not open.
 const BROKEN_LIVE: &str = "this device's group files (group.cbor and the keys beside it in the service's state directory) do not open, so the service does not start the group; restore them from a backup, or leave the group (cbb leave) and join again";
-const BROKEN: &str = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again";
 
+/// Runs the service until SIGTERM or SIGINT.
 pub fn run(cfg: Config) -> Result<()> {
     // SAFETY: the handler only stores to an atomic.
     unsafe {
@@ -1306,8 +1304,7 @@ impl Service {
         }
         let broken = self.broken.lock().unwrap().clone();
         if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
-            let why = if on_live::in_group(&self.state_dir) { BROKEN_LIVE } else { BROKEN };
-            let h = Header { error: why.to_string(), detail, done: true, ..Default::default() };
+            let h = Header { error: BROKEN_LIVE.to_string(), detail, done: true, ..Default::default() };
             let _ = control::write(&mut out, &control::reply(h, Vec::new()));
             return;
         }
@@ -2037,7 +2034,7 @@ fn act_takers<T>(
         .collect()
 }
 
-mod on_live;
+pub(crate) mod on_live;
 
 #[cfg(test)]
 mod tests {

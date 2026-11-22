@@ -113,6 +113,7 @@ struct UpdateCard: View {
 /// lost group claimed with its recovery key.
 struct StartView: View {
     @Binding var recovering: Bool
+    @Binding var joining: Bool
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
 
@@ -126,11 +127,11 @@ struct StartView: View {
             VStack(spacing: Tokens.spacingMedium) {
                 Button { Task { await model.createGroup() } } label: { Text("Create a group").frame(maxWidth: .infinity) }
                     .buttonStyle(AccentButtonStyle())
-                Button { Task { await model.joinGroup() } } label: { Text("Join a group").frame(maxWidth: .infinity) }
+                Button { joining = true } label: { Text("Join a group").frame(maxWidth: .infinity) }
                     .buttonStyle(GlassButtonStyle())
             }
             .frame(width: 260)
-            .disabled(model.busy || model.joining)
+            .disabled(model.busy)
             Button { recovering = true } label: { Text("Recovery key") }
                 .buttonStyle(.link)
                 .font(.callout)

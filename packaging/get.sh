@@ -18,7 +18,8 @@
 # console, and --uinput adds the uinput helper for remote paste on desktops
 # without another way to press keys. The archive of each system decides the
 # rest: a router's (MIPS) has no helper. cbb without its helper starts
-# pairing as soon as it runs in no group and shows its QR code; --no-pair,
+# pairing as soon as it runs in no group and takes a pairing window's six
+# digits; --no-pair,
 # for a scripted install, leaves that for later.
 # --rootless, run without sudo (curl ... | sh -s -- --rootless), installs cbb
 # for the user who runs it, on Linux only (D-79).
