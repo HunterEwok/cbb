@@ -3083,6 +3083,8 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The iPhone app's theme swatches in Settings are laid out all at once, so none is left
+  undrawn while its name is on screen (the accessibility audit of `testLanguages`).
 - A restart of the service no longer leaves it unreachable for a few seconds where the
   system starts the new process before the old one has stopped (procd on OpenWrt): the new
   one waits up to 15 seconds for the old one to go instead of stopping with "another cbb

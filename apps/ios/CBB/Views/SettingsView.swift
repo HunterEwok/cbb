@@ -459,7 +459,10 @@ struct ThemeSwatches: View {
     @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
+        // Not a LazyVGrid: inside the list's row a lazy grid could leave a
+        // cell undrawn while its text was already on screen, which the
+        // accessibility audit reports as text no element carries.
+        SwatchGrid(minimum: width, spacing: Tokens.spacingSmall, rowSpacing: Tokens.spacingMedium) {
             ForEach(Tokens.themes, id: \.name) { theme in
                 let swatch = palette.dark ? theme.dark : theme.light
                 let chosen = theme.name == selection
@@ -489,6 +492,50 @@ struct ThemeSwatches: View {
             }
         }
         .padding(.vertical, Tokens.spacingSmall)
+    }
+}
+
+/// Lays its views out in as many equal columns of at least `minimum` as
+/// fit, row by row, as `GridItem(.adaptive(minimum:))` does, all at once.
+struct SwatchGrid: Layout {
+    var minimum: CGFloat
+    var spacing: CGFloat
+    var rowSpacing: CGFloat
+
+    private func columns(_ width: CGFloat) -> (count: Int, width: CGFloat) {
+        let n = max(1, Int(((width + spacing) / (minimum + spacing)).rounded(.down)))
+        return (n, max(0, (width - spacing * CGFloat(n - 1)) / CGFloat(n)))
+    }
+
+    private func rows(_ subviews: Subviews, _ n: Int, _ column: CGFloat) -> [CGFloat] {
+        stride(from: 0, to: subviews.count, by: n).map { start in
+            subviews[start..<min(start + n, subviews.count)]
+                .map { $0.sizeThatFits(ProposedViewSize(width: column, height: nil)).height }
+                .max() ?? 0
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? (minimum * 4 + spacing * 3)
+        let (n, column) = columns(width)
+        let heights = rows(subviews, n, column)
+        return CGSize(width: width, height: heights.reduce(0, +) + rowSpacing * CGFloat(max(0, heights.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (n, column) = columns(bounds.width)
+        let heights = rows(subviews, n, column)
+        var y = bounds.minY
+        for (row, height) in heights.enumerated() {
+            for i in 0..<n {
+                let index = row * n + i
+                guard index < subviews.count else { break }
+                let x = bounds.minX + CGFloat(i) * (column + spacing)
+                subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
+                                      proposal: ProposedViewSize(width: column, height: height))
+            }
+            y += height + rowSpacing
+        }
     }
 }
 
