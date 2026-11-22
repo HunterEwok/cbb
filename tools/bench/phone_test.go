@@ -4,10 +4,14 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestPhoneResults reads the JUnit file as Gradle's connected tests write
@@ -107,18 +111,62 @@ func TestPhoneAddrs(t *testing.T) {
 	}
 }
 
-func TestSlirpDev(t *testing.T) {
-	wifi := `1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
-3: wlan0    inet 10.0.2.16/24 brd 10.0.2.255 scope global wlan0\       valid_lft forever preferred_lft forever
-`
-	if dev, addr := slirpDev(wifi); dev != "wlan0" || addr != "10.0.2.16" {
-		t.Fatalf("slirpDev of Wi-Fi alone = %q %q, want wlan0 10.0.2.16", dev, addr)
+// The relay carries each sender's datagrams to udprelay over TCP, framed,
+// and the answers back to that sender.
+func TestRelayUDPOverTCP(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	both := wifi + "3: wlan0    inet 10.0.2.15/32 scope global wlan0\n"
-	if dev, addr := slirpDev(both); dev != "wlan0" || addr != slirpAddr {
-		t.Fatalf("slirpDev once the address is there = %q %q, want wlan0 %s", dev, addr, slirpAddr)
+	defer ln.Close()
+	// udprelay's side, which answers each datagram with "re:" and it.
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				r := bufio.NewReader(c)
+				for {
+					d, err := readFrame(r)
+					if err != nil {
+						return
+					}
+					if writeFrame(c, append([]byte("re:"), d...)) != nil {
+						return
+					}
+				}
+			}()
+		}
+	}()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if dev, _ := slirpDev("1: lo    inet 127.0.0.1/8 scope host lo\n2: eth0    inet 192.168.1.5/24 scope global eth0\n"); dev != "" {
-		t.Fatalf("slirpDev off the emulator's network = %q, want none", dev)
+	defer pc.Close()
+	go relayUDPOverTCP(pc, ln.Addr().String())
+	for _, sender := range []string{"a", "b"} {
+		c, err := net.Dial("udp", pc.LocalAddr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer c.Close()
+		for i := 0; i < 3; i++ {
+			msg := fmt.Sprintf("%s%d", sender, i)
+			if _, err := c.Write([]byte(msg)); err != nil {
+				t.Fatal(err)
+			}
+			_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+			b := make([]byte, 100)
+			n, err := c.Read(b)
+			if err != nil || string(b[:n]) != "re:"+msg {
+				t.Fatalf("answer to %s: %q, %v", msg, b[:n], err)
+			}
+		}
+	}
+	if err := writeFrame(io.Discard, make([]byte, 0x10000)); err == nil {
+		t.Fatal("a datagram over 65535 bytes was framed")
 	}
 }

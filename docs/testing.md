@@ -158,8 +158,10 @@ and F-Droid builds build from nothing.
 A change is tested where it can be before it is pushed: the cloud sessions run everything that
 runs on Linux (the Rust and Go tests, the service tests on the Rust `cbb`, the e2e, the
 format's vectors). Right after the push, while CI runs, a maintainer's macOS machine runs what
-only it can (the Apple builds and their unit tests, the Android app and its emulator suite, Go
-with `-race` on macOS) and a Windows machine runs Go and Rust on Windows and the installer. They
+only it can (the Apple builds and their unit tests, Go with `-race` on macOS), a Linux machine
+builds the Android apps and runs their unit tests, screenshots, lint and the F-Droid build, and
+a Windows machine runs Go and Rust on Windows and the installer. The Android emulator suite
+needs a machine with hardware virtualization and runs in CI. They
 answer in minutes what CI answers in most of an hour, so a red result is fixed before CI ends;
 CI stays the gate before the merge.
 

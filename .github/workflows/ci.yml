@@ -2233,11 +2233,8 @@ jobs:
           [ -f "$ANDROID_AVD_HOME/bench.ini" ] || { ls -la "$ANDROID_AVD_HOME" ~/.android ~/.android/avd 2>&1; exit 1; }
           ls -l /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -accel-check
-          # -feature -WiFiPacketStream: Wi-Fi through the emulator's own
-          # user-mode network, as before 36.5, so that its console's UDP
-          # redirects reach a hub on the phone (tools/bench, phoneUDP).
           "$ANDROID_HOME/emulator/emulator" -avd bench -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
-            -accel on -gpu swiftshader_indirect -camera-back emulated -camera-front none -feature -WiFiPacketStream \
+            -accel on -gpu swiftshader_indirect -camera-back emulated -camera-front none \
             >"$RUNNER_TEMP/emulator.log" 2>&1 &
           adb="$ANDROID_HOME/platform-tools/adb"
           # An emulator that does not start says why in its log.
