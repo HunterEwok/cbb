@@ -409,7 +409,9 @@ pub(crate) fn new(g: &Global, args: &[String]) -> Result<()> {
     }
     println!(
         "{}",
-        tr!("Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.")
+        tr!(
+            "Add a device: cbb pair here opens a pairing window; on the new computer type its six digits (cbb pair -code), or scan its QR code with the new phone."
+        )
     );
     Ok(())
 }

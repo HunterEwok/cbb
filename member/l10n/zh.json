@@ -19,7 +19,7 @@
  "A claim to take the group over now waits {} on each member, from when it first holds the claim.": "现在，接管群组的申请在每个成员上等待 {}，从该成员首次收到申请时算起。",
  "A copy from another device goes into the clipboard for {} after it arrives; after that this device keeps its own clipboard, however old.": "来自其他设备的副本在到达后的 {} 内会放入剪贴板；之后本设备保留自己的剪贴板，无论它多旧。",
  "A device that joins with an invitation syncs away from home through the\ngroup's hub, so sync away from home is turned on here.\n": "通过邀请加入的设备经由群组的中心在外出时同步，\n因此这里会开启外出同步。\n",
- "Add a device: on it, join a group, which shows a code; then type that code here with cbb pair -qr.": "添加设备：在该设备上加入群组，它会显示一个代码；然后在这里用 cbb pair -qr 输入该代码。",
+ "Add a device: cbb pair here opens a pairing window; on the new computer type its six digits (cbb pair -code), or scan its QR code with the new phone.": "添加设备：在这里运行 cbb pair 打开配对窗口；在新电脑上输入它的六位数字（cbb pair -code），或用新手机扫描它的二维码。",
  "Automatic updates are off; cbb update installs a release by hand.": "自动更新已关闭；cbb update 手动安装发布版本。",
  "Automatic updates are on: once a day this device checks for a signed release and installs it.": "自动更新已开启：本设备每天检查一次签名的发布版本并安装。",
  "Below it: {}. They stay until you remove them (cbb remove) or take back their admin or hub role.": "在其之下：{}。它们会保留，直到你移除它们（cbb remove）或收回其管理员或中心角色。",

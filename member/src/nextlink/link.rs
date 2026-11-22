@@ -1040,8 +1040,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             });
         }
         if service_at.is_some_and(|at| clock.is_some() || now >= at) {
-            // And again a while later: a service that stopped (.cbb pair
-            // stops it while cbb next pair waits on its port) starts again.
+            // And again a while later: a service that stopped starts again.
             service_at = Some(now + SERVICE_CHECK);
             match start_service(g, port, udp_port, log_path.as_deref()) {
                 Ok(true) => (link.log)("started the service"),

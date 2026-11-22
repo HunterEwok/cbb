@@ -236,7 +236,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
   `key_level`, `incoming`, `mute` and `unmute` of another
-  device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
+  device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
   `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs

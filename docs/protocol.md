@@ -1555,7 +1555,7 @@ phone that offers no admin key joins any admin's window as a member: the admin s
 admin key does (D-90). A phone that listens and shows its QR code
 ("The joiner listens" below) offers none: the apps have one button to join, and the root makes
 the phone an admin later with the admin key its hellos offer (section 10, "Admins"). A joiner
-that does offer one is admitted as an admin only by the root with `cbb pair -qr -admin`. Before it certifies an
+that does offer one is admitted as an admin only in a window the root opens with `cbb pair -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
 connection, never becomes an admin; the root computer also refuses a key its records name already
