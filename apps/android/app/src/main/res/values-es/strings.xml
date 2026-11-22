@@ -4,7 +4,7 @@
 <resources>
     <string name="about">Acerca de</string>
     <string name="accessibility_description">Detecta cuando copias texto, lee el portapapeles un momento y envía el texto a tus ordenadores. Con el pegado remoto activado, pone el texto de un administrador en el campo de texto que tiene el foco. No lee nada más de la pantalla.</string>
-    <string name="accessibility_label">Enviar mis copias solas</string>
+    <string name="accessibility_label">Sincronización del portapapeles</string>
     <string name="action_cancel">Cancelar el reinicio o el apagado</string>
     <string name="action_confirm_body">Ocurre dentro de un minuto; hasta entonces, Cancelar el reinicio o el apagado lo detiene.</string>
     <string name="action_confirm_title">¿%1$s %2$s?</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">Pegado remoto</string>
     <string name="remote_paste_body">Entonces un administrador del grupo pone un texto en el campo de texto que tiene el foco en este teléfono, desde su propia app o con cbb paste. Este teléfono muestra quién pegó y guarda un registro de los últimos pegados sin su texto. Nunca en la pantalla de bloqueo.</string>
     <string name="remote_paste_enter">Permitir que un pegado pulse Intro</string>
-    <string name="remote_paste_needs_service">Pega mediante el servicio \"Enviar mis copias solas\", que está desactivado: actívalo en los ajustes de accesibilidad del sistema.</string>
+    <string name="remote_paste_needs_service">Pega mediante el servicio \"Sincronización del portapapeles\", que está desactivado: actívalo en los ajustes de accesibilidad del sistema.</string>
     <string name="remote_paste_needs_service_tv">Pega mediante el servicio de accesibilidad de CBB, que está desactivado: actívalo en los ajustes del televisor, en Accesibilidad.</string>
     <string name="remote_paste_service_stopped">El servicio de accesibilidad está activado en los ajustes, pero el sistema lo detuvo. Desactívalo y vuelve a activarlo allí.</string>
     <string name="remote_paste_switch">Permitir que los administradores del grupo peguen aquí</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">Firma %1$d</string>
     <string name="signature_of">Firma %1$d de %2$d</string>
     <string name="source">Código fuente y licencia (AGPL-3.0)</string>
-    <string name="swapped">Se envió lo tuyo; la copia del grupo está en el portapapeles.</string>
+    <string name="swapped">Enviado. Ahora tienes la copia del grupo en el portapapeles.</string>
     <string name="sync">Sincronizar</string>
     <string name="sync_off">La sincronización está desactivada</string>
     <string name="sync_off_until">La sincronización está desactivada hasta %1$s</string>

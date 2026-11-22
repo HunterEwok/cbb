@@ -2176,7 +2176,7 @@ made with 0.5 is set up again once. The details follow.
   `opened` replace `waiting` and `sends`; `took` stays.
 - On Android the accessibility button or gesture (the floating button, the swipe with two
   fingers, or both volume keys held) is the one button on every phone, whoever made it, once
-  "Send my copies by themselves" is on: it swaps the clipboard with the group's copy, as the
+  "Clipboard sync" is on: it swaps the clipboard with the group's copy, as the
   tile and the widget do.
 - A computer or small device writes whatever becomes the group's current copy, however old: its
   clipboard always equals the group's buffer, and the live window no longer limits it; a copy
@@ -2613,7 +2613,7 @@ made with 0.5 is set up again once. The details follow.
   step `sudo cbb mode shared`, a comparison with similar tools and their weak points, and a
   way to check the installer against `SHA256SUMS` before running it. The website's first
   screen says "Copy on one device, paste on another", and its translations are corrected.
-- Android's automatic sending ("Send my copies by themselves") leaves a copy marked sensitive
+- Android's automatic sending ("Clipboard sync") leaves a copy marked sensitive
   (`android.content.extra.IS_SENSITIVE`, as password managers and the app's received secrets
   mark it) on the phone, as the computers leave the password managers' marks; the button still
   sends it.

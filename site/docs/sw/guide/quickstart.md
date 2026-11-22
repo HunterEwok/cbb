@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e8caf339efb7 -->
+<!-- source: 1de61d3165d2 -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
@@ -67,7 +67,7 @@ Ongeza kila kompyuta nyingine kwa njia hiyo hiyo: sakinisha, **+** kwenye progra
 
 Unachonakili kwenye kompyuta kinafika kwenye kikundi, na kikundi kinachonakili kinafika kwake. Nakili kwenye kompyuta na ubandike kwenye simu, au kinyume chake:
 
-- **Android** hupokea nakala za kompyuta zenyewe. Ili kutuma nakala za simu, gusa kitufe kikubwa kwenye Mwanzo wa programu, kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, au Send kwenye arifa; au washa **Send my copies by themselves** kwenye programu ili ifanyike yenyewe.
+- **Android** hupokea nakala za kompyuta zenyewe. Ili kutuma nakala za simu, gusa kitufe kikubwa kwenye Mwanzo wa programu, kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, au Send kwenye arifa; au washa **Clipboard sync** kwenye programu ili ifanyike yenyewe.
 - **Kati ya kompyuta**: nakili kwenye moja, bandika kwenye nyingine. Hakuna cha kubonyeza.
 
 Ili ubao wa kunakili wa kifaa ubaki wake peke yake kwa muda, zima usawazishaji: kitufe cha nyumba kwenye skrini ya kwanza ya programu, au `cbb sync off` ([amri](../reference/cli.md#cbb)). Mengine ambayo programu hufanya yako katika [Programu](apps.md).

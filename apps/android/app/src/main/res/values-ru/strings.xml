@@ -4,7 +4,7 @@
 <resources>
     <string name="about">О программе</string>
     <string name="accessibility_description">Замечает, когда вы копируете текст, на мгновение читает буфер обмена и отправляет текст на ваши компьютеры. Если вы включили удалённую вставку, вставляет текст от админа группы в поле ввода с фокусом. Больше ничего на экране не читает.</string>
-    <string name="accessibility_label">Отправлять скопированное само</string>
+    <string name="accessibility_label">Синхронизация буфера</string>
     <string name="action_cancel">Отменить перезагрузку или выключение</string>
     <string name="action_confirm_body">Это произойдёт через минуту; до тех пор её остановит «Отменить перезагрузку или выключение».</string>
     <string name="action_confirm_title">%1$s: %2$s?</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">Удалённая вставка</string>
     <string name="remote_paste_body">Тогда админ группы сможет вставить текст в поле ввода с фокусом на этом телефоне: из своего приложения или командой cbb paste. Телефон покажет, кто вставил, и сохранит журнал последних вставок без самого текста. На экране блокировки вставка не работает.</string>
     <string name="remote_paste_enter">Разрешить вставке нажимать Enter</string>
-    <string name="remote_paste_needs_service">Вставка идёт через службу «Отправлять скопированное само», а она выключена. Включите её в настройках специальных возможностей.</string>
+    <string name="remote_paste_needs_service">Вставка идёт через службу «Синхронизация буфера», а она выключена. Включите её в настройках специальных возможностей.</string>
     <string name="remote_paste_needs_service_tv">Вставка идёт через службу специальных возможностей CBB, а она выключена. Включите её в настройках телевизора, в разделе «Специальные возможности».</string>
     <string name="remote_paste_service_stopped">Служба специальных возможностей включена в настройках, но система её остановила. Выключите её там и включите снова.</string>
     <string name="remote_paste_switch">Разрешить админам группы вставлять сюда</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">Подпись %1$d</string>
     <string name="signature_of">Подпись %1$d из %2$d</string>
     <string name="source">Исходный код и лицензия (AGPL-3.0)</string>
-    <string name="swapped">Ваше отправлено, копия группы в буфере обмена.</string>
+    <string name="swapped">Отправлено. В буфере теперь копия группы.</string>
     <string name="sync">Синхронизация</string>
     <string name="sync_off">Синхронизация выключена</string>
     <string name="sync_off_until">Синхронизация выключена до %1$s</string>

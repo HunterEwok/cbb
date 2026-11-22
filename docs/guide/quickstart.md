@@ -75,7 +75,7 @@ Copy on the computer and paste on the phone, or the other way round:
 
 - **Android** gets the computers' copies by itself. To send the phone's copies, tap the big
   button on the app's Home, the **Send clipboard** tile in Quick Settings or Send in the
-  notification; or turn on **Send my copies by themselves** in the app to have it done for
+  notification; or turn on **Clipboard sync** in the app to have it done for
   you.
 - **Between computers**: copy on one, paste on another. Nothing to press.
 

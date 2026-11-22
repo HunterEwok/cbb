@@ -4,7 +4,7 @@
 <resources>
     <string name="about">About</string>
     <string name="accessibility_description">Notices when you copy text, then reads the clipboard for a moment and sends the text to your computers. With remote paste on, it puts an admin\'s text into the text field that has the focus. It reads nothing else on the screen.</string>
-    <string name="accessibility_label">Send my copies by themselves</string>
+    <string name="accessibility_label">Clipboard sync</string>
     <string name="action_cancel">Cancel the reboot or shutdown</string>
     <string name="action_confirm_body">It happens a minute from now; until then, Cancel the reboot or shutdown stops it.</string>
     <string name="action_confirm_title">%1$s %2$s?</string>
@@ -504,7 +504,7 @@
     <string name="remote_paste">Remote paste</string>
     <string name="remote_paste_body">An admin of the group then puts a text into the text field that has the focus on this phone, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text. Never on the lock screen.</string>
     <string name="remote_paste_enter">Let a paste press Enter</string>
-    <string name="remote_paste_needs_service">It pastes through the service \"Send my copies by themselves\", which is off: turn it on in the system\'s accessibility settings.</string>
+    <string name="remote_paste_needs_service">It pastes through the service \"Clipboard sync\", which is off: turn it on in the system\'s accessibility settings.</string>
     <string name="remote_paste_needs_service_tv">It pastes through CBB\'s accessibility service, which is off: turn it on in the TV\'s settings, under Accessibility.</string>
     <string name="remote_paste_service_stopped">The accessibility service is on in the settings, but the system stopped it. Turn it off and on again there.</string>
     <string name="remote_paste_switch">Let the group\'s admins paste here</string>
@@ -559,7 +559,7 @@
     <string name="signature_n">Signature %1$d</string>
     <string name="signature_of">Signature %1$d of %2$d</string>
     <string name="source">Source code and license (AGPL-3.0)</string>
-    <string name="swapped">Sent yours; the group\'s copy is in the clipboard.</string>
+    <string name="swapped">Sent. The group\'s copy is in your clipboard.</string>
     <string name="sync">Sync</string>
     <string name="sync_off">Sync is off</string>
     <string name="sync_off_until">Sync is off until %1$s</string>

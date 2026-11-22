@@ -17300,48 +17300,48 @@
         }
       }
     },
-    "Sent yours; the group's copy is in the clipboard.": {
+    "Sent. The group's copy is in your clipboard.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أُرسل ما لديك؛ ونسخة المجموعة في الحافظة."
+            "value": "أُرسل. نسخة المجموعة الآن في حافظتك."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se envió lo tuyo; la copia del grupo está en el portapapeles."
+            "value": "Enviado. Ahora tienes la copia del grupo en el portapapeles."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שלך נשלח; העותק של הקבוצה נמצא בלוח."
+            "value": "נשלח. העותק של הקבוצה נמצא עכשיו בלוח שלך."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "आपका भेज दिया गया; समूह की कॉपी क्लिपबोर्ड में है।"
+            "value": "भेज दिया गया। अब आपके क्लिपबोर्ड में समूह की कॉपी है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ваше отправлено, копия группы в буфере обмена."
+            "value": "Отправлено. В буфере теперь копия группы."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chako kimetumwa; nakala ya kikundi iko kwenye ubao wa kunakili."
+            "value": "Imetumwa. Nakala ya kikundi sasa iko kwenye ubao wako wa kunakili."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已发送您的内容；群组的副本已在剪贴板中。"
+            "value": "已发送。剪贴板中现在是群组的副本。"
           }
         }
       }

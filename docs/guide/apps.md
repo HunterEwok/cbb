@@ -39,7 +39,7 @@ the desktop apps are a window onto the service that already runs on the computer
   Control Center control, or the home-screen widget. Share, Copy Beyond Borders sends a text
   or a link at once.
 - **Android**: copies from the computers arrive by themselves. To send the phone's copies
-  by themselves too, turn on **Send my copies by themselves** (an accessibility service;
+  by themselves too, turn on **Clipboard sync** (an accessibility service;
   the app explains what it reads). Without it, one tap: the **Send clipboard** tile in Quick
   Settings, Send in the notification, the home-screen widget, or Share and text selection,
   Copy Beyond Borders.

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f1f7831ac553 -->
+<!-- source: adedc68707fc -->
 # Las apps
 
 Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
@@ -26,7 +26,7 @@ Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps 
 
 - **Inicio** muestra todos los dispositivos del grupo, como iconos o como lista, con un punto que indica si está en línea. El botón grande toma una copia de otro dispositivo que aún esté vigente (un minuto por defecto; un administrador lo cambia en Ajustes) y, si no, envía lo que tiene el teléfono.
 - **iPhone**: iOS solo deja a una app usar el portapapeles mientras está en primer plano, así que el iPhone sincroniza con un solo gesto: la acción «Sync clipboard» en Tocar atrás o en el botón de Acción, el control del Centro de control o el widget de la pantalla de inicio. Compartir, Copy Beyond Borders envía de inmediato un texto o un enlace.
-- **Android**: las copias de los ordenadores llegan solas. Para que también se envíen solas las copias del teléfono, activa **Send my copies by themselves** (un servicio de accesibilidad; la app explica qué lee). Sin él, basta una pulsación: el icono **Send clipboard** de Ajustes rápidos, Send en la notificación, el widget de la pantalla de inicio, o Compartir y la selección de texto, Copy Beyond Borders.
+- **Android**: las copias de los ordenadores llegan solas. Para que también se envíen solas las copias del teléfono, activa **Clipboard sync** (un servicio de accesibilidad; la app explica qué lee). Sin él, basta una pulsación: el icono **Send clipboard** de Ajustes rápidos, Send en la notificación, el widget de la pantalla de inicio, o Compartir y la selección de texto, Copy Beyond Borders.
 - **Las notificaciones** avisan cuando un dispositivo se une o se elimina, se convierte en administrador, o el hub no responde fuera de casa. Cada tipo tiene su propio interruptor en Ajustes.
 
 ### Dispositivos

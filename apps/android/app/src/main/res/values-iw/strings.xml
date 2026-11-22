@@ -4,7 +4,7 @@
 <resources>
     <string name="about">אודות</string>
     <string name="accessibility_description">מבחין כשאתם מעתיקים טקסט, ואז קורא את הלוח לרגע ושולח את הטקסט למחשבים שלכם. כשהדבקה מרחוק פועלת, הוא מכניס את הטקסט של מנהל לשדה הטקסט שבמיקוד. הוא לא קורא שום דבר אחר במסך.</string>
-    <string name="accessibility_label">שליחת ההעתקות שלי מעצמן</string>
+    <string name="accessibility_label">סנכרון הלוח</string>
     <string name="action_cancel">ביטול האתחול או הכיבוי</string>
     <string name="action_confirm_body">זה יקרה בעוד דקה; עד אז, ״ביטול ההפעלה מחדש או הכיבוי״ עוצר זאת.</string>
     <string name="action_confirm_title">%1$s %2$s?</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">הדבקה מרחוק</string>
     <string name="remote_paste_body">מנהל בקבוצה מכניס אז טקסט לשדה הטקסט שבפוקוס בטלפון הזה, מהאפליקציה שלו או עם cbb paste. הטלפון הזה מציג מי הדביק, ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן. אף פעם לא במסך הנעילה.</string>
     <string name="remote_paste_enter">לאפשר להדבקה ללחוץ Enter</string>
-    <string name="remote_paste_needs_service">הוא מדביק דרך השירות \"שליחת ההעתקות שלי מעצמן\", שכבוי: הפעילו אותו בהגדרות הנגישות של המערכת.</string>
+    <string name="remote_paste_needs_service">הוא מדביק דרך השירות \"סנכרון הלוח\", שכבוי: הפעילו אותו בהגדרות הנגישות של המערכת.</string>
     <string name="remote_paste_needs_service_tv">הוא מדביק דרך שירות הנגישות של CBB, שכבוי: הפעילו אותו בהגדרות הטלוויזיה, תחת נגישות.</string>
     <string name="remote_paste_service_stopped">שירות הנגישות מופעל בהגדרות, אבל המערכת עצרה אותו. כבו והפעילו אותו שוב שם.</string>
     <string name="remote_paste_switch">לאפשר למנהלי הקבוצה להדביק כאן</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">חתימה %1$d</string>
     <string name="signature_of">חתימה %1$d מתוך %2$d</string>
     <string name="source">קוד מקור ורישיון (AGPL-3.0)</string>
-    <string name="swapped">שלך נשלח; העותק של הקבוצה נמצא בלוח.</string>
+    <string name="swapped">נשלח. העותק של הקבוצה נמצא עכשיו בלוח שלך.</string>
     <string name="sync">סנכרון</string>
     <string name="sync_off">הסנכרון כבוי</string>
     <string name="sync_off_until">הסנכרון כבוי עד %1$s</string>

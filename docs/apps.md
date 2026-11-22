@@ -791,7 +791,7 @@ ongoing notification Android requires) keeps one connection to each computer of 
 and puts what they copy on the phone's clipboard. It holds a multicast lock only while it
 browses mDNS. Nothing to set up.
 
-**Sending, automatic: "Send my copies by themselves".** An accessibility service that the
+**Sending, automatic: "Clipboard sync".** An accessibility service that the
 user turns on once, from a screen in the app that says what it is for and opens the right
 page of Settings:
 

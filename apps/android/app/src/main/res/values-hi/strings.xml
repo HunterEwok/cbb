@@ -4,7 +4,7 @@
 <resources>
     <string name="about">परिचय</string>
     <string name="accessibility_description">जब आप टेक्स्ट कॉपी करते हैं तो यह ध्यान देता है, फिर एक पल के लिए क्लिपबोर्ड पढ़कर टेक्स्ट आपके कंप्यूटरों पर भेजता है। रिमोट पेस्ट चालू होने पर, यह एडमिन का टेक्स्ट उस टेक्स्ट फ़ील्ड में डालता है जिस पर फ़ोकस है। यह स्क्रीन पर और कुछ नहीं पढ़ता।</string>
-    <string name="accessibility_label">मेरी कॉपी अपने आप भेजें</string>
+    <string name="accessibility_label">क्लिपबोर्ड सिंक</string>
     <string name="action_cancel">रीबूट या शटडाउन रद्द करें</string>
     <string name="action_confirm_body">यह एक मिनट बाद होगा; तब तक, रीबूट या शटडाउन रद्द करें इसे रोक देता है।</string>
     <string name="action_confirm_title">%1$s %2$s?</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">रिमोट पेस्ट</string>
     <string name="remote_paste_body">तब समूह का कोई एडमिन अपने ऐप से या cbb paste से इस फ़ोन पर फ़ोकस वाले टेक्स्ट फ़ील्ड में टेक्स्ट डालता है। यह फ़ोन दिखाता है कि किसने पेस्ट किया, और पिछले पेस्ट का लॉग उनके टेक्स्ट के बिना रखता है। लॉक स्क्रीन पर कभी नहीं।</string>
     <string name="remote_paste_enter">पेस्ट को Enter दबाने दें</string>
-    <string name="remote_paste_needs_service">यह \"मेरी कॉपी अपने आप भेजें\" सेवा के ज़रिए पेस्ट करता है, जो बंद है: इसे सिस्टम की सुलभता सेटिंग्स में चालू करें।</string>
+    <string name="remote_paste_needs_service">यह \"क्लिपबोर्ड सिंक\" सेवा के ज़रिए पेस्ट करता है, जो बंद है: इसे सिस्टम की सुलभता सेटिंग्स में चालू करें।</string>
     <string name="remote_paste_needs_service_tv">यह CBB की सुलभता सेवा के ज़रिए पेस्ट करता है, जो बंद है: इसे टीवी की सेटिंग्स में, सुलभता के अंतर्गत चालू करें।</string>
     <string name="remote_paste_service_stopped">सुलभता सेवा सेटिंग्स में चालू है, पर सिस्टम ने उसे रोक दिया। वहाँ इसे बंद करके फिर चालू करें।</string>
     <string name="remote_paste_switch">समूह के एडमिन को यहाँ पेस्ट करने दें</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">हस्ताक्षर %1$d</string>
     <string name="signature_of">%2$d में से हस्ताक्षर %1$d</string>
     <string name="source">सोर्स कोड और लाइसेंस (AGPL-3.0)</string>
-    <string name="swapped">आपका भेज दिया गया; समूह की कॉपी क्लिपबोर्ड में है।</string>
+    <string name="swapped">भेज दिया गया। अब आपके क्लिपबोर्ड में समूह की कॉपी है।</string>
     <string name="sync">सिंक</string>
     <string name="sync_off">सिंक बंद है</string>
     <string name="sync_off_until">%1$s तक सिंक बंद है</string>

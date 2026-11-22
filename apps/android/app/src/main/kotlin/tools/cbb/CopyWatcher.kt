@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 /**
- * "Send my copies by themselves" (docs/apps.md, "Android: the clipboard
+ * "Clipboard sync" (docs/apps.md, "Android: the clipboard
  * without taps"): an accessibility service that notices a copy, a click on
  * a "Copy" action or the system's clipboard overlay of Android 13 and
  * later, and then takes the input focus for a moment with a 1-pixel

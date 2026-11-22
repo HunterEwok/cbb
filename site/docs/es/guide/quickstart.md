@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e8caf339efb7 -->
+<!-- source: 1de61d3165d2 -->
 # Inicio rápido
 
 Copy Beyond Borders da a tu teléfono y a tus ordenadores un único portapapeles: copias en uno y pegas en otro. Los dispositivos forman un **grupo** en tu red doméstica. El teléfono guarda la clave del grupo y deja entrar a cada dispositivo nuevo, así que nadie puede unirse sin ti.
@@ -66,7 +66,7 @@ Añade cada otro ordenador igual: instalar, **+** en la app y `sudo cbb pair -co
 
 Lo que copias en el ordenador llega al grupo, y lo que copia el grupo llega a él. Copia en el ordenador y pega en el teléfono, o al revés:
 
-- **Android** recibe por sí solo lo que copian los ordenadores. Para enviar lo que copia el teléfono, pulsa el botón grande de Inicio de la app, el icono **Send clipboard** de Ajustes rápidos o Send en la notificación; o activa **Send my copies by themselves** en la app para que se haga solo.
+- **Android** recibe por sí solo lo que copian los ordenadores. Para enviar lo que copia el teléfono, pulsa el botón grande de Inicio de la app, el icono **Send clipboard** de Ajustes rápidos o Send en la notificación; o activa **Clipboard sync** en la app para que se haga solo.
 - **Entre ordenadores**: copia en uno y pega en otro. No hay nada que pulsar.
 
 Para que el portapapeles de un dispositivo sea solo suyo durante un tiempo, desactiva la sincronización: el botón de la casa en la primera pantalla de la app, o `cbb sync off` ([los comandos](../reference/cli.md#cbb)). El resto de lo que hacen las apps está en [Las apps](apps.md).

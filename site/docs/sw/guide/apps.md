@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f1f7831ac553 -->
+<!-- source: adedc68707fc -->
 # Programu
 
 Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za simu hushikilia kikundi; programu za kompyuta ni dirisha la kuangalia huduma ambayo tayari inaendeshwa kwenye kompyuta.
@@ -26,7 +26,7 @@ Copy Beyond Borders ina programu za simu, saa na kompyuta za mezani. Programu za
 
 - **Mwanzo** huonyesha kila kifaa cha kikundi, kama vigae au orodha, na kitone kinachoonyesha kama kiko mtandaoni. Kitufe kikubwa huchukua nakala kutoka kifaa kingine kama bado ni hai (dakika moja kwa chaguo-msingi; msimamizi huibadilisha kwenye Mipangilio), na vinginevyo hutuma kile ambacho simu inashikilia.
 - **iPhone**: iOS huruhusu programu kutumia ubao wa kunakili ikiwa mbele tu, kwa hiyo iPhone husawazisha kwa ishara moja: kitendo cha "Sync clipboard" kwenye Back Tap au kitufe cha Action, kidhibiti cha Kituo cha Udhibiti, au wijeti ya skrini ya kwanza. Shiriki, Copy Beyond Borders hutuma maandishi au kiungo mara moja.
-- **Android**: nakala kutoka kwenye kompyuta hufika zenyewe. Ili nakala za simu nazo zitumwe zenyewe, washa **Send my copies by themselves** (huduma ya ufikivu; programu hueleza inachosoma). Bila hiyo, mguso mmoja: kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, Send kwenye arifa, wijeti ya skrini ya kwanza, au Shiriki na uteuzi wa maandishi, Copy Beyond Borders.
+- **Android**: nakala kutoka kwenye kompyuta hufika zenyewe. Ili nakala za simu nazo zitumwe zenyewe, washa **Clipboard sync** (huduma ya ufikivu; programu hueleza inachosoma). Bila hiyo, mguso mmoja: kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, Send kwenye arifa, wijeti ya skrini ya kwanza, au Shiriki na uteuzi wa maandishi, Copy Beyond Borders.
 - **Arifa** husema kifaa kinapojiunga au kuondolewa, kinapokuwa msimamizi, au kitovu kisipojibu ukiwa mbali na nyumbani. Kila aina ina swichi yake kwenye Mipangilio.
 
 ### Vifaa

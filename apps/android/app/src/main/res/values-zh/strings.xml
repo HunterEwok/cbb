@@ -4,7 +4,7 @@
 <resources>
     <string name="about">关于</string>
     <string name="accessibility_description">在你复制文本时察觉，随后短暂读取剪贴板并将文本发送到你的电脑。开启远程粘贴后，它会将管理员的文本放入当前焦点所在的文本框。它不会读取屏幕上的其他任何内容。</string>
-    <string name="accessibility_label">自动发送我的副本</string>
+    <string name="accessibility_label">剪贴板同步</string>
     <string name="action_cancel">取消重启或关机</string>
     <string name="action_confirm_body">将在一分钟后执行；在此之前，“取消重启或关机”可阻止它。</string>
     <string name="action_confirm_title">%1$s %2$s？</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">远程粘贴</string>
     <string name="remote_paste_body">之后群组的管理员可以从自己的应用或用 cbb paste，把文本放进这部手机上当前有焦点的文本框。这部手机会显示是谁粘贴的，并保留最近几次粘贴的记录（不含文本）。锁屏时从不粘贴。</string>
     <string name="remote_paste_enter">允许粘贴时按回车</string>
-    <string name="remote_paste_needs_service">它通过“自动发送我的副本”服务粘贴，但该服务已关闭：请在系统的无障碍设置中开启。</string>
+    <string name="remote_paste_needs_service">它通过“剪贴板同步”服务粘贴，但该服务已关闭：请在系统的无障碍设置中开启。</string>
     <string name="remote_paste_needs_service_tv">它通过 CBB 的无障碍服务粘贴，但该服务已关闭：请在电视设置的“无障碍”中开启。</string>
     <string name="remote_paste_service_stopped">无障碍服务在设置中已开启，但系统停止了它。请在那里将它关闭再重新开启。</string>
     <string name="remote_paste_switch">允许群组管理员在此粘贴</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
     <string name="source">源代码和许可证 (AGPL-3.0)</string>
-    <string name="swapped">已发送您的内容；群组的副本已在剪贴板中。</string>
+    <string name="swapped">已发送。剪贴板中现在是群组的副本。</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
     <string name="sync_off_until">同步关闭至 %1$s</string>

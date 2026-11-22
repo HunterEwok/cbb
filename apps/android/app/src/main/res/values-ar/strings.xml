@@ -4,7 +4,7 @@
 <resources>
     <string name="about">حول</string>
     <string name="accessibility_description">يلاحظ عندما تنسخ نصًا، ثم يقرأ الحافظة للحظة ويرسل النص إلى حواسيبك. عند تشغيل اللصق عن بُعد، يضع نص المشرف في حقل النص الذي عليه التركيز. لا يقرأ أي شيء آخر على الشاشة.</string>
-    <string name="accessibility_label">إرسال نسخي تلقائيًا</string>
+    <string name="accessibility_label">مزامنة الحافظة</string>
     <string name="action_cancel">إلغاء إعادة التشغيل أو الإيقاف</string>
     <string name="action_confirm_body">يحدث بعد دقيقة من الآن؛ وحتى ذلك الحين، يوقفه إلغاء إعادة التشغيل أو الإيقاف.</string>
     <string name="action_confirm_title">%1$s %2$s؟</string>
@@ -501,7 +501,7 @@
     <string name="remote_paste">اللصق عن بُعد</string>
     <string name="remote_paste_body">بعدها يضع مشرف في المجموعة نصًا في حقل النص الذي عليه التركيز على هذا الهاتف، من تطبيقه أو بـcbb paste. يعرض هذا الهاتف من لصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها. ليس على شاشة القفل أبدًا.</string>
     <string name="remote_paste_enter">السماح للّصق بضغط Enter</string>
-    <string name="remote_paste_needs_service">يلصق عبر خدمة \"إرسال نسخي تلقائيًا\"، وهي متوقفة: شغّلها في إعدادات إمكانية الوصول في النظام.</string>
+    <string name="remote_paste_needs_service">يلصق عبر خدمة \"مزامنة الحافظة\"، وهي متوقفة: شغّلها في إعدادات إمكانية الوصول في النظام.</string>
     <string name="remote_paste_needs_service_tv">يلصق عبر خدمة إمكانية الوصول في CBB، وهي متوقفة: شغّلها في إعدادات التلفاز، ضمن إمكانية الوصول.</string>
     <string name="remote_paste_service_stopped">خدمة إمكانية الوصول مفعّلة في الإعدادات، لكن النظام أوقفها. أوقفها ثم شغّلها مرة أخرى هناك.</string>
     <string name="remote_paste_switch">السماح لمشرفي المجموعة باللصق هنا</string>
@@ -555,7 +555,7 @@
     <string name="signature_n">التوقيع %1$d</string>
     <string name="signature_of">التوقيع %1$d من %2$d</string>
     <string name="source">الشيفرة المصدرية والترخيص (AGPL-3.0)</string>
-    <string name="swapped">أُرسل ما لديك؛ ونسخة المجموعة في الحافظة.</string>
+    <string name="swapped">أُرسل. نسخة المجموعة الآن في حافظتك.</string>
     <string name="sync">مزامنة</string>
     <string name="sync_off">المزامنة متوقفة</string>
     <string name="sync_off_until">المزامنة متوقفة حتى %1$s</string>
