@@ -25,7 +25,7 @@ import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
 import { Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
-import { BusyLine, ErrorText } from '../components/Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON } from '../components/Common';
 import { DeviceDetail, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
 import { SettingsBody } from '../components/SettingsBody';
@@ -645,7 +645,7 @@ struct Main {
       BusyLine({ busy: true, label: $r('app.string.main_fetching') })
     }
     if (app.member.received.length > 0) {
-      Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+      Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
         .onClick(() => {
           this.saveReceived();
         })

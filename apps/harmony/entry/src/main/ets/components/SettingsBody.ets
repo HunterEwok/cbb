@@ -19,7 +19,7 @@ import { t } from '../core/Text';
 import { app } from '../model/AppModel';
 import { EVENT_KINDS } from '../model/Events';
 import { watch } from '../model/Watch';
-import { BusyLine, ErrorText } from './Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON } from './Common';
 import { WhySection } from './WhySection';
 
 // The languages of the apps (docs/apps.md, Languages), '' for the phone's.
@@ -243,7 +243,7 @@ export struct SettingsBody {
               .width('100%')
             }
           }
-          Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .fontColor($r('app.color.error'))
             .enabled(!app.busy)

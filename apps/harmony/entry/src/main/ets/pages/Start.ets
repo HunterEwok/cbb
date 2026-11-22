@@ -7,7 +7,7 @@
 
 import { router } from '@kit.ArkUI';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText, KeyGuardNote } from '../components/Common';
+import { BusyLine, EMPHASIZED_BUTTON, ErrorText, KeyGuardNote, NORMAL_BUTTON } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -26,6 +26,7 @@ struct Start {
   choice(label: ResourceStr, note: ResourceStr, primary: boolean, act: () => void) {
     Column({ space: 4 }) {
       Button(label, { type: ButtonType.Capsule, buttonStyle: primary ? ButtonStyleMode.EMPHASIZED : ButtonStyleMode.NORMAL })
+        .attributeModifier(primary ? EMPHASIZED_BUTTON : NORMAL_BUTTON)
         .width('100%')
         .enabled(!app.busy)
         .onClick(act)

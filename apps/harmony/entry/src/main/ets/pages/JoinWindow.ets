@@ -13,7 +13,7 @@ import { t } from '../core/Text';
 import { scanQr } from '../common/Scan';
 import { app } from '../model/AppModel';
 import { Joiner, WINDOW_QR } from '../model/Pairing06';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -87,7 +87,7 @@ struct JoinWindow {
             .onSubmit(() => {
               this.dial(this.typed);
             })
-          Button($r('app.string.start_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.start_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .enabled(this.typed.trim().length > 0)
             .onClick(() => {
@@ -97,7 +97,7 @@ struct JoinWindow {
         ErrorText({ text: this.hint })
         ErrorText({ text: app.joiner.error })
         if (app.joiner.state === 'failed') {
-          Button($r('app.string.try_again'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.try_again'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .enabled(this.last.length > 0)
             .onClick(() => {

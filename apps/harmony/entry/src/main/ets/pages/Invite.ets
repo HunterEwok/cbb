@@ -13,7 +13,7 @@ import { common } from '@kit.AbilityKit';
 import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, EMPHASIZED_BUTTON, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 import { QrView } from '../components/QrView';
 
 const INVITE_SECONDS: number = 3600;
@@ -80,10 +80,10 @@ struct Invite {
           .alignItems(HorizontalAlign.Center)
           Text($r('app.string.invite_warning')).fontSize(13).fontColor($r('app.color.secondary'))
           Row({ space: 8 }) {
-            Button($r('app.string.invite_copy'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
+            Button($r('app.string.invite_copy'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON).onClick(() => {
               this.copy();
             })
-            Button($r('app.string.invite_share'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
+            Button($r('app.string.invite_share'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON).onClick(() => {
               this.share();
             })
           }
@@ -96,12 +96,12 @@ struct Invite {
             .fontColor($r('app.color.accent'))
             .width('100%')
             .textAlign(TextAlign.Center)
-          Button($r('app.string.invite_admit'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
+          Button($r('app.string.invite_admit'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED }).attributeModifier(EMPHASIZED_BUTTON)
             .width('100%')
             .onClick(() => {
               app.invite.answer(true);
             })
-          Button($r('app.string.invite_not_this'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.invite_not_this'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .onClick(() => {
               app.invite.answer(false);

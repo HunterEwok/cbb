@@ -3043,6 +3043,9 @@ made with 0.5 is set up again once. The details follow.
   library moved to `apps/harmony/core/`, which hvigor's clean leaves alone, and DevEco's
   Previewer takes a stand-in for the native module (`entry/src/mock/`), so the pages show
   there as on a phone in no group; a module that did not load is a broken build, not a crash.
+- The HarmonyOS app's buttons take its own colours: filled with the accent when they lead,
+  the accent's text on a light surface otherwise, in place of the system's blue and pale grey
+  that were hard to read on the app's beige and dark pages.
 - The Aurora app keeps the core's own words when a YubiKey refuses: they go to the error's
   details (shown in a debug build or with `CBB_ERROR_DETAILS=1`, logged always) under the
   message in the user's words, which had replaced them and left the step unknown.
