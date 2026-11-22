@@ -31,8 +31,7 @@ func serviceHealth(ctx context.Context, d *Device) (pid string, rssKiB, fds int,
 	return f[0], rssKiB, fds, nil
 }
 
-// fuzzing (S20): a member of the group sends a member fuzzed frames over
-// its member TLS, a stranger sends random bytes and TLS records to the
+// fuzzing (S20): a stranger sends random bytes and TLS records to the
 // member port and to an open pairing window, and a local user fuzzes the
 // control socket; the service neither crashes nor restarts, gives back its
 // descriptors and memory, and still syncs.
@@ -61,10 +60,9 @@ func fuzzing(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	}) != nil {
 		return
 	}
-	id, err := deviceOf(ctx, target)
-	ip, err2 := fleetIP(ctx, target)
-	if err != nil || err2 != nil {
-		r.Do(p+"target", func() error { return fmt.Errorf("%v %v", err, err2) })
+	ip, err := fleetIP(ctx, target)
+	if err != nil {
+		r.Do(p+"target", func() error { return err })
 		return
 	}
 	secs := int(fuzzFor / time.Second)
@@ -73,9 +71,6 @@ func fuzzing(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 		fmt.Fprintf(r.out, "%s\n", strings.TrimSpace(out))
 		return err
 	}
-	r.Do(p+"member-frames", func() error {
-		return run(h, fmt.Sprintf("cbbbench-forge -state /tmp/%s -to %s -addr %s:8764 fuzz:%d:%d", insider.Name, id, ip, secs, time.Now().UnixNano()))
-	})
 	r.Do(p+"raw-bytes", func() error {
 		return run(h, fmt.Sprintf("cbbbench-forge -addr %s:8764 fuzz-raw:%d:%d", ip, secs, time.Now().UnixNano()))
 	})

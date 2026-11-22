@@ -2980,6 +2980,11 @@ made with 0.5 is set up again once. The details follow.
   pairing window (D-130).
 - Go's reader of the join QR code of 0.5 (`internal/phone`) and the bench's case of a
   computer that listens for the phone (G17), with the forge's `qr:` case (D-130).
+- The bench's cases that played a member of 0.5 with its copied state: forged commands and
+  records (S17, S23, T8, G31, G32), the admin CA (K14), renewals (K3), the fetch limits (O15),
+  a relayed join (G8), another system in the hello (G35), an event sent again (Y15) and fuzzed
+  member frames (S20); the cases stay in the catalogue until the bench plays a member of 0.6
+  (D-130).
 - The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's

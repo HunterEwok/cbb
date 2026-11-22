@@ -11,9 +11,9 @@ import (
 )
 
 // duplicates (Y15): an event that reaches a member by several paths, from
-// its sender and from each member that passes it on, is written once, and
-// so is one a member sends again. The forge watches the members'
-// clipboards as a desktop connector does and counts the writes.
+// its sender and from each member that passes it on, is written once. The
+// forge watches the members' clipboards as a desktop connector does and
+// counts the writes.
 func duplicates(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 	const p = "fleet/Y15-duplicates/"
 	g := fleetGroup(ctx, r, f, "fleet/Y15-duplicates", 4)
@@ -73,29 +73,6 @@ func duplicates(ctx context.Context, r *Report, f *Fleet, timeout time.Duration)
 			if n[m] != 1 {
 				return fmt.Errorf("%s wrote the text %d times, not once", m.Name, n[m])
 			}
-		}
-		return nil
-	})
-	r.Do("fleet/Y15-sent-again-written-once", func() error {
-		h, err := forgeHost(ctx, f, d, a)
-		if err != nil {
-			return err
-		}
-		text := "cbb-bench-" + g.run + "-again"
-		var out string
-		n, err := writes([]*Device{c}, 12, text, func() error {
-			var err error
-			out, err = runForge(ctx, h, d, a, c, "event:"+text+":3")
-			return err
-		})
-		if err != nil {
-			return err
-		}
-		if !strings.Contains(out, "event: sent 3 times") {
-			return fmt.Errorf("the forge printed %q", out)
-		}
-		if n[c] != 1 {
-			return fmt.Errorf("%s wrote an event sent three times %d times, not once", c.Name, n[c])
 		}
 		return nil
 	})
