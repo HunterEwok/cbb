@@ -47,7 +47,6 @@ export const memberStart: (request: string, onEvent: (event: string) => void) =>
 export const memberCall: (member: Handle, request: string) => Promise<string>;
 export const memberManage: (member: Handle, request: string, which: Which) => Promise<string>;
 export const memberManageWatch: (member: Handle, request: string) => Promise<string>;
-export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 
 export const inviteNew: (member: Handle, request: string, which: Which) => Promise<Made>;

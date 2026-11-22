@@ -1215,11 +1215,12 @@ Rust core, which does the protocol, the pairing, sync, the member's view of the 
 tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
 `ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
 system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
-joining by the phone's QR code, always as a member, or by an invitation, restoring), Home with the tiles
-or the list, a device's page with the admin's actions, adding a device by its QR code,
-invitations, the recovery key, the takeover, the arrangement and collections, and Settings
-with the error details, the notifications, the root's settings and, under the advanced
-settings, why it does not sync and the lab.
+joining by a group's window or by an invitation), Home with the tiles or the list, a device's
+page with the admin's actions, the home window for adding a device, invitations, the recovery
+key, changing the root with it, the arrangement and collections, and Settings with the error
+details, the notifications, the root's settings and, under the advanced settings, why it does
+not sync and the lab. A group from before 0.6 opens a page that says a new group is needed and
+offers Leave, which alone deletes its files (D-126).
 
 - **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
   asking; the admin key (the root's in a group the phone made) only after the user's face,
@@ -1247,13 +1248,13 @@ settings, why it does not sync and the lab.
   as Aurora does.
 - **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
   group without a computer the root or an admin phone is the hub itself (Settings, "This phone
-  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  as the hub"), registered with the forwarder the group's root set, its tunnel hidden for
   strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. In a group of 0.6 that relay is the group's, which the root phone
-  sets (the manage action `relay`) and the other phones show read-only. The core runs both (`cbb_member_servers`, docs/core-api.md), with
-  the server and period keys in HUKS; the root phone signs the next period of the group's
-  server credentials (docs/protocol.md, section 18) with the root key when it renews the
-  certificates, after the face, fingerprint or PIN.
+  user read what it learns. That relay is the group's, which the root phone sets (the manage
+  action `relay`) and the other phones show read-only. The member of 0.6 runs both and keeps
+  the group's server credentials itself; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it is due, after
+  the face, fingerprint or PIN.
 - **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
   sends of its member key, with the revocation list the app fetches from the mirror once a
   day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the

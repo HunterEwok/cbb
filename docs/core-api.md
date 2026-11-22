@@ -127,8 +127,7 @@ without signing, each other device's outcome `stays`, `out`, `admin_kept`, `admi
 signs the new start with the app's new root key and answers `{seq}`, as `cbb recovery` does on
 a computer (`writers::recover`); `take_over`, `take_handed_over`, `recover`, `hand_over`,
 `takeover_delay` and `finish_takeover` answer that the root changes only with the recovery key.
-`TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else, and
-`cbb_member_servers`, answers that it does not work in this build yet, with the cause
+`TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest
 (`media`), which the app fetches.

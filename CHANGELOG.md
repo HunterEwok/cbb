@@ -2901,6 +2901,12 @@ made with 0.5 is set up again once. The details follow.
 - Making and removing the recovery key on the Android root phone: on a group of 0.6 the key is
   part of the group's ID and its sheet is shown once when the group is made, so Settings only
   says so; a lost sheet means a new group.
+- The HarmonyOS app's code of 0.5 (D-126): the certificates and admin CAs it kept, commands
+  for the phone, alerts and their decisions, the takeover and handing the group over, the
+  takeover delay, the user's own forwarder and relay, making and removing the recovery key, the
+  key for sealed messages and the servers' keys in HUKS, with `cbb_member_servers` and its
+  keys callback in ffi. A group from before 0.6 opens a page that says a new group is needed
+  and offers Leave, which alone deletes its files, now with `epochs.json` among them.
 - The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
   member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
   and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,

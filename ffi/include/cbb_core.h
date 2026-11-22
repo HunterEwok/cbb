@@ -73,21 +73,6 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 /*
- * The app's keys for the servers, by name: the member of 0.6 keeps the
- * group's server credentials itself and calls them no more. op 0 answers 0
- * when the app holds the key name, 1 writes its public point (SEC1, 65
- * bytes) to out, 2 its signature (DER) of the 32-byte digest, 3 drops every
- * key but those name lists; out has room for 72 bytes.
- */
-typedef int32_t (*cbb_keys_fn)(void *ctx, int32_t op, const uint8_t *name, size_t name_len, const uint8_t *digest,
-                               uint8_t *out, size_t *out_len);
-/*
- * The member of 0.6 serves the group's servers itself: this answers that it
- * does not serve them for the app, an {"error"} whose details say "not on
- * the records of 0.6 yet". It stays until the Harmony app drops the call.
- */
-uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, size_t *answer_len);
-/*
  * Stops the member. It stays valid for the rest of the process: another
  * thread may still call it, and a call after the stop answers that the
  * member stopped; stopping it again does nothing.

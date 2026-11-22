@@ -10,7 +10,6 @@ import cbb, { Handle } from 'libcbb_napi.so';
 import { call, read } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure } from '../core/Keys';
-import { Membership } from '../core/Membership';
 import { t } from '../core/Text';
 import { Member } from './Member';
 
@@ -119,7 +118,7 @@ export class Invite {
   private polling: boolean = false;
 
   // Opens one for seconds, signed with the admin key.
-  async open(member: Member, m: Membership, seconds: number): Promise<void> {
+  async open(member: Member, seconds: number): Promise<void> {
     await this.close();
     this.error = '';
     this.joined = '';
@@ -135,9 +134,6 @@ export class Invite {
       return;
     }
     const request: Record<string, Object> = { 'public': key.ok.public, 'expires': seconds };
-    if (!m.isRoot() && m.member.admin_ca !== undefined) {
-      request['admin_ca'] = m.member.admin_ca;
-    }
     this.state = 'opening';
     const made = await cbb.inviteNew(core, JSON.stringify(request), 'admin');
     if (this.state !== 'opening') {

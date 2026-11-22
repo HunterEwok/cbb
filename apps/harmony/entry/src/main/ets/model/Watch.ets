@@ -21,7 +21,7 @@ import {
   decodeAsk, encode, fit, signNotes, WatchAsk, WatchDevice, WatchNote, WatchState
 } from '../common/WatchState';
 import { Wear } from '../common/Wear';
-import { app, CommandResult } from './AppModel';
+import { app } from './AppModel';
 import { Device } from './Member';
 
 // How often the phone looks for its watch, and for a change to tell it.
@@ -39,6 +39,12 @@ interface WatchAdmin {
   public: string;
   group: string;
   signer: string;
+}
+
+// A command's answer: done, or refused or failed with why.
+interface CommandResult {
+  status?: string;
+  reason?: string;
 }
 
 interface WatchAnswer {
@@ -75,7 +81,7 @@ export function stateOf(actions: Map<string, string[]>, admin: boolean): WatchSt
     away: app.member.awayOn ? app.member.awayStatus : 'off',
     events: app.events.recent.slice(0, 5),
     admin: admin,
-    signs: !app.isV06()
+    signs: false
   };
 }
 
@@ -166,15 +172,7 @@ export class Watch {
   private async tell(): Promise<void> {
     this.admin = this.stillAdmin();
     // In a group of 0.6 the watch signs nothing (D-124): no actions.
-    if (this.admin && !app.isV06()) {
-      const next = new Map<string, string[]>();
-      for (const d of app.member.devices) {
-        next.set(d.id, await app.member.watchActions(d.id));
-      }
-      this.actions = next;
-    } else {
-      this.actions = new Map<string, string[]>();
-    }
+    this.actions = new Map<string, string[]>();
     const data = fit(stateOf(this.actions, this.admin));
     const text = data.join(',');
     if (text === this.told) {

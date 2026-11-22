@@ -61,7 +61,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    const page = app.membership !== undefined ? 'pages/Main' : 'pages/Start';
+    const page = app.membership === undefined ? 'pages/Start' : app.isBefore06() ? 'pages/Before06' : 'pages/Main';
     windowStage.loadContent(page, (err) => {
       if (err.code) {
         Errors.log(`app: ${page} did not load: ${err.code} ${err.message}`);

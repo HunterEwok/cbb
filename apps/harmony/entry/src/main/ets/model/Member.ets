@@ -15,21 +15,18 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { read, Result } from '../core/Core';
-import { fromBase64, shortLine, toBase64 } from '../core/Bytes';
+import { shortLine, toBase64 } from '../core/Bytes';
 import { Errors, Failure } from '../core/Errors';
-import { Joined, Membership, sealSecret } from '../core/Membership';
-import { OS, osVersion, STORE } from '../core/Phone';
+import { Membership } from '../core/Membership';
+import { OS, osVersion } from '../core/Phone';
 import { t } from '../core/Text';
 import { ensure } from '../core/Keys';
-import { CheckedPaste, PasteAnswer } from './Paste';
 
 // The most bytes the phone fetches of a copy, or sends of shared files.
 const MAX_FETCH_BYTES: number = 200 * 1024 * 1024;
 export const MAX_SEND_BYTES: number = 50 * 1024 * 1024;
 // How often the devices, the mute and sync away from home are brought up to date.
 const POLL_MS: number = 3000;
-// The commands carried out, by ID, until they expire.
-const MAX_COMMANDS: number = 4096;
 export const IMAGE_TYPES: string[] = ['image/png', 'image/jpeg', 'image/gif'];
 
 // A device of the group, as the member's devices op lists it.
@@ -53,23 +50,7 @@ export interface Device {
 }
 
 // What the group's records stop and what ends it (the member's alerts).
-export interface Alert {
-  kind: string;
-  names?: string[];
-  devices?: string[];
-  records?: string[];
-  left_ms?: number;
-  count?: number;
-}
-
 // The root's settings as the records hold them (the member's root_view).
-export interface RootView {
-  delay_ms?: number;
-  key_level?: string;
-  recovery?: boolean;
-  handed_to?: string;
-}
-
 interface Peer {
   device: string;
   name?: string;
@@ -83,10 +64,6 @@ interface Devices {
   devices?: Device[];
 }
 
-interface Alerts {
-  alerts?: Alert[];
-}
-
 // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does not
 // sync"), the reason that stops the most first.
 export interface Why {
@@ -97,6 +74,11 @@ export interface Why {
   devices?: string[];
   value?: string;
   detail?: string;
+}
+
+// The member's group of 0.6, the part the app reads: its key level.
+interface GroupView {
+  key_level?: string;
 }
 
 interface Whys {
@@ -162,10 +144,6 @@ interface Away {
   relay?: Server;
 }
 
-interface Servers {
-  period_due?: boolean;
-}
-
 interface Attest {
   pending?: number;
   revoked?: number;
@@ -214,66 +192,14 @@ interface Fetched {
   parts?: Part[];
 }
 
-interface CommandBody {
-  id: string;
-  type: string;
-  by?: string;
-  time_ms: number;
-  expires_ms: number;
-  // A paste's.
-  text?: string;
-  enter?: boolean;
-  kind?: string;
-}
-
-interface Checked {
-  command: CommandBody;
-  verified?: boolean;
-  sender?: string;
-  clean?: string;
-}
-
 interface MemberEvent {
   type: string;
   line?: string;
   text?: string;
   kind?: string;
   ttl_ms?: number;
-  cert?: string;
-  issuer?: string;
-  roots?: string[];
-  token?: number;
-  from?: string;
-  command?: Object;
   copy?: Copy;
   details?: string;
-  message?: PeerMessage;
-}
-
-// A peer's message the core hands over as it came: the root's admin
-// message carries the admin CA.
-interface PeerMessage {
-  t?: string;
-  admin_ca?: string;
-}
-
-// P-256's SubjectPublicKeyInfo before the 65-byte point.
-const P256_SPKI_PREFIX: number[] = [
-  0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a,
-  0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00
-];
-
-// The SubjectPublicKeyInfo of a P-256 point in base64, base64; none for a
-// point of another length.
-export function p256Spki(point: string): string | undefined {
-  const p = new Uint8Array(fromBase64(point));
-  if (p.length !== 65) {
-    return undefined;
-  }
-  const out = new Uint8Array(P256_SPKI_PREFIX.length + p.length);
-  out.set(P256_SPKI_PREFIX, 0);
-  out.set(p, P256_SPKI_PREFIX.length);
-  return toBase64(out);
 }
 
 interface Started {
@@ -290,9 +216,9 @@ export class Member {
   // The names of the members connected now.
   @Trace peers: string[] = [];
   @Trace devices: Device[] = [];
-  @Trace alerts: Alert[] = [];
-  @Trace rootView: RootView = {};
   @Trace why: Why[] = [];
+  // The group's key level (proven, hardware or files), as its records set it.
+  @Trace keyLevel: string = 'hardware';
   // The tiles; viewed is false until the member gave them.
   @Trace view: View = { tiles: [] };
   @Trace viewed: boolean = false;
@@ -340,11 +266,6 @@ export class Member {
   // The root's next period of the server credentials waits for the user.
   @Trace periodDue: boolean = false;
 
-  // An admin renewed the certificate, or a takeover made a new root.
-  onIdentity: (cert: string, issuer: string, roots: string[]) => void = () => {};
-  // The root made this phone an admin: its admin message brought the admin
-  // CA (base64) for the key the hellos offer, not yet checked.
-  onAdminCa: (ca: string, from: string) => void = () => {};
   // The images or files of a copy are in folder.
   onSaved: (folder: string, count: number) => void = () => {};
   // The devices changed, for the notifications.
@@ -352,13 +273,6 @@ export class Member {
   // Something in the member broke (docs/core-api.md, "Panics"): details say
   // what and where. The app shows it and starts the member again.
   onPanic: (details: string) => void = () => {};
-  // A paste or paste-off command, checked: the paste receiver carries it
-  // out; name is the sender's when the records show it signed.
-  onPaste: (c: CheckedPaste, name: string) => PasteAnswer = () => {
-    const a = new PasteAnswer();
-    a.reason = 'this phone takes no remote pastes';
-    return a;
-  };
 
   // The member's recent log lines, oldest first, for a bug report.
   recentLog: string[] = [];
@@ -370,8 +284,6 @@ export class Member {
   private dir: string = '';
   private tookImage: string = '';
   private awayFailure: string = '';
-  private seen: Map<string, number> = new Map<string, number>();
-  private startedMs: number = 0;
   // Bumped by every change of the pasteboard, so that a secret leaves it
   // only when nothing replaced it.
   private boardChanges: number = 0;
@@ -399,46 +311,20 @@ export class Member {
 
   private async begin(m: Membership, dir: string, name: string): Promise<void> {
     this.dir = dir;
-    const secret = sealSecret(dir);
-    if (secret instanceof Failure) {
-      this.error = Errors.shown(secret);
-      return;
-    }
     const key = await ensure('member');
     if (key.ok === undefined) {
       this.error = Errors.shown(key.failure as Failure);
       return;
     }
-    const j: Joined = m.member;
     const request: Record<string, Object> = {
       'dir': dir,
       'name': name,
       'os': OS,
       'os_version': osVersion(),
-      'key_store': STORE,
       'version': AppStorage.get<string>('version') ?? '',
-      'device': j.device,
-      'public': key.ok.public,
-      'seal': secret,
-      'cert': j.cert,
-      'group_ca': j.group_ca,
-      'roots': j.roots
+      'device': m.member.device,
+      'public': key.ok.public
     };
-    if (j.issuer !== undefined && j.issuer.length > 0) {
-      request['issuer'] = j.issuer;
-    }
-    // A member phone's hellos offer its admin key, for the root's "Make it
-    // an admin" (docs/protocol.md, section 10, "Admins"). HUKS makes it
-    // without asking; only a signature asks for the user's consent.
-    if (!m.isAdmin()) {
-      const admin = await ensure('admin');
-      const spki = admin.ok !== undefined ? p256Spki(admin.ok.public) : undefined;
-      if (spki !== undefined) {
-        request['admin_key'] = spki;
-      } else {
-        Errors.log(`member: no admin key to offer: ${admin.failure?.message ?? 'not a P-256 point'} (${admin.failure?.details ?? ''})`);
-      }
-    }
     const made = await cbb.memberStart(JSON.stringify(request), (e: string) => {
       this.event(e);
     });
@@ -450,19 +336,11 @@ export class Member {
     this.handle = made.handle;
     this.running = true;
     this.error = '';
-    this.startedMs = Date.now();
-    this.seen.clear();
     this.watchBoard();
     Errors.log(`member: started in the group ${m.groupTag()}`);
     this.timer = setInterval(() => {
       this.poll();
     }, POLL_MS);
-    // The server credentials, the hub and the relay (cbb_member_servers),
-    // with the keys for the servers in HUKS.
-    const servers = read<Object>(await cbb.memberServers(made.handle, `${dir}/server-keys.txt`), 'member');
-    if (servers.failure !== undefined) {
-      Errors.log(`member: the server credentials: ${servers.failure.message} (${servers.failure.details})`);
-    }
     await this.pollMuted();
     await this.pollDevices();
   }
@@ -480,7 +358,6 @@ export class Member {
     this.running = false;
     this.peers = [];
     this.devices = [];
-    this.alerts = [];
     this.why = [];
     this.view = { tiles: [] };
     this.viewed = false;
@@ -720,12 +597,13 @@ export class Member {
       return;
     }
     const devices = d.ok.devices ?? [];
-    const al = await this.call<Alerts>('alerts');
     const w = await this.call<Whys>('why');
-    const rv = await this.call<RootView>('root_view');
-    const alerts = al.ok !== undefined ? (al.ok.alerts ?? []) : this.alerts;
     const why = w.ok !== undefined ? (w.ok.why ?? []) : this.why;
-    const rootView = rv.ok !== undefined ? rv.ok : this.rootView;
+    const g = await this.call<GroupView>('group');
+    const level = g.ok?.key_level;
+    if (level !== undefined && level !== this.keyLevel) {
+      this.keyLevel = level;
+    }
     await this.readView(await this.call<Viewed>('view'));
     if (JSON.stringify(why) !== JSON.stringify(this.why)) {
       this.why = why;
@@ -733,12 +611,6 @@ export class Member {
     if (JSON.stringify(devices) !== JSON.stringify(this.devices)) {
       this.devices = devices;
       this.onDevices(devices);
-    }
-    if (JSON.stringify(alerts) !== JSON.stringify(this.alerts)) {
-      this.alerts = alerts;
-    }
-    if (JSON.stringify(rootView) !== JSON.stringify(this.rootView)) {
-      this.rootView = rootView;
     }
   }
 
@@ -780,11 +652,8 @@ export class Member {
     await this.pollMuted();
     await this.pollDevices();
     await this.pollAway();
-    const s = await this.call<Servers>('servers');
-    // A group of 0.6 says it in away_status; one of 0.5 in servers.
-    const due = s.ok?.period_due === true || this.periodDueAway;
-    if (due !== this.periodDue) {
-      this.periodDue = due;
+    if (this.periodDueAway !== this.periodDue) {
+      this.periodDue = this.periodDueAway;
     }
   }
 
@@ -855,18 +724,6 @@ export class Member {
     } finally {
       req.destroy();
     }
-  }
-
-  // Meets the group at the blind relay at relay whose key's pin is key
-  // ('default' for the project's), or leaves it with relay empty.
-  async setRelay(relay: string, key: string): Promise<Failure | undefined> {
-    const a = await this.call<AwayAnswer>('relay', { 'relay': relay, 'key': key } as Record<string, Object>);
-    if (a.ok === undefined) {
-      return a.failure;
-    }
-    Errors.log(relay.length > 0 ? `member: meets the group at the relay ${relay}` : 'member: left the relay');
-    this.readAway(a.ok.away);
-    return undefined;
   }
 
   private async pollMuted(): Promise<void> {
@@ -995,94 +852,14 @@ export class Member {
       this.onPanic(e.details ?? '');
     } else if (e.type === 'write') {
       this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
-    } else if (e.type === 'identity') {
-      this.onIdentity(e.cert ?? '', e.issuer ?? '', e.roots ?? []);
     } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
-    } else if (e.type === 'command') {
-      if (e.command !== undefined) {
-        this.command(e.token ?? 0, e.from ?? '', e.command);
-      } else {
-        this.answer(e.token ?? 0, 'refused', 'the command has no body');
-      }
-    } else if (e.type === 'message') {
-      if (e.message?.t === 'admin' && (e.message.admin_ca ?? '').length > 0) {
-        this.onAdminCa(e.message.admin_ca ?? '', e.from ?? '');
-      }
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync
       // is on, as texts do through write.
       if (e.copy !== undefined && e.copy.kind === 'media' && !this.paused) {
         this.take(e.copy);
       }
-    }
-  }
-
-  // A command for the phone itself (docs/protocol.md, section 15): checked
-  // with the records, not carried out before, signed after the member started.
-  private async command(token: number, from: string, record: Object): Promise<void> {
-    const refuse = (reason: string): Promise<void> => {
-      Errors.log(`member: refused a command from ${from}: ${reason}`);
-      return this.answer(token, 'refused', reason);
-    };
-    const c = await this.call<Checked>('check_command', { 'command': record } as Record<string, Object>);
-    if (c.ok === undefined) {
-      const f = c.failure as Failure;
-      await refuse(f.details.length > 0 ? f.details : f.message);
-      return;
-    }
-    const body = c.ok.command;
-    const now = Date.now();
-    if (body.time_ms < this.startedMs) {
-      await refuse('this device started after the command was signed, so it may have carried it out already; send it again');
-      return;
-    }
-    this.seen.forEach((expires: number, id: string) => {
-      if (expires <= now) {
-        this.seen.delete(id);
-      }
-    });
-    if (this.seen.has(body.id)) {
-      await refuse('this command was carried out already');
-      return;
-    }
-    if (this.seen.size >= MAX_COMMANDS) {
-      await refuse('too many commands; try again in a minute');
-      return;
-    }
-    this.seen.set(body.id, body.expires_ms);
-    if (body.type === 'away-off') {
-      Errors.log(`member: ${body.by ?? from} turned sync away from home off`);
-      if (this.awayOn) {
-        await this.setAway(false);
-      }
-      await this.answer(token, 'done', '');
-    } else if (body.type === 'actions-off') {
-      // A phone has no quick actions, so none of them stays on.
-      await this.answer(token, 'done', '');
-    } else if (body.type === 'paste' || body.type === 'paste-off') {
-      let name = '';
-      if (c.ok.verified === true) {
-        const d = this.devices.find((d: Device) => d.id === body.by);
-        name = d !== undefined ? d.name : '';
-      }
-      const paste: CheckedPaste = {
-        command: { type: body.type, by: body.by, text: body.text, enter: body.enter, kind: body.kind },
-        verified: c.ok.verified,
-        sender: c.ok.sender,
-        clean: c.ok.clean
-      };
-      const a = this.onPaste(paste, name);
-      await this.answer(token, a.status, a.reason);
-    } else {
-      await refuse(`this phone takes no ${body.type} commands`);
-    }
-  }
-
-  private async answer(token: number, status: string, reason: string): Promise<void> {
-    const a = await this.call<Object>('answer', { 'token': token, 'status': status, 'reason': reason } as Record<string, Object>);
-    if (a.failure !== undefined) {
-      Errors.log(`member: answering a command: ${a.failure.message} (${a.failure.details})`);
     }
   }
 

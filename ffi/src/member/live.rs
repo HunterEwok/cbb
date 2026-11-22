@@ -28,7 +28,7 @@ use cbb_member::writers;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{Event, EventFn, Events, KeysFn, Request, SyncArgs, args, lock};
+use super::{Event, EventFn, Events, Request, SyncArgs, args, lock};
 use crate::join::{AppKey, SignFn, answer};
 
 /// Whether the app's folder in a start request holds a group of 0.6.
@@ -755,11 +755,6 @@ impl Phone {
     /// Whether sync is off and whether the phone is muted, as on 0.5.
     fn state(&self) -> Value {
         serde_json::to_value(cbb_member::sync::standing(&self.live.board)).unwrap_or_default()
-    }
-
-    /// The servers are not on the records of 0.6 yet.
-    pub fn servers(&self, _keys: KeysFn, _ctx: usize) -> Vec<u8> {
-        answer::<()>(Err(not_yet("serving the group's servers")))
     }
 
     /// Stops the member once; calls answer that it stopped from then on.

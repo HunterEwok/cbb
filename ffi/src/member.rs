@@ -26,20 +26,6 @@ pub(crate) mod live;
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;
 
-/// The app's keys for the servers, which `cbb_member_servers` takes: the
-/// member of 0.6 keeps the group's server credentials itself and calls it
-/// no more. It stays until the Harmony app, the call's last caller, drops
-/// it.
-pub type KeysFn = unsafe extern "C" fn(
-    ctx: *mut core::ffi::c_void,
-    op: i32,
-    name: *const u8,
-    name_len: usize,
-    digest: *const u8,
-    out: *mut u8,
-    out_len: *mut usize,
-) -> i32;
-
 fn yes() -> bool {
     true
 }
@@ -197,13 +183,6 @@ impl Member {
 
     pub fn call(&self, request: &[u8]) -> Vec<u8> {
         self.0.call(request)
-    }
-
-    /// The member of 0.6 keeps the group's server credentials itself:
-    /// this answers that it serves none for the app (until the Harmony app,
-    /// its last caller, drops the call).
-    pub fn servers(&self, keys: KeysFn, ctx: usize) -> Vec<u8> {
-        self.0.servers(keys, ctx)
     }
 
     pub fn stop(&self) {

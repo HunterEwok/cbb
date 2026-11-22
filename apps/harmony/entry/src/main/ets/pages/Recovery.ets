@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The root's recovery key (docs/apps.md, "Recovery key"): made, shown once
-// as its text and QR code to write down or print, and while it shows,
-// sealed onto a YubiKey held to the phone if the person wants; replaced or
-// removed.
+// The root's recovery key (docs/apps.md, "Recovery key"): made with the
+// group and shown once as its text and QR code to write down or print, and
+// while it shows, sealed onto a YubiKey held to the phone if the person
+// wants. On 0.6 it is part of the group's ID: nothing makes a new one or
+// removes it (D-126).
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
@@ -40,19 +41,12 @@ struct Recovery {
     });
   }
 
-  confirm(message: string, button: string, yes: () => void): void {
-    this.getUIContext().showAlertDialog({
-      message: message,
-      primaryButton: { value: t('cancel'), action: () => {} },
-      secondaryButton: { value: button, fontColor: $r('app.color.error'), action: yes }
-    });
-  }
 
   lead(): string {
     if (app.recoveryText.length > 0) {
       return t('recovery_write_down');
     }
-    return app.member.rootView.recovery === true ? t('recovery_has') : t('recovery_none');
+    return t('recovery_06');
   }
 
   build() {
@@ -111,31 +105,6 @@ struct Recovery {
           Button($r('app.string.recovery_wrote'), { type: ButtonType.Capsule }).width('100%').onClick(() => {
             app.forgetRecovery();
           })
-        } else if (app.isRoot()) {
-          Button(app.member.rootView.recovery === true ? t('recovery_make_new') : t('recovery_make'),
-            { type: ButtonType.Capsule })
-            .width('100%')
-            .enabled(!app.busy && app.member.running)
-            .onClick(() => {
-              if (app.member.rootView.recovery === true) {
-                this.confirm(t('recovery_replace_confirm'), t('recovery_make_new'), () => {
-                  app.makeRecovery();
-                });
-              } else {
-                app.makeRecovery();
-              }
-            })
-          if (app.member.rootView.recovery === true) {
-            Button(t('recovery_remove'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-              .width('100%')
-              .fontColor($r('app.color.error'))
-              .enabled(!app.busy && app.member.running)
-              .onClick(() => {
-                this.confirm(t('recovery_remove_confirm'), t('recovery_remove'), () => {
-                  app.removeRecovery();
-                });
-              })
-          }
         }
         BusyLine({ busy: app.busy })
         ErrorText({ text: app.error })
