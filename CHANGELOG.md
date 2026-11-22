@@ -3037,6 +3037,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Kotlin kit is back above its coverage floor: code of 0.5 that nothing calls any more
+  went (its DER writer and reader, the blob's sealing and opening, a result's reason
+  cleaner), and tests cover the member's values, manifests, names, keys and the group file.
 - The Android emulator tests admit a computer as a group of 0.6 does: the phone opens its
   pairing window and the computer joins with its six digits (`cbb pair -code`, D-119), which
   the bench's helper lets the members reach (`adb forward` and a relay on the fleet's

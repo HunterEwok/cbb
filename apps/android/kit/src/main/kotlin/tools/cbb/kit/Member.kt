@@ -24,34 +24,6 @@ object Member {
     /** Whether a device in sync mode mode sends its own copies to the group by itself. */
     fun sends(mode: String?): Boolean = mode == null || mode == "shared" || mode == "send"
 
-    /** The longest reason a result carries, in UTF-8 bytes (section 15). */
-    const val MAX_REASON = 256
-
-    /**
-     * A result's reason made fit to show: a control character (escape
-     * included) becomes a space, and it is cut to [MAX_REASON] bytes at a
-     * character boundary. The member that answers is a peer, so the member
-     * that shows the reason cleans it.
-     */
-    fun cleanReason(s: String): String {
-        val out = StringBuilder()
-        var bytes = 0
-        var i = 0
-        while (i < s.length) {
-            val cp = s.codePointAt(i)
-            i += Character.charCount(cp)
-            val c = if (Character.getType(cp) == Character.CONTROL.toInt()) ' '.code else cp
-            val size = String(Character.toChars(c)).toByteArray(Charsets.UTF_8).size
-            if (bytes + size > MAX_REASON) break
-            out.appendCodePoint(c)
-            bytes += size
-        }
-        return out.toString()
-    }
-
-    /** Texts are at most this many bytes of UTF-8. */
-    const val MAX_TEXT = 1 shl 20
-
     /** The kind of an event: a secret is kept only briefly (section 5); media is images or files, of which the kit takes the text. */
     enum class Kind(val wire: String) {
         TEXT("text"), SECRET("secret"), MEDIA("media");
@@ -187,17 +159,7 @@ object Member {
             )
         }
     }
-
 }
 
 internal fun ByteArray?.contentEqualsOrNull(other: ByteArray?): Boolean =
     if (this == null) other == null else other != null && contentEquals(other)
-
-/** Whether endpoint ends in a port from 1 to 65535, as in "192.0.2.1:8764" or "[2001:db8::1]:8764". */
-internal fun hasPort(endpoint: String): Boolean {
-    val colon = endpoint.lastIndexOf(':')
-    if (colon <= 0) return false
-    val digits = endpoint.substring(colon + 1)
-    if (digits.isEmpty() || digits.length > 5 || !digits.all { it in '0'..'9' }) return false
-    return digits.toInt() in 1..65535
-}

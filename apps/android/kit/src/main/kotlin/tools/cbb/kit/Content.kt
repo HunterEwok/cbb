@@ -14,16 +14,6 @@ import java.security.MessageDigest
 interface ContentStore {
     /** The blob whose SHA-256 is sum, or null when this phone does not hold all of it. The node closes it. */
     fun open(sum: ByteArray): ContentSource?
-
-    /**
-     * Seals the parts of m, which the store holds, into the blob of a new
-     * copy under a new key, and keeps the blob to serve it; null when m holds
-     * no bytes (docs/protocol.md, section 4, "The blob").
-     */
-    fun sealBlob(m: Media.Manifest): Pair<ByteArray, Blob>? {
-        if (m.size != 0L) throw Content.NoParts()
-        return null
-    }
 }
 
 /** One part a ContentStore opened. */
@@ -66,19 +56,6 @@ class MemoryContent(private val maxBytes: Long = Media.MAX_MEDIA) : ContentStore
 
     /** The bytes of a part or a blob it keeps. */
     fun bytes(sum: ByteArray): ByteArray? = synchronized(this) { parts[sum.toHex()] }
-
-    override fun sealBlob(m: Media.Manifest): Pair<ByteArray, Blob>? {
-        if (m.size == 0L) return null
-        val data = m.parts.filter { !it.dir && it.size > 0 }.map { p ->
-            val b = p.sha256?.let { bytes(it) }
-            if (b == null || b.size.toLong() != p.size) throw Content.NoParts()
-            b
-        }
-        val key = Blob.newKey()
-        val (blob, sealed) = Blob.seal(key, data)
-        put(sealed, blob = true)
-        return key to blob
-    }
 
     override fun open(sum: ByteArray): ContentSource? = synchronized(this) {
         parts[sum.toHex()]?.takeIf { sum.toHex() in blobs }?.let { b ->
@@ -131,9 +108,6 @@ object Content {
 
     /** The copy is not sealed to this phone, or names no blob. */
     class Unread : Exception("the copy is not sealed to this phone")
-
-    /** The store does not hold the parts of a copy to seal. */
-    class NoParts : Exception("the parts of the copy are no longer on this phone")
 
     /** The blob or a part does not match its hash, or does not open. */
     class Mismatch : Exception("the copy's content does not match")
