@@ -74,20 +74,24 @@ Page {
             width: parent.width
             spacing: Theme.paddingMedium
 
-            PageHeader { title: page.shown ? qsTr("Save the group's recovery key") : qsTr("Recovery key") }
+            PageHeader {
+                title: page.shown ? qsTr("Save the group's recovery key") : qsTr("Recovery key")
+                wrapMode: Text.Wrap
+            }
 
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
+                visible: text !== ""
                 text: !page.shown
                       ? qsTr("Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.")
                       : page.step === "choice"
                         ? qsTr("Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.")
                         : page.step === "sheet"
                           ? qsTr("Write the key down or save this page, and keep it safe.")
-                          : qsTr("Insert your YubiKey into the USB-C port and type its PIN.")
+                          : page.sealed ? "" : qsTr("Insert your YubiKey into the USB-C port and type its PIN.")
             }
 
             // The choice: both are allowed, one after the other.
@@ -224,9 +228,10 @@ Page {
             Button {
                 visible: page.shown && page.step !== "choice"
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Back")
+                // Once the key is on the YubiKey the work is done: straight out.
+                text: page.step === "yubikey" && page.sealed ? qsTr("Done") : qsTr("Back")
                 enabled: !app.busy
-                onClicked: page.step = "choice"
+                onClicked: page.step === "yubikey" && page.sealed ? page.leave() : page.step = "choice"
             }
             // Done: straight out once something is saved; after only looking
             // at the sheet it means it was written down; else it asks.
