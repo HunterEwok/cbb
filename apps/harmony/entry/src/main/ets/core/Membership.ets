@@ -27,6 +27,19 @@ interface Stored {
   member: Joined;
 }
 
+// The app's own files of the group.
+const APP_FILES: string[] = ['member.json', 'seal.key', 'server-keys.txt'];
+
+// The member's files of the group, as member/src/leave.rs lists them
+// (GROUP_FILES): keep the two lists alike.
+const GROUP_FILES: string[] = [
+  'identity.json', 'seal.json', 'tunnel.json', 'entries.json', 'attest-status.json', 'content', 'networks.json',
+  'credentials.json', 'server-keys.json', 'pastes.json', 'actions-log.json', 'mute.json', 'signed.json', 'before-0.6',
+  'local.json', 'offered.json', 'keys.json', 'epochs.json', 'statements.json', 'commands.cbor', 'marks.cbor',
+  'signed-records.json', 'push.cbor', 'push-previous.cbor', 'server-credentials.cbor', 'period-key', 'server-secret',
+  'hub-forwarders.json', 'invite-guest', 'records.json', 'group.cbor'
+];
+
 export class Membership {
   member: Joined;
 
@@ -99,14 +112,20 @@ export class Membership {
     }
   }
 
-  // Leaves the group on this phone: deletes member.json, the set of 0.6 and
-  // what a group from before 0.6 kept (its records, the key for its sealed
-  // messages and its servers' keys).
+  // Leaves the group on this phone: deletes member.json and every file the
+  // member keeps of its group, the list of member/src/leave.rs
+  // (GROUP_FILES), with what a group from before 0.6 kept beside them (the
+  // key for its sealed messages, its servers' keys).
   static remove(dir: string): Failure | undefined {
     try {
-      for (const name of ['member.json', 'group.cbor', 'local.json', 'epochs.json', 'records.json', 'seal.key', 'server-keys.txt']) {
+      for (const name of APP_FILES.concat(GROUP_FILES)) {
         const path = `${dir}/${name}`;
-        if (fileIo.accessSync(path)) {
+        if (!fileIo.accessSync(path)) {
+          continue;
+        }
+        if (fileIo.statSync(path).isDirectory()) {
+          fileIo.rmdirSync(path);
+        } else {
           fileIo.unlinkSync(path);
         }
       }
