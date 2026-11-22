@@ -428,6 +428,8 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 
+A test that compares two times of its own run is not timed under `cargo llvm-cov`, which counts every step of the code under test and none of its dependencies (`cfg(coverage)`): the full group's fill against its signatures (`records::tests::insert_cost`) is ignored there and runs in the `cbb (Rust), the checks` job's plain build.
+
 The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
