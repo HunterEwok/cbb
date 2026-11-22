@@ -211,6 +211,61 @@ func phoneAddrs(ctx context.Context) ([]string, error) {
 	return addrs, nil
 }
 
+// slirpAddr is where the emulator's console redirects a port to: the
+// guest's address on its user-mode network.
+const slirpAddr = "10.0.2.15"
+
+// slirpGuest lets the phone take what the emulator's console redirects
+// (adb emu redir), which goes to slirpAddr. An image whose only network is
+// Wi-Fi (Android 35: wlan0, 10.0.2.16) has no such address, and the
+// datagrams were lost in the emulator. The interface on that network takes
+// slirpAddr too, and its datagrams go on to the interface's own address,
+// so the replies leave from slirpAddr, where the emulator expects them.
+// Done once; the image's su runs it as root.
+func slirpGuest(ctx context.Context) error {
+	out, err := exec.CommandContext(ctx, adbPath(), "shell", "ip", "-4", "-o", "addr", "show").Output()
+	if err != nil {
+		return fmt.Errorf("adb: the phone's addresses: %w", err)
+	}
+	dev, own := slirpDev(string(out))
+	if dev == "" || own == slirpAddr {
+		return nil // no user-mode network, or the address is there
+	}
+	script := fmt.Sprintf("ip addr add %[1]s/32 dev %[2]s && "+
+		"iptables -t nat -A PREROUTING -i %[2]s -d %[1]s -p udp -j DNAT --to-destination %[3]s",
+		slirpAddr, dev, own)
+	if out, err := exec.CommandContext(ctx, adbPath(), "shell", "su", "0", "sh", "-c", "'"+script+"'").CombinedOutput(); err != nil {
+		return fmt.Errorf("adb: %s on the phone: %v: %s", script, err, out)
+	}
+	return nil
+}
+
+// slirpDev reads ip -4 -o addr for the interface on the emulator's
+// user-mode network (10.0.2.0/24) and its address there; slirpAddr when an
+// interface has it already.
+func slirpDev(out string) (dev, addr string) {
+	_, slirp, _ := net.ParseCIDR("10.0.2.0/24")
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] != "inet" || len(f) < 2 {
+				continue
+			}
+			ip, _, err := net.ParseCIDR(f[i+1])
+			if err != nil || !slirp.Contains(ip) {
+				continue
+			}
+			if ip.String() == slirpAddr {
+				return f[1], slirpAddr
+			}
+			if dev == "" {
+				dev, addr = f[1], ip.String()
+			}
+		}
+	}
+	return dev, addr
+}
+
 // ipv4Addrs reads the addresses of ip -4 -o addr ("2: wlan0    inet
 // 10.0.2.16/24 brd ..." a line), without the loopback's, each once.
 func ipv4Addrs(out string) []string {
@@ -597,6 +652,9 @@ func (h *phoneHelper) phoneUDP(ctx context.Context, d *Device) error {
 	ports := udpPorts(string(table), uid)
 	if len(ports) == 0 {
 		return nil
+	}
+	if err := slirpGuest(ctx); err != nil {
+		return err
 	}
 	addrs, err := phoneAddrs(ctx)
 	if err != nil {

@@ -106,3 +106,19 @@ func TestPhoneAddrs(t *testing.T) {
 		t.Fatalf("ipv4Addrs of the loopback alone = %v", got)
 	}
 }
+
+func TestSlirpDev(t *testing.T) {
+	wifi := `1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+3: wlan0    inet 10.0.2.16/24 brd 10.0.2.255 scope global wlan0\       valid_lft forever preferred_lft forever
+`
+	if dev, addr := slirpDev(wifi); dev != "wlan0" || addr != "10.0.2.16" {
+		t.Fatalf("slirpDev of Wi-Fi alone = %q %q, want wlan0 10.0.2.16", dev, addr)
+	}
+	both := wifi + "3: wlan0    inet 10.0.2.15/32 scope global wlan0\n"
+	if dev, addr := slirpDev(both); dev != "wlan0" || addr != slirpAddr {
+		t.Fatalf("slirpDev once the address is there = %q %q, want wlan0 %s", dev, addr, slirpAddr)
+	}
+	if dev, _ := slirpDev("1: lo    inet 127.0.0.1/8 scope host lo\n2: eth0    inet 192.168.1.5/24 scope global eth0\n"); dev != "" {
+		t.Fatalf("slirpDev off the emulator's network = %q, want none", dev)
+	}
+}
