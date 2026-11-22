@@ -1305,7 +1305,7 @@ async function refresh() {
   }
   if (asked === "settings" && !document.querySelector("dialog[open]")) openSettings();
   if (asked === "away") await turnAway();
-  if (state.status && state.status.bug && !askingBug && !document.querySelector("dialog[open]")) await askBug();
+  if (state.status?.bug && !askingBug && !document.querySelector("dialog[open]")) await askBug();
 }
 
 // askBug asks about the bug report of the service's panic before its last
