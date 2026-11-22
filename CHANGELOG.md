@@ -3076,7 +3076,9 @@ made with 0.5 is set up again once. The details follow.
   pass to the members. Their waits
   let Compose run each round: the screens' effects run on the test rule's dispatcher, and a
   bare sleep held the window that "Create a group" opens until the wait had failed. They
-  take Espresso 3.7, whose touches work on Android 17 too.
+  take Espresso 3.7, whose touches work on Android 17 too. The emulator's network passes no
+  mDNS, so after a computer joins the test hands the phone the computer's address, which a
+  debuggable build alone takes, as NSD would at home.
 - CI's differential run compares Go, the Rust core and the Kotlin kit: the iPhone kit's
   verdict test went with its own readers (D-126), and the run failed looking for its output.
   The Android emulator test of the phone as a hub checks the hub at home only, the

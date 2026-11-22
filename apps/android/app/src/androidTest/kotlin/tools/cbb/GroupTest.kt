@@ -298,6 +298,10 @@ class GroupTest {
         }
         assertTrue("cbb pair -code on $dev did not join:\n$out\n${appState()}", out.contains("Joined the group"))
         until(30, "the window says $dev joined: ${model.message}") { model.message?.text == R.string.window_joined }
+        // The emulator's network passes no mDNS: the phone is told where dev
+        // listens, as NSD would tell it at home.
+        until(30, "$dev in the phone's devices: ${model.group.devices.map { it.name }}") { model.group.devices.any { it.name == dev } }
+        model.group.dialInTests(idOf(dev), Bench.addr(dev))
     }
 
     /** Admits a member in no group from Home's + menu, through the phone's pairing window. */

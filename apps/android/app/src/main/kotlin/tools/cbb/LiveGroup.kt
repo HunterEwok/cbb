@@ -213,6 +213,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private var browser: NsdBrowser? = null
     private var found: Set<FoundMember> = emptySet()
 
+    /**
+     * Members' addresses that a debuggable build's instrumented tests hand
+     * in (dialInTests), device ID to "host:port": the emulator's network
+     * passes no mDNS, so NSD finds no member there; guarded by lock.
+     */
+    private var testMembers: Map<String, String> = emptyMap()
+
     /** The members handed to the node to dial, with the addresses handed; guarded by lock. */
     private var dialing: Map<String, List<String>> = emptyMap()
 
@@ -1477,11 +1484,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val b = browser
             val want = found.filter { (it.group == null || it.group == g.tag) && it.device != g.device && !it.pairing }.associate { m ->
                 m.device to listOfNotNull(b?.address(m.device)?.let { hostPort(it.hostString, it.port) })
-            }.filterValues { it.isNotEmpty() }
+            }.filterValues { it.isNotEmpty() } + testMembers.filterKeys { it != g.device }.mapValues { listOf(it.value) }
             Triple(n, want, dialing).also { dialing = want }
         }
         for ((d, addrs) in want) if (before[d] != addrs) runCatching { n.found(d, addrs, d) }.onFailure { Log.w(TAG, "dialing $d", it) }
         for (d in before.keys - want.keys) runCatching { n.lost(d) }
+    }
+
+    /**
+     * Has the node dial device at address ("host:port") as if NSD had
+     * found it: for the instrumented tests on an emulator, whose network
+     * passes no mDNS. Only a debuggable build takes it.
+     */
+    fun dialInTests(device: String, address: String) {
+        check(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) { "only a debuggable build dials a member the tests name" }
+        synchronized(lock) { testMembers = testMembers + (device to address) }
+        relay()
     }
 
     /** The group's face toward the push service, from the member; null until the entry points name the service. */
