@@ -2663,6 +2663,12 @@ impl RecordSet {
         // removed: a device left out, or removed before, is simply not
         // carried; only the admin keys that lose their rights are.
         let mut carried = self.change_carries(state, &device_key, leave_out);
+        // The new root's own device and every carried one within the
+        // group's devices: past MAX_DEVICES a re-issued device would not
+        // count, and the change would not apply whole.
+        if carried.len().saturating_add(1) > super::MAX_DEVICES {
+            return Err(Error::msg(CHANGE_TOO_BIG));
+        }
         if !past.is_empty() {
             // No spare past a waiting change: the device is carried plain.
             for d in &mut carried {

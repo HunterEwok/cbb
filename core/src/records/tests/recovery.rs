@@ -693,7 +693,7 @@ fn every_kind_of_record_in_any_order() {
 /// from its store only under the mark of both.
 #[test]
 fn a_device_pins_the_root_and_the_recovery_key() {
-    let local = [3u8; 32];
+    let local = crate::certs::sha256(b"a local key");
     let root = k("root").key;
     let mark = pin_mark(&local, &root, &rk());
     assert!(RecordSet::pinned(root.clone(), rk(), &local, &mark).is_some());
@@ -702,7 +702,7 @@ fn a_device_pins_the_root_and_the_recovery_key() {
     let other2 = Recovery { k2: crate::records::pq::PqKey::from_seeds(&[9; 16], &[9; 16], &[9; 16]).key(), ..rk() };
     assert!(RecordSet::pinned(root.clone(), other2, &local, &mark).is_none());
     assert!(RecordSet::pinned(k("root 2").key, rk(), &local, &mark).is_none());
-    assert!(RecordSet::pinned(root, rk(), &[4u8; 32], &mark).is_none());
+    assert!(RecordSet::pinned(root, rk(), &crate::certs::sha256(b"another local key"), &mark).is_none());
 }
 
 /// The Group ID commits to the root and both halves of the recovery key.
@@ -2310,6 +2310,47 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
     assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
     let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
     assert_eq!(restored.state().roots, m.state().roots);
+}
+
+/// A change that would carry more devices than the group holds, with the
+/// new root's own device, is refused: past MAX_DEVICES a re-issued device
+/// would not count and the change would not apply whole. Leaving one
+/// device out, it is written and applies.
+#[test]
+fn a_change_past_the_groups_devices_is_refused_until_one_is_left_out() {
+    let mut g = base();
+    let root = k("root");
+    let mut i = 0;
+    while g.state().devices.len() < crate::records::MAX_DEVICES {
+        g.device(&root, &k(&format!("m{i}")), "m", |_| {});
+        i += 1;
+    }
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert_eq!(st.devices.len(), crate::records::MAX_DEVICES);
+    let before = set.digest();
+    let err = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("new phone")), &[], false, 0)
+        .unwrap_err();
+    assert_eq!(err.to_string(), crate::records::set::CHANGE_TOO_BIG);
+    assert_eq!(set.digest(), before);
+    let w = set
+        .write_change(
+            &st,
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k("n1"),
+            phone(&k("new phone")),
+            &[k("tv").hash],
+            false,
+            0,
+        )
+        .unwrap();
+    let after = set.state();
+    assert_eq!(after.roots.last(), Some(&k("n1").hash));
+    assert!(w.first.iter().all(|r| after.counting.contains(&r.id())));
+    assert_eq!(after.devices.len(), crate::records::MAX_DEVICES);
+    assert!(!has(&after, &k("tv")));
 }
 
 /// A change never drops a device that counts by itself: when the re-issue
