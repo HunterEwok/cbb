@@ -659,7 +659,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   hub -on`), "Stop being the hub" (`cbb global hub off`, with `-on` for another device), and on this Mac while it is a hub how its tunnel hides (WireGuard, AmneziaWG,
   VLESS) and its forwarder (`cbb global hub -keep`, the tray app's page of this computer
   the same), sync on or off on another computer, on an admin: `cbb sync -on`, adding a
-  device by its six digits: `cbb pair -qr`, the update: `cbb update`) goes only through the admin socket, which only root reaches, so the app runs
+  device: `cbb pair -app FILE`, joining a group: `cbb pair -code`, the update: `cbb update`) goes only through the admin socket, which only root reaches, so the app runs
   `cbb` with administrator privileges (`Admin`, `do shell script … with administrator
   privileges`): macOS asks for the password, as `sudo cbb` does in Terminal. With error
   details on, `CBB_DEBUG=1` makes cbb name the error underneath.
@@ -684,13 +684,15 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   with the house's times (`cbb mute -on`, "Until an admin unmutes it" for the last) and
   "Unmute"; a muted device says so on its tile, its row and its card, and this Mac's own
   mute is an alert, with "Unmute" on an admin.
-- **Join a group**: on a Mac in no group, the button runs `cbb pair -app FILE` as the
-  administrator, and the sheet shows the QR code that cbb writes into the file (JSON: `qr`,
-  `expires`, `port`) with its six digits while it waits: a phone of the group scans the code,
-  a computer of the group types the digits after "+". Cancel removes the file, and cbb hangs
-  up, which ends the wait. "+" on the root or an admin takes the digits, or the QR code's
-  text or a picture of it, and runs `cbb pair -qr` with them on its standard input; "Device
-  far away? Send an invitation", on an admin, runs `cbb invite -app FILE -answers FILE` as
+- **Join a group**: on a Mac in no group, the button asks for the six digits of a pairing
+  window open on a device of the group and runs `cbb pair -code` as the administrator with
+  them on its standard input. "+" on the root or an admin opens the pairing window: it runs
+  `cbb pair -app FILE` as the administrator and shows the window that cbb writes into the
+  file (JSON: `code`, `qr`, `expires`, then `refused` when a device fails and `done` with
+  `name` when one joins), with its QR code for a new phone and its six digits for a new
+  computer. On the root, "Admit it as an admin" opens it again with `-admin`. Closing the
+  sheet removes the file, and cbb closes the window; a device that joins closes the sheet.
+  "Device far away? Send an invitation", on an admin, runs `cbb invite -app FILE -answers FILE` as
   the administrator: the sheet shows the invitation's QR code that cbb writes into the first
   file (JSON: `invite`, `expires`, and `joining` while it asks), with its text as the
   fallback, asks about the device that uses it by its fingerprint and writes the answer into

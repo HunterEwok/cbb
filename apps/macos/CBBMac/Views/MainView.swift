@@ -37,6 +37,7 @@ struct MainView: View {
     @State private var adding = false
     @State private var leaving = false
     @State private var recovering = false
+    @State private var joining = false
     @StateObject private var arrange = ArrangeState()
     @State private var query = ""
     @State private var filter: DeviceFilter?
@@ -64,7 +65,7 @@ struct MainView: View {
                         }
                     }
                 } else if !model.inGroup {
-                    StartView(recovering: $recovering)
+                    StartView(recovering: $recovering, joining: $joining)
                 } else {
                     header
                     UpdateCard()
@@ -115,9 +116,9 @@ struct MainView: View {
             }
         }
         .sheet(isPresented: $adding) { AddDeviceSheet().modifier(Themed()) }
-        .sheet(isPresented: Binding(get: { model.joining }, set: { if !$0 { model.cancelJoin() } })) { JoinSheet().modifier(Themed()) }
         .sheet(isPresented: Binding(get: { model.inviting }, set: { if !$0 { model.cancelInvite() } })) { InviteSheet().modifier(Themed()) }
         .sheet(isPresented: $recovering) { RecoverySheet().modifier(Themed()) }
+        .sheet(isPresented: $joining) { JoinSheet().modifier(Themed()) }
         .sheet(isPresented: $model.settingsShown) { SettingsView().environmentObject(model).modifier(Themed()) }
         .sheet(item: Binding(get: { model.bug }, set: { if $0 == nil, model.bug != nil { Task { await model.cancelBug() } } })) {
             BugSheet(offer: $0).modifier(Themed())

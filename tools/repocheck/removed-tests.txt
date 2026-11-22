@@ -598,3 +598,5 @@ member/tests/cli_commands.rs pair_shows_the_phone_a_code D-126: the QR code a de
 member/tests/cli_commands.rs pair_for_an_app D-126: cbb pair -app wrote that QR code for the desktop apps; cli_commands pair_with_a_code cases "pair in no group", "pair -app" and "pair -port -addr" check the refusal
 member/tests/cli_commands.rs pair_waits_on_the_service_port D-126: the device in no group no longer listens for a phone; cli_commands pair_with_a_code cases "pair in no group", "pair -app" and "pair -port -addr" check the refusal
 member/tests/cli_commands.rs pair_reads_the_qr_text D-126: cbb pair -qr read the QR code of a device that waited for the group (D-119); cli_commands pair_qr_is_gone checks its refusal
+apps/macos/CBBMacTests/CBBMacTests.swift testJoinCode D-126: the QR code cbb pair -app wrote for the group to dial a Mac is gone (D-119); CBBMacTests testPairingWindow reads what cbb pair -app writes in a group now
+apps/macos/CBBMacTests/CBBMacTests.swift testWaitingJoiner D-126: the QR code of a device that waited for the group is gone (D-119); cli_commands pair_qr_is_gone checks cbb pair -qr's refusal
