@@ -929,3 +929,5 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/RustTunnelTest.kt refusals D-123:
 apps/android/app/src/androidTest/kotlin/tools/cbb/GroupTest.kt c1_phoneHub D-126: in 0.6 a phone hub's forwarder is the root's setting and no phone names one; c1_phoneHubAtHome checks the hub at home only, the invitation it serves and the home network
 member/src/button.rs a_copy_waits D-128: no copy waits for a live window any more; the gesture swaps, and the_gesture_swaps and opening_listens check the new rule
 member/src/button.rs the_button_sends D-128: the gesture swaps; the_gesture_swaps checks what goes and what comes
+internal/service/incoming_test.go TestIncomingWindow D-129: the live window became the two lifetimes of a copy; TestCopyLifetimes in the same file checks them, their bounds and who may set them
+member/src/cli.rs incoming_line_drops_zero_units D-129: cbb incoming became cbb ttl; ttl_line_drops_zero_units in the same file checks the line it prints
