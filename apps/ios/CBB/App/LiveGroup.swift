@@ -1315,6 +1315,7 @@ final class LiveGroup: GroupController {
         func newDevice() throws {
             if !FileManager.default.fileExists(atPath: url.path) { try set("shared") }
         }
+    }
 
     /// Passes the members of the group that the browser finds to the
     /// member, which dials each by the addresses Bonjour resolves; the

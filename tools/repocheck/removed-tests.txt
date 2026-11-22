@@ -867,3 +867,5 @@ internal/service/swift_test.go TestSwiftJoinsComputerRoot D-126: cbb-interop, th
 internal/service/swift_test.go TestSwiftMemberTLS D-126: cbb-interop, the Swift kit's player of 0.5's phone, is gone with that kit; ffi's phone-on-linux example and TestFFI play a phone of 0.6 against the service
 apps/ios/CBBKit/Tests/CBBKitTests/ComputerAdminTests.swift testWire D-126: the phone that admits a computer with 0.5's admin CA is gone; on 0.6 the window in the core admits it, which WindowTests and the core's pairing tests check
 apps/ios/CBBKit/Tests/CBBKitTests/ContentTests.swift testGoFrames D-126: the frames and chunks of 0.5's member wire are gone with it; the member of 0.6 fetches images and files in the core, which CoreMemberTests.testNodesFetch and TestFFI check
+apps/ios/CBBKit/Tests/CBBKitTests/TunnelSettingsTests.swift testGroupPathOfAUserID D-126: the kit's VLESS settings of 0.5 are gone (D-123); the core's vless::group_path makes the path, checked by its vless tests
+apps/ios/CBBKit/Tests/CBBKitTests/TunnelSettingsTests.swift testUserIDs D-126: the kit's VLESS settings of 0.5 are gone (D-123); the core checks VLESS user IDs, checked by its vless tests
