@@ -131,8 +131,10 @@ Other jobs run side by side the same way: the iPhone app's UI tests on an iPhone
 simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
 (`cbb (Rust), the checks and the Raspberry Pi builds`) and its optimized builds and installers
 (`cbb (Rust), the optimized builds and the installers`) run beside its tests (`cbb (Rust)`),
-whose test binaries cargo-nextest runs side by side (`.config/nextest.toml`; the
-tests that time their own run run alone there),
+which run as the service tests do: one job builds them once into a cargo-nextest archive,
+four parts run a share of its tests each (`--partition`; within a part cargo-nextest runs the
+test binaries side by side, `.config/nextest.toml`, and the tests that time their own run
+run alone), and `cbb (Rust), the coverage` puts the parts' profiles together into one report,
 and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
@@ -437,7 +439,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` jobs' tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
-| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the `rust` job |
+| `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov nextest` in the four `cbb (Rust)` parts, put together by `cbb (Rust), the coverage` |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
