@@ -907,6 +907,9 @@ made with 0.5 is set up again once. The details follow.
   (`TestAloneServiceFlags`).
 - A request to the Rust service while it is still starting waits for it rather than hearing
   that the device is in no group.
+- A request that comes while the Rust service is still reading its group's files hears that
+  they do not open as soon as that is known, rather than that the device is still starting
+  (`TestBrokenGroupFiles`).
 - The Rust member no longer can deadlock when a renewed certificate and new records come at
   once (seen in `TestAloneTakeover`).
 - A pairing window closed while it sent its Welcome now ends when that attempt ends, also when

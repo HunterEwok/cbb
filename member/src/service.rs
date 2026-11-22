@@ -653,6 +653,22 @@ impl Service {
         }
     }
 
+    /// Waits, START_WAIT at most, while the group is still starting: its
+    /// sockets open before its files are read, so a request that comes
+    /// meanwhile hears that the files do not open once that is known,
+    /// rather than that the device is still starting.
+    fn settle(&self) {
+        let deadline = std::time::Instant::now() + START_WAIT;
+        while self.live().is_none()
+            && self.broken.lock().unwrap().is_none()
+            && on_live::in_group(&self.state_dir)
+            && std::time::Instant::now() < deadline
+            && !STOP.load(Ordering::SeqCst)
+        {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     /// Whether the request h only mutes or unmutes this device itself,
     /// which the service also takes on its control socket from the user at
     /// the screen (or root and the service's own user): it changes nothing
@@ -1368,6 +1384,9 @@ impl Service {
                     return;
                 }
             }
+        }
+        if m.header.op != control::op::LEAVE && !on_live::needs_no_group(&m.header.op) {
+            self.settle();
         }
         let broken = self.broken.lock().unwrap().clone();
         if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
