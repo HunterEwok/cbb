@@ -13,6 +13,8 @@
 //! phone to register again, which reaches the phone's queue when it is
 //! back.
 
+#![cfg(unix)]
+
 mod common;
 
 use std::collections::HashMap;

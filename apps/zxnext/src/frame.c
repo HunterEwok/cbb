@@ -41,11 +41,6 @@ uint8_t frame_line(const char *line, uint32_t *len, uint32_t *crc)
         if (!p || *p) return LINE_OTHER;
         return LINE_TEXT;
     }
-    if (strncmp(line, "CBBQ ", 5) == 0) {
-        p = number(line + 5, 10, len);
-        if (!p || *p || *len == 0 || *len > 177) return LINE_OTHER;
-        return LINE_QR;
-    }
     if (strcmp(line, "CBBGO") == 0) return LINE_GO;
     if (strcmp(line, "CBBOK") == 0) return LINE_OK;
     if (strncmp(line, "CBBERR", 6) == 0 && (line[6] == ' ' || line[6] == 0)) return LINE_ERR;

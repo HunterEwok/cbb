@@ -33,9 +33,7 @@ int main(void)
     CHECK(frame_line("CBB1 9", &len, &crc) == LINE_OTHER);
     CHECK(frame_line("CBB1 x 0", &len, &crc) == LINE_OTHER);
     CHECK(frame_line("CBB1 9 cbf43926 extra", &len, &crc) == LINE_OTHER);
-    CHECK(frame_line("CBBQ 41", &len, &crc) == LINE_QR && len == 41);
-    CHECK(frame_line("CBBQ 0", &len, &crc) == LINE_OTHER);
-    CHECK(frame_line("CBBQ 999", &len, &crc) == LINE_OTHER);
+    CHECK(frame_line("CBBQ 41", &len, &crc) == LINE_OTHER);
     CHECK(frame_line("CBBGO", &len, &crc) == LINE_GO);
     CHECK(frame_line("CBBOK", &len, &crc) == LINE_OK);
     CHECK(frame_line("CBBERR the service is not running", &len, &crc) == LINE_ERR);

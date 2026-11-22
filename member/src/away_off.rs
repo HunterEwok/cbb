@@ -8,13 +8,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use cbb_core::certs::Cert;
-use cbb_core::wire::Message;
-
 use crate::certs::DeviceId;
 use crate::control::{self, Header};
 use crate::error::{Error, Result};
-use crate::node::{Node, Peer};
 
 /// Sync away from home on this device: never on in this build.
 pub struct Away;
@@ -49,52 +45,13 @@ impl Away {
         None
     }
 
-    pub fn retry(&self, _node: &Node, _hub: &DeviceId) {}
-
-    pub fn status(&self, _node: &Node) -> Option<control::Away> {
-        None
-    }
-
     pub fn make_hub(&self, _h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
         self.turn_on()
-    }
-
-    pub fn serve_if_first(&self, _node: &std::sync::Arc<Node>) {}
-
-    pub fn stop_hub(&self, _node: &Node, _anyway: bool) -> Result<()> {
-        Err(Error::msg("this device is no hub of the group"))
-    }
-
-    pub fn hello(&self, _node: &Node, _from: &DeviceId, _peer: &Peer, _chain: &[Cert]) -> Vec<Message> {
-        Vec::new()
-    }
-
-    pub fn prune(&self, _node: &Node) {}
-
-    pub fn set_credentials(&self, _c: Arc<crate::credentials::Credentials>) {}
-
-    pub fn meet_at(&self, _node: &Node, _h: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
-        self.turn_on()
-    }
-
-    pub fn open_own(
-        self: &Arc<Self>,
-        _keys: &crate::inviter::GuestKeys,
-        _w: &Arc<crate::window::Window>,
-    ) -> Result<crate::inviter::Opened> {
-        Err(off())
     }
 
     pub fn is_hub(&self) -> bool {
         false
     }
-
-    pub fn guest_message(self: &Arc<Self>, _node: &Node, _from: &DeviceId, _chain: &[Cert], _g: crate::wire::Guest) {}
-
-    pub fn hubs_shared(self: &Arc<Self>, _node: &Arc<Node>, _from: &DeviceId, _chain: &[Cert], _v: &serde_json::Value) {
-    }
-
-    pub fn run(self: Arc<Self>, _node: Arc<Node>) {}
 
     pub fn is_hub_now(&self) -> bool {
         false
@@ -139,26 +96,4 @@ pub fn forwarder_named(fwd: &str, _key: &str) -> Result<Option<(String, [u8; 32]
 /// Why sync away from home is off in this build.
 fn off() -> Error {
     Error::msg("this build of cbb has no tunnel for sync away from home (MIPS); it syncs at home only")
-}
-
-/// A build without the tunnel keeps no invitation: it cannot join by one.
-pub fn keep_guest(_dir: &std::path::Path, _text: &str) -> Result<()> {
-    Err(off())
-}
-
-/// A build without the tunnel has no guest tunnel.
-pub struct GuestTunnel;
-
-impl GuestTunnel {
-    pub fn start(_inv: &cbb_core::invite::Invitation, _log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<GuestTunnel> {
-        Err(off())
-    }
-
-    pub fn port(&self) -> u16 {
-        0
-    }
-
-    pub fn answered(&self) -> bool {
-        false
-    }
 }

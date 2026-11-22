@@ -146,33 +146,6 @@ pub fn unseal(b: &Sealed) -> Result<Vec<u8>> {
     Ok(open.secret)
 }
 
-/// A key on a YubiKey, which cbb signs with itself after its PIN
-/// (piv.rs): the recovery key a root phone put there. The key whose
-/// certificate's public key has the hash key_hash signs; public is that
-/// key, from the admin CA the records carry for it.
-pub struct CardKey {
-    key_hash: [u8; 32],
-    pin: String,
-    public: Vec<u8>,
-}
-
-impl CardKey {
-    /// The card's key for key_hash, whose public key is public.
-    pub fn new(key_hash: [u8; 32], pin: &str, public: Vec<u8>) -> Result<CardKey> {
-        Ok(CardKey { key_hash, pin: pin.to_string(), public })
-    }
-}
-
-impl ExternalKey for CardKey {
-    fn public(&self) -> Vec<u8> {
-        self.public.clone()
-    }
-
-    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
-        crate::piv::sign_with_card(&self.key_hash, &self.pin, &self.public, digest)
-    }
-}
-
 /// A device key in the hardware, which the helper signs with.
 pub struct HardwareKey {
     helper: Arc<Helper>,

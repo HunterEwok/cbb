@@ -127,6 +127,7 @@ fn platforms(f: &Flags) -> Result<HashMap<u64, Arc<dyn Platform>>> {
 /// Set by SIGTERM or SIGINT: the service writes its bindings and stops.
 static STOP: AtomicBool = AtomicBool::new(false);
 
+#[cfg(unix)]
 extern "C" fn on_signal(_: libc::c_int) {
     STOP.store(true, Ordering::SeqCst);
 }

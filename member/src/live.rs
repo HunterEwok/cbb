@@ -34,6 +34,10 @@ use crate::roster::id_text;
 use crate::sealed::Blob;
 use crate::uptime;
 
+/// What a hub that only passes copies on refuses.
+pub const FORWARD_ONLY: &str =
+    "this computer is a hub of the group that only passes the copies on: it makes, reads and pastes none";
+
 /// How long a device that discovery found still counts as at home: anyone
 /// on a network can announce a device and the group's tag, so past that
 /// only a connection to it counts.
@@ -385,7 +389,7 @@ impl Live {
     pub fn refuse_forward_only(&self) -> Result<()> {
         let st = self.mesh.state();
         if st.device(&self.me).is_some_and(|d| crate::writers::is_forward_only(d.rights)) {
-            return Err(crate::error::Error::msg(crate::node::FORWARD_ONLY));
+            return Err(crate::error::Error::msg(FORWARD_ONLY));
         }
         Ok(())
     }

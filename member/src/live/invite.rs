@@ -669,7 +669,7 @@ pub fn join(
         crate::tunnel::State::new(&super::tag(&a.state))?.save(dir)?;
         crate::files::write_atomic(&dir.join(GUEST_FILE), text.as_bytes(), 0o600)
     };
-    let step = crate::window::CONFIRM_WAIT + Duration::from_secs(60);
+    let step = crate::pair::CONFIRM_WAIT + Duration::from_secs(60);
     // A connection that ends before its TLS handshake never reached the
     // window, as when the hub passes it to an admin not connected just
     // then: it counts as no attempt, and the next one goes after a pause.

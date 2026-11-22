@@ -75,9 +75,11 @@ pub struct Client {
     tls: StreamOwned<ClientConnection, Timed>,
     next: u64,
     /// Sends left this hour for the face's tag, as the service said.
+    #[allow(dead_code, reason = "what the service answered, kept beside the face")]
     pub left: u64,
     /// The face's tag, as its hubs' credential names it: a registration's
     /// signature must cover it to hold on this connection.
+    #[allow(dead_code, reason = "what the service answered, which the tests check")]
     pub face: [u8; 16],
     /// How long a send waits for its answer ([`ANSWER_WITHIN`]).
     pub answer_within: Duration,

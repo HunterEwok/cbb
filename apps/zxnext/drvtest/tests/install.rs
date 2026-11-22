@@ -569,7 +569,7 @@ fn shows_the_usage() {
     let s = run.hw.screen_text();
     // Two columns in 32, every line whole, and no "scroll?".
     assert!(s.contains("|install       fetch the rest"), "{s}");
-    assert!(s.contains("|              or cbb pair CODE"), "{s}");
+    assert!(s.contains("|              code of cbb pair"), "{s}");
     assert!(s.contains("|leave         leave the group"), "{s}");
     assert!(!s.contains("scroll?"), "{s}");
 }
@@ -884,11 +884,7 @@ fn says_when_the_pi_is_in_a_group_already() {
     let s = run.hw.screen_text();
     assert!(s.contains("already: .cbb leave first"), "{s}");
     let pi: &mut Pi = run.hw.pi.peer.as_any().downcast_mut().unwrap();
-    assert!(
-        !pi.log.iter().any(|l| l.contains("next pair")),
-        "{:?}",
-        pi.log
-    );
+    assert!(!pi.log.iter().any(|l| l.contains("-join ")), "{:?}", pi.log);
 }
 
 #[test]
@@ -1112,8 +1108,9 @@ fn pastes_through_the_driver() {
     assert!(s.contains("Hello from the group"), "{s}");
 }
 
-/// After the first install, a Pi in no group goes on to pair at once: the
-/// QR code's command runs on the Pi once the install's screen has its key.
+/// After the first install, a Pi in no group is told at once how to pair:
+/// once the install's screen has its key, the Next asks the Pi whether it
+/// is in a group and, as it is not, says where the code comes from.
 #[test]
 fn installs_then_pairs() {
     let Some(kit) = kit("thenpair") else { return };
@@ -1132,9 +1129,11 @@ fn installs_then_pairs() {
     let probe = pi
         .log
         .iter()
-        .position(|l| l.contains("cbb-state/identity.json"));
-    let pair = pi.log.iter().position(|l| l.contains("next pair -addr"));
-    assert!(probe.is_some() && pair > probe, "{:?}", pi.log);
+        .position(|l| l.contains("cbb-state/group.cbor"));
+    assert!(probe.is_some(), "{:?}", pi.log);
+    assert!(!pi.log.iter().any(|l| l.contains("-join ")), "{:?}", pi.log);
+    let s = run.hw.screen_text();
+    assert!(s.contains("sudo cbb pair shows a code"), "{s}");
     let _ = std::fs::remove_dir_all(&card);
 }
 

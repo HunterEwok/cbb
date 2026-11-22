@@ -39,36 +39,23 @@ pub(super) fn in_group(dir: &Path) -> bool {
     dir.join(crate::set::FILE_NAME).exists()
 }
 
-/// The clipboard side of the member that runs: the old member's engine or
-/// the member of 0.6, for what both do the same.
-pub(super) enum Group {
-    Old(Arc<Node>),
-    Live(Arc<Live>),
-}
+/// The clipboard side of the member that runs.
+pub(super) struct Group(Arc<Live>);
 
 impl Group {
     /// The text this device's own clipboard holds, as the member knows it.
     pub(super) fn local_text(&self) -> Option<String> {
-        match self {
-            Group::Old(n) => n.engine.local().map(|(t, ..)| t),
-            Group::Live(l) => l.board.local().map(|(t, ..)| t),
-        }
+        self.0.board.local().map(|(t, ..)| t)
     }
 
     /// A watcher says what its clipboard holds.
     pub(super) fn clipboard_is(&self, text: &str, kind: Kind) {
-        match self {
-            Group::Old(n) => n.engine.clipboard_is(text, kind),
-            Group::Live(l) => l.board.clipboard_is(text, kind),
-        }
+        self.0.board.clipboard_is(text, kind)
     }
 
     /// A watcher saw the clipboard change.
     pub(super) fn copied(&self, text: &str, kind: Kind, via: Via) -> Result<()> {
-        match self {
-            Group::Old(n) => n.copied(text, kind, via),
-            Group::Live(l) => l.copied(text, kind, via),
-        }
+        self.0.copied(text, kind, via)
     }
 }
 
@@ -80,10 +67,7 @@ impl Service {
 
     /// The clipboard side of the member that runs.
     pub(super) fn group(&self) -> Result<Group> {
-        match self.live() {
-            Some(l) => Ok(Group::Live(l)),
-            None => self.node().map(Group::Old),
-        }
+        self.started(|| self.live()).map(Group)
     }
 
     /// Starts the member of 0.6 on the group in the state directory: it
@@ -230,14 +214,12 @@ impl Service {
             *l
         };
         let req = WriteReq {
-            id: crate::certs::hex(&w.id),
             text: w.text.clone(),
             media: None,
             kind: if w.media.is_some() { Kind::Text } else { w.kind },
             via: Via::Copy,
             seq,
             ttl: w.ttl,
-            event: None,
         };
         let Some(m) = w.media.clone() else {
             self.deliver(req);
@@ -990,7 +972,7 @@ impl Service {
             n.learn_all();
         }
         let now = crate::admitting::home_window_ms;
-        let (mut open, digits) = crate::admitting::home_window(now(), window::LIFETIME);
+        let (mut open, digits) = crate::admitting::home_window(now(), crate::admitting::WINDOW_LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
             // One device at a time; another is dropped.
@@ -1013,7 +995,7 @@ impl Service {
         };
         let opened = Header {
             kind: crate::admit_cli::HOME_WINDOW.into(),
-            expires: window::LIFETIME.as_secs() as i64,
+            expires: crate::admitting::WINDOW_LIFETIME.as_secs() as i64,
             address: addrs.first().cloned().unwrap_or_default(),
             code: digits,
             invite: if link.addrs.is_empty() { String::new() } else { link.text() },
@@ -1022,7 +1004,7 @@ impl Service {
         control::write(out, &control::partial(opened))?;
         // Five minutes of this device's running time, which a wall clock
         // set ahead does not move (docs/protocol.md, "Pairing in 0.6").
-        let end = crate::uptime::now() + window::LIFETIME;
+        let end = crate::uptime::now() + crate::admitting::WINDOW_LIFETIME;
         loop {
             if hung.load(Ordering::SeqCst) {
                 (self.log)("cbb: the pairing window closed: its cbb pair ended");
@@ -1182,7 +1164,7 @@ impl Service {
                 }
                 // Drops an answer left from before.
                 while asked.try_recv().is_ok() {}
-                let until = Instant::now() + crate::window::CONFIRM_WAIT;
+                let until = Instant::now() + crate::pair::CONFIRM_WAIT;
                 while !hung.load(Ordering::SeqCst) && Instant::now() < until {
                     match asked.recv_timeout(Duration::from_millis(200)) {
                         Ok(yes) => return yes,

@@ -38,6 +38,10 @@ pub(crate) fn rights_of(role: u64, caps: u64) -> u64 {
     RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS | hub
 }
 
+/// How long a home window stays open, counting the time the machine
+/// sleeps; an attempt that has started may finish after it.
+pub const WINDOW_LIFETIME: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// A new home window (docs/protocol.md, "Pairing in 0.6"), open from
 /// `now_ms` for `lifetime`: the invitation it keeps open, and its six
 /// digits to show.

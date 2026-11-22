@@ -17,7 +17,7 @@ use cbb_core::clip;
 use crate::error::{Context, Error, Result};
 use crate::{Global, control, request};
 
-const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | speed-in <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | pair [-name name] [-port port] [-addr host[:port]]... | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
+const USAGE: &str = "usage: cbb next paste [-max bytes] | image [-mode auto|lo|hi] [-tape] | speed <baud> <bytes> | speed-in <baud> <bytes> | copy [-secret] <len> <crc32> | check-list <file> | link -to host:port [-port port] [-serve esp-port:local-port] [-zone +hh:mm] [-join code] [-log file] [-trace]";
 
 /// How long copy waits for the next byte from the Next.
 const READ_TIMEOUT_DECISECONDS: u8 = 100;
@@ -34,7 +34,6 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
         #[cfg(unix)]
         Some("speed-in") => speed_in(&args[1..]),
         Some("check-list") => check_list(&args[1..], &mut std::io::stdout()),
-        Some("pair") => crate::join(g, &args[1..], true),
         // The link answers in frames, not in a status line.
         #[cfg(unix)]
         Some("link") => {
@@ -542,31 +541,6 @@ fn copy(g: &Global, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Writes a QR code for the phone: `CBBQ <size>` CR, then size rows, each of
-/// (size + 3) / 4 hex digits, the leftmost module in the high bit of the
-/// first digit, a set bit dark.
-pub fn qr_frame(text: &str) -> Vec<u8> {
-    let Ok(code) = qrcode::QrCode::with_error_correction_level(text, qrcode::EcLevel::L) else {
-        return Vec::new();
-    };
-    let size = code.width();
-    let mut f = format!("CBBQ {size}\r").into_bytes();
-    for y in 0..size {
-        for x0 in (0..size).step_by(4) {
-            let mut nibble = 0;
-            for x in x0..x0 + 4 {
-                nibble <<= 1;
-                if x < size && code[(x, y)] == qrcode::Color::Dark {
-                    nibble |= 1;
-                }
-            }
-            f.push(b"0123456789abcdef"[nibble]);
-        }
-        f.push(b'\r');
-    }
-    f
-}
-
 /// UTF-8 to the Spectrum character set: printable ASCII, CR line ends, £ at
 /// 0x60 and © at 0x7F, and `?` for every other character (the backtick
 /// included, since 0x60 is the pound sign). Cyrillic comes later.
@@ -750,19 +724,6 @@ mod tests {
     fn frame_has_length_and_crc() {
         assert_eq!(frame(b"123456789"), b"CBB1 9 cbf43926\r123456789\r".to_vec());
         assert_eq!(frame(b""), b"CBB1 0 00000000\r\r".to_vec());
-    }
-
-    #[test]
-    fn qr_frame_rows() {
-        let f = qr_frame("cbb:test");
-        let s = String::from_utf8(f).unwrap();
-        let mut lines = s.split('\r');
-        let size: usize = lines.next().unwrap().strip_prefix("CBBQ ").unwrap().parse().unwrap();
-        let rows: Vec<&str> = lines.filter(|l| !l.is_empty()).collect();
-        assert_eq!(rows.len(), size);
-        assert!(rows.iter().all(|r| r.len() == size.div_ceil(4)));
-        // The top-left finder pattern starts with seven dark modules.
-        assert!(rows[0].starts_with("fe"));
     }
 
     /// check-list takes the lists the Go vectors take and writes their

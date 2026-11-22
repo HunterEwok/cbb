@@ -704,7 +704,7 @@ fn parse_entries(s: &str) -> Result<Vec<u8>> {
 }
 
 /// A wall-clock time in milliseconds as a UTC date, YYYY-MM-DD.
-fn utc_date(ms: i64) -> String {
+pub(crate) fn utc_date(ms: i64) -> String {
     // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
     let z = ms.div_euclid(86_400_000) + 719_468;
     let era = z.div_euclid(146_097);

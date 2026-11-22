@@ -9,79 +9,28 @@
 //! ("Several hubs"). It fails closed: without the tunnel, it syncs at home
 //! only, and cbb global says why.
 //!
-//! Kept for ffi until the phones move to Live (D-122). `cbb` runs sync away
-//! from home only in a group of 0.6 (`crate::live`, live/away.rs); this module
-//! and its users stay for the phones' apps alone, which still run a
-//! `phone::Member` on the Node:
-//! - `Away` (new, key, offered, retry, run, set_credentials, hello,
-//!   guest_message, hubs_shared, prune, make_hub, serve_if_first, stop_hub,
-//!   meet_at, turn_on, turn_off, status), from phone.rs: ffi member.rs
-//!   commands `away`, `away_status`, `hub`, `hub_off`, `relay`,
-//!   `joined_by_invite`, `why`, and `cbb_member_servers` (serve_servers);
-//! - `GuestTunnel` and `keep_guest`: ffi join.rs (`cbb_join_*` from an
-//!   invitation), tunnel.rs (the guest tunnel's link) and `joined_by_invite`;
-//! - `crate::inviter` (`Invite`, `open_where`, `GuestKeys`): ffi invite.rs;
-//! - the Node's hooks on_tunnel, on_guest, on_hello and set_tunnel_key.
-//!
-//! Remove them with the phones' move, not before.
+//! The state of sync away from home that the member of 0.6 drives
+//! (`crate::live`, live/away.rs): the hubs' offers kept (held.rs, offer.rs),
+//! the way toward a hub (toward.rs), a hub's own keys and registration
+//! (serve.rs), and the relay's small parts (meet.rs).
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 
 use crate::certs::DeviceId;
-use crate::control;
 use crate::error::{Error, Result};
-use crate::node::Node;
-use crate::tunnel::{self, Link, State};
-use crate::uptime;
+use crate::tunnel::{self, State};
 use crate::wire::TunnelOffer;
 
 mod held;
-mod hubs;
-mod invite;
 pub(crate) mod meet;
 mod offer;
 mod serve;
 mod toward;
 
 pub use held::{forwarder_named, offer_result};
-#[cfg_attr(test, allow(unused_imports))]
-pub(crate) use hubs::standby_grace;
-pub use invite::{GuestTunnel, keep_guest};
-
-pub(crate) use crate::NO_OTHER_HUB;
-
-const MAX_WAIT: Duration = Duration::from_secs(30);
-/// The longest wait between tries of a hub that is a phone, there only
-/// while its app is open (docs/design.md, "The phone as the hub"): a try
-/// costs one handshake initiation, which the forwarder drops while the
-/// phone is not registered.
-const PHONE_HUB_WAIT: Duration = Duration::from_secs(5);
-const STEADY: Duration = Duration::from_secs(30);
-/// How long the member stays on a hub that is not the first in the order
-/// before it tries the ones above again.
-const UP_CHECK_SECS: u64 = 300;
-
-/// How long a device stays on a hub below the first before it tries the
-/// ones above again, as Go's upCheck: five minutes, or CBB_TEST_UP_CHECK
-/// seconds, which tests set shorter.
-fn up_check() -> Duration {
-    static UP: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
-    *UP.get_or_init(|| {
-        Duration::from_secs(
-            crate::testbuild::env("CBB_TEST_UP_CHECK").and_then(|v| v.parse().ok()).unwrap_or(UP_CHECK_SECS),
-        )
-    })
-}
-/// How long discovery is given to find the hub at home after the service
-/// starts, before the tunnel is tried.
-/// How long the links with a hub's key and its key for the next period
-/// wait together for the handshake that answers.
-const KEYS_WAIT: Duration = Duration::from_secs(5);
-const FIRST_WAIT: Duration = Duration::from_secs(5);
 
 /// Sync away from home on this device.
 pub struct Away {
@@ -101,26 +50,9 @@ pub struct Away {
     link_up: Mutex<Option<(String, Vec<u8>)>>,
     /// Where the tunnel sends its packets instead of the hubs' addresses.
     via: Option<SocketAddr>,
-    /// The hub, while this device serves as one.
-    serving: Mutex<Option<serve::Serving>>,
-    /// The link to the blind relay, while the device meets the group there.
-    meeting: Mutex<Option<meet::Meeting>>,
-    /// The group's server credentials, which the relay link registers with
-    /// once they list this device.
-    credentials: Mutex<Option<Arc<crate::credentials::Credentials>>>,
-    /// When a failing link to the project's relay last fetched the signed
-    /// lists, and whether it is fetching them now.
-    refetched: Mutex<Option<Instant>>,
-    fetching: Arc<AtomicBool>,
-    /// Why the hub, while it serves, is to try the hubs above it.
-    standby: Mutex<Option<String>>,
-    /// The hub passes a hub above's offer on before it gives way.
-    giving_way: AtomicBool,
     /// The hub is moving to another device: it offers itself to no member
     /// that connects meanwhile, which would keep it as a hub after the move.
     moving: AtomicBool,
-    /// The guest tunnels of the open invitations, on the hub.
-    guests: invite::Guests,
     /// The hub of 0.6's registration with its forwarder, while it serves.
     hub_report: Mutex<Option<Arc<Mutex<crate::forward::Report>>>>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
@@ -170,15 +102,7 @@ impl Away {
             using: Mutex::new(None),
             link_up: Mutex::new(None),
             via: None,
-            serving: Mutex::new(None),
-            meeting: Mutex::new(None),
-            credentials: Mutex::new(None),
-            refetched: Mutex::new(None),
-            fetching: Arc::new(AtomicBool::new(false)),
-            standby: Mutex::new(None),
-            giving_way: AtomicBool::new(false),
             moving: AtomicBool::new(false),
-            guests: Default::default(),
             hub_report: Mutex::new(None),
             log,
         }
@@ -189,12 +113,6 @@ impl Away {
     pub fn via(mut self, via: Option<SocketAddr>) -> Away {
         self.via = via;
         self
-    }
-
-    /// Gives the group's server credentials, which the relay link
-    /// registers with once they list this device.
-    pub fn set_credentials(&self, c: Arc<crate::credentials::Credentials>) {
-        *self.credentials.lock().unwrap() = Some(c);
     }
 
     /// Whether this device is one of the group's hubs.
@@ -227,8 +145,6 @@ impl Away {
     pub fn turn_off(&self) -> Result<()> {
         let mut st = self.st.lock().unwrap();
         State::remove(&self.dir)?;
-        self.stop_serving();
-        self.meeting.lock().unwrap().take();
         if st.take().is_some() {
             (self.log)("cbb: sync away from home is off");
         }
@@ -308,29 +224,6 @@ impl Away {
         if keeps_link { None } else { Some(hub_id) }
     }
 
-    /// Ends the link through the tunnel when the hub `hub`, whose offer
-    /// changed, is above the hub in use or is that hub, so the member tries
-    /// again from the first hub.
-    pub fn retry(&self, node: &Node, hub: &DeviceId) {
-        let Some((using, _)) = self.using.lock().unwrap().clone() else { return };
-        let order = node.hub_order();
-        let rank = |d: &str| order.iter().position(|o| o == d).unwrap_or(order.len());
-        if rank(hub.as_str()) <= rank(&using)
-            && let Ok(id) = DeviceId::parse(&using)
-        {
-            node.disconnect(&id);
-        }
-    }
-
-    /// What cbb global and cbb status show; None while it is off.
-    /// The way over VLESS by which cbb update reaches the mirror on the
-    /// hub's forwarder, as Go's updateVLESS: a hub's own forwarder's, with
-    /// the group's VLESS user ID, or the hub's this member uses or tries
-    /// first; None without VLESS.
-    pub fn update_way(&self, node: &Node) -> Option<serde_json::Value> {
-        self.update_way_in(&node.hub_order())
-    }
-
     /// The way of [`Away::update_way`] in the group's order of hubs
     /// `order` (device IDs in hex): the member on the records of 0.6 gives
     /// its own order (`Live::update_way`).
@@ -348,55 +241,6 @@ impl Away {
         hub?.vless
     }
 
-    pub fn status(&self, node: &Node) -> Option<control::Away> {
-        let st = self.st.lock().unwrap();
-        let error = self.error.lock().unwrap().clone();
-        let Some(st) = st.as_ref() else {
-            // Off, unless the state could not be read.
-            return error.map(|(e, d)| control::Away { error: e, detail: d, ..Default::default() });
-        };
-        let allow = st.destinations().iter().map(ToString::to_string).collect();
-        let mut a = control::Away { keys_in_file: true, allow, ..Default::default() };
-        if let Some(r) = &st.relay {
-            let (relay, through) = self.meeting_status(r);
-            (a.relay, a.through) = (Some(relay), through);
-            if let Some((e, d)) = error {
-                (a.error, a.detail) = (e, d);
-            }
-            return Some(a);
-        }
-        let using = self.using.lock().unwrap().clone().map(|(d, _)| d);
-        let hubs = st.hubs_above(&node.hub_order(), self.me.as_str());
-        // A hub waiting as the client of a hub above shows that hub.
-        let standby = st.is_hub && self.serving.lock().unwrap().is_none();
-        if st.is_hub {
-            let entries_held = node.entries().current(crate::uptime::wall_ms()).is_some();
-            self.hub_status(st, &mut a, standby, entries_held);
-        }
-        if let Some(h) = using
-            .as_deref()
-            .and_then(|d| st.hub(d))
-            .or(hubs.first())
-            .filter(|_| !st.is_hub || standby || using.is_some())
-        {
-            a.hub_device = h.device.clone();
-            a.endpoints = h.endpoints.iter().map(ToString::to_string).collect();
-            // A client says how the hub it uses hides its tunnel, as Go's.
-            if !st.is_hub {
-                a.obfuscated = h.obfuscation.is_some();
-                a.vless = h.vless.is_some();
-            }
-            a.through = self.through.load(Ordering::SeqCst)
-                && using.as_deref() == Some(h.device.as_str())
-                && DeviceId::parse(&h.device).is_ok_and(|id| node.connected(&id));
-        }
-        if let Some((e, d)) = error {
-            a.error = e;
-            a.detail = d;
-        }
-        Some(a)
-    }
-
     fn fail(&self, e: &Error) {
         let mut cur = self.error.lock().unwrap();
         if cur.as_ref().is_none_or(|(m, _)| m != e.message()) {
@@ -404,180 +248,6 @@ impl Away {
         }
         *cur = Some((e.message().to_string(), e.details()));
     }
-
-    /// Dials, through the tunnel, the first hub in the group's order that
-    /// answers, whenever no hub is found at home or connected, until the
-    /// service stops; on a hub below the first it tries the ones above
-    /// again after up_check(). A hub serves while no hub above it answers
-    /// (Go's reachHubs with standby): starting, it tries them once; once it
-    /// loses the hub above, it tries them for a minute (standby_grace); while it
-    /// serves, it tries them again every HUB_RECHECK and when a hub above
-    /// says it serves.
-    pub fn run(self: Arc<Self>, node: Arc<Node>) {
-        std::thread::sleep(FIRST_WAIT);
-        let mut wait = Duration::from_secs(1);
-        let mut links = 0u64;
-        let grace_over = || Instant::now().checked_sub(hubs::standby_grace());
-        // When this hub last had a hub above it.
-        let mut lost = grace_over();
-        while !node.is_closed() {
-            let st = self.st.lock().unwrap().clone();
-            // A group that meets at a relay has no hub.
-            if self.meet(&node, st.as_ref()) {
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-            let hubs = st.as_ref().map(|s| s.hubs_above(&node.hub_order(), self.me.as_str())).unwrap_or_default();
-            match &st {
-                Some(s) if s.is_hub => {
-                    let since = self.serving.lock().unwrap().as_ref().map(|v| v.since);
-                    let why = self.standby.lock().unwrap().take();
-                    if let Some(since) = since {
-                        let why = why.or_else(|| {
-                            (since.elapsed() >= hubs::HUB_RECHECK)
-                                .then(|| "it is time to look for the hubs above this one".to_string())
-                        });
-                        match why {
-                            Some(why) if !hubs.is_empty() => {
-                                (self.log)(&format!("cbb: {why}; this hub tries the hubs above it"));
-                                self.stop_serving();
-                                self.share(&node, None);
-                                lost = grace_over();
-                            }
-                            _ => {
-                                self.rotate_hub_key(&node);
-                                self.vless_learned(&node);
-                                std::thread::sleep(Duration::from_secs(1));
-                                continue;
-                            }
-                        }
-                    } else if hubs.is_empty() {
-                        self.serve(&node, s);
-                        std::thread::sleep(Duration::from_secs(1));
-                        continue;
-                    }
-                }
-                _ => self.stop_serving(),
-            }
-            // A phone's app in the background makes no connection.
-            if node.is_paused() {
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-            // A device that joined with an invitation offers its key through
-            // the guest tunnel until the hub's offer comes.
-            if hubs.is_empty()
-                && let Some(s) = &st
-                && self.through_guest(&node, s)
-            {
-                continue;
-            }
-            let (Some(st), false) = (st, hubs.is_empty()) else {
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
-            };
-            let ids: Vec<DeviceId> = hubs.iter().filter_map(|h| DeviceId::parse(&h.device).ok()).collect();
-            if ids.iter().any(|id| node.connected(id) || node.at_home(id)) {
-                // At home the tunnel is not used, so it sends nothing; a hub
-                // waits as the client of the hub above.
-                wait = Duration::from_secs(1);
-                lost = Some(Instant::now());
-                std::thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-            let mut reached = false;
-            let mut i = 0;
-            while i < hubs.len() {
-                // A hub that gave its key for the next period comes twice,
-                // with each key: both are tried at once, so the one that
-                // gets no answer costs no time (Go's reachHubs).
-                let n = hubs[i..].iter().take_while(|h| h.device == hubs[i].device).count();
-                let (tries, id) = (&hubs[i..i + n], &ids[i]);
-                i += n;
-                let mut started = Vec::new();
-                for hub in tries {
-                    let mut hub = hub.clone();
-                    if let Some(v) = self.via {
-                        hub.endpoints = vec![v];
-                    }
-                    match Link::start(&st, &hub, &self.me, self.log.clone()) {
-                        Ok(l) => started.push((hub, l)),
-                        Err(e) => self.fail(&e),
-                    }
-                }
-                if started.len() > 1 {
-                    // Each link goes through its ways in turn, so the one
-                    // that answers may answer only at its last way: over
-                    // VLESS after the hub's addresses, for one.
-                    let ways =
-                        tries.iter().map(|h| h.endpoints.len() + usize::from(h.vless.is_some())).max().unwrap_or(1);
-                    let until = Instant::now()
-                        + KEYS_WAIT
-                        + crate::tunnel::ENDPOINT_WAIT
-                            .saturating_mul(u32::try_from(ways.saturating_sub(1)).unwrap_or(u32::MAX));
-                    while Instant::now() < until && !started.iter().any(|(_, l)| l.answered()) {
-                        std::thread::sleep(Duration::from_millis(50));
-                    }
-                    if let Some(k) = started.iter().position(|(_, l)| l.answered()) {
-                        started.swap(0, k);
-                    }
-                    started.truncate(1);
-                }
-                let Some((hub, link)) = started.pop() else { continue };
-                links += 1;
-                *self.using.lock().unwrap() = Some((hub.device.clone(), links));
-                if hub.device != hubs[0].device {
-                    // A hub below the first: the ones above are tried again
-                    // after a while.
-                    let (away, node, id, n) = (self.clone(), node.clone(), id.clone(), links);
-                    std::thread::spawn(move || {
-                        std::thread::sleep(up_check());
-                        if away.using.lock().unwrap().as_ref().is_some_and(|(_, m)| *m == n) {
-                            node.disconnect(&id);
-                        }
-                    });
-                }
-                let start = uptime::now();
-                self.through.store(true, Ordering::SeqCst);
-                *self.link_up.lock().unwrap() = Some((hub.device.clone(), hub.key.clone()));
-                let res = node.dial(link.local(), Some(id.clone()));
-                self.link_up.lock().unwrap().take();
-                self.through.store(false, Ordering::SeqCst);
-                *self.using.lock().unwrap() = None;
-                match res {
-                    Ok(()) => *self.error.lock().unwrap() = None,
-                    Err(e) if !link.answered() => self.fail(&e.context(format!(
-                        "the hub {id} does not answer through the tunnel: it may be off, its UDP port closed, or the network on the way down"
-                    ))),
-                    Err(e) => self.fail(&e),
-                }
-                if uptime::now().saturating_sub(start) > STEADY {
-                    wait = Duration::from_secs(1);
-                }
-                if link.answered() {
-                    reached = true;
-                    break;
-                }
-            }
-            if reached {
-                lost = Some(Instant::now());
-                continue;
-            }
-            if st.is_hub && lost.is_none_or(|l| l.elapsed() >= hubs::standby_grace()) {
-                (self.log)("cbb: no hub above this one answers; this device serves as the group's hub");
-                self.serve(&node, &st);
-                continue;
-            }
-            std::thread::sleep(wait);
-            wait = (wait * 2).min(hub_wait(&node.devices(), &hubs[0].device));
-        }
-    }
-}
-
-/// The longest wait between tries of the hub: short for a phone, which
-/// comes and goes, and MAX_WAIT for any other.
-fn hub_wait(devices: &[crate::records::Device], hub: &str) -> Duration {
-    if devices.iter().any(|d| d.id == hub && d.role == "phone") { PHONE_HUB_WAIT } else { MAX_WAIT }
 }
 
 /// Whether two offers of a hub reach it the same way, apart from its keys,
@@ -589,30 +259,6 @@ fn same_way(a: &tunnel::Hub, b: &tunnel::Hub) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn device(id: &str, role: &str) -> crate::records::Device {
-        crate::records::Device {
-            id: id.into(),
-            name: role.into(),
-            role: role.into(),
-            os: String::new(),
-            key: Default::default(),
-            store: "file".into(),
-            admin: true,
-            admin_key: None,
-            frozen: false,
-            keys: vec![],
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn a_phone_hub_is_tried_often() {
-        let devices = [device("p", "phone"), device("c", "member")];
-        assert_eq!(hub_wait(&devices, "p"), PHONE_HUB_WAIT);
-        assert_eq!(hub_wait(&devices, "c"), MAX_WAIT);
-        assert_eq!(hub_wait(&[], "p"), MAX_WAIT);
-    }
 
     /// The offers kept, one per hub: the sender's own, one passed on for
     /// another hub, a moved one that drops the sender's, and none naming a
@@ -688,7 +334,3 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
-
-#[cfg(test)]
-#[path = "nettest/away.rs"]
-mod net_tests;

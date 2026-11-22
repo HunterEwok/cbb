@@ -378,6 +378,7 @@ impl Sender {
     }
 
     /// Bodies waiting to go.
+    #[cfg(test)]
     pub fn waiting(&self) -> usize {
         self.lock().jobs.len()
     }

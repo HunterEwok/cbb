@@ -55,6 +55,7 @@ fn decode(v: &RawValue) -> Result<Set> {
 
 /// A set of signed files, `{"NAME": FILE, ...}`, of the bytes of each file
 /// as fetched, which must each be one JSON value; the readers check them.
+#[cfg(any(test, feature = "tunnel"))]
 pub fn set_of(files: &[(&str, &[u8])]) -> Result<Box<RawValue>> {
     let mut out = String::from("{");
     for (i, (name, data)) in files.iter().enumerate() {

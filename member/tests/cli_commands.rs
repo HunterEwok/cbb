@@ -999,6 +999,30 @@ fn pair_with_a_code() {
                 stderr: "usage",
                 ..Case::default()
             },
+            // On 0.6 no device waits for a phone to dial it (D-119): cbb
+            // pair in no group, and the QR code's old flags, say to dial a
+            // pairing window instead.
+            Case {
+                name: "pair in no group",
+                args: &["pair"],
+                code: 1,
+                stderr: "open a pairing window",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -app",
+                args: &["pair", "-app", "join.json"],
+                code: 1,
+                stderr: "open a pairing window",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -port -addr",
+                args: &["pair", "-port", "0", "-addr", "192.0.2.7"],
+                code: 1,
+                stderr: "open a pairing window",
+                ..Case::default()
+            },
             Case {
                 name: "an address without -code",
                 args: &["pair", "192.168.1.5:4000"],
@@ -1118,49 +1142,6 @@ fn pair_in_a_group() {
     want("pair", &r, 0, "deck joined", "");
     assert_eq!(ops(&r).first(), Some(&"status"), "pair asked first {:?}", ops(&r));
     assert!(ops(&r).contains(&"pair"), "pair sent {:?}", ops(&r));
-}
-
-/// In no group cbb pair listens for the phone itself and shows a QR code
-/// with its code, addresses and fingerprint, and the same as text to paste
-/// into the app; this test stops it while it waits.
-#[test]
-fn pair_shows_the_phone_a_code() {
-    let dir = tempdir("pair-phone");
-    let sock = dir.join("control.sock");
-    serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b""), Arc::new(Mutex::new(Vec::new())));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-port", "0", "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let mut out = String::new();
-    let mut r = BufReader::new(child.stdout.take().unwrap());
-    let mut line = String::new();
-    while r.read_line(&mut line).unwrap_or(0) > 0 {
-        out.push_str(&line);
-        line.clear();
-        if out.contains("Waiting up to 5 minutes") {
-            break;
-        }
-    }
-    child.kill().ok();
-    child.wait().ok();
-    let _ = std::fs::remove_dir_all(&dir);
-    assert!(out.contains("Scan a code") && out.contains("\x1b["), "no QR code: {out:?}");
-    let link = out
-        .lines()
-        .find_map(|l| l.strip_prefix("Or paste this into the app: "))
-        .unwrap_or_else(|| panic!("no link: {out:?}"));
-    let code = link.split("code=").nth(1).map(|c| c.split('&').next().unwrap()).unwrap_or("");
-    assert!(link.starts_with("cbb://join?"), "{link}");
-    assert!(code.len() == 6 && code.bytes().all(|b| b.is_ascii_digit()), "the code in {link}");
-    assert!(link.contains("addr=192.0.2.7%3A") && link.contains("&fp="), "{link}");
 }
 
 #[test]
@@ -2378,70 +2359,6 @@ fn pair_reads_the_qr_text() {
     );
 }
 
-/// cbb pair -app, for a desktop app that runs cbb as the administrator:
-/// the QR code's text goes into the app's own file as one line of JSON, and
-/// removing the file cancels the wait. cbb writes only over a regular file
-/// the app made: never one that is not there, a folder or a link.
-#[test]
-fn pair_for_an_app() {
-    let dir = tempdir("pair-app");
-    let sock = dir.join("control.sock");
-    serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b""), Arc::new(Mutex::new(Vec::new())));
-    let file = dir.join("join.json");
-    std::fs::write(&file, "").unwrap();
-    let child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-app", file.to_str().unwrap(), "-port", "0", "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut written = String::new();
-    for _ in 0..300 {
-        written = std::fs::read_to_string(&file).unwrap_or_default();
-        if !written.is_empty() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
-    let port = j["port"].as_u64().unwrap_or(0);
-    assert!(
-        j["qr"].as_str().is_some_and(|q| q.starts_with("cbb://join?")) && j["expires"] == 300 && port != 0,
-        "the file holds {j}"
-    );
-    assert!(j["qr"].as_str().unwrap().contains(&format!("addr=192.0.2.7%3A{port}")), "{j}");
-    // The app closes its window.
-    std::fs::remove_file(&file).unwrap();
-    let out = child.wait_with_output().unwrap();
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        out.status.code() == Some(1) && stderr.contains("cancelled"),
-        "after the file went: {:?} {stderr:?}",
-        out.status
-    );
-
-    for (what, path) in [("a file that is not there", dir.join("none")), ("a folder", dir.clone())] {
-        let r = run_in(&dir, &["pair", "-app", path.to_str().unwrap(), "-port", "0"], "", json!({}), b"");
-        assert!(r.code == 1, "{what}: {} {:?}", r.code, r.stderr);
-    }
-    let other = dir.join("other");
-    std::fs::write(&other, "kept").unwrap();
-    let link = dir.join("link");
-    std::os::unix::fs::symlink(&other, &link).unwrap();
-    let r = run_in(&dir, &["pair", "-app", link.to_str().unwrap(), "-port", "0"], "", json!({}), b"");
-    assert!(r.code == 1 && r.stderr.contains("not a regular file"), "a link: {} {:?}", r.code, r.stderr);
-    assert_eq!(std::fs::read_to_string(&other).unwrap(), "kept");
-    std::fs::write(&file, "").unwrap();
-    let r = run_in(&dir, &["pair", "-app", file.to_str().unwrap(), "-code"], "", json!({}), b"");
-    want("pair -app -code", &r, 2, "", "usage");
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// The service's side of cbb copy FILE: it takes the copy-media request, its
 /// parts and their bytes, and answers once the last part came (with refused
 /// as the error, if any).
@@ -2690,48 +2607,6 @@ fn run_basics() {
             },
         ],
     );
-}
-
-/// Out of a group cbb pair waits for the phone on the service's own port,
-/// which its firewall rule opens (OpenWrt's comes from /etc/config/cbb),
-/// not on the default one.
-#[test]
-fn pair_waits_on_the_service_port() {
-    let dir = tempdir("pair-port");
-    let port = std::net::TcpListener::bind("0.0.0.0:0").unwrap().local_addr().unwrap().port();
-    let sock = dir.join("control.sock");
-    serve(
-        UnixListener::bind(&sock).unwrap(),
-        always(status(json!({"port": port})), b""),
-        Arc::new(Mutex::new(Vec::new())),
-    );
-    let file = dir.join("join.json");
-    std::fs::write(&file, "").unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-app", file.to_str().unwrap(), "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .env_remove("CBB_PORT")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let mut written = String::new();
-    for _ in 0..300 {
-        written = std::fs::read_to_string(&file).unwrap_or_default();
-        if !written.is_empty() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    let _ = std::fs::remove_dir_all(&dir);
-    let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
-    assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
 }
 
 /// cbb own-command writes the user's own command in the user's settings
