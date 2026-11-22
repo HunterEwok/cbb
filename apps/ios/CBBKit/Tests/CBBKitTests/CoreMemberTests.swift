@@ -375,7 +375,7 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertTrue(off == nil || off?.isOn == false, "sync away from home is off: \(String(describing: off))")
 
         if let face = try m.pushFace() { XCTAssertEqual(face.count, 16) }
-        try m.setPush(Data([1, 2, 3]))
+        XCTAssertThrowsError(try m.setPush(Data([1, 2, 3])), "bytes that are no push registration")
         try m.setPush(nil)
         XCTAssertEqual(try m.pushRenewals(), [])
         try m.setEvidence([])
