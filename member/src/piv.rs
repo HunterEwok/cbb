@@ -237,7 +237,8 @@ fn is_free(c: &mut dyn Card, slot: u8) -> Result<bool> {
     if certificate_der(c, slot)?.is_some() {
         return Ok(false);
     }
-    Ok(matches!(command(c, 0xf7, 0x00, slot, &[])?.1, 0x6a82 | 0x6d00 | 0x6a81))
+    // YubiKey firmware 5.x answers 6A88 for an empty slot's metadata.
+    Ok(matches!(command(c, 0xf7, 0x00, slot, &[])?.1, 0x6a82 | 0x6a88 | 0x6d00 | 0x6a81))
 }
 
 /// The first free retired slot.

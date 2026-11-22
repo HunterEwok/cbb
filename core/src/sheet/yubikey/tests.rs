@@ -135,3 +135,46 @@ fn the_yubikey_vectors() {
         assert_eq!(got, Some(s(t, "reason").as_str()), "{}", s(t, "name"));
     }
 }
+
+#[test]
+fn a_container_carries_the_object_and_the_tag() {
+    let (card, e) = (scalar(3), scalar(103));
+    let obj = seal(&secret(3), &point(&card), &e).unwrap();
+    let der = container("0123456789abcdef", &point(&card), &obj).unwrap();
+    let c = read_container(&der).unwrap();
+    assert_eq!(c.tag, "0123456789abcdef");
+    assert_eq!(c.point, point(&card));
+    assert_eq!(c.object, obj.to_vec());
+    // An ordinary certificate parser reads it too, as other PIV tools do.
+    let parsed = crate::certs::Cert::parse(&der).unwrap();
+    assert_eq!(parsed.common_name.as_deref(), Some("cbb recovery 0123456789abcdef"));
+    assert_eq!(parsed.public_key(), point(&card).as_slice());
+}
+
+#[test]
+fn a_container_needs_a_tag_and_a_point() {
+    let (card, e) = (scalar(4), scalar(104));
+    let obj = seal(&secret(4), &point(&card), &e).unwrap();
+    for tag in ["", "0123456789ABCDEF", "0123456789abcde", "0123456789abcdef0", "0123456789abcdeg"] {
+        assert!(container(tag, &point(&card), &obj).is_err(), "{tag}");
+    }
+    assert!(container("0123456789abcdef", &[4u8; POINT], &obj).is_err());
+}
+
+#[test]
+fn another_tools_certificate_is_no_container() {
+    let key = p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).unwrap();
+    let id = crate::certs::DeviceId::random();
+    let der = crate::certs::self_signed(&id, &key).unwrap();
+    assert_eq!(read_container(&der), None);
+    assert_eq!(read_container(b"not a certificate"), None);
+    let (card, e) = (scalar(5), scalar(105));
+    let obj = seal(&secret(5), &point(&card), &e).unwrap();
+    let mut der = container("0123456789abcdef", &point(&card), &obj).unwrap();
+    // A CN without cbb's prefix: the same bytes, one letter changed in
+    // the issuer and the subject.
+    while let Some(at) = der.windows(12).position(|w| w == b"cbb recovery") {
+        der[at] = b'x';
+    }
+    assert_eq!(read_container(&der), None);
+}

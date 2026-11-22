@@ -110,15 +110,16 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
 /*
  * One step with the group's recovery key on a YubiKey (src/piv.rs; docs/protocol.md,
  * "The recovery key on a YubiKey (0.6)"): the core speaks PIV and transmit
- * carries each APDU, during this call only. request is {"op",...}: "inspect"
- * {"pin"} answers {"default_key"}; "seal" {"pin","recovery","replace_default",
- * "management"} seals the sheet's secret (recovery as manage's change_root
- * takes it) and answers {"default_key","replaced","warning"}; "open" {"pin"}
- * answers {"secret"}, base64, for change_root's recovery. "transport" is
+ * carries each APDU, during this call only. request is {"op",...} with
+ * "group", the group's ID in hex or its first 16 hex digits: "seal"
+ * {"pin","recovery","management"} seals the sheet's secret (recovery as
+ * manage's change_root takes it) into the first empty retired slot from 95
+ * down and answers {"slot","default_key"}; "open" {"pin"} opens the group's
+ * and answers {"secret"}, base64, for change_root's recovery. "transport" is
  * "apdu" (the default) or "ccid_bulk", as cbb_transmit_fn says, or "pcsc"
  * on a system that runs pcscd (Aurora OS): the core is the PC/SC client
  * and never calls transmit, which must still be a function; open takes the
- * one card with cbb's key, inspect and seal the one card that has PIV.
+ * one card with the group's key, seal the one card that has PIV.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
 

@@ -308,15 +308,15 @@ nothing came within about a second), and the core frames each APDU as CCID's
 touch (`cbb_member::piv::ccid`). With `pcsc` (a phone whose system runs pcscd, as Aurora OS
 does, which takes a YubiKey plugged into USB-C itself) the core is pcscd's client, as `cbb` is
 on a Linux computer, and never calls the function, which must still be one: `open` takes the
-one card with a key in slot 95, so that no other card is asked for the PIN, and `inspect` and
-`seal` the one card that answers PIV's SELECT; two such cards are refused. The card holds the recovery secret itself
-(protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`):
-`inspect` (`pin`) checks that the card can take it, with nothing written, and answers
-`{"default_key"}`, true while the card has its factory management key, which the app tells the
-person; `seal` (`pin`; `recovery`, the sheet's `{qr}` or `{text}`; `replace_default`, the
-person's consent to replace a factory key by a PIN-protected one; `management`, a changed
-key in base64) makes the card's key in slot 95 and writes the sealed secret in `5FC121`,
-answering `{"default_key", "replaced", "warning"}`; `open` (`pin`, then a touch) answers
+one card with the group's recovery key, so that no other card is asked for the PIN, and `seal`
+the one card that answers PIV's SELECT; two such cards are refused. The card holds the recovery
+secret itself (protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`),
+in the first empty retired slot from 95 down, its certificate naming the group, so both steps
+take `group`, the group's ID in hex or its first 16 hex digits: `seal` (`pin`; `recovery`, the
+sheet's `{qr}` or `{text}`; `management`, a changed management key in base64, used only when
+the card's key is neither the factory one nor PIN-protected) makes the card's key and writes the
+container, answering `{"slot", "default_key"}` (the slot, and whether the card keeps its
+factory management key, which cbb never changes); `open` (`pin`, then a touch) answers
 `{"secret"}`, base64, which the app hands to manage's `change_root` as `recovery` and drops.
 `TestFFIPhoneYubiKey` seals a group's sheet on a fake YubiKey in `phone-on-linux`, opens it
 after the root is lost, over NFC and through a fake CCID reader, and changes the root with it.

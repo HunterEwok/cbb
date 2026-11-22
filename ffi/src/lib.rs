@@ -276,7 +276,7 @@ pub unsafe extern "C" fn cbb_member_start(
 }
 
 /// Runs one step with the group's recovery key on a YubiKey (src/piv.rs):
-/// `request` is `{"op", ...}` (inspect, seal or open) and `transmit`
+/// `request` is `{"op", ...}` (seal or open) and `transmit`
 /// with `ctx` carries each APDU to the card during this call only. Returns
 /// the answer, `{"ok"}` or `{"error"}`, with its length in `answer_len`.
 ///

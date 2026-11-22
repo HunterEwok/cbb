@@ -341,7 +341,7 @@ pub fn server_cert_by(point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8
 
 /// A self-signed P-256 certificate with cn as its subject and issuer, key
 /// usage digital signature and the extension ext.
-fn self_signed_cert(
+pub(crate) fn self_signed_cert(
     cn: &str,
     point: &[u8],
     ext: &[u8],

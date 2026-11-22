@@ -1262,7 +1262,7 @@ offers Leave, which alone deletes its files (D-126).
 - **YubiKey**: on a group of 0.6 the card holds the recovery secret (docs/protocol.md, "The
   recovery key on a YubiKey (0.6)"): the root phone seals the sheet's secret onto it and a
   phone in the group opens it with the PIN to change the root. HarmonyOS has no PIV of its
-  own, so the core speaks it (`cbb_piv`'s `inspect`, `seal` and `open`, docs/core-api.md) and
+  own, so the core speaks it (`cbb_piv`'s `seal` and `open`, docs/core-api.md) and
   the app only carries each APDU to the card's IsoDep tag in NFC reader mode
   (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
   USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
@@ -1521,11 +1521,9 @@ the app on real devices.
 - The recovery key on a YubiKey, over NFC or USB-C (docs/protocol.md, section 9, "The
   recovery key on a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the
   app only carries the card's bytes (the kits' `RecoveryCard`). The root phone's sheet page has
-  "Put it on a YubiKey": after the PIN, the app asks the card first (`inspect`), and when it
-  still has its factory management key, which anyone could use to erase the recovery key
-  without the PIN, says so and lets the person choose to replace it by a random key the PIN
-  protects or to keep it; then the card held to the phone or plugged in seals the sheet's
-  secret behind the PIN and a touch (`seal`). A YubiKey older than firmware 5.3, or one whose
+  "Put it on a YubiKey": after the PIN, the card held to the phone or plugged in seals the
+  sheet's secret behind the PIN and a touch in its first empty retired slot (`seal`, naming the
+  group), with its management key as the card keeps it, never asked about (D-127). A YubiKey older than firmware 5.3, or one whose
   management key the app cannot use, takes the sheet only. The change-root screen's "Use a
   YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
   `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap

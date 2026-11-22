@@ -22,10 +22,10 @@ made with 0.5 is set up again once. The details follow.
   the sheet's QR code or text or from the secret a YubiKey opens, after showing who stays
   (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);
   the root phone seals the sheet's secret onto a YubiKey through the core (`cbb_piv`'s
-  `inspect`, `seal` and `open`). Restoring a group on a new phone that is in no group yet
+  `seal` and `open`, each naming the group). Restoring a group on a new phone that is in no group yet
   comes with 0.7 (D-125). Every phone app has the screen ("Move the group to this phone"):
   the iPhone, Android and HarmonyOS apps take the sheet or a YubiKey over NFC and seal the
-  sheet onto a YubiKey after asking whether its factory management key is replaced; the
+  sheet onto a YubiKey; the
   Aurora app takes the sheet or a YubiKey on USB-C. The iPhone and Android kits' own PIV code and their restore
   on the Start screen are gone: the core speaks PIV for them.
   `cbb_piv` also reaches a YubiKey plugged into the phone's USB-C port: with the transport
@@ -348,16 +348,18 @@ made with 0.5 is set up again once. The details follow.
   mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
   both carry a version, and a later one says the sheet needs a newer cbb.
 - The 0.6 recovery secret on a YubiKey 5 (firmware 5.3 or later): sealed to a P-256 key the
-  card makes in retired PIV slot 95, which needs the PIN and a touch for every use, and kept
-  in the PIN-protected object 5FC121 (`cbb_core::sheet::yubikey`, the card's commands in
-  `cbb`). cbb never overwrites anything on the card: a key or a value already in either place
-  stops it before the first write. A card still on its factory management key, which anyone
-  could use to spoil the recovery key without the PIN, is named before anything is written,
-  and cbb replaces that key by a random PIN-protected one only when the person agrees; without
-  consent it seals as it is and keeps the warning. `cbb recovery -yubikey` on a group of 0.6
-  opens it after the PIN and a touch, on the one card with a key in slot 95 (another card is
-  never asked for the PIN), checks it against the group's recovery key and changes the root
-  with it, as from the sheet.
+  card makes in the first empty retired PIV slot from 95 down to 82, which needs the PIN and a
+  touch for every use, and kept in that slot's certificate object, in a certificate whose name
+  carries the group's tag (`cbb_core::sheet::yubikey`, the card's commands in `cbb`), so one
+  card holds the recovery keys of several groups and the group's slot is found without the
+  PIN. cbb never overwrites anything on the card: a slot that holds a key or a certificate is
+  never touched, and every retired slot in use stops it before the first write. The card's
+  management key is used as the card keeps it and never changed: a PIN-protected one quietly,
+  the factory one as it is, any other typed (D-127). An empty slot's answer 6A88, which
+  YubiKey firmware gives, reads as empty. `cbb recovery -yubikey` on a group of 0.6 opens it
+  after the PIN and a touch, on the one card with cbb's recovery key (another card is never
+  asked for the PIN), checks it against the group's recovery key and changes the root with
+  it, as from the sheet.
 - One table of the format's bounds (`cbb_core::bounds`, `testdata/format/bounds.json`): each
   limit with its value, whether a later version may change it, the widest case it allows and
   the rule that refuses one more. Tests keep it complete: every number of the format is in it,
