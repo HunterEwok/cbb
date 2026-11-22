@@ -302,6 +302,15 @@ fn wait(child: std::process::Child, time: Duration) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
+    /// The tests that keep log lines or set the panic hook run one at a
+    /// time: RECENT and the hook are the process's, and cargo test runs the
+    /// tests of a binary on threads side by side.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// The panic's file, with its unfiltered log, is the service user's
     /// alone.
     #[cfg(unix)]
@@ -343,6 +352,7 @@ mod tests {
 
     #[test]
     fn a_panic_waits_until_the_user_answers() {
+        let _serial = serial();
         let dir = std::env::temp_dir().join(format!("cbb-bugs-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -384,6 +394,7 @@ mod tests {
 
     #[test]
     fn remember_keeps_the_last_lines_cut_at_a_character() {
+        let _serial = serial();
         let long = "\u{e9}".repeat(cbb_core::bug::MAX_LINE);
         remember(&long);
         {
@@ -402,6 +413,7 @@ mod tests {
 
     #[test]
     fn the_hook_writes_what_broke_and_where() {
+        let _serial = serial();
         let dir = fresh("hook");
         remember("before the panic");
         install(&dir);
@@ -479,6 +491,7 @@ mod tests {
     /// service up for months keeps at most LINES lines of MAX_LINE bytes.
     #[test]
     fn the_recent_lines_stay_bounded() {
+        let _serial = serial();
         let long = "\u{2}\u{436}\"".repeat(cbb_core::bug::MAX_LINE);
         for i in 0..LINES * 4 {
             remember(&format!("{i} {long}"));
