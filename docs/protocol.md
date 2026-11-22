@@ -781,120 +781,97 @@ on. A receiver ignores an ID that is not valid or that no device record of the g
 ## 5. Sync semantics
 
 The parts marked "wire" are needed for convergence, and an implementation MUST follow them;
-the rest is the Go engine's local policy, which another member SHOULD follow so that users
-see the same behaviour. Source:
-`core/src/clip.rs`, `core/src/hlc.rs`, `member/src/node.rs`.
+the rest is the members' local policy, which another member SHOULD follow so that users see
+the same behaviour. Source: `core/src/hlc.rs`, `core/src/copies` (`fresh.rs`),
+`core/src/rule.rs`, `member/src/mesh.rs`, `member/src/board.rs`.
 
-### Hybrid logical clock (wire)
+### The time of a copy (wire)
 
-A timestamp is `(wall, logical)`: `wall` is milliseconds since the Unix epoch, 0 to
-253402300799999 (the last millisecond of 9999); `logical` is a uint32. Text form: the two
-numbers in decimal separated by a dot, with no sign or spaces, for example
-`1761024000000.3`. Order: by `wall`, then by `logical`. The zero timestamp sorts first and
-MUST be refused in an event.
+A copy's header carries its time, signed: a hybrid timestamp `[wall, logical]`, `wall` in
+milliseconds since the Unix epoch, 0 to 253402300799999 (the last millisecond of 9999), and
+`logical` a uint32 ([format](format.md), section 2). Order: by `wall`, then by `logical`. The
+origin takes it from its hybrid clock (`cbb_core::hlc::Clock`): the wall clock, or, when the
+wall clock has not moved past the last time it gave, that time with `logical` one higher. The
+copy's age, `age_ms`, travels outside the signature, since it grows on the way.
 
-An event whose `wall` is more than 7 days (MaxAhead) ahead of the receiver's wall clock MUST
-be refused, whatever `last.wall` is, so a chain of events, each within MaxAhead of the one
-before, cannot carry the clocks further ahead: as a message it changes nothing (Go and
-`cbb` answer it with an error), and as a hello's current event it is taken as no
-current event while the connection stays. Otherwise one device with a wrong date, or a removed
-member, could hold every clock of the group at MaxWall for good. A device whose reference is
-before 2026-01-01 (1767225600000), such as a board without a real-time clock that has not set
-its time yet, refuses nothing.
+### The current copy (wire)
 
-- `Now()` for a local event: `pt = min(wall clock in ms, MaxWall)`. If `pt > last.wall`, then
-  `last = (pt, 0)`; otherwise `logical` is incremented (if it is at its maximum, `last =
-  (wall + 1, 0)`, stopping at MaxWall).
-- `Observe(r)` for a received event, done only the first time its ID is seen:
-  `w = max(last.wall, r.wall, pt)`; if `w` equals both `last.wall` and `r.wall`, `logical =
-  max(last.logical, r.logical) + 1`; else if `w == last.wall`, `logical + 1`; else if
-  `w == r.wall`, `last = r` then `logical + 1`; else `last = (w, 0)`.
-- Persistence: a member MUST NOT issue a timestamp below one it issued before, also after a
-  restart or a crash. `cbb` does it so: before the clock reaches the last saved
-  mark, it saves a new mark 10 000 ms ahead (file `hlc.mark` in the state directory, text
-  form) and uses it as the floor after a restart. A saved mark more than MaxAhead ahead of
-  a wall clock that reads 2026 or later is dropped at the restart, and the clock starts
-  from the wall clock: the device's clock was ahead and has been set right, every member
-  with a right clock refused those timestamps, and keeping the mark would leave its copies
-  refused until real time caught up (Go and `cbb`).
+The group's current copy, on a member, is the copy with the latest signed time among those it
+took that are not secrets. A member sends it when a connection opens (section 4, "Message
+order"), so a pair that meets after a copy converges at once: the receiver judges it as any
+other copy and drops one older than what it holds or one it has seen.
 
-### Ordering and the current event (wire)
+### Passing copies on (wire)
 
-Event E is later than F when `E.time > F.time`, or the times are equal and `E.id > F.id`
-compared as strings. The group's current event MUST be the latest event a member has seen,
-so every member converges on the same one (last writer wins).
+A member remembers the last 4096 copies' IDs. A copy whose ID it has not seen, once it passes
+the checks of every member (the origin is a device of the records that may send, and the
+signature holds; [format](format.md), section 10.4), it passes on once to every other
+connection: also when it is older than the current copy, also when it cannot read it, and with
+sync on or off, since sync decides only what it does with its own clipboard. A copy that fails
+the checks it drops and logs; the connection stays.
 
-### Forwarding and reconciliation (wire)
+### Freshness (wire)
 
-A member remembers the last 4096 event IDs (at least that many SHOULD be kept). For each received event (from an `event` frame,
-or the `current` of a hello), after validation:
+A reader decides whether a copy that opened is new from its signed fields
+(`cbb_core::copies::fresh`), since `age_ms` alone could be set back by a member in between:
 
-1. If its ID was seen before: if it is the current event, the current event is a mark and the
-   received one has the `payload` whose SHA-256 the mark carries, the payload is taken (and
-   forwarded); otherwise nothing happens.
-2. Otherwise: check it ([format](format.md), section 10.4) and drop it when that fails; observe its timestamp, record the ID, and forward it to every other connection
-   (also when it is older than the current event, and also a mark). A member MUST forward
-   every new event so, with sync on or off: sync decides only what it does with its
-   own clipboard. If it is later than the
-   current event, it becomes the current event, also on a member that cannot read it.
+- With a clock, it refuses a copy signed more than the allowance ahead of it: neither written
+  nor taken as the newest. The allowance is 5 minutes, and at most a quarter of the copy's
+  lifetime.
+- The age it uses is the larger of `age_ms` and the time since the signed wall time less the
+  allowance, so a copy held back and sent again later is as old as it really is.
+- It writes no copy whose signed time is not after the newest copy it wrote. An origin the
+  records still name and have not frozen counts with its own time; a removed or frozen one only
+  up to the newest time judged from the origins that still stand, so its copy dated ahead stops
+  no one.
+- A secret it has seen once, written or not, it never writes again.
 
-A member MUST send its current event in every hello, so a newly connected pair converges at
-once. A local event is sent to all connections; a mark (from a hello) travels in `event`
-frames like any other event.
+It keeps what it saw (`marks.cbor` in the state directory) and saves it before it writes, so a
+restart forgets nothing of it. A device without a clock decides by the signed times alone.
 
-### Local events
+### Local copies
 
-- A new event gets a random ID, `origin` = own device ID, `time = Now()`, `age_ms` 0 at
-  creation, and becomes the current event and the member's own clipboard text.
-- Reported copies (a clipboard watcher, `copied`) make no event when: the member's own
-  clipboard already holds that text; the text was written to the local clipboard within the
-  last 10 s (echo; the last 8 written texts are remembered); `via` is
-  `universal-clipboard` and the text equals the live current event (a Mac receiving the
-  group's own text back); or the text is a remembered secret reported as `text` (a clipboard
-  manager restoring it), which also clears the known local text.
-- Deliberate actions (`copy` on the control socket, sending from a phone) always make an event;
-  a text remembered as a secret is sent as a secret. The text is also written to the
-  member's own clipboard unless it already holds it.
+- A watcher's report of a change (`copied`) makes a copy unless the member's own clipboard
+  already holds that text, or the member wrote that text itself within the last 10 s (its own
+  write coming back; the last 16 writes are remembered), or its sync is off, or an admin muted
+  it.
+- Deliberate actions (`copy` on the control socket, sending from a phone) always make a copy,
+  unless the member is muted, which they refuse with that reason. The text is also written to
+  the member's own clipboard unless it already holds it.
+- A copy's content carries the lifetime the group's root set for its kind (section 10, "The
+  copies setting"), so every member sends the same (D-129). A member that copied while no other
+  reader's keys statement was there sends the copy once one arrives (section 4, "Keys
+  statements").
 
-### Writing the member's own clipboard (local policy)
+### Writing the member's own clipboard
 
-When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: the member's sync is on (mode `shared`); this member opened the current
-event ([format](format.md), section 10.4) and it is live (it has a text, and a secret is younger than the
-secret TTL); and the local clipboard does not already hold the text. A device that always
-listens keeps its own clipboard equal to the group's buffer (D-128): the only age limit is the
-copy's own `ttl` (D-129, section 10, "The copies setting"), so a member that comes back with a
-live copy made after the group's current one makes it current and every member writes it, while a copy made before the current one never becomes current and
-changes nothing (`cbb_core::copies::fresh`, `Behind`). A write increments the write sequence
-number (section 8). A phone, which listens only sometimes, swaps its own clipboard and the
-group's buffer on a gesture and listens so only while its app is on screen (design.md, "The
-one button").
+When a copy that opened is new (above), it becomes the group's current copy here, and it is
+written to the local clipboard when all of these hold (`cbb_core::rule`): the member's sync is
+on (mode `shared`); the content is of a type this member writes (a text, or images or files on
+a member that takes them; one that does not writes a copy's text alone, and keeps its clipboard
+when there is none); a secret is within its own lifetime; and the local clipboard does not
+already hold the content. A device that always listens keeps its own clipboard equal to the
+group's buffer (D-128): the only age limit is the copy's own lifetime (D-129), so a member that
+comes back with a live copy made after the group's current one makes it current and every
+member writes it, while a copy made before the current one never becomes current and changes
+nothing (`cbb_core::copies::fresh`, `Behind`). A write increments the write sequence number
+(section 8). A phone, which listens only sometimes, swaps its own clipboard and the group's
+buffer on a gesture and listens so only while its app is on screen (design.md, "The one
+button").
 
-- When the records stop accepting the current event's origin (its device is removed, or a
-  takeover took effect and the root that admitted it is no longer on the path), the member
-  drops the event, written or not, and does not write it.
-- Rejoin: on service start, and when the machine slept (the clock that counts sleep moved
-  more than 3 s further than the one that does not, checked every 2 s), the member closes all
-  connections, waits up to 2 s for them to end, and connects again; connections that start
-  meanwhile wait.
+When the records no longer name the current copy's origin (its device was removed), the member
+drops that copy and never writes it later.
 
-### Secrets (wire and local)
+### Secrets
 
-- Secret TTL: a secret event is usable for its own `ttl` after the copy (the group's
-  `secret_ttl_ms`, 60 s by default, "The copies setting"), judged by its age. After that
-  it is neither the member's usable current text nor returned to the iPhone, but it stays the
-  current event for ordering.
-- Marks (wire): a reader MUST put a secret into a hello only as its mark: the event with
-  `payload_sha256` in place of `payload`, which the signature still covers. Full secret events
-  travel in `event` frames. A member that reads no copies (`forward_only`, or one without a
-  wrap in it) cannot tell a secret from a text and sends the event as it holds it; a reader
-  that gets a secret so takes it as it would from an `event` frame, by the rules above.
-- A reader MUST NOT write a secret's text, nor its `payload` (which its own key opens), to
-  disk, and SHOULD forget both 60 s after the copy.
-- Secret memory (local): each member remembers keyed hashes (HMAC-SHA-256 with a random
-  per-process key, memory only) of secret texts it sent, received or was told about by a
-  watcher, up to 4096 entries for 12 hours. Such a text reported again as `text` makes no
-  event; sent deliberately, it becomes a secret again.
+- A secret is usable for its own lifetime after the copy (the group's `secret_ttl_ms`, 60 s by
+  default, section 10, "The copies setting"), judged by its age. After that it is neither the
+  member's usable current text nor returned to the phone.
+- A secret never becomes the current copy that a member sends when a connection opens, and a
+  reader writes it at most once.
+- A member that reads no copies (`forward_only`, or one without a wrap in it) cannot tell a
+  secret from a text and passes it on as it holds it.
+- A reader MUST NOT write a secret's text to disk.
 
 ## 6. Pairing a computer
 
