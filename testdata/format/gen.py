@@ -3339,9 +3339,19 @@ def write_unicode(outdir):
           + "\nvar uComp = [][3]rune{\n" + rows(comp, g(h3), 4).replace("    ", "\t") + "\n}\n"
           + "\nvar uCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n"
           + "\nvar uCase = [][2]rune{\n" + rows(keys, g(h2), 6).replace("    ", "\t") + "\n}\n")
-    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "unicode.rs"), "w") as f:
+    # Into the repository when outdir is this folder, else beside the
+    # vectors in outdir, where CI compares them with the repository's.
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.realpath(outdir) == os.path.realpath(here):
+        rs_path = os.path.join(here, "..", "..", "core", "src", "content", "unicode.rs")
+        go_path = os.path.join(here, "check", "unicode.go")
+    else:
+        rs_path = os.path.join(outdir, "unicode.rs")
+        go_path = os.path.join(outdir, "check", "unicode.go")
+        os.makedirs(os.path.dirname(go_path), exist_ok=True)
+    with open(rs_path, "w") as f:
         f.write(rs)
-    with open(os.path.join(outdir, "check", "unicode.go"), "w") as f:
+    with open(go_path, "w") as f:
         f.write(go)
 
 
@@ -4019,8 +4029,16 @@ def wave5_vectors():
     return out
 
 
+# The Unicode version of the name rules' tables, which Python's unicodedata
+# gives: Python 3.13.
+UNICODE_VERSION = "15.1.0"
+
+
 def main():
     outdir = sys.argv[1]
+    if unicodedata.unidata_version != UNICODE_VERSION:
+        sys.exit("gen.py: the vectors follow Unicode %s (Python 3.13); this Python has Unicode %s"
+                 % (UNICODE_VERSION, unicodedata.unidata_version))
     os.makedirs(outdir, exist_ok=True)
     write_unicode(outdir)
     rt, rr, rl = record_vectors()

@@ -3463,14 +3463,21 @@ jobs:
             go run ./tools/formatfreeze -check
           fi
       - name: gen.py writes the same bytes again
+        # In Python 3.13, whose Unicode 15.1 the names' tables follow.
         run: |
-          sudo apt-get update -q && sudo apt-get install -y -q python3-cryptography
           out="$RUNNER_TEMP/format"
           mkdir -p "$out"
-          python3 -I testdata/format/gen.py "$out"
-          for f in testdata/format/*.json; do
-            cmp "$f" "$out/$(basename "$f")" || { echo "gen.py writes $f differently"; exit 1; }
+          docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -w /src python:3.13-slim sh -euc '
+            pip install -q --no-cache-dir --root-user-action=ignore cryptography==50.0.1
+            python3 -I testdata/format/gen.py /out'
+          # The files gen.py writes; bounds.json, push.json and the mutants
+          # come from their own generators.
+          for f in "$out"/*.json; do
+            g="testdata/format/$(basename "$f")"
+            cmp "$g" "$f" || { echo "gen.py writes $g differently"; exit 1; }
           done
+          cmp core/src/content/unicode.rs "$out/unicode.rs" || { echo "gen.py writes core/src/content/unicode.rs differently"; exit 1; }
+          cmp testdata/format/check/unicode.go "$out/check/unicode.go" || { echo "gen.py writes testdata/format/check/unicode.go differently"; exit 1; }
       - name: the second reader, in Go (testdata/format/check)
         # The Rust core reads the same vectors in the rust job (format::, msg::).
         working-directory: testdata/format/check
