@@ -35,11 +35,17 @@ const DUTIES_FIRST_MS: number = 60 * 1000;
 // What the core says when the hub to stop is the group's only one.
 const ONLY_HUB: string = 'no other hub';
 
-// What sealing the recovery key onto a YubiKey did (cbb_piv seal).
+// What sealing the recovery key onto a YubiKey did (cbb_piv seal): the
+// retired slot, and whether the card keeps its factory management key,
+// which cbb never changes (D-127).
 interface Sealed {
+  slot?: number;
   default_key?: boolean;
-  replaced?: boolean;
-  warning?: string;
+}
+
+// How the YubiKey found was reached (findCard).
+interface Reached {
+  transport?: string;
 }
 
 interface Opened {
@@ -403,11 +409,36 @@ export class AppModel {
     this.recoveryQr = '';
   }
 
-  // Seals the sheet's recovery key onto a YubiKey held to the phone or plugged in, after
-  // its PIN (cbb_piv seal; docs/protocol.md, "The recovery key on a YubiKey
-  // (0.6)"); replaceDefault is the person's consent to replace a factory
-  // management key. Answers what to tell the person, or shows the failure.
-  async sealOnCard(context: common.UIAbilityContext, pin: string, replaceDefault: boolean,
+  // The group's ID in hex, which names its slot on a YubiKey.
+  private groupId(): string {
+    return this.membership?.member.group06 ?? '';
+  }
+
+  // Waits for a YubiKey plugged in or held to the phone, with nothing done
+  // on it, before its PIN is asked: true when it is on USB, false over NFC,
+  // undefined with the failure shown.
+  async findCard(context: common.UIAbilityContext): Promise<boolean | undefined> {
+    if (this.busy) {
+      return undefined;
+    }
+    const run = await withCard(context, async (transport: string) => {
+      const reached: Reached = { transport: transport };
+      return JSON.stringify(reached);
+    });
+    if (run.failure !== undefined) {
+      this.show(Errors.shown(run.failure));
+      return undefined;
+    }
+    this.show('');
+    return (JSON.parse(run.answer) as Reached).transport === 'ccid_bulk';
+  }
+
+  // Seals the sheet's recovery key onto a YubiKey held to the phone or
+  // plugged in, after its PIN, into its first empty retired slot, named for
+  // this group (cbb_piv seal; docs/protocol.md, "The recovery key on a
+  // YubiKey (0.6)"). Answers what to tell the person, empty with the failure
+  // shown.
+  async sealOnCard(context: common.UIAbilityContext, pin: string,
     plugged: () => void = () => {}): Promise<string> {
     if (this.recoveryQr.length === 0 || this.busy) {
       return '';
@@ -415,7 +446,7 @@ export class AppModel {
     this.busy = true;
     const request: Record<string, Object> = {
       'op': 'seal', 'pin': pin, 'recovery': { 'qr': this.recoveryQr } as Record<string, Object>,
-      'replace_default': replaceDefault
+      'group': this.groupId()
     };
     const run = await withCard(context, (transport: string) => {
       request['transport'] = transport;
@@ -428,9 +459,9 @@ export class AppModel {
       return '';
     }
     const sealed = read<Sealed>(run.answer, 'yubikey: seal').ok as Sealed;
-    Errors.log(`yubikey: sealed, factory key ${sealed.default_key === true}, replaced ${sealed.replaced === true}`);
+    Errors.log(`yubikey: sealed in slot ${(sealed.slot ?? 0).toString(16)}, factory management key ${sealed.default_key === true}`);
     this.show('');
-    return sealed.default_key === true ? t('yubikey_sealed_default_key') : t('yubikey_sealed');
+    return t('yubikey_sealed');
   }
 
   // Opens the recovery key on a YubiKey held to the phone, after its PIN
@@ -442,7 +473,7 @@ export class AppModel {
       return undefined;
     }
     this.busy = true;
-    const request: Record<string, Object> = { 'op': 'open', 'pin': pin };
+    const request: Record<string, Object> = { 'op': 'open', 'pin': pin, 'group': this.groupId() };
     const run = await withCard(context, (transport: string) => {
       request['transport'] = transport;
       return cbb.piv(JSON.stringify(request));
