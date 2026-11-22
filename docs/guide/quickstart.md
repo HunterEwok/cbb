@@ -5,16 +5,15 @@ Copy Beyond Borders gives your phone and your computers one clipboard: copy on o
 another. The devices form a **group** on your home network. The phone holds the group's key
 and lets each new device in, so nobody can join without you.
 
-![The phone adds each computer by its QR code; then the devices share one clipboard](../images/group.svg)
+![Each computer joins the phone's group by the six digits the phone shows; then the devices share one clipboard](../images/group.svg)
 
-It takes four steps: install the app, install Copy Beyond Borders on a computer, scan the
-computer's QR code, and turn on sharing on that computer.
+It takes four steps: install the app and create the group, install Copy Beyond Borders on a
+computer, type on the computer the six digits the phone shows, and copy.
 
 A group can have a computer at its heart or be made of phones only: both work, and we recommend
 a computer that is often on, which keeps sync away from home going at any time ([two kinds of group](how-it-works.md#two-kinds-of-group)).
-With phones only, skip steps 2 to 4: on each other phone tap **I already use Copy Beyond Borders
-on another phone**, and scan the code it shows with **Connect a new device** on the first (**+** once it has
-devices).
+With phones only, skip steps 2 and 3: tap **+** on the first phone, then on each other phone
+tap **Join a group** and scan the code the first one shows.
 
 ## 1. Install the app on your phone
 
@@ -24,7 +23,10 @@ devices).
 - **iPhone**: the app comes with TestFlight, which is not open yet. Until then a group
   starts on Android, or on a computer: see [Without the app](without-app.md).
 
-Open the app. You will add the first computer in step 3.
+Open the app and tap **Create a group**. The app makes the group's key (it asks for your
+fingerprint, face or passcode) and then asks how to keep the recovery key: **Write on a sheet**
+or **Write to YubiKey**. Keep it apart from your devices; it brings the group back if the
+phone is lost ([keys](keys.md)).
 
 ## 2. Install Copy Beyond Borders on a computer
 
@@ -49,21 +51,22 @@ Windows. Homebrew, Docker and the details are in [Installing](install.md).
 
 ## 3. Add the computer
 
+In the app, tap **+** (Add a device). It shows a QR code and six digits under it, and waits
+for a few minutes.
+
 On the computer:
 
 ```sh
-sudo cbb pair
+sudo cbb pair -code
 ```
 
-On Windows, run `cbb pair` in the administrator terminal. It shows a QR code. Or, without a
+On Windows, run `cbb pair -code` in the administrator terminal. Type the six digits: the
+computer finds the phone's pairing window on the home network and joins. Or, without a
 terminal, open the CBB app on the computer (the tray app on Windows and Linux, the menu bar
-app on a Mac) and click **Join a phone's group**: it asks for the administrator's password
-and shows the same code.
+app on a Mac), click **Join a group** and type the digits there; it asks for the
+administrator's password first.
 
-In the app, tap **Connect a new device** and scan the code. The app makes the group's key
-(it asks for your fingerprint, face or passcode) and adds the computer. That's the group.
-
-Add every other computer the same way: install, `sudo cbb pair`, and **+** in the app.
+Add every other computer the same way: install, **+** in the app, and `sudo cbb pair -code`.
 
 ## 4. Copy on one, paste on another
 
@@ -95,9 +98,8 @@ such as a home server, a Raspberry Pi or a desktop:
 - **Make it the hub**, so your devices keep syncing when they are away from home. See
   [Away from home](away-from-home.md).
 
-Add a second phone too, so that losing one phone loses nothing: on the second phone tap
-**I already use Copy Beyond Borders on another phone** and scan its code with **+** on the
-first. The first phone makes it an admin.
+Add a second phone too, so that losing one phone loses nothing: tap **+** on the first phone,
+then on the second tap **Join a group** and scan the code. The first phone makes it an admin.
 
 ## What next
 
