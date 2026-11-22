@@ -184,6 +184,9 @@ pub struct Mesh {
     applied: Mutex<push::Applied>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     closed: AtomicBool,
+    /// The intros taken from the connections members made, by address and
+    /// network (`cbb_core::join::intro::Limiter`).
+    intros: Mutex<cbb_core::join::intro::Limiter>,
 }
 
 /// The copies' IDs seen, and their order, to forget the oldest.
@@ -349,6 +352,7 @@ impl Mesh {
                 content: Arc::new(Store::open(dir)),
                 fetches: Mutex::new(HashMap::new()),
                 conns: Mutex::new(HashMap::new()),
+                intros: Mutex::new(cbb_core::join::intro::Limiter::default()),
                 hellos: Mutex::new(HashMap::new()),
                 reach_in: Mutex::new(HashMap::new()),
                 reach_out: Mutex::new(HashMap::new()),
@@ -1099,7 +1103,7 @@ impl Mesh {
         let own = self.own.hash();
         bykey::by_standing(
             move |p| standing(&set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).state(), &own, p),
-            false,
+            true,
         )
     }
 
@@ -1242,6 +1246,27 @@ impl Mesh {
             through_hub,
             point,
         });
+        // The intro (docs/protocol.md, section 6, "The intro"): a peer whose
+        // key this device does not know yet must send its intro before
+        // anything else, and gets through only when its records make it a
+        // member. To a member, this device first sends its own, since it
+        // cannot tell whether the peer knows its key yet; a key no record
+        // names gets nothing, not even that.
+        let mut standing_now = standing(&self.state(), &self.own.hash(), &point);
+        if matches!(standing_now, Standing::Unknown) {
+            sock.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+            if let Err(e) = self.take_intro(&conn, dialed) {
+                conn.close();
+                return Err(e.context(format!("{} is not a device of the group here", hex(&peer.0[..4]))));
+            }
+            sock.set_read_timeout(Some(TIMEOUT)).map_err(|e| Error::with("cannot set the timeout", e))?;
+            standing_now = standing(&self.state(), &self.own.hash(), &point);
+        }
+        if matches!(standing_now, Standing::Member(_))
+            && let Some(f) = self.intro_frame()
+        {
+            conn.write(&f).map_err(|e| Error::with("cannot send the intro", e))?;
+        }
         {
             let mut conns = self.conns.lock().unwrap();
             if let Some(old) = conns.get(&peer)
@@ -1341,6 +1366,68 @@ impl Mesh {
         let _ = writer.join();
         self.logf(&format!("the connection with {} ended: {}", hex(&peer.0[..4]), end.details()));
         Ok(peer)
+    }
+
+    /// This device's intro: its own record and the records that prove it
+    /// up to the group's first root (`cbb_core::join::intro::Intro::of`),
+    /// as a frame; none when the records do not make this device a member.
+    fn intro_frame(&self) -> Option<Vec<u8>> {
+        let msg = {
+            let set = self.set.lock().unwrap();
+            let state = set.state();
+            cbb_core::join::intro::Intro::of(&set, &state, &self.own.hash(), None).ok()?.message()
+        };
+        let v = cbb_core::format::cbor::decode(&msg).ok()?;
+        Some(frame::write(&v))
+    }
+
+    /// Takes the first message of a peer whose key the records do not name
+    /// yet: its intro, whose records are kept only when every signature
+    /// checks up to this device's root and the peer then stands as a member.
+    /// A connection that a member made counts against the intros its
+    /// address and network may send (`intro::Limiter`).
+    fn take_intro(&self, conn: &Conn, dialed: bool) -> Result<()> {
+        use cbb_core::join::intro::{Intro, Refusal};
+        if !dialed
+            && let Ok(a) = conn.sock.peer_addr()
+            && !self.intros.lock().unwrap().allow(a.ip(), crate::uptime::wall_ms().max(0) as u64)
+        {
+            return Err(Error::msg(format!("too many intros from {}", a.ip())));
+        }
+        let mut reader = Reader { c: conn, buf: Vec::new() };
+        let msg = match media::read_any(&mut reader)? {
+            media::In::Msg(m) => m,
+            media::In::Chunk(_) => return Err(Error::msg("it sent no intro first")),
+        };
+        let intro =
+            Intro::read(&msg).map_err(|r| Error::msg(format!("it sent no intro first, or one that breaks {r}")))?;
+        let hello = {
+            let mut set = self.set.lock().unwrap();
+            let new = intro.check(&set, &self.own.hash(), &conn.point).map_err(|r| {
+                Error::msg(match r {
+                    Refusal::TooBig => "its intro is too large",
+                    Refusal::Broken => "its intro holds a record that does not check",
+                    Refusal::NotMember => "its intro does not make it a member",
+                })
+            })?;
+            if new.is_empty() {
+                return Ok(());
+            }
+            for r in new {
+                set.insert(r).map_err(|e| Error::msg(format!("cannot keep a record of its intro: {e:?}")))?;
+            }
+            crate::set::save(&self.dir, &set, &self.local)?;
+            self.statements.lock().unwrap().prune(&set.state());
+            if let Some(f) = &*self.on_set.read().unwrap() {
+                f(&set);
+            }
+            self.refresh_faces(&set.state());
+            self.push_events(&set);
+            self.hello_frame(&set)
+        };
+        self.logf(&format!("took the intro of {}", hex(&conn.peer.0[..4])));
+        self.broadcast(&hello, None);
+        Ok(())
     }
 
     fn take(&self, conn: &Conn, x: &mut Exchange, msg: &[u8]) -> Result<()> {

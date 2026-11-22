@@ -693,3 +693,117 @@ fn only_the_root_key_renews_the_credentials() {
     a.close();
     b.close();
 }
+
+/// Two devices of one group where b joined first and a later, through
+/// another device (a phone root, which b never meets): a holds both
+/// records, b only its own and the root's. Gives a's and b's meshes, with
+/// one log for both.
+fn joined_later(name: &str) -> (Arc<Mesh>, Arc<Mesh>, Arc<Mutex<Vec<String>>>) {
+    let (da, db) = (temp(&format!("{name}-a")), temp(&format!("{name}-b")));
+    let (oa, ob) = (own(&da), own(&db));
+    let root = root();
+    let (k1, k2) = pq::recovery_keys(&[1; 32]).unwrap();
+    let k1 = SigningKey::from(&k1).verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let mut set = RecordSet::new(
+        Key::es256(root.public()),
+        Recovery::new(Key::es256(k1), Key::new(ALG_SLH_DSA, k2.public())).unwrap(),
+    );
+    let now = crate::uptime::wall_ms() as u64;
+    let write = |set: &mut RecordSet, o: &Own, name: &str, at: u64| {
+        let mut d = Device::new(o.member_key(), name, body::ROLE_MEMBER);
+        d.rights = body::RIGHT_READ | body::RIGHT_SEND | body::RIGHT_SECRETS;
+        let st = set.state();
+        set.write_record(&st, &root, Kind::device(d), at).unwrap();
+    };
+    write(&mut set, &ob, "b", now - 1000);
+    let b_set = set.clone();
+    write(&mut set, &oa, "a", now - 500);
+    for (dir, s) in [(&da, &set), (&db, &b_set)] {
+        let local = crate::set::local_key(dir).unwrap();
+        crate::set::save(dir, s, &local).unwrap();
+    }
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let l = lines.clone();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()));
+    let a = Mesh::open(&da, own(&da), log.clone()).unwrap();
+    let b = Mesh::open(&db, own(&db), log).unwrap();
+    a.rotate().unwrap();
+    b.rotate().unwrap();
+    (a, b, lines)
+}
+
+// b does not know a's key yet; a's intro, its first message, brings b the
+// record that admits it, whichever side dials (docs/protocol.md, section
+// 6, "The intro").
+#[test]
+fn a_device_admitted_later_gets_through_by_its_intro() {
+    for b_dials in [true, false] {
+        let (a, b, lines) = joined_later(if b_dials { "intro-b-dials" } else { "intro-a-dials" });
+        assert!(b.state().device(&a.device()).is_none(), "b knows a before the intro");
+        if b_dials {
+            connect(&a, &b);
+        } else {
+            connect(&b, &a);
+        }
+        until("b to take a's intro", || b.state().device(&a.device()).is_some());
+        until("the sets to settle", || a.set().lock().unwrap().digest() == b.set().lock().unwrap().digest());
+        until("the statements", || {
+            let st = b.state();
+            b.statements.lock().unwrap().sealing(&st).contains_key(&a.device())
+        });
+        // b kept the record.
+        let local = crate::set::local_key(&b.dir).unwrap();
+        assert!(crate::set::load(&b.dir, &local).unwrap().unwrap().state().device(&a.device()).is_some());
+        assert!(lines.lock().unwrap().iter().any(|l| l.contains("took the intro of")), "{:?}", lines.lock().unwrap());
+        a.close();
+        b.close();
+    }
+}
+
+// A key no record admits gets nothing: its intro proves nothing, and the
+// connection closes before any hello.
+#[test]
+fn a_stranger_gets_nothing_by_an_intro() {
+    let (a, _b, lines) = joined_later("intro-stranger");
+    let ds = temp("intro-stranger-s");
+    // The stranger keeps a group of its own, with the same root's key but
+    // no record of a.
+    let root = root();
+    let (k1, k2) = pq::recovery_keys(&[2; 32]).unwrap();
+    let k1 = SigningKey::from(&k1).verifying_key().to_sec1_point(false).as_bytes().to_vec();
+    let mut set = RecordSet::new(
+        Key::es256(root.public()),
+        Recovery::new(Key::es256(k1), Key::new(ALG_SLH_DSA, k2.public())).unwrap(),
+    );
+    let os = own(&ds);
+    let mut d = Device::new(os.member_key(), "s", body::ROLE_MEMBER);
+    d.rights = body::RIGHT_READ;
+    let st = set.state();
+    set.write_record(
+        &st,
+        &K(SigningKey::from_slice(&[3; 32]).unwrap()),
+        Kind::device(d),
+        crate::uptime::wall_ms() as u64,
+    )
+    .ok();
+    let local = crate::set::local_key(&ds).unwrap();
+    crate::set::save(&ds, &set, &local).unwrap();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let s = Mesh::open(&ds, own(&ds), log).unwrap();
+    let before = a.set().lock().unwrap().digest();
+    let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = ln.local_addr().unwrap();
+    let a2 = a.clone();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let (sock, _) = ln.accept().unwrap();
+        let _ = tx.send(a2.accept(sock).map_err(|e| e.details()));
+    });
+    let _ = s.dial(addr, Some(a.device()));
+    let got = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+    assert!(got.is_err(), "a took a stranger: {got:?}");
+    assert_eq!(a.set().lock().unwrap().digest(), before, "a kept something of a stranger's intro");
+    assert!(!lines.lock().unwrap().iter().any(|l| l.contains("took the intro of")));
+    a.close();
+    s.close();
+}

@@ -3044,6 +3044,11 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A device added after another one now reaches it: each device sends its intro, its own
+  record and the records that prove it up to the root, as its first message to a member, and a
+  device whose key the peer does not know yet gets through once its intro checks. Before, a
+  phone that joined first refused a computer added later through a phone root, which never
+  meets it, and never learned of that computer.
 - The service test of an admin turning another device's sync waits for that device's keys
   statement, not only its connection: a command sealed before the statement arrived was
   refused, and the test failed now and then.

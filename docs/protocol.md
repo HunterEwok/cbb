@@ -1353,6 +1353,16 @@ set and its identity, and send message 68.
 The first message to a peer that does not know the sender's key yet is the intro (t 8): field
 2, record envelopes in the order a receiver takes them (the root changes, the records that
 prove the admitter's rights, the sender's own record); field 3, the sender's keys statement.
+A device cannot tell whether its peer knows its key, so it sends its intro as the first message
+to every peer that stands as a member in its own records; a peer that knows the sender already
+ignores it. A peer whose key it does not know yet gets nothing until that peer's intro makes it
+a member, not even this device's intro; then this device sends its own. Two devices that each
+know the other's key send theirs both ways. This is how a device admitted after another one
+reaches it when the device that admitted it never meets that one: a computer added through a
+phone root, for a phone that joined earlier (phones do not dial phones, and computers do not
+dial phones). The intros a member takes from connections other devices made count against
+`join::intro::MAX_PER_WINDOW` (4) per address and `join::intro::MAX_PER_NETWORK` (256) per
+network in `join::intro::WINDOW_MS`; an intro must come within the handshake's 10 seconds.
 The recovery heads count apart, at most `join::intro::MAX_HEADS` (65); the other records at
 most `join::intro::MAX_RECORDS` (32) and `join::intro::MAX_BYTES` (16384) by their envelopes'
 bytes (`intro/size`; vectors: `messages3.json`, `intros`). The receiver checks every signature
