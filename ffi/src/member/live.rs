@@ -261,6 +261,12 @@ fn kind_name(k: Kind) -> &'static str {
     }
 }
 
+/// What a gesture or an opening does, as the app reads it: `sends`, and
+/// the copy that comes in (`copy`), or null.
+fn swap_json(s: cbb_member::button::Swap) -> Value {
+    json!({ "sends": s.sends, "copy": s.takes.map(|e| event_json(&e)) })
+}
+
 /// A copy the button's rule gives, as the app reads it, in the shape of
 /// 0.5's.
 fn event_json(e: &cbb_core::clip::Event) -> Value {
@@ -429,13 +435,24 @@ impl Phone {
                 let parts = l.open_media(&from, a.max, Path::new(&a.out))?;
                 Ok(json!({ "parts": parts.iter().map(|(p, at)| super::part_json(p, at)).collect::<Vec<_>>() }))
             }
-            // The one button's rule (cbb_member::button), on the group's
-            // current copy.
-            "waiting" => {
-                let me = id_text(&l.mesh.device());
-                let window = Duration::from_millis(l.board.lifetimes().0);
-                let ev = cbb_member::button::waiting(self.current_event(), &me, window, &self.own);
-                Ok(json!({ "copy": ev.map(|e| event_json(&e)) }))
+            // The one button and the app's opening (cbb_member::button,
+            // D-128), on the group's current copy: whether the clipboard
+            // (its key, `board`) goes out, and the copy that comes in.
+            "swap" => {
+                let board = arg("board");
+                let s = cbb_member::button::swap(board.as_str().unwrap_or_default(), self.current_event(), &self.own);
+                Ok(swap_json(s))
+            }
+            "opened" => {
+                let board = arg("board");
+                let changed = arg("changed").as_bool().unwrap_or(false);
+                let s = cbb_member::button::opened(
+                    board.as_str().unwrap_or_default(),
+                    changed,
+                    self.current_event(),
+                    &self.own,
+                );
+                Ok(swap_json(s))
             }
             "took" => {
                 let id = arg("id");
@@ -444,11 +461,6 @@ impl Phone {
                     self.own.took(&ev);
                 }
                 done()
-            }
-            "sends" => {
-                let board = arg("board");
-                let board = board.as_str().unwrap_or_default();
-                Ok(json!({ "sends": cbb_member::button::sends(board, self.current_event().as_ref(), &self.own) }))
             }
             "current" => {
                 Ok(json!({ "copy": l.board.current().map(|c| current_json(&c, cbb_member::uptime::wall_ms())) }))

@@ -317,6 +317,7 @@
     <string name="lab">Laboratorio</string>
     <string name="language">Idioma</string>
     <string name="language_system">Sistema</string>
+    <string name="last_received">Lo último recibido, de %1$s</string>
     <string name="layout_list">Lista</string>
     <string name="layout_orbit">Órbita</string>
     <string name="layout_tiles">Mosaicos</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">Firma %1$d</string>
     <string name="signature_of">Firma %1$d de %2$d</string>
     <string name="source">Código fuente y licencia (AGPL-3.0)</string>
+    <string name="swapped">Se envió lo tuyo; la copia del grupo está en el portapapeles.</string>
     <string name="sync">Sincronizar</string>
     <string name="sync_off">La sincronización está desactivada</string>
     <string name="sync_off_until">La sincronización está desactivada hasta %1$s</string>

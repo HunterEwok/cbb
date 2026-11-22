@@ -71,8 +71,14 @@ they look, so both apps are built to the same plan.
    off") and the **globe** ("Everywhere", sync away from home, which asks once and waits
    while sync is off). Under them an alert card only when there is something to say, then
    every device of the group as tiles or as a list (the "…" menu switches them, arranges
-   them and opens Settings). There is no send button: what was copied goes out as the app
-   opens, and a copy from another device that waits comes in. On the iPhone a note at the
+   them and opens Settings). There is no send button. Opening the app (a start or a return from the
+   background, not from the system's own windows or a turn of the screen) swaps nothing: a
+   clipboard changed since the app last saw it goes out, otherwise the group's copy comes in;
+   while the app is on the screen every copy of the group is written to the clipboard, and in
+   the background none is (D-128). The tile, the widget, the notification's action and Back
+   Tap are the one button, which swaps the clipboard with the group's copy. Under the alerts
+   a line shows the last copy that came, from which device and its text (a secret without
+   it), with **Copy**, which puts it into the clipboard. On the iPhone a note at the
    first Home asks once for the clipboard, so that Settings, CBB lists "Paste from Other
    Apps", and opens Settings there to set it to Allow; the system's paste button (an icon
    only) shows on Home only when iOS refuses the app the clipboard or the user chose
@@ -529,10 +535,11 @@ app runs, its cover included, and shows them through the system's notifications
 reaches, the last copy and the latest event, with two actions: the one button and pause
 or resume. A text shared to CBB from the system's share menu (`ShareProvider`, the desktop
 entry's `X-Share Method text`) goes to the group as the phone's copy, and so do images and
-files (`X-Share Method files`, up to 50 MB together). The main page's Sync button, its
-pull-down menu and the cover follow the one button's rule (docs/design.md) through the core's
-`waiting`, `sends` and `took`; images and files from another device are fetched by
-themselves while the phone takes the group's copies, with a notification, which is why the app
+files (`X-Share Method files`, up to 50 MB together). Opening the app follows the
+one button's rule for an opening (docs/design.md, D-128) through the core's `opened` and
+`took`, with a stored hash of the clipboard; the group's copies are written only while the app
+is in front, and the main page shows the last one that came with Copy. Images and files from
+another device are fetched by themselves while the app is in front and takes the group's copies, with a notification, which is why the app
 asks for the user's folders: one image goes to Pictures/CBB (and into the clipboard) and one
 video to Videos/CBB, where the gallery shows them as an album, as Telegram does; other files
 go to a folder of their own in Downloads/CBB.
@@ -1265,8 +1272,12 @@ offers Leave, which alone deletes its files (D-126).
   has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
   Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
   since HarmonyOS lets it read the clipboard only in front, and with the system's paste
-  button or `READ_PASTEBOARD` alone: without either, a quick sync takes what the group copied
-  and sends nothing. Live View (Live View Kit), the Live Activity's twin, shows adding a
+  button or `READ_PASTEBOARD` alone. The paste button's tap is the one button and swaps the
+  pasteboard with the group's copy (D-128); without a read, a quick sync changes nothing, since
+  taking would lose what the pasteboard held. Opening the app swaps nothing: the group's copy
+  comes in when the pasteboard is as the app last saw it (its change events, counted while the
+  app runs), and one changed since stays for the paste button. The group's copies are written
+  only while the app is in front, and the main page shows the last one that came with Copy. Live View (Live View Kit), the Live Activity's twin, shows adding a
   device with a timer and its result, and sync away from home through the hub's tunnel with
   the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
   until then it shows nothing.

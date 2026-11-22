@@ -317,6 +317,7 @@
     <string name="lab">实验室</string>
     <string name="language">语言</string>
     <string name="language_system">系统</string>
+    <string name="last_received">最近收到，来自 %1$s</string>
     <string name="layout_list">列表</string>
     <string name="layout_orbit">轨道</string>
     <string name="layout_tiles">磁贴</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
     <string name="source">源代码和许可证 (AGPL-3.0)</string>
+    <string name="swapped">已发送您的内容；群组的副本已在剪贴板中。</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
     <string name="sync_off_until">同步关闭至 %1$s</string>

@@ -51,6 +51,11 @@ class Member : public QObject
     // and seq; empty when none.
     Q_PROPERTY(QVariantMap rootChanged READ rootChanged NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
+    // The last copy that came from another device (D-128): from which
+    // device, and its text, empty for a secret; lastFrom is empty when there
+    // is none to show.
+    Q_PROPERTY(QString lastFrom READ lastFrom NOTIFY changed)
+    Q_PROPERTY(QString lastText READ lastText NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // Sync turned off (design.md, "Sync on and off"): the clipboard is the
     // phone's own, until pausedUntil or, when it is invalid, until the user
@@ -90,6 +95,8 @@ public:
     QVariantMap rootChanged() const { return m_rootChanged; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
+    QString lastFrom() const { return m_lastFrom; }
+    QString lastText() const { return m_lastText; }
     QString error() const { return m_error; }
     bool paused() const { return m_paused; }
     QDateTime pausedUntil() const { return m_pausedUntil; }
@@ -110,9 +117,14 @@ public:
     // (the member's listen op); a second call keeps it open.
     bool listen(Failure *failure);
 
-    // Sends the clipboard's text or image when the core's rule says so:
-    // neither the group's copy nor what this phone sent or took last.
-    Q_INVOKABLE void sendClipboard();
+    // The app's opening (docs/design.md, "The one button", D-128), which
+    // swaps nothing: a clipboard changed since the app last saw it goes to
+    // the group, unless it is the group's copy or what this phone sent or
+    // took last; otherwise the phone takes the group's copy.
+    Q_INVOKABLE void opened();
+    // Copy on the main page's last received line: the group's copy into
+    // the clipboard, if it is still the group's latest.
+    Q_INVOKABLE void copyReceived();
     // Sends a text shared to the app, as a copy of this phone.
     Q_INVOKABLE void sendText(const QString &text);
     // Sends images or files shared to the app (absolute paths), up to
@@ -176,7 +188,9 @@ private:
     // clipboard, images or files fetched into Downloads, one image into the
     // clipboard too; then tells the core it took it.
     void take(const QJsonObject &copy);
-    void sendImage(const QImage &image);
+    void sendImage(const QByteArray &png, const QString &key);
+    // Sends a text the clipboard held, as the opening decided.
+    void sendBoardText(const QString &text);
     // Sends images or files as one copy, up to maxSendBytes together, and
     // returns its event ID, or none with failure set.
     QString copyMedia(const QStringList &paths, Failure *failure);
@@ -206,9 +220,12 @@ private:
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.
     QString m_known;
+    QString m_lastId, m_lastFrom, m_lastText;
     // The key of the image this phone put into the clipboard from the
     // group: read back, it is encoded anew, so the core cannot tell it.
     QString m_tookImage;
+    // The ID of the group's copy that image came from.
+    QString m_tookImageCopy;
     QThread *m_fetch = nullptr;
     bool m_paused = false;
     QDateTime m_pausedUntil;

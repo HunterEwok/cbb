@@ -143,8 +143,9 @@ Page {
         }
     }
 
-    // Aurora lets an app read the clipboard only in the foreground: what the
-    // user copied goes to the group when the app comes to the front.
+    // Aurora lets an app read the clipboard only in the foreground: as the
+    // app comes to the front, what the user copied goes to the group, or the
+    // group's copy comes in (D-128).
     Connections {
         target: Qt.application
         onStateChanged: if (Qt.application.state === Qt.ApplicationActive) sendSoon.restart()
@@ -152,7 +153,7 @@ Page {
     Timer {
         id: sendSoon
         interval: 300
-        onTriggered: app.member.sendClipboard()
+        onTriggered: app.member.opened()
     }
 
     SilicaFlickable {
@@ -460,6 +461,46 @@ Page {
                 running: app.busy
                 visible: running
                 size: BusyIndicatorSize.Medium
+            }
+
+            // The last copy that came from another device, with Copy (D-128).
+            Item {
+                visible: app.member.lastFrom !== ""
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                height: visible ? Math.max(received.height, copyReceived.height) : 0
+
+                Column {
+                    id: received
+                    anchors.left: parent.left
+                    anchors.right: copyReceived.left
+                    anchors.rightMargin: Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        width: parent.width
+                        text: qsTr("Last received from %1").arg(app.member.lastFrom)
+                        color: Theme.secondaryColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        truncationMode: TruncationMode.Fade
+                    }
+                    Label {
+                        visible: app.member.lastText !== ""
+                        width: parent.width
+                        text: app.member.lastText
+                        maximumLineCount: 2
+                        wrapMode: Text.Wrap
+                        elide: Text.ElideRight
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+                }
+                Button {
+                    id: copyReceived
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Copy")
+                    onClicked: app.member.copyReceived()
+                }
             }
 
             Label {

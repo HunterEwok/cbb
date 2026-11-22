@@ -151,15 +151,19 @@ class GroupTest {
         }
     }
 
-    /** A1: the big button sends the phone's copy to the computer. */
+    /** A1: the big button sends the phone's copy to the computer, and swaps in the group's copy before it, if any (D-128). */
     @Test
     fun a2_sendToComputer() {
         settled(Bench.PC)
+        val before = model.group.latestCopy
         val text = "cbb-bench phone A1 from the phone ${System.currentTimeMillis()}"
         setClip(text)
         runBlocking { model.sync() }
-        assertEquals("the button says ${model.message}", R.string.sent, model.message?.text)
+        assertTrue("the button says ${model.message}", model.message?.text in setOf(R.string.sent, R.string.swapped))
         Bench.arrives(Bench.PC, text)
+        if (before != null && before.text.isNotEmpty() && model.message?.text == R.string.swapped) {
+            assertEquals("the group's copy before the swap is in the phone's clipboard", before.text, clip())
+        }
     }
 
     /** A1: the big button fetches the computer's copy onto the phone's clipboard. */
@@ -340,11 +344,7 @@ class GroupTest {
         try {
             // Settles what earlier tests left, so the send screen finds the group connected.
             runBlocking { model.sync() }
-            // A computer's copy of a moment ago, from an earlier test, is what the button
-            // fetches first instead of sending.
-            until((model.group.incomingMS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
-                model.group.recentCopy == null
-            }
+            // The send screen swaps (D-128): the phone's text goes out, whatever the group holds.
             setClip(text)
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
             // What the widget's and the tile's PendingIntent start.
@@ -353,9 +353,9 @@ class GroupTest {
             try {
                 Bench.arrives(Bench.PC, text)
             } catch (e: Throwable) {
-                throw AssertionError("${e.message}; the send screen says ${model.message}; the latest copy ${model.group.recentCopy}; the phone's clipboard has ${clip()}", e)
+                throw AssertionError("${e.message}; the send screen says ${model.message}; the latest copy ${model.group.latestCopy}; the phone's clipboard has ${clip()}", e)
             }
-            until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text == R.string.sent }
+            until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text in setOf(R.string.sent, R.string.swapped) }
         } finally {
             model.group.setOwnMode("shared")
         }
@@ -397,10 +397,9 @@ class GroupTest {
         val copied = Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back 2>&1")
         try {
             // The button waits until the computer's copy is here: pressed
-            // before it, it sends what the phone's clipboard holds (a9's
-            // text, which the phone's own files replaced), and that newer
-            // copy wins over the computer's (SyncRule.decide).
-            until(30, "${Bench.PC}'s files reach the phone") { model.group.recentCopy?.media?.isFiles == true }
+            // before it, it would swap in the phone's own files instead
+            // (D-128).
+            until(30, "${Bench.PC}'s files reach the phone") { model.group.latestCopy?.media?.isFiles == true }
             until(60, "the phone saves ${Bench.PC}'s file") {
                 runBlocking { model.sync() }
                 model.message?.text == R.string.files_saved

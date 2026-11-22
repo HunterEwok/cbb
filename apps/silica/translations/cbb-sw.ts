@@ -1085,6 +1085,10 @@
         <translation>Inaunganisha na kitovu kupitia handaki…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>Nakili</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>Unda kikundi</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>Jiunge kwa mwaliko</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>Kilichopokelewa mwisho, kutoka %1</translation>
     </message>
     <message>
         <source>Leave the group</source>

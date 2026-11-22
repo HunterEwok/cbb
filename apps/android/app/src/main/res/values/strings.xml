@@ -320,6 +320,7 @@
     <string name="lab">Lab</string>
     <string name="language">Language</string>
     <string name="language_system">System</string>
+    <string name="last_received">Last received from %1$s</string>
     <string name="layout_list">List</string>
     <string name="layout_orbit">Orbit</string>
     <string name="layout_tiles">Tiles</string>
@@ -558,6 +559,7 @@
     <string name="signature_n">Signature %1$d</string>
     <string name="signature_of">Signature %1$d of %2$d</string>
     <string name="source">Source code and license (AGPL-3.0)</string>
+    <string name="swapped">Sent yours; the group\'s copy is in the clipboard.</string>
     <string name="sync">Sync</string>
     <string name="sync_off">Sync is off</string>
     <string name="sync_off_until">Sync is off until %1$s</string>

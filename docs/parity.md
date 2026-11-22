@@ -149,7 +149,7 @@ in three lines; this table has every part.
 | The Arduino Nano ESP32 | firmware: Wi-Fi, the USB port as a keyboard; CI in QEMU; joins only groups of 0.5, joining a group of 0.6 and syncing in 0.7 | not yet |
 | Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
 | Sync away from home for the phones and small devices | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
-| The phone as the hub, several hubs, your own blind relay | built | not yet |
+| The phone as the hub (the root phone too; on Aurora OS planned for 0.7), several hubs, your own blind relay | built | not yet |
 | Images, files and formatted text | built | not yet |
 | Remote paste and quick actions | built | remote paste from the iPhone and the watch to a Mac, at home and away from home; Windows, Linux and the quick actions not yet |
 | Keys in the TPM on Linux and Windows, proven Android keys, the group's key level (`cbb keys`) | built; CI against a software TPM | Windows in a virtual machine only |

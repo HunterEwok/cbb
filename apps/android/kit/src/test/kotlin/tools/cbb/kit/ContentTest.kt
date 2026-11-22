@@ -30,7 +30,7 @@ class ContentTest {
         val sent = a.member.copyMedia("", listOf(CoreMember.Part.data("image/png", png)), board = true)
         assertEquals(Member.Kind.MEDIA, sent.kind)
         b.next("the picture") { (it as? CoreMember.Event.CopyChanged)?.copy?.takeIf { c -> c.id == sent.id } }
-        assertEquals(sent.id, b.member.waiting()?.id)
+        assertEquals(sent.id, b.member.swap("").copy?.id)
         val out = kotlin.io.path.createTempDirectory("cbb-fetch").toFile()
         try {
             val parts = b.member.fetch(sent.id, 64L shl 20, java.io.File(out, "picture"))

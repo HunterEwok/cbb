@@ -2163,6 +2163,17 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- A phone's one button swaps instead of picking a direction (D-128): what the phone's
+  clipboard holds goes to the group and the group's copy comes into the clipboard; an empty
+  clipboard, or one holding the group's copy, only takes. Opening the app (a start or a return
+  from the background, not from the system's own windows or a turn of the screen) swaps
+  nothing: a clipboard changed since the app last saw it goes out (the iPhone's change count;
+  a stored hash on Android and Aurora; the pasteboard's change events on HarmonyOS, where a
+  changed one waits for the paste button), otherwise the group's copy comes in. While the app
+  is on the screen every copy of the group is written to the clipboard however old; in the
+  background none is. Home shows the last copy that came, from which device and its text (a
+  secret without it), with Copy. The core's `cbb_member::button` and ffi's ops `swap` and
+  `opened` replace `waiting` and `sends`; `took` stays.
 - A computer or small device writes whatever becomes the group's current copy, however old: its
   clipboard always equals the group's buffer, and the live window no longer limits it; a copy
   made before the current one changes nothing (D-128, [design](docs/design.md), "Sync model").

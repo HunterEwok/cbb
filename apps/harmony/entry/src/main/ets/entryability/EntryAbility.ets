@@ -85,12 +85,14 @@ export default class EntryAbility extends UIAbility {
       });
     }
     app.startMember();
+    app.member.setForeground(true);
   }
 
   // HarmonyOS suspends an app soon after it leaves the screen: the member
   // goes on as a continuous task while it runs, and otherwise asks for the
   // short delay the system grants and stops when it ends.
   onBackground(): void {
+    app.member.setForeground(false);
     if (app.membership !== undefined && app.member.running) {
       this.keepRunning().then((kept: boolean) => {
         if (!kept) {

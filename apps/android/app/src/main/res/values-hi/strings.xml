@@ -317,6 +317,7 @@
     <string name="lab">प्रयोगशाला</string>
     <string name="language">भाषा</string>
     <string name="language_system">सिस्टम</string>
+    <string name="last_received">आख़िरी बार मिला, %1$s से</string>
     <string name="layout_list">सूची</string>
     <string name="layout_orbit">कक्षा</string>
     <string name="layout_tiles">टाइलें</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">हस्ताक्षर %1$d</string>
     <string name="signature_of">%2$d में से हस्ताक्षर %1$d</string>
     <string name="source">सोर्स कोड और लाइसेंस (AGPL-3.0)</string>
+    <string name="swapped">आपका भेज दिया गया; समूह की कॉपी क्लिपबोर्ड में है।</string>
     <string name="sync">सिंक</string>
     <string name="sync_off">सिंक बंद है</string>
     <string name="sync_off_until">%1$s तक सिंक बंद है</string>

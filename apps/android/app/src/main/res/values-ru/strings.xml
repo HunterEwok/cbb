@@ -317,6 +317,7 @@
     <string name="lab">Лаборатория</string>
     <string name="language">Язык</string>
     <string name="language_system">Как в системе</string>
+    <string name="last_received">Последнее пришедшее, с устройства %1$s</string>
     <string name="layout_list">Список</string>
     <string name="layout_orbit">Орбита</string>
     <string name="layout_tiles">Плитки</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">Подпись %1$d</string>
     <string name="signature_of">Подпись %1$d из %2$d</string>
     <string name="source">Исходный код и лицензия (AGPL-3.0)</string>
+    <string name="swapped">Ваше отправлено, копия группы в буфере обмена.</string>
     <string name="sync">Синхронизация</string>
     <string name="sync_off">Синхронизация выключена</string>
     <string name="sync_off_until">Синхронизация выключена до %1$s</string>

@@ -1085,6 +1085,10 @@
         <translation>جارٍ الاتصال بالمحور عبر النفق…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>نسخ</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>إنشاء مجموعة</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>الانضمام بدعوة</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>آخر ما وصل، من %1</translation>
     </message>
     <message>
         <source>Leave the group</source>

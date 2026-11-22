@@ -28,14 +28,15 @@ class CoreMemberTest {
     fun startsAnswersAndStops() {
         val m = group(1).root.member
         assertNull(m.current())
-        assertNull(m.waiting())
+        assertNull(m.swap("").copy, "an empty group buffer gives nothing")
         assertTrue(m.peers().isEmpty())
-        assertTrue(m.sends("on the phone"), "a clipboard nothing sent yet goes out")
+        assertTrue(m.swap("on the phone").sends, "a clipboard nothing sent yet goes out")
         assertFailsWith<Core.Refusal> { m.setSync(true, forMS = 1_000) }
         assertFailsWith<Core.Refusal> { m.fetch("nothing", 1 shl 20, File(createTempDirectory("cbb-out").toFile(), "out")) }
         // A lone phone's copy reaches nobody; the button's rule still knows it went out.
         m.copy("from the phone")
-        assertTrue(!m.sends("from the phone"), "what the phone sent does not go again")
+        assertTrue(!m.swap("from the phone").sends, "what the phone sent does not go again")
+        assertTrue(!m.opened("from the phone", changed = true).sends, "opening on the phone's own copy sends nothing")
         m.close()
         assertFailsWith<IllegalStateException> { m.current() }
     }
@@ -76,9 +77,13 @@ class CoreMemberTest {
         b.member.copy("hello from two")
         val got = a.copy("hello from two")
         assertEquals(b.device, got.origin)
-        assertEquals(got.id, a.member.waiting()?.id)
+        val swap = a.member.swap("on a")
+        assertTrue(swap.sends, "the gesture sends what the phone holds")
+        assertEquals(got.id, swap.copy?.id, "and takes the group's copy")
         a.member.took(got.id)
-        assertNull(a.member.waiting())
+        assertNull(a.member.swap("hello from two").copy, "a clipboard holding the group's text takes nothing")
+        assertEquals(got.id, a.member.opened("on a", changed = false).copy?.id, "opening on an unchanged clipboard takes the group's copy")
+        assertTrue(a.member.opened("on a", changed = true).let { it.sends && it.copy == null }, "opening on a changed clipboard only sends")
 
         fun act(action: String, vararg more: Pair<String, kotlinx.serialization.json.JsonElement>): kotlinx.serialization.json.JsonObject =
             a.member.act(

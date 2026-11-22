@@ -896,8 +896,16 @@ final class LiveGroup: GroupController {
     private func handled(_ e: CoreMember.Event) {
         switch e {
         case let .copy(c):
-            guard let node, let g = state, c.origin != g.device, Member.receives(modeBox.mode),
-                  (try? node.waiting())?.id == c.id else { return }
+            // A copy from another device (docs/design.md, "Sync model",
+            // D-128): Home shows it as the last received, and while the app
+            // is on the screen the phone listens like a computer and writes
+            // it, whatever its age; in the background it writes nothing.
+            guard let g = state, c.origin != g.device, !c.unread, c.media?.isFiles != true else { return }
+            let image = Images.part(of: c.media) != nil
+            guard image || (!c.text.isEmpty && c.kind != .media) else { return }
+            lastReceived = AppModel.Received(id: c.id, from: name(of: c.origin), text: c.kind == .secret ? "" : c.text)
+            onReceived?(lastReceived)
+            guard foreground, !background, Member.receives(modeBox.mode) else { return }
             Task {
                 do {
                     try await take(c)
@@ -1375,15 +1383,6 @@ final class LiveGroup: GroupController {
         }
     }
 
-    /// The copy from another device that waits for this phone, by the
-    /// core's rule (docs/design.md, "The one button"): younger than the
-    /// group's live window and not yet taken; for what the app takes by
-    /// itself (byItself), also while sync is on.
-    private func pending(_ node: CoreMember, byItself: Bool) -> CoreMember.Copy? {
-        guard !byItself || Member.receives(modeBox.mode) else { return nil }
-        return try? node.waiting()
-    }
-
     /// Puts a copy from another device in this phone's clipboard: a text,
     /// an image fetched whole, or files saved in Files, or one image or
     /// video in Photos (true); then it waits no more.
@@ -1400,6 +1399,8 @@ final class LiveGroup: GroupController {
             write(c.text, kind: c.kind)
         }
         try node.took(c.id)
+        // The app's own write is no copy: the next opening does not send it.
+        seen(UIPasteboard.general.changeCount, key: c.media == nil && !c.text.isEmpty ? c.text : nil)
         return photos
     }
 
@@ -1410,43 +1411,86 @@ final class LiveGroup: GroupController {
         return .fetched(from: devices.first { $0.id == c.origin && !$0.isSelf }?.name, preview: preview)
     }
 
-    /// Takes the copy that waits for this phone, when one does: at the
-    /// app's start or its return to the front, after the computers had a
-    /// moment to connect. nil when none waits.
-    func takePending() async -> AppModel.SyncResult? {
+    /// The last copy that came from another device, for Home's line (D-128).
+    private(set) var lastReceived: AppModel.Received?
+    /// Tells the app the last received copy changed.
+    var onReceived: ((AppModel.Received?) -> Void)?
+
+    /// Copy on Home's last received line: the copy goes into the clipboard
+    /// and the line goes. nil when the group holds a newer copy now.
+    func copyReceived(_ id: String) async throws -> AppModel.SyncResult? {
+        guard let node else { throw PendingGroup.Failure.noComputers }
+        lastReceived = nil
+        onReceived?(nil)
+        guard let c = try node.current(), c.id == id else { return nil }
+        let photos = try await take(c)
+        return fetched(c, photos: photos)
+    }
+
+    /// The clipboard's change count as the app last saw it (D-128): opening
+    /// compares it to tell a copy made since. It keeps across starts.
+    private var seenCount: Int {
+        get { UserDefaults.standard.object(forKey: Self.seenCountKey) as? Int ?? -1 }
+        set { UserDefaults.standard.set(newValue, forKey: Self.seenCountKey) }
+    }
+    nonisolated static let seenCountKey = "BoardSeen"
+    /// The clipboard's key as the app last saw it, while it runs; nil when
+    /// it does not know.
+    private var seenKey: String?
+
+    private func seen(_ count: Int, key: String?) {
+        seenCount = count
+        seenKey = key
+    }
+
+    /// The app's opening (docs/design.md, "The one button", D-128): it swaps
+    /// nothing. A clipboard changed since the app last saw it (the change
+    /// count) goes out, when the user lets the app read it (mayRead);
+    /// otherwise the phone takes the group's copy. A changed clipboard the
+    /// app may not read stays as it is. nil when nothing went either way.
+    func opened(mayRead: Bool) async throws -> AppModel.SyncResult? {
         guard let node, state != nil else { return nil }
         _ = await connected(node)
-        guard let c = pending(node, byItself: true) else { return nil }
-        let photos: Bool
-        do {
-            photos = try await take(c)
-        } catch {
-            imageLog.error("taking the waiting copy: \(String(reflecting: error), privacy: .public)")
-            return nil
-        }
+        let count = UIPasteboard.general.changeCount
+        let changed = count != seenCount
+        if changed && !mayRead { return nil }
+        let board: AppModel.Board? = changed ? try await Self.readBoard() : nil
+        let key = changed ? (board?.key ?? "") : (seenKey ?? "")
+        seen(count, key: key.isEmpty ? nil : key)
+        let s = try node.opened(board: key, changed: changed)
+        if s.sends, let board { return try await send(board, node) }
+        guard let c = s.copy, Member.receives(modeBox.mode) else { return nil }
+        let photos = try await take(c)
         return fetched(c, photos: photos)
     }
 
     /// The one button, and Back Tap through Shortcuts (docs/design.md, "The
-    /// one button"): a copy from another device that waits for this phone
-    /// comes in; otherwise what this phone copied goes out, however old,
-    /// unless it is the group's copy already or what this phone sent or
-    /// took last, as the core's member decides (sends). board is what the
-    /// paste button or Shortcuts handed over; without it the button reads
-    /// the clipboard, and only when it sends.
+    /// one button", D-128): a strict swap. What the clipboard holds goes to
+    /// the group and the group's copy comes into the clipboard; an empty
+    /// clipboard, or one holding the group's copy, only takes. board is
+    /// what the paste button or Shortcuts handed over; without it the
+    /// button reads the clipboard.
     func sync(board given: AppModel.Board?) async throws -> AppModel.SyncResult {
         guard let node, state != nil else { throw PendingGroup.Failure.noComputers }
         online = node.connected()
-        if let c = pending(node, byItself: false) {
-            let photos = try await take(c)
-            return fetched(c, photos: photos)
-        }
         let board: AppModel.Board
         if let given { board = given } else { board = try await Self.readBoard() }
-        guard let key = board.key, try node.sends(board: key) else {
+        let s = try node.swap(board: board.key ?? "")
+        var sent: AppModel.SyncResult?
+        if s.sends { sent = try await send(board, node) }
+        guard let c = s.copy else {
+            if let sent { return sent }
             if !(await connected(node)) { throw PendingGroup.Failure.noComputers }
             return .nothingNew
         }
+        let photos = try await take(c)
+        let got = fetched(c, photos: photos)
+        if sent != nil, case let .fetched(from, preview) = got { return .swapped(from: from, preview: preview) }
+        return got
+    }
+
+    /// Sends what the clipboard held to the group.
+    private func send(_ board: AppModel.Board, _ node: CoreMember) async throws -> AppModel.SyncResult {
         guard await connected(node) else { throw PendingGroup.Failure.noComputers }
         if let image = board.image {
             try node.copyMedia([.data(image.data, type: image.type)], board: true)

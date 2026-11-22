@@ -9112,6 +9112,52 @@
         }
       }
     },
+    "Last received from %@": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخر ما وصل، من %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo último recibido, de %@"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "האחרון שהתקבל, מ־%@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आख़िरी बार मिला, %@ से"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Последнее пришедшее, с устройства %@"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kilichopokelewa mwisho, kutoka %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近收到，来自 %@"
+          }
+        }
+      }
+    },
     "Later": {
       "localizations": {
         "ar": {
@@ -17250,6 +17296,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "已发送到电脑。"
+          }
+        }
+      }
+    },
+    "Sent yours; the group's copy is in the clipboard.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل ما لديك؛ ونسخة المجموعة في الحافظة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se envió lo tuyo; la copia del grupo está en el portapapeles."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שלך נשלח; העותק של הקבוצה נמצא בלוח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपका भेज दिया गया; समूह की कॉपी क्लिपबोर्ड में है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше отправлено, копия группы в буфере обмена."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chako kimetumwa; nakala ya kikundi iko kwenye ubao wa kunakili."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已发送您的内容；群组的副本已在剪贴板中。"
           }
         }
       }

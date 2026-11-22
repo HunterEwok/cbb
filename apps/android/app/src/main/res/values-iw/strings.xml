@@ -317,6 +317,7 @@
     <string name="lab">מעבדה</string>
     <string name="language">שפה</string>
     <string name="language_system">מערכת</string>
+    <string name="last_received">האחרון שהתקבל, מ־%1$s</string>
     <string name="layout_list">רשימה</string>
     <string name="layout_orbit">מסלול</string>
     <string name="layout_tiles">אריחים</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">חתימה %1$d</string>
     <string name="signature_of">חתימה %1$d מתוך %2$d</string>
     <string name="source">קוד מקור ורישיון (AGPL-3.0)</string>
+    <string name="swapped">שלך נשלח; העותק של הקבוצה נמצא בלוח.</string>
     <string name="sync">סנכרון</string>
     <string name="sync_off">הסנכרון כבוי</string>
     <string name="sync_off_until">הסנכרון כבוי עד %1$s</string>

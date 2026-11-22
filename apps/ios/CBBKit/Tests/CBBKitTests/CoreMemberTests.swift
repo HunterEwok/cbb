@@ -93,18 +93,21 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(peer.name, "Root phone")
         XCTAssertEqual(peer.role, "phone")
 
-        // B's text reaches A, waits there for the button, and once taken
-        // neither waits nor goes back.
+        // B's text reaches A; A's button swaps it in for what A holds, and
+        // once taken it neither comes again nor goes back (D-128).
         try b.member.copy("from phone B")
-        try await until("the copy at A") { try a.member.waiting() != nil }
-        let copy = try XCTUnwrap(try a.member.waiting())
-        XCTAssertEqual(copy.origin, b.device)
+        try await until("the copy at A") { try a.member.current()?.origin == b.device }
+        let copy = try XCTUnwrap(try a.member.current())
         XCTAssertEqual(copy.text, "from phone B")
-        XCTAssertEqual(try a.member.current()?.id, copy.id)
+        let swap = try a.member.swap(board: "copied on A")
+        XCTAssertTrue(swap.sends, "the button sends what A holds")
+        XCTAssertEqual(swap.copy?.id, copy.id, "and takes the group's copy")
         try a.member.took(copy.id)
-        XCTAssertNil(try a.member.waiting())
-        XCTAssertFalse(try a.member.sends(board: copy.key))
-        XCTAssertTrue(try a.member.sends(board: "copied on A"))
+        XCTAssertNil(try a.member.swap(board: copy.text).copy, "a clipboard holding the group's copy takes nothing")
+        XCTAssertFalse(try a.member.swap(board: copy.text).sends, "the app's own write is no copy")
+        XCTAssertEqual(try a.member.opened(board: "copied on A", changed: false).copy?.id, copy.id, "opening on an unchanged clipboard takes")
+        let opened = try a.member.opened(board: "copied on A", changed: true)
+        XCTAssertTrue(opened.sends && opened.copy == nil, "opening on a changed clipboard only sends")
 
         // The root renames B and turns its sync off; B carries the order out.
         let sign = { [k = t.rootKey] (d: Data) throws -> Data in try k.signature(digest: d) }
@@ -160,7 +163,7 @@ final class CoreMemberTests: XCTestCase {
         let png = Data((0..<(5 << 20 + 1234)).map { _ in UInt8.random(in: 0...255, using: &rng) })
         let sent = try a.member.copyMedia([.data(png, type: "image/png")], board: true)
         XCTAssertEqual(sent.kind, .media)
-        try await until("the picture at B") { try b.member.waiting()?.id == sent.id }
+        try await until("the picture at B") { try b.member.current()?.id == sent.id }
         let out = temporary("fetch")
         try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
         let parts = try await b.member.fetch(sent.id, max: 64 << 20, into: out.appendingPathComponent("picture"))

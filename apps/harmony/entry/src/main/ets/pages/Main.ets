@@ -641,6 +641,26 @@ struct Main {
       Text(app.member.last).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
+    // The last copy that came from another device, with Copy (D-128).
+    if (app.member.lastId.length > 0) {
+      Row({ space: 12 }) {
+        Column() {
+          Text(t('main_last_received', app.member.lastFrom)).fontSize(13).fontColor($r('app.color.secondary'))
+          if (app.member.lastText.length > 0) {
+            Text(app.member.lastText).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button($r('app.string.main_copy_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
+          .enabled(app.member.running)
+          .onClick(() => {
+            app.member.copyReceived();
+          })
+      }
+      .width('100%')
+    }
     if (app.member.fetching) {
       BusyLine({ busy: true, label: $r('app.string.main_fetching') })
     }

@@ -317,6 +317,7 @@
     <string name="lab">المختبر</string>
     <string name="language">اللغة</string>
     <string name="language_system">النظام</string>
+    <string name="last_received">آخر ما وصل، من %1$s</string>
     <string name="layout_list">قائمة</string>
     <string name="layout_orbit">مدار</string>
     <string name="layout_tiles">مربعات</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">التوقيع %1$d</string>
     <string name="signature_of">التوقيع %1$d من %2$d</string>
     <string name="source">الشيفرة المصدرية والترخيص (AGPL-3.0)</string>
+    <string name="swapped">أُرسل ما لديك؛ ونسخة المجموعة في الحافظة.</string>
     <string name="sync">مزامنة</string>
     <string name="sync_off">المزامنة متوقفة</string>
     <string name="sync_off_until">المزامنة متوقفة حتى %1$s</string>

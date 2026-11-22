@@ -55,6 +55,7 @@ class AppModel(private val app: Context) {
     val group = LiveGroup(app).also { g ->
         g.onCopy = { text, kind -> Clipboard.write(app, text, kind) }
         g.onImage = { file, alt -> Clipboard.writeImage(app, file, alt) }
+        g.onReceived = { Handler(Looper.getMainLooper()).post { received = g.lastReceived } }
         // In the background too: the service keeps the connections that bring the records.
         // Off the node's thread, which may hold its own lock while it hands records over.
         g.onRecords = { Thread({ notifier.observe(g.devices) }, "events").start() }
@@ -472,15 +473,36 @@ class AppModel(private val app: Context) {
         phase = Phase.START
     }
 
-    /** The one big button. */
+    /** The last copy that came from another device, which Home shows with Copy (D-128). */
+    var received by mutableStateOf<LiveGroup.Received?>(null)
+        private set
+
+    /** Copy on Home's last received line: the copy goes into the clipboard and the line goes. */
+    suspend fun copyReceived() {
+        val r = received ?: return
+        try {
+            when (val got = withContext(Dispatchers.IO) { group.copyReceived(r.id) }) {
+                is LiveGroup.Got.Text -> Clipboard.write(app, got.text, got.kind)
+                is LiveGroup.Got.Image -> Clipboard.writeImage(app, got.file, got.alt)
+                is LiveGroup.Got.Files, null -> {}
+            }
+            group.dismissReceived()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+        }
+    }
+
     /** Counts the syncs started, so that only the newest one says how it went. */
     private var syncs = 0
 
-    suspend fun sync() {
+    /** The one big button, which swaps the clipboard with the group's copy; opening, which swaps nothing (D-128). */
+    suspend fun sync(opening: Boolean = false) {
         busy = true
         val mine = ++syncs
         try {
-            val (result, fetched) = withContext(Dispatchers.IO) { group.sync { Clipboard.readForSync(app) } }
+            val (result, fetched) = withContext(Dispatchers.IO) { group.sync(opening) { Clipboard.readForSync(app) } }
             // A sync started meanwhile (the button pressed while the one as
             // the app opened was still going) says how it went, not this one.
             if (mine != syncs) return
@@ -495,6 +517,7 @@ class AppModel(private val app: Context) {
                 when (result) {
                     LiveGroup.SyncResult.SENT -> R.string.sent
                     LiveGroup.SyncResult.FETCHED -> R.string.fetched
+                    LiveGroup.SyncResult.SWAPPED -> R.string.swapped
                     LiveGroup.SyncResult.NOTHING_NEW -> R.string.nothing_new
                 },
             )
@@ -509,20 +532,27 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * What the app does as it opens (docs/apps.md, Home): sends what was
-     * copied, or takes a newer copy, without a button; it says something
-     * only when a copy went one way or the other, or failed.
+     * What the app does as it opens (docs/apps.md, Home; D-128): a
+     * clipboard changed since the app last saw it goes out, otherwise the
+     * phone takes the group's copy; it never swaps. It says something only
+     * when a copy went one way or the other, or failed.
      */
-    suspend fun sendOnOpen() {
+    suspend fun opened() {
         if (!group.hasGroup || busy || syncOff != null || phase != Phase.HOME) return
         val before = message
         val started = syncs
-        sync()
+        sync(opening = true)
         // The button pressed meanwhile: its sync says how it went.
         if (syncs != started + 1) return
         sendFailed = message?.error == true
         if (message?.text == R.string.nothing_new) message = before
     }
+
+    /** Whether the app handled its opening since it came to the front; it outlives an activity made again as the screen turns. */
+    var sentOnOpen = false
+
+    /** Whether the last activity stopped only to be made again, as the screen turned. */
+    var turning = false
 
     /** Whether sending as the app opened failed, so that Home offers a button for it. */
     var sendFailed by mutableStateOf(false)

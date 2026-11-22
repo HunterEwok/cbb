@@ -190,6 +190,7 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
         LostPhoneCard(model)
         model.message?.let { NoteText(it, dim = true) }
         FallbackSend(model)
+        LastReceived(model)
         Devices(model, search, layout, select, openCollection)
     }
 }
@@ -542,6 +543,25 @@ internal fun FallbackSend(model: AppModel) {
     if (!model.sendFailed) return
     val scope = rememberCoroutineScope()
     QuietButton(stringResource(R.string.send_copy), enabled = !model.busy, onClick = { scope.launch { model.sync() } })
+}
+
+/**
+ * The last copy that came from another device (D-128): from which device
+ * and its text, a secret without it, with Copy, which puts it in the
+ * clipboard. Copy, or a newer copy, takes the line away.
+ */
+@Composable
+internal fun LastReceived(model: AppModel) {
+    val r = model.received ?: return
+    val scope = rememberCoroutineScope()
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.last_received, r.from), style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim)
+            if (r.text.isNotEmpty()) Text(r.text, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(Tokens.spacingSmall))
+        QuietButton(stringResource(R.string.push_copy), enabled = !model.busy, onClick = { scope.launch { model.copyReceived() } })
+    }
 }
 
 /** The devices as tiles or as a list; each one opens its details. */

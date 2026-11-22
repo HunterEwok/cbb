@@ -1085,6 +1085,10 @@
         <translation>सुरंग से हब से जुड़ रहा है…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>कॉपी करें</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>समूह बनाएँ</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>निमंत्रण से जुड़ें</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>आख़िरी बार मिला, %1 से</translation>
     </message>
     <message>
         <source>Leave the group</source>

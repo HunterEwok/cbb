@@ -222,16 +222,26 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** The group's current copy, or null. */
     fun current(): Copy? = call("current").optObject("copy")?.let(Copy::fromJson)
 
-    /** The copy from another device that waits for the phone (the button's first case), or null. */
-    fun waiting(): Copy? = call("waiting").optObject("copy")?.let(Copy::fromJson)
+    /**
+     * What a gesture or the app's opening does (D-128): whether the
+     * clipboard goes out (sends), and the group's copy that comes into it,
+     * or null.
+     */
+    class Swap(val sends: Boolean, val copy: Copy?)
 
-    /** The app took the copy id into the clipboard, or saved its files, so that it waits no more. */
+    /** The gesture swaps: board is the clipboard's key (Copy.key's shape), empty for an empty clipboard. */
+    fun swap(board: String): Swap = call("swap", Wire.obj("board" to Wire.str(board))).let(::swapOf)
+
+    /** The app opened: a clipboard that changed since the app last saw it goes out, otherwise the group's copy comes in. */
+    fun opened(board: String, changed: Boolean): Swap =
+        call("opened", Wire.obj("board" to Wire.str(board), "changed" to JsonPrimitive(changed))).let(::swapOf)
+
+    private fun swapOf(o: JsonObject) = Swap(o.optBool("sends") ?: false, o.optObject("copy")?.let(Copy::fromJson))
+
+    /** The app took the copy id into the clipboard, or saved its files: its own write, never a copy of the phone's. */
     fun took(id: String) {
         call("took", Wire.obj("id" to Wire.str(id)))
     }
-
-    /** Whether the button sends what the clipboard holds, by its key (the button's second case). */
-    fun sends(board: String): Boolean = call("sends", Wire.obj("board" to Wire.str(board))).optBool("sends") ?: false
 
     /** Fetches the images or files of the group's copy id, unless its sealed blob is larger than max bytes, and opens them into the new folder out. Blocks. */
     fun fetch(id: String, max: Long, out: File): List<Fetched> =

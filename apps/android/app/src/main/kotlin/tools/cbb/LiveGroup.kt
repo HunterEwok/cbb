@@ -187,7 +187,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         )
     }
 
-    enum class SyncResult { SENT, FETCHED, NOTHING_NEW }
+    enum class SyncResult { SENT, FETCHED, SWAPPED, NOTHING_NEW }
 
     private val lock = Any()
     private var state: PhoneGroup? = runCatching { PhoneGroup.load(file) }.getOrNull()
@@ -1400,14 +1400,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * A live copy from another device (docs/design.md, "The one button");
-     * an older one, as a hello brings it on connecting, would overwrite what
-     * the phone copied since. Only in a sync mode that takes the group's
-     * copies, and only while its sync is on.
+     * A copy from another device (docs/design.md, "Sync model", D-128):
+     * Home shows it as the last received, and while the app is on the
+     * screen the phone listens like a computer and writes it to the
+     * clipboard, whatever its age. In the background or closed the phone
+     * writes nothing. Only in a sync mode that takes the group's copies,
+     * and only while its sync is on.
      */
     private fun copyArrived(n: CoreMember, c: CoreMember.Copy, me: String) {
-        if (c.unread || c.origin == me || c.ageMS >= incomingMS || !Member.receives(syncMode) || c.isFiles) return
+        if (c.unread || c.origin == me || c.isFiles) return
         val image = Images.part(c.media)
+        if (image == null && (c.text.isEmpty() || c.kind == Member.Kind.MEDIA)) return
+        lastReceived = Received(c.id, nameOf(c.origin), if (c.kind == Member.Kind.SECRET) "" else c.text, c.kind, image != null)
+        onReceived?.invoke()
+        if (!foreground || !Member.receives(syncMode)) return
         if (image != null) {
             // Fetched off the events' thread, which the next events wait for.
             onImage?.let { f ->
@@ -1415,13 +1421,38 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                     fetchImage(n, c, image)?.let {
                         f(it, c.text)
                         runCatching { n.took(c.id) }
+                        image.sha256?.let { h -> seen(Images.key(h)) }
                     }
                 }, "image").start()
             }
-        } else if (c.text.isNotEmpty() && c.kind != Member.Kind.MEDIA) {
+        } else {
             onCopy?.invoke(c.text, c.kind)
             runCatching { n.took(c.id) }
+            seen(c.text)
         }
+    }
+
+    /** The last copy that came from another device, for Home's line (D-128); text is empty for a secret, which Home does not show. */
+    data class Received(val id: String, val from: String, val text: String, val kind: Member.Kind, val image: Boolean)
+
+    @Volatile var lastReceived: Received? = null
+        private set
+
+    /** Hides the last received line, as its Copy did or a newer copy will replace it. */
+    fun dismissReceived() {
+        lastReceived = null
+        onReceived?.invoke()
+    }
+
+    /**
+     * Copy on the last received line: the group's copy goes into the
+     * phone's clipboard (an image fetched first). Null when the group holds
+     * a newer copy now, which its own line shows. On the caller's IO thread.
+     */
+    fun copyReceived(id: String): Got? {
+        val n = currentNode ?: throw Failure(Failure.Kind.NO_COMPUTERS)
+        val c = n.current()?.takeIf { it.id == id } ?: return null
+        return take(n, c)
     }
 
     /** Keeps a stopped node's last log lines, for the tests' messages. */
@@ -1555,51 +1586,84 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         get() = currentNode?.let { n -> runCatching { n.periods().second }.getOrNull() } ?: false
 
     /**
-     * The one button, by the node's rule (docs/design.md, "The one button"):
-     * a copy from another device that waits for the phone comes in (the text
-     * or image to put in the clipboard is returned); otherwise what the
-     * phone's clipboard holds goes out when the node says it sends it. board
-     * reads the clipboard, and only when no copy waits.
+     * The one button and the app's opening, by the node's rule (docs/design.md,
+     * "The one button", D-128). The button swaps: what the phone's clipboard
+     * holds goes to the group and the group's copy comes into the clipboard;
+     * an empty clipboard, or one holding the group's copy, only takes.
+     * Opening (opening = true) swaps nothing: a clipboard changed since the
+     * app last saw it goes out, otherwise the phone takes the group's copy.
+     * board reads the clipboard. Returns what happened and what to put in
+     * the clipboard; the phone sends before it takes, so nothing it held is
+     * lost.
      */
-    fun sync(board: () -> Clipboard.Board?): Pair<SyncResult, Got?> {
+    fun sync(opening: Boolean = false, board: () -> Clipboard.Board?): Pair<SyncResult, Got?> {
         val n = synchronized(lock) { node ?: throw Failure(Failure.Kind.NO_COMPUTERS) }
-        // The button works in every mode; only what the phone takes by itself follows it.
-        val w = n.waiting()
-        if (w != null) {
-            val files = w.media?.takeIf { it.isFiles }
-            if (files != null) {
-                if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
-                val saved = Files.save(context, n, w, files)
-                n.took(w.id)
-                return SyncResult.FETCHED to Got.Files(saved.count, saved.gallery)
-            }
-            val image = Images.part(w.media)
-            if (image == null) {
-                n.took(w.id)
-                return SyncResult.FETCHED to Got.Text(w.text, if (w.kind == Member.Kind.MEDIA) Member.Kind.TEXT else w.kind)
-            }
-            if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
-            val f = fetchImage(n, w, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
-            n.took(w.id)
-            // The image the button fetched goes to the gallery's album too, as the Aurora app keeps it.
-            val type = image.type ?: "image/png"
-            runCatching { Files.toGallery(context, f, "CBB ${w.id.take(12)}.${f.extension}", type) }
-                .onFailure { Log.w(TAG, "putting the image in the gallery", it) }
-            return SyncResult.FETCHED to Got.Image(f, w.text)
-        }
         val b = board()
-        val key = b?.key
-        if (b == null || key.isNullOrEmpty() || !n.sends(key)) {
+        val key = b?.key.orEmpty()
+        val changed = key.isNotEmpty() && boardSeen != seenOf(key)
+        seen(key)
+        // The button works in every mode; only what the phone takes by itself follows it.
+        val s = if (opening) n.opened(key, changed) else n.swap(key)
+        Log.i(TAG, "${if (opening) "opening" else "the button"}: sends ${s.sends}, takes ${s.copy?.id?.take(12)}")
+        if (s.sends && b != null) {
+            if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
+            notMuted()
+            when (b) {
+                is Clipboard.Board.Text -> n.copy(b.text, board = true)
+                is Clipboard.Board.Image -> sendImage(n, b.image, board = true)
+            }
+        }
+        val w = s.copy
+        if (w == null) {
+            if (s.sends) return SyncResult.SENT to null
             if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
             return SyncResult.NOTHING_NEW to null
         }
-        if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
-        notMuted()
-        when (b) {
-            is Clipboard.Board.Text -> n.copy(b.text, board = true)
-            is Clipboard.Board.Image -> sendImage(n, b.image, board = true)
+        val got = take(n, w)
+        return (if (s.sends) SyncResult.SWAPPED else SyncResult.FETCHED) to got
+    }
+
+    /** Takes the group's copy w for the phone: its text, its image fetched, or its files saved; the app's own write is no copy. */
+    private fun take(n: CoreMember, w: CoreMember.Copy): Got {
+        val files = w.media?.takeIf { it.isFiles }
+        if (files != null) {
+            if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
+            val saved = Files.save(context, n, w, files)
+            n.took(w.id)
+            return Got.Files(saved.count, saved.gallery)
         }
-        return SyncResult.SENT to null
+        val image = Images.part(w.media)
+        if (image == null) {
+            n.took(w.id)
+            seen(w.text)
+            return Got.Text(w.text, if (w.kind == Member.Kind.MEDIA) Member.Kind.TEXT else w.kind)
+        }
+        if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
+        val f = fetchImage(n, w, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
+        n.took(w.id)
+        image.sha256?.let { seen(Images.key(it)) }
+        // The image the button fetched goes to the gallery's album too, as the Aurora app keeps it.
+        val type = image.type ?: "image/png"
+        runCatching { Files.toGallery(context, f, "CBB ${w.id.take(12)}.${f.extension}", type) }
+            .onFailure { Log.w(TAG, "putting the image in the gallery", it) }
+        return Got.Image(f, w.text)
+    }
+
+    /**
+     * The clipboard as the app last saw it, as a hash (D-128): Android has
+     * no change count, so opening compares the clipboard with it to tell a
+     * copy made since. It keeps across starts, so a copy made while the app
+     * was closed goes out as it opens.
+     */
+    private val boardSeen: String? get() = seenPrefs.getString(SEEN, null)
+
+    private val seenPrefs by lazy { context.getSharedPreferences("board", Context.MODE_PRIVATE) }
+
+    private fun seenOf(key: String): String = java.security.MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+
+    /** Notes that the clipboard holds key, as the app read it or wrote it itself. */
+    private fun seen(key: String) {
+        if (key.isNotEmpty()) seenPrefs.edit().putString(SEEN, seenOf(key)).apply()
     }
 
     /** Throws [Muted] while an admin mutes this phone: its copies stay on it. */
@@ -1635,12 +1699,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val online: Boolean get() = currentNode?.let { runCatching { it.peers() }.getOrNull() }?.isNotEmpty() == true
 
     /**
-     * The group's latest copy while the button would fetch it first: another
-     * device's, younger than the live window and not taken yet; null
-     * otherwise. The tests wait it out before they send.
+     * The group's latest copy, as the node holds it; null before any. For
+     * the tests.
      */
-    internal val recentCopy: CoreMember.Copy?
-        get() = currentNode?.let { runCatching { it.waiting() }.getOrNull() }
+    internal val latestCopy: CoreMember.Copy?
+        get() = currentNode?.let { runCatching { it.current() }.getOrNull() }
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */
     sealed class Got {
@@ -1698,6 +1761,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     @Volatile var onCopy: ((String, Member.Kind) -> Unit)? = null
 
+    /** Called on the events' thread when the last received copy changes. */
+    @Volatile var onReceived: (() -> Unit)? = null
+
     /** Gets each image a computer copied, fetched into the app's cache, with its text; on a thread of its own. */
     @Volatile var onImage: ((File, String) -> Unit)? = null
 
@@ -1713,6 +1779,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** This phone's secret for sealed messages (docs/protocol.md, section 15), 32 random bytes under a Keystore key. */
     companion object {
         private const val TAG = "cbb"
+
+        /** The preference that keeps the clipboard's hash as the app last saw it. */
+        private const val SEEN = "seen"
 
         /** How often the phone reads the push face and renewals the member keeps. */
         private const val RECORDS_POLL_MS = 15_000L

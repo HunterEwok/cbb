@@ -1085,6 +1085,10 @@
         <translation>正在通过隧道连接中枢…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>创建群组</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>通过邀请加入</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>最近收到，来自 %1</translation>
     </message>
     <message>
         <source>Leave the group</source>

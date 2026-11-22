@@ -28,6 +28,8 @@ export const MAX_SEND_BYTES: number = 50 * 1024 * 1024;
 // How often the devices, the mute and sync away from home are brought up to date.
 const POLL_MS: number = 3000;
 export const IMAGE_TYPES: string[] = ['image/png', 'image/jpeg', 'image/gif'];
+// How long a secret the button took stays in the pasteboard (docs/design.md, "Secrets").
+const SECRET_TTL_MS: number = 60000;
 
 // A device of the group, as the member's devices op lists it.
 export interface Device {
@@ -118,8 +120,11 @@ interface Muted {
   muted_ms?: number;
 }
 
-interface Sends {
+// What the paste button's swap or the app's opening does (D-128): whether
+// the pasteboard goes to the group, and the group's copy that comes in.
+interface Swap {
   sends?: boolean;
+  copy?: Copy;
 }
 
 interface Server {
@@ -173,6 +178,7 @@ interface AwayAnswer {
 
 interface Copy {
   id: string;
+  origin?: string;
   kind?: string;
   text?: string;
 }
@@ -224,6 +230,12 @@ export class Member {
   @Trace viewed: boolean = false;
   // What the pasteboard got or sent last, shortened, for the main page.
   @Trace last: string = '';
+  // The last copy that came from another device (D-128): its ID, the
+  // device's name and its text, empty for a secret, for the main page's
+  // line with Copy; lastId is empty when there is none to show.
+  @Trace lastId: string = '';
+  @Trace lastFrom: string = '';
+  @Trace lastText: string = '';
   @Trace error: string = '';
   // Sync turned off (design.md, "Sync on and off"), until pausedUntil
   // (ms since the epoch) or, when 0, until the user turns it on.
@@ -289,6 +301,13 @@ export class Member {
   private boardChanges: number = 0;
   private watching: boolean = false;
   private starting: boolean = false;
+  // Whether the app is on the screen: only then does the phone write the
+  // group's copies (D-128).
+  private foreground: boolean = false;
+  // boardChanges as the app last saw the pasteboard, -1 when it does not
+  // know; and the key of what it held then.
+  private seenChanges: number = -1;
+  private seenKey: string = '';
 
   // The core's member, for adding a device and invitations; null when stopped.
   core(): Handle | null {
@@ -429,11 +448,14 @@ export class Member {
     return r;
   }
 
-  // Reads the pasteboard and sends it when the core's rule says so: neither
-  // the group's copy nor what this phone sent or took last. Called from the
-  // paste button's tap, the one moment HarmonyOS lets the app read it, and
-  // from a quick sync (quiet: a pasteboard the app may not read is no
-  // error then). Answers whether it sent.
+  // The one button (docs/design.md, "The one button", D-128): reads the
+  // pasteboard and swaps it with the group's copy. What it holds goes to the
+  // group, unless it is the group's copy or what this phone sent or took
+  // last, and the group's copy comes into the pasteboard; an empty
+  // pasteboard only takes. Called from the paste button's tap, the one
+  // moment HarmonyOS lets the app read it, and from a quick sync (quiet: a
+  // pasteboard the app may not read is no error then). Answers whether it
+  // sent.
   async sendPasteboard(quiet?: boolean): Promise<boolean> {
     if (this.handle === null || this.muted) {
       return false;
@@ -450,25 +472,43 @@ export class Member {
       }
       return false;
     }
+    let pixels: image.PixelMap | undefined = undefined;
     for (let i = 0; i < data.getRecordCount(); i++) {
       const record = data.getRecord(i);
       if (record.mimeType === pasteboard.MIMETYPE_PIXELMAP && record.pixelMap !== undefined) {
-        await this.sendImage(record.pixelMap);
-        return true;
+        pixels = record.pixelMap;
+        break;
       }
     }
-    const text = data.getPrimaryText();
-    if (text === undefined || text.length === 0) {
+    let png: ArrayBuffer | undefined = undefined;
+    let key = '';
+    if (pixels !== undefined) {
+      png = await this.packed(pixels);
+      if (png === undefined) {
+        return false;
+      }
+      key = Member.imageKey(png);
+    } else {
+      key = data.getPrimaryText() ?? '';
+    }
+    this.seen(this.boardChanges, key);
+    const swap = await this.call<Swap>('swap', { 'board': key } as Record<string, Object>);
+    if (swap.ok === undefined) {
+      this.error = Errors.shown(swap.failure as Failure);
       return false;
     }
-    const sends = await this.call<Sends>('sends', { 'board': text } as Record<string, Object>);
-    if (sends.ok === undefined) {
-      this.error = Errors.shown(sends.failure as Failure);
-      return false;
+    let sent = false;
+    if (swap.ok.sends === true) {
+      sent = png !== undefined ? await this.sendImage(png) : await this.sendText(key);
     }
-    if (sends.ok.sends !== true) {
-      return false;
+    if (swap.ok.copy !== undefined) {
+      await this.takeCopy(swap.ok.copy);
     }
+    return sent;
+  }
+
+  // Sends a text the pasteboard held to the group.
+  private async sendText(text: string): Promise<boolean> {
     const sent = await this.call<Object>('copy', { 'text': text, 'board': true } as Record<string, Object>);
     if (sent.ok === undefined) {
       this.error = Errors.shown(sent.failure as Failure);
@@ -477,6 +517,88 @@ export class Member {
     this.error = '';
     this.setLast(text, false);
     return true;
+  }
+
+  // The app came to the screen (on) or left it. Coming to it is an opening
+  // (D-128), which swaps nothing: the phone takes the group's copy when the
+  // pasteboard is as the app last saw it. HarmonyOS lets the app read the
+  // pasteboard only on the paste button's tap, so one changed since stays
+  // as it is, for the button to send.
+  setForeground(on: boolean): void {
+    const opening = on && !this.foreground;
+    this.foreground = on;
+    if (opening) {
+      this.opened();
+    }
+  }
+
+  private async opened(): Promise<void> {
+    if (this.handle === null || this.paused || !this.watching || this.seenChanges !== this.boardChanges) {
+      return;
+    }
+    const a = await this.call<Swap>('opened', { 'board': this.seenKey, 'changed': false } as Record<string, Object>);
+    if (a.ok === undefined) {
+      Errors.log(`member: opening: ${(a.failure as Failure).details}`);
+      return;
+    }
+    if (a.ok.copy !== undefined) {
+      await this.takeCopy(a.ok.copy);
+    }
+  }
+
+  // Puts a copy of the group into the pasteboard, as the button or the
+  // opening took it: a text, or images and files fetched; then the core
+  // knows the phone took it.
+  private async takeCopy(copy: Copy): Promise<void> {
+    if (copy.kind === 'media') {
+      await this.take(copy);
+      return;
+    }
+    if ((copy.text ?? '').length === 0) {
+      return;
+    }
+    this.write(copy.text ?? '', copy.kind === 'secret', copy.kind === 'secret' ? SECRET_TTL_MS : 0);
+    await this.call<Object>('took', { 'id': copy.id } as Record<string, Object>);
+    this.dismissReceived();
+  }
+
+  // Notes the pasteboard as the app saw it: its change count and key.
+  private seen(changes: number, key: string): void {
+    this.seenChanges = changes;
+    this.seenKey = key;
+  }
+
+  // A copy from another device, for the main page's last received line.
+  private cameIn(copy: Copy): void {
+    const me = this.devices.find((d: Device) => d.self === true);
+    if (copy.origin === undefined || (me !== undefined && copy.origin === me.id)) {
+      return;
+    }
+    const from = this.devices.find((d: Device) => d.id === copy.origin);
+    this.lastId = copy.id;
+    this.lastFrom = from !== undefined ? from.name : copy.origin;
+    this.lastText = copy.kind === 'secret' || copy.kind === 'media' ? '' : copy.text ?? '';
+  }
+
+  // Copy on the last received line: the group's copy into the pasteboard,
+  // if it is still the group's latest.
+  async copyReceived(): Promise<void> {
+    const id = this.lastId;
+    this.dismissReceived();
+    const a = await this.call<Swap>('opened', { 'board': '', 'changed': false } as Record<string, Object>);
+    if (a.ok === undefined) {
+      this.error = Errors.shown(a.failure as Failure);
+      return;
+    }
+    if (a.ok.copy !== undefined && a.ok.copy.id === id) {
+      await this.takeCopy(a.ok.copy);
+    }
+  }
+
+  private dismissReceived(): void {
+    this.lastId = '';
+    this.lastFrom = '';
+    this.lastText = '';
   }
 
   // Makes the group's copy of files (paths in the app's sandbox), up to
@@ -851,13 +973,24 @@ export class Member {
       Errors.log(`member: ${e.details ?? ''}`);
       this.onPanic(e.details ?? '');
     } else if (e.type === 'write') {
-      this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
+      // While on the screen the phone listens like a computer; in the
+      // background it writes nothing (D-128).
+      if (this.foreground) {
+        this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
+      }
     } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync
       // is on, as texts do through write.
-      if (e.copy !== undefined && e.copy.kind === 'media' && !this.paused) {
+      if (e.copy !== undefined) {
+        this.cameIn(e.copy);
+        // A text written as it came is the app's own write, no copy to send back.
+        if (this.foreground && e.copy.kind !== 'media' && (e.copy.text ?? '').length > 0) {
+          this.call<Object>('took', { 'id': e.copy.id } as Record<string, Object>);
+        }
+      }
+      if (e.copy !== undefined && e.copy.kind === 'media' && !this.paused && this.foreground) {
         this.take(e.copy);
       }
     }
@@ -876,6 +1009,9 @@ export class Member {
     const board = pasteboard.getSystemPasteboard();
     board.setData(data).then(() => {
       const mark = this.boardChanges;
+      // The app's own write is no copy: the next opening finds the
+      // pasteboard as it left it.
+      this.seen(mark + 1, text);
       if (secret && ttlMs > 0) {
         setTimeout(() => {
           if (this.boardChanges === mark + 1) {
@@ -912,37 +1048,34 @@ export class Member {
     return `\u0000image:${hex}`;
   }
 
-  private async sendImage(pixels: image.PixelMap): Promise<void> {
+  // A pasteboard image as PNG, undefined when it does not pack.
+  private async packed(pixels: image.PixelMap): Promise<ArrayBuffer | undefined> {
     const packer = image.createImagePacker();
-    let png: ArrayBuffer;
     try {
-      png = await packer.packToData(pixels, { format: 'image/png', quality: 100 });
+      return await packer.packToData(pixels, { format: 'image/png', quality: 100 });
     } catch (e) {
       this.error = Errors.shown(Errors.unexpected(t('error_image'), e as Object));
-      return;
+      return undefined;
     } finally {
       packer.release();
     }
-    const key = Member.imageKey(png);
-    if (key === this.tookImage || png.byteLength > MAX_SEND_BYTES) {
-      return;
-    }
-    const sends = await this.call<Sends>('sends', { 'board': key } as Record<string, Object>);
-    if (sends.ok === undefined) {
-      this.error = Errors.shown(sends.failure as Failure);
-      return;
-    }
-    if (sends.ok.sends !== true) {
-      return;
+  }
+
+  // Sends an image the pasteboard held to the group, unless it is the one
+  // the phone took or too large.
+  private async sendImage(png: ArrayBuffer): Promise<boolean> {
+    if (Member.imageKey(png) === this.tookImage || png.byteLength > MAX_SEND_BYTES) {
+      return false;
     }
     const part: Record<string, Object> = { 'type': 'image/png', 'data': toBase64(png) };
     const sent = await this.call<Object>('copy_media', { 'parts': [part], 'board': true } as Record<string, Object>);
     if (sent.ok === undefined) {
       this.error = Errors.shown(sent.failure as Failure);
-      return;
+      return false;
     }
     this.error = '';
     this.last = t('last_image');
+    return true;
   }
 
   // Takes the group's images or files: fetched into the app's folder of

@@ -84,12 +84,15 @@ protocol GroupController: AnyObject {
     /// Joins a group from afar by a remote invitation the user accepted;
     /// shown gets the fingerprint the inviting admin compares.
     func joinByInvite(_ text: String, shown: @escaping @MainActor (String) -> Void) async throws
-    /// Takes the copy from another device that waits for this phone, or
-    /// sends what it holds: board, or the clipboard read when it sends.
+    /// The one button (D-128): swaps what the phone holds, board or the
+    /// clipboard read, with the group's copy.
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult
-    /// Takes the copy from another device that waits for this phone, when
-    /// one does; nil when none does.
-    func takePending() async -> AppModel.SyncResult?
+    /// The app's opening (D-128): sends a clipboard changed since the app
+    /// last saw it, when it may read it, or takes the group's copy; nil
+    /// when nothing went either way.
+    func opened(mayRead: Bool) async throws -> AppModel.SyncResult?
+    /// Copy on Home's last received line; nil when a newer copy came.
+    func copyReceived(_ id: String) async throws -> AppModel.SyncResult?
     /// Updates which computers are online.
     func refresh() async
     /// Sync away from home: whether it is on, where it stands and its last
@@ -176,7 +179,8 @@ extension GroupController {
     func setKeyLevel(_ level: String) async throws { throw PhoneGroup.Failure.notRoot }
     var incomingMS: Int64 { Records.defaultIncomingMS }
     func setIncoming(ms: Int64) async throws { throw PhoneGroup.Failure.notAdmin }
-    func takePending() async -> AppModel.SyncResult? { nil }
+    func opened(mayRead: Bool) async throws -> AppModel.SyncResult? { nil }
+    func copyReceived(_ id: String) async throws -> AppModel.SyncResult? { nil }
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission { throw PhoneGroup.Failure.notRoot }
     func watchActions(for id: String) -> [String] { [] }
     func watchBody(_ ask: WatchState.Ask) throws -> Data { throw PhoneGroup.Failure.notForWatch }
@@ -341,6 +345,9 @@ final class AppModel: ObservableObject {
         /// Fetched into the clipboard: from the computer that copied it, and
         /// the start of a text.
         case fetched(from: String?, preview: String?)
+        /// The button sent what the phone held and took the group's copy
+        /// (D-128): from the device that copied it, and the start of a text.
+        case swapped(from: String?, preview: String?)
         case nothingNew
         /// Files a computer copied, saved in the app's folder in Files, or
         /// one image or video in Photos.
@@ -350,6 +357,7 @@ final class AppModel: ObservableObject {
         /// that may show on a locked phone.
         var withoutPreview: SyncResult {
             if case .fetched(let from, _) = self { return .fetched(from: from, preview: nil) }
+            if case .swapped(let from, _) = self { return .swapped(from: from, preview: nil) }
             return self
         }
     }
@@ -544,6 +552,7 @@ final class AppModel: ObservableObject {
         loadTiles()
         if let live = group as? LiveGroup {
             live.onPanic = { [weak self] details, log in self?.broke(kind: "panic", code: 5, name: "panic", details: details, log: log) }
+            live.onReceived = { [weak self] r in self?.received = r }
             let bugs = self.bugs
             Task.detached { bugs.resend() }
         }
@@ -852,6 +861,8 @@ final class AppModel: ObservableObject {
             return String(localized: "Ready to paste, from \(from).", bundle: .app)
         case .fetched:
             return String(localized: "Ready to paste.", bundle: .app)
+        case .swapped:
+            return String(localized: "Sent yours; the group's copy is in the clipboard.", bundle: .app)
         case .nothingNew:
             return String(localized: "Nothing new to send or fetch.", bundle: .app)
         case .savedFiles(photos: true):
@@ -878,21 +889,22 @@ final class AppModel: ObservableObject {
     /// app read it: Home offers the system's paste button instead.
     @Published private(set) var pasteRefused = false
 
-    /// Sends what was copied as the app comes to the front, while sync is on
-    /// and the user let the app read the clipboard; a copy from another
-    /// device that waits comes in first. Says only what it did.
-    func sendOnOpen() async {
+    /// The app's opening (D-128), while sync is on: a copy made since the
+    /// app last saw the clipboard goes out, when the user let the app read
+    /// it; otherwise the group's copy comes in. It never swaps, and says
+    /// only what it did.
+    func opened() async {
         guard group.hasGroup, syncOff == nil else { return }
-        guard readsClipboard else {
+        if !readsClipboard {
             pasteRefused = UserDefaults.standard.string(forKey: Self.pasteChoiceKey) != nil
-            return
         }
         do {
-            let result = try await group.sync(board: nil)
-            pasteRefused = false
-            if result != .nothingNew {
-                message = Self.said(result)
-                if let message { Island.flash(message) }
+            if let result = try await group.opened(mayRead: readsClipboard) {
+                if readsClipboard { pasteRefused = false }
+                if result != .nothingNew {
+                    message = Self.said(result)
+                    if let message { Island.flash(message) }
+                }
             }
         } catch is LiveGroup.ClipboardUnreadable {
             pasteRefused = true
@@ -900,6 +912,30 @@ final class AppModel: ObservableObject {
             // No device connected yet, or the like: the next opening tries again.
         }
         computers = group.computers
+    }
+
+    /// The last copy that came from another device (D-128): from which
+    /// device, and its text, empty for a secret, which Home does not show.
+    struct Received: Equatable, Sendable {
+        var id: String
+        var from: String
+        var text: String
+    }
+
+    /// The last received copy, which Home shows with Copy.
+    @Published var received: Received?
+
+    /// Copy on Home's last received line.
+    func copyReceived() async {
+        guard let r = received else { return }
+        received = nil
+        do {
+            if let result = try await group.copyReceived(r.id) {
+                message = Self.said(result)
+            }
+        } catch {
+            message = Self.describe(error)
+        }
     }
 
     /// Asks iOS for the clipboard once, so that Settings, CBB lists "Paste
@@ -916,15 +952,6 @@ final class AppModel: ObservableObject {
     func declineClipboard() {
         UserDefaults.standard.set("later", forKey: Self.pasteChoiceKey)
         pasteRefused = true
-    }
-
-    /// Takes the copy from another device that waits for this phone, as
-    /// the app comes to the front, and says so.
-    func takePending() async {
-        guard let result = await group.takePending() else { return }
-        message = Self.said(result)
-        if let message { Island.flash(message) }
-        computers = group.computers
     }
 
     /// The sync the Shortcuts action runs, with the app perhaps just

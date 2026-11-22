@@ -399,22 +399,32 @@ public final class CoreMember: @unchecked Sendable {
     /// The group's current copy, nil for none.
     public func current() throws -> Copy? { try run("current", Optional<Empty>.none, as: CopyAnswer.self).copy }
 
-    /// The copy from another device that waits for this phone (the button's
-    /// first case), nil for none.
-    public func waiting() throws -> Copy? { try run("waiting", Optional<Empty>.none, as: CopyAnswer.self).copy }
+    /// What the one button or the app's opening does (D-128): whether the
+    /// clipboard goes to the group, and the group's copy that comes into it.
+    public struct Swap: Decodable, Sendable {
+        public var sends: Bool
+        public var copy: Copy?
+    }
+
+    /// The one button: a strict swap of the clipboard, by its key, with the
+    /// group's copy; an empty clipboard, or one holding the group's copy,
+    /// only takes.
+    public func swap(board: String) throws -> Swap {
+        struct A: Encodable { var board: String }
+        return try run("swap", A(board: board), as: Swap.self)
+    }
+
+    /// The app's opening, which swaps nothing: a clipboard changed since the
+    /// app last saw it goes out; otherwise the group's copy comes in.
+    public func opened(board: String, changed: Bool) throws -> Swap {
+        struct A: Encodable { var board: String, changed: Bool }
+        return try run("opened", A(board: board, changed: changed), as: Swap.self)
+    }
 
     /// The app took the copy id into the clipboard, or saved its files.
     public func took(_ id: String) throws {
         struct A: Encodable { var id: String }
         try run("took", A(id: id))
-    }
-
-    /// Whether the button sends what the clipboard holds, by its key (the
-    /// button's second case).
-    public func sends(board: String) throws -> Bool {
-        struct A: Encodable { var board: String }
-        struct R: Decodable { var sends: Bool }
-        return try run("sends", A(board: board), as: R.self).sends
     }
 
     /// Fetches the images or files of the group's copy id, unless its sealed

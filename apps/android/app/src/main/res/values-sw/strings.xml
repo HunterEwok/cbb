@@ -317,6 +317,7 @@
     <string name="lab">Maabara</string>
     <string name="language">Lugha</string>
     <string name="language_system">Mfumo</string>
+    <string name="last_received">Kilichopokelewa mwisho, kutoka %1$s</string>
     <string name="layout_list">Orodha</string>
     <string name="layout_orbit">Obiti</string>
     <string name="layout_tiles">Vigae</string>
@@ -554,6 +555,7 @@
     <string name="signature_n">Sahihi %1$d</string>
     <string name="signature_of">Sahihi %1$d kati ya %2$d</string>
     <string name="source">Msimbo chanzo na leseni (AGPL-3.0)</string>
+    <string name="swapped">Chako kimetumwa; nakala ya kikundi iko kwenye ubao wa kunakili.</string>
     <string name="sync">Sawazisha</string>
     <string name="sync_off">Usawazishaji umezimwa</string>
     <string name="sync_off_until">Usawazishaji umezimwa hadi %1$s</string>

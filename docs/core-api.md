@@ -74,7 +74,7 @@ sent out in its next hello; it answers the paste, action and away switches with 
 do, and refuses an action, a hub change, a device change and, until the apps take it, a paste.
 Its operations are `copy`, `copy_media` (images or files, sealed and kept to serve, as the
 service's), `fetch` (a copy's images or files, fetched from the member it came from and opened
-into `out`), `current`, `waiting`, `took` and `sends` (the button's rule, `cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
+into `out`), `current`, `swap`, `opened` and `took` (the button's rule, `cbb_member::button`, D-128), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
 `resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
 (`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
 update_needed, too_old, change_arriving, key_level, incoming_ms, devices[{device, name, os,
@@ -206,13 +206,13 @@ after the header, and an operation that answers more than once marks the last an
 | `view` | both | `away` (optional on a phone, as `why` takes it) | `{"view": {"tiles", "online", "others", "custom", "warnings?"}}`: the device tiles to draw in the user's order and collections, each `{"device"}` (as `devices` lists it) or `{"collection": {id, name, devices}}`, this device among them, and how many other devices are online out of how many, whether the user changed the order, and `warnings`, why this device does not sync, the same reasons as `why` and status's `why`, left out when everything syncs (`member/src/view.rs`; docs/apps.md, "What the member shows" and "Why it does not sync") |
 | `arrange` | both | `arrange` (`{"op": "move", "item", "before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as `testdata/arrangement/vectors.json` names them), `away` as `view` | as `view`, after the change, which the member keeps in `arrangement.json`; a change that does not fit is refused whole |
 | `current` | phone | none | `{"copy"}`: the group's current copy, or null |
-| `waiting` | phone | none | `{"copy"}`: the copy from another device that waits for the phone (design.md, "The one button"), or null |
-| `took` | phone | `id` | `{}`: the app took that copy into the clipboard, or saved its files |
-| `sends` | phone | `board`: the clipboard's key | `{"sends"}`: whether the button sends it: it is neither the group's copy nor what this phone itself sent from its clipboard or took into it last |
+| `swap` | phone | `board`: the clipboard's key | `{"sends", "copy"}`: the one button (design.md, "The one button", D-128), a strict swap: `sends`, whether the clipboard goes to the group (it is not empty, not the group's copy, and not what this phone itself sent from its clipboard or took into it last), and `copy`, the group's copy that comes into the clipboard, null when the clipboard is empty of nothing new or already holds it. The app sends first, then takes |
+| `opened` | phone | `board`, `changed`: whether the clipboard changed since the app last saw it (iOS's change count, elsewhere a stored hash) | `{"sends", "copy"}`: the app's opening, which swaps nothing: a changed clipboard the button would send goes to the group (`sends`, `copy` null); otherwise `copy` is the group's copy to take, as `swap` gives it |
+| `took` | phone | `id` | `{}`: the app took that copy into the clipboard, or saved its files; what it wrote itself is no copy to send back |
 | `fetch` | phone | `id`, `max` (bytes of the sealed blob), `out` (a new folder) | `{"parts"}`: each part with `file`, where it is, each checked against its hash |
 | `found`, `lost` | phone | `key` (the app's name for the member), `addrs` (`host:port`, loopback too for the tunnel), `device` (optional) | `{}`: dial it again and again, or stop |
 | `listen`, `unlisten` | phone | `port` (0 for any), `kind`: `home` (the default and the only kind: every address, for the members that dial this phone, and as the group's hub at home, which the app publishes with `r=phone`) | `{"port"}`: the member port; a port already open is closed first |
-| `pause`, `resume`, `wait` | phone | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `waiting`, `pause` |
+| `pause`, `resume`, `wait` | phone | `wait`: `timeout_ms` | `{}`; `wait` answers `{"connected"}`: the app in the background closes every connection and makes none; one pass of a background refresh is `resume`, `wait`, `pause` |
 | `set_mute` | phone | `until_ms` (null unmutes) | `{}`: the phone's own mute, as the app keeps it |
 | `peers` | phone | `all` (optional: the members offline too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, reach}]`, the connected members as the records and their hellos name them, `reach` the members each says it reaches |
 | `evidence` | phone | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |

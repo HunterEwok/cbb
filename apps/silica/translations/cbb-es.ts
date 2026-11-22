@@ -1085,6 +1085,10 @@
         <translation>Conectando con el hub por el túnel…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>Copiar</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>Crear un grupo</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>Unirse con una invitación</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>Lo último recibido, de %1</translation>
     </message>
     <message>
         <source>Leave the group</source>

@@ -1085,6 +1085,10 @@
         <translation>Подключение к хабу через туннель…</translation>
     </message>
     <message>
+        <source>Copy</source>
+        <translation>Скопировать</translation>
+    </message>
+    <message>
         <source>Create a group</source>
         <translation>Создать группу</translation>
     </message>
@@ -1107,6 +1111,10 @@
     <message>
         <source>Join with an invitation</source>
         <translation>Вступить по приглашению</translation>
+    </message>
+    <message>
+        <source>Last received from %1</source>
+        <translation>Последнее пришедшее, с устройства %1</translation>
     </message>
     <message>
         <source>Leave the group</source>
