@@ -816,7 +816,7 @@ public final class CoreMember: @unchecked Sendable {
         try P256.Signing.PublicKey(derRepresentation: der).x963Representation
     }
 
-    // The root's own records (cbb_core::root): the member builds and checks
+    // The root's own records (cbb_member_manage): the member builds and checks
     // each, signs it with the root key public (DER) through sign, adds it to
     // its records and sends it; the app then takes the member's records.
 

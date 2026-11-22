@@ -39,8 +39,6 @@
 
 extern crate alloc;
 
-#[cfg(feature = "tls")]
-pub mod admit;
 pub mod alpn;
 pub mod api;
 pub mod arrange;
@@ -79,12 +77,9 @@ pub mod keylevel;
 pub mod keystore;
 #[cfg(test)]
 mod longrules;
-pub mod manage;
 pub mod media;
 pub mod msg;
 pub mod pair;
-#[cfg(feature = "tls")]
-pub mod pair_session;
 pub mod peer;
 #[cfg(test)]
 mod powerloss;
@@ -93,7 +88,6 @@ pub mod records;
 pub mod recovery;
 pub mod release;
 pub mod remotepaste;
-pub mod root;
 pub mod rule;
 pub mod seal;
 pub mod secret;
@@ -105,7 +99,6 @@ pub mod slhdsa;
 pub mod store;
 pub mod strict;
 pub mod sync;
-pub mod takeover;
 pub mod third_party {
     // Copied code, kept close to its source: its field arithmetic wraps on
     // purpose (u128 limbs, reduced modulo p), and its indexes and unwraps

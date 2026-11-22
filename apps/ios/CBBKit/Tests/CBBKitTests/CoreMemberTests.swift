@@ -230,7 +230,7 @@ final class CoreMemberTests: XCTestCase {
     }
 
     /// The root's own records, which the core builds, checks and signs with
-    /// the root key outside it (cbb_core::root).
+    /// the root key outside it (cbb_member_manage).
     func testTheRootSignsItsOwnRecordsInTheCore() throws {
         let (phone, rootKey) = try rootPhone()
         let m = phone.member

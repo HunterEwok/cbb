@@ -1237,7 +1237,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /**
      * Has the core's member build and sign one of the root's own records
-     * (cbb_core::root) with root, which adds it and sends it to every
+     * (cbb_member_manage) with root, which adds it and sends it to every
      * member, and takes it into the group's file.
      */
     private suspend fun <T> rootRecord(root: KeystoreSigner, act: (CoreMember, ByteArray, (ByteArray) -> ByteArray) -> T): T {

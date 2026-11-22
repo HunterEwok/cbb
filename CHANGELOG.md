@@ -2970,6 +2970,9 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The core's signing of the records of 0.5 (`cbb_core::admit`, `manage`, `root`, `takeover`,
+  `pair_session`): making a group with a group CA, admitting into it, the root's settings and
+  handover, the claims, and an admin's records on version 2 (D-130).
 - The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's

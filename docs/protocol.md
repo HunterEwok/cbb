@@ -1200,7 +1200,7 @@ one button").
 ## 6. Pairing a computer
 
 Source: `core/src/join` (0.6: `mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `intro.rs`),
-`core/src/msg/tables.rs` (the messages' tables), `core/src/pair.rs`, `core/src/admit`,
+`core/src/msg/tables.rs` (the messages' tables), `core/src/pair.rs`,
 `core/src/third_party/cpace`, `member/src/pair.rs`.
 
 This section first gives pairing as the 0.6 format has it, in the core. The service in

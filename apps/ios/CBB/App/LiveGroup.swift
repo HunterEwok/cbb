@@ -186,7 +186,7 @@ final class LiveGroup: GroupController {
     var isAdmin: Bool { state?.isAdmin ?? true }
     var isRoot: Bool { state?.isRoot ?? false }
     /// Has the phone's member in the core build, check and sign one of the
-    /// root's own records with the root key (cbb_core::root), which it adds
+    /// root's own records with the root key (cbb_member_manage), which it adds
     /// and sends.
     @discardableResult
     private func rootRecord<T>(_ root: SecKeySigner, _ act: (CoreMember, Data, @escaping (Data) throws -> Data) throws -> T) throws -> T {
