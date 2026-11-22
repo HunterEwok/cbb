@@ -2163,6 +2163,10 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The coverage check's format gate counts a Rust test marked `// refuses: <rule>` for a rule
+  whose refusal depends on what the reader holds; every format rule now has a refused
+  vector or such a test, new tests among them for a copy dated past the last wall time, a
+  payload that does not open, and saved counters and marks of another shape.
 - The desktop app and the Mac app pair as 0.6 does (D-119): + opens a pairing window and shows its six
   digits and QR code (`cbb pair -app FILE` in a group writes them for it), and Join a group
   takes a window's six digits (`cbb pair -code`); `cbb pair -qr` says it is gone.

@@ -65,6 +65,7 @@ impl World {
     }
 }
 
+// refuses: commands/counter, commands/late, commands/right
 #[test]
 fn a_member_obeys_the_root_and_its_admins_by_their_commands() {
     let w = World::new();
@@ -402,6 +403,7 @@ fn orders_of_each_type() {
 /// A leaf and the grant it keeps: an ordinary kettle obeys its
 /// commanders; a guarded lock wants a one-time number on every command and
 /// obeys nobody with a stale grant.
+// refuses: commands/stale
 #[test]
 fn a_leaf_obeys_its_grant() {
     let g = G::new();
@@ -643,4 +645,17 @@ fn orders_and_nonces_at_their_bounds() {
     for (p, n) in peers.iter().zip(&issued).skip(1) {
         assert!(nonces.take(p, n));
     }
+}
+
+// refuses: counters/shape
+#[test]
+fn saved_counters_of_another_shape_are_refused() {
+    let shape = Rule::field("counters/shape");
+    let good = Counters::default().encode();
+    assert_eq!(Counters::decode(&good), Ok(Counters::default()));
+    // A map, an entry of a key hash without its counter, and a number for
+    // the key hash.
+    assert_eq!(Counters::decode(&[0xa0]).err(), Some(shape));
+    assert_eq!(Counters::decode(&[0x81, 0x81, 0x40]).err(), Some(shape));
+    assert_eq!(Counters::decode(&[0x81, 0x82, 0x01, 0x02]).err(), Some(shape));
 }

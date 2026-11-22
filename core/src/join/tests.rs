@@ -1683,6 +1683,7 @@ type Fields<'a> = Vec<(u16, crate::format::cbor::Value<'a>)>;
 /// Message 67's tag binds every byte of the Welcome to the session:
 /// a flipped byte, field 13 removed, field 12 changed, no tag, or a tag
 /// from another session's ISK, and the Welcome is not opened.
+// refuses: welcome/late
 #[test]
 fn the_welcome_tag_binds_every_byte() {
     use crate::format::cbor::{self, Value};

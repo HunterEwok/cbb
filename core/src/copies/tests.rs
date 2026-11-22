@@ -96,6 +96,7 @@ fn a_copy_is_sealed_to_the_devices_that_read_it() {
     assert!(none.is_empty());
 }
 
+// refuses: copy/wrap
 #[test]
 fn every_reader_opens_its_own_wrap_and_nobody_else_reads() {
     let w = World::new();
@@ -124,6 +125,7 @@ fn every_reader_opens_its_own_wrap_and_nobody_else_reads() {
     assert_eq!(open(&only, &w.id("desktop"), &w.stores["desktop"], &state), Err(RULE_WRAP));
 }
 
+// refuses: copy/origin, copy/send
 #[test]
 fn every_member_checks_the_origin_before_passing_a_copy_on() {
     let w = World::new();
@@ -281,6 +283,7 @@ fn an_older_device_passes_an_unknown_type_on_and_does_not_write_it() {
     assert!(got.unknown && !got.writable(), "{got:?}");
 }
 
+// refuses: copy/leaf-frame
 #[test]
 fn a_leaf_gets_a_reduced_copy_within_its_frame() {
     let w = World::new();
@@ -335,6 +338,7 @@ fn a_secret_mark_verifies_and_holds_no_payload() {
 
 /// The wave's promise: a device that slept through a key change gets the
 /// copy after it asks to have it sealed again.
+// refuses: reseal/halted, reseal/not-current, reseal/reader
 #[test]
 fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let mut w = World::new();
@@ -397,6 +401,7 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     assert_eq!(reseal(&w.phone, &mut kept, &st2, &s2, &ask("laptop", 3)).err(), Some(RULE_RESEAL_READER));
 }
 
+// refuses: reseal/limit
 #[test]
 fn a_copy_sealed_again_is_passed_to_the_asker_and_limited() {
     let w = World::new();
@@ -428,6 +433,7 @@ fn a_copy_sealed_again_is_passed_to_the_asker_and_limited() {
     assert_eq!(kept.resealed[&w.id("laptop")], MAX_RESEALS);
 }
 
+// refuses: reseal/expired
 #[test]
 fn a_secret_past_its_lifetime_is_not_sealed_again() {
     let w = World::new();
@@ -864,4 +870,77 @@ fn a_blob_holds_at_most_max_segments() {
     assert_eq!(blob::segments(full), Some(blob::MAX_SEGMENTS));
     assert_eq!(blob::segments(full + blob::SEALED_SEGMENT as u64), None);
     assert_eq!(blob::segments(full - 1), None);
+}
+
+// refuses: copy/time
+#[test]
+fn a_copy_dated_past_the_last_wall_time_is_refused() {
+    let w = World::new();
+    let state = w.g.state();
+    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[], None);
+    // At the last wall time a copy is checked as any other.
+    let last = Made { time: Timestamp { wall: crate::hlc::MAX_WALL, logical: 0 }, ..made(1) };
+    let copy = seal(&w.phone, &rs, &last, &Content::text("x", false)).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    assert!(check(&v, &state).is_ok());
+    // One past it, signed by the phone as sealing would: the phone seals no
+    // such copy, so the header is written again by hand.
+    let hdr = cbor::decode(v.get(fcopy::FIELD_HDR).and_then(Value::as_bytes).unwrap()).unwrap();
+    let late = Value::Array(vec![Value::Uint(crate::hlc::MAX_WALL as u64 + 1), Value::Uint(0)]);
+    let hdr = Value::Map(
+        hdr.as_map().unwrap().iter().map(|(n, x)| (*n, if *n == 3 { late.clone() } else { x.clone() })).collect(),
+    )
+    .encode();
+    let with_hdr = Value::Map(
+        v.as_map()
+            .unwrap()
+            .iter()
+            .map(|(n, x)| if *n == fcopy::FIELD_HDR { (*n, Value::Bytes(&hdr)) } else { (*n, x.clone()) })
+            .collect(),
+    );
+    let parsed = fcopy::Copy::from_value(&with_hdr).unwrap();
+    let sig = rkey::sign_es256(&w.phone, sig::LABEL_COPY_SIG, &fcopy::signed(&parsed.h, &parsed.w, &parsed.p)).unwrap();
+    let signed = Value::Map(
+        with_hdr
+            .as_map()
+            .unwrap()
+            .iter()
+            .map(|(n, x)| if *n == fcopy::FIELD_SIG { (*n, Value::Bytes(&sig)) } else { (*n, x.clone()) })
+            .collect(),
+    );
+    assert_eq!(check(&signed, &state).err(), Some(RULE_TIME));
+}
+
+// refuses: copy/payload
+#[test]
+fn a_payload_that_does_not_open_under_its_key_is_refused() {
+    let w = World::new();
+    let state = w.g.state();
+    let rs = readers(&state, &w.sealing(), &Content::text("hello", false), &w.id("phone"), &[], None);
+    let copy = seal(&w.phone, &rs, &made(1), &Content::text("hello", false)).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    // The wrap and the commitment hold; one byte of the payload does not.
+    let mut bent = c.copy.payload.unwrap().to_vec();
+    bent[0] ^= 1;
+    let changed = Checked { copy: Copy { payload: Some(&bent), ..c.copy.clone() }, ..c.clone() };
+    assert_eq!(open(&changed, &w.id("laptop"), &w.stores["laptop"], &state), Err(RULE_PAYLOAD));
+    assert!(matches!(open(&c, &w.id("laptop"), &w.stores["laptop"], &state), Ok(Opened::Content { .. })));
+}
+
+// refuses: marks/shape
+#[test]
+fn saved_marks_of_another_shape_are_refused() {
+    let shape = Rule::field("marks/shape");
+    // A map without the floor, and a secret's entry of two fields.
+    assert_eq!(Marks::decode(&[0xa0]).err(), Some(shape));
+    let good = Marks::default().encode();
+    assert!(Marks::decode(&good).is_ok());
+    let mut v = cbor::decode(&good).unwrap();
+    if let Value::Map(m) = &mut v {
+        m.retain(|(n, _)| *n != 3);
+        m.push((3, Value::Array(vec![Value::Array(vec![Value::Uint(1), Value::Uint(2)])])));
+        m.sort_by_key(|(n, _)| *n);
+    }
+    assert_eq!(Marks::decode(&v.encode()).err(), Some(shape));
 }

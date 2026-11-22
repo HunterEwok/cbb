@@ -964,6 +964,7 @@ fn the_admins_record_of_a_grant_is_read_as_a_record() {
 /// A leaf handed two records of its root at one seq stops obeying that
 /// root: its grant is over, and it takes a grant again only one made under
 /// a higher recovery seq.
+// refuses: grants/fork, grants/forked
 #[test]
 fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
     use crate::records::body::{Device, ROLE_MEMBER};
@@ -1048,6 +1049,7 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
 /// starts afresh, an old grant or an old binding after a later change does
 /// nothing, and a leaf that forgot it was waiting still waits. An ordinary
 /// leaf follows the change.
+// refuses: grants/rebind
 #[test]
 fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     use crate::testkit::k;
@@ -1190,6 +1192,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
 /// a later version's fields are kept and written back, an unknown field
 /// below 256 is refused, and the reader gives the kept state only with the
 /// stored head applied.
+// refuses: grants/state, grants/state-newer
 #[test]
 fn a_stored_leaf_state_reads_back_in_one_spelling() {
     use crate::testkit::k;

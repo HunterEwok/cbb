@@ -125,6 +125,37 @@ func TestFormatGate(t *testing.T) {
 		t.Fatalf("refused by a verdict: %+v, %v", g, err)
 	}
 
+	// A rule refused by what the reader holds: a test marked with it
+	// counts when its body names the rule or one of its constants.
+	writeIn(t, dir, "src/commands/mod.rs", `pub const RULE_STALE: Rule = Rule::field("commands/stale");
+pub const RULE_LATE: Rule = Rule::field("commands/late");
+let bad = Rule::field("counters/shape");`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.of != 7 || strings.Join(g.missing, ",") != "commands/late,commands/stale,counters/shape" {
+		t.Fatalf("before the tests: %+v, %v", g, err)
+	}
+	writeIn(t, dir, "src/commands/tests.rs", `
+// refuses: commands/stale, commands/late
+#[test]
+fn a_stale_command() {
+    assert_eq!(take(&old), Err(RULE_STALE));
+}
+
+// refuses: counters/shape
+#[test]
+#[cfg(feature = "x")]
+fn saved_counters() {
+    assert_eq!(Counters::decode(&[0xa0]).err(), Some(Rule::field("counters/shape")));
+}
+
+// refuses: commands/late
+fn not_a_test() { RULE_LATE }
+`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.met != 6 || strings.Join(g.missing, ",") != "commands/late" {
+		t.Fatalf("marked tests: %+v, %v", g, err)
+	}
+
 	writeIn(t, dir, "vectors/c.json", `{`)
 	if _, err := formatGate(src, vectors); err == nil {
 		t.Error("bad vectors: taken")

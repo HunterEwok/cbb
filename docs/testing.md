@@ -409,7 +409,12 @@ Under the table are the hard gates, which have no floor and fail the job at once
   is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
   `-vectors`): a vector with that `rule` and the verdict `refuse`, or one whose `verdict`
   is the rule itself (`"verdict": "content/type"`, as wave 4's and push's vectors write
-  it); the rules of a test's own tables (`tests.rs`) are not counted;
+  it); the rules of a test's own tables (`tests.rs`) are not counted. A rule whose refusal
+  depends on what the reader already holds (a command's counter, a grant's earlier branch,
+  a key no longer current, the clock) cannot be a vector of bytes alone: a Rust test in
+  `core/src` marked `// refuses: <rule>, <rule>` on the line above its `#[test]` counts
+  instead, when its body names the rule, as its string or one of its constants. A stateful
+  vector format, which the Go reader would check too, is for 0.7;
 - no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
   `tools/mutants/check.sh` in the nightly jobs).
 
