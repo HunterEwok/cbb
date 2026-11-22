@@ -1607,16 +1607,6 @@ the QR code dials the computer, and nothing is announced:
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
   device whose certificate `fp` names.
-- While it listens the joiner announces itself by mDNS (section 3: TXT `j=1` and `f`, its
-  fingerprint), so that a computer of the group admits it by the six digits alone, which the
-  user types from the joiner's screen, where a phone scans the QR code. The computer browses
-  for such devices for up to 10 s and MUST refuse when more than one announces itself, as a
-  joiner refuses more than one window: each other announcement would be one more guess at
-  the code. It then dials the one with the code, its addresses (at most 4) and `f` taking
-  the place of the QR code's, and MUST stop at the first attempt in which it sent its CPace
-  message, as that attempt tried the code. The announcement is not authenticated, and needs
-  not be: CPace gives a device that does not know the code one guess per attempt and nothing
-  to test guesses with offline, and the code admits only the device the user sees.
 - A joiner that listens takes one attempt at a time; a member must start the TLS handshake
   within 5 s of connecting and prove that it knows the code (its CPace message and tag)
   within 10 s, a running attempt whose member has not proved it after 2 s ends when another

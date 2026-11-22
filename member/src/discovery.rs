@@ -162,41 +162,6 @@ fn start_trace() {
     }
 }
 
-/// Announces a device that listens to join (docs/protocol.md section 3,
-/// TXT `j=1` and `f`, its certificate's fingerprint), so that a computer of
-/// the group finds it by the code it shows. The announcement ends when the
-/// returned value is dropped; None when mDNS is not at hand.
-pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<Announcement> {
-    let daemon = mdns_sd::ServiceDaemon::new().ok()?;
-    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
-    let only = interfaces::only();
-    if !only.is_empty() {
-        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
-        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
-    }
-    let txt = [("v", "1"), ("j", "1"), ("f", fingerprint)];
-    let info = mdns_sd::ServiceInfo::new(SERVICE, id.as_str(), &format!("{}.", id.host_name()), "", port, &txt[..])
-        .ok()?
-        .enable_addr_auto();
-    daemon.register(info).ok()?;
-    // A joiner waits for minutes: a daemon whose cache another device
-    // floods stops announcing it, and the QR code still works.
-    let watched = daemon.clone();
-    std::thread::spawn(move || {
-        let mut flood = Flood::default();
-        loop {
-            std::thread::sleep(CACHE_CHECK);
-            // A daemon shut down takes no more commands.
-            let Ok(rx) = watched.get_metrics() else { return };
-            if flood.check(rx.recv_timeout(CACHE_CHECK).ok().map(|m| sum_cached(&m))) {
-                let _ = watched.shutdown();
-                return;
-            }
-        }
-    });
-    Some(Announcement(daemon))
-}
-
 /// Announces a phone's open home window of 0.6 (docs/protocol.md,
 /// "Pairing in 0.6"): the phone's device ID, as text, as the instance, its
 /// member port, and TXT `v=1`, `g=<tag>`, `p=1`, the hash of its member key
@@ -218,7 +183,7 @@ pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str, window
     Some(Announcement(daemon))
 }
 
-/// An announcement of announce_joiner or announce_window: dropping it shuts the mDNS daemon
+/// An announcement of announce_window: dropping it shuts the mDNS daemon
 /// down, which sends the goodbyes.
 pub struct Announcement(mdns_sd::ServiceDaemon);
 
@@ -232,26 +197,6 @@ impl Drop for Announcement {
 /// Go's service does, and how long it waits after the first for others.
 pub const PAIRING_BROWSE: Duration = Duration::from_secs(5);
 const PAIRING_SETTLE: Duration = Duration::from_secs(2);
-
-/// The addresses of the members that announce an open pairing window (TXT
-/// `p=1`), for a device that joins with a code alone: browsed for up to
-/// wait, then a moment more for the others; an error when none is found.
-/// More than one window is refused, as in Go: the code fits only one.
-/// A home window of 0.6 is found by [`find_window`].
-pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
-    use crate::error::Error;
-    let open = browse_txt(wait, |info| (info.get_property_val_str("p") == Some("1")).then_some(()))?;
-    match open.len() {
-        0 => Err(Error::msg(
-            "no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address",
-        )),
-        1 => Ok(open.into_values().next().map(|(a, ())| a).unwrap_or_default()),
-        n => Err(Error::msg(format!(
-            "{n} devices announce a pairing window ({}); give the address that cbb pair showed",
-            open.keys().cloned().collect::<Vec<_>>().join(", ")
-        ))),
-    }
-}
 
 /// A home window that mDNS finds (TXT `p=1` with `i`, docs/protocol.md,
 /// "Pairing in 0.6"): its addresses, its ID and the hash of the member's
@@ -299,52 +244,6 @@ pub fn find_window(wait: Duration, at: Option<SocketAddr>) -> crate::error::Resu
             "{n} devices announce a pairing window; give the address that cbb pair showed, or the link of its QR code"
         ))),
     }
-}
-
-/// The device that announces that it waits to join (TXT `j=1` with its
-/// certificate's fingerprint `f`, docs/protocol.md section 3), with its
-/// addresses, for cbb pair with a code alone, as Go's findJoiners. More
-/// than one is refused, as find_pairing refuses more than one window: the
-/// code serves one device, and each other one would be one more guess.
-pub fn find_joiner(wait: Duration) -> crate::error::Result<(Vec<SocketAddr>, String)> {
-    let waiting = browse_txt(wait, |info| {
-        let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
-        (info.get_property_val_str("j") == Some("1")).then(|| fp.to_string())
-    })?;
-    the_one_joiner(waiting.into_values().collect())
-}
-
-/// The one device of those that wait to join, its addresses cut to a QR
-/// code's.
-fn the_one_joiner(mut waiting: Vec<(Vec<SocketAddr>, String)>) -> crate::error::Result<(Vec<SocketAddr>, String)> {
-    match waiting.len() {
-        0 => Err(crate::error::Error::msg(
-            "no device that waits to join was found; on the new device, choose to join a group (cbb pair there) and type the code it shows",
-        )),
-        1 => {
-            let (mut addrs, fp) = waiting.remove(0);
-            addrs.truncate(cbb_core::pair::MAX_ADDRS);
-            Ok((addrs, fp))
-        }
-        n => Err(crate::error::Error::msg(format!(
-            "{n} devices wait to join on the network; scan the QR code that the new device shows, or give its address"
-        ))),
-    }
-}
-
-/// The addresses of the members of the group tag that browsing finds, one
-/// list for each member, for a new phone that restores the group with its
-/// recovery key: browsed for up to wait, then a moment more for the others.
-pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
-    let found = browse_txt(wait, |info| (info.get_property_val_str("g") == Some(tag)).then_some(()))?;
-    Ok(found.into_values().map(|(a, ())| a).collect())
-}
-
-/// The members of any group that browsing finds for up to wait, by
-/// device, for a restore with a card's recovery key, which names no group.
-pub fn find_any_group(wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
-    let found = browse_txt(wait, |info| info.get_property_val_str("g").filter(|g| !g.is_empty()).map(|_| ()))?;
-    Ok(found.into_values().map(|(a, ())| a).collect())
 }
 
 /// Browses for up to wait for the members whose TXT pick takes, then a
@@ -1524,18 +1423,6 @@ mod tests {
 
     /// A code alone admits only when one device waits: two would give a
     /// device that only pretends to wait a guess at the code.
-    #[test]
-    fn a_code_alone_needs_one_waiting_device() {
-        let addr = |i: u8| SocketAddr::from(([192, 168, 1, i], 8764));
-        assert!(the_one_joiner(Vec::new()).is_err());
-        let many: Vec<SocketAddr> = (1..=9).map(addr).collect();
-        let (addrs, fp) = the_one_joiner(vec![(many, "f1".into())]).unwrap();
-        assert_eq!((addrs.len(), fp.as_str()), (cbb_core::pair::MAX_ADDRS, "f1"));
-        let two = vec![(vec![addr(1)], "f1".to_string()), (vec![addr(2)], "f2".to_string())];
-        let e = the_one_joiner(two).unwrap_err();
-        assert!(e.message().contains("2 devices wait to join"), "{e:?}");
-    }
-
     /// One source holds at most MAX_HANDSHAKES_PER_SOURCE of the
     /// handshake slots, so idle connections from one device leave the
     /// others room; loopback connections only count in all.
