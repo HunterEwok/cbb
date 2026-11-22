@@ -36,6 +36,8 @@ Item {
 
     // Whether this phone may act on the device: an admin, not on itself.
     readonly property bool acts: app.admin && app.member.running && !page.device.self
+    // It offered this phone an admin key when it paired and is no admin yet.
+    readonly property bool offersAdmin: (app.member.groupState.offers_admin || []).indexOf(page.device.id) >= 0
 
     RemorsePopup { id: remorse }
 
@@ -70,11 +72,9 @@ Item {
                                            function() { app.manage("remove", page.device.id) })
             }
             MenuItem {
-                // The admin key comes from the device's hello: a computer's
-                // with the admin capability, or a phone's.
-                visible: page.acts && app.root && !page.device.admin
-                         && (Devices.can(page.device, "admin") || page.device.role === "phone")
-                         && page.device.online
+                // The admin key is the one the device offered this phone when
+                // it paired, as the group view says (offers_admin).
+                visible: page.acts && app.root && !page.device.admin && page.offersAdmin
                 text: qsTr("Make an admin")
                 onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),
                                            function() { app.manage("make_admin", page.device.id) })

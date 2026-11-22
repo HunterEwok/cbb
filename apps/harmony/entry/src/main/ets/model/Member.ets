@@ -78,10 +78,18 @@ export interface Why {
   detail?: string;
 }
 
+// A device as the group view names it: whether it offered this phone an
+// admin key when it paired and is no admin yet.
+interface GroupDevice {
+  device?: string;
+  offers_admin?: boolean;
+}
+
 // The member's group of 0.6, the part the app reads: its key level and
 // how long copies and secrets live (D-129), null for the default.
 interface GroupView {
   key_level?: string;
+  devices?: GroupDevice[];
   ttl_ms?: number | null;
   secret_ttl_ms?: number | null;
 }
@@ -233,6 +241,9 @@ export class Member {
   @Trace why: Why[] = [];
   // The group's key level (proven, hardware or files), as its records set it.
   @Trace keyLevel: string = 'hardware';
+  // The devices that offered this phone an admin key at pairing and are no
+  // admins yet: the root may make them admins.
+  @Trace offersAdmin: string[] = [];
   // How long a copy and a secret live, in milliseconds (D-129).
   @Trace ttlMs: number = DEFAULT_TTL_MS;
   @Trace secretTtlMs: number = DEFAULT_SECRET_TTL_MS;
@@ -568,7 +579,7 @@ export class Member {
     if ((copy.text ?? '').length === 0) {
       return;
     }
-    this.write(copy.text ?? '', copy.kind === 'secret', copy.kind === 'secret' ? SECRET_TTL_MS : 0);
+    this.write(copy.text ?? '', copy.kind === 'secret', copy.kind === 'secret' ? (copy.ttl_ms ?? SECRET_TTL_MS) : 0);
     await this.call<Object>('took', { 'id': copy.id } as Record<string, Object>);
     this.dismissReceived();
   }
@@ -746,6 +757,11 @@ export class Member {
       this.keyLevel = level;
     }
     if (g.ok !== undefined) {
+      const offers = (g.ok.devices ?? []).filter((d: GroupDevice) => d.offers_admin === true)
+        .map((d: GroupDevice) => d.device ?? '');
+      if (JSON.stringify(offers) !== JSON.stringify(this.offersAdmin)) {
+        this.offersAdmin = offers;
+      }
       const ttl = g.ok.ttl_ms ?? DEFAULT_TTL_MS;
       const secretTtl = g.ok.secret_ttl_ms ?? DEFAULT_SECRET_TTL_MS;
       if (ttl !== this.ttlMs) {

@@ -20,6 +20,9 @@ made with 0.5 is set up again once. The details follow.
   `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone. All four
   phone apps show both to admins in Settings, "Copy lifetime" and "Secret lifetime", and Home's
   last received line goes when the copy's own lifetime runs out (D-129).
+- The root's "Make it an admin" shows in all four phone apps for a device that offered the
+  phone an admin key when it paired (the group view's `offers_admin`), and a secret leaves the
+  phone's clipboard when the lifetime its sender stamped runs out.
 - Right after a group is made the root phone offers where to save its recovery key: "Write on
   a sheet", which shows the sheet and prints it or saves it with the system's own tools, with
   the warning that a saved file is the group's key, and "Write to YubiKey", which waits for the

@@ -367,6 +367,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Device(
                 id = it.device, name = it.name, online = self || p != null, role = if (it.role == "computer") "member" else it.role,
                 os = it.os.ifEmpty { null }, isSelf = self, admin = it.admin, isRoot = it.device == gs.rootDevice,
+                canMakeAdmin = gs.isRoot && !self && it.offersAdmin,
                 keysInFile = p?.keyStore == KitRecords.FILE, frozen = it.frozen,
                 device = if (self) ownDevice.cleaned else null, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
                 hub = if (it.hub) HubMark.HUB else null,
@@ -1432,7 +1433,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 }, "image").start()
             }
         } else {
-            onCopy?.invoke(c.text, c.kind)
+            onCopy?.invoke(c.text, c.kind, c.ttlMS)
             runCatching { n.took(c.id) }
             seen(c.text)
         }
@@ -1646,7 +1647,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (image == null) {
             n.took(w.id)
             seen(w.text)
-            return Got.Text(w.text, if (w.kind == Member.Kind.MEDIA) Member.Kind.TEXT else w.kind)
+            return Got.Text(w.text, if (w.kind == Member.Kind.MEDIA) Member.Kind.TEXT else w.kind, w.ttlMS)
         }
         if (!connected(n)) throw Failure(Failure.Kind.NO_COMPUTERS)
         val f = fetchImage(n, w, image, quiet = false) ?: throw Failure(Failure.Kind.NO_COMPUTERS)
@@ -1717,7 +1718,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** What the button fetched for the phone's clipboard: a text, or an image in the app's cache with its text. */
     sealed class Got {
-        data class Text(val text: String, val kind: Member.Kind) : Got()
+        /** ttlMS: the lifetime its sender stamped (D-129), after which a secret leaves the clipboard. */
+        data class Text(val text: String, val kind: Member.Kind, val ttlMS: Long? = null) : Got()
 
         data class Image(val file: File, val alt: String) : Got()
 
@@ -1769,7 +1771,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * Gets each text a computer copied, as it arrives, to put on the
      * phone's clipboard; on the node's thread.
      */
-    @Volatile var onCopy: ((String, Member.Kind) -> Unit)? = null
+    @Volatile var onCopy: ((String, Member.Kind, Long?) -> Unit)? = null
 
     /** Called on the events' thread when the last received copy changes. */
     @Volatile var onReceived: (() -> Unit)? = null

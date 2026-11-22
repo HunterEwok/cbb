@@ -282,7 +282,7 @@ final class LiveGroup: GroupController {
             let me = $0.device == g.device
             return .init(id: $0.device, name: $0.name, online: me || online.contains($0.device), role: $0.role == "computer" ? "member" : $0.role,
                          os: $0.os.isEmpty ? nil : $0.os, isSelf: me, admin: $0.admin, isRoot: $0.device == gs.rootDevice,
-                         keysInFile: keyStores[$0.device] == Records.file, frozen: $0.frozen,
+                         canMakeAdmin: gs.isRoot && !me && $0.offersAdmin, keysInFile: keyStores[$0.device] == Records.file, frozen: $0.frozen,
                          device: me ? Self.ownDevice : infos[$0.device], mode: me ? modeBox.mode : modes[$0.device],
                          actions: actions[$0.device] ?? [],
                          muted: AppModel.Hold(ms: me ? modeBox.mutedUntilMS : mutes[$0.device]),
@@ -1403,7 +1403,7 @@ final class LiveGroup: GroupController {
         } else if let part = Images.part(of: c.media) {
             try await receive(c, image: part)
         } else if !c.text.isEmpty {
-            write(c.text, kind: c.kind)
+            write(c.text, kind: c.kind, ttlMS: c.ttlMS)
         }
         try node.took(c.id)
         // The app's own write is no copy: the next opening does not send it.
@@ -1610,15 +1610,17 @@ final class LiveGroup: GroupController {
         await Gallery.keep(data, type: part.type ?? "image/png")
     }
 
-    /// How long a secret stays in the clipboard (docs/design.md, "Secrets").
+    /// How long a secret stays in the clipboard when it carries no lifetime
+    /// of its own (docs/design.md, "Secrets"; D-129).
     nonisolated static let secretTTL: TimeInterval = 60
 
     /// Puts a text into the phone's clipboard; a secret stays on this phone
-    /// only and for its remaining minute.
-    private func write(_ text: String, kind: Member.Kind) {
+    /// only and for its lifetime, as its sender stamped it.
+    private func write(_ text: String, kind: Member.Kind, ttlMS: Int64? = nil) {
         if kind == .secret {
+            let ttl = ttlMS.map { TimeInterval($0) / 1000 } ?? Self.secretTTL
             UIPasteboard.general.setItems([[UTType.plainText.identifier: text]],
-                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(Self.secretTTL)])
+                                          options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(ttl)])
         } else {
             UIPasteboard.general.string = text
         }
