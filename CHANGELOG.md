@@ -3037,6 +3037,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- "Create a group" on the iPhone and Android apps keeps the new group's pairing window open:
+  the app went Home as soon as the group was made, which closed the window the Start screen
+  had just opened, so no device could join. The phone now goes Home when the window ends.
 - The Swift kit's tests cover its 0.6 code: the records' levels, a hello's device, manifests
   and names, notices and the list of a change of root, the reasons why a phone does not sync,
   the home network's addresses, the keychain signer and the root phone's away calls; code

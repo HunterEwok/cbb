@@ -394,16 +394,21 @@ class AppModel(private val app: Context) {
      * (its recovery sheet shows over the window), then opens the window
      * until a device joins. "Add a device" runs it as its effect, so leaving
      * it closes the window. Answers whether a device joined.
+     *
+     * A group made here takes the phone Home only once the window ends:
+     * Start shows this window, and leaving Start while it is open would
+     * close it the moment it opened.
      */
     suspend fun addByWindow(): Boolean {
         message = null
+        var made = false
         try {
             if (!group.hasGroup) {
                 busy = true
                 newSheet = group.newGroup06()
+                made = true
                 busy = false
                 update()
-                phase = Phase.HOME
             }
             val name = group.openWindow { qr, digits ->
                 main.post {
@@ -424,6 +429,7 @@ class AppModel(private val app: Context) {
             busy = false
             windowQr = null
             windowDigits = null
+            if (made && phase == Phase.START) phase = Phase.HOME
         }
     }
 
