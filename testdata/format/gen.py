@@ -351,10 +351,10 @@ SIG2_HASH = sha(b"a second key of a later version")
 SIG2 = fake("a second signature of a later version", 2420)
 
 
-def envelope2(kind, signer, body_map, sig2=SIG2):
+def envelope2(kind, signer, body_map, sig2=SIG2, signer2=SIG2_HASH):
     """The envelope [body, sig, sig2] of body_map with signer2 set; its
     damaged twin, whose sig2 was swapped on the way, is envelope2(...)[2]."""
-    body = enc({**body_map, 8: SIG2_HASH})
+    body = enc({**body_map, 8: signer2})
     env = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), sig2])
     swapped = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), fake("another second signature", 2420)])
     return env, body, swapped
@@ -1239,6 +1239,9 @@ def credential_vectors():
                  "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
     env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
+    env, _, _ = envelope2("credential", ROOT, m, signer2=SIG2_HASH[:31])
+    refuse.append({"name": "a second signer's hash of 31 bytes", "rule": "credentials/signer2", "verdict": "refuse",
                    "envelope": env.hex()})
     # The body's ceiling, 16 KiB: a text in the optional zone fills it.
     def sized(n):
@@ -2588,6 +2591,12 @@ def intro_vectors(records_take):
     add(f"{fit + 1} records of {len(big['envelope']) // 2} bytes, past {max_bytes}", [(big, fit + 1)], "intro/size")
     add(f"{max_records + max_heads + 1} envelopes, refused before any is read",
         [(small, max_records + max_heads + 1)], "intro/size")
+    # What the records' reader refuses, and a message of another form,
+    # written whole (`message`).
+    not_record = enc([enc({}), bytes(64)]).hex()
+    out.append({"name": "an envelope that is no record", "runs": [[small["envelope"], 1], [not_record, 1]],
+                "rule": "intro/record"})
+    out.append({"name": "records that are not an array", "message": enc({0: 8, 2: 1}).hex(), "rule": "intro/shape"})
     return out
 
 
@@ -2789,6 +2798,9 @@ def wave3_vectors(records_take):
     mp("a Welcome with claim ages (field 3, retired)", "welcome", {**welcome, 3: [[claims[0], 1]]},
        "welcome/retired")
     mp("a Welcome with counted claims (field 8, retired)", "welcome", {**welcome, 8: claims}, "welcome/retired")
+    # Each table's own shape, after the samples the readers take first.
+    for table in ("hubs", "guest", "pair/info"):
+        mp(f"a {table} that is not a map", table, [1], table + "/shape")
     return take, refuse, maps
 
 
@@ -3033,6 +3045,12 @@ def card_vectors():
     env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "envelope": env.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
+    no("version 0", card({4: 0}), "card/shape")
+    no("no expiry", {k: v for k, v in card().items() if k != 7}, "card/shape")
+    no("an empty name", card({10: ""}), "card/name")
+    no("a name with a line end", card({10: "a forwarder\nin Europe"}), "card/name")
+    env, _, _ = envelope2("card", OPERATOR, card(), signer2=SIG2_HASH[:31])
+    refuse.append({"name": "a second signer's hash of 31 bytes", "rule": "card/signer2", "envelope": env.hex()})
     return take, refuse
 
 
@@ -4084,7 +4102,17 @@ def main():
         "codes": code_vectors(),
         "welcome_parts": welcome_parts_vectors(),
         "intros": intro_vectors(rt),
+        # Welcomes the Welcome's reader refuses after its table.
+        "welcomes": [{"name": "a record that is no record", "rule": "welcome/record",
+                      "welcome": enc({1: ROOT.key, 2: [[enc({}), bytes(64)]], 5: T0, 9: RECOVERY.key,
+                                      11: RECOVERY2.key, 12: fake("welcome digest", 32)}).hex()}],
     }
+    # A Welcome is read only after the code is confirmed.
+    welcome_frame = next(t["frame"] for t in files["frames.json"]["take"] if t["name"] == "welcome")
+    files["frames.json"]["pairing"] = [{"name": "a Welcome before the confirm", "frame": welcome_frame,
+                                        "confirmed": False, "rule": "pair/early-welcome"},
+                                       {"name": "a Welcome after the confirm", "frame": welcome_frame,
+                                        "confirmed": True}]
     files["wave4.json"] = wave4_vectors()
     files["messages5.json"] = wave5_vectors()
     files["future.json"] = future_vectors()

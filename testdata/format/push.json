@@ -1107,5 +1107,31 @@
    "length": 64,
    "verdict": "push/hello/credentials"
   }
+ ],
+ "maps": [
+  {
+   "name": "a push-renew that is not a map",
+   "table": "push-renew",
+   "value": "8101",
+   "rule": "push-renew/shape"
+  },
+  {
+   "name": "a push/send that is not a map",
+   "table": "push/send",
+   "value": "8101",
+   "rule": "push/send/shape"
+  },
+  {
+   "name": "a push/sent that is not a map",
+   "table": "push/sent",
+   "value": "8101",
+   "rule": "push/sent/shape"
+  },
+  {
+   "name": "a pushbody that is not a map",
+   "table": "pushbody",
+   "value": "8101",
+   "rule": "pushbody/shape"
+  }
  ]
 }

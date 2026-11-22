@@ -2093,6 +2093,12 @@ fn intros_match_their_vectors() {
     let cases = v["intros"].as_array().unwrap();
     assert!(cases.len() >= 6);
     for c in cases {
+        // A message of another form is written whole.
+        if let Some(m) = c["message"].as_str() {
+            let got = Intro::read(&hex(m)).err().map(|r| r.name());
+            assert_eq!(got, c["rule"].as_str(), "{}", c["name"]);
+            continue;
+        }
         let mut envs = Vec::new();
         for run in c["runs"].as_array().unwrap() {
             let env = hex(run[0].as_str().unwrap());
@@ -2114,6 +2120,29 @@ fn intros_match_their_vectors() {
             Some(rule) => assert_eq!(got.err().map(|r| r.name()), rule.as_str(), "{}", c["name"]),
             None => assert_eq!(got, Ok(n), "{}", c["name"]),
         }
+    }
+}
+
+/// The Welcomes the Welcome's reader refuses after its table, and the
+/// pairing frames read before and after the code is confirmed
+/// (`messages3.json` "welcomes", `frames.json` "pairing").
+#[test]
+fn welcomes_and_pairing_frames_match_their_vectors() {
+    let read = |name: &str| -> serde_json::Value {
+        let path = format!("{}/../testdata/format/{name}", env!("CARGO_MANIFEST_DIR"));
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    };
+    let hex = |s: &str| -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    for c in read("messages3.json")["welcomes"].as_array().unwrap() {
+        let got = Welcome::decode(&hex(c["welcome"].as_str().unwrap())).err().map(|r| r.name());
+        assert_eq!(got, c["rule"].as_str(), "{}", c["name"]);
+    }
+    for c in read("frames.json")["pairing"].as_array().unwrap() {
+        let f = hex(c["frame"].as_str().unwrap());
+        let got = read_pairing(&f, c["confirmed"].as_bool().unwrap()).err().map(|r| r.name());
+        assert_eq!(got, c["rule"].as_str(), "{}", c["name"]);
     }
 }
 

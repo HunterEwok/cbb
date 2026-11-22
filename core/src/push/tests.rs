@@ -686,6 +686,12 @@ fn the_vectors_are_what_the_readers_say() {
         assert_eq!(got, want(u), "unifiedpush {}", name(u));
         assert!(t.len() <= MAX_TOKEN);
     }
+    for m in v["maps"].as_array().unwrap() {
+        let t = ALL.iter().find(|t| t.name() == m["table"].as_str().unwrap()).unwrap();
+        let value = unhex(&m["value"]);
+        let got = check_map(t, &crate::format::cbor::decode(&value).unwrap()).err().map(Rule::name);
+        assert_eq!(got, m["rule"].as_str(), "map {}", name(m));
+    }
     for m in v["messages"].as_array().unwrap() {
         let f = unhex(&m["frame"]);
         let msg = frame::read(&f, frame::LIMIT_MEMBER).unwrap();
