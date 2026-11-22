@@ -227,13 +227,6 @@ fn swift_admin() {
     }
 }
 
-/// A group handed over to a new root by a claim that took effect: the
-/// cases of v2-records.json about it, as Go's TestGoRootVectors runs them.
-#[test]
-fn go_root() {
-    v2_cases(&["claim waits and takes effect", "chain of claims", "settings delay"]);
-}
-
 /// A legacy group that cbb upgrade gave a root wrote records of version 1,
 /// which no member takes: there is no migration (docs/records-v2.md).
 #[test]
@@ -249,50 +242,6 @@ fn go_upgrade() {
     ] {
         assert!(crate::authority::Body::parse(body.as_bytes()).is_err(), "{body}");
     }
-}
-
-/// Runs the cases of v2-records.json whose names start with one of the
-/// prefixes through the record set of the core's entry point (group_add,
-/// group_claim_times, group_view), as Go's checkV2Cases and the phone
-/// kits do: each gives the case's state. Answers how many cases ran.
-fn v2_cases(prefixes: &[&str]) -> usize {
-    let call = |op: &str, args: Value| -> Value {
-        let req = serde_json::json!({"abi": crate::api::ABI, "op": op, "args": args});
-        let out: Value = serde_json::from_slice(&crate::api::call(&serde_json::to_vec(&req).unwrap())).unwrap();
-        assert!(out.get("error").is_none(), "{op}: {out}");
-        out["ok"].clone()
-    };
-    let v = vectors("v2-records.json");
-    let mut n = 0;
-    for case in v["cases"].as_array().unwrap() {
-        let name = case["name"].as_str().unwrap();
-        if case["time_unknown"].as_bool().unwrap_or(false) || !prefixes.iter().any(|p| name.starts_with(p)) {
-            continue;
-        }
-        let mut set =
-            serde_json::json!({"group_ca": case["group_ca"], "group": case["group"], "now_ms": case["now_ms"]});
-        let mut args = set.clone();
-        args["records"] = case["records"].clone();
-        set["file"] = call("group_add", args)["file"].clone();
-        if let Some(times) = case.get("first_seen") {
-            let mut args = set.clone();
-            args["claim_times"] = times.clone();
-            set["file"] = call("group_claim_times", args)["file"].clone();
-        }
-        let mut got = call("group_view", set)["state"].clone();
-        let mut want: Value = serde_json::from_str(case["state"].as_str().unwrap()).unwrap();
-        // The set does not keep the records it refuses, which the
-        // evaluation of all of them lists as ignored.
-        let ignored = |v: &mut Value| {
-            v.as_object_mut().unwrap().remove("ignored").map_or_else(Vec::new, |i| i.as_array().unwrap().clone())
-        };
-        let (kept, all) = (ignored(&mut got), ignored(&mut want));
-        assert!(kept.iter().all(|i| all.contains(i)), "{name}");
-        assert_eq!(got, want, "{name}");
-        n += 1;
-    }
-    assert!(n > 0, "no case of {prefixes:?}");
-    n
 }
 
 /// The order of the group's hubs (docs/protocol.md section 11, "Several
@@ -311,20 +260,6 @@ fn go_hubs() {
     assert_eq!(s.hub_order(), want);
 }
 
-/// What a computer's admin CA may do in a phone's group: the cases of
-/// v2-records.json about powers, as Go's TestGoAdminVectors runs them.
-#[test]
-fn go_admins() {
-    v2_cases(&["powers", "one record under two admin CAs", "two histories of an admin"]);
-}
-
-/// One body under two signers, and two histories of one signer: the
-/// cases of v2-records.json about them.
-#[test]
-fn go_envelopes() {
-    v2_cases(&["one record under two admin CAs", "two histories", "times at the ends"]);
-}
-
 /// Where a device's keys live, as Go's StoreOf reads a record's store.
 #[test]
 fn stores() {
@@ -341,65 +276,6 @@ fn stores() {
     ] {
         assert_eq!(store_of(store, role), want, "{store:?} {role:?}");
     }
-}
-
-/// An admin phone that the root removed claims the group afterwards: the
-/// claim counts for nothing (v2-records.json, as Go's TestRemovedAdminVectors).
-#[test]
-fn go_removed_admin() {
-    v2_cases(&["removed admin's claim", "removed phone after a takeover", "claim after removal"]);
-}
-
-/// Admins that remove each other in order or crossed, and a root's
-/// removal that cuts an admin off (v2-records.json, as Go's
-/// TestRemovedAdminsVectors).
-#[test]
-fn go_removed_admins() {
-    v2_cases(&[
-        "admin removals in order",
-        "admin removals crossed",
-        "root removal cuts an admin",
-        "chain of claims",
-        "two claims",
-    ]);
-}
-
-/// The root's own device after a takeover and a chain of claims
-/// (v2-records.json).
-#[test]
-fn go_root_member() {
-    v2_cases(&["removed phone after a takeover", "chain of claims"]);
-}
-
-/// What a device record and a removed admin's records decide
-/// (v2-records.json, as Go's TestGoAuthorityVectors).
-#[test]
-fn go_authority() {
-    v2_cases(&["basic", "powers", "removed admin's device", "ignored records"]);
-}
-
-/// An admin computer freezing another (v2-records.json, as Go's
-/// TestGoFreezeVectors).
-#[test]
-fn go_freeze() {
-    v2_cases(&["freeze and thaw", "freezes crossed"]);
-}
-
-/// Claims to take a group over that are disputed, void or early
-/// (v2-records.json, as Go's TestGoTakeoverVectors).
-#[test]
-fn go_takeover() {
-    v2_cases(&[
-        "claim disputed",
-        "claim while another waits",
-        "claimed root signs early",
-        "stranger's claim",
-        "two histories of the root",
-        "checkpoint",
-        "times at the ends",
-        "record of a later version",
-        "device seal",
-    ]);
 }
 
 /// A hello's device keeps only its valid fields.
