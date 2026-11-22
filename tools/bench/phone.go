@@ -231,11 +231,18 @@ func slirpGuest(ctx context.Context) error {
 	if dev == "" || own == slirpAddr {
 		return nil // no user-mode network, or the address is there
 	}
-	script := fmt.Sprintf("ip addr add %[1]s/32 dev %[2]s && "+
-		"iptables -t nat -A PREROUTING -i %[2]s -d %[1]s -p udp -j DNAT --to-destination %[3]s",
-		slirpAddr, dev, own)
+	rule := fmt.Sprintf("PREROUTING -i %s -d %s -p udp -j DNAT --to-destination %s", dev, slirpAddr, own)
+	script := fmt.Sprintf("ip addr add %s/32 dev %s && iptables -t nat -A %s && iptables -t nat -C %s", slirpAddr, dev, rule, rule)
 	if out, err := exec.CommandContext(ctx, adbPath(), "shell", "su", "0", "sh", "-c", "'"+script+"'").CombinedOutput(); err != nil {
 		return fmt.Errorf("adb: %s on the phone: %v: %s", script, err, out)
+	}
+	// adb shell may not pass the command's status on: the address must be there.
+	out, err = exec.CommandContext(ctx, adbPath(), "shell", "ip", "-4", "-o", "addr", "show").Output()
+	if err != nil {
+		return fmt.Errorf("adb: the phone's addresses: %w", err)
+	}
+	if _, got := slirpDev(string(out)); got != slirpAddr {
+		return fmt.Errorf("the phone did not take %s on %s for the emulator's redirects: %q", slirpAddr, dev, out)
 	}
 	return nil
 }
@@ -689,6 +696,8 @@ func (h *phoneHelper) phoneUDP(ctx context.Context, d *Device) error {
 		go func() {
 			<-ctx.Done()
 			pc.Close()
+			// The emulator keeps a redirect until it is removed.
+			_ = exec.Command(adb, "emu", "redir", "del", fmt.Sprintf("udp:%d", hostPort)).Run()
 		}()
 		go relayUDP(pc, local)
 		_, at, _ := net.SplitHostPort(pc.LocalAddr().String())

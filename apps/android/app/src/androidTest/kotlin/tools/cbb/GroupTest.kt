@@ -526,7 +526,9 @@ class GroupTest {
      * W42 and W5: a computer the phone made an admin is the hub; it admits a
      * computer by itself, which the phone lists (G36); with sync away from
      * home on, the phone, which finds no hub on its network (the emulator
-     * sees no mDNS), reaches it through the tunnel in the app's process,
+     * sees no mDNS) and whose direct connection the hub refuses then (the
+     * bench's relay on the emulator's host would keep it at home), reaches
+     * it through the tunnel in the app's process,
      * marks it as the hub in use and shows the computer behind it online; the app and cbb global say where it stands, also while the hub
      * does not answer.
      */
@@ -561,6 +563,22 @@ class GroupTest {
             model.group.devices.any { it.name == guest }
         }
         assertEquals("off before it is turned on", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
+        // The bench lets the phone reach every member over the emulator's
+        // host, so the phone stays connected to the hub directly and counts
+        // itself at home with it. Away from home it has no such path: the
+        // hub refuses what comes from the emulator's host to its member port
+        // from here on (the tunnel's datagrams still pass), and the phone
+        // takes the tunnel.
+        Bench.run(hub, "iptables -I INPUT -p tcp --dport 8764 -s \$(ip route | awk '/^default/ {print \$3; exit}') -j REJECT --reject-with tcp-reset")
+        try {
+            awayThrough(hub, guest)
+        } finally {
+            Bench.run(hub, "iptables -D INPUT -p tcp --dport 8764 -s \$(ip route | awk '/^default/ {print \$3; exit}') -j REJECT --reject-with tcp-reset")
+        }
+    }
+
+    /** c2 from sync away from home on: the phone through hub's tunnel, guest behind it. */
+    private fun awayThrough(hub: String, guest: String) {
         runBlocking { model.setAway(true) }
         assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
         val status = { runBlocking { model.refresh() }; model.away }
