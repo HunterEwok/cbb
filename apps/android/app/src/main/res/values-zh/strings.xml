@@ -140,6 +140,7 @@
     <string name="error_no_biometric">请先在这部手机上添加指纹或面容：在 Android 10 上，群组的密钥需要它。</string>
     <string name="error_no_network">把这部手机连到家里的 Wi-Fi，然后重试。</string>
     <string name="error_no_nfc">这部手机既没有 NFC，也没有可连接 YubiKey 的 USB 接口。</string>
+    <string name="error_no_screen">CBB 当时不在屏幕上，因此无法请求指纹、面容或屏幕锁定。请打开 CBB 后重试。</string>
     <string name="error_no_screen_lock">请先为这部手机设置屏幕锁定：群组的密钥需要它。</string>
     <string name="error_no_window">此网络上没有你的群组设备在显示六位数字。请在群组的手机上点按 +，或在电脑上选择“添加设备”，然后重试。</string>
     <string name="error_not_admin">只有管理员手机可以执行此操作。</string>

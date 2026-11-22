@@ -140,6 +140,7 @@
     <string name="error_no_biometric">أضف بصمة أو وجهًا على هذا الهاتف أولًا: على Android 10 تحتاج مفاتيح المجموعة إلى ذلك.</string>
     <string name="error_no_network">صِل هذا الهاتف بشبكة Wi-Fi المنزلية، ثم حاول مجددًا.</string>
     <string name="error_no_nfc">لا يحتوي هذا الهاتف على NFC ولا على منفذ USB يقبل YubiKey.</string>
+    <string name="error_no_screen">لم يكن CBB على الشاشة، فلم يستطع طلب بصمة إصبعك أو وجهك أو قفل الشاشة. افتح CBB وحاول مرة أخرى.</string>
     <string name="error_no_screen_lock">اضبط قفل الشاشة على هذا الهاتف أولًا: تحتاجه مفاتيح المجموعة.</string>
     <string name="error_no_window">لا يعرض أي جهاز من مجموعتك ستة أرقام على هذه الشبكة. على هاتف من المجموعة اضغط +، أو على حاسوب اختر «إضافة جهاز»، ثم حاول مرة أخرى.</string>
     <string name="error_not_admin">هاتف المشرف وحده يمكنه فعل هذا.</string>

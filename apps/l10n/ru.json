@@ -271,6 +271,7 @@
   "CBB recovery key": "Ключ восстановления CBB",
   "CBB scans the QR code a computer shows, to add it to your group.": "CBB сканирует QR-код, который показывает компьютер, чтобы добавить его в вашу группу.",
   "CBB sends it to your devices the next time you open it.": "CBB отправит это на ваши устройства, когда вы в следующий раз его откроете.",
+  "CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.": "CBB не было на экране, поэтому оно не смогло попросить отпечаток пальца, лицо или блокировку экрана. Откройте CBB и попробуйте снова.",
   "CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.": "Собственный PIN CBB, не короче шести цифр и не простой вроде 123456. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.",
   "Cancel": "Отмена",
   "Cancel [aurora:BugDialog]": "Отменить",

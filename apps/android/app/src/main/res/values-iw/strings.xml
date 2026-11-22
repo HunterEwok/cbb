@@ -140,6 +140,7 @@
     <string name="error_no_biometric">הוסיפו קודם טביעת אצבע או פנים בטלפון הזה: ב־Android 10 מפתחות הקבוצה צריכים זאת.</string>
     <string name="error_no_network">חברו את הטלפון הזה ל-Wi-Fi של הבית ונסו שוב.</string>
     <string name="error_no_nfc">בטלפון הזה אין NFC וגם לא יציאת USB שמקבלת YubiKey.</string>
+    <string name="error_no_screen">CBB לא היה על המסך, ולכן לא יכול היה לבקש טביעת אצבע, פנים או נעילת מסך. פתחו את CBB ונסו שוב.</string>
     <string name="error_no_screen_lock">הגדירו קודם נעילת מסך בטלפון הזה: המפתחות של הקבוצה צריכים אותה.</string>
     <string name="error_no_window">אף מכשיר בקבוצה שלכם לא מציג שש ספרות ברשת הזו. בטלפון של הקבוצה הקישו +, או במחשב בחרו „הוספת מכשיר”, ונסו שוב.</string>
     <string name="error_not_admin">רק טלפון מנהל יכול לעשות זאת.</string>

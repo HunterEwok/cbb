@@ -271,6 +271,7 @@
   "CBB recovery key": "Ufunguo wa urejeshaji wa CBB",
   "CBB scans the QR code a computer shows, to add it to your group.": "CBB huchanganua msimbo wa QR unaoonyeshwa na kompyuta, ili kuiongeza kwenye kikundi chako.",
   "CBB sends it to your devices the next time you open it.": "CBB itakituma kwenye vifaa vyako utakapoifungua tena.",
+  "CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.": "CBB haikuwa kwenye skrini, kwa hiyo haikuweza kuomba alama ya kidole, uso au kufuli ya skrini. Fungua CBB ujaribu tena.",
   "CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.": "PIN ya CBB yenyewe, angalau tarakimu sita na isiyo rahisi kama 123456. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.",
   "Cancel": "Ghairi",
   "Cancel [aurora:BugDialog]": "Ghairi",

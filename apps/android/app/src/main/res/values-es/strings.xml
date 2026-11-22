@@ -140,6 +140,7 @@
     <string name="error_no_biometric">Primero añade una huella o una cara en este teléfono: en Android 10 las claves del grupo lo necesitan.</string>
     <string name="error_no_network">Conecta este teléfono al Wi-Fi de casa y vuelve a intentarlo.</string>
     <string name="error_no_nfc">Este teléfono no tiene NFC ni un puerto USB que admita una YubiKey.</string>
+    <string name="error_no_screen">CBB no estaba en pantalla, así que no pudo pedir tu huella, tu cara o el bloqueo de pantalla. Abre CBB y vuelve a intentarlo.</string>
     <string name="error_no_screen_lock">Primero pon un bloqueo de pantalla en este teléfono: las claves del grupo lo necesitan.</string>
     <string name="error_no_window">Ningún dispositivo de tu grupo muestra seis dígitos en esta red. En un teléfono del grupo, toca +, o en un ordenador elige Añadir un dispositivo, y vuelve a intentarlo.</string>
     <string name="error_not_admin">Solo un teléfono administrador puede hacer esto.</string>

@@ -3047,6 +3047,8 @@ made with 0.5 is set up again once. The details follow.
 - A hub reached only through its forwarder no longer asks to open its UDP port to the internet
   or lets its service take that port from any address: the forwarder's endpoint, which the
   status lists among the hub's, no longer counts as an address of the hub's own.
+- The Android app says so when it could not ask for the fingerprint, face or screen lock
+  because it was not on the screen; it said the computer could not be reached.
 - "Create a group" on the iPhone and Android apps keeps the new group's pairing window open:
   the app went Home as soon as the group was made, which closed the window the Start screen
   had just opened, so no device could join. The phone now goes Home when the window ends.

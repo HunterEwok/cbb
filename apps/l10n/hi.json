@@ -271,6 +271,7 @@
   "CBB recovery key": "CBB रिकवरी कुंजी",
   "CBB scans the QR code a computer shows, to add it to your group.": "CBB किसी कंप्यूटर का दिखाया QR कोड स्कैन करता है, ताकि उसे आपके समूह में जोड़ सके।",
   "CBB sends it to your devices the next time you open it.": "अगली बार जब आप CBB खोलेंगे, यह इसे आपके डिवाइसों पर भेज देगा।",
+  "CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.": "CBB स्क्रीन पर नहीं था, इसलिए वह आपकी उंगली की छाप, चेहरा या स्क्रीन लॉक नहीं माँग सका। CBB खोलें और फिर से कोशिश करें।",
   "CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.": "CBB का अपना PIN, कम से कम छह अंक और 123456 जैसा आसान नहीं। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।",
   "Cancel": "रद्द करें",
   "Cancel [aurora:BugDialog]": "रद्द करें",

@@ -142,6 +142,7 @@
     <string name="error_no_biometric">Add a fingerprint or face on this phone first: on Android 10 the group\'s keys need one.</string>
     <string name="error_no_network">Connect this phone to your home Wi-Fi, then try again.</string>
     <string name="error_no_nfc">This phone has neither NFC nor a USB port that takes a YubiKey.</string>
+    <string name="error_no_screen">CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.</string>
     <string name="error_no_screen_lock">Set a screen lock on this phone first: the group\'s keys need it.</string>
     <string name="error_no_window">No device of your group shows six digits on this network. On a phone of the group, tap +, or on a computer choose Add a device, then try again.</string>
     <string name="error_not_admin">Only an admin phone can do this.</string>

@@ -140,6 +140,7 @@
     <string name="error_no_biometric">Kwanza ongeza alama ya kidole au uso kwenye simu hii: kwenye Android 10 funguo za kikundi zinahitaji hilo.</string>
     <string name="error_no_network">Unganisha simu hii na Wi-Fi ya nyumbani, kisha ujaribu tena.</string>
     <string name="error_no_nfc">Simu hii haina NFC wala mlango wa USB unaopokea YubiKey.</string>
+    <string name="error_no_screen">CBB haikuwa kwenye skrini, kwa hiyo haikuweza kuomba alama ya kidole, uso au kufuli ya skrini. Fungua CBB ujaribu tena.</string>
     <string name="error_no_screen_lock">Weka kufuli ya skrini kwenye simu hii kwanza: funguo za kikundi zinaihitaji.</string>
     <string name="error_no_window">Hakuna kifaa cha kikundi chako kinachoonyesha tarakimu sita kwenye mtandao huu. Kwenye simu ya kikundi, gusa +, au kwenye kompyuta chagua Ongeza kifaa, kisha ujaribu tena.</string>
     <string name="error_not_admin">Simu ya msimamizi pekee inaweza kufanya hivi.</string>

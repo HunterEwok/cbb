@@ -1235,7 +1235,8 @@ class AppModel(private val app: Context) {
                 LiveGroup.Failure.Kind.TOO_MANY_WRONG_CODES -> R.string.error_too_many_codes
                 LiveGroup.Failure.Kind.NOT_ADMIN -> R.string.error_not_admin
                 LiveGroup.Failure.Kind.NO_COMPUTERS -> R.string.no_computers
-                LiveGroup.Failure.Kind.NO_SCREEN, LiveGroup.Failure.Kind.UNREACHABLE -> R.string.error_unreachable
+                LiveGroup.Failure.Kind.UNREACHABLE -> R.string.error_unreachable
+                LiveGroup.Failure.Kind.NO_SCREEN -> R.string.error_no_screen
                 LiveGroup.Failure.Kind.NO_WINDOW -> R.string.error_no_window
                 LiveGroup.Failure.Kind.TWO_WINDOWS -> R.string.error_two_windows
                 LiveGroup.Failure.Kind.NO_GROUP -> R.string.error_nothing_to_leave

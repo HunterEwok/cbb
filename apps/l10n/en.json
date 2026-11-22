@@ -272,6 +272,7 @@
   "CBB recovery key": {"in": ["android:recovery_page_title", "ios", "aurora:RecoveryPage", "harmony:recovery_page_title"]},
   "CBB scans the QR code a computer shows, to add it to your group.": {"in": ["ios-plist:NSCameraUsageDescription"]},
   "CBB sends it to your devices the next time you open it.": {"in": ["ios-share"]},
+  "CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.": {"in": ["android:error_no_screen"]},
   "CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.": {"in": ["aurora:PinDialog"]},
   "Cancel": {"in": ["android:cancel", "ios", "mac", "tray", "harmony:cancel", "harmony-wear:cancel"]},
   "Cancel [aurora:BugDialog]": {"en": "Cancel", "in": ["android:bug_cancel", "aurora:BugDialog"]},

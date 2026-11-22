@@ -271,6 +271,7 @@
   "CBB recovery key": "CBB 恢复密钥",
   "CBB scans the QR code a computer shows, to add it to your group.": "CBB 扫描电脑显示的二维码，以将其添加到你的群组。",
   "CBB sends it to your devices the next time you open it.": "下次打开 CBB 时，它会把这些内容发送到你的设备。",
+  "CBB was not on the screen, so it could not ask for your fingerprint, face or screen lock. Open CBB and try again.": "CBB 当时不在屏幕上，因此无法请求指纹、面容或屏幕锁定。请打开 CBB 后重试。",
   "CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.": "CBB 自己的 PIN，至少六位数字，且不能是 123456 这样简单的数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。",
   "Cancel": "取消",
   "Cancel [aurora:BugDialog]": "取消",

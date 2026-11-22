@@ -140,6 +140,7 @@
     <string name="error_no_biometric">पहले इस फ़ोन पर फ़िंगरप्रिंट या चेहरा जोड़ें: Android 10 पर समूह की कुंजियों को इसकी ज़रूरत है।</string>
     <string name="error_no_network">इस फ़ोन को अपने घर के Wi-Fi से जोड़ें, फिर दोबारा कोशिश करें।</string>
     <string name="error_no_nfc">इस फ़ोन में न NFC है, न ऐसा USB पोर्ट जिसमें YubiKey लगे।</string>
+    <string name="error_no_screen">CBB स्क्रीन पर नहीं था, इसलिए वह आपकी उंगली की छाप, चेहरा या स्क्रीन लॉक नहीं माँग सका। CBB खोलें और फिर से कोशिश करें।</string>
     <string name="error_no_screen_lock">पहले इस फ़ोन पर स्क्रीन लॉक लगाएँ: समूह की कुंजियों को इसकी ज़रूरत है।</string>
     <string name="error_no_window">इस नेटवर्क पर आपके समूह का कोई डिवाइस छह अंक नहीं दिखा रहा है। समूह के किसी फ़ोन पर + टैप करें, या कंप्यूटर पर डिवाइस जोड़ें चुनें, फिर से कोशिश करें।</string>
     <string name="error_not_admin">केवल एडमिन फ़ोन ही यह कर सकता है।</string>
