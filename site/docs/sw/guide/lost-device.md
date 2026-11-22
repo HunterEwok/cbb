@@ -26,14 +26,22 @@ Msimamizi aliyegandishwa hawezi kugandisha mzizi wala simu ya msimamizi. Akigand
 
 ## 3. Kama kilikuwa mzizi: chukua kikundi
 
-Mzizi hushikilia ufunguo wa mzizi wa kikundi. Ukipotea, msimamizi anakuwa mzizi, na kila kifaa kingine hubaki kwenye kikundi:
+Mzizi unashika ufunguo wa mzizi wa kikundi. Ukipotea, kifaa kingine cha kikundi kinakuwa mzizi
+kwa **ufunguo wa urejeshaji** wa kikundi, karatasi au YubiKey uliyohifadhi ulipounda kikundi,
+na kila kifaa kingine kinabaki kwenye kikundi:
 
-- kwa simu: kwenye simu nyingine, ambayo ni msimamizi, ondoa iliyopotea; programu huchukua kikundi katika hatua ile ile;
-- kwa kompyuta: kwenye kompyuta ya msimamizi, `sudo cbb takeover NAME`, ambapo NAME ni mzizi aliyepotea.
+- kwa simu: kwenye simu yako nyingine, fungua urejeshaji kwenye programu na uipe ufunguo wa
+  urejeshaji;
+- kwa kompyuta: kwenye kompyuta nyingine ya kikundi, `sudo cbb recovery` na karatasi ya
+  urejeshaji (`sudo cbb recovery -yubikey` na YubiKey), ukitaja kifaa kilichopotea kwa
+  `-leave NAME`.
 
-Mtu mwingine akiwa na kifaa cha msimamizi aliyeondolewa, anaweza kusimamisha kikundi kwa muda kwa kusaini madai yake mwenyewe: vifaa vinasema kikundi kimesimamishwa. Kisha mzizi wa zamani humaliza hilo, kama bado unao; katika 0.6 mzizi mpya hawezi, na kikundi ambacho mzizi wake wa zamani umepotea pia huundwa upya ([itifaki](../protocol.md), sehemu ya 10, "Known limits in 0.6").
+Inaonyesha nani anabaki na nani anaondoka na inauliza mara moja; mabadiliko yanaanza mara
+moja, na kuanzia hapo kikundi kinakataa kifaa kilichopotea. Hakuna anayechukua kikundi bila
+ufunguo wa urejeshaji, hata msimamizi.
 
-Kama kikundi hakikuwa na msimamizi mwingine, hakiwezi kuchukuliwa: tengeneza kikundi kipya na uongeze vifaa tena. Ndiyo maana programu hupendekeza simu ya pili ya msimamizi, au kompyuta ya msimamizi, mara kikundi kinapokuwa na msimamizi mmoja tu.
+Bila ufunguo wa urejeshaji kikundi hakiwezi kuchukuliwa: unda kikundi kipya na uongeze vifaa
+tena. Ndiyo sababu programu inauliza jinsi ya kuuhifadhi mara tu kikundi kinapoundwa.
 
 ## 4. Zima kile kilichoweza kufikia
 
