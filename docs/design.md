@@ -2552,16 +2552,16 @@ docs/protocol.md, section 16.
 
 ### Versions in one group
 
-From 0.6 on (D-92), a device of one release works in a group with devices of the release
-before it, and an update never breaks a group: the devices can be updated one at a time,
-in any order, and a group never has to be set up again. The group's records carry this: a
-new record type or field comes only with a new `v`, and a device of the older release keeps
-such a record, passes it on in sync and tells the user to update, while the group goes on
-under the records it can read ([protocol](protocol.md), section 10, "Records of a later
-version"). CI checks it: `tools/e2e/upgrade.sh` updates the members of the last published
-release to the build under test, one at a time, and the group, its devices and sync must
-survive. A group of 0.5 is not carried over: 0.6 reads no records of version 1, so such a
-group is set up again once.
+0.6 promises what 0.5 did (D-131): a device works in a group with devices of its own
+release, so every device of a group is updated to the same release, and the format of the
+records and messages may still change before 0.7. The records already leave room for later
+versions: a record of a later `v` is kept and passed on in sync, never applied, and the
+device tells the user to update ([protocol](protocol.md), section 10, "Records of a later
+version"). CI's `tools/e2e/upgrade.sh` updates members of the last published release to the
+build under test, one at a time. A group of 0.5 is not carried over: 0.6 reads no records of
+version 1, so each member leaves such a group at its first start, keeps its settings, and the
+group is set up again once. The promise of one release back (D-92) and the format's freeze
+(D-100) start with 0.7.
 
 ## 7. Deployment view
 

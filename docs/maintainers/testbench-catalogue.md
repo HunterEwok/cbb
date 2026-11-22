@@ -68,8 +68,8 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I3 | `get.sh` and `get.ps1` check the release: a good build installs; a tampered archive, a wrong signature, an expired manifest, an unknown key and a missing openssl are refused with a clear message; `CBB_VERSION` installs that release | feed | |
 | I4 | Uninstall and purge on each system leave nothing: service, agent, units, firewall rules, users and groups, the Apps entry on Windows, the state with `--purge`/`-Purge` and the keys kept without it [L10] | real, fleet | |
 | I5 | Install again over an install: the group, mode, settings, quick actions, remote paste switch and keys stay | real | |
-| I6 | From 0.6 on, upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
-| I7 | From 0.6 on, downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
+| I6 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), upgrade from the previous release one device at a time in a mixed group: the same group and devices, copying between old and new after each step and then between all; state and keys survive; the agent restarts in every running session [L9] | real, fleet | |
+| I7 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), downgrade to the previous release over the new state: it starts in the same group or refuses clearly, and no key is lost [P14] | real, fleet | |
 | I8 | `cbb update -check` and `cbb update` on Linux, macOS and Windows from the feed: renamed into place (the running exe moved aside on Windows), the health check passes, the new version runs | feed, real | |
 | I9 | Updates refused: a tampered file, a bad signature, an expired manifest, an older version (the highest seen is kept), `min_from` not met, a wrong platform; each named in the message | feed | |
 | I10 | A new build that never becomes healthy is rolled back and listed as failed; the next check skips it | feed | |
@@ -89,7 +89,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I24 | Windows binaries carry a valid Authenticode signature; `cbb update` checks it; SmartScreen lets the installer run | real | signing |
 | I25 | The installers' errors: a failed step names its exit status; `CBB_ERROR_DETAILS=1` shows every command and the full Windows error record | real | |
 | I26 | The upgrade from 0.5 to 0.6, once: a group made before 0.6 is not carried over (records version 2 have no migration); each member leaves it at its first start, says so in `cbb status`, keeps its settings, and a new group made on 0.6 works; a 0.5 member left in the old group reaches no 0.6 member | real, fleet | |
-| I27 | From 0.6 on a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
+| I27 | Between fix releases of 0.6, and between releases from 0.7 on (D-131), a device of version N works in one group with N-1: the previous release's cbb (`tools/e2e/previous.sh`) and this build's join one group, sync both ways, take the record of a device admitted later, and the previous one takes its removal (TestPreviousRelease in CI; I6 with the bench's two versions) | fleet | |
 
 ## 2. Groups, pairing and roles (G)
 

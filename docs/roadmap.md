@@ -172,10 +172,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
 ### Next
 
-- **70.** **Planned for 0.6.** The core and the format before the freeze (D-92): one binary
+- **70.** **Planned for 0.6.** The core and the format of 0.6 (D-131): one binary
     format, new record rules, members without certificates, content and keys, the session
     in the core and the small device. Six waves, each with its own test of being done; the
-    format is frozen only after the last. See "The core and the format in 0.6" below.
+    format stays preliminary until 0.7. See "The core and the format in 0.6" below.
 - **10.** **Console helper and auto-paste**: the double press that injects the member's own text
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
@@ -464,7 +464,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       (alias `cbb`, certificate SHA-256 `16:99:CD:37:…:7C:E6:B3:6D`), which the environment
       **release** already holds. Write its fingerprint in docs/maintainers/maintaining.md, "Android
       signing key"; 0.5.0's APK is signed by the old key, so 0.5.0 does not update to 0.6.0
-      in place (compatibility starts with 0.6, D-92).
+      in place (a group made with 0.5 is set up again on 0.6, D-131).
     - RuStore, Android: upload the release's signed `cbb-fdroid-X.Y.Z.apk` (the flavor
       without an update of its own and without Wear OS), not an AAB, so that RuStore never
       holds the key and its copy, the GitHub APK and F-Droid's share one certificate. The
@@ -1187,9 +1187,9 @@ its translations, and design.md in place of this section.
 
 ## The core and the format in 0.6
 
-The format of the records and of the wire is frozen in 0.6 (D-92), and the groups of 0.5 are
-set up again, so everything that touches the core and the protocol is done before the freeze,
-in this order. The third and the fourth waves run side by side. The waves that change the
+The format of the records and of the wire changes in 0.6 and stays preliminary until 0.7
+(D-131), and the groups of 0.5 are set up again, so everything that touches the core and the
+protocol is done in 0.6, in this order. The third and the fourth waves run side by side. The waves that change the
 format land in `main` together, from one shared branch, since between them nothing works.
 
 1. **At once, without the format.** The firmware's size measured in CI, part by part; a

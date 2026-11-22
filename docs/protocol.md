@@ -18,11 +18,12 @@ member protocol of section 4 runs in the Rust core's member on every phone (docs
 is the way it is; this document only says what it is, and the threats it answers are in the
 [threat model](threat-model.md).
 
-**Status.** This is the edition for release 0.6. A change that a peer of the previous
-release could not read gets a new ALPN protocol, record type or message field, never a new
-meaning for an old one; the registries (section 19) list every name in use. Where the Go
-code and this document differ, the Go code is the source of truth and the difference is a
-bug in one of them; a "Note:" line marks a known difference.
+**Status.** This is the edition for release 0.6, and it is preliminary: devices work
+together within one release, and 0.7, whose format and protocol are final, may change any
+part of it (D-131). A change gets a new ALPN protocol, record type or message field, never a
+new meaning for an old one; the registries (section 19) list every name in use. Where the
+Rust core and this document differ, the difference is a bug in one of them; a "Note:" line
+marks a known difference.
 
 ### Contents
 

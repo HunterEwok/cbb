@@ -11,9 +11,9 @@ the phones' apps, with the Go helper beside it on computers; the group's signed 
 new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
 apps for the iPhone, Android, Aurora OS and HarmonyOS, the Mac, and a tray app for Linux and
 Windows; devices sync away from home through a hub, a forwarder or a blind relay; releases are
-signed and `cbb update` installs them. From 0.6 on a device works in one group with devices of
-the release before it ([versions and compatibility](docs/reference/compatibility.md)); a group
-made with 0.5 is set up again once. The details follow.
+signed and `cbb update` installs them. As with 0.5, a device works in a group with devices of its own release: keep every device on
+the same release ([versions and compatibility](docs/reference/compatibility.md)); a group made
+with 0.5 is set up again once. The details follow.
 
 ### Added
 - ffi's group of 0.6 names its key level and how long a copy and a secret live (`key_level`,
@@ -2451,8 +2451,9 @@ made with 0.5 is set up again once. The details follow.
   records that a role gives no rights, so any admin with `admit` admits a phone without an
   admin key; D-26 is marked replaced by D-80, D-11 partly replaced by D-80 and D-40 partly
   replaced by D-87.
-- From 0.6 on, a device works in one group with devices of the release before it, and an
-  update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
+- 0.6 promises what 0.5 did: a device works in a group with devices of its own release, and
+  the format may still change before 0.7, where the promise of one release back starts (D-131;
+  docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
 - Admin actions no longer ask for the password every time (D-97). The user confirms them
   with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
