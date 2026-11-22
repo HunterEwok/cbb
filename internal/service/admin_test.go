@@ -128,10 +128,10 @@ func TestKeyLevelSetting(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpDelay, Value: "24h"}, ""); err == nil || !strings.Contains(err.Error(), "cbb recovery") {
 		t.Errorf("a takeover delay on the records of 0.6: %v", err)
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpIncoming, Value: "2m"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpTTL, Value: "2m"}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "deck takes the new setting", func() bool { return deck.status(t).IncomingMS == 120_000 })
+	waitFor(t, "deck takes the new setting", func() bool { return deck.status(t).TTLMS == 120_000 })
 	for _, s := range []*testService{pi, deck} {
 		if l := s.status(t).KeyLevel; l != "files" {
 			t.Errorf("the level on %s after a new setting: %q", s.name, l)

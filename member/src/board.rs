@@ -24,11 +24,10 @@ use crate::error::{Error, Result};
 use crate::mesh::Arrived;
 use crate::sealed::Blob;
 
-/// How long after a copy content from another member still goes into the
-/// clipboard, unless the group sets its own window.
-pub const LIVE_WINDOW_MS: u64 = 60_000;
-/// How long a secret stays current unless the group says otherwise.
-pub const SECRET_TTL_MS: u64 = 60_000;
+/// How long an ordinary copy lives unless the group's root sets its own.
+pub const COPY_TTL_MS: u64 = cbb_core::records::body::DEFAULT_COPY_TTL_MS;
+/// How long a secret lives unless the group's root sets its own.
+pub const SECRET_TTL_MS: u64 = cbb_core::records::body::DEFAULT_SECRET_TTL_MS;
 /// A watcher's report of what this member wrote itself, within this time,
 /// is the member's own write coming back, not a copy.
 const ECHO_MS: i64 = 10_000;
@@ -69,7 +68,7 @@ struct Inner {
     local: Option<Local>,
     current: Option<Current>,
     written: VecDeque<([u8; 32], i64)>,
-    window_ms: u64,
+    ttl_ms: u64,
     secret_ms: u64,
     takes_media: bool,
 }
@@ -84,12 +83,15 @@ fn sum(text: &str) -> [u8; 32] {
     Sha256::digest(text.as_bytes()).into()
 }
 
-fn content(text: &str, kind: Kind, via: Via) -> Result<Content> {
+/// The content of a copy, with the lifetime the group's root set for its
+/// kind: every member sends the same (D-129).
+fn content(text: &str, kind: Kind, via: Via, st: &Inner) -> Result<Content> {
     if kind == Kind::Media {
         return Err(Error::msg("images and files go as media, not as text"));
     }
     cbb_core::clip::check_text(text)?;
     let mut c = Content::text(text, kind == Kind::Secret);
+    c.ttl = if kind == Kind::Secret { st.secret_ms } else { st.ttl_ms };
     c.via = match via {
         Via::Phone => 1,
         Via::Universal => 2,
@@ -113,7 +115,7 @@ impl Board {
                 local: None,
                 current: None,
                 written: VecDeque::new(),
-                window_ms: LIVE_WINDOW_MS,
+                ttl_ms: COPY_TTL_MS,
                 secret_ms: SECRET_TTL_MS,
                 takes_media: false,
             }),
@@ -180,18 +182,18 @@ impl Board {
         }
     }
 
-    /// The group's window for incoming copies and lifetime of secrets;
-    /// zero keeps the defaults.
-    pub fn set_lifetimes(&self, window_ms: u64, secret_ms: u64) {
+    /// The group's lifetimes of ordinary copies and of secrets, which
+    /// this member's copies carry; zero keeps the default.
+    pub fn set_lifetimes(&self, ttl_ms: u64, secret_ms: u64) {
         let mut st = self.inner.lock().unwrap();
-        st.window_ms = if window_ms == 0 { LIVE_WINDOW_MS } else { window_ms };
+        st.ttl_ms = if ttl_ms == 0 { COPY_TTL_MS } else { ttl_ms };
         st.secret_ms = if secret_ms == 0 { SECRET_TTL_MS } else { secret_ms };
     }
 
-    /// The window and the lifetime of secrets now.
+    /// The lifetimes of ordinary copies and of secrets now.
     pub fn lifetimes(&self) -> (u64, u64) {
         let st = self.inner.lock().unwrap();
-        (st.window_ms, st.secret_ms)
+        (st.ttl_ms, st.secret_ms)
     }
 
     pub fn set_takes_media(&self, on: bool) {
@@ -219,8 +221,8 @@ impl Board {
     /// member's own write coming back, the same text again, sync off or a
     /// mute).
     pub fn copied(&self, text: &str, kind: Kind, via: Via) -> Result<Option<Content>> {
-        let c = content(text, kind, via)?;
         let mut st = self.inner.lock().unwrap();
+        let c = content(text, kind, via, &st)?;
         let now = (self.wall)();
         let s = sum(text);
         let echo = st.written.iter().any(|(w, at)| *w == s && now.saturating_sub(*at) <= ECHO_MS);
@@ -239,8 +241,8 @@ impl Board {
     /// own clipboard too: unless the clipboard holds it already, as a copy
     /// from tmux reaches the desktop's clipboard, whatever the mode.
     pub fn send(&self, text: &str, kind: Kind, via: Via) -> Result<(Content, bool)> {
-        let c = content(text, kind, via)?;
         let mut st = self.inner.lock().unwrap();
+        let c = content(text, kind, via, &st)?;
         if self.muted(&mut st) {
             return Err(Error::msg("this device is muted: its copies do not reach the group until the mute ends"));
         }
@@ -340,7 +342,8 @@ impl Board {
             // copy is written, however old; an older copy than the current
             // one never gets here (`cbb_core::copies::fresh`, Behind).
             window_ms: i64::MAX,
-            secret_ttl_ms: i64::try_from(st.secret_ms).unwrap_or(i64::MAX),
+            // The secret's own lifetime, which its sender set.
+            secret_ttl_ms: i64::try_from(c.ttl_ms().unwrap_or(st.secret_ms)).unwrap_or(i64::MAX),
         };
         let v = rule::incoming(&i);
         st.current =

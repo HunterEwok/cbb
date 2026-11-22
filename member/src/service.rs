@@ -313,7 +313,7 @@ const GROUP_OPS: &[&str] = &[
     control::op::MAKE_ADMIN,
     control::op::KEY_LEVEL,
     control::op::TAKEOVER_DELAY,
-    "incoming",
+    "ttl",
     control::op::TAKE_OVER,
     control::op::RECOVER,
     control::op::HAND_OVER,

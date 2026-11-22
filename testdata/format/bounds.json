@@ -637,23 +637,63 @@
     },
     {
       "class": "frozen",
-      "name": "records::body::MIN_INCOMING_MS",
+      "name": "records::body::MIN_COPY_TTL_MS",
       "reached": [
         "bodies_at_their_bounds"
       ],
-      "refusal": "records/copies/incoming_ms",
-      "value": 5000,
-      "widest": "the shortest incoming window"
+      "refusal": "records/copies/ttl_ms",
+      "value": 60000,
+      "widest": "the owner's shortest lifetime of an ordinary copy, a minute"
     },
     {
       "class": "frozen",
-      "name": "records::body::MAX_INCOMING_MS",
+      "name": "records::body::MAX_COPY_TTL_MS",
       "reached": [
         "bodies_at_their_bounds"
       ],
-      "refusal": "records/copies/incoming_ms",
+      "refusal": "records/copies/ttl_ms",
       "value": 3600000,
-      "widest": "the longest incoming window"
+      "widest": "the owner's longest lifetime of an ordinary copy, an hour"
+    },
+    {
+      "class": "frozen",
+      "name": "records::body::MIN_SECRET_TTL_MS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/copies/secret_ttl_ms",
+      "value": 5000,
+      "widest": "the owner's shortest lifetime of a secret, 5 seconds"
+    },
+    {
+      "class": "frozen",
+      "name": "records::body::MAX_SECRET_TTL_MS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/copies/secret_ttl_ms",
+      "value": 60000,
+      "widest": "the owner's longest lifetime of a secret, a minute"
+    },
+    {
+      "class": "frozen",
+      "name": "content::MIN_TTL_MS",
+      "reached": [
+        "ttl_is_milliseconds_within_its_bounds"
+      ],
+      "refusal": "content/ttl",
+      "value": 5000,
+      "widest": "the shortest lifetime a copy carries, a secret's least"
+    },
+    {
+      "class": "frozen",
+      "name": "content::MAX_TTL_MS",
+      "reached": [
+        "ttl_is_milliseconds_within_its_bounds"
+      ],
+      "refusal": "content/ttl",
+      "value": 3600000,
+      "widest": "the longest lifetime a copy carries, an ordinary copy's most"
     },
     {
       "class": "stated",

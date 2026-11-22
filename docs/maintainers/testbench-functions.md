@@ -267,7 +267,7 @@ line here with every new function, and a case for it in the catalogue.
 | M.11 | `cbb sync` without the helper | M1 |
 | M.12 | `cbb sync off [-for]` and `cbb sync on` on the device itself | M8 |
 | M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
-| M.14 | The group's copies setting (`cbb incoming`) | M10 |
+| M.14 | The group's copies setting (`cbb ttl`) | M10 |
 
 ## O. Images, files and formatted text
 

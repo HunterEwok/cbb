@@ -35,7 +35,7 @@ impl ExternalKey for K {
 }
 
 const NOW: u64 = 1_793_000_000_000;
-const LIFE: Lifetimes = Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 };
+const LIFE: Lifetimes = Lifetimes { secret_ms: 60_000, ttl_ms: 600_000 };
 
 /// A group of devices a (key 2) and b (key 3) that read, send and take
 /// secrets, and the state.

@@ -14,8 +14,8 @@ use crate::records::eval::Stop;
 fn forked() -> (G, Record, Record, Vec<Record>) {
     let mut g = G::new();
     g.device(&k("root"), &k("laptop"), "laptop", |_| {});
-    let r = g.root_rec(Kind::Copies { incoming_ms: 50_000, seen: vec![] });
-    let twin = root_twin(&g, &r, Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    let r = g.root_rec(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 110_000, seen: vec![] });
+    let twin = root_twin(&g, &r, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 60_000, seen: vec![] });
     let side: Vec<Record> = g.recs.iter().filter(|q| q.id() != r.id()).cloned().chain([twin.clone()]).collect();
     g.recs.push(twin.clone());
     (g, r, twin, side)
@@ -51,8 +51,8 @@ fn only_a_valid_pair_of_the_counted_root_is_taken() {
     let other = k("other");
     let body = |kind| Body { group: g.gid, signer: other.hash, seq: 1, prev: None, time_ms: 0, kind, held: false };
     let fake = [
-        Record::sign(body(Kind::Copies { incoming_ms: 50_000, seen: vec![] }), &other).unwrap(),
-        Record::sign(body(Kind::Copies { incoming_ms: 60_000, seen: vec![] }), &other).unwrap(),
+        Record::sign(body(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 110_000, seen: vec![] }), &other).unwrap(),
+        Record::sign(body(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 60_000, seen: vec![] }), &other).unwrap(),
     ];
     assert_eq!(one.insert_from_unknown(&fake, &[]), 0, "not the root's");
     assert_eq!(one.len(), n);

@@ -243,9 +243,10 @@ fn a_mixed_fill_with_sixteen_laggards_keeps_the_way_out_after_every_record() {
             let before = w.made.len();
             let r = match roll() {
                 0 | 1 => {
-                    let ms = MIN_INCOMING_MS + u64::from(step);
+                    let ms = MIN_COPY_TTL_MS + u64::from(step);
                     w.act(&|set, st, root, t| {
-                        set.write_record(st, root, Kind::Copies { incoming_ms: ms, seen: vec![] }, t).map(|_| ())
+                        set.write_record(st, root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: ms, seen: vec![] }, t)
+                            .map(|_| ())
                     })
                 }
                 2..=4 => {

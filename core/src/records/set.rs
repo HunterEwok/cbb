@@ -2725,8 +2725,9 @@ impl RecordSet {
         if !hubs.is_empty() && !drop_hubs {
             first.push(sign(Kind::Hubs { hubs, seen: Vec::new() })?);
         }
-        if let Some(incoming_ms) = state.incoming_ms {
-            first.push(sign(Kind::Copies { incoming_ms, seen: Vec::new() })?);
+        if let Some(ttl_ms) = state.ttl_ms {
+            let secret_ttl_ms = state.secret_ttl_ms.unwrap_or(0);
+            first.push(sign(Kind::Copies { secret_ttl_ms, ttl_ms, seen: Vec::new() })?);
         }
         let mut frozen = Vec::new();
         for d in &carried {

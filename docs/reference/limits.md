@@ -17,8 +17,8 @@ them is in the [protocol](../protocol.md).
 | What the phones' share sheet sends | 100 MiB on Android, 50 MB from the iPhone | no |
 | The plain text that goes with images or files | 256 KiB | no |
 | HTML from a desktop clipboard | 8 MiB | no |
-| A secret (marked by a password manager, or `cbb copy -secret`) | current for 60 s after the copy, kept only in memory; its text is recognised for 12 h after, so that it stays secret when offered again | no |
-| How long a copy is still written to the clipboards it reaches | 60 s after the copy; for 30 s after a device comes back, the newest copy is still written there although it is older | no |
+| A secret (marked by a password manager, or `cbb copy -secret`) | lives 60 s after the copy (the group's setting, 5 s to 1 min, `cbb ttl`), kept only in memory; its text is recognised for 12 h after, so that it stays secret when offered again | no |
+| How long a copy lives: written to the clipboards it reaches and shown on the phones | 5 min after the copy (the group's setting, 1 min to 1 h, `cbb ttl`); every device stamps it on its copies, so the whole group keeps the same | yes, `cbb ttl` on the root or an admin |
 | A received time ahead of this device's clock | at most 7 days; a later one is refused, so that no device can move the group's clocks for good | no |
 
 ## Remote paste and quick actions

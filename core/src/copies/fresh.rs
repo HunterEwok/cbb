@@ -83,10 +83,11 @@ pub struct Seen {
 
 impl Seen {
     /// A checked copy that opened to content, with the lifetime that
-    /// applies to it: its own `ttl`, else for a secret the group's
-    /// lifetime of secrets (`secret_ms`), else the group's window for
-    /// incoming copies (`incoming_ms`).
-    pub fn of(c: &super::Checked<'_>, content: &crate::content::Content, secret_ms: u64, incoming_ms: u64) -> Seen {
+    /// applies to it: its own `ttl`, which its sender set from the group's
+    /// copies record, else for a secret the group's lifetime of secrets
+    /// (`secret_ms`), else the group's lifetime of an ordinary copy
+    /// (`ttl_ms`).
+    pub fn of(c: &super::Checked<'_>, content: &crate::content::Content, secret_ms: u64, ttl_ms: u64) -> Seen {
         let secret = content.is_secret();
         Seen {
             origin: c.origin,
@@ -94,7 +95,7 @@ impl Seen {
             signed: c.time,
             age_ms: c.copy.age_ms,
             secret,
-            ttl_ms: Some(content.ttl_ms().unwrap_or(if secret { secret_ms } else { incoming_ms })),
+            ttl_ms: Some(content.ttl_ms().unwrap_or(if secret { secret_ms } else { ttl_ms })),
         }
     }
 }

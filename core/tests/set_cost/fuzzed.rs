@@ -338,7 +338,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                 keep.dedup();
                 Kind::Checkpoint { heads: vec![Head { key: by.hash, seq, id }], keep }
             }
-            11 => Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(x) * 1000, seen: g.seen(arg) },
+            11 => Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + u64::from(x) * 1000, seen: g.seen(arg) },
             12 => {
                 let mut v = vec![dev.key.device_id()];
                 if x & 1 == 1 {
@@ -351,7 +351,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
             13 => {
                 // The recovery key signing something other than a head.
                 let rec = &ks[RECOVERY];
-                let body = g.body(rec, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, time);
+                let body = g.body(rec, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, time);
                 if let Ok(r) = Record::sign(body, rec) {
                     g.recs.push(r);
                 }
@@ -361,8 +361,11 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                 // A second record at one seq by a key that is not the
                 // recovery key.
                 let Some(&(seq, _)) = g.heads.get(&by.hash) else { continue };
-                let mut body =
-                    g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(x), seen: vec![] }, time);
+                let mut body = g.body(
+                    by,
+                    Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + u64::from(x), seen: vec![] },
+                    time,
+                );
                 body.seq = seq;
                 body.prev =
                     g.recs.iter().find(|r| r.body().signer == by.hash && r.body().seq + 1 == seq).map(|r| r.id());

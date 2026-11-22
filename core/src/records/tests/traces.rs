@@ -95,7 +95,7 @@ impl Run {
                     d.powers = all;
                     Kind::device(d)
                 }
-                "copies" => Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(n), seen: vec![] },
+                "copies" => Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + u64::from(n), seen: vec![] },
                 "revoke" => Kind::Revoke(removal(&[key(kind_text.split_whitespace().nth(2).unwrap()).hash], vec![])),
                 "freeze" => Kind::Freeze(removal(&[key(kind_text.split_whitespace().nth(2).unwrap()).hash], vec![])),
                 "thaw" => {

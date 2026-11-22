@@ -271,39 +271,40 @@ func muteByAdmin(ctx context.Context, r *Report, f *Fleet, timeout time.Duration
 	})
 }
 
-// incoming (M10): the group's copies setting: the root sets how long a copy
-// from another device stays live, every member shows it, a value out of
-// 5s to 1h and a device that is no admin are refused; a device cut off for
-// 10 seconds writes the copy made meanwhile with a window of 1m, and not
-// with one of 5s.
-func incoming(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
-	const p = "fleet/M10-incoming/"
-	g := fleetGroup(ctx, r, f, "fleet/M10-incoming", 2)
+// lifetimes (M10): the group's copies setting: the root sets how long a
+// copy and a secret live (cbb ttl), every member shows it, a value out of
+// bounds and a device that is no admin are refused; a device cut off for 10
+// seconds writes the secret made meanwhile while it lives 1m, and not once
+// it lives 5s.
+func lifetimes(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
+	const p = "fleet/M10-ttl/"
+	g := fleetGroup(ctx, r, f, "fleet/M10-ttl", 2)
 	if g == nil || len(g.members) < 2 {
 		return
 	}
 	root, b := g.members[0], g.members[1]
 	shows := func(d *Device, want string) error {
 		return eventually(ctx, timeout, func() error {
-			return succeeds(ctx, d, "cbb incoming", "", "goes into the clipboard for "+want+" after it arrives")
+			return succeeds(ctx, d, "cbb ttl", "", want)
 		})
 	}
-	r.Do(p+"default", func() error { return shows(b, "1m") })
-	r.Do("fleet/M10-incoming", func() error {
-		if err := succeeds(ctx, root, "cbb incoming 5s", "", "for 5s after it arrives"); err != nil {
+	r.Do(p+"default", func() error { return shows(b, "A copy lives 5m in the group and a secret 1m") })
+	r.Do("fleet/M10-ttl", func() error {
+		want := "A copy lives 2m in the group and a secret 5s"
+		if err := succeeds(ctx, root, "cbb ttl 2m 5s", "", want); err != nil {
 			return err
 		}
-		if err := shows(b, "5s"); err != nil {
+		if err := shows(b, want); err != nil {
 			return err
 		}
 		return syncs(ctx, g, root, b, "after the setting changed", timeout)
 	})
-	for _, v := range []string{"4s", "2h"} {
-		fails(ctx, r, p+"bounds-"+v, root, errorCase{cmd: "cbb incoming " + v, want: []string{"from 5s to 1h"}})
+	for _, c := range []struct{ v, want string }{{"30s", "a copy lives from 1m to 1h"}, {"2h", "a copy lives from 1m to 1h"}, {"- 4s", "a secret lives from 5s to 1m"}, {"- 2m", "a secret lives from 5s to 1m"}} {
+		fails(ctx, r, p+"bounds-"+strings.ReplaceAll(c.v, " ", ""), root, errorCase{cmd: "cbb ttl " + c.v, want: []string{c.want}})
 	}
-	fails(ctx, r, p+"not-admin", b, errorCase{cmd: "cbb incoming 10s", want: []string{"only the group's root or an admin"}})
-	// late cuts b off, copies on the root, waits 10 seconds and brings b
-	// back, which then writes the copy only within the live window.
+	fails(ctx, r, p+"not-admin", b, errorCase{cmd: "cbb ttl 10m", want: []string{"only the group's root or an admin"}})
+	// late cuts b off, copies a secret on the root, waits 10 seconds and
+	// brings b back, which then writes the secret only while it lives.
 	late := func(what string, live bool) error {
 		if err := cut(ctx, root, b); err != nil {
 			return err
@@ -315,7 +316,7 @@ func incoming(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 			return err
 		}
 		text := "cbb-bench " + g.run + " " + what
-		if err := Copy(ctx, root, text); err != nil {
+		if _, err := Run(ctx, root, cbbCmd(root)+" copy -secret", text); err != nil {
 			return err
 		}
 		time.Sleep(10 * time.Second)
@@ -326,26 +327,19 @@ func incoming(ctx context.Context, r *Report, f *Fleet, timeout time.Duration) {
 			return arrives(ctx, b, text, timeout)
 		}
 		if err := notArrives(ctx, b, text, 20*time.Second); err != nil {
-			return fmt.Errorf("%w after the window of 5s had passed", err)
+			return fmt.Errorf("%w after the secret's 5s had passed", err)
 		}
-		return syncs(ctx, g, root, b, "after the late copy", timeout)
+		return syncs(ctx, g, root, b, "after the late secret", timeout)
 	}
-	r.Do("fleet/M10-window", func() error {
-		if err := succeeds(ctx, root, "cbb incoming 5s", "", "for 5s after it arrives"); err != nil {
-			return err
-		}
-		if err := shows(b, "5s"); err != nil {
-			return err
-		}
-		return late("past the window", false)
-	})
+	r.Do("fleet/M10-window", func() error { return late("past its lifetime", false) })
 	r.Do(p+"back", func() error {
-		if err := succeeds(ctx, root, "cbb incoming 1m", "", "for 1m after it arrives"); err != nil {
+		want := "A copy lives 2m in the group and a secret 1m"
+		if err := succeeds(ctx, root, "cbb ttl - 1m", "", want); err != nil {
 			return err
 		}
-		if err := shows(b, "1m"); err != nil {
+		if err := shows(b, want); err != nil {
 			return err
 		}
-		return late("within the window", true)
+		return late("within its lifetime", true)
 	})
 }

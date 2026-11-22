@@ -374,7 +374,10 @@ impl Mesh {
                 archives: Mutex::new(HashMap::new()),
                 clock,
                 hello: RwLock::new(Hello::default()),
-                lifetimes: RwLock::new(Lifetimes { secret_ms: 60_000, incoming_ms: 600_000 }),
+                lifetimes: RwLock::new(Lifetimes {
+                    secret_ms: crate::board::SECRET_TTL_MS,
+                    ttl_ms: crate::board::COPY_TTL_MS,
+                }),
                 on_copy: RwLock::new(None),
                 on_command: RwLock::new(None),
                 on_set: RwLock::new(None),

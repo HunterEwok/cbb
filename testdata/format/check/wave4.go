@@ -169,7 +169,7 @@ func contentVerdict(b []byte) string {
 		return "content/data"
 	}
 	// The rows between fields.
-	if ttl, _ := u(c, 3); ttl > 4 {
+	if ttl, there := u(c, 3); there && (ttl < minTTL || ttl > maxTTL) {
 		return "content/ttl"
 	}
 	if via, _ := u(c, 4); via > 2 {

@@ -209,7 +209,7 @@ pub fn make_with(
 #[derive(Clone, Copy, Debug)]
 pub struct Lifetimes {
     pub secret_ms: u64,
-    pub incoming_ms: u64,
+    pub ttl_ms: u64,
 }
 
 /// A copy's blob as its header and its opened key name it: what a fetch
@@ -265,7 +265,7 @@ pub fn take(
     let opened = copies::open(&c, me, store, state).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
     Ok(match opened {
         Opened::Content { content, blob_key } => {
-            let seen = fresh::Seen::of(&c, &content, lifetimes.secret_ms, lifetimes.incoming_ms);
+            let seen = fresh::Seen::of(&c, &content, lifetimes.secret_ms, lifetimes.ttl_ms);
             let blob = c.blob().zip(blob_key).map(|((size, sha256), key)| Blob { size, sha256, key });
             match marks.judge(&seen, now_ms, state) {
                 fresh::Fresh::New { age_ms } => {

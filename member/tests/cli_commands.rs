@@ -377,25 +377,33 @@ fn device_commands() {
                 ..Case::default()
             },
             Case {
-                name: "incoming",
-                args: &["incoming", "90s"],
-                sent: Some(("incoming", Some(|s| s.s("value") == "90s"))),
-                stdout: "for 1m30s after it arrives",
+                name: "ttl",
+                args: &["ttl", "90s", "-"],
+                answer: status(json!({"group": "g", "ttl_ms": 90_000, "secret_ttl_ms": 60_000})),
+                sent: Some(("ttl", Some(|s| s.s("value") == "90s -"))),
+                stdout: "A copy lives 1m30s in the group and a secret 1m",
                 ..Case::default()
             },
             Case {
-                name: "incoming shown",
-                args: &["incoming"],
-                answer: status(json!({"group": "g", "incoming_ms": 3_600_000})),
+                name: "ttl shown",
+                args: &["ttl"],
+                answer: status(json!({"group": "g", "ttl_ms": 3_600_000, "secret_ttl_ms": 5_000})),
                 sent: Some(("status", None)),
-                stdout: "for 1h after it arrives",
+                stdout: "A copy lives 1h in the group and a secret 5s",
                 ..Case::default()
             },
             Case {
-                name: "incoming not a duration",
-                args: &["incoming", "soon"],
+                name: "ttl not a duration",
+                args: &["ttl", "soon"],
                 code: 2,
-                stderr: "usage: cbb incoming",
+                stderr: "usage: cbb ttl",
+                ..Case::default()
+            },
+            Case {
+                name: "ttl of a secret past a minute",
+                args: &["ttl", "5m", "2m"],
+                code: 2,
+                stderr: "a secret lives from 5s to 1m",
                 ..Case::default()
             },
             Case {

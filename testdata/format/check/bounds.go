@@ -15,6 +15,8 @@ const (
 	maxInt       = 1<<63 - 1
 	maxPasteText = 1 << 20
 	maxTypedText = 16384
+	minTTL       = 5_000
+	maxTTL       = 3_600_000
 )
 
 func checkBounds(dir string) {
@@ -37,6 +39,8 @@ func checkBounds(dir string) {
 		"format::cbor::MAX_INT":            maxInt,
 		"commands::orders::MAX_PASTE_TEXT": maxPasteText,
 		"commands::orders::MAX_TYPED_TEXT": maxTypedText,
+		"content::MIN_TTL_MS":              minTTL,
+		"content::MAX_TTL_MS":              maxTTL,
 	}
 	for name, n := range ours {
 		got, ok := reg[name]

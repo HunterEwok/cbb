@@ -721,7 +721,7 @@ fn a_full_room_after_a_change_keeps_it() {
     let w = g.change("NK");
     for by in ["A", "C", "W", "NK"] {
         for _ in 0..300 {
-            g.sign(by, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+            g.sign(by, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000, seen: vec![] });
         }
     }
     let m = g.member(&g.all());
@@ -738,7 +738,7 @@ fn any_order_gives_one_state() {
     g.device("C");
     g.revoke("R", "D");
     g.change("NK");
-    g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    g.sign("NK", Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000, seen: vec![] });
     g.freeze("W", "C", Vec::new());
     g.change("NA");
     let all = g.all();
@@ -767,7 +767,7 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
     let s = g.member(&g.all()).state();
     let older = g.checkpoint("NK", &s);
     for _ in 0..900 {
-        g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        g.sign("NK", Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000, seen: vec![] });
     }
     let s = g.member(&g.all()).state();
     let newest = g.checkpoint("NK", &s);
@@ -784,7 +784,7 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
         if dropped >= 20 {
             break;
         }
-        let r = g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        let r = g.sign("NK", Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000, seen: vec![] });
         a.insert(r.clone()).unwrap();
         b.insert(r.clone()).unwrap();
         assert_eq!(a.contains(&r.id()), b.contains(&r.id()), "record {i} after the checkpoint");

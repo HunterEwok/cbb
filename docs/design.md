@@ -235,7 +235,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
-  `key_level`, `incoming`, `mute` and `unmute` of another
+  `key_level`, `ttl`, `mute` and `unmute` of another
   device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
@@ -640,7 +640,10 @@ starting the Android app's listener for the Wear OS switch, and the delay of not
 Devices that always listen (computers and small devices, whose watcher reports every copy)
 work with the group's buffer as their own: their clipboard always equals it, so what they
 copy goes to the group, and each copy that becomes the group's current one comes into their
-clipboard, however old (the sync model below). A phone listens only
+clipboard while it lives (the sync model below). How long a copy lives is the group's
+setting, which the root (or an admin) sets with `cbb ttl` or on a phone and every device
+stamps on the copies it makes (D-129): an ordinary copy 5 minutes by default (1 minute to 1
+hour), a secret 60 seconds by default (5 seconds to 1 minute). A phone listens only
 sometimes, since Android and iOS let an app read the clipboard only while it is on screen, so
 it follows two rules of its own (the owner, 2026-11-22; D-128):
 
@@ -661,7 +664,9 @@ it follows two rules of its own (the owner, 2026-11-22; D-128):
    otherwise it takes the group's buffer, so a phone that copied nothing never sends back an
    old text. A group copy that waited and so did not reach the phone's clipboard is not lost
    silently: the app shows the last copy that came, with its device, and takes it into the
-   clipboard with one tap. Coming back from the system's own windows (the notification shade, a
+   clipboard with one tap. The line shows only while that copy is not in the phone's
+   clipboard: it hides when the person takes it, when a newer copy comes, and at once when
+   the copy's own lifetime runs out. Coming back from the system's own windows (the notification shade, a
    fingerprint or Face ID prompt, a permission dialog, a rotation) is not an opening.
 
 What the app itself wrote into the phone's clipboard is never a new copy (no echo). On the
@@ -900,10 +905,11 @@ sync away from home, the admins, and remote paste.
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
   - on a device that always listens, an event that becomes the group's current event is
-    written while sync is on, however old it is (the owner, 2026-11-22; D-128): its own
+    written while sync is on and the event lives (its own `ttl`, D-129; the owner, 2026-11-22;
+    D-128): its own
     clipboard always equals the group's buffer. A copy made before the current one never
-    becomes current, so it changes nothing; a member back from offline whose copy was made
-    after the current one makes it current, and every member writes it;
+    becomes current, so it changes nothing; a member back from offline whose live copy was
+    made after the current one makes it current, and every member writes it;
   - a phone, which listens only sometimes, follows "The one button" above: a gesture swaps
     its own clipboard and the group's buffer, and while its app is on screen it works as a
     device that always listens;
@@ -2905,7 +2911,7 @@ service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardw
   skipped, and such an offer makes no event (see the sync model).
 - Explicit actions may carry a secret: "send even if secret" on the Mac and the console
   paste. Secret events are kept only in memory and
-  expire 60 seconds after the copy, judged by the event's age. When a secret that a connector
+  expire after their own lifetime (the group's, 60 seconds by default), judged by the event's age. When a secret that a connector
   wrote expires, the connector gives up the clipboard, so the desktop does not keep it.
 - Secrets stay out of swap where the system allows it: on Linux the service's unit sets
   `MemorySwapMax=0`, and macOS encrypts its swap. Windows does not encrypt its page file by

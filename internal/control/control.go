@@ -56,7 +56,7 @@ const (
 	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Device names
 	OpDelay       = "takeover_delay" // client → service: on the root, set how long a claim waits to Value, a duration
 	OpKeyLevel    = "key_level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
-	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
+	OpTTL         = "ttl"            // client → service: on the root or an admin, set how long a copy and a secret live in the group to Value, "COPY [SECRET]", durations, "-" keeping one
 	OpRecover     = "recover"        // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Device names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
@@ -304,10 +304,12 @@ type Status struct {
 	// KeyLevel is the group's key level: which keys may be its root, an
 	// admin or a hub (proven, hardware or files).
 	KeyLevel string `json:"key_level,omitempty"`
-	// IncomingMS is how long a copy from another device stays live after
-	// it arrives, as the group's records set it (one minute by default):
-	// written to the clipboard until then, never after.
-	IncomingMS int64 `json:"incoming_ms,omitempty"`
+	// TTLMS is how long a copy lives in the group, as the group's records
+	// set it (five minutes by default); every device's copies carry it.
+	TTLMS int64 `json:"ttl_ms,omitempty"`
+	// SecretTTLMS is how long a secret lives in the group (a minute by
+	// default).
+	SecretTTLMS int64 `json:"secret_ttl_ms,omitempty"`
 	// KeyProblem says why this device's own key is in a file although the
 	// machine has a TPM it may use; empty when nothing failed.
 	KeyProblem string `json:"key_problem,omitempty"`

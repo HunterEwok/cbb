@@ -304,10 +304,10 @@ fn keys_in_the_hardware() {
     );
     wait_for(
         "desk signs as an admin with its key in the hardware",
-        || desk.ask(true, json!({"op": "incoming", "value": "20s"}), b"").error().is_empty().then_some(()),
+        || desk.ask(true, json!({"op": "ttl", "value": "- 20s"}), b"").error().is_empty().then_some(()),
         || desk.log(),
     );
-    svc.wait("the root takes desk's setting", |st| st["incoming_ms"] == 20_000);
+    svc.wait("the root takes desk's setting", |st| st["secret_ttl_ms"] == 20_000);
     // The helper gone, the key cannot be opened: the service says why, and
     // takes only cbb leave.
     let mut desk = desk;

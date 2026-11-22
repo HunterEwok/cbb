@@ -349,8 +349,8 @@ func TestAloneRoot(t *testing.T) {
 		t.Errorf("cbb remove of an unknown device: %v\n%s", err, out)
 	}
 	// The group's settings; the root changes only with the recovery key.
-	must("", "incoming", "2m")
-	waitFor(t, "the laptop takes the incoming time", func() bool { return laptop.status(t).IncomingMS == 120000 })
+	must("", "ttl", "2m")
+	waitFor(t, "the laptop takes the copy's lifetime", func() bool { return laptop.status(t).TTLMS == 120000 })
 	if out, err := cbb("", "takeover", "-delay", "0s"); err == nil || !strings.Contains(out, "cbb recovery") {
 		t.Errorf("cbb takeover -delay on the records of 0.6: %v\n%s", err, out)
 	}

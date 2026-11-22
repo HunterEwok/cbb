@@ -16,8 +16,8 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
-- ffi's group of 0.6 names its key level and the window for incoming copies (`key_level`,
-  `incoming_ms`), and the manage action `incoming` sets that window from a phone.
+- ffi's group of 0.6 names its key level and how long a copy and a secret live (`key_level`,
+  `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone.
 - Right after a group is made the root phone offers where to save its recovery key: "Write on
   a sheet", which shows the sheet and prints it or saves it with the system's own tools, with
   the warning that a saved file is the group's key, and "Write to YubiKey", which waits for the
@@ -713,7 +713,7 @@ made with 0.5 is set up again once. The details follow.
 - The Aurora app puts one received image in Pictures/CBB and one video in Videos/CBB, an album
   in the gallery; other files still go to Downloads/CBB.
 - The Rust `cbb` takes the group commands of the command line, with the Go cbb's words and
-  exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `incoming`,
+  exit codes (2 for a wrong use): `new`, `remove`, `rename`, `takeover -delay`, `ttl`,
   `keys`, `global hubs`, `freeze`, `unfreeze`, `admin`, `resolve`, `handover`, `mute`,
   `unmute`, `config` and `network`; `TestRustCommandLine` runs them against Rust services.
   Its `cbb status` prints what the Go cbb's does, with the devices' table, and the Rust
@@ -825,8 +825,8 @@ made with 0.5 is set up again once. The details follow.
   as a full member when its device record says so. A member the records remove or freeze
   now gets those records before its connection closes. `cbb pair` on it opens a pairing
   window with a code, which a computer joins as it joins a Go root (`TestAloneRootWindow`). It
-  also sets the takeover delay and how long an incoming copy stays live, hands the group to
-  an admin, and mutes and unmutes a device (`cbb takeover -delay`, `incoming`, `handover`,
+  also sets the takeover delay and how long a copy lives, hands the group to
+  an admin, and mutes and unmutes a device (`cbb takeover -delay`, `ttl`, `handover`,
   `mute -on`, `unmute -on`). With the capability `admin` (`-caps`, on by default), it is a
   computer's service in a Go computer's group: it offers an admin key, becomes an admin when
   the root makes it one, and takes the group over from a lost root with `cbb takeover`,
@@ -971,8 +971,8 @@ made with 0.5 is set up again once. The details follow.
 - The bench's fleet checks muting: `cbb mute` and `cbb unmute` on the device, across a restart
   and with `-for` (M8), an admin's `cbb mute -on` against the device's own user, a second
   admin and its time, a device that cannot be reached and two admins one after the other
-  (M9), and `cbb incoming` with its bounds and rights, and a device cut off that writes a
-  late copy only within the live window (M10).
+  (M9), and `cbb ttl` with its bounds and rights, and a device cut off that writes a late
+  secret only while it lives (M10).
 - The bench's fleet checks that the ways out carry only cbb: a hostile client with a member's
   keys reaches neither the internet nor the hub's home network nor its loopback, directly or
   through the forwarder (W44), and a hub that has only HTTPS registers inside VLESS (W45).
@@ -1055,10 +1055,12 @@ made with 0.5 is set up again once. The details follow.
   no hub is at home it reaches the first that answers through the hub's WireGuard, AmneziaWG
   or VLESS tunnel, the lite member's in the Rust core (the member's `away` and `away_status`
   ops); `TestFFIPhoneAway` syncs it with a Go hub through the tunnel.
-- The group sets how long a copy from another device stays live: one minute by default, from
-  5 seconds to an hour, in a signed `copies` record that the root or any admin signs
-  (`cbb incoming`, Settings on both phones; docs/protocol.md, section 10, "The copies
-  setting"); `cbb incoming` without a value shows it.
+- The group sets how long a copy and a secret live, in a signed `copies` record that the root
+  or any admin signs: a copy 5 minutes by default, from a minute to an hour, and a secret a
+  minute by default, from 5 seconds to a minute (`cbb ttl`, Settings on the phones;
+  docs/protocol.md, section 10, "The copies setting"); `cbb ttl` without a value shows them.
+  Every device stamps the lifetime on each copy it makes, as the copy's own `ttl` in
+  milliseconds, so the whole group keeps the same, and past it a copy is gone (D-129).
 - The first build of the app for Aurora OS 5 (`apps/silica`, armv7hl and aarch64): it shows
   the Rust core it links and keeps the phone's P-256 key in its own OP-TEE token, initialized
   once through Aurora's QCA keystore and used through PKCS#11 after that. It joins a group
@@ -2181,9 +2183,12 @@ made with 0.5 is set up again once. The details follow.
 - The bench's phone suite runs on a Mac or Windows with Docker Desktop too: the relay to the
   phone's pairing window listens on the loopback there, which the members reach as
   host.docker.internal, since the fleet network's gateway is inside Docker Desktop's VM.
-- A computer or small device writes whatever becomes the group's current copy, however old: its
-  clipboard always equals the group's buffer, and the live window no longer limits it; a copy
-  made before the current one changes nothing (D-128, [design](docs/design.md), "Sync model").
+- A computer or small device writes whatever becomes the group's current copy while it lives:
+  its clipboard always equals the group's buffer; a copy made before the current one changes
+  nothing (D-128, [design](docs/design.md), "Sync model").
+- A copy carries its lifetime as plain milliseconds, which its sender takes from the group's
+  `copies` record (`ttl_ms` for a copy, `secret_ttl_ms` for a secret), and readers judge it by
+  that; `cbb incoming` and the live window are gone, and `cbb ttl` sets both lifetimes (D-129).
 - The root's own device may be a hub, a phone root without an admin key too, first among the
   phones in the hub order ([protocol](docs/protocol.md), section 11, "Several hubs").
 - The coverage check's format gate counts a Rust test marked `// refuses: <rule>` for a rule

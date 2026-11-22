@@ -186,7 +186,7 @@ pub fn group(tag: &str) -> Group {
     let mut t = 1_000u64;
     let (d, e, pa, a) = (k("D"), k("E"), k("PA"), k("A"));
     for kind in [
-        Kind::Copies { incoming_ms: 60_000, seen: vec![] },
+        Kind::Copies { secret_ttl_ms: 0, ttl_ms: 60_000, seen: vec![] },
         Kind::settings(Settings { shared: true, ..Settings::default() }),
         Kind::device(plain(&d, "D")),
         Kind::device(plain(&e, "E")),
@@ -250,7 +250,7 @@ pub fn view(s: &State) -> View {
     devices.sort();
     let mut revoked = s.revoked.clone();
     revoked.sort();
-    (s.roots.clone(), devices, revoked, s.settings.clone(), s.incoming_ms, s.chain())
+    (s.roots.clone(), devices, revoked, s.settings.clone(), s.ttl_ms, s.chain())
 }
 
 /// The records and lists of `src` offered to fresh members in several

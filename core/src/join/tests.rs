@@ -1648,7 +1648,7 @@ fn a_welcome_too_wide_for_its_budget_comes_whole_in_parts() {
     let own = g.rec(&n1, Kind::device(d));
     let mut filler = Vec::new();
     for i in 0..40u64 {
-        filler.push(g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }).id());
+        filler.push(g.rec(&n1, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000 + i, seen: vec![] }).id());
     }
     let set = g.set();
     let st = set.state();
@@ -1853,7 +1853,7 @@ fn a_welcome_in_parts_leaves_nothing_to_sync() {
     d.rights = RIGHT_READ | RIGHT_SEND;
     g.rec(&n1, Kind::device(d));
     for i in 0..40u64 {
-        g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+        g.rec(&n1, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000 + i, seen: vec![] });
     }
     let set = g.set();
     let st = set.state();
@@ -1911,7 +1911,7 @@ fn a_welcome_carries_the_chain_of_the_joiners_record() {
     let mut g = G::new();
     let slate = k("slate");
     for i in 0..20u64 {
-        g.rec_root(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+        g.rec_root(Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000 + i, seen: vec![] });
     }
     let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
     d.rights = RIGHT_READ | RIGHT_SEND;
@@ -2035,12 +2035,12 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     d.rights = RIGHT_READ;
     let tv_admission = g.rec(&n2, Kind::device(d));
     for i in 0..30u64 {
-        g.rec(&n2, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+        g.rec(&n2, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 65_000 + i, seen: vec![] });
     }
     let seen = g.seen();
     g.rec(&n2, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
     // The removal is not the root's head when it checkpoints.
-    g.rec(&n2, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
+    g.rec(&n2, Kind::Copies { secret_ttl_ms: 0, ttl_ms: 69_000, seen: vec![] });
     // Every live admin acknowledges the removal, so a checkpoint may let
     // it go.
     for a in [k("laptop admin"), k("admin b"), k("admin c")] {

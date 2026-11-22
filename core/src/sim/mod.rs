@@ -516,7 +516,7 @@ impl World {
             let kind = if f % 4 == 3 {
                 Kind::settings(Settings { shared: f % 8 == 3, ..Settings::default() })
             } else {
-                Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() }
+                Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + f % 1000, seen: Vec::new() }
             };
             rec(&root, kind, &mut out, &mut units);
             f += 1;
@@ -526,7 +526,7 @@ impl World {
             while units.get(&ak.hash).copied().unwrap_or(0) + 4 < keep::ceiling(false) {
                 rec(
                     ak,
-                    Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() },
+                    Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + f % 1000, seen: Vec::new() },
                     &mut out,
                     &mut units,
                 );

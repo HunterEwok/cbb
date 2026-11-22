@@ -1163,9 +1163,9 @@ When an event becomes current (or a mark gets its text) it is written to the loc
 when all of these hold: the member's sync is on (mode `shared`); this member opened the current
 event (section 4, "Opening") and it is live (it has a text, and a secret is younger than the
 secret TTL); and the local clipboard does not already hold the text. A device that always
-listens keeps its own clipboard equal to the group's buffer (D-128): there is no age limit, so
-a member that comes back with a copy made after the group's current one makes it current and
-every member writes it, while a copy made before the current one never becomes current and
+listens keeps its own clipboard equal to the group's buffer (D-128): the only age limit is the
+copy's own `ttl` (D-129, section 10, "The copies setting"), so a member that comes back with a
+live copy made after the group's current one makes it current and every member writes it, while a copy made before the current one never becomes current and
 changes nothing (`cbb_core::copies::fresh`, `Behind`). A write increments the write sequence
 number (section 8). A phone, which listens only sometimes, swaps its own clipboard and the
 group's buffer on a gesture and listens so only while its app is on screen (design.md, "The
@@ -1181,7 +1181,8 @@ one button").
 
 ### Secrets (wire and local)
 
-- Secret TTL: a secret event is usable for 60 s after the copy, judged by its age. After that
+- Secret TTL: a secret event is usable for its own `ttl` after the copy (the group's
+  `secret_ttl_ms`, 60 s by default, "The copies setting"), judged by its age. After that
   it is neither the member's usable current text nor returned to the iPhone, but it stays the
   current event for ordering.
 - Marks (wire): a reader MUST put a secret into a hello only as its mark: the event with
@@ -1713,7 +1714,7 @@ which must hold the right `tools.cbb.admin` for five minutes, or for an operatio
 each time `tools.cbb.admin.each.` and the operation (`tools.cbb.admin.each` for one not
 listed). One
 confirmation covers the group's everyday changes for five minutes (`sync` of another device,
-`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `network`,
+`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `ttl`, `network`,
 `paste_on`, the quick actions' operations, `release_file`, `release_want` and `update_way`);
 every other operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`,
 `key_level`, `takeover_delay`, `make_admin`, `pair`, `join`, `invite`, `away`, `hubs`,
@@ -1769,8 +1770,8 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
   `seq` grows with every write the engine decides on (starting at 1 per service run); the
   service sends each write to every connected watcher, dropping the oldest queued write for
   one that falls 16 behind. A watcher MUST ignore a write whose `seq` is not greater than the
-  last one it applied. `ttl_ms` is the secret's remaining lifetime (60 s minus its age, at
-  least 1 ms); the Go connector uses 60 s when it is missing and gives up the clipboard when
+  last one it applied. `ttl_ms` is the secret's remaining lifetime (its own `ttl`, 60 s by default, minus its
+  age, at least 1 ms); the Go connector uses 60 s when it is missing and gives up the clipboard when
   it expires. A watcher writes a secret with the platform's password-manager marks.
 - A copy of images or files: a watcher whose watch request set `images` (for a copy with an
   image) or `files` (for a copy of files and folders) gets, once every part is in the cache,
@@ -2494,7 +2495,7 @@ and `a`-`f`.
 | `claim` | `root`, `seen` | an admin's claim to take the group over with a new root |
 | `resolve` | `records` | the current root voids the records it names: a cancelled claim, one side of a conflict, one of two records with one number |
 | `settings` | `takeover_delay_ms`, `key_level` | the root's settings for the group |
-| `copies` | `incoming_ms` | how long a copy from another device stays live ("The copies setting") |
+| `copies` | `ttl_ms`, `secret_ttl_ms` | how long a copy and a secret live in the group ("The copies setting") |
 | `checkpoint` | `heads`, `keep` | a root's checkpoint: the records it covers and does not keep may be dropped |
 | `hubs` | `hubs` | the user's main hubs for sync away from home, in the order they serve |
 | `recovery` | `admin`, `cert` | names the group's recovery key, an offline admin key that may only claim the group ("The recovery key") |
@@ -2524,7 +2525,8 @@ and `a`-`f`.
 | `cert` | string | `recovery` | the recovery key's admin CA certificate, DER, base64, whose key hash is `admin` |
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
 | `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a trusted hub, which is an admin ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
-| `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): the lifetime the readers' freshness check gives a copy without its own (`cbb_core::copies::fresh`, the allowance); since D-128 it no longer limits what a member writes; without a `copies` record that counts, 60 000 |
+| `ttl_ms` | integer | `copies` | field 10, from 60 000 (1 minute) to 3 600 000 (1 hour): the lifetime every member stamps on an ordinary copy it makes (D-129); without a `copies` record that counts, 300 000 (5 minutes) |
+| `secret_ttl_ms` | integer | none | field 12, from 5 000 to 60 000 (1 minute): the lifetime every member stamps on a secret it makes; absent (0 is never written) or without a `copies` record that counts, 60 000 |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}`; above seq 1 its own key's head is its `prev`, at seq 1 it names no head of its own key |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
@@ -2733,13 +2735,17 @@ name still serves after the main hubs.
 
 #### The copies setting
 
-A `copies` record sets the group's live window, `incoming_ms`: how long a copy from another
-device goes into a member's clipboard after it was copied (section 5, "Writing the member's
-own clipboard"). The root and every admin may sign one, since it changes only how the
+A `copies` record sets the group's two lifetimes (D-129): `ttl_ms`, how long an ordinary copy
+lives, and `secret_ttl_ms`, how long a secret lives. Every member stamps the one for its kind
+on each copy it makes, as the copy's own `ttl` in milliseconds (Content field 3, from
+`content::MIN_TTL_MS` (5000) to `content::MAX_TTL_MS` (3600000)), so the whole group sends the
+same; a reader judges a copy by its own `ttl` (`cbb_core::copies::fresh`): past it the copy is
+gone, a phone's "Last received" line hides and a secret is no longer written. The root and
+every admin may sign one, since it changes only how the
 members treat the group's own copies. Of the `copies` records that count, one counts for the
 setting by the rule of the hubs table: a root's beats an admin's, of two roots' the later
 root on the path, then the higher `seq`; of two admins' the later `time_ms`, then the smaller
-signer, then the higher `seq`. The state carries its `incoming_ms`.
+signer, then the higher `seq`. The state carries its `ttl_ms` and `secret_ttl_ms`.
 
 #### Removals and freezes keep what the author saw
 
@@ -3016,7 +3022,8 @@ and returns the state as one canonical JSON object:
 | `hubs` | array of strings | the main hubs of the `hubs` record that counts ("The hubs table"): its devices that are in `devices` and may be hubs (a phone, or a member with `hub`), in its order |
 | `recovery` | string | the key hash of the recovery key ("The recovery key"), while it is neither removed nor frozen |
 | `key_level` | string | the `key_level` of the current root's newest counting `settings` record; absent when it has none (then `hardware`), so a claim's new root starts without one and signs the old root's settings again |
-| `incoming_ms` | integer | the `incoming_ms` of the `copies` record that counts ("The copies setting"); absent when none counts (then 60 000) |
+| `ttl_ms` | integer | the `ttl_ms` of the `copies` record that counts ("The copies setting"); absent when none counts (then 300 000) |
+| `secret_ttl_ms` | integer | the `secret_ttl_ms` of the `copies` record that counts; absent when it has none or none counts (then 60 000) |
 
 The reasons in `ignored`, in the order they are decided:
 
@@ -5169,8 +5176,12 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::body::MAX_KEYS` | 256 | frozen | keys of a settings record | `records/revoke/keys` |
 | `records::body::MAX_HUBS` | 16 | stated | hubs of a group | `records/hubs/hubs` |
 | `records::body::MAX_SERVERS` | 16 | stated | servers of a group | `records/settings/servers` |
-| `records::body::MIN_INCOMING_MS` | 5000 | frozen | the shortest incoming window | `records/copies/incoming_ms` |
-| `records::body::MAX_INCOMING_MS` | 3600000 | frozen | the longest incoming window | `records/copies/incoming_ms` |
+| `records::body::MIN_COPY_TTL_MS` | 60000 | frozen | the owner's shortest lifetime of an ordinary copy, a minute | `records/copies/ttl_ms` |
+| `records::body::MAX_COPY_TTL_MS` | 3600000 | frozen | the owner's longest lifetime of an ordinary copy, an hour | `records/copies/ttl_ms` |
+| `records::body::MIN_SECRET_TTL_MS` | 5000 | frozen | the owner's shortest lifetime of a secret, 5 seconds | `records/copies/secret_ttl_ms` |
+| `records::body::MAX_SECRET_TTL_MS` | 60000 | frozen | the owner's longest lifetime of a secret, a minute | `records/copies/secret_ttl_ms` |
+| `content::MIN_TTL_MS` | 5000 | frozen | the shortest lifetime a copy carries, a secret's least | `content/ttl` |
+| `content::MAX_TTL_MS` | 3600000 | frozen | the longest lifetime a copy carries, an ordinary copy's most | `content/ttl` |
 | `records::ADMIN_KEYS_MAX` | 16 | stated | the owner's cap of 16 admins |  |
 | `records::MAX_DEVICES` | 256 | stated | 256 devices with a device record |  |
 | `records::MAX_ROOT_RECORDS` | 1536 | frozen | a full checkpoint, a second waiting one and the devices |  |

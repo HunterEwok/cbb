@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+use cbb_core::records::body::{Device, MIN_COPY_TTL_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
 use cbb_core::records::key::group_id;
 use cbb_core::records::set::{ADMIN_KEY_TAKEN_BACK, ADMIN_SILENCE_MS};
 use cbb_core::records::{Body, Key, KeyHash, Kind, Record, RecordId, RecordSet, State};
@@ -141,7 +141,7 @@ fn taken_back(named: Named, checkpoints: usize) -> (RecordSet, K, K, K, Record, 
         let st = set.state();
         set.write_record(&st, &root, kind, *t).unwrap_or_else(|e| panic!("{named:?}: {e:?}"));
     };
-    w(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, &mut t);
+    w(&mut set, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, &mut t);
     match named {
         Named::AtAdmission => w(&mut set, device(&p, "phone", Some(&a)), &mut t),
         Named::Later | Named::LaterThenChanged => {
@@ -304,7 +304,7 @@ fn a_fresh_removal_past_three_quarters_does_not_take_every_admin_back() {
         let st = set.state();
         set.write_record(&st, &root, kind, *t)
     };
-    w(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, &mut t).unwrap();
+    w(&mut set, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, &mut t).unwrap();
     let admins: Vec<(K, K)> = (0..3).map(|i| (k(&format!("phone {i}")), k(&format!("admin {i}")))).collect();
     for (p, a) in &admins {
         w(&mut set, device(p, "phone", Some(a)), &mut t).unwrap();
@@ -319,8 +319,8 @@ fn a_fresh_removal_past_three_quarters_does_not_take_every_admin_back() {
         if room.is_some_and(|r| r.used * 4 > cap * 3) {
             break;
         }
-        let ms = MIN_INCOMING_MS + n;
-        if w(&mut set, Kind::Copies { incoming_ms: ms, seen: vec![] }, &mut t).is_err() {
+        let ms = MIN_COPY_TTL_MS + n;
+        if w(&mut set, Kind::Copies { secret_ttl_ms: 0, ttl_ms: ms, seen: vec![] }, &mut t).is_err() {
             break;
         }
         n += 1;
@@ -376,7 +376,7 @@ fn a_key_named_only_in_a_middle_record_stays_known() {
         let _ = set.insert(cp);
         r
     };
-    write(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, &mut t);
+    write(&mut set, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, &mut t);
     let plain = |name: &str, rights: u64| {
         let mut d = Device::new(p.key.clone(), name, ROLE_MEMBER);
         d.rights = rights;
@@ -421,7 +421,7 @@ fn the_notices_tell_what_waits_for_whom() {
     let mut set = RecordSet::new(root.key.clone(), recovery);
     let mut t = 1000u64;
     for kind in [
-        Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+        Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] },
         device(&p, "phone", Some(&a)),
         device(&k("victim"), "victim", None),
     ] {
@@ -489,7 +489,7 @@ fn a_freeze_by_an_admin_without_remove_admins_is_not_made_permanent() {
         Kind::device(d)
     };
     for kind in [
-        Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+        Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] },
         computer_admin(&pa, &a),
         computer_admin(&pb, &b),
         device(&k("victim"), "victim", None),
@@ -554,7 +554,7 @@ fn a_removal_of_an_admin_key_stays_when_its_signer_is_taken_back() {
             Kind::device(d)
         };
         for kind in [
-            Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+            Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] },
             admin(&p4, &a4, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS),
             admin(&p5, &a5, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE),
         ] {
@@ -634,7 +634,7 @@ fn a_root_at_its_cap_can_still_take_the_silent_admin_back() {
         d.rights = RIGHT_READ | RIGHT_SEND;
         d.admin = Some(a.key.clone());
         d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
-        for kind in [Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, Kind::device(d)] {
+        for kind in [Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, Kind::device(d)] {
             t += 1;
             let st = set.state();
             set.write_record(&st, &root, kind, t).unwrap();
@@ -745,7 +745,7 @@ fn at_the_cap(n: usize) -> (RecordSet, K, Vec<K>, u64) {
     let mut set = RecordSet::new(root.key.clone(), recovery);
     let mut t = 1_000u64;
     let st = set.state();
-    set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, t).unwrap();
+    set.write_record(&st, &root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, t).unwrap();
     let admins: Vec<K> = (0..n).map(|i| k(&format!("lag admin {i}"))).collect();
     for (i, a) in admins.iter().enumerate() {
         let mut d = Device::new(k(&format!("lag phone {i}")).key.clone(), "a", ROLE_MEMBER);
@@ -842,7 +842,7 @@ fn a_root_at_its_cap_can_take_back_two_laggards_and_recover() {
     }
     let st = set.state();
     t += 1;
-    set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] }, t)
+    set.write_record(&st, &root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + 1, seen: vec![] }, t)
         .expect("and writes ordinary records again");
 }
 
@@ -894,7 +894,8 @@ fn sixteen_laggards_a_mixed_fill_never_closes_the_way_out() {
         let mut set = RecordSet::new(root.key.clone(), recovery.clone());
         let mut t = 1_000u64;
         let st = set.state();
-        set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, t).unwrap();
+        set.write_record(&st, &root, Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS, seen: vec![] }, t)
+            .unwrap();
         for i in 0..16 {
             let mut d = Device::new(k(&format!("mix phone {i}")).key.clone(), "a", ROLE_MEMBER);
             d.rights = RIGHT_READ | RIGHT_SEND;
@@ -926,7 +927,7 @@ fn sixteen_laggards_a_mixed_fill_never_closes_the_way_out() {
                     let r = set.write_record(
                         &st,
                         &root,
-                        Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(step), seen: vec![] },
+                        Kind::Copies { secret_ttl_ms: 0, ttl_ms: MIN_COPY_TTL_MS + u64::from(step), seen: vec![] },
                         t,
                     );
                     ("ordinary", r.is_ok())

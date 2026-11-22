@@ -69,7 +69,7 @@ fn a_member_is_no_admin() {
         (json!({"op": "make_admin", "device": "root"}), "only the group's root makes admins"),
         (json!({"op": "key_level", "value": "files"}), "only the group's root sets the key level"),
         (json!({"op": "takeover_delay", "value": "1h"}), "changes only with its recovery key"),
-        (json!({"op": "incoming", "value": "1m"}), "only the group's root or an admin sets"),
+        (json!({"op": "ttl", "value": "1m"}), "only the group's root or an admin sets"),
         (json!({"op": "hubs", "hubs": ["root"]}), "only the group's root or an admin that may be a hub"),
         (json!({"op": "hand_over", "device": "root"}), "changes only with its recovery key"),
         (json!({"op": "take_over", "device": "root"}), "changes only with its recovery key"),
@@ -98,7 +98,7 @@ fn a_member_is_no_admin() {
 }
 
 /// The root's group settings: the key level, the takeover delay, how long
-/// an incoming copy stays live, the main hubs.
+/// a copy lives, the main hubs.
 #[test]
 fn the_roots_settings() {
     let g = group(&["root", "desk"]);
@@ -116,11 +116,15 @@ fn the_roots_settings() {
         has(&root.err(true, json!({"op": "takeover_delay", "value": value})), "changes only with its recovery key");
     }
 
-    has(&root.err(true, json!({"op": "incoming", "value": "1s"})), "from 5s to 1h");
-    has(&root.err(true, json!({"op": "incoming", "value": "2h"})), "from 5s to 1h");
-    root.ok(true, json!({"op": "incoming", "value": "5m"}));
-    assert_eq!(root.status()["incoming_ms"], 300_000);
-    desk.wait("desk takes the copies setting", |st| st["incoming_ms"] == 300_000);
+    has(&root.err(true, json!({"op": "ttl", "value": "30s"})), "a copy lives from 1m to 1h");
+    has(&root.err(true, json!({"op": "ttl", "value": "2h"})), "a copy lives from 1m to 1h");
+    has(&root.err(true, json!({"op": "ttl", "value": "5m 2m"})), "a secret lives from 5s to 1m");
+    root.ok(true, json!({"op": "ttl", "value": "10m 30s"}));
+    assert_eq!(
+        (root.status()["ttl_ms"].clone(), root.status()["secret_ttl_ms"].clone()),
+        (json!(600_000), json!(30_000))
+    );
+    desk.wait("desk takes the copies setting", |st| st["ttl_ms"] == 600_000 && st["secret_ttl_ms"] == 30_000);
 
     has(&root.err(true, json!({"op": "hubs", "hubs": []})), "name 1 to");
     has(&root.err(true, json!({"op": "hubs", "hubs": ["root", "ROOT"]})), "named twice");
@@ -145,7 +149,7 @@ fn makes_an_admin_and_hands_the_group_over() {
     wait_for(
         "desk signs as an admin",
         || {
-            let m = desk.ask(true, json!({"op": "incoming", "value": "30s"}), b"");
+            let m = desk.ask(true, json!({"op": "ttl", "value": "2m"}), b"");
             m.error().is_empty().then_some(())
         },
         || desk.log(),
@@ -237,7 +241,7 @@ fn an_admin_does_not_take_the_group_over() {
     wait_for(
         "desk holds its admin CA",
         || {
-            let m = g[1].ask(true, json!({"op": "incoming", "value": "1m"}), b"");
+            let m = g[1].ask(true, json!({"op": "ttl", "value": "1m"}), b"");
             m.error().is_empty().then_some(())
         },
         || g[1].log(),
@@ -509,8 +513,8 @@ fn recovers_the_group_with_its_sheet() {
     // As the root it signs: it names how long a copy stays live, and lap,
     // which stayed in the group, takes it.
     has(&desk.err_with(true, json!({"op": "recover"}), sheet.as_bytes()), "root already");
-    desk.ok(true, json!({"op": "incoming", "value": "45s"}));
-    lap.wait("lap takes the new root's setting", |st| st["incoming_ms"] == 45_000);
+    desk.ok(true, json!({"op": "ttl", "value": "- 45s"}));
+    lap.wait("lap takes the new root's setting", |st| st["secret_ttl_ms"] == 45_000);
 }
 
 /// A stolen root is left out when another computer recovers the group:
