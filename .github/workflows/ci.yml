@@ -2746,6 +2746,11 @@ jobs:
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-core --features fuzzing -- -D warnings # the fuzz targets' readers, without std
+      - name: the core's timed tests, in a build no coverage slows
+        # cbb (Rust) runs the core's tests under coverage, which slows the
+        # code it measures and not the crates it does not, so a test that
+        # compares the two times runs here.
+        run: cargo test --locked -p cbb-core --lib a_full_group_fills_in_about_the_time_of_its_signatures
       - name: cargo clippy for Windows, macOS and FreeBSD (the service builds there too)
         run: |
           for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do

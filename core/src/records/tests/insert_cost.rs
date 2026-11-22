@@ -261,8 +261,12 @@ fn the_pool_ends_alike_the_old_way_and_the_new() {
 /// signature twice, takes less than verifying every record twice, and the
 /// last quarter of the records, against its own signatures, costs no more
 /// than four times the first. The times are taken side by side in one
-/// loop, so a loaded machine changes neither bound.
+/// loop, so a loaded machine changes neither bound. A coverage build counts
+/// every step of the fill but none of the signature's (its crates are not
+/// measured), which skews the two times apart: CI times it in the checks
+/// job's plain build instead.
 #[test]
+#[cfg_attr(coverage, ignore = "a coverage build slows the fill and not the signatures; the checks job runs it")]
 fn a_full_group_fills_in_about_the_time_of_its_signatures() {
     // Timed: without the debug check after every insert (which only a
     // build with std makes).

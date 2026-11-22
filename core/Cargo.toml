@@ -79,3 +79,7 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 # The tests compare the exporter with rustls's own, which needs std.
 rustls = { version = "0.23.46", default-features = false, features = ["std"] }
 serde_json = "1"
+
+[lints.rust]
+# cargo llvm-cov builds with --cfg coverage.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }
