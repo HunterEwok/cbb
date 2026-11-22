@@ -107,7 +107,7 @@ final class WatchLink: NSObject {
             d.isSelf
                 ? WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: true, can: [], collection: c, phone: true)
                 : WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: d.online,
-                                    can: signs ? model.group.watchActions(for: d.id) : [], actions: d.actions, collection: c)
+                                    can: [], actions: d.actions, collection: c)
         }
         s.away = model.away.map { a in
             guard a.on else { return .off }
