@@ -33,6 +33,7 @@ class GroupStateTest {
         assertEquals(listOf("Root phone", "Pixel", "Desk"), g.devices.map { it.name })
         assertEquals(listOf(false, true, false), g.devices.map { it.admin })
         assertTrue(g.devices[2].frozen && g.devices[2].hub)
+        assertEquals(listOf(false, false, true), g.devices.map { it.offersAdmin })
         assertTrue(g.copy(me = g.me.copy(device = g.rootDevice)).isRoot)
     }
 

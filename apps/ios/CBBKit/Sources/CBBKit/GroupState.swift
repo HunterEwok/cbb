@@ -71,10 +71,13 @@ public struct GroupState: Decodable, Equatable, Sendable {
         public var admin: Bool
         public var frozen: Bool
         public var hub: Bool
+        /// It offered this phone an admin key when it paired and is no admin
+        /// yet: the root may make it one.
+        public var offersAdmin: Bool
 
         public var id: String { device }
 
-        enum CodingKeys: String, CodingKey { case device, name, os, role, admin, frozen, hub }
+        enum CodingKeys: String, CodingKey { case device, name, os, role, admin, frozen, hub, offersAdmin = "offers_admin" }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -85,6 +88,7 @@ public struct GroupState: Decodable, Equatable, Sendable {
             admin = try c.decodeIfPresent(Bool.self, forKey: .admin) ?? false
             frozen = try c.decodeIfPresent(Bool.self, forKey: .frozen) ?? false
             hub = try c.decodeIfPresent(Bool.self, forKey: .hub) ?? false
+            offersAdmin = try c.decodeIfPresent(Bool.self, forKey: .offersAdmin) ?? false
         }
     }
 

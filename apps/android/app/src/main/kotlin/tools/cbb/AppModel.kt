@@ -53,7 +53,7 @@ class AppModel(private val app: Context) {
         n.onEvent = { Handler(Looper.getMainLooper()).post { WatchLink.update(app, this) } }
     }
     val group = LiveGroup(app).also { g ->
-        g.onCopy = { text, kind -> Clipboard.write(app, text, kind) }
+        g.onCopy = { text, kind, ttlMS -> Clipboard.write(app, text, kind, ttlMS) }
         g.onImage = { file, alt -> Clipboard.writeImage(app, file, alt) }
         g.onReceived = { Handler(Looper.getMainLooper()).post { received = g.lastReceived } }
         // In the background too: the service keeps the connections that bring the records.
@@ -487,7 +487,7 @@ class AppModel(private val app: Context) {
         val r = received ?: return
         try {
             when (val got = withContext(Dispatchers.IO) { group.copyReceived(r.id) }) {
-                is LiveGroup.Got.Text -> Clipboard.write(app, got.text, got.kind)
+                is LiveGroup.Got.Text -> Clipboard.write(app, got.text, got.kind, got.ttlMS)
                 is LiveGroup.Got.Image -> Clipboard.writeImage(app, got.file, got.alt)
                 is LiveGroup.Got.Files, null -> {}
             }
@@ -512,7 +512,7 @@ class AppModel(private val app: Context) {
             // the app opened was still going) says how it went, not this one.
             if (mine != syncs) return
             when (fetched) {
-                is LiveGroup.Got.Text -> Clipboard.write(app, fetched.text, fetched.kind)
+                is LiveGroup.Got.Text -> Clipboard.write(app, fetched.text, fetched.kind, fetched.ttlMS)
                 is LiveGroup.Got.Image -> Clipboard.writeImage(app, fetched.file, fetched.alt)
                 is LiveGroup.Got.Files -> {}
                 null -> {}

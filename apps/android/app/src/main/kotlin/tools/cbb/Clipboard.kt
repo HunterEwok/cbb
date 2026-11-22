@@ -148,7 +148,7 @@ object Clipboard {
      * system shows no preview of it, and goes after its remaining minute
      * while it is still there.
      */
-    fun write(context: Context, text: String, kind: Member.Kind) {
+    fun write(context: Context, text: String, kind: Member.Kind, ttlMS: Long? = null) {
         val cm = context.getSystemService(ClipboardManager::class.java)
         val clip = ClipData.newPlainText("cbb", text)
         if (kind == Member.Kind.SECRET) {
@@ -166,7 +166,7 @@ object Clipboard {
                 // text it wrote), so that it does not stay for good.
                 val now = read(context)
                 if (if (now != null) now == text else changes == written) cm.clearPrimaryClip()
-            }, SECRET_TTL_MS)
+            }, ttlMS ?: SECRET_TTL_MS)
         }
     }
 }

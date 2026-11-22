@@ -374,8 +374,10 @@ void Member::take(const QJsonObject &copy)
     const QString id = copy.value(QStringLiteral("id")).toString();
     const QString kind = copy.value(QStringLiteral("kind")).toString();
     if (kind != QStringLiteral("media")) {
-        // A secret the phone took leaves the clipboard after a minute (docs/design.md, "Secrets").
-        write(copy.value(QStringLiteral("text")).toString(), kind == QStringLiteral("secret"), kind == QStringLiteral("secret") ? 60000 : 0);
+        // A secret the phone took leaves the clipboard when its lifetime runs
+        // out, a minute unless its sender set another (D-129).
+        const qint64 ttl = copy.value(QStringLiteral("ttl_ms")).isDouble() ? qint64(copy.value(QStringLiteral("ttl_ms")).toDouble()) : 60000;
+        write(copy.value(QStringLiteral("text")).toString(), kind == QStringLiteral("secret"), kind == QStringLiteral("secret") ? ttl : 0);
         Failure failure;
         call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
         return;
@@ -821,7 +823,17 @@ void Member::pollDevices()
     Failure groupFailure;
     const QJsonObject g = call(m_member, QStringLiteral("group"), QJsonObject(), &groupFailure);
     QVariantMap groupState = groupFailure.isNull() ? g.toVariantMap() : m_groupState;
-    // The devices are listed above, with what the hellos add.
+    // The devices are listed above, with what the hellos add; of the group
+    // view's own list only the devices that offered this phone an admin key
+    // at pairing and are no admins yet stay, as offers_admin.
+    if (groupFailure.isNull()) {
+        QStringList offers;
+        for (const QJsonValue &d : g.value(QStringLiteral("devices")).toArray()) {
+            if (d.toObject().value(QStringLiteral("offers_admin")).toBool())
+                offers << d.toObject().value(QStringLiteral("device")).toString();
+        }
+        groupState.insert(QStringLiteral("offers_admin"), offers);
+    }
     groupState.remove(QStringLiteral("devices"));
     Failure noticesFailure;
     const QJsonObject ns = call(m_member, QStringLiteral("notices"), QJsonObject(), &noticesFailure);

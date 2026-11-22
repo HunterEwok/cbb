@@ -10,7 +10,7 @@
 
 import { router } from '@kit.ArkUI';
 import { t } from '../core/Text';
-import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
+import { kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
 import { Device as DeviceInfo } from '../model/Member';
 
@@ -149,10 +149,10 @@ export struct DeviceDetail {
                 })
               }
               if (this.acts(this.device() as DeviceInfo)) {
-                // The admin key comes from the device's hello: a computer's
-                // with the admin capability, or a phone's.
+                // The admin key is the one the device offered this phone
+                // when it paired, as the group view says (offers_admin).
                 if (app.isRoot() && (this.device() as DeviceInfo).admin !== true &&
-                  ((this.device() as DeviceInfo).role === 'phone' || can(this.device() as DeviceInfo, 'admin'))) {
+                  app.member.offersAdmin.indexOf(this.deviceId) >= 0) {
                   this.action(t('device_make_admin'), false, () => {
                     const phone = (this.device() as DeviceInfo).role === 'phone';
                     this.confirm(t(phone ? 'device_make_admin_phone_confirm' : 'device_make_admin_confirm'), t('device_make_admin'), () => {

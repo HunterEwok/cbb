@@ -34,6 +34,7 @@ final class GroupStateTests: XCTestCase {
         XCTAssertEqual(g.devices.map(\.name), ["Root phone", "Pixel", "Desk"])
         XCTAssertEqual(g.devices.map(\.admin), [false, true, false])
         XCTAssertTrue(g.devices[2].frozen && g.devices[2].hub)
+        XCTAssertEqual(g.devices.map(\.offersAdmin), [false, false, true])
         var r = g
         r.me.device = g.rootDevice
         XCTAssertTrue(r.isRoot)

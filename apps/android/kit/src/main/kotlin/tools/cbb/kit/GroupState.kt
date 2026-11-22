@@ -60,6 +60,8 @@ data class GroupState(
         val admin: Boolean,
         val frozen: Boolean,
         val hub: Boolean,
+        /** It offered this phone an admin key when it paired and is no admin yet: the root may make it one. */
+        val offersAdmin: Boolean = false,
     )
 
     val stopped: Boolean get() = stop == "full" || halted
@@ -98,6 +100,7 @@ data class GroupState(
                         admin = it.optBool("admin") ?: false,
                         frozen = it.optBool("frozen") ?: false,
                         hub = it.optBool("hub") ?: false,
+                        offersAdmin = it.optBool("offers_admin") ?: false,
                     )
                 },
             )

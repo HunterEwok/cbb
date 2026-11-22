@@ -12,7 +12,7 @@
     "devices": [
       {"device": "01010101010101010101010101010101", "name": "Root phone", "os": "ios", "role": "phone", "admin": false, "frozen": false, "hub": false},
       {"device": "02020202020202020202020202020202", "name": "Pixel", "os": "android", "role": "phone", "admin": true, "frozen": false, "hub": false},
-      {"device": "03030303030303030303030303030303", "name": "Desk", "os": "linux", "role": "computer", "admin": false, "frozen": true, "hub": true}
+      {"device": "03030303030303030303030303030303", "name": "Desk", "os": "linux", "role": "computer", "admin": false, "frozen": true, "hub": true, "offers_admin": true}
     ]
   },
   "notices": [
