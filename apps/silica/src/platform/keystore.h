@@ -19,10 +19,9 @@ namespace KeyStore {
 QString store();
 
 // Which key: the member key, the phone's device key in its group, or the
-// admin key, which a phone that joins as an admin offers and the group's
-// root certifies (docs/protocol.md, section 6, "A phone joins a computer's
-// group"). The admin key is made only when the user asks to join as an
-// admin.
+// admin key, which the phone's hellos offer and the group's root makes an
+// admin (docs/protocol.md, section 6, "The window and who dials"). The
+// admin key is made only when the user asks to join as an admin.
 enum class Which { Member, Admin };
 
 // Why the phone has no hardware key: no OP-TEE at all (Sailfish OS, the

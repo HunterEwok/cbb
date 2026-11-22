@@ -346,10 +346,7 @@ Members (computers, boards and routers with the service or the firmware) publish
 phones and joining devices only browse, except a phone that is the group's hub, which
 publishes `v=1`, `g=<tag>`, `r=phone` while its app is open (design.md, "The phone as the
 hub"), and a phone whose pairing window is open (section 6, "The window and who dials"), which
-publishes `v=1`, `g=<tag>`, `p=1`, `f=<fingerprint>` while the window is open. Until the switch
-to the core (wave 5), a device that listens to join (section 6, "The joiner listens") publishes
-its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
-`f=<fingerprint>` while it waits.
+publishes `v=1`, `g=<tag>`, `p=1`, `f=<fingerprint>` while the window is open.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
 [RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns` (Go, for the tests); `cbb`
 publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
@@ -386,7 +383,6 @@ TXT strings (each at most 255 bytes):
 | `v` | `1` | protocol version |
 | `g` | group tag | members of another group, or of a replaced CA, are ignored |
 | `p` | `1` | present only while a pairing window is open (a computer's or, in 0.6, a phone's) |
-| `j` | `1` | until the switch to the core (wave 5): present only on a device that listens to join; it has no `g`, so no member dials it as one |
 | `f` | fingerprint | with `p`, on the records of 0.6: the hex of the window's member key hash (Conventions: SHA-256 of the Key's encoding, 64 lowercase hex characters), the key of its TLS by key, as the window's QR code's `fp` (section 7), which the new device checks before it sends anything; with `j`, until the switch: the fingerprint of the key of the joiner's self-signed certificate (Conventions, "Fingerprints"), as its QR code's `fp` |
 | `i` | window ID | with `p`, on the records of 0.6: the home window's ID, 32 lowercase hex characters, by which a new device that has only the six digits typed into it finds the window and builds its password (section 6, "Pairing in 0.6"); never the digits |
 | `r` | `listen` or `phone` | `listen` on a member without the capability `dials` (section 4, "Capabilities"), which every member dials since it dials none; `phone` on a phone that is the group's hub while its app is open, which the members do not dial, since it dials them; the other phones dial it |
@@ -1196,13 +1192,9 @@ one button").
 
 ## 6. Pairing a computer
 
-Source: `core/src/join` (0.6: `mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `intro.rs`),
-`core/src/msg/tables.rs` (the messages' tables), `core/src/pair.rs`,
-`core/src/third_party/cpace`, `member/src/pair.rs`.
-
-This section first gives pairing as the 0.6 format has it, in the core. The service in
-`member/` and the apps still pair as the subsection "Until the switch to the core (wave 5)"
-describes, until wave 5 moves them onto the core; that subsection goes with that code.
+Source: `core/src/join` (`mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `intro.rs`),
+`core/src/msg/tables.rs` (the messages' tables), `core/src/third_party/cpace`,
+`member/src/inviter.rs`, `member/src/pair.rs`.
 
 ### Pairing in 0.6
 
@@ -1391,230 +1383,6 @@ joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
   joins only by its own invitation. A phone joins as a member of the group with role `phone`;
   the root makes it an admin later, from the admin key its hellos offer.
 
-### Until the switch to the core (wave 5)
-
-What follows is pairing as the Go helper and the apps of 0.5 speak it: JSON frames and a
-member certificate in the Welcome. It goes with that code in wave 5. A home window of a group
-of 0.6 does not follow it: its six digits are typed on the new device or come in the QR code,
-and its mDNS announcement carries the window's ID (`i`), never the digits ("Pairing in 0.6"
-above, and section 3).
-
-#### Window
-
-The root or an admin (section 10, "Admins") opens a window with a six-digit code. The code MUST be drawn
-uniformly at random, and MUST NOT be taken from a command line, where other users of the
-machine could read it. While it is open
-the member publishes `p=1`. The window lives 5 minutes (counting sleep); an attempt that has
-started may finish after that. One attempt at a time; another gets `busy`. The window MUST
-close after a success or after the third failed attempt (`too-many`), so that a guesser gets
-at most three online guesses per code. An attempt fails (counts) when the joiner's tag Ta
-does not verify (`wrong-code`) or its admin declines the device; an attempt that ends
-without a tag (bad AD, a bad certificate, a dropped connection, a joiner that goes quiet
-after the member's CPace message) tested no guess and does not count. Each attempt has 30 s
-on both sides; the joiner's first message must arrive within 10 s of the TLS handshake, and
-its tag within 10 s of the member's CPace message. A running attempt whose joiner has not
-sent its first message 2 s after it began ends when another joiner's attempt comes, which
-takes its place. After 5 attempts from one source that ended without counting, the window
-answers that source `busy`, so that one device on the network cannot hold the window for
-its whole life; a source whose failed attempts are one short of closing the window gets
-`busy` too, so that no one device closes it alone, while a user who mistypes once may try
-again. A source is as for the member port (section 4); loopback counts only in all, and
-past 1024 sources the new ones share one count.
-
-A window for a remote invitation (design.md, "Joining from another network") differs:
-
-- Its password is the invitation's secret, at least 16 random bytes (128 bits), in place
-  of the code. The joiner gets it from the invitation and never types it.
-- It lives as long as the invitation, up to a day.
-- Its joiner gets no CA keys, whatever its `os`.
-- After Ta verifies, and before it makes the certificate, the member asks its admin to
-  confirm the device: its name, `os`, device ID and key fingerprint (of the key of the
-  joiner's TLS certificate, Conventions, "Fingerprints", as the joiner shows it). It sends frame 4
-  only after a yes; a no sends `{"error": "declined"}` and counts as a failed attempt.
-- Each attempt then has 30 s plus the time allowed for the admin's answer, on both sides.
-
-#### TLS
-
-- Joiner (client): TLS 1.3, ALPN `cbb-pair/3`, presents its self-signed certificate
-  (section 2) for the P-256 key it will keep, with its new device ID as CN; it does not
-  verify the server's certificate during the handshake.
-- Member (server): TLS 1.3, ALPN `cbb-pair/3`, presents its member certificate (leaf
-  only), requires any client certificate, session tickets off. It MUST reject the connection
-  unless the client sent exactly one certificate with a P-256 key and a device ID as CN that
-  differs from its own.
-
-#### Channel binding and CPace
-
-Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
-`core/src/third_party/cpace`, with explicit key confirmation.
-
-| Input | Value |
-|-------|-------|
-| Roles | joiner = initiator, member = responder |
-| PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
-| CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
-| sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"\|"harmonyos"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS, `harmonyos` for HarmonyOS 5 and later) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a member adds `"caps"`, its capabilities (section 4, "Capabilities"), sorted, unless it has none, and firmware without a system says `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`, `harmonyos`) as phones and records any other joiner with role `member` and its `caps`; a computer admits `linux`, `windows`, `macos` and `none` as members with their `caps`, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
-| ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
-| Ya, Yb | 32-byte X25519 u-coordinates |
-| Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
-
-The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
-is `linux`, `windows`, `macos`, `none`, or one of the phones' `ios`,
-`android`, `aurora`, `sailfish` and `harmonyos`; `name` is 1 to 64 bytes of
-printable UTF-8; `admin_key`, when present, comes with a phone's system and is a P-256 key, and
-`admin_proof` comes with it; `caps`,
-when present, is a sorted list of distinct known capabilities and comes from no phone; `seal`, when present, comes from no phone and is 1216 bytes. A member is recorded
-with role `member` and the `caps` its Info says. A Go member that is not the root
-refuses a phone that offers `admin_key`: only the root makes a phone an admin.
-
-#### Frames
-
-Frames are a 4-byte big-endian length and a JSON object of at most 64 KiB (65 536 bytes).
-Fields, all optional, each frame using some: `msg` (bytes), `ad` (bytes), `tag` (bytes),
-`welcome` (object), `error` (string), `ok` (bool).
-
-| # | Direction | Frame |
-|---|-----------|-------|
-| 1 | joiner to member | `{"msg": Ya, "ad": ADa}` |
-| 2 | member to joiner | `{"msg": Yb, "ad": ADb}`, or `{"error": code}` |
-| 3 | joiner to member | `{"tag": Ta}` |
-| 4 | member to joiner | `{"tag": Tb, "welcome": Welcome}`, or `{"error": code}` |
-| 5 | joiner to member | `{"ok": true}`, or `{"error": "refused"}` |
-
-- The member always reads frame 1 before it answers, also when it refuses at once (no window:
-  `closed`; busy; expired; too many).
-- The member sends frame 2 before it processes Ya. If processing Ya fails, or Ta does not
-  verify (`wrong-code`), it sends `{"error": code}` instead of frame 4.
-- The joiner MUST check Tb and that a welcome is present. Once it has sent frame 3 the code is
-  spent: a joiner that fails after that MUST NOT try the same code at another address.
-- A member MUST NOT send a certificate before Ta verified. Sending frame 4 is the point of
-  no return: the window records the device and closes,
-  whether or not frame 5 arrives. Frame 5 only reports whether the joiner stored its
-  identity.
-
-Error codes: `wrong-code`, `closed`, `busy`, `expired`, `too-many`, `refused`, `declined`
-(the admin did not confirm the device of a remote invitation), `taken` (the joiner's device
-ID is in the group already). A joining device picks its own device ID, so the member refuses
-one that a `device` record names, with any key, or that a connected member or the member
-itself has, after the joiner's first frame and before its own CPace message; this does not
-count as a failed attempt, and the joiner joins again with a new ID. An unknown
-code MUST be treated as `refused`. Errors carry no free text, and an implementation MUST NOT
-show free text from a peer that has not proved it knows the code, so an unauthenticated
-peer cannot put words in front of the user.
-
-#### Welcome
-
-| Field | Type | Present |
-|-------|------|---------|
-| `cert` | bytes, DER | always: a member certificate from the group CA, or from `issuer`, for the key of the joiner's TLS certificate and its device ID |
-| `issuer` | bytes, DER | only from an admin phone or computer: its admin CA (section 10), which issued `cert` |
-| `group_ca` | bytes, DER | always: the group's first root, which names the group |
-| `roots` | array of bytes, DER | only in a group that claims handed to new roots (section 10, "Handing the group over"): those roots in order, the current one last |
-| `records` | array of record envelopes (section 10) | the group's records (section 10), so the new device takes its peers at once; always with `roots`, which they must lead to; otherwise left out when they do not fit in the frame, and the new device gets them over connections that carry records only |
-| `claim_times` | array of `{record, ms}` | with `records` that hold a claim: when the admitting member first held each claim, in Unix milliseconds; the joiner takes a time that is earlier than its own and not in the future, so a claim that took effect there takes effect on the joiner too (section 10, "Handing the group over") |
-| `admin_ca` | bytes, DER | only to a phone (`ios`, `android`, `aurora`, `sailfish` or `harmonyos`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
-
-The joiner MUST check: the tag of `group_ca` equals ADb `group`; `issuer`, when present, is an
-admin CA under `group_ca` or one of `roots` (section 10); the member's TLS certificate is
-signed by `issuer` or by one of those roots and names ADb `device` (section 2); `cert`
-verifies to one of them, through `issuer` when present; `roots` are exactly the path that
-`records` lead to from `group_ca` (section 10, "The state"), so an admin cannot make a joiner trust a
-root of its own; the joiner keeps `records` in its record set before it keeps the identity, keeps
-`roots`, and keeps `issuer` to send in its handshakes.
-
-The Welcome carries no CA key: no device gets the key of the group CA by joining. A new
-computer is a member without CA keys: it publishes and listens, but admits nobody until the
-root makes it an admin (section 10, "Admins"). A joiner reads a Welcome by the fields of this
-table only.
-
-The Welcome carries no group state: it arrives in the first hello.
-
-A phone that joins MUST check the same, and also: `group_ca` is a phone's root (path length 1);
-there are no CA keys; `admin_ca`, when present, is an admin CA under `group_ca` for the key
-it sent in `admin_key`, its CN naming its own device ID.
-
-#### Joining side behaviour
-
-Without an address the joiner browses up to 10 s for a member with `p=1`, refuses when more
-than one announces a window, and tries that member's addresses in order, at most three,
-stopping after the first attempt whose code was spent. A whole join is bounded by 2 minutes
-plus the browse time.
-
-#### A phone joins a computer's group
-
-A phone joins a group that a computer created through the group's root, as a computer joins
-(the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
-and the phone finds it by mDNS (`p=1`) and takes the six-digit code the user types. Its ADa says
-a phone's system and carries `admin_key`; the root's Welcome then carries `admin_ca` for that
-key, and the root signs the phone's `device` record with role `phone` that names the admin key
-in `admin` with the powers of an admin, `takeover` among them (the table in section 10, "Who
-signs what"). The user chooses that the window makes an admin, never the joiner: any other
-window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
-confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key joins any admin's window as a member: the admin signs its
-`device` record with role `phone` and no `admin`, since a role gives no rights and only an
-admin key does (D-90). A phone that listens and shows its QR code
-("The joiner listens" below) offers none: the apps have one button to join, and the root makes
-the phone an admin later with the admin key its hellos offer (section 10, "Admins"). A joiner
-that does offer one is admitted as an admin only in a window the root opens with `cbb pair -admin`. Before it certifies an
-admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
-`sid` of this connection, so that a key the joiner does not hold, or a proof made for another
-connection, never becomes an admin; the root computer also refuses a key its records name already
-(a device's key, an admin key, the recovery key). Both answer `{"error": "refused"}`. This is how a new phone takes over a computer's group, as after `cbb recovery`:
-it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
-"Handing the group over"), and its claim takes effect at once.
-
-#### The joiner listens (for the phone)
-
-`cbb pair` without `-code`, on a device in no group, turns the direction round, so that the device that scans
-the QR code dials the computer, and nothing is announced:
-
-- The joiner listens on its member port, which nothing holds while it is in no group, when
-  free, otherwise on a port the OS chooses (all
-  addresses; only home network addresses may connect, as on the member port) for up to
-  5 minutes, and shows the QR code
-  `cbb://join?code=<code>&addr=<host:port>&fp=<fingerprint>` (section 7): its
-  addresses that mDNS would publish, IPv4 first, without link-local ones, at most four; and
-  the fingerprint of its self-signed certificate's key (Conventions, "Fingerprints").
-- The member dials the QR code's addresses in turn, and stops at the first attempt in
-  which it sent its CPace message (frame 2), which tried the code: when that attempt fails
-  afterwards, its admin scans the QR code again for another. It is the TLS client. It
-  presents its member certificate and MUST
-  check that the server sent exactly one certificate whose fingerprint is `fp`, with a
-  P-256 key and a device ID as CN. The joiner (server) requires any client certificate and
-  checks it as in the other direction, through the exchange and the Welcome.
-- The CPace inputs, roles and the Welcome are those above. The member, which dialed,
-  confirms first:
-
-| # | Direction | Frame |
-|---|-----------|-------|
-| 1 | joiner to member | `{"msg": Ya, "ad": ADa}` |
-| 2 | member to joiner | `{"msg": Yb, "ad": ADb, "tag": Tb}` |
-| 3 | joiner to member | `{"tag": Ta}`, or `{"error": "wrong-code"}` when Tb does not verify |
-| 4 | member to joiner | `{"welcome": Welcome}`, or `{"error": code}` |
-| 5 | joiner to member | `{"ok": true}`, or `{"error": "refused"}` |
-
-- A device that does not know the code gets the joiner's refusal and nothing to test
-  guesses with, so a failed attempt never spends the code: the joiner takes further
-  attempts, one at a time, and gives up after the third wrong code or the 5 minutes. It
-  counts a wrong code by the refusal itself (frame 3's or the member's `wrong-code`), never by
-  the words of an error, and refuses for the rest of the window the connections of an address
-  whose attempts failed three times for any reason.
-- On the member the window counts attempts as above. It is not announced (`p` stays unset)
-  and takes no pairing connections on the member port, so the code is good only against the
-  device whose certificate `fp` names.
-- A joiner that listens takes one attempt at a time; a member must start the TLS handshake
-  within 5 s of connecting and prove that it knows the code (its CPace message and tag)
-  within 10 s, a running attempt whose member has not proved it after 2 s ends when another
-  member connects, and after 5 attempts from one source (section 4) that ended without a
-  wrong code the joiner takes no more from it.
-- A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
-  while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
-  and dials. The phone makes its admin key before it listens and sends it in ADa; the root
-  phone, when the user makes the new phone an admin (the default), answers with `admin_ca`.
-  A phone that is not the root makes no admins, so its welcome has no `admin_ca`.
-
 ## 7. The join QR code
 
 ### The window's QR code (0.6)
@@ -1643,8 +1411,8 @@ compare binds the session.
 
 Source: `core/src/pair.rs` (`join_qr`, `parse_join_qr`).
 
-The QR code that the ESP32 firmware shows while it waits to join (section 6, "The joiner
-listens"; it joins by a pairing window from 0.7) carries a URL:
+The QR code that the ESP32 firmware shows while it waits to join carries a URL. No device
+of 0.6 dials it, so the board joins no group of 0.6; it joins by a pairing window from 0.7.
 
 ```
 cbb://join?code=123456&addr=192.168.1.20:8764&addr=[fd00::20]:8764&fp=<fingerprint>
@@ -1843,13 +1611,12 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for
   members (a phone cannot accept connections in the background), so members MUST NOT dial a
-  `phone` member; it publishes no mDNS records, except while it is the group's hub, when
-  other phones dial it. It listens only for pairing, while another
-  phone joins it (section 6, "The joiner listens"), and while it is the group's hub
-  (section 3, `r=phone`).
-- **Join QR code and pairing direction.** `cbb pair` listens and shows its addresses and
-  certificate fingerprint; the app dials it as the admitting side, confirms first (section
-  6, "The joiner listens") and sends a Welcome with a member certificate signed by its CA.
+  `phone` member; it publishes no mDNS records, except while its pairing window is open
+  and while it is the group's hub, when other phones dial it (section 3, `p=1` and
+  `r=phone`).
+- **Pairing direction.** The joiner always dials: the root phone, or a phone that may admit,
+  opens a pairing window and shows its QR code, and the new device dials it (section 6,
+  "The window and who dials").
 - **Finding the members.** The app trusts its own CA and finds members through mDNS browsing.
   It keeps the home network addresses (private IPv4, unique local IPv6) of the QR code of
   each computer it admitted, the one that answered first, and dials a computer of the

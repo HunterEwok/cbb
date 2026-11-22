@@ -708,8 +708,8 @@ sync away from home, the admins, and remote paste.
 
 ### Group and pairing
 
-- **Who admits whom.** With the phone app, the phone admits computers by their QR code
-  (section 6 of the protocol, "The joiner listens"). In a group a computer created, `cbb new`
+- **Who admits whom.** With the phone app, the phone opens a pairing window and the computer
+  joins it (section 6 of the protocol, "The window and who dials"). In a group a computer created, `cbb new`
   on the first computer creates it, and every further computer joins with `cbb pair` on the
   root or an admin, which shows a six-digit code to type on the new computer.
 - **Creating the group**: `cbb new`, or the first `cbb pair`, on a
