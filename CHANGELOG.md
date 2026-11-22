@@ -3062,6 +3062,9 @@ made with 0.5 is set up again once. The details follow.
 ### Fixed
 - A hub's message that reached a member before the records naming its sender a hub waits for
   those records instead of being dropped, so a member that met a hub early still uses it.
+- A member seals its current copy again to a device that became a reader after the copy was
+  made (its keys statement or record came later, as after a change of root), so that device
+  gets the copy too.
 - A device added after another one now reaches it: each device sends its intro, its own
   record and the records that prove it up to the root, as its first message to a member, and a
   device whose key the peer does not know yet gets through once its intro checks. Before, a

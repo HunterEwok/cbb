@@ -195,6 +195,11 @@ pub struct Mesh {
     /// name the peer a hub, so the message waits for them and is taken
     /// once they arrive, while that peer is still connected.
     held_hubs: Mutex<HashMap<DeviceId, Vec<u8>>>,
+    /// The devices with a sealing key counted when this device last
+    /// sealed or resealed its current copy: a device that gains one later
+    /// (its keys statement or its record came after the copy) gets that
+    /// copy sealed again to it alone (`reseal_for_new_readers`).
+    sealed_to: Mutex<HashSet<DeviceId>>,
 }
 
 /// The copies' IDs seen, and their order, to forget the oldest.
@@ -362,6 +367,7 @@ impl Mesh {
                 conns: Mutex::new(HashMap::new()),
                 intros: Mutex::new(cbb_core::join::intro::Limiter::default()),
                 held_hubs: Mutex::new(HashMap::new()),
+                sealed_to: Mutex::new(HashSet::new()),
                 hellos: Mutex::new(HashMap::new()),
                 reach_in: Mutex::new(HashMap::new()),
                 reach_out: Mutex::new(HashMap::new()),
@@ -820,6 +826,7 @@ impl Mesh {
         let hello = self.hello_frame(&set);
         drop(set);
         self.take_held_hubs();
+        self.reseal_for_new_readers();
         // The peers the records refuse now go first: they get nothing more,
         // not even the hello that would draw the new records.
         self.drop_refused();
@@ -1045,6 +1052,7 @@ impl Mesh {
         let now = crate::uptime::wall_ms().max(0) as u64;
         let made = sealed::make(&*self.own.member, &state, &self.statements.lock().unwrap(), content, time, Some(now))?;
         let Some((frame, kept)) = made else { return Ok(false) };
+        *self.sealed_to.lock().unwrap() = self.statements.lock().unwrap().sealing(&state).into_keys().collect();
         let kept_id = kept.made.id;
         self.see(&kept_id);
         self.kept.lock().unwrap().insert(kept_id, kept);
@@ -1438,7 +1446,39 @@ impl Mesh {
         self.logf(&format!("took the intro of {}", hex(&conn.peer.0[..4])));
         self.broadcast(&hello, None);
         self.take_held_hubs();
+        self.reseal_for_new_readers();
         Ok(())
+    }
+
+    /// Seals this device's current copy again to each device that has
+    /// gained a sealing key since it was sealed: after a change of root, for
+    /// one, a copy made before a device's keys statement or record arrived
+    /// left that device out, and nothing else would bring it the copy.
+    fn reseal_for_new_readers(&self) {
+        let Some((_, id, _)) = self.current.lock().unwrap().clone() else { return };
+        if !self.kept.lock().unwrap().contains_key(&id) {
+            return;
+        }
+        // The state first: holding the statements while taking the set
+        // would invert the lock order.
+        let state = self.state();
+        let now: HashSet<DeviceId> = self.statements.lock().unwrap().sealing(&state).into_keys().collect();
+        let fresh: Vec<DeviceId> = {
+            let mut sealed = self.sealed_to.lock().unwrap();
+            let fresh = now.difference(&sealed).copied().filter(|d| *d != self.device()).collect();
+            *sealed = now;
+            fresh
+        };
+        // To a connected reader directly: the members between have seen the
+        // copy's ID and pass it on no more; one not connected gets it
+        // sealed again when its connection opens (`current_for`).
+        for d in fresh {
+            if let Some(f) = self.resealed(&id, &d)
+                && self.send_to(&d, f)
+            {
+                self.logf(&format!("sealed the current copy again to {}, a reader since", hex(&d.0[..4])));
+            }
+        }
     }
 
     /// Takes each held hubs message whose sender the records now make a
@@ -1481,6 +1521,7 @@ impl Mesh {
         };
         if out.changed {
             self.take_held_hubs();
+            self.reseal_for_new_readers();
         }
         if let Some((theirs, ours)) = out.stuck {
             self.logf(&format!(
@@ -1598,6 +1639,7 @@ impl Mesh {
             let f = frame::write(&cbb_core::format::cbor::decode(msg).map_err(|r| Error::msg(r.to_string()))?);
             self.broadcast(&f, Some(&conn.peer));
             self.send_unsent();
+            self.reseal_for_new_readers();
         }
         Ok(())
     }
