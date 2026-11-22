@@ -575,12 +575,16 @@ class GroupTest {
         // itself at home with it. Away from home it has no such path: the
         // hub refuses what comes from the emulator's host to its member port
         // from here on (the tunnel's datagrams still pass), and the phone
-        // takes the tunnel.
-        Bench.run(hub, "iptables -I INPUT -p tcp --dport 8764 -s \$(ip route | awk '/^default/ {print \$3; exit}') -j REJECT --reject-with tcp-reset")
+        // takes the tunnel. Nor does the hub reach the phone by its own dial,
+        // which goes to the bench's relay to the phone on the same host.
+        val gateway = "\$(ip route | awk '/^default/ {print \$3; exit}')"
+        Bench.run(hub, "iptables -I INPUT -p tcp --dport 8764 -s $gateway -j REJECT --reject-with tcp-reset")
+        Bench.run(hub, "iptables -I OUTPUT -p tcp -d $gateway -j REJECT --reject-with tcp-reset")
         try {
             awayThrough(hub, guest)
         } finally {
-            Bench.run(hub, "iptables -D INPUT -p tcp --dport 8764 -s \$(ip route | awk '/^default/ {print \$3; exit}') -j REJECT --reject-with tcp-reset")
+            Bench.run(hub, "iptables -D OUTPUT -p tcp -d $gateway -j REJECT --reject-with tcp-reset")
+            Bench.run(hub, "iptables -D INPUT -p tcp --dport 8764 -s $gateway -j REJECT --reject-with tcp-reset")
         }
     }
 

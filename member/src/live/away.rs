@@ -423,6 +423,9 @@ const STEADY: Duration = Duration::from_secs(30);
 /// and whose offer this member does not hold: it may have become a hub, or
 /// one by the records, since the connection began.
 const RETUNNEL: Duration = Duration::from_secs(15);
+/// How long a connection at the hub's guest port waits for the hub to note
+/// where in the tunnel it came from.
+const GUEST_ADDR_WAIT: Duration = Duration::from_secs(1);
 
 /// Dials, through the tunnel, the first hub whose offer is kept that
 /// answers, whenever no hub is connected or at home, until the member
@@ -459,6 +462,11 @@ fn reach_hubs(w: &Weak<Live>) {
             continue;
         }
         let connected = l.mesh.connected();
+        if ids.iter().any(|id| connected.contains(id) || l.at_home(id)) {
+            // A hub reached at home or connected by its own dial: what went
+            // wrong through the tunnel before is over.
+            away.failed(None);
+        }
         if hubs.is_empty() || l.is_paused() || ids.iter().any(|id| connected.contains(id) || l.at_home(id)) {
             drop(l);
             std::thread::sleep(Duration::from_secs(1));
@@ -793,10 +801,25 @@ impl Live {
         std::thread::spawn(move || {
             for sock in guest_ln.incoming() {
                 let (Some(l), Some(hub), Ok(sock)) = (w.upgrade(), h.upgrade(), sock) else { return };
-                let from = sock.peer_addr().ok().and_then(|a| hub.tunnel_addr(a.port()));
-                drop(hub);
-                let Some(from) = from.filter(crate::hub::is_guest) else { continue };
-                std::thread::spawn(move || l.serve_guest(sock, from));
+                std::thread::spawn(move || {
+                    // The hub notes the tunnel address of a connection it
+                    // dials once its dial returned, which may be after the
+                    // connection is here: wait a moment for it.
+                    let port = sock.peer_addr().ok().map(|a| a.port());
+                    let until = Instant::now() + GUEST_ADDR_WAIT;
+                    let from = loop {
+                        let from = port.and_then(|p| hub.tunnel_addr(p));
+                        if from.is_some() || Instant::now() >= until {
+                            break from;
+                        }
+                        std::thread::sleep(Duration::from_millis(5));
+                    };
+                    drop(hub);
+                    match from.filter(crate::hub::is_guest) {
+                        Some(from) => l.serve_guest(sock, from),
+                        None => drop(sock),
+                    }
+                });
             }
         });
         self.logf(&format!("cbb: the hub serves on UDP port {}", hub.udp_port()));
