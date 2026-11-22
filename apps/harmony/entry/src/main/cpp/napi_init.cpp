@@ -79,13 +79,6 @@ napi_value num(napi_env env, double n)
     return v;
 }
 
-napi_value boolean(napi_env env, bool b)
-{
-    napi_value v = nullptr;
-    napi_get_boolean(env, b, &v);
-    return v;
-}
-
 napi_value buffer(napi_env env, const std::vector<uint8_t> &b)
 {
     void *data = nullptr;

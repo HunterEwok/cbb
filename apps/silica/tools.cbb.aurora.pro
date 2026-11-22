@@ -108,7 +108,6 @@ DISTFILES += \
     qml/pages/JoinWindowPage.qml \
     qml/pages/DevicePage.qml \
     qml/pages/DeviceCard.qml \
-    qml/pages/AlertsCard.qml \
     qml/pages/GroupNotices.qml \
     qml/pages/WhySection.qml \
     qml/pages/RenameDevicePage.qml \

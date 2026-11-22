@@ -33,15 +33,6 @@
 
 namespace {
 
-// How often an admin looks for member certificates due for renewal, and
-// how long after the member starts it looks first.
-const int renewEveryMs = 6 * 3600 * 1000;
-const int renewFirstMs = 60 * 1000;
-// A waiting claim is looked at every minute, and first once the member
-// had time to reach its peers.
-const int claimEveryMs = 60 * 1000;
-const int claimFirstMs = 10 * 1000;
-
 // Runs KeyStore::ensure in a thread of its own and hands the key back.
 class KeyThread : public QThread
 {
@@ -93,10 +84,6 @@ class ManageThread : public QThread
 public:
     cbb_member *member = nullptr;
     QJsonObject request; // without public, which the key gives
-    // An action to try when the request's is refused, as a claim tries
-    // take_over when the root handed the group to nobody.
-    QString fallback;
-    QString refused; // why the request's own action was refused, for the log
     QJsonObject answer;
     Failure failure;
     Core::AdminSign sign; // whether the admin key waited for its PIN
@@ -117,13 +104,7 @@ protected:
             return;
         }
         request.insert(QStringLiteral("public"), QString::fromLatin1(key.publicKey.toBase64()));
-        QJsonObject a = answer = call();
-        if (!failure.isNull() && !fallback.isEmpty()) {
-            refused = failure.details;
-            failure = Failure();
-            request.insert(QStringLiteral("action"), fallback);
-            a = answer = call();
-        }
+        const QJsonObject a = answer = call();
         // A command the device refused answers with its reason.
         const QJsonObject result = a.value(QStringLiteral("result")).toObject();
         const QString status = result.value(QStringLiteral("status")).toString();
@@ -284,49 +265,11 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     m_member = Membership::load(&failure);
     if (!failure.isNull())
         show(Errors::shown(failure));
+    else if (m_member.before06)
+        Errors::log(QStringLiteral("group: made before 0.6, which this version no longer runs"));
     else if (!m_member.isNull())
         Errors::log(QStringLiteral("group: %1 as %2").arg(m_member.groupTag(), m_member.device));
     connect(&m_node, &Member::devicesChanged, this, [this]() { m_events.observe(m_node.devices()); });
-    connect(&m_node, &Member::identityChanged, this,
-            [this](const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots) {
-                if (m_member.isNull())
-                    return;
-                Membership next = m_member;
-                next.cert = cert;
-                next.issuer = issuer;
-                next.roots = roots;
-                Failure f;
-                if (!next.saveIdentity(&f)) {
-                    // The member runs on with it; the next start loads the
-                    // old one, which an admin renews again.
-                    show(Errors::shown(f));
-                    return;
-                }
-                m_member = next;
-                Errors::log(QStringLiteral("group: kept a new member certificate or root"));
-            });
-    // Renewals are due months ahead, so a look every few hours, and one
-    // a minute after the member starts, once it reached its peers, is plenty.
-    m_renewTimer.setInterval(renewEveryMs);
-    connect(&m_renewTimer, &QTimer::timeout, this, &App::renew);
-    connect(&m_node, &Member::changed, this, [this]() {
-        if (m_node.running() && !m_renewTimer.isActive()) {
-            m_renewTimer.start();
-            QTimer::singleShot(renewFirstMs, this, &App::renew);
-        } else if (!m_node.running()) {
-            m_renewTimer.stop();
-        }
-        // A claim to take the group over is looked at every minute while
-        // the member runs, and once soon after it starts.
-        if (m_node.running() && !m_member.claim.isEmpty() && !m_claimTimer.isActive()) {
-            m_claimTimer.start();
-            QTimer::singleShot(claimFirstMs, this, &App::finishTakeover);
-        } else if (!m_node.running()) {
-            m_claimTimer.stop();
-        }
-    });
-    m_claimTimer.setInterval(claimEveryMs);
-    connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
     // The admin token stays logged in only while the app is on the screen,
     // and is logged out once unused for five minutes, which adminPinHeld
     // checks.
@@ -374,25 +317,23 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     connect(&m_joiner, &Joiner::joined, this, [this](const QString &group, const QString &device) {
         Membership m;
         m.device = device;
-        m.group06 = group;
+        m.group = group;
         if (!keep(m))
             return;
         emit groupChanged();
         startMember();
     });
-    // On 0.6 the group's records say who is an admin; the member's devices
-    // list them.
+    // The group's records say who is an admin; the member's devices list
+    // them.
     connect(&m_node, &Member::devicesChanged, this, [this]() {
-        if (!m_member.isV06())
-            return;
         for (const QVariant &v : m_node.devices()) {
             const QVariantMap d = v.toMap();
             if (!d.value(QStringLiteral("self")).toBool())
                 continue;
             const bool admin = d.value(QStringLiteral("admin")).toBool();
-            if (admin != m_member.admin06) {
+            if (admin != m_member.admin) {
                 Membership next = m_member;
-                next.admin06 = admin;
+                next.admin = admin;
                 if (keep(next)) {
                     Errors::log(QStringLiteral("admin: the records %1 this phone an admin").arg(admin ? QStringLiteral("make") : QStringLiteral("no longer make")));
                     emit groupChanged();
@@ -406,29 +347,11 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     connect(&m_join, &Join::joined, this, [this](const QString &group, const QString &device) {
         Membership m;
         m.device = device;
-        m.group06 = group;
+        m.group = group;
         if (!keep(m))
             return;
         emit groupChanged();
         startMember();
-    });
-    // The root made this phone an admin: the member checks the admin CA
-    // first, then the phone keeps it and signs with it.
-    connect(&m_node, &Member::adminCaArrived, this, [this](const QByteArray &ca) {
-        if (m_member.isAdmin())
-            return;
-        Failure failure;
-        if (!m_node.takeAdminCa(ca, &failure)) {
-            Errors::log(QStringLiteral("admin: refused an admin CA: %1 (%2)").arg(failure.message, failure.details));
-            return;
-        }
-        Membership next = m_member;
-        next.adminCa = ca;
-        next.adminOffer.clear();
-        if (!keep(next))
-            return;
-        Errors::log(QStringLiteral("admin: the root made this phone an admin"));
-        emit groupChanged();
     });
 }
 
@@ -480,41 +403,6 @@ void App::stopJoin()
     m_join.stop();
 }
 
-void App::prepareAdmin()
-{
-    if (m_busy || m_member.isNull() || m_member.isAdmin() || !m_member.adminOffer.isEmpty())
-        return;
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new KeyThread(KeyStore::Which::Admin);
-    connect(thread, &QThread::finished, this, [this, thread]() {
-        const KeyStore::Key key = thread->key;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (m_member.isNull() || m_member.isAdmin())
-            return;
-        if (key.state != KeyStore::State::Ready) {
-            if (key.pinNeeded
-                && askPin([this]() { prepareAdmin(); }, std::function<void()>(),
-                          QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin.")))
-                return;
-            show(Errors::shown(key.failure));
-            return;
-        }
-        Membership next = m_member;
-        next.adminOffer = key.publicKey;
-        if (!keep(next))
-            return;
-        Errors::log(QStringLiteral("key: %1 the admin key, offered to the root").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-        emit groupChanged();
-        // The hellos of the new connections offer it.
-        m_node.stop();
-        startMember();
-    });
-    thread->start();
-}
-
 void App::startInvite(int seconds)
 {
     if (!m_member.isAdmin()) {
@@ -537,7 +425,7 @@ void App::startInvite(int seconds)
             m_invite.fail(key.failure);
             return;
         }
-        m_invite.open(m_node.handle(), key.publicKey, m_member.adminCa, seconds);
+        m_invite.open(m_node.handle(), key.publicKey, seconds);
     });
     thread->start();
 }
@@ -556,20 +444,12 @@ void App::startJoinByInvite(const QString &text)
     m_join.startInvite(text, Membership::directory(), phoneName(), phoneOs(), m_publicKey);
 }
 
-void App::resolve(const QStringList &records)
-{
-    manage(QStringLiteral("resolve"), QString(), records.join(QLatin1Char(',')));
-}
-
 void App::manage(const QString &action, const QString &device, const QString &name, int forMinutes)
 {
     QJsonObject extra{
         {QStringLiteral("name"), name},
         {QStringLiteral("for_ms"), double(qint64(forMinutes) * 60 * 1000)},
     };
-    // A resolve's records come joined in name, as QML hands them.
-    if (action == QStringLiteral("resolve"))
-        extra.insert(QStringLiteral("records"), QJsonArray::fromStringList(name.split(QLatin1Char(','), QString::SkipEmptyParts)));
     runManage(action, device, extra, nullptr);
 }
 
@@ -594,8 +474,6 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
     thread->request = extra;
     thread->request.insert(QStringLiteral("action"), action);
     thread->request.insert(QStringLiteral("device"), device);
-    if (!m_member.adminCa.isEmpty() && !m_member.root)
-        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
     connect(thread, &QThread::finished, this, [this, thread, action, device, extra, done]() {
         const Failure failure = thread->failure;
         const QJsonObject answer = thread->answer;
@@ -624,7 +502,7 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
 
 void App::changePreview(const QVariantMap &recovery, const QStringList &leaveOut)
 {
-    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+    if (m_member.root || !m_node.handle() || m_busy)
         return;
     m_busy = true;
     emit keyChanged();
@@ -657,7 +535,7 @@ void App::changePreview(const QVariantMap &recovery, const QStringList &leaveOut
 
 void App::changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, bool overWaiting)
 {
-    if (m_member.root || !m_member.isV06() || !m_node.handle() || m_busy)
+    if (m_member.root || !m_node.handle() || m_busy)
         return;
     // The admin key in the TEE, behind its PIN, becomes the root key.
     if (askPin([this, recovery, leaveOut, overWaiting]() { changeRoot(recovery, leaveOut, overWaiting); },
@@ -691,8 +569,6 @@ void App::changeRoot(const QVariantMap &recovery, const QStringList &leaveOut, b
         }
         Membership next = m_member;
         next.root = true;
-        next.adminCa.clear();
-        next.claim.clear();
         if (!keep(next)) {
             emit rootChangedHere(false);
             return;
@@ -758,14 +634,6 @@ void App::pasteFiles(const QString &device, const QStringList &files, bool enter
               nullptr);
 }
 
-void App::setTakeoverDelay(int hours)
-{
-    if (!m_member.root)
-        return;
-    runManage(QStringLiteral("takeover_delay"), QString(),
-              QJsonObject{{QStringLiteral("delay_ms"), double(qint64(hours) * 3600 * 1000)}}, nullptr);
-}
-
 void App::setGroupKeyLevel(const QString &level)
 {
     if (!m_member.root)
@@ -775,13 +643,6 @@ void App::setGroupKeyLevel(const QString &level)
                   m_belowLevel = a.value(QStringLiteral("below")).toVariant().toStringList();
                   emit recoveryChanged();
               });
-}
-
-void App::handOver(const QString &device)
-{
-    if (!m_member.root)
-        return;
-    runManage(QStringLiteral("hand_over"), device, QJsonObject(), nullptr);
 }
 
 void App::openCard(const QString &pin)
@@ -795,7 +656,7 @@ void App::openCard(const QString &pin)
     // "The recovery key on a YubiKey (0.6)").
     thread->request = QJsonObject{{QStringLiteral("op"), QStringLiteral("open")},
                                   {QStringLiteral("pin"), pin},
-                                  {QStringLiteral("group"), m_member.group06}};
+                                  {QStringLiteral("group"), m_member.group}};
     connect(thread, &QThread::finished, this, [this, thread]() {
         const Failure failure = thread->failure;
         const QString secret = thread->answer.value(QStringLiteral("secret")).toString();
@@ -825,7 +686,7 @@ void App::sealCard(const QString &pin)
         {QStringLiteral("op"), QStringLiteral("seal")},
         {QStringLiteral("pin"), pin},
         {QStringLiteral("recovery"), QJsonObject{{QStringLiteral("text"), m_recoveryText}}},
-        {QStringLiteral("group"), m_member.group06},
+        {QStringLiteral("group"), m_member.group},
     };
     connect(thread, &QThread::finished, this, [this, thread]() {
         const Failure failure = thread->failure;
@@ -907,181 +768,15 @@ void App::forgetRecovery()
     emit recoveryChanged();
 }
 
-void App::renew()
-{
-    // Renewals wait for a time the user entered the admin PIN anyway.
-    if (m_busy || !m_member.isAdmin() || !m_node.running() || !KeyStore::adminPinHeld())
-        return;
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new ManageThread;
-    thread->member = m_node.handle();
-    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("renew")}};
-    if (!m_member.adminCa.isEmpty() && !m_member.root)
-        thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
-    connect(thread, &QThread::finished, this, [this, thread]() {
-        const Failure failure = thread->failure;
-        const int renewed = thread->answer.value(QStringLiteral("renewed")).toInt();
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        if (!failure.isNull())
-            Errors::log(QStringLiteral("renew: %1 (%2)").arg(failure.message, failure.details));
-        else if (renewed > 0)
-            Errors::log(QStringLiteral("renew: renewed %1 member certificates").arg(renewed));
-    });
-    thread->start();
-}
-
 bool App::keep(const Membership &next)
 {
     Failure failure;
-    if (!next.saveIdentity(&failure)) {
+    if (!next.save(&failure)) {
         show(Errors::shown(failure));
         return false;
     }
     m_member = next;
     return true;
-}
-
-void App::takeOver(const QString &device)
-{
-    if (m_busy || !m_member.isAdmin() || m_member.root || !m_member.claim.isEmpty() || !m_node.running())
-        return;
-    if (askPin([this, device]() { takeOver(device); }))
-        return;
-    m_busy = true;
-    emit keyChanged();
-    // The new root is the admin key itself, which stays in the TEE: a root
-    // CA for it first, kept before the claim goes out, so that a claim never
-    // takes effect for a root this phone lost.
-    auto *thread = new ManageThread;
-    thread->member = m_node.handle();
-    thread->request = QJsonObject{{QStringLiteral("action"), QStringLiteral("root_ca")}};
-    connect(thread, &QThread::finished, this, [this, thread, device]() {
-        const Failure failure = thread->failure;
-        const QByteArray rootCa = QByteArray::fromBase64(thread->answer.value(QStringLiteral("root_ca")).toString().toLatin1());
-        thread->deleteLater();
-        Membership next = m_member;
-        next.claim = rootCa;
-        if (!failure.isNull() || rootCa.isEmpty() || !keep(next)) {
-            m_busy = false;
-            emit keyChanged();
-            if (!failure.isNull())
-                show(Errors::shown(failure));
-            return;
-        }
-        auto *claim = new ManageThread;
-        claim->member = m_node.handle();
-        claim->request = QJsonObject{
-            {QStringLiteral("action"), QStringLiteral("take_handed_over")},
-            {QStringLiteral("device"), device},
-            {QStringLiteral("root_ca"), QString::fromLatin1(rootCa.toBase64())},
-            {QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64())},
-        };
-        claim->fallback = QStringLiteral("take_over");
-        connect(claim, &QThread::finished, this, [this, claim, device]() {
-            const Failure failure = claim->failure;
-            const QString refused = claim->refused;
-            claim->deleteLater();
-            m_busy = false;
-            emit keyChanged();
-            if (!refused.isEmpty())
-                Errors::log(QStringLiteral("takeover: no handover (%1)").arg(refused));
-            if (!failure.isNull()) {
-                Membership next = m_member;
-                next.claim.clear();
-                keep(next);
-                show(Errors::shown(failure));
-                emit claimChanged();
-                return;
-            }
-            Errors::log(QStringLiteral("takeover: claimed the group from %1").arg(device));
-            m_claimState = QStringLiteral("pending");
-            emit claimChanged();
-            show(QString());
-            m_claimTimer.start();
-            finishTakeover();
-        });
-        claim->start();
-    });
-    thread->start();
-}
-
-void App::finishTakeover()
-{
-    if (m_member.claim.isEmpty()) {
-        m_claimTimer.stop();
-        return;
-    }
-    if (m_busy || !m_node.running())
-        return;
-    Failure failure;
-    const QByteArray secret = sealSecret(&failure);
-    const QJsonObject seal = secret.isEmpty() ? QJsonObject()
-        : Core::call(QStringLiteral("seal_public"), QJsonObject{{QStringLiteral("secret"), QString::fromLatin1(secret.toBase64())}}, &failure).toObject();
-    m_busy = true;
-    emit keyChanged();
-    auto *thread = new ManageThread;
-    thread->member = m_node.handle();
-    thread->request = QJsonObject{
-        {QStringLiteral("action"), QStringLiteral("finish_takeover")},
-        {QStringLiteral("root_ca"), QString::fromLatin1(m_member.claim.toBase64())},
-        {QStringLiteral("name"), phoneName()},
-        {QStringLiteral("os"), phoneOs()},
-        {QStringLiteral("store"), KeyStore::store()},
-    };
-    if (seal.contains(QStringLiteral("key")))
-        thread->request.insert(QStringLiteral("seal"), seal.value(QStringLiteral("key")));
-    connect(thread, &QThread::finished, this, [this, thread]() {
-        const Failure failure = thread->failure;
-        const QJsonObject a = thread->answer;
-        const bool pinNeeded = thread->sign.pinNeeded;
-        thread->deleteLater();
-        m_busy = false;
-        emit keyChanged();
-        // The claim took effect and the new root signs now: the user's PIN
-        // first, asked once; the timer tries again after a cancel.
-        if (!failure.isNull() && pinNeeded && !m_pinRun) {
-            Errors::log(QStringLiteral("takeover: the claim took effect, the admin PIN is asked"));
-            askPin([this]() { finishTakeover(); });
-            return;
-        }
-        if (!failure.isNull()) {
-            // Tried again in a minute; the log says why.
-            Errors::log(QStringLiteral("takeover: %1 (%2)").arg(failure.message, failure.details));
-            return;
-        }
-        const QString state = a.value(QStringLiteral("state")).toString();
-        m_claimLeftMs = qint64(a.value(QStringLiteral("left_ms")).toDouble());
-        if (state == QStringLiteral("effective")) {
-            Membership next = m_member;
-            next.root = true;
-            next.adminCa.clear();
-            next.claim.clear();
-            next.cert = QByteArray::fromBase64(a.value(QStringLiteral("cert")).toString().toLatin1());
-            next.issuer.clear();
-            if (!keep(next))
-                return;
-            m_claimTimer.stop();
-            Errors::log(QStringLiteral("takeover: this phone is the group's root now"));
-            emit groupChanged();
-        } else if (state == QStringLiteral("cancelled") || state == QStringLiteral("void")) {
-            Membership next = m_member;
-            next.claim.clear();
-            if (!keep(next))
-                return;
-            m_claimTimer.stop();
-            Errors::log(QStringLiteral("takeover: the claim is %1").arg(state));
-            const QString shown = state == QStringLiteral("cancelled")
-                ? QCoreApplication::translate("Errors", "The group's root cancelled the claim; the phone stays an admin.")
-                : QCoreApplication::translate("Errors", "The claim to take the group over became void; the phone stays an admin.");
-            show(Errors::shown({shown, QStringLiteral("takeover: the claim is %1").arg(state)}));
-        }
-        m_claimState = state;
-        emit claimChanged();
-    });
-    thread->start();
 }
 
 void App::makeGroup()
@@ -1121,9 +816,9 @@ void App::makeGroup()
         }
         Membership m;
         m.device = group.value(QStringLiteral("device")).toString();
-        m.group06 = group.value(QStringLiteral("group")).toString();
+        m.group = group.value(QStringLiteral("group")).toString();
         m.root = true;
-        if (m.isNull() || !m.isV06() || !m.save(&failure)) {
+        if (m.device.isEmpty() || m.group.isEmpty() || !m.save(&failure)) {
             show(Errors::shown(failure.isNull() ? Failure{QCoreApplication::translate("Errors", "The phone could not save the group."), QStringLiteral("group: no device in the answer")} : failure));
             return;
         }
@@ -1149,7 +844,7 @@ void App::makeGroup()
 
 void App::openWindow()
 {
-    if (!m_member.isV06() || !m_member.isAdmin()) {
+    if (!m_member.isAdmin()) {
         m_window.fail({QCoreApplication::translate("Errors", "Only an admin of the group adds devices."), QStringLiteral("window: not an admin")});
         return;
     }
@@ -1312,8 +1007,6 @@ void App::enterPin(const QString &pin)
             m_pinCancel = nullptr;
             if (run)
                 run();
-            // Certificates due for renewal go while the PIN is held.
-            QTimer::singleShot(renewFirstMs / 2, this, &App::renew);
             return;
         }
         case KeyStore::PinResult::Wrong:
@@ -1375,7 +1068,7 @@ void App::changePin(const QString &old, const QString &pin)
 
 void App::startMember()
 {
-    if (m_member.isNull() || m_publicKey.isEmpty() || m_node.running())
+    if (m_member.isNull() || m_member.before06 || m_publicKey.isEmpty() || m_node.running())
         return;
     m_node.start(m_member, phoneName(), m_publicKey, phoneOs(), system());
 }

@@ -100,38 +100,19 @@ void Member::start(const Membership &membership, const QString &name, const QByt
 {
     if (m_member || membership.isNull() || publicKey.isEmpty())
         return;
-    Failure failure;
-    const QByteArray seal = sealSecret(&failure);
-    if (seal.isEmpty()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
-    }
-    QJsonArray roots;
-    for (const QByteArray &r : membership.roots)
-        roots.append(b64(r));
-    QJsonObject req{
+    // The records name the group's devices and keys, so the member takes
+    // no certificates (ffi's StartArgs).
+    const QJsonObject req{
         {QStringLiteral("dir"), Membership::directory()},
         {QStringLiteral("name"), name},
         {QStringLiteral("os"), os},
         {QStringLiteral("os_version"), osVersion},
-        {QStringLiteral("key_store"), KeyStore::store()},
         {QStringLiteral("version"), QCoreApplication::applicationVersion()},
         {QStringLiteral("device"), membership.device},
         {QStringLiteral("public"), b64(publicKey)},
-        {QStringLiteral("seal"), b64(seal)},
-        {QStringLiteral("cert"), b64(membership.cert)},
-        {QStringLiteral("group_ca"), b64(membership.groupCa)},
-        {QStringLiteral("roots"), roots},
     };
-    if (!membership.issuer.isEmpty())
-        req.insert(QStringLiteral("issuer"), b64(membership.issuer));
-    // The admin key the hellos offer the root, as a SubjectPublicKeyInfo:
-    // P-256's fixed prefix before the point.
-    if (!membership.isAdmin() && membership.adminOffer.size() == 65)
-        req.insert(QStringLiteral("admin_key"),
-                   b64(QByteArray::fromHex("3059301306072a8648ce3d020106082a8648ce3d030107034200") + membership.adminOffer));
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
+    Failure failure;
     current.store(this);
     uint8_t *answer = nullptr;
     size_t len = 0;
@@ -172,7 +153,7 @@ void Member::stop()
     m_listening = false;
     m_peers.clear();
     m_devices.clear();
-    m_alerts.clear();
+    m_groupState.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
     readAway(QJsonValue());
@@ -429,12 +410,6 @@ void Member::event(const QByteArray &json)
     } else if (type == QStringLiteral("write")) {
         write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
               qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));
-    } else if (type == QStringLiteral("identity")) {
-        QList<QByteArray> roots;
-        for (const QJsonValue &r : e.value(QStringLiteral("roots")).toArray())
-            roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
-        emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
-                             QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
     } else if (type == QStringLiteral("panic")) {
         const QString details = e.value(QStringLiteral("details")).toString();
         Errors::log(QStringLiteral("member: %1").arg(details));
@@ -464,21 +439,7 @@ void Member::event(const QByteArray &json)
         const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
         if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
             take(copy);
-    } else if (type == QStringLiteral("message")) {
-        const QJsonObject m = e.value(QStringLiteral("message")).toObject();
-        if (m.value(QStringLiteral("t")).toString() == QStringLiteral("admin"))
-            emit adminCaArrived(QByteArray::fromBase64(m.value(QStringLiteral("admin_ca")).toString().toLatin1()));
     }
-}
-
-bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
-{
-    if (!m_member) {
-        *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
-        return false;
-    }
-    call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
-    return failure->isNull();
 }
 
 bool Member::listen(Failure *failure)
@@ -761,23 +722,21 @@ void Member::pollDevices()
         d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("device")).toString()));
         v = d;
     }
-    const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
-    const QVariantList alerts =
-        failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
     const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
     const QVariantList why = failure.isNull() ? w.value(QStringLiteral("why")).toArray().toVariantList() : m_why;
-    Failure viewFailure;
-    const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
-    const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
+    Failure groupFailure;
+    const QJsonObject g = call(m_member, QStringLiteral("group"), QJsonObject(), &groupFailure);
+    QVariantMap groupState = groupFailure.isNull() ? g.toVariantMap() : m_groupState;
+    // The devices are listed above, with what the hellos add.
+    groupState.remove(QStringLiteral("devices"));
     Failure noticesFailure;
     const QJsonObject ns = call(m_member, QStringLiteral("notices"), QJsonObject(), &noticesFailure);
     const QVariantList notices =
         noticesFailure.isNull() ? ns.value(QStringLiteral("notices")).toArray().toVariantList() : m_notices;
-    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView || notices != m_notices) {
+    if (devices != m_devices || why != m_why || groupState != m_groupState || notices != m_notices) {
         m_devices = devices;
-        m_alerts = alerts;
         m_why = why;
-        m_rootView = rootView;
+        m_groupState = groupState;
         m_notices = notices;
         emit devicesChanged();
     }

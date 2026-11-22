@@ -31,11 +31,11 @@ const CHANGE_MS: number = 2000;
 const WEARER_MS: number = 120000;
 const KEPT: string = 'watch_admin';
 
-// The watch as an admin, as the phone keeps it: its device ID, its admin
-// CA and key point (base64), the group's tag and its key's hash.
+// The watch as an admin, as the phone keeps it: its device ID, its key
+// point (base64), the group's tag and its key's hash, which stays empty in
+// a group of 0.6, where the watch signs nothing (D-124).
 interface WatchAdmin {
   device: string;
-  admin_ca: string;
   public: string;
   group: string;
   signer: string;
@@ -279,8 +279,7 @@ export class Watch {
       return; // runManage showed why
     }
     const k: WatchAdmin = {
-      device: made.device ?? '', admin_ca: made.admin_ca ?? '', public: pointOf(key), group: made.group ?? '',
-      signer: made.signer ?? ''
+      device: made.device ?? '', public: pointOf(key), group: app.membership?.groupTag() ?? '', signer: ''
     };
     this.kept = k;
     this.prefs?.putSync(KEPT, JSON.stringify(k));
@@ -318,7 +317,7 @@ export class Watch {
       return;
     }
     const request: Record<string, Object> = {
-      'action': action.replace(new RegExp('-', 'g'), '_'), 'device': device, 'watch': k.device, 'public': k.public, 'admin_ca': k.admin_ca
+      'action': action.replace(new RegExp('-', 'g'), '_'), 'device': device, 'watch': k.device, 'public': k.public
     };
     const r = await app.member.manageWatch<WatchAnswer>(request);
     let failure = r.failure;

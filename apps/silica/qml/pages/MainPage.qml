@@ -223,7 +223,7 @@ Page {
             // join one; the settings and the language are in the pull-down
             // menu, as in every Silica app.
             Column {
-                visible: app.group === ""
+                visible: app.group === "" && !app.before06
                 width: parent.width
                 spacing: Theme.paddingLarge
 
@@ -271,6 +271,41 @@ Page {
                     text: qsTr("The phone has no key yet. Pull down to check it again.")
                     wrapMode: Text.Wrap
                     color: Theme.highlightColor
+                }
+            }
+
+            // A group made before 0.6, which this version no longer runs
+            // (D-126): a new group is needed, and Leave alone deletes its
+            // files.
+            Column {
+                visible: app.before06
+                width: parent.width
+                spacing: Theme.paddingLarge
+
+                RemorsePopup { id: leaving }
+
+                Item { width: 1; height: Theme.itemSizeLarge }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    text: qsTr("A group from before 0.6")
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeLarge
+                    color: Theme.highlightColor
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    text: qsTr("This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.")
+                    wrapMode: Text.Wrap
+                    color: Theme.secondaryHighlightColor
+                }
+                Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Leave the group")
+                    enabled: !app.busy
+                    onClicked: leaving.execute(qsTr("Leaving the group"), function() { app.leave() })
                 }
             }
 
@@ -369,8 +404,6 @@ Page {
                 color: Theme.errorColor
                 font.pixelSize: Theme.fontSizeSmall
             }
-
-            AlertsCard {}
 
             GroupNotices {}
 

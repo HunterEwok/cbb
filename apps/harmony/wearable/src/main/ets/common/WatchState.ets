@@ -152,7 +152,7 @@ export function fit(s: WatchState): Uint8Array {
     }
     const t: WatchState = {
       type: s.type, group: s.group, devices: devices, more: s.devices.length - devices.length, online: s.online,
-      total: s.total, sync: s.sync, away: s.away, events: events, admin: s.admin
+      total: s.total, sync: s.sync, away: s.away, events: events, admin: s.admin, signs: s.signs
     };
     out = encode(t);
   }
