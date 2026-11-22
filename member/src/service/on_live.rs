@@ -1312,7 +1312,7 @@ fn writes(h: &Header, other: bool) -> bool {
 
 /// What cbb pair -qr answers on the records of 0.6: a device that waits
 /// for the group to dial it is gone (D-119).
-pub(super) const LISTENING_JOINER_GONE: &str = "on the records of 0.6 no device waits for the group to dial it, so a QR code or a code from the new device admits nothing: open a pairing window here with cbb pair, and the new device dials it (cbb pair -code on a computer, the QR code of the window on a phone)";
+pub(crate) const LISTENING_JOINER_GONE: &str = "on the records of 0.6 no device waits for the group to dial it, so a QR code or a code from the new device admits nothing: open a pairing window here with cbb pair, and the new device dials it (cbb pair -code on a computer, the QR code of the window on a phone)";
 
 /// Why a device that is no admin, or not the group's root, is refused.
 pub(super) const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";

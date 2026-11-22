@@ -4,74 +4,95 @@
 package main
 
 import (
-	"encoding/base64"
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
-
-	"rsc.io/qr"
+	"time"
 )
 
-const joinText = "cbb://join?code=123456&addr=192.0.2.7:8764&fp=AbC%2Bd%2F0="
-
-func qrPicture(t *testing.T, text string) string {
-	t.Helper()
-	c, err := qr.Encode(text, qr.M)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.Scale = 6
-	return base64.StdEncoding.EncodeToString(c.PNG())
-}
-
-// A picture of the code that a waiting phone shows gives back its text;
-// another code, or no picture, an error.
-func TestReadQR(t *testing.T) {
-	d := &Desk{tr: map[string]string{}}
-	if got, err := d.ReadQR(qrPicture(t, joinText)); err != nil || got != joinText {
-		t.Fatalf("ReadQR = %q, %v", got, err)
-	}
-	if _, err := d.ReadQR(qrPicture(t, "https://cbb.tools")); err == nil {
-		t.Error("read a code that is no join code")
-	}
-	if _, err := d.ReadQR(qrPicture(t, "cbb://join?code=123456")); err == nil {
-		t.Error("read the code of a joiner that does not listen")
-	}
-	if _, err := d.ReadQR(base64.StdEncoding.EncodeToString([]byte("not a picture"))); err == nil {
-		t.Error("read a file that is no picture")
-	}
-}
-
-// TestAdmitByQR: Admit runs cbb pair -qr as the administrator with the text on its
-// standard input, never among its arguments.
-func TestAdmitByQR(t *testing.T) {
-	var args []string
-	var input string
+// TestOpenWindow: OpenWindow runs cbb pair -app with the app's own file as
+// the administrator, -admin for an admin phone; WindowState shows the
+// digits and the QR code cbb writes there, and the device that failed and
+// the one that joined; CloseWindow removes the file, which cbb takes as
+// closing the window.
+func TestOpenWindow(t *testing.T) {
+	d := &Desk{tr: map[string]string{}, socket: filepath.Join(t.TempDir(), "none.sock")}
+	ran := make(chan []string, 4)
+	steps := make(chan string)
+	written := make(chan struct{})
 	old := adminRun
-	adminRun = func(a []string, in string, _ bool) error {
-		args, input = a, in
+	adminRun = func(a []string, _ string, _ bool) error {
+		ran <- a
+		for line := range steps {
+			if line == "" {
+				break
+			}
+			if line == "exit" {
+				return nil
+			}
+			if err := os.WriteFile(a[2], []byte(line+"\n"), 0o600); err != nil {
+				return err
+			}
+			written <- struct{}{}
+		}
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if _, err := os.Stat(a[2]); err != nil {
+				return &adminError{msg: "cancelled"}
+			}
+		}
 		return nil
 	}
 	defer func() { adminRun = old }()
-	d := &Desk{tr: map[string]string{}, socket: filepath.Join(t.TempDir(), "none.sock")}
-	d.Admit("  "+joinText+"\n", false)
-	if !slices.Equal(args, []string{"pair", "-qr"}) || input != joinText+"\n" {
-		t.Fatalf("ran %q with %q", args, input)
+	if w := d.WindowState(); w.Running {
+		t.Fatalf("a window before any: %+v", w)
 	}
-	d.Admit(joinText, true)
-	if !slices.Equal(args, []string{"pair", "-qr", "-admin"}) {
-		t.Fatalf("as an admin, ran %q", args)
+
+	ended := make(chan struct{})
+	go func() { d.OpenWindow(true); close(ended) }()
+	a := <-ran
+	if len(a) != 4 || !slices.Equal([]string{a[0], a[1], a[3]}, []string{"pair", "-app", "-admin"}) {
+		t.Fatalf("ran %q", a)
 	}
-	// The six digits the new device shows, typed with a space.
-	d.Admit(" 246 810 ", false)
-	if !slices.Equal(args, []string{"pair", "-qr"}) || input != "246810\n" {
-		t.Fatalf("by the shown code, ran %q with %q", args, input)
+	if w := d.WindowState(); !w.Running || w.Code != "" {
+		t.Errorf("before cbb wrote: %+v", w)
 	}
-	for _, bad := range []string{"cbb://join?code=123456", "12345", "1234567", "12a456"} {
-		args, d.message = nil, ""
-		d.Admit(bad, false)
-		if args != nil || d.message == "" {
-			t.Errorf("admitted %q: %q, %q", bad, args, d.message)
-		}
+	steps <- `{"code":"654321","qr":"cbb://pair?c=654321","address":"192.168.1.5:8764","expires":300}`
+	<-written
+	w := d.WindowState()
+	if w.Code != "654 321" || !strings.HasPrefix(w.Image, "data:image/png;base64,") || w.Address != "192.168.1.5:8764" {
+		t.Errorf("the window: %+v", w)
+	}
+	if left := time.Until(time.UnixMilli(w.Ends)); left < 4*time.Minute || left > 5*time.Minute {
+		t.Errorf("it ends in %v", left)
+	}
+	steps <- `{"code":"654321","qr":"cbb://pair?c=654321","expires":300,"refused":"the code did not match"}`
+	<-written
+	if w := d.WindowState(); w.Refused != "the code did not match" {
+		t.Errorf("after a failed device: %+v", w)
+	}
+	steps <- ""
+	d.CloseWindow()
+	<-ended
+	if d.message != "" {
+		t.Errorf("a closed window said %q", d.message)
+	}
+
+	// A device that joins: the window says so.
+	ended = make(chan struct{})
+	go func() { d.OpenWindow(false); close(ended) }()
+	if a := <-ran; len(a) != 3 {
+		t.Fatalf("ran %q", a)
+	}
+	steps <- `{"code":"654321","qr":"cbb://pair?c=654321","expires":300,"done":true,"name":"laptop"}`
+	<-written
+	if w := d.WindowState(); w.Joined != "laptop" {
+		t.Errorf("after the join: %+v", w)
+	}
+	steps <- "exit"
+	<-ended
+	if d.message != "It joined the group." {
+		t.Errorf("a join said %q", d.message)
 	}
 }

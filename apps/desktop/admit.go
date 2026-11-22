@@ -6,108 +6,156 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
-	"strings"
+	"encoding/json"
+	"os"
+	"time"
 
-	"github.com/makiuchi-d/gozxing"
-	"github.com/makiuchi-d/gozxing/qrcode"
-
-	"github.com/HunterEwok/cbb/internal/phone"
+	"rsc.io/qr"
 )
 
-// Admitting a new device that shows a code and waits: on the root or an
-// admin, the user types the six digits it shows, pastes its QR code's text
-// or opens a picture of it, and cbb pair -qr runs as the administrator with
-// the code on its standard input, never on its command line.
+// Adding a device from the window: on the root or an admin, cbb pair -app
+// runs as the administrator (admin.go), opens a pairing window and writes
+// its six digits and QR code into a file the app made, which the app reads
+// while cbb waits; the new device dials the window with the digits (a
+// computer) or the QR code (a phone), D-119. Removing the file closes the
+// window.
 
-// maxImage bounds the picture ReadQR decodes.
-const maxImage = 16 << 20
-
-// ReadQR reads the QR code in a picture (PNG or JPEG, base64) and returns
-// its text when it is a code of a device that waits to join.
-func (d *Desk) ReadQR(b64 string) (string, error) {
-	if len(b64) > maxImage*4/3+4 {
-		return "", errors.New(d.T("The picture is too large."))
-	}
-	data, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		return "", errors.New(d.T("This file is no picture."))
-	}
-	text, err := readQR(data)
-	if err != nil {
-		return "", errors.New(d.T(err.Error()))
-	}
-	return text, nil
+// Window is the add dialog's picture of a pairing window: its QR code and
+// digits once cbb wrote them, when it closes, the last device that failed,
+// and the name of the one that joined.
+type Window struct {
+	Running bool `json:"running"`
+	// Image is the QR code as a data: URL of a PNG.
+	Image string `json:"image,omitempty"`
+	// Code is the six digits, in two groups of three.
+	Code string `json:"code,omitempty"`
+	// Address is where a computer without mDNS dials the window.
+	Address string `json:"address,omitempty"`
+	// Ends is when the window closes, in Unix milliseconds.
+	Ends    int64  `json:"ends,omitempty"`
+	Refused string `json:"refused,omitempty"`
+	Joined  string `json:"joined,omitempty"`
 }
 
-func readQR(data []byte) (string, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return "", errors.New("This file is no picture.")
-	}
-	bmp, err := gozxing.NewBinaryBitmapFromImage(img)
-	if err != nil {
-		return "", errors.New("No QR code was found in the picture.")
-	}
-	hints := map[gozxing.DecodeHintType]any{gozxing.DecodeHintType_TRY_HARDER: true}
-	res, err := qrcode.NewQRCodeReader().Decode(bmp, hints)
-	if err != nil {
-		return "", errors.New("No QR code was found in the picture.")
-	}
-	text := strings.TrimSpace(res.GetText())
-	if !waitingJoiner(text) {
-		return "", errors.New("This QR code is not of a device that waits to join.")
-	}
-	return text, nil
+// appWindow is what cbb pair -app writes (member/src/admit_cli.rs).
+type appWindow struct {
+	Code    string `json:"code"`
+	QR      string `json:"qr"`
+	Address string `json:"address"`
+	Expires int64  `json:"expires"`
+	Refused string `json:"refused"`
+	Done    bool   `json:"done"`
+	Name    string `json:"name"`
 }
 
-// waitingJoiner tells whether text is the QR code of a device that listens
-// for the member that admits it: an address and a fingerprint.
-func waitingJoiner(text string) bool {
-	jc, ok := phone.ParseJoinQR(text)
-	return ok && len(jc.Addrs) > 0 && jc.Fingerprint != ""
-}
-
-// shownCode is the six digits a new device shows, as typed: spaces and
-// dashes between them are fine; "" when text is not such a code.
-func shownCode(text string) string {
-	digits := strings.Map(func(r rune) rune {
-		switch {
-		case r >= '0' && r <= '9':
-			return r
-		case r == ' ' || r == '-':
-			return -1
-		}
-		return 'x'
-	}, text)
-	if len(digits) != 6 || strings.Contains(digits, "x") {
-		return ""
-	}
-	return digits
-}
-
-// Admit admits the new device that shows text and waits: the six digits it
-// shows, typed here, or its QR code's text; cbb pair -qr does it as the
-// administrator, finding the device by its code on the home network. With
-// admin, on the group's root, a phone that asks to be an admin becomes one
-// (cbb pair -qr -admin).
-func (d *Desk) Admit(text string, admin bool) {
-	text = strings.TrimSpace(text)
-	if code := shownCode(text); code != "" {
-		text = code
-	} else if !waitingJoiner(text) {
-		msg := d.T("Type the six digits the new device shows.") // T takes d.mu
+// OpenWindow opens a pairing window for a new device; with admin, on the
+// group's root, the phone that joins becomes an admin (cbb pair -admin).
+// It returns when the window closes, while the dialog asks WindowState for
+// its code.
+func (d *Desk) OpenWindow(admin bool) {
+	f, err := os.CreateTemp("", "cbb-window-*.json")
+	if err != nil {
+		msg := d.describe(err) // describe takes d.mu
 		d.mu.Lock()
 		d.message = msg
 		d.mu.Unlock()
 		return
 	}
-	args := []string{"pair", "-qr"}
+	path := f.Name()
+	f.Close()
+	defer os.Remove(path)
+	d.mu.Lock()
+	if d.windowPath != "" {
+		d.mu.Unlock()
+		return
+	}
+	d.windowPath, d.windowCancelled, d.windowSeen = path, false, ""
+	d.mu.Unlock()
+	defer func() {
+		d.mu.Lock()
+		d.windowPath = ""
+		d.mu.Unlock()
+	}()
+	args := []string{"pair", "-app", path}
 	if admin {
 		args = append(args, "-admin")
 	}
-	d.adminWith(args, text+"\n", "It joined the group.")
+	details := d.showDetails()
+	d.act(func() (string, error) {
+		err := adminRun(args, "", details)
+		d.mu.Lock()
+		cancelled := d.windowCancelled
+		d.mu.Unlock()
+		switch {
+		case cancelled:
+			return "", nil
+		case err != nil:
+			return "", err
+		}
+		if a, ok := readAppWindow(path); ok && a.Done {
+			return d.T("It joined the group."), nil
+		}
+		return "", nil
+	})
+}
+
+// readAppWindow reads what cbb pair -app wrote, if it wrote a whole line.
+func readAppWindow(path string) (appWindow, bool) {
+	var a appWindow
+	data, err := os.ReadFile(path)
+	if err != nil || len(bytes.TrimSpace(data)) == 0 {
+		return a, false
+	}
+	if err := json.Unmarshal(data, &a); err != nil || len(a.Code) != 6 {
+		return a, false // cbb is still writing it
+	}
+	return a, true
+}
+
+// WindowState is the pairing window now: its code and QR code as soon as
+// cbb wrote them.
+func (d *Desk) WindowState() Window {
+	d.mu.Lock()
+	path := d.windowPath
+	d.mu.Unlock()
+	if path == "" {
+		return Window{}
+	}
+	w := Window{Running: true}
+	a, ok := readAppWindow(path)
+	if !ok {
+		return w
+	}
+	if a.QR != "" {
+		if code, err := qr.Encode(a.QR, qr.M); err == nil {
+			code.Scale = 8
+			w.Image = "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
+		}
+	}
+	w.Code = a.Code[:3] + " " + a.Code[3:]
+	w.Address, w.Refused = a.Address, a.Refused
+	d.mu.Lock()
+	if d.windowSeen != path {
+		d.windowSeen, d.windowEndsMs = path, time.Now().Add(time.Duration(a.Expires)*time.Second).UnixMilli()
+	}
+	w.Ends = d.windowEndsMs
+	d.mu.Unlock()
+	if a.Done {
+		w.Joined = a.Name
+	}
+	return w
+}
+
+// CloseWindow closes the pairing window: cbb sees its file gone and hangs
+// up.
+func (d *Desk) CloseWindow() {
+	d.mu.Lock()
+	path := d.windowPath
+	if path != "" {
+		d.windowCancelled = true
+	}
+	d.mu.Unlock()
+	if path != "" {
+		os.Remove(path)
+	}
 }

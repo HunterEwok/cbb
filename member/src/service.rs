@@ -2037,7 +2037,7 @@ fn act_takers<T>(
         .collect()
 }
 
-mod on_live;
+pub(crate) mod on_live;
 
 #[cfg(test)]
 mod tests {

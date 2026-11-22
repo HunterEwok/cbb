@@ -1100,6 +1100,43 @@ fn pairing_by_a_home_window() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// cbb pair -app FILE, for the desktop apps: the window goes into the
+/// app's own file as one line of JSON, rewritten when a device fails and
+/// when one joins; cbb writes only over a file the app made.
+#[test]
+fn pairing_window_for_an_app() {
+    let dir = tempdir("pair-app");
+    let window = || {
+        group_then("g1", |s| match s.op() {
+            "pair" => vec![
+                (
+                    json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                           "invite": WINDOW_LINK.trim()}),
+                    Vec::new(),
+                ),
+                (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
+                done(json!({"name": "laptop"})),
+            ],
+            _ => Vec::new(),
+        })
+    };
+    let file = dir.join("window.json");
+    let path = file.to_str().unwrap().to_string();
+    let r = run_with(&dir, &["pair", "-app", &path], "", window(), &[]);
+    want("pair -app without its file", &r, 1, "", "");
+    std::fs::write(&file, "").unwrap();
+    let r = run_with(&dir, &["pair", "-app", &path], "", window(), &[]);
+    want("pair -app", &r, 0, "", "");
+    let line: Value = serde_json::from_str(std::fs::read_to_string(&file).unwrap().trim()).unwrap();
+    assert_eq!(line["code"], "654321", "{line}");
+    assert_eq!(line["qr"], WINDOW_LINK.trim(), "{line}");
+    assert_eq!(line["address"], "192.168.1.5:8764", "{line}");
+    assert_eq!(line["expires"], 300, "{line}");
+    assert!(line["done"] == true && line["name"] == "laptop", "{line}");
+    assert!(r.sent.iter().any(|s| s.op() == "pair"), "pair -app sent {:?}", ops(&r));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn new_group() {
     let dir = tempdir("new");
@@ -1120,7 +1157,8 @@ fn new_group() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// cbb pair in a group opens a window and shows its code and address.
+/// cbb pair in a group opens a home window of 0.6 and shows its code and
+/// address.
 #[test]
 fn pair_in_a_group() {
     let dir = tempdir("pair-group");
@@ -1130,7 +1168,10 @@ fn pair_in_a_group() {
         "",
         group_then("g1", |_| {
             vec![
-                (json!({"code": "123456", "expires": 300, "address": "192.168.1.5:8764"}), Vec::new()),
+                (
+                    json!({"kind": "home-window", "code": "123456", "expires": 300, "address": "192.168.1.5:8764"}),
+                    Vec::new(),
+                ),
                 done(json!({"name": "deck"})),
             ]
         }),
@@ -2340,23 +2381,16 @@ fn stop_lines() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The QR code's text that cbb pair -qr reads arrives whole, fingerprint and
-/// all, though it is longer than a pairing code's line.
+/// cbb pair -qr admitted a device that waited for the group to dial it,
+/// which is gone on 0.6 (D-119): it says so, reads nothing and sends
+/// nothing to the service.
 #[test]
-fn pair_reads_the_qr_text() {
+fn pair_qr_is_gone() {
     let dir = tempdir("pair-qr");
-    let text = "cbb://join?code=123456&addr=192.168.0.179%3A8764&addr=10.0.0.2%3A8764&addr=%5Bfe80%3A%3A1%5D%3A8764&addr=172.16.5.5%3A8764&fp=sdyYqdtKW%2BHR%2B0ALkJovRReX54G3FuWvIEXFFSKjNGs%3D\n";
-    let r = run_with(&dir, &["pair", "-qr"], text, group_then("g1", |_| vec![done(json!({"name": "phone"}))]), &[]);
+    let r = run_with(&dir, &["pair", "-qr"], "123456\n", group_then("g1", |_| vec![done(json!({}))]), &[]);
     let _ = std::fs::remove_dir_all(&dir);
-    want("pair -qr", &r, 0, "phone joined the group.", "");
-    let p = r.sent.iter().find(|s| s.op() == "pair").expect("pair -qr sent no pair");
-    assert!(
-        p.s("code") == "123456"
-            && p.list("addrs").len() == 4
-            && p.s("fingerprint") == "sdyYqdtKW+HR+0ALkJovRReX54G3FuWvIEXFFSKjNGs=",
-        "pair -qr sent {:?}",
-        p.h
-    );
+    want("pair -qr", &r, 1, "", "no device waits for the group to dial it");
+    assert!(!r.sent.iter().any(|s| s.op() == "pair"), "pair -qr sent {:?}", ops(&r));
 }
 
 /// The service's side of cbb copy FILE: it takes the copy-media request, its

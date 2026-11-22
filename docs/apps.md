@@ -750,14 +750,17 @@ service and its clipboard agent keep syncing without it.
 - **The hub's line**: on every device's page, as in the Mac app (`hubLine` in `app.js`,
   `MakeHub` and `StopHub` in `desk.go`).
 - **Muting**: as in the Mac app (`Mute` and `Unmute` in `desk.go`).
-- **Add a device** (+): on the root or an admin, one field for the six digits the new device
-  shows (or its QR code's text, or a picture of it), which runs `cbb pair -qr` as the
-  administrator with the code on its standard input; "Device far away? Send an invitation"
-  runs `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
-- **Join a group**: runs `cbb pair -app FILE` as the administrator, as the Mac app does: the
-  dialog shows the QR code cbb writes into the file the app made and its six digits, which a
-  computer of the group types, and Cancel removes the file. On Linux the file is written over
-  without being created, so root never makes a file in `/tmp`.
+- **Add a device** (+): on the root or an admin, opens a pairing window with
+  `cbb pair -app FILE` as the administrator (`admit.go`): the dialog shows the window's six
+  digits, which a new computer types, and its QR code, which a new phone scans (D-119), from
+  the line cbb writes into the file the app made (JSON: `code`, `qr`, `address`, `expires`,
+  then `refused` for a device that failed, `done` and `name` for the one that joined). Closing
+  the dialog removes the file, which closes the window; on the root, "Admit it as an admin"
+  opens it again with `-admin`. On Linux the file is written over without being created, so
+  root never makes a file in `/tmp`. "Device far away? Send an invitation" runs
+  `cbb invite -app` as the administrator, as the Mac app does (`invite.go`).
+- **Join a group**: asks for the six digits of a pairing window open on a device of the group
+  and runs `cbb pair -code` as the administrator with them on its standard input (`join.go`).
 - Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
   `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
 
