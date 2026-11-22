@@ -641,6 +641,10 @@ impl Service {
             if let Some(v) = get() {
                 return Ok(v);
             }
+            // Files that turned out not to open: the group never starts.
+            if self.broken.lock().unwrap().is_some() {
+                return Err(Error::msg(BROKEN_LIVE));
+            }
             let in_group = on_live::in_group(&self.state_dir);
             if !in_group || std::time::Instant::now() >= deadline || STOP.load(Ordering::SeqCst) {
                 return Err(Error::msg(if in_group {
