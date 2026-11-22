@@ -59,11 +59,11 @@ export class Live {
       event: EVENT,
       sequence: this.sequence,
       isMute: true,
-      primary: { title: title, content: [{ text: text }], keepTime: keep ?? 0, clickAction: this.open }
+      liveViewData: { primary: { title: title, content: [{ text: text }], keepTime: keep ?? 0, clickAction: this.open } }
     };
     if (since > 0) {
       view.timer = { time: Date.now() - since, isCountdown: false, isPaused: false };
-      view.primary.content = [{ text: text.length > 0 ? `${text} · \${placeholder.timer}` : '${placeholder.timer}' }];
+      view.liveViewData.primary.content = [{ text: text.length > 0 ? `${text} · \${placeholder.timer}` : '${placeholder.timer}' }];
     }
     try {
       if (this.running.has(id)) {
@@ -85,7 +85,7 @@ export class Live {
     this.sequence++;
     const view: liveViewManager.LiveView = {
       id: id, event: EVENT, sequence: this.sequence, isMute: true,
-      primary: { title: title, content: [{ text: text }], keepTime: keep, clickAction: this.open }
+      liveViewData: { primary: { title: title, content: [{ text: text }], keepTime: keep, clickAction: this.open } }
     };
     try {
       await liveViewManager.stopLiveView(view);

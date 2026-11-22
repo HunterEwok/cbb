@@ -275,7 +275,7 @@ watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator.
 
 ```sh
-apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
