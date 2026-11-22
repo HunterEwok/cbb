@@ -13,8 +13,6 @@
 //! are stable and listed in Code. `call` never panics on any input and
 //! always answers.
 
-mod group;
-pub use group::checked_command;
 mod push;
 mod set;
 mod signed;
@@ -226,7 +224,6 @@ fn dispatch(op: &str, args: Value) -> Result<Vec<u8>, Refusal> {
         "bug_sent" => bug_sent(serde_json::from_value(args).map_err(bad_args)?),
         "bug_pending" => bug_pending(serde_json::from_value(args).map_err(bad_args)?),
         _ => push::dispatch(op, &args)
-            .or_else(|| group::dispatch(op, &args))
             .or_else(|| signed::dispatch(op, &args))
             .or_else(|| set::dispatch(op, &args))
             .unwrap_or_else(|| Err(refuse(Code::Op, Error::msg(alloc::format!("The core has no call named {op:?}."))))),

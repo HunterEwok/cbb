@@ -4335,7 +4335,7 @@ hold for the body as sent and for the orders once opened. The members in between
 sealed command on as any other. Every sender seals to a receiver whose record has a `seal`
 key: computers, small devices and both phone apps (the kits through the core's
 `seal_command`), and every one of them has a key of its own, which it opens the commands for
-it with (the phones through the core's `group_command`). So a receiver whose own record has one refuses a `paste` command in the
+it with (the phones through their member in the core). So a receiver whose own record has one refuses a `paste` command in the
 open, whose text was read on its way; it takes the other types in the open, as a watch signs
 them (a watch checks what it signs and cannot read sealed orders). A receiver without a key
 in its record takes commands in the open, and a member without a key of its own refuses a

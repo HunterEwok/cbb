@@ -374,21 +374,9 @@ the core's.
 | `read_invite` | `text`: a remote invitation's text ([protocol.md](protocol.md), section 12) | `{"invitation"}` with `group`, `hub`, `hub_key`, `endpoints`, `guest_key`, `guest_psk`, `secret`, `expires` (Unix seconds) and `obfuscation` (or `null`), as the valid cases of `testdata/interop/invites.json` write them; or `{"refused": {"reason", "message"}}`, the reason one of the names of section 12 and the message a sentence for the user. A refused invitation is an answer, not an error. The caller checks `expires` against its clock |
 | `recovery_sheet` | `key` (the recovery key's 32 bytes, base64), `cert` (its admin CA, DER, base64), `group` (the group's tag) | `{"qr", "text", "admin"}`: the sheet's QR code and text ([protocol.md](protocol.md), section 10, "The recovery key") and the key hash the `recovery` record names. An admin CA that is not the key's is refused with `cert` |
 | `read_recovery_sheet` | `text`: what the user scanned or typed | `{"sheet"}` with `key` (32 bytes), `pkcs8`, `public` (uncompressed), `admin` (its key hash), all base64, and from the QR code `cert` and `group`; or `{"refused": {"reason", "message"}}` as `read_invite`, with the reasons of protocol.md's "The recovery sheet" |
-| `group_add` | the set's arguments (see "The record set"), `records` | `{"file", "fresh", "errors"}`: the new file, the records it did not hold before, and why it left others out (optional) |
-| `group_view` | the set's arguments | `{"state", "devices", "path", "root_member", "hub_order", "handed_to", "digest", "claim_times", "records"}`: see "The record set" |
-| `group_refused` | the set's arguments, `chain` (a chain `check_member` took, leaf first) | `{"verdict", "why", "claimant"}`: `ok`, `not_listed` (the set does not name the device yet), `taken_over` (the root's own device that a claim took the group over from, whose connection carries records only; `claimant` is `{device, admin}`), `stopped` (the state stops the exchange with the device, docs/protocol.md section 10, "Stopping the exchange"; its connection carries records only) or `refused`, with the reason for the log |
-| `group_taken_over` | the set's arguments, `chain` (the member's own) | `{"claimant"}`: `{device, admin}` of the admin that took the group over from this root by a claim that took effect; `{}` when none did |
-| `group_refused_admin_ca` | the set's arguments, `ca` (base64 DER) | `{"verdict", "why"}` for an admin CA, as for `group_refused` |
-| `group_admin_peer` | the set's arguments, `device`, `chain` | `{"admin"}`: whether the device is the group's root or an admin |
-| `group_hub_peer` | the set's arguments, `device`, `chain` | `{"hub"}`: whether the device may be a hub of the group, whose offers a member keeps: the root, an admin, or a device that only passes copies on ([protocol.md](protocol.md), section 11, "Two kinds of hub") |
-| `group_seal_copy` | the set's arguments, `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `kind`, `via` (optional), `text`, `media` (a manifest, optional), `blob` (`{size, sha256}`, optional) and `key` (base64, 32 bytes, the key that sealed the blob; optional without a blob) | `{"event", "to_sign", "readers", "key"}`: the copy sealed to the readers the set names ([protocol.md](protocol.md), section 4, "Sealing" and "Readers"), without `sig`; the caller signs `to_sign` (base64) with its member key, ECDSA P-256 with SHA-256 in DER, and puts it in the event's `sig`. `key` comes back when the core made it. A copy that cannot be sealed is code 17 |
-| `group_check_copy` | the set's arguments, `event` (a copy as the member protocol carries it) | `{}` when the copy's certificate, its issuer, its origin's key and its signature check against the set, as a member checks a copy before it passes it on; code 17 with the reason otherwise |
-| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself; the caller signs `to_sign` |
 | `copy_verdict` | `receives`, `kind`, `mark`, `unread`, `has_text`, `has_media`, `takes_media`, `held` (booleans, false when left out but `receives`), `age_ms`, `window_ms`, `secret_ttl_ms` | `{"verdict"}`: whether the group's current copy goes into the member's clipboard (`write`), or why not: `mode`, `unread`, `secret_gone`, `no_text`, `held` or `old` (`cbb_core::rule`; the cases of `testdata/interop/copy-verdicts.json`) |
 | `open_copy` | `event`, `me` (the reader's device), `secret` (base64, its secret for sealed messages) | `{"kind", "via", "text", "media", "key"}`: what the copy holds, and the copy's key (base64), which opens its blob; code 17 when it is not sealed to `me`, does not open or breaks a rule of its content. It does not check the origin |
 | `seal_segment`, `open_segment` | `key` (base64, the copy's key), `index` (from 0), `last` (the blob's last segment), `data` (base64: at most 64 KiB to seal, 65 552 bytes to open) | `{"data"}`: the segment sealed or opened ([protocol.md](protocol.md), section 4, "The blob"); a segment that does not open is code 17 |
-| `group_command` | the set's arguments, `command` (`{body, sig, chain}`), `me` (the member's device), `secret` (optional, base64: the member's secret for sealed messages) | `{"command", "signer", "root", "sender", "verified", "opened"}`: the command's body as an object, with a sealed command's orders opened with `secret` and put in it (`opened`), the device that signed it, whether it signed as the root, and the device the limits count it for, `verified` when that device's own key signed; a command refused is code 15, as is a sealed one without `secret` or one that does not open with it, and a `paste` in the open for a member whose device record has a `seal` key |
-| `group_claim_times` | the set's arguments, `claim_times` (`[{record, ms}]`, from a Welcome) | `{"file"}`: the times earlier than the set's own and not in the future taken |
 | `parse_body` | `kind` (`command`, `credential`, `keys`, `release`, `channel`, `attest-status`, `entries`, `zxnext` or `manifest`), `body` (base64) | `{"kind", "value"}`: the body's fields as an object, once it checks; see "Signed bodies" |
 | `release_check` | `keys`, `channel`, `release` (each a release file's bytes as fetched, base64), `name` (the channel), `now_ms`, `seen` (what the device kept, optional), `roots` (optional, `[{alg, key, name, use}]`: other roots, for tests; the pinned ones when left out) | `{"value", "seen"}`: release.json's fields and the Seen to keep; a file refused, or one that does not read, is code 16. See "Release files" |
 | `release_check_status` | `keys`, `status` (attest-status.json), each its bytes in base64, `now_ms`, `seen`, `roots` as `release_check` | `{"value", "seen"}`: the revocation list's fields and the Seen to keep |
@@ -400,7 +388,6 @@ the core's.
 | `keyboard` | `layout` (`us` or `ru`, the host's), `text` | `{"reports", "untypeable", "map"}`: the HID boot keyboard's reports that type `text` (each 8 bytes, base64; a key down, then all keys up), the characters the layout has no key for (no reports then), and the report map (base64), for a phone that is a Bluetooth LE keyboard (`cbb_core::keyboard`); an unknown layout is code 1 |
 | `seal_public` | `secret` (base64, 32 random bytes the device keeps) | `{"key"}`: its public key for sealed messages (base64, 1216 bytes), the `seal` its pairing and device record carry |
 | `seal_command` | `body` (base64, a command in the open), `key` (base64, the receiver's `seal` key) | `{"body"}`: the same command with its orders sealed to the key (`v` `2`, `sealed`), canonical, for the sender to sign; see "Signed bodies" |
-| `group_body` | the set's arguments, `body` (a record body as `canonical_body` takes it, with `signer` set) | `{"body"}`: the canonical bytes of the signer's next record, to sign: the group, seq and prev set from the set, and for a removal, a freeze or a claim `seen` from the set, the signer's own previous seq among them |
 | `bug_report` | `input` (`{kind, code, name, message, details, app, version, build, os, os_version, model, arch, log, names, now_ms}`: `kind` `panic` or `error`, `app` `ios`, `android`, `aurora`, `mac`, `tray` or `cbb`, `log` CBB's own log, oldest first, `names` the words that must not leave the device), `state` (as the last bug call gave it, optional) | `{"report", "fingerprint", "post", "url", "action", "offer_always", "fixed_in"}`: the report, filtered, as "Technical details" shows it, the break's fingerprint, the body to post to `url` (empty when this build has no key to seal to), what the app does (`ask`, `send` or `skip`), whether the dialog offers "Always allow", and the version the server said fixes this break; see "Bug reports" |
 | `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
 | `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
@@ -712,47 +699,11 @@ admit the device, and whether it is the device discovery found, are the caller's
 `testdata/interop/member-chains.json`, written by Go from crypto/tls's chain building, holds the
 cases both give the same answer.
 
-## The record set
-
-The calls whose names start with `group_` work on the set of records a member keeps, which the
-phones store as the records file `cbb` writes (`cbb_core::group::Records`):
-`{"v": 2, "records": [{body, sig, chain}], "first_seen": [{record, ms}]}`. The caller keeps the
-file and passes it in each call, base64; a call that changes the set answers the new file,
-which the caller saves in place of the old one. So the phones hold no rule of the group in
-their own code, and every member gives the same answers for the same records.
-
-The set's arguments, which every such call takes:
-
-| Field | Meaning |
-|---|---|
-| `group_ca` | the group CA, base64 DER |
-| `now_ms` | the member's clock that counts sleep |
-| `file` | the records file, base64; left out for an empty set |
-| `group` | optional: the group's tag where it is not the CA's own, for the vectors |
-
-The set keeps a record that verifies under one of the group's roots and names the group, and a
-record of a later version, which it passes on and never applies (records-v2.md); it keeps at
-most the records records-v2.md allows. `group_view` answers:
-
-| Field | Meaning |
-|---|---|
-| `state` | the group's state, as `evaluate` gives it for the records the set keeps |
-| `devices` | `[{device, name, role, caps, os, key, store, kind, proof, seal, admin, admin_key, powers, commands, frozen, freezes, keys}]`: the devices list the apps show; `key`, `keys` and `seal` (the key commands for it are sealed to, when its record has one) base64; `freezes`, for a frozen admin, the IDs of the freezes a thaw names |
-| `path` | the roots' certificates on the path, the group CA first, base64 DER |
-| `root_member` | `{device, key}`: the device that holds the root key, when the set names one |
-| `hub_order` | the devices that may be hubs, in the order members try them |
-| `handed_to` | the admin key hash (base64) of the current root's newest `handover` record that the state does not ignore, while that key is neither revoked nor frozen; left out without one. The phone with that admin key offers to take the group, and its claim takes effect at once (docs/protocol.md, section 10, "Handing the group over") |
-| `digest` | the set's digest, which a hello carries; left out for an empty set |
-| `claim_times` | `[{record, ms}]`: when the set first held each claim, which a Welcome passes on |
-| `known` | every device ID a device record names, counted or not: IDs a new device must not take |
-| `records` | the number of records the set holds |
-
 ## The group (records v3)
 
 The calls whose names start with `set_` are the group of 0.6: its records v3 (`cbb_core::records`)
 kept in a set file (`cbb_core::setfile`), which the computers' member writes in its state folder and
-Go and the tests pass in each call. They take the place of the `group_` calls above when the
-programs move to the core of 0.6. Keys, key hashes, record IDs, device IDs and digests are base64;
+Go and the tests pass in each call. Keys, key hashes, record IDs, device IDs and digests are base64;
 a key is the point (SEC1, 65 bytes) except the recovery key's second half, the SLH-DSA public key.
 
 Every call takes `set`, the set file, and `local`, the device's 32-byte local key, when the file is
@@ -806,7 +757,7 @@ in through a change of root).
 release files in section 16, manifests in section 7): the strict form of signed bodies, then
 each field against its row. A release file's body is refused above 256 KiB, as its envelope
 allows. It checks the body alone; the signature, the signer and the time are the caller's, or
-`group_command`'s for a command. Go reads the bodies with its own code, which the strict vectors
+the member's for a command. Go reads the bodies with its own code, which the strict vectors
 keep the same. The phone kits call it for
 each command, credential and release file they take. A manifest comes inside a copy's sealed
 Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
@@ -820,8 +771,8 @@ and writes the body with `v` `2` in the canonical form. The phone kits call it f
 to a device whose record has a `seal` key; Go seals with its own `group.SealCommand`, and both
 open each other's. A phone keeps a secret for sealed messages of its own (32 random bytes in
 the keychain, or under a key of the Android Keystore), gives its public key from `seal_public`
-when it makes a group or joins one, and passes the secret to `group_command`, which opens the
-commands sealed to it.
+when it makes a group or joins one, and its member in the core opens the commands sealed to it
+with that secret.
 
 ## Release files
 

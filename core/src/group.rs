@@ -893,6 +893,7 @@ impl Records {
 
     /// Names the set's group with tag instead of the group CA's own: for
     /// the vectors, whose groups carry tags of their own.
+    #[cfg(test)]
     pub(crate) fn set_tag(&mut self, tag: &str) {
         self.tag = tag.to_string();
         self.st.replace(None);
