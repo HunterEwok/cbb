@@ -165,8 +165,13 @@ protected:
         size_t len = 0;
         answer = Core::take(cbb_piv(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()), noCard, nullptr, &len),
                             len, QStringLiteral("yubikey"), &failure);
-        if (!failure.isNull())
+        if (!failure.isNull()) {
+            // The core's own words go to the details (shown in debug, logged
+            // always), so that a refusal names its step and status word.
+            const QString core = failure.details.isEmpty() ? failure.message : failure.message + QStringLiteral(": ") + failure.details;
             failure.message = shownFor(failure.message, failure.details);
+            failure.details = core;
+        }
     }
 
 private:

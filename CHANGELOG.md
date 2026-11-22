@@ -2988,6 +2988,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Aurora app keeps the core's own words when a YubiKey refuses: they go to the error's
+  details (shown in a debug build or with `CBB_ERROR_DETAILS=1`, logged always) under the
+  message in the user's words, which had replaced them and left the step unknown.
 - A device that joins with six digits no longer dials a member whose pairing window just
   closed: mDNS may still serve that member's old announcement for a moment, and the browse
   now drops a device whose newer announcement shows no window, or that leaves.
