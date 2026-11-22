@@ -1330,7 +1330,7 @@ fn notices_of(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
         out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
     }
     if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| st.root_device == Some(*me)) {
-        let percent = w.waiting_units.saturating_mul(100) / w.room.cap.max(1);
+        let percent = w.waiting_units.saturating_mul(100).checked_div(w.room.cap.max(1)).unwrap_or(0);
         out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
     }
     let own_admin = st.devices.iter().find(|d| d.id == *me).and_then(|d| d.admin);

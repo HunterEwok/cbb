@@ -37,9 +37,12 @@ fn test_offset_ms() -> i64 {
 /// wall clock moves only the first). It never goes back, whatever the file
 /// says, so that the time since boot stays monotonic; 0 without the file.
 fn test_run_ms() -> u64 {
-    static MOST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    // A mutex, not an AtomicU64, which 32-bit MIPS has not.
+    static MOST: std::sync::Mutex<u64> = std::sync::Mutex::new(0);
     let run = u64::try_from(test_clock().1).unwrap_or(0);
-    MOST.fetch_max(run, std::sync::atomic::Ordering::Relaxed).max(run)
+    let mut most = MOST.lock().unwrap_or_else(|e| e.into_inner());
+    *most = (*most).max(run);
+    *most
 }
 
 /// The test clock file's two numbers: the wall clock's offset and the

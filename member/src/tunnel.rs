@@ -1961,6 +1961,8 @@ pub(crate) mod tests {
     /// the same.
     #[test]
     fn a_go_hubs_state_saves_the_same() {
+        // The file's own form: a Mac's Secure Enclave would seal the key.
+        crate::keys::files_only_on_this_thread();
         let want: serde_json::Value =
             serde_json::from_str(include_str!("../../testdata/interop/tunnel-state.json")).unwrap();
         let dir = std::env::temp_dir().join(format!("cbb-tunnel-go-{}", std::process::id()));

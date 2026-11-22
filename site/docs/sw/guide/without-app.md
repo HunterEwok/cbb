@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: f88bc63a357c -->
+<!-- source: a9d8b94a0114 -->
 # Bila programu
 
 Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia kikundi.
@@ -14,7 +14,9 @@ Kikundi cha kompyuta hakihitaji programu ya simu: kompyuta inaweza kushikilia ki
 sudo cbb new
 ```
 
-Kompyuta hii sasa ni **mzizi** wa kikundi: inashikilia ufunguo wa kikundi na kuongeza na kuondoa vifaa. Ufunguo wake ni faili kwenye kompyuta, inayolindwa na mfumo; programu ya simu huhifadhi ufunguo huohuo kwenye chipu ya usalama ya simu.
+Kompyuta hii sasa ni **mzizi** wa kikundi: inashikilia ufunguo wa kikundi na kuongeza na kuondoa vifaa. Ufunguo wake uko kwenye TPM au Secure Enclave ya kompyuta ikiwa inayo, vinginevyo kwenye faili inayolindwa na mfumo.
+
+`cbb new` pia huonyesha **karatasi ya urejeshaji** ya kikundi mara moja: mistari minne ya herufi na tarakimu na msimbo wa QR. Iandike au uchapishe skrini, na uiweke mbali na vifaa vyako. Kwa hiyo unarudisha kikundi kompyuta hii ikipotea (`cbb recovery`); hakuna kinachohifadhi nakala.
 
 ## 2. Ongeza kompyuta
 
@@ -24,7 +26,7 @@ Kwenye mzizi:
 sudo cbb pair
 ```
 
-Huonyesha msimbo wa tarakimu sita na kusubiri. Kwenye kompyuta mpya, endesha pia `sudo cbb pair`: kwanza huonyesha msimbo wa QR kwa programu ya simu, ambao unaweza kuupuuza, kisha huuliza msimbo; andika tarakimu hizo sita pale. Kompyuta mpya hujiunga ndani ya sekunde chache.
+Hufungua dirisha la kuoanisha, huonyesha msimbo wa tarakimu sita na kusubiri. Kwenye kompyuta mpya endesha `sudo cbb pair -code` na uandike msimbo huo: inapata dirisha kwenye mtandao wa nyumbani na kujiunga ndani ya sekunde chache. Msimbo usio sahihi hutumia mojawapo ya majaribio matatu; dirisha hufungwa baada ya la tatu, au kompyuta ikishajiunga.
 
 Kisha kila kompyuta husawazisha, kama katika [mwanzo wa haraka](quickstart.md#4-copy-on-one-paste-on-another).
 
@@ -39,10 +41,10 @@ sudo cbb admin -allow-file-key NAME   # for a computer without a TPM or a Secure
 
 Kompyuta ya Linux au ya Windows yenye TPM huweka ufunguo wa msimamizi humo, na Mac kwenye Secure Enclave yake. Kompyuta isiyo na chochote kati ya hivyo huuweka kwenye faili, kwa hivyo `cbb admin` huomba kwanza `-allow-file-key`: yeyote anayenakili faili hiyo hutenda kama msimamizi hadi msimamizi mwingine aondoe kompyuta hiyo, kwa hivyo fanya msimamizi kompyuta unayoitunza salama tu.
 
-Mzizi ukipotea au kuharibika, msimamizi huchukua kikundi, na kila kifaa kingine kinabaki:
+Mzizi ukipotea au kuharibika, kompyuta nyingine inakuwa mzizi kwa karatasi ya urejeshaji ya kikundi, na kila kifaa kingine kinabaki:
 
 ```sh
-sudo cbb takeover NAME       # on the admin; NAME is the lost root
+sudo cbb recovery            # then type the recovery key from the sheet
 ```
 
 Zaidi katika [kifaa kikipotea au kuibiwa](lost-device.md).
@@ -56,8 +58,8 @@ Kompyuta isiyo nyumbani hujiunga kwa mwaliko kutoka kitovu ([Nje ya nyumbani](aw
 
 Kwa njia zote mbili, andika mstari ambao `cbb pair` huchapisha chini ya msimbo (`cbb://pair?...`) badala ya tarakimu sita: tarakimu peke yake hazitaji dirisha lolote mahali ambapo mDNS haifiki, na mstari unalitaja, ukiwa na msimbo uleule ndani yake.
 
-Msimbo haupiti wazi kamwe: uoanishaji hufanyika ndani ya SSH au VPN yako, na ndani ya TLS. Kompyuta mpya husawazisha kupitia njia hiyo hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha baadaye, washa [usawazishaji nje ya nyumbani](away-from-home.md) kwenye zote mbili kabla ya kufunga muunganisho.
+Misimbo haisafiri kamwe: kila kompyuta hukokotoa msimbo wake yenyewe kutokana na kuoanisha, ambako hufanyika ndani ya SSH au VPN yako, na ndani ya TLS. Kompyuta mpya husawazisha kupitia njia hiyo hadi huduma yake ianzishwe upya; ili kuendelea kusawazisha baadaye, washa [usawazishaji nje ya nyumbani](away-from-home.md) kwenye zote mbili kabla ya kufunga muunganisho.
 
 ## Kikundi cha kabla ya 0.6
 
-0.6 inasoma rekodi za kikundi za toleo 2 pekee, na haina njia ya kurudi kwenye vikundi vya zamani. Kompyuta iliyosasishwa kutoka toleo la awali huacha kikundi chake cha zamani inapoanza kwa mara ya kwanza: huhamisha faili za kikundi hadi `before-0.6` kwenye saraka yake ya hali, huhifadhi mipangilio yake, na `cbb status` husema hivyo. Unda kikundi upya: `cbb new` kwenye kompyuta moja, kisha `cbb pair` kwenye nyingine.
+0.6 inasoma rekodi za kikundi za toleo 2 pekee, na haina njia ya kurudi kwenye vikundi vya zamani. Kompyuta iliyosasishwa kutoka toleo la awali huacha kikundi chake cha zamani inapoanza kwa mara ya kwanza: huhamisha faili za kikundi hadi `before-0.6` kwenye saraka yake ya hali, huhifadhi mipangilio yake, na `cbb status` husema hivyo. Unda kikundi upya: `cbb new` kwenye kompyuta moja, kisha `cbb pair -code` kwenye nyingine.

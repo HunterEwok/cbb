@@ -602,8 +602,14 @@ func commandVerdict(body []byte, m map[any]any) string {
 	if len(body) > 2<<20 {
 		return "env/size"
 	}
-	if !only(m, 1, 2, 3, 4, 6, 7, 10, 11, 13, 14, 15) {
+	if !only(m, 1, 2, 3, 4, 6, 7, 8, 10, 11, 13, 14, 15) {
 		return "form/critical"
+	}
+	// 8, signer2: a second signer of a later version, taken on the first
+	if s2, ok := m[uint64(8)]; ok {
+		if b, isBytes := s2.([]byte); !isBytes || len(b) != 32 {
+			return "commands/signer2"
+		}
 	}
 	t, ok := u(m, 1)
 	if !ok || t < 1 || t > 10 {

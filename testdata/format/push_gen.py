@@ -481,6 +481,14 @@ def main():
     assert all(m["length"] <= 16384 for m in msgs)
     out["messages"] = msgs
 
+    # Each table's own shape: a value that is not a map.
+    maps = []
+    for table in ("push-renew", "push/send", "push/sent", "pushbody"):
+        rule = check_map(table, [1])
+        assert rule == table + "/shape", (table, rule)
+        maps.append({"name": "a %s that is not a map" % table, "table": table, "value": enc([1]).hex(), "rule": rule})
+    out["maps"] = maps
+
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "push.json")
     with open(path, "w") as f:
         json.dump(out, f, indent=1, ensure_ascii=False)

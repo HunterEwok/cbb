@@ -2915,6 +2915,7 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The ESP32 firmware does not join groups of 0.6 yet: it joins only as a device that waits for the phone to dial it, which 0.6 has no more (D-119); it moves to 0.6, joining by a pairing window, in 0.7.
 - The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
   renewals, proofs, sealing and joining of a computer, with their tests and the kit's
   interop player (`InteropMain`, `interopScript`). A phone with a group from before 0.6

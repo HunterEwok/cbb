@@ -174,9 +174,14 @@ pub fn over_with(
         before(a)?;
         crate::set::save(dir, &a.set, &local)
     });
-    // A member with no window open ends the connection at once.
+    // A member with no window open ends the connection at once: an end of
+    // the stream, or a reset when the joiner's first message was still
+    // unread there.
     got.map_err(|e| {
-        let eof = e.find::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof);
+        let eof = e.find::<std::io::Error>().is_some_and(|io| {
+            use std::io::ErrorKind::{ConnectionAborted, ConnectionReset, UnexpectedEof};
+            matches!(io.kind(), UnexpectedEof | ConnectionReset | ConnectionAborted)
+        });
         if eof {
             e.context(format!("the pairing window is closed at {who}, or none was open: run cbb pair there, then join"))
         } else {

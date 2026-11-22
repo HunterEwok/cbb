@@ -1334,7 +1334,11 @@ mod tests {
                                 cookies.fetch_add(1, Ordering::Relaxed);
                             }
                         }
-                        std::thread::sleep(Duration::from_micros(200));
+                        // Paced below what the hub's one thread drains: a
+                        // flood past it fills the kernel's buffer and drops
+                        // the client's packets with the rest (macOS), which
+                        // no admission rule can help, and is not this test.
+                        std::thread::sleep(Duration::from_millis(1));
                     }
                 })
             })
@@ -1564,7 +1568,10 @@ mod tests {
         let flood = {
             let (stop, sent) = (stop.clone(), sent.clone());
             std::thread::spawn(move || {
-                let u = UdpSocket::bind("127.0.0.2:0").unwrap();
+                // From another source where the system has one (macOS
+                // brings up 127.0.0.1 alone): a wrong mac1 is charged to no
+                // source, so the client's own is not the point.
+                let u = UdpSocket::bind("127.0.0.2:0").or_else(|_| UdpSocket::bind("127.0.0.1:0")).unwrap();
                 let mut g = vec![7u8; 148];
                 g[..4].copy_from_slice(&[1, 0, 0, 0]);
                 while !stop.load(Ordering::SeqCst) {

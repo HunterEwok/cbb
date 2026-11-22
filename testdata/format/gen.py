@@ -211,6 +211,9 @@ def slh_sign(seeds, items):
     Python has no SLH-DSA of its own here; the Rust core checks these with
     another implementation (RustCrypto's slh-dsa)."""
     global _SLH_SIGNER
+    if _SLH_SIGNER is None and os.environ.get("CBB_SLH_SIGNER"):
+        # A signer built beforehand, as CI does where gen.py runs without Go.
+        _SLH_SIGNER = os.environ["CBB_SLH_SIGNER"]
     if _SLH_SIGNER is None:
         here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check")
         _SLH_SIGNER = os.path.join(tempfile.mkdtemp(), "check")
@@ -348,10 +351,10 @@ SIG2_HASH = sha(b"a second key of a later version")
 SIG2 = fake("a second signature of a later version", 2420)
 
 
-def envelope2(kind, signer, body_map, sig2=SIG2):
+def envelope2(kind, signer, body_map, sig2=SIG2, signer2=SIG2_HASH):
     """The envelope [body, sig, sig2] of body_map with signer2 set; its
     damaged twin, whose sig2 was swapped on the way, is envelope2(...)[2]."""
-    body = enc({**body_map, 8: SIG2_HASH})
+    body = enc({**body_map, 8: signer2})
     env = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), sig2])
     swapped = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), fake("another second signature", 2420)])
     return env, body, swapped
@@ -1033,6 +1036,9 @@ def grant_vectors(admin_record):
     root_bad("grant of another type", "grants/shape", {**g, 1: 2})
     root_bad("grant with an unknown critical field", "form/critical", {**g, 200: 1})
     root_bad("grant with field 9", "form/critical", {**g, 9: 1})
+    two = {**g, 3: ROOT.hash}
+    genv, _, _ = envelope2("grant", ROOT, two, signer2=SIG2_HASH[:31])
+    bad("a second signer's hash of 31 bytes", "grants/signer2", message(genv), L)
     root_bad("root grant naming a grant it replaces", "grants/replaces", {**g, 18: sha(b"some grant")})
     root_bad("grant with recovery seq 0 written", "form/default", {**g, 19: 0})
     root_bad("grant made under a recovery seq the leaf does not know", "grants/recovery", {**g, 19: 1})
@@ -1236,6 +1242,9 @@ def credential_vectors():
                  "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
     env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
+    env, _, _ = envelope2("credential", ROOT, m, signer2=SIG2_HASH[:31])
+    refuse.append({"name": "a second signer's hash of 31 bytes", "rule": "credentials/signer2", "verdict": "refuse",
                    "envelope": env.hex()})
     # The body's ceiling, 16 KiB: a text in the optional zone fills it.
     def sized(n):
@@ -2585,6 +2594,12 @@ def intro_vectors(records_take):
     add(f"{fit + 1} records of {len(big['envelope']) // 2} bytes, past {max_bytes}", [(big, fit + 1)], "intro/size")
     add(f"{max_records + max_heads + 1} envelopes, refused before any is read",
         [(small, max_records + max_heads + 1)], "intro/size")
+    # What the records' reader refuses, and a message of another form,
+    # written whole (`message`).
+    not_record = enc([enc({}), bytes(64)]).hex()
+    out.append({"name": "an envelope that is no record", "runs": [[small["envelope"], 1], [not_record, 1]],
+                "rule": "intro/record"})
+    out.append({"name": "records that are not an array", "message": enc({0: 8, 2: 1}).hex(), "rule": "intro/shape"})
     return out
 
 
@@ -2786,6 +2801,9 @@ def wave3_vectors(records_take):
     mp("a Welcome with claim ages (field 3, retired)", "welcome", {**welcome, 3: [[claims[0], 1]]},
        "welcome/retired")
     mp("a Welcome with counted claims (field 8, retired)", "welcome", {**welcome, 8: claims}, "welcome/retired")
+    # Each table's own shape, after the samples the readers take first.
+    for table in ("hubs", "guest", "pair/info"):
+        mp(f"a {table} that is not a map", table, [1], table + "/shape")
     return take, refuse, maps
 
 
@@ -3030,6 +3048,12 @@ def card_vectors():
     env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "envelope": env.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
+    no("version 0", card({4: 0}), "card/shape")
+    no("no expiry", {k: v for k, v in card().items() if k != 7}, "card/shape")
+    no("an empty name", card({10: ""}), "card/name")
+    no("a name with a line end", card({10: "a forwarder\nin Europe"}), "card/name")
+    env, _, _ = envelope2("card", OPERATOR, card(), signer2=SIG2_HASH[:31])
+    refuse.append({"name": "a second signer's hash of 31 bytes", "rule": "card/signer2", "envelope": env.hex()})
     return take, refuse
 
 
@@ -3339,9 +3363,19 @@ def write_unicode(outdir):
           + "\nvar uComp = [][3]rune{\n" + rows(comp, g(h3), 4).replace("    ", "\t") + "\n}\n"
           + "\nvar uCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n"
           + "\nvar uCase = [][2]rune{\n" + rows(keys, g(h2), 6).replace("    ", "\t") + "\n}\n")
-    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "unicode.rs"), "w") as f:
+    # Into the repository when outdir is this folder, else beside the
+    # vectors in outdir, where CI compares them with the repository's.
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.realpath(outdir) == os.path.realpath(here):
+        rs_path = os.path.join(here, "..", "..", "core", "src", "content", "unicode.rs")
+        go_path = os.path.join(here, "check", "unicode.go")
+    else:
+        rs_path = os.path.join(outdir, "unicode.rs")
+        go_path = os.path.join(outdir, "check", "unicode.go")
+        os.makedirs(os.path.dirname(go_path), exist_ok=True)
+    with open(rs_path, "w") as f:
         f.write(rs)
-    with open(os.path.join(outdir, "check", "unicode.go"), "w") as f:
+    with open(go_path, "w") as f:
         f.write(go)
 
 
@@ -3439,13 +3473,18 @@ def command_rule(env_b):
         env = dec(env_b)
     except Bad as e:
         return e.rule
-    if not (isinstance(env, list) and len(env) == 2 and all(isinstance(x, bytes) for x in env)):
+    if not (isinstance(env, list) and len(env) in (2, 3) and all(isinstance(x, bytes) for x in env)):
         return "env/shape"
     if len(env[0]) > 2 << 20:
         return "env/size"
     m = dec(env[0])
-    if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 10, 11, 13, 14, 15) for k in m):
+    # A second signature goes with signer2 (key 8) and only with it.
+    if (8 in m) != (len(env) == 3):
+        return "env/shape"
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 8, 10, 11, 13, 14, 15) for k in m):
         return "form/critical"
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "commands/signer2"
     t = m.get(1)
     if not (isinstance(t, int) and 1 <= t <= 10):
         return "commands/type"
@@ -3756,6 +3795,11 @@ def wave4_vectors():
     ]:
         env, b = envelope("command", ADMIN, m)
         commands.append({"name": name, "verdict": command_rule(env), "diag": diag(m), "envelope": env.hex()})
+    for name, signer2 in [("a second signer", SIG2_HASH), ("a second signer's hash of 31 bytes", SIG2_HASH[:31])]:
+        m = body(4, {})
+        env, _, _ = envelope2("command", ADMIN, m, sig2=fake("a short second signature", 64), signer2=signer2)
+        commands.append({"name": name, "verdict": command_rule(env), "diag": diag({**m, 8: signer2}),
+                         "envelope": env.hex()})
     out["commands"] = commands
 
     orders = []
@@ -4019,8 +4063,16 @@ def wave5_vectors():
     return out
 
 
+# The Unicode version of the name rules' tables, which Python's unicodedata
+# gives: Python 3.13.
+UNICODE_VERSION = "15.1.0"
+
+
 def main():
     outdir = sys.argv[1]
+    if unicodedata.unidata_version != UNICODE_VERSION:
+        sys.exit("gen.py: the vectors follow Unicode %s (Python 3.13); this Python has Unicode %s"
+                 % (UNICODE_VERSION, unicodedata.unidata_version))
     os.makedirs(outdir, exist_ok=True)
     write_unicode(outdir)
     rt, rr, rl = record_vectors()
@@ -4063,7 +4115,17 @@ def main():
         "codes": code_vectors(),
         "welcome_parts": welcome_parts_vectors(),
         "intros": intro_vectors(rt),
+        # Welcomes the Welcome's reader refuses after its table.
+        "welcomes": [{"name": "a record that is no record", "rule": "welcome/record",
+                      "welcome": enc({1: ROOT.key, 2: [[enc({}), bytes(64)]], 5: T0, 9: RECOVERY.key,
+                                      11: RECOVERY2.key, 12: fake("welcome digest", 32)}).hex()}],
     }
+    # A Welcome is read only after the code is confirmed.
+    welcome_frame = next(t["frame"] for t in files["frames.json"]["take"] if t["name"] == "welcome")
+    files["frames.json"]["pairing"] = [{"name": "a Welcome before the confirm", "frame": welcome_frame,
+                                        "confirmed": False, "rule": "pair/early-welcome"},
+                                       {"name": "a Welcome after the confirm", "frame": welcome_frame,
+                                        "confirmed": True}]
     files["wave4.json"] = wave4_vectors()
     files["messages5.json"] = wave5_vectors()
     files["future.json"] = future_vectors()

@@ -39,3 +39,54 @@ reason = "block-buffer 0.10 through esp-hal; the firmware does not unwind, nothi
 id = "RUSTSEC-2026-0387"
 ignoreUntil = 2027-01-27T00:00:00Z
 reason = "crypto-bigint 0.5 through trouble-host's p256 0.13, the Nano's Bluetooth pairing only"
+
+# heapless before 0.9.4 has nine soundness bugs in single APIs. The 0.8 line
+# comes with embassy-sync 0.6/0.7 and bt-hci through esp-hal (pinned to a git
+# commit), and of the APIs named only Deque::clear is reached, which goes
+# wrong only when a value's Drop panics and the caller unwinds; the firmware
+# does not unwind. The firmware is not shipped in 0.6; it goes when esp-hal
+# moves to heapless 0.9, which this lockfile already carries at 0.9.4.
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0574"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0575"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0576"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0577"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0578"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0579"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0580"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0581"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0582"
+ignoreUntil = 2027-01-27T00:00:00Z
+reason = "heapless 0.8 through esp-hal's embassy-sync and bt-hci; only Deque::clear is reached, and the firmware does not unwind"

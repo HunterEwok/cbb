@@ -501,6 +501,24 @@ func checkMessages(dir string) {
 			}
 			return err.Error()
 		}
+		// The reader's order: a second signer's hash, then the card's
+		// shape (type 1, a version, an expiry), its name, its endpoints.
+		if s2, there := m[uint64(8)]; there {
+			if b, ok := s2.([]byte); !ok || len(b) != 32 {
+				return "card/signer2"
+			}
+		}
+		if t, ok := m[uint64(1)].(uint64); !ok || t != 1 {
+			return "card/shape"
+		}
+		for _, f := range []uint64{4, 7} {
+			if n, ok := m[f].(uint64); !ok || n < 1 {
+				return "card/shape"
+			}
+		}
+		if !nameOK(m[uint64(10)]) {
+			return "card/name"
+		}
 		if !tyOK("set 1..4 of key 1", m[uint64(12)]) {
 			return "card/keys"
 		}

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+// The push marks stand on PushVault, the Keychain's: Apple only.
+#if canImport(Security)
 import Foundation
 import XCTest
 @testable import CBBKit
@@ -541,3 +543,4 @@ final class PushTests: XCTestCase {
     }
     #endif
 }
+#endif

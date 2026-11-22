@@ -10,7 +10,7 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -1232,6 +1232,7 @@ fn status_lines() {
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "macOS has no /dev/full")]
 fn paste_write_error() {
     let dir = tempdir("paste-full");
     let sock = dir.join("control.sock");
@@ -2649,8 +2650,20 @@ fn run_basics() {
 #[test]
 fn own_command_as_the_user() {
     let dir = tempdir("own-command");
-    let config = dir.join(".config");
-    let env = [("XDG_CONFIG_HOME", config.to_str().unwrap())];
+    // The user's settings folder for a home (actions::user_config_dir): on
+    // a Mac ~/Library/Application Support; elsewhere XDG_CONFIG_HOME, set
+    // here so the runner's own does not count.
+    let settings = |home: &Path| -> (PathBuf, Vec<(&'static str, String)>) {
+        if cfg!(target_os = "macos") {
+            (home.join("Library/Application Support"), vec![("HOME", home.to_str().unwrap().to_string())])
+        } else {
+            let c = home.join(".config");
+            let v = c.to_str().unwrap().to_string();
+            (c, vec![("XDG_CONFIG_HOME", v)])
+        }
+    };
+    let (config, env) = settings(&dir);
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     let none = || always(json!({}), b"");
     let r = run_with(&dir, &["own-command", "backup", "--", "/usr/local/bin/backup", "--quick"], "", none(), &env);
     want("own-command", &r, 0, "", "");
@@ -2666,10 +2679,10 @@ fn own_command_as_the_user() {
     // A link in place of the folder is not followed.
     let elsewhere = dir.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
-    let linked = dir.join("linked");
+    let (linked, env) = settings(&dir.join("linked"));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     std::fs::create_dir_all(&linked).unwrap();
     std::os::unix::fs::symlink(&elsewhere, linked.join("cbb")).unwrap();
-    let env = [("XDG_CONFIG_HOME", linked.to_str().unwrap())];
     let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
     assert_ne!(r.code, 0);
     assert!(!elsewhere.join("own-actions.json").exists());
@@ -2996,6 +3009,7 @@ fn global_entries() {
 /// cbb update's settings in a rootless install, whose user owns the
 /// updater's folder: where updates come from, and what installed this copy.
 #[test]
+#[cfg_attr(not(target_os = "linux"), ignore = "rootless installs are Linux only (D-79)")]
 fn update_settings_rootless() {
     let dir = tempdir("update-rootless");
     let state = dir.join("xdg-state");
