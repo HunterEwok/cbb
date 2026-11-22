@@ -107,6 +107,25 @@ enum Event<'a> {
         off: bool,
         by: &'a str,
     },
+    /// The group's records changed what the app shows: the group as the
+    /// op `group` answers it.
+    State {
+        state: Value,
+    },
+    /// A notice about the group that was not there before, as the op
+    /// `notices` lists it.
+    Notice {
+        notice: Value,
+    },
+    /// The group's root changed by its recovery key (seq: how many roots
+    /// the group has had), from the old root's device to the new one's:
+    /// every device shows it until the person saw it (`root_change_seen`).
+    #[serde(rename = "root_changed")]
+    RootChanged {
+        from: &'a str,
+        to: &'a str,
+        seq: u64,
+    },
 }
 
 #[derive(Deserialize)]
@@ -147,10 +166,15 @@ struct Events {
 impl Events {
     fn send(&self, e: &Event<'_>) {
         if let Ok(b) = serde_json::to_vec(e) {
-            // SAFETY: the app gave a callback that stays valid, and may be
-            // called from any thread, until cbb_member_stop returns.
-            unsafe { (self.f)(self.ctx as *mut core::ffi::c_void, b.as_ptr(), b.len()) }
+            self.send_bytes(&b);
         }
+    }
+
+    /// An event already encoded, as send encodes one.
+    fn send_bytes(&self, b: &[u8]) {
+        // SAFETY: the app gave a callback that stays valid, and may be
+        // called from any thread, until cbb_member_stop returns.
+        unsafe { (self.f)(self.ctx as *mut core::ffi::c_void, b.as_ptr(), b.len()) }
     }
 }
 

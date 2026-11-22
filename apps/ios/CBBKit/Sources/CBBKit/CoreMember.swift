@@ -765,6 +765,10 @@ public final class CoreMember: @unchecked Sendable {
         try run("dismiss", A(id: id))
     }
 
+    /// The person saw the change of root `Event.rootChanged` told of: the
+    /// member no longer tells of it, not even when it starts again.
+    public func rootChangeSeen() throws { try run("root_change_seen") }
+
     /// Who stays after a change of root with the recovery key, before
     /// anything is signed: the core writes the list; leaveOut are the
     /// devices the person unticked. The recovery keys are derived inside

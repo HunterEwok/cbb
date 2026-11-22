@@ -1245,6 +1245,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     fun rootChangeSeen() {
         rootChanged = null
+        currentNode?.let { n -> runCatching { n.rootChangeSeen() }.onFailure { Log.w(TAG, "noting that the change of root was seen", it) } }
     }
 
     /** A device's name as the group's devices show it, else its ID. */

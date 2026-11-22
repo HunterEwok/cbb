@@ -11,17 +11,6 @@ public protocol ContentStore: Sendable {
     /// The blob whose SHA-256 is sha256, or nil when this phone does not
     /// hold all of it. The node closes it.
     func open(sha256: Data) -> ContentSource?
-    /// Seals the parts of m, which the store holds, into the blob of a new
-    /// copy under a new key, and keeps the blob to serve it; nil when m
-    /// holds no bytes (docs/protocol.md, section 4, "The blob").
-    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)?
-}
-
-public extension ContentStore {
-    func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? {
-        guard m.size == 0 else { throw Content.Failure.noParts }
-        return nil
-    }
 }
 
 /// One part a ContentStore opened.
@@ -67,18 +56,6 @@ public final class MemoryContent: ContentStore, @unchecked Sendable {
 
     public func open(sha256: Data) -> ContentSource? {
         lock.withLock { parts.first { $0.sum == sha256 && $0.blob }.map { Bytes(data: $0.bytes) } }
-    }
-
-    public func sealBlob(_ m: Media.Manifest) throws -> (key: Data, blob: Media.Blob)? {
-        guard m.size > 0 else { return nil }
-        let data = try m.parts.filter { !$0.dir && $0.size > 0 }.map { p in
-            guard let sum = p.sha256, let b = bytes(sha256: sum), Int64(b.count) == p.size else { throw Content.Failure.noParts }
-            return b
-        }
-        let key = Data(SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) })
-        let (blob, sealed) = try Media.sealBlob(key: key, parts: data)
-        put(sealed, blob: true)
-        return (key, blob)
     }
 
     struct Bytes: ContentSource {

@@ -25,7 +25,7 @@ use cbb_member::live::{Live, Write, not_yet};
 use cbb_member::own::Own;
 use cbb_member::roster::{self, id_text};
 use cbb_member::writers;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::{Event, EventFn, Events, Request, SyncArgs, args, lock};
@@ -324,6 +324,7 @@ impl Phone {
         // the phone's face is for.
         live.keep_signed(&dir, &*log);
         live.on_write(Box::new(move |w| deliver(&ev, &w)));
+        watch_records(&live, &dir, ev, log.clone());
         // The Android evidence the peers send, which the phone checks while
         // it is the group's root, when its app hands it the root key.
         live.with_phone_attestations();
@@ -660,6 +661,15 @@ impl Phone {
                 Ok(json!({ "view": view }))
             }
             "notices" => Ok(json!({ "notices": self.notices() })),
+            // The person saw the change of root the member told of: it is
+            // not told again, not even after a restart.
+            "root_change_seen" => {
+                if let Some(mut seen) = root_seen(&self.dir) {
+                    seen.pending = None;
+                    keep_root_seen(&self.dir, &seen)?;
+                }
+                done()
+            }
             // A notice the person hid: the set keeps it dismissed.
             "dismiss" => {
                 let id = arg("id");
@@ -761,61 +771,11 @@ impl Phone {
         cbb_core::why::diagnose(&facts, cbb_member::uptime::wall_ms())
     }
 
-    /// The member's notices about the group (docs/apps.md, "Notices"), as
-    /// the apps show them: `{id, kind, args, dismissable}`. Only the
-    /// notices of removed devices that count again (`returned_after_removal`,
-    /// by the removal's or the change's record ID) may be hidden; the
-    /// others stay until what they say is over.
+    /// The member's notices about the group (`notices_of`).
     fn notices(&self) -> Vec<Value> {
-        let l = &self.live;
-        // Mesh::is_root reads the set under its lock: asked before taking it.
-        let root = l.mesh.is_root();
-        let held = l.mesh.set();
+        let held = self.live.mesh.set();
         let set = lock(&held);
-        let st = set.state();
-        let me = l.mesh.device();
-        let device_of = |k: &cbb_core::records::KeyHash| {
-            st.devices.iter().find(|d| d.key.hash() == *k || d.admin.as_ref() == Some(k)).map(|d| id_text(&d.id))
-        };
-        let notice = |id: String, kind: &str, args: Value, dismissable: bool| json!({ "id": id, "kind": kind, "args": args, "dismissable": dismissable });
-        let mut out = Vec::new();
-        if set.change_arriving(&st).is_some() {
-            out.push(notice("change_arriving".into(), "change_arriving", json!({}), false));
-        }
-        if !set.removals_waiting(&st).is_empty() {
-            out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
-        }
-        if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| root) {
-            let percent = w.waiting_units.saturating_mul(100) / w.room.cap.max(1);
-            out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
-        }
-        let own_admin = st.devices.iter().find(|d| d.id == me).and_then(|d| d.admin);
-        if let Some(o) = own_admin.and_then(|k| set.ack_owed(&st, &k, wall_ms_u64())) {
-            out.push(notice(
-                "ack_owed".into(),
-                "ack_owed",
-                json!({ "removals": o.removals, "days_left": o.days_left }),
-                false,
-            ));
-        }
-        for f in set.frozen_holding(&st) {
-            let d = id_text(&f.device);
-            out.push(notice(format!("frozen_holding:{d}"), "frozen_holding", json!({ "device": d }), false));
-        }
-        if !set.stuck_checkpoints().is_empty() {
-            out.push(notice("checkpoint_stuck".into(), "checkpoint_stuck", json!({}), false));
-        }
-        for (id, keys) in set.notices(&st) {
-            let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
-            let Some(first) = devices.first() else { continue };
-            out.push(notice(
-                certs::b64::encode(&id.0),
-                "returned_after_removal",
-                json!({ "device": first, "devices": devices.len() }),
-                true,
-            ));
-        }
-        out
+        notices_of(&set, &self.live.mesh.device())
     }
 
     /// Sync away from home as the away ops answer it: its state, null
@@ -1350,6 +1310,178 @@ fn carry_out(live: &Live, me: &Me, dir: &Path, ev: &Events, t: &cbb_member::comm
 /// before the root phone says so (docs/apps.md, "Notices").
 const ROOT_ROOM_WARN_PERCENT: u64 = 50;
 
+/// The member's notices about the group (docs/apps.md, "Notices"), as
+/// the apps show them: `{id, kind, args, dismissable}`. Only the notices of
+/// removed devices that count again (`returned_after_removal`, by the
+/// removal's or the change's record ID) may be hidden; the others stay
+/// until what they say is over. `root_room_waiting` shows on the root's
+/// own device.
+fn notices_of(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Vec<Value> {
+    let st = set.state();
+    let device_of = |k: &cbb_core::records::KeyHash| {
+        st.devices.iter().find(|d| d.key.hash() == *k || d.admin.as_ref() == Some(k)).map(|d| id_text(&d.id))
+    };
+    let notice = |id: String, kind: &str, args: Value, dismissable: bool| json!({ "id": id, "kind": kind, "args": args, "dismissable": dismissable });
+    let mut out = Vec::new();
+    if set.change_arriving(&st).is_some() {
+        out.push(notice("change_arriving".into(), "change_arriving", json!({}), false));
+    }
+    if !set.removals_waiting(&st).is_empty() {
+        out.push(notice("removals_waiting".into(), "removals_waiting", json!({}), false));
+    }
+    if let Some(w) = set.root_room_waiting(&st, ROOT_ROOM_WARN_PERCENT).filter(|_| st.root_device == Some(*me)) {
+        let percent = w.waiting_units.saturating_mul(100) / w.room.cap.max(1);
+        out.push(notice("root_room_waiting".into(), "root_room_waiting", json!({ "percent": percent }), false));
+    }
+    let own_admin = st.devices.iter().find(|d| d.id == *me).and_then(|d| d.admin);
+    if let Some(o) = own_admin.and_then(|k| set.ack_owed(&st, &k, wall_ms_u64())) {
+        out.push(notice(
+            "ack_owed".into(),
+            "ack_owed",
+            json!({ "removals": o.removals, "days_left": o.days_left }),
+            false,
+        ));
+    }
+    for f in set.frozen_holding(&st) {
+        let d = id_text(&f.device);
+        out.push(notice(format!("frozen_holding:{d}"), "frozen_holding", json!({ "device": d }), false));
+    }
+    if !set.stuck_checkpoints().is_empty() {
+        out.push(notice("checkpoint_stuck".into(), "checkpoint_stuck", json!({}), false));
+    }
+    for (id, keys) in set.notices(&st) {
+        let devices: Vec<String> = keys.iter().filter_map(device_of).collect();
+        let Some(first) = devices.first() else { continue };
+        out.push(notice(
+            certs::b64::encode(&id.0),
+            "returned_after_removal",
+            json!({ "device": first, "devices": devices.len() }),
+            true,
+        ));
+    }
+    out
+}
+
+/// Where the phone keeps the group's root as it last told its app of it.
+const ROOT_SEEN: &str = "root_seen.json";
+
+/// The group's root as the phone last saw it: how many roots the group
+/// has had and the root's device, and the change the person has not seen
+/// yet.
+#[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
+struct RootSeen {
+    seq: u64,
+    device: String,
+    #[serde(default)]
+    pending: Option<RootChange>,
+}
+
+/// A change of root to tell the app of.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct RootChange {
+    from: String,
+    to: String,
+    seq: u64,
+}
+
+fn root_seen(dir: &Path) -> Option<RootSeen> {
+    serde_json::from_slice(&std::fs::read(dir.join(ROOT_SEEN)).ok()?).ok()
+}
+
+fn keep_root_seen(dir: &Path, seen: &RootSeen) -> Result<()> {
+    let b = serde_json::to_vec(seen).map_err(|e| Error::msg(format!("cannot encode the root seen: {e}")))?;
+    cbb_member::files::write_atomic(&dir.join(ROOT_SEEN), &b, 0o600)?;
+    Ok(())
+}
+
+/// Notes the group's root in state against what the phone saw last: a new
+/// root (more roots than before) is a change the person must see, kept as
+/// pending until `root_change_seen`. The first time it only notes the root:
+/// a phone that joins sees no change.
+fn note_root(dir: &Path, st: &cbb_core::records::eval::State) -> Result<Option<RootChange>> {
+    let seq = st.roots.len() as u64;
+    let device = st.root_device.as_ref().map(id_text).unwrap_or_default();
+    match root_seen(dir) {
+        None => {
+            keep_root_seen(dir, &RootSeen { seq, device, pending: None })?;
+            Ok(None)
+        }
+        Some(s) if seq > s.seq => {
+            let change = RootChange { from: s.device, to: device.clone(), seq };
+            keep_root_seen(dir, &RootSeen { seq, device, pending: Some(change.clone()) })?;
+            Ok(Some(change))
+        }
+        Some(_) => Ok(None),
+    }
+}
+
+fn send_root_change(ev: &Events, c: &RootChange) {
+    ev.send(&Event::RootChanged { from: &c.from, to: &c.to, seq: c.seq });
+}
+
+/// The notices of now that were not among the IDs shown, which then
+/// become now's.
+fn new_notices(shown: &mut Vec<String>, now: &[Value]) -> Vec<Value> {
+    let id = |n: &Value| n["id"].as_str().map(String::from);
+    let new = now.iter().filter(|n| id(n).is_some_and(|i| !shown.contains(&i))).cloned().collect();
+    *shown = now.iter().filter_map(id).collect();
+    new
+}
+
+/// Tells the app what the group's records change (docs/core-api.md, "The
+/// member", events): the group's state on each change, each notice that
+/// was not there before, and a change of root, at once and, while the
+/// person has not seen it, again when the member starts.
+fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str) + Send + Sync>) {
+    let me = live.mesh.device();
+    let (shown, pending) = {
+        let held = live.mesh.set();
+        let set = lock(&held);
+        if let Err(e) = note_root(dir, &set.state()) {
+            log(&format!("cbb: the group's root as seen: {}", e.for_log()));
+        }
+        let mut ids = Vec::new();
+        new_notices(&mut ids, &notices_of(&set, &me));
+        (Arc::new(Mutex::new(ids)), root_seen(dir).and_then(|s| s.pending))
+    };
+    if let Some(c) = pending {
+        send_root_change(&ev, &c);
+    }
+    // The set's lock is held while the records change: the events go to
+    // the app from a thread of their own, so that an app that answers one
+    // by calling the member does not wait for that lock. The thread ends
+    // with the member.
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    let weak = Arc::downgrade(live);
+    std::thread::spawn(move || {
+        while let Ok(b) = rx.recv() {
+            match weak.upgrade() {
+                Some(l) if !l.mesh.is_closed() => ev.send_bytes(&b),
+                _ => break,
+            }
+        }
+    });
+    let queue = move |e: &Event<'_>| {
+        if let Ok(b) = serde_json::to_vec(e) {
+            let _ = tx.send(b);
+        }
+    };
+    let dir = dir.to_path_buf();
+    live.on_records(Box::new(move |set| {
+        let st = set.state();
+        match note_root(&dir, &st) {
+            Ok(Some(c)) => queue(&Event::RootChanged { from: &c.from, to: &c.to, seq: c.seq }),
+            Ok(None) => {}
+            Err(e) => log(&format!("cbb: the group's root as seen: {}", e.for_log())),
+        }
+        let now = notices_of(set, &me);
+        for n in new_notices(&mut lock(&shown), &now) {
+            queue(&Event::Notice { notice: n });
+        }
+        queue(&Event::State { state: group_view(set, &me) });
+    }));
+}
+
 /// The app's own tunnel as why takes it (`away`), none when it is null.
 fn away_arg(v: &Value) -> Result<Option<cbb_core::why::AwayFacts>> {
     serde_json::from_value(v.clone()).map_err(|e| Error::msg(format!("away: {e}")))
@@ -1686,6 +1818,135 @@ mod tests {
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The test's callbacks' context: the member key, and the events the
+    /// member sent the app.
+    struct Caught {
+        key: Signer,
+        events: Mutex<Vec<Value>>,
+    }
+
+    unsafe extern "C" fn caught_sign(
+        ctx: *mut core::ffi::c_void,
+        digest: *const u8,
+        sig: *mut u8,
+        sig_len: *mut usize,
+    ) -> i32 {
+        // SAFETY: ctx is a Caught the test keeps for the process.
+        unsafe {
+            let c = &*(ctx as *const Caught);
+            sign(&c.key as *const Signer as *mut core::ffi::c_void, digest, sig, sig_len)
+        }
+    }
+
+    unsafe extern "C" fn caught(ctx: *mut core::ffi::c_void, event: *const u8, len: usize) {
+        // SAFETY: ctx is a Caught the test keeps for the process, and event
+        // len bytes the member keeps during the call.
+        unsafe {
+            let c = &*(ctx as *const Caught);
+            if let Ok(v) = serde_json::from_slice::<Value>(core::slice::from_raw_parts(event, len)) {
+                c.events.lock().unwrap().push(v);
+            }
+        }
+    }
+
+    /// A change of root reaches the app as an event, again at each start
+    /// until the person saw it; a change of the records sends the group's
+    /// state.
+    #[test]
+    fn a_phone_tells_its_app_of_a_change_of_root_and_of_its_records() {
+        let dir = std::env::temp_dir().join(format!("cbb-ffi-live-events-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let me = cbb_member::founding::Me { name: "phone", os: 0, caps: 0 };
+        let now = cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+        cbb_member::founding::found_with(&dir, &me, now, &|| None).unwrap();
+        let own = Own::load(&dir).unwrap();
+        let device = id_text(&own.device());
+        let c: &'static Caught =
+            Box::leak(Box::new(Caught { key: Signer(own.member.clone()), events: Mutex::new(Vec::new()) }));
+        let root: &'static Signer = Box::leak(Box::new(Signer(own.root.clone().unwrap())));
+        let req = json!({
+            "dir": dir.to_string_lossy(), "name": "phone", "os": "ios", "device": device,
+            "public": b64(&c.key.0.public()), "mdns": false,
+        })
+        .to_string();
+        let old = "01010101010101010101010101010101";
+        // The phone last saw no root of its group: the group's root now is
+        // a change it tells of.
+        keep_root_seen(&dir, &RootSeen { seq: 0, device: old.into(), pending: None }).unwrap();
+        let start = || {
+            c.events.lock().unwrap().clear();
+            let (m, a) = Member::start(req.as_bytes(), caught_sign, caught, c as *const Caught as usize);
+            ok(&a);
+            m.unwrap()
+        };
+        let changes = || -> Vec<Value> {
+            c.events.lock().unwrap().iter().filter(|e| e["type"] == "root_changed").cloned().collect()
+        };
+        let m = start();
+        let want = json!({ "type": "root_changed", "from": old, "to": device, "seq": 1 });
+        assert_eq!(changes(), vec![want.clone()]);
+        m.stop();
+        // Not seen yet: told again when the member starts.
+        let m = start();
+        assert_eq!(changes(), vec![want]);
+        ok(&m.call(json!({ "op": "root_change_seen" }).to_string().as_bytes()));
+        assert_eq!(root_seen(&dir).unwrap().pending, None);
+        m.stop();
+        let m = start();
+        assert!(changes().is_empty(), "a change the person saw is not told again");
+
+        // The root renames the phone: the app gets the group's new state.
+        let r = json!({ "action": "rename", "device": device, "name": "desk", "public": b64(&root.0.public()) });
+        ok(&m.manage(r.to_string().as_bytes(), sign, root as *const Signer as usize));
+        let named = || {
+            c.events.lock().unwrap().iter().any(|e| {
+                e["type"] == "state"
+                    && e["state"]["devices"].as_array().is_some_and(|d| d.iter().any(|d| d["name"] == "desk"))
+            })
+        };
+        let until = Instant::now() + Duration::from_secs(5);
+        while !named() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(named(), "{:?}", c.events.lock().unwrap());
+        m.stop();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A root seen for the first time is noted, not told; more roots than
+    /// before are a change from the old root's device to the new one's.
+    #[test]
+    fn a_new_root_is_a_change_once() {
+        let dir = std::env::temp_dir().join(format!("cbb-ffi-root-seen-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut st = cbb_core::records::eval::State::default();
+        let (a, b) = (cbb_core::records::DeviceId([1; 16]), cbb_core::records::DeviceId([2; 16]));
+        st.roots = vec![cbb_core::records::KeyHash([1; 32])];
+        st.root_device = Some(a);
+        assert_eq!(note_root(&dir, &st).unwrap(), None, "a phone that joins sees no change");
+        assert_eq!(note_root(&dir, &st).unwrap(), None);
+        st.roots.push(cbb_core::records::KeyHash([2; 32]));
+        st.root_device = Some(b);
+        let want = RootChange { from: id_text(&a), to: id_text(&b), seq: 2 };
+        assert_eq!(note_root(&dir, &st).unwrap(), Some(want.clone()));
+        assert_eq!(note_root(&dir, &st).unwrap(), None, "told once");
+        assert_eq!(root_seen(&dir).unwrap().pending, Some(want), "kept until the person saw it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Only the notices not shown before are new.
+    #[test]
+    fn new_notices_are_those_not_shown() {
+        let n = |id: &str| json!({ "id": id, "kind": "checkpoint_stuck", "args": {}, "dismissable": false });
+        let mut shown = Vec::new();
+        assert_eq!(new_notices(&mut shown, &[n("a")]), vec![n("a")]);
+        assert_eq!(new_notices(&mut shown, &[n("a"), n("b")]), vec![n("b")]);
+        assert!(new_notices(&mut shown, &[n("b")]).is_empty());
+        assert_eq!(new_notices(&mut shown, &[n("a"), n("b")]), vec![n("a")], "a notice gone and back is new again");
     }
 
     /// The ops the apps' screens read: the tiles and the person's order of

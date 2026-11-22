@@ -472,6 +472,11 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         call("dismiss", Wire.obj("id" to Wire.str(id)))
     }
 
+    /** The person saw the change of root [Event.RootChanged] told of: the member no longer tells of it, not even when it starts again. */
+    fun rootChangeSeen() {
+        call("root_change_seen")
+    }
+
     /**
      * Who stays after a change of root with the recovery key, before anything is signed: the
      * core writes the list; leaveOut are the devices the person unticked. The recovery keys

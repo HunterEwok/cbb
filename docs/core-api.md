@@ -62,7 +62,12 @@ that gets each event as JSON from the member's threads, and its request needs `d
 group's devices and keys; `device` must be the one the member key makes. `cbb_member_stop`
 stops it. Its events are `write`, `copy` (`{id, origin,
 age_ms, kind, text, media, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
-turned the phone's sync off or on), `log` and `panic`. It carries out by itself the commands
+turned the phone's sync off or on), `state` (`{state}`, the group as `group` answers it, at
+each change of the records), `notice` (`{notice}`, one that was not there before, as `notices`
+lists it), `root_changed` (`{from, to, seq}`: the group's root changed by its recovery key,
+from the old root's device to the new one's, `seq` the number of roots the group has had;
+sent again each time the member starts until the app answers `root_change_seen`, kept in
+`root_seen.json`; a phone that joins sees no change), `log` and `panic`. It carries out by itself the commands
 an admin sends the phone that the records let through (`cbb_member::orders`, as the service's
 `live_command`): `mute`, `unmute` and the sync mode, kept in `mute.json` and `sync.json` and
 sent out in its next hello; it answers the paste, action and away switches with nothing to
@@ -213,6 +218,7 @@ after the header, and an operation that answers more than once marks the last an
 | `evidence` | phone | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
 | `notices` | phone | none | `{"notices"}`: what the person should know about the group's records (docs/apps.md, "Notices"), `[{id, kind, args, dismissable}]`, `kind` one of `change_arriving`, `removals_waiting`, `root_room_waiting` (on the root phone, `args.percent` of its room taken by removals that wait, from half of it), `ack_owed` (`args.removals`, `args.days_left`), `frozen_holding` (`args.device`), `checkpoint_stuck` and `returned_after_removal` (`args.device`, the first device that counts again, and `args.devices`, how many), from the set's own notices (`RecordSet::change_arriving`, `removals_waiting`, `root_room_waiting`, `ack_owed`, `frozen_holding`, `stuck_checkpoints` and `notices`). Only `returned_after_removal`, by its record ID in base64, may be hidden |
+| `root_change_seen` | phone | none | `{}`: the person saw the change of root the event `root_changed` told of; it is not told again |
 | `dismiss` | phone | `id`: a notice's record ID, base64 | `{}`: the set keeps the notice dismissed (`RecordSet::dismiss`), saved with the group's records |
 | `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off`, `port` (the UDP port) and `addrs` (`ip:port`, reached from afar without the forwarder) for `hub` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, which the records must give an admin key, is one of the group's hubs, the Live hub the computers run (`member/src/live/away.rs`), which also serves the guests of invitations, or stops being one, handing its clients to the next hub in the order (protocol.md, section 11, "Stopping a hub"); only with the feature `tunnel`. With no `forwarder` the hub serves through the one the root set, and every away op answers it beside `away` as `root_forwarder` `{endpoint, key}`, null while the root set none |

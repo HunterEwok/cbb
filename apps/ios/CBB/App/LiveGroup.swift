@@ -404,7 +404,14 @@ final class LiveGroup: GroupController {
         notices = (try? n.notices()) ?? notices.filter { $0.id != id }
     }
 
-    func rootChangeSeen() { rootChanged = nil }
+    func rootChangeSeen() {
+        rootChanged = nil
+        do {
+            try node?.rootChangeSeen()
+        } catch {
+            syncLog.error("cannot note that the change of root was seen: \(String(reflecting: error), privacy: .public)")
+        }
+    }
 
     /// A device's name as the group's devices show it, else its ID.
     private func name(of id: String) -> String { devices.first { $0.id == id }?.name ?? id }
