@@ -1517,6 +1517,11 @@ jobs:
           awayAllow 'on'
           homeOnly 'Outbound Block True'
           if ((blocked cbb-home-only).Count -ne 9) { throw "with no servers: $(blocked cbb-home-only)" }
+          # The root names itself the group's hub first: only a device the
+          # records name is a hub (cbb global hubs). cbb new named it after
+          # the computer.
+          & $cbb global hubs $env:COMPUTERNAME
+          if ($LASTEXITCODE -ne 0) { throw 'cbb global hubs failed' }
           & $cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key "$('A' * 43)="
           if ($LASTEXITCODE -ne 0) { throw 'cbb global hub -forwarder failed' }
           awayAllow 'on 198.51.100.9'
