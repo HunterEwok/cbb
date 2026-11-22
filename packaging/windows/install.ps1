@@ -582,6 +582,6 @@ Write-Host (T 'CBB %s is running on TCP port %s; %s may use it.' $v $Port $user)
 if (Test-Path (Join-Path $dataDir 'state\identity.json')) {
 	Write-Host (T 'It stays in its group.')
 } else {
-	Write-Host (T 'Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group''s root or an admin; or start a group: cbb new.')
+	Write-Host (T 'Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.')
 }
 Write-Host (T 'To remove it: Settings, Apps, CBB, Uninstall.')

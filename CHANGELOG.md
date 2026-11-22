@@ -2141,6 +2141,8 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The installers pair a device in no group by a pairing window's six digits (`cbb pair -code`)
+  instead of the QR code of 0.5, and their closing lines say so in every language (D-119).
 - The protocol's tunnel keys (section 11) and the design's hub describe sync away from home
   on the records of 0.6: the `tunnel` and `hubs` messages, the offer's table, the hubs'
   order, stopping a hub, the hub's key per period, obfuscation and VLESS as 0.6 carries them;

@@ -36,7 +36,8 @@
 # what it does (keys in the TPM, the desktop's clipboard and keys,
 # Bluetooth); a device installed without it stays so on later runs and
 # updates. Without its helper, cbb, once running and in no group, starts
-# pairing and shows its QR code at once (packaging/pair.sh); --no-pair
+# pairing at once and takes a pairing window's six digits
+# (packaging/pair.sh); --no-pair
 # (CBB_PAIR=no), for a scripted install, leaves that for later.
 # uninstall.sh removes it all again. --rootless installs cbb for
 # the user who runs it, without sudo (install-rootless.sh, D-79).
@@ -534,8 +535,8 @@ if [ "$helper" = no ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" cbb; then
-		say "Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app." "$run"
+		say "Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows." "$run"
 	fi
 else
-	say "Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md." "$run"
+	say "Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows." "$run"
 fi

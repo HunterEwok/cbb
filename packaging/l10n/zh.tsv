@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	服务在 10 秒内没有响应：%s
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB 正在 TCP 端口 %s 上运行。卸载：sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense：它显示在 System > Diagnostics > Services 中，其规则在每次重新加载过滤器后保留。
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	不支持 pfSense：pfSense 更新可能会移除 CBB；更新后请再次运行此安装程序。
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	下一步：以 root 运行 cbb pair，并用手机上的 CBB 应用扫描二维码；没有应用时，请参阅 docs/guide/without-app.md。
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 cbb pair -code（以 root 身份），并输入它显示的六位数字。
 CBB is removed, with this device's keys; it left its group.	CBB 已移除，连同此设备的密钥；它已离开群组。
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /var/db/cbb 中以便重新安装；--purge 会删除它们。
 --port needs a port number	--port 需要端口号
@@ -110,8 +110,7 @@ the desktop agent did not start; it starts at your next login	桌面代理未启
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB 在你登录期间运行。要在注销后继续运行，请管理员执行：sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB 正在为 %s 在 TCP 端口 %s 上运行，未使用 root 安装：它不能成为群组的根、管理员或中心节点。如果这里的防火墙限制入站连接，需由管理员允许来自家庭网络的 TCP %s 和 UDP 5353。卸载：%s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	要在 tmux 中复制粘贴，请在 ~/.tmux.conf 中加入这一行：source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	下一步：参阅 member/README.md；简而言之，在这里运行 %s pair，并用手机应用扫描二维码。
-Next: run %s pair and scan its QR code with the CBB app on your phone.	下一步：运行 %s pair，并用手机上的 CBB 应用扫描二维码。
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 %s pair -code，并输入它显示的六位数字。
 this archive has no install-rootless.sh, so it cannot install without root	此压缩包没有 install-rootless.sh，因此无法在没有 root 的情况下安装
 systemd is required	需要 systemd
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	这里已有名为 cbb 的账户，且不属于本服务（其注释不是“cbb service”）；它会获得群组的密钥。请重命名或删除它，然后再次运行 install.sh。
@@ -125,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	uinput 助手未�
 the desktop agent of %s did not start again; it starts at their next login	%s 的桌面代理未能重新启动；它会在该用户下次登录时启动
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow 失败；服务运行后请执行 sudo cbb global allow。
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB 正在 TCP 端口 %s 上运行。卸载：sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	下一步：参阅 member/README.md；简而言之，在这里运行 sudo -u cbb %s pair，并用手机应用扫描二维码。
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	下一步：运行 sudo %s pair，并用手机上的 CBB 应用扫描二维码；没有应用时，请参阅 docs/guide/without-app.md。
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 sudo -u cbb %s pair -code，并输入它显示的六位数字。
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 sudo %s pair -code，并输入它显示的六位数字。
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 %s/cbb 中以便重新安装；--purge 会删除它们。
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /var/lib/cbb 中以便重新安装；--purge 会删除它们。
 %s does not run on this Mac	%s 无法在这台 Mac 上运行
@@ -143,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	已添加上述规则%s。�
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	未添加防火墙规则。只有防火墙允许上述规则时 CBB 才能工作。要手动添加，请运行：
 To let CBB add and manage it, run the installer again with --express.	要让 CBB 添加并管理它，请使用 --express 再次运行安装程序。
 CBB is running on TCP port %s, in its group.	CBB 正在 TCP 端口 %s 上运行，已在群组中。
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB 正在 TCP 端口 %s 上运行。加入群组：sudo cbb pair，然后用手机扫描二维码，或输入群组的根或管理员上 cbb pair 显示的代码；或创建群组：sudo cbb new。
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	CBB 正在 TCP 端口 %s 上运行。加入群组：在群组中的某台设备上打开配对窗口，然后运行 sudo cbb pair -code，并输入它显示的六位数字；或创建群组：sudo cbb new。
 CBB is removed, with this Mac's keys; it left its group.	CBB 已移除，连同这台 Mac 的密钥；它已离开群组。
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 %s/state 中以便重新安装；--purge 会删除它们。
 this installer is for OpenWrt	此安装程序用于 OpenWrt
@@ -154,9 +153,9 @@ the service did not answer within 40 s: %s	服务在 40 秒内没有响应：%s
 see logread -e cbb	请查看 logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB 正在 lan 区域的 TCP 端口 %s 上运行。卸载：sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	attended sysupgrade（ASU、owut）不会保留 OpenWrt 软件源以外的软件包：升级后请重新安装。
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	下一步：运行 su -s /bin/sh cbb -c 'cbb pair -name router'，并用手机上的 CBB 应用扫描二维码。
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	下一步：在群组中的某台设备上打开配对窗口，然后在这里运行 su -s /bin/sh cbb -c 'cbb pair -code -name router'，并输入它显示的六位数字。
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /etc/cbb 中以便重新安装；--purge 会删除它们。
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	此设备尚未加入群组，因此现在开始配对（--no-pair 可跳过）。
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	此设备尚未加入群组。请在群组中的某台设备上打开配对窗口（在那里运行 cbb pair），然后在这里输入它显示的六位数字（--no-pair 可跳过）。
 could not record how CBB was installed; cbb update takes it as get.sh	无法记录 CBB 的安装方式；cbb update 将视为 get.sh
 automatic updates are on or off, not %s	自动更新应为 on 或 off，而不是 %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB 可以每天检查一次项目签名的新版本并安装；与任何下载一样，检查时 GitHub 会得知此设备的地址。
@@ -238,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	无法将自动更新设为 %s；请以管理员身份运行 cbb update -auto %s。
 CBB %s is running on TCP port %s; %s may use it.	CBB %s 正在 TCP 端口 %s 上运行；%s 可以使用它。
 It stays in its group.	它仍在原来的群组中。
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	下一步，在以管理员身份打开的终端中：cbb pair，然后用手机扫描二维码，或输入群组的根或管理员上 cbb pair 显示的代码；或创建群组：cbb new。
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	下一步，加入群组：在群组中的某台设备上打开配对窗口，然后在以管理员身份打开的终端中运行 cbb pair -code，并输入它显示的六位数字；或在那里创建群组：cbb new。
 To remove it: Settings, Apps, CBB, Uninstall.	卸载：设置、应用、CBB、卸载。
 Y	是
 Yes	是的
