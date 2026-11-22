@@ -3077,6 +3077,11 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A restart of the service no longer leaves it unreachable for a few seconds where the
+  system starts the new process before the old one has stopped (procd on OpenWrt): the new
+  one waits up to 15 seconds for the old one to go instead of stopping with "another cbb
+  service runs", and the old one, stopping late, no longer removes the new one's control
+  socket.
 - A phone stops dialing a device the group removed, although its app still finds it on the
   network; it looks again every 30 seconds, in case the records bring the device back.
 - The op `current` gives a phone's app the copy's images or files and its lifetime, so the

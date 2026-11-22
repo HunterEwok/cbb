@@ -273,12 +273,22 @@ vm)
 		# The init script writes nothing into the service'"'"'s own folder.
 		: >/tmp/elsewhere
 		ln -sf /tmp/elsewhere /var/run/cbb/interfaces
+		svcpid() { pgrep -x -f "/usr/bin/cbb service.*" | head -n1; }
+		old=$(svcpid)
 		/etc/init.d/cbb restart
 		test ! -s /tmp/elsewhere
 		test ! -e /var/run/cbb/interfaces
-		# The service opens its control socket a moment after the restart.
+		# procd starts the new process before the old one has stopped, and
+		# the old one answers until it does: the status counts only from the
+		# new process, which opens its control socket a moment after.
+		for i in $(seq 30); do p=$(svcpid); [ -n "$p" ] && [ "$p" != "$old" ] && ! kill -0 "$old" 2>/dev/null && break; sleep 1; done
 		for i in $(seq 30); do cbb status 2>&1 | grep -q "Not in a group" && break; sleep 1; done
-		cbb status 2>&1 | grep -q "Not in a group"
+		if ! cbb status 2>&1 | grep -q "Not in a group"; then
+			echo "no status after the restart; it said, and the log:" >&2
+			cbb status >&2 || true
+			logread -e cbb | tail -n 40 >&2 || true
+			exit 1
+		fi
 		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"

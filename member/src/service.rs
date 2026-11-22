@@ -386,7 +386,10 @@ pub fn run(cfg: Config) -> Result<()> {
     *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
     crate::confirm::install(&|l: &str| log(l), &cfg.state_dir);
-    for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
+    let mut sockets = Vec::new();
+    for (path, admin) in [(&cfg.socket, false), (&admin_socket, true)] {
+        let (ln, sock) = listen(path, admin)?;
+        sockets.push(sock);
         let svc = svc.clone();
         std::thread::spawn(move || accept_control(ln, move |conn| svc.serve(conn, admin)));
     }
@@ -395,8 +398,7 @@ pub fn run(cfg: Config) -> Result<()> {
     let mut said = false;
     loop {
         if STOP.load(Ordering::SeqCst) {
-            let _ = std::fs::remove_file(&cfg.socket);
-            let _ = std::fs::remove_file(&admin_socket);
+            sockets.iter().for_each(Socket::remove);
             if LEFT.load(Ordering::SeqCst) {
                 return Err(Error::msg("restarting after leaving the group"));
             }
@@ -404,7 +406,7 @@ pub fn run(cfg: Config) -> Result<()> {
         }
         if on_live::in_group(&cfg.state_dir) {
             *svc.broken.lock().unwrap() = None;
-            return run_live(&svc, &cfg, &admin_socket);
+            return run_live(&svc, &cfg, &sockets);
         }
         *svc.broken.lock().unwrap() = None;
         if !said {
@@ -416,7 +418,7 @@ pub fn run(cfg: Config) -> Result<()> {
 }
 
 /// Runs the service on the member of 0.6 until SIGTERM or SIGINT.
-fn run_live(svc: &Arc<Service>, cfg: &Config, admin_socket: &Path) -> Result<()> {
+fn run_live(svc: &Arc<Service>, cfg: &Config, sockets: &[Socket]) -> Result<()> {
     let started = svc.start_live(cfg);
     let live = match started {
         Ok(l) => {
@@ -442,8 +444,7 @@ fn run_live(svc: &Arc<Service>, cfg: &Config, admin_socket: &Path) -> Result<()>
         l.close();
     }
     std::thread::sleep(Duration::from_millis(500));
-    let _ = std::fs::remove_file(&cfg.socket);
-    let _ = std::fs::remove_file(admin_socket);
+    sockets.iter().for_each(Socket::remove);
     if LEFT.load(Ordering::SeqCst) {
         return Err(Error::msg("restarting after leaving the group"));
     }
@@ -453,26 +454,68 @@ fn run_live(svc: &Arc<Service>, cfg: &Config, admin_socket: &Path) -> Result<()>
     Ok(())
 }
 
+/// How long a starting service waits for another one that still answers
+/// on its control socket to go: a restart by procd (OpenWrt) or launchd
+/// starts the new process before the old one has stopped.
+const OLD_SERVICE_WAIT: Duration = Duration::from_secs(15);
+
+/// Waits while another service answers at path, for OLD_SERVICE_WAIT at
+/// most; an error if it still answers then, or if this one is stopping.
+fn wait_for_old_service(path: &Path) -> Result<()> {
+    let until = Instant::now() + OLD_SERVICE_WAIT;
+    while UnixStream::connect(path).is_ok() {
+        if STOP.load(Ordering::SeqCst) || Instant::now() >= until {
+            return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Ok(())
+}
+
+/// A control socket this service made. It is removed when the service
+/// stops only while it is still the one this service made, so a service
+/// that stops late never removes the socket of the one started after it.
+pub(crate) struct Socket {
+    path: PathBuf,
+    #[cfg(unix)]
+    made: Option<(u64, u64, i64, i64)>,
+}
+
+impl Socket {
+    #[cfg(unix)]
+    /// The socket file's device, inode and time of making: an inode
+    /// freed by the old socket may come back for the new one.
+    fn id(path: &Path) -> Option<(u64, u64, i64, i64)> {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::symlink_metadata(path).ok().map(|m| (m.dev(), m.ino(), m.mtime(), m.mtime_nsec()))
+    }
+
+    pub(crate) fn remove(&self) {
+        #[cfg(unix)]
+        if self.made.is_none() || Self::id(&self.path) != self.made {
+            return;
+        }
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
 /// Listens on the control socket on Windows, its folder's access list set
 /// first (sys/acl_windows.rs).
 #[cfg(windows)]
-fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
-    if UnixStream::connect(path).is_ok() {
-        return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
-    }
-    crate::sys::listen_windows(path, admin)
+fn listen(path: &Path, admin: bool) -> Result<(UnixListener, Socket)> {
+    wait_for_old_service(path)?;
+    let ln = crate::sys::listen_windows(path, admin)?;
+    Ok((ln, Socket { path: path.to_path_buf() }))
 }
 
 /// Listens on the control socket: mode 0660, in its own directory; the
 /// admin socket gets mode 0600, for root and the service's user only.
 #[cfg(unix)]
-fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
+fn listen(path: &Path, admin: bool) -> Result<(UnixListener, Socket)> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
     }
-    if UnixStream::connect(path).is_ok() {
-        return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
-    }
+    wait_for_old_service(path)?;
     let _ = std::fs::remove_file(path);
     // The socket is made in a new directory that only the service can enter,
     // narrowed there and then moved into place, so nobody can connect before
@@ -487,8 +530,9 @@ fn listen(path: &Path, admin: bool) -> Result<UnixListener> {
         let ln = UnixListener::bind(&tmp_path).context(format!("cannot listen at {}", path.display()))?;
         std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(if admin { 0o600 } else { 0o660 }))
             .context("cannot set the socket's mode")?;
+        let made = Socket::id(&tmp_path);
         std::fs::rename(&tmp_path, path).context(format!("cannot move the socket to {}", path.display()))?;
-        Ok(ln)
+        Ok((ln, Socket { path: path.to_path_buf(), made }))
     })();
     let _ = std::fs::remove_dir_all(&tmp);
     made
@@ -2179,6 +2223,52 @@ mod tests {
         first.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
         assert!(first.read(&mut [0u8; 1]).is_err(), "a connection within the limit was closed");
         drop(open);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A service started while the old one still answers on the control
+    /// socket (a restart by procd) waits for it to go, then listens; the
+    /// old one, stopping late, leaves the new one's socket in place.
+    #[test]
+    #[cfg(unix)]
+    fn a_restart_waits_for_the_old_service_and_keeps_the_new_socket() {
+        let dir = std::env::temp_dir().join(format!("cbb-restart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("control.sock");
+        let (old_ln, old) = super::listen(&path, false).unwrap();
+        let gone = {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(400));
+                let _ = std::fs::remove_file(&path);
+                drop(old_ln);
+            })
+        };
+        let started = std::time::Instant::now();
+        let (new_ln, new) = super::listen(&path, false).unwrap();
+        assert!(started.elapsed() >= Duration::from_millis(300), "it did not wait for the old service");
+        gone.join().unwrap();
+        old.remove();
+        assert!(UnixStream::connect(&path).is_ok(), "the old service removed the new one's socket");
+        new.remove();
+        drop(new_ln);
+        assert!(!path.exists(), "the service did not remove its own socket");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// One that answers past the wait is another service, and stays.
+    #[test]
+    #[cfg(unix)]
+    fn another_service_that_stays_is_refused() {
+        let dir = std::env::temp_dir().join(format!("cbb-other-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("control.sock");
+        let (_ln, _sock) = super::listen(&path, false).unwrap();
+        // The wait is the constant's; the test checks the error, not its length.
+        let err = super::wait_for_old_service(&path).err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(err.contains("another cbb service runs"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
