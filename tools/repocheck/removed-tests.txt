@@ -926,3 +926,4 @@ member/tests/control_admin.rs admits_by_qr_code D-119: no device waits to be dia
 member/tests/control_admin.rs an_admin_takes_the_group_over D-117: the root changes only with the recovery key; an_admin_does_not_take_the_group_over checks it
 member/tests/control_admin.rs the_window_refuses_wrong_codes D-120: the home window of 0.6 refuses wrong codes; wrong_digits_let_nothing_in, wrong_digits_count_and_the_third_closes_the_window and a_closed_window_refuses_the_joiner check it
 apps/android/kit/src/test/kotlin/tools/cbb/kit/RustTunnelTest.kt refusals D-123: the app's own tunnel and its RustTunnel calls are gone; AwayKitTest.theMemberRefusesABadHub checks the Live member's refusals
+apps/android/app/src/androidTest/kotlin/tools/cbb/GroupTest.kt c1_phoneHub D-126: in 0.6 a phone hub's forwarder is the root's setting and no phone names one; c1_phoneHubAtHome checks the hub at home only, the invitation it serves and the home network

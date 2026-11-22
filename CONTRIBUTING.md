@@ -284,8 +284,8 @@ sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
 ```
 
-The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
-container; [docs/differential.md](docs/differential.md)):
+The differential run of all three implementations (Go, Rust and JDK 17;
+[docs/differential.md](docs/differential.md)):
 
 ```sh
 sh .github/differential.sh 1 20000 500 /tmp/differential

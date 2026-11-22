@@ -3037,6 +3037,11 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- CI's differential run compares Go, the Rust core and the Kotlin kit: the iPhone kit's
+  verdict test went with its own readers (D-126), and the run failed looking for its output.
+  The Android emulator test of the phone as a hub checks the hub at home only, the
+  invitation it serves and the home network, as a group of 0.6 has them; it no longer
+  compiled against the app, whose forwarder setting is the root's now.
 - The HarmonyOS app builds with DevEco Studio 6.1.1: it called Wear Engine and Live View
   as declarations of our own said, not as the SDK does (no phone category, success as
   `COMMUNICATION_SUCCESS`, the receiver unregistered with its device, a Live View's
