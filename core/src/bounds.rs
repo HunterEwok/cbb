@@ -484,7 +484,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "a sender's clock 5 minutes ahead",
         "beacons/time",
-        &["one_admins_time_never_hides_anothers_evidence"],
+        &["one_admins_time_never_hides_the_evidence_of_another"],
     ),
     b(
         "beacon::MAX_AGE_MS",

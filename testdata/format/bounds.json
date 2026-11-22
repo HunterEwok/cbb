@@ -497,7 +497,7 @@
       "class": "frozen",
       "name": "beacon::ALLOWANCE_MS",
       "reached": [
-        "one_admins_time_never_hides_anothers_evidence"
+        "one_admins_time_never_hides_the_evidence_of_another"
       ],
       "refusal": "beacons/time",
       "value": 300000,

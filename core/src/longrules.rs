@@ -257,7 +257,7 @@ fn a_device_clock_that_goes_back_does_not_stop_the_weekly_change() {
 }
 
 #[test]
-fn a_guarded_grant_lives_35_days_of_the_leafs_running_time() {
+fn a_guarded_grant_lives_35_days_of_running_time_on_the_leaf() {
     assert_eq!(DEFAULT_LIFE_MS, 35 * DAY);
     assert_eq!(MAX_LIFE_MS, 40 * DAY);
     // The leaf runs except for ten days of no power; its grant counts the

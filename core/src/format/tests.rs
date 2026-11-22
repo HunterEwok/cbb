@@ -1191,7 +1191,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
 /// below 256 is refused, and the reader gives the kept state only with the
 /// stored head applied.
 #[test]
-fn a_leafs_stored_state_reads_back_in_one_spelling() {
+fn a_stored_leaf_state_reads_back_in_one_spelling() {
     use crate::testkit::k;
     use grant::{Kept, Stored};
     let phone = k("phone");
@@ -1263,7 +1263,7 @@ fn a_leafs_stored_state_reads_back_in_one_spelling() {
 /// the firmware needs an update. The reader takes no state a writer never
 /// makes.
 #[test]
-fn a_leafs_state_that_does_not_read_obeys_nobody() {
+fn a_leaf_state_that_does_not_read_obeys_nobody() {
     use crate::testkit::k;
     use grant::{Kept, Stored};
     let (root, new_root) = (k("root"), k("new root"));

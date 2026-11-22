@@ -233,11 +233,11 @@ impl Marks {
     fn see_secret(&mut self, key: (DeviceId, [u8; 16]), t: Timestamp) {
         self.secrets.insert(key, t);
         while self.secrets.len() > MAX_SECRETS {
-            let Some((oldest, ot)) = self.secrets.iter().min_by_key(|(k, v)| (**v, **k)).map(|(k, v)| (*k, *v)) else {
+            let Some((oldest, at)) = self.secrets.iter().min_by_key(|(k, v)| (**v, **k)).map(|(k, v)| (*k, *v)) else {
                 break;
             };
             self.secrets.remove(&oldest);
-            self.floor = self.floor.max(ot);
+            self.floor = self.floor.max(at);
         }
     }
 

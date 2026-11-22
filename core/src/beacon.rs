@@ -301,7 +301,7 @@ mod tests {
     /// A beacon dated ahead of the receiver's clock is not used, and each
     /// admin's evidence counts by itself, whatever the times of others.
     #[test]
-    fn one_admins_time_never_hides_anothers_evidence() {
+    fn one_admins_time_never_hides_the_evidence_of_another() {
         let b = |who: &str, t, d: u8, count| Beacon {
             group: k("root").key.device_id(),
             signer: k(who).hash,
