@@ -2183,6 +2183,8 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- CI installs the Python packages of the format vectors' generator from
+  `testdata/format/requirements.txt`, pinned by hash, and Dependabot keeps them current.
 - A phone's one button swaps instead of picking a direction (D-128): what the phone's
   clipboard holds goes to the group and the group's copy comes into the clipboard; an empty
   clipboard, or one holding the group's copy, only takes. Opening the app (a start or a return

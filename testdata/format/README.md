@@ -2,7 +2,8 @@
 
 The vectors of the 0.6 wire format: the strict CBOR profile, keys, signed envelopes, records,
 keys statements, commands, grants, server credentials, frames, the copy and the TLS key
-container. `gen.py` writes them (`python3 -I testdata/format/gen.py testdata/format`); they are
+container. `gen.py` writes them (`python3 -I testdata/format/gen.py testdata/format`, with the
+Python packages of `requirements.txt`: `pip install --require-hashes -r testdata/format/requirements.txt`); they are
 deterministic, with test keys from fixed labels and RFC 6979 signatures, so writing them again
 gives the same bytes. Wraps and sealed parts are placeholder bytes of the right size.
 

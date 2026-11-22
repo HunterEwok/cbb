@@ -106,6 +106,19 @@ updates:
       gradle:
         patterns: ["*"]
 
+  # What testdata/format/gen.py needs (requirements.txt, pinned by hash).
+  - package-ecosystem: "pip"
+    directory: "/testdata/format"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      timezone: "UTC"
+    cooldown:
+      default-days: 7
+    groups:
+      format-generator:
+        patterns: ["*"]
+
   - package-ecosystem: "npm"
     directory: "/site"
     schedule:

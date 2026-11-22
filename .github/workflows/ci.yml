@@ -3709,7 +3709,7 @@ jobs:
           (cd testdata/format/check && CGO_ENABLED=0 go build -o "$RUNNER_TEMP/slh-signer" .)
           docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -v "$RUNNER_TEMP/slh-signer:/usr/local/bin/slh-signer:ro" \
             -e CBB_SLH_SIGNER=/usr/local/bin/slh-signer -w /src python:3.13-slim sh -euc '
-            pip install -q --no-cache-dir --root-user-action=ignore cryptography==50.0.1
+            pip install -q --no-cache-dir --root-user-action=ignore --require-hashes --only-binary :all: -r testdata/format/requirements.txt
             python3 -I testdata/format/gen.py /out'
           # The files gen.py writes; bounds.json, push.json and the mutants
           # come from their own generators.
