@@ -88,8 +88,7 @@
 		$rootsFile = $env:CBB_RELEASE_ROOTS
 		# Each block without its headers (Name), the ES256 halves only. A
 		# file that cannot be read gives no roots, which Test-Release refuses.
-		$text = ''
-		try { $text = [string](Get-Content -Raw -LiteralPath $rootsFile -ErrorAction Stop) } catch { }
+		try { $text = [string](Get-Content -Raw -LiteralPath $rootsFile -ErrorAction Stop) } catch { $text = '' }
 		$roots = @(($text -split '-----END PUBLIC KEY-----') |
 			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '(?m)^.*:.*$', '' -replace '\s', '') } |
 			Where-Object { $_.StartsWith('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE') })
