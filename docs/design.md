@@ -659,7 +659,9 @@ it follows two rules of its own (the owner, 2026-11-22; D-128):
    2026-11-22): a phone whose clipboard changed since the app last saw it (the system's
    change count, read without the text) sends that copy, as a watcher reports a copy, and
    otherwise it takes the group's buffer, so a phone that copied nothing never sends back an
-   old text. Coming back from the system's own windows (the notification shade, a
+   old text. A group copy that waited and so did not reach the phone's clipboard is not lost
+   silently: the app shows the last copy that came, with its device, and takes it into the
+   clipboard with one tap. Coming back from the system's own windows (the notification shade, a
    fingerprint or Face ID prompt, a permission dialog, a rotation) is not an opening.
 
 What the app itself wrote into the phone's clipboard is never a new copy (no echo). On the
