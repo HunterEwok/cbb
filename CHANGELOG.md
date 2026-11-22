@@ -3065,7 +3065,8 @@ made with 0.5 is set up again once. The details follow.
   the bench's helper lets the members reach (`adb forward` and a relay on the fleet's
   gateway); they waited for the QR code of 0.5 that a computer no longer shows. Their waits
   let Compose run each round: the screens' effects run on the test rule's dispatcher, and a
-  bare sleep held the window that "Create a group" opens until the wait had failed.
+  bare sleep held the window that "Create a group" opens until the wait had failed. They
+  take Espresso 3.7, whose touches work on Android 17 too.
 - CI's differential run compares Go, the Rust core and the Kotlin kit: the iPhone kit's
   verdict test went with its own readers (D-126), and the run failed looking for its output.
   The Android emulator test of the phone as a hub checks the hub at home only, the

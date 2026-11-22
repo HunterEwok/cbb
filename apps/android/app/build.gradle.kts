@@ -214,6 +214,10 @@ dependencies {
     // test rule, the system's own screens (notifications, the share sheet) with UI Automator.
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Compose's test rule brings Espresso 3.5, whose touches reach for
+    // InputManager.getInstance, which Android 17 no longer has; 3.7 takes
+    // the system's InputManager service.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
