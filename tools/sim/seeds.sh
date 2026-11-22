@@ -50,7 +50,7 @@ if [ "${1:-}" = one ]; then
 	while [ -e "$(dirname "$file")/.pause" ] || busy; do
 		sleep 20
 	done
-	# shellcheck disable=SC2086 # the variables are split on purpose
+	# shellcheck disable=SC2046,SC2086 # the variables are split on purpose
 	env SIM_ALL=1 SIM_FIRST="$first" SIM_SEEDS=100 $(echo "$vars" | tr ',' ' ') \
 		nice -n 19 "$bin" sim::groups_under_faults_agree --exact --nocapture >"$file.part" 2>&1 || true
 	mv "$file.part" "$file"
@@ -95,7 +95,10 @@ rm -f "$list"
 {
 	for set in "$@"; do
 		name=$(echo "$set" | cut -d: -f1)
-		files=$(ls "$out/$name"-*.txt 2>/dev/null | wc -l)
+		files=0
+		for f in "$out/$name"-*.txt; do
+			[ ! -e "$f" ] || files=$((files + 1))
+		done
 		echo "$name: $files batches"
 		cat "$out/$name"-*.txt 2>/dev/null | sed -n 's/^sim seed [0-9]* failed: //p' |
 			sed 's/m[0-9][0-9]*/mN/g' | sort | uniq -c | sort -rn

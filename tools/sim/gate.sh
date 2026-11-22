@@ -45,7 +45,8 @@ echo "gate: $(git rev-parse --short "$base") + $(git rev-parse --short "$commit"
 
 export CARGO_TARGET_DIR="$dir/target"
 cargo test -q --release -p cbb-core --features std --lib --no-run 2>&1 | grep -E '^(error|warning: unused)' >&2 || true
-bin=$(ls -t "$CARGO_TARGET_DIR"/release/deps/cbb_core-* | grep -v '\.d$' | head -1)
+# shellcheck disable=SC2012 # cargo's file names are plain
+bin=$(ls -t "$CARGO_TARGET_DIR"/release/deps/cbb_core-* | sed '/\.d$/d' | head -1)
 
 out="$dir/out.txt"
 : >"$out"

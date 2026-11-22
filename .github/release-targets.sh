@@ -20,6 +20,7 @@ grep -E '^ *- \{ goos: ' "$release" |
 # CI's: the build job's targets, buildmac's, rustmips's, without /vet.
 {
 	grep -E '^ *targets: ' "$ci" | sed -E 's/^ *targets: //'
+	# shellcheck disable=SC2016 # the workflow's text, $RUNNER_TEMP as written
 	grep -E 'build-targets\.sh "\$RUNNER_TEMP" [a-z]' "$ci" | sed -E 's/.*build-targets\.sh "\$RUNNER_TEMP" //'
 	grep -E '^ *MIPS_TARGETS: ' "$ci" | sed -E 's/^ *MIPS_TARGETS: //'
 } | tr ' ' '\n' | sed 's/\/vet$//' | grep . | sort -u >"$work/ci"
@@ -27,7 +28,7 @@ n=$(wc -l <"$work/release")
 [ "$n" -ge 10 ] || { echo "release-targets.sh: read only $n targets of $release" >&2; exit 1; }
 missing=$(comm -23 "$work/release" "$work/ci")
 if [ -n "$missing" ]; then
-	echo "release-targets.sh: the release builds targets CI does not:" $missing >&2
+	echo "release-targets.sh: the release builds targets CI does not: $(echo "$missing" | tr '\n' ' ')" >&2
 	exit 1
 fi
 while IFS=/ read -r os arch _; do

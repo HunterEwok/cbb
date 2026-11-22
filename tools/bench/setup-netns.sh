@@ -55,7 +55,7 @@ setup)
 	command -v ip >/dev/null || { echo "setup-netns.sh: needs ip (iproute2)" >&2; exit 1; }
 	mkdir -p "$dir/bin" "$dir/state" "$dir/run"
 	chmod 0700 "$dir/state"
-	[ "$t2s" -ef "$dir/bin/tun2socks" ] || install -m 0755 "$t2s" "$dir/bin/tun2socks"
+	[ "$(readlink -f "$t2s")" = "$(readlink -f "$dir/bin/tun2socks" 2>/dev/null)" ] || install -m 0755 "$t2s" "$dir/bin/tun2socks"
 	mkdir -p "/etc/netns/$ns"
 	printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\noptions use-vc\n' >"/etc/netns/$ns/resolv.conf"
 

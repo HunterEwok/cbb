@@ -50,8 +50,6 @@ EOF
 	[ -z "$vet" ] || go vet ./...
 	rust=$(sh packaging/build.sh "$os/$arch${arm:+/$arm}")
 	sh packaging/notices.sh "$(basename "$(dirname "$rust")")" >"$out/rust-notices"
-	exe=''
-	[ "$os" != windows ] || exe=.exe
 	# The target's programs by the release's own list
 	# (.github/release-programs.sh): cbb, cbb-relay and the Go programs
 	# beside it, cbbw.exe (cbb without a console window) on Windows; on the

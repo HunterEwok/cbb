@@ -70,6 +70,7 @@
 set -eu
 
 umask 022
+# shellcheck disable=SC3045 # dash and bash have -n; where a shell has not, it is left as it is
 ulimit -n 65536 2>/dev/null || true
 export LC_ALL=C.UTF-8
 
@@ -179,10 +180,10 @@ confine() {
 
 start() {
 	bin=$1
-	[ -x "$bin/cbb" ] && [ -x "$bin/cbb-helper" ] || {
+	if [ ! -x "$bin/cbb" ] || [ ! -x "$bin/cbb-helper" ]; then
 		echo "soak: $bin has no cbb and cbb-helper" >&2
 		exit 2
-	}
+	fi
 	[ ! -e "$dir/soak.pid" ] || {
 		echo "soak: already running in $dir (soak.sh stop first)" >&2
 		exit 1
@@ -345,7 +346,7 @@ by_member() {
 # floor is compared with it until the member restarts; the comparison of the
 # last full window is what a sample reports.
 usage() {
-	rss=0 fds=0 grow=0 fds_moved= rises=0 raw_grow=0 raw_fds=
+	rss=0 fds=0 grow=0 fds_moved='' rises=0 raw_grow=0 raw_fds=
 	m=1
 	t=$(secs)
 	while [ "$m" -le "$members" ]; do
@@ -581,7 +582,7 @@ verdict() {
 	[ "${p95:-0}" -le "$p95_max" ] || why="$why delivery_ms_p95=$p95>$p95_max"
 	head=$(sed -n '1s/^[^ ]* //p' "$log")
 	if [ -z "$why" ]; then
-		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) $(by_member) $raw | $head"
+		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole_n $(percentiles) $(by_member) $raw | $head"
 	else
 		echo "$(now) soak verdict FAIL$why $(by_member) $raw | $head"
 	fi

@@ -563,9 +563,10 @@ if [ "$version" = latest ] && verifying; then
 	# A version as cbb reads one, X.Y.Z or X.Y.Z-rc.N, on one line, before
 	# it goes into the address.
 	n='(0|[1-9][0-9]{0,5})'
-	[ "$(printf '%s\n' "$named" | wc -l)" -eq 1 ] &&
-		printf '%s\n' "$named" | LC_ALL=C grep -Eqx "$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?" ||
+	if [ "$(printf '%s\n' "$named" | wc -l)" -ne 1 ] ||
+		! printf '%s\n' "$named" | LC_ALL=C grep -Eqx "$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?"; then
 		fail "stable.json names no release"
+	fi
 	version=v$named
 	[ -n "${CBB_RELEASE_DIR:-}" ] || base=$repo/releases/download/$version
 fi

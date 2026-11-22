@@ -116,6 +116,24 @@ impl Drop for Fetching<'_> {
 }
 
 impl Mesh {
+    /// Takes the one place of the fetch of `sum`, whose chunks come to `tx`:
+    /// while another fetch of it runs (the copy's own fetch, when cbb paste
+    /// asks for it too), waits for that one to end, which a chunk that does
+    /// not come within CHUNK_WAIT bounds. The caller then looks whether it
+    /// is held.
+    fn place(&self, sum: [u8; 32], tx: mpsc::SyncSender<Got>) -> Fetching<'_> {
+        loop {
+            {
+                let mut f = self.fetches.lock().unwrap();
+                if let std::collections::hash_map::Entry::Vacant(e) = f.entry(sum) {
+                    e.insert(tx);
+                    return Fetching { mesh: self, sum };
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     /// Seals a copy with images or files: the parts' bytes into a blob
     /// under the copy's blob key, kept to serve, and, when `send`, the copy
     /// to the group. `content` is of type media or files; its manifest is
@@ -177,14 +195,11 @@ impl Mesh {
             return Err(Error::msg("the copy's blob has no size a blob has"));
         }
         let (tx, rx) = mpsc::sync_channel(64);
-        {
-            let mut f = self.fetches.lock().unwrap();
-            if f.contains_key(&blob.sha256) {
-                return Err(Error::msg("this blob is being fetched already"));
-            }
-            f.insert(blob.sha256, tx);
+        let _place = self.place(blob.sha256, tx);
+        // The fetch waited for may have kept it.
+        if self.content.held(&blob.sha256) == Some(blob.size) {
+            return Ok(());
         }
-        let _place = Fetching { mesh: self, sum: blob.sha256 };
         let mut peers = vec![*from];
         peers.extend(self.connected().into_iter().filter(|p| p != from));
         let mut last = Error::msg("no member that may hold the blob is connected");
@@ -260,14 +275,10 @@ impl Mesh {
             .ok_or_else(|| Error::msg(format!("{sha:?} is not a SHA-256")))?;
         let size = u64::try_from(a.size).map_err(|_| Error::msg("the archive has no size"))?;
         let (tx, rx) = mpsc::sync_channel(64);
-        {
-            let mut f = self.fetches.lock().unwrap();
-            if f.contains_key(&sum) {
-                return Err(Error::msg("this archive is being fetched already"));
-            }
-            f.insert(sum, tx);
+        let _place = self.place(sum, tx);
+        if r.held(sha, now).is_some() {
+            return Ok(());
         }
-        let _place = Fetching { mesh: self, sum };
         let part = r.files_dir()?.join(format!(".part-{sha}"));
         let mut last = Error::msg("no member that serves files is connected");
         let hellos = self.hellos();
