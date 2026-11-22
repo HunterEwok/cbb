@@ -461,15 +461,38 @@ const OLD_SERVICE_WAIT: Duration = Duration::from_secs(15);
 
 /// Waits while another service answers at path, for OLD_SERVICE_WAIT at
 /// most; an error if it still answers then, or if this one is stopping.
+/// It holds one connection and connects again only after that one ends:
+/// a connection the old service never takes stays in its queue, and
+/// once the queue is full (128 on macOS) a new one is refused although
+/// the old service still runs.
 fn wait_for_old_service(path: &Path) -> Result<()> {
+    use std::io::{self, Read};
     let until = Instant::now() + OLD_SERVICE_WAIT;
-    while UnixStream::connect(path).is_ok() {
+    let mut held: Option<UnixStream> = None;
+    loop {
+        if held.is_none() {
+            match UnixStream::connect(path) {
+                Ok(c) => {
+                    let _ = c.set_read_timeout(Some(Duration::from_millis(100)));
+                    held = Some(c);
+                }
+                Err(_) => return Ok(()),
+            }
+        }
         if STOP.load(Ordering::SeqCst) || Instant::now() >= until {
             return Err(Error::msg(format!("another cbb service runs at {}", path.display())));
         }
-        std::thread::sleep(Duration::from_millis(100));
+        // The old service sends nothing first: a read ends only by the
+        // timeout while it runs, and with an end or an error once it went.
+        let mut b = [0u8; 1];
+        match held.as_ref().map(|mut c| c.read(&mut b)) {
+            Some(Err(e)) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {}
+            _ => {
+                held = None;
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
     }
-    Ok(())
 }
 
 /// A control socket this service made. It is removed when the service
