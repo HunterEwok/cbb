@@ -67,6 +67,12 @@ pub trait Peers: Send + Sync + 'static {
     /// This device dials the members it finds (its record gives it the
     /// capability).
     fn can_dial(&self) -> bool;
+    /// The device may be dialed: it is a device of the group, or this
+    /// member knows of no group to judge it by. A removed device is not, so
+    /// the dial loops leave it alone while the app still finds it.
+    fn may_dial(&self, _id: &DeviceId) -> bool {
+        true
+    }
     /// The known networks, on a computer's service.
     fn networks(&self) -> Option<Arc<Networks>>;
     /// A pairing window is open.
@@ -603,6 +609,15 @@ fn dial_loop_as<P: Peers>(node: Arc<P>, addrs: Addrs, peer: Option<DeviceId>, la
         // Dialed again, the lower device ID's new connection would replace
         // it every time.
         let known = peer.as_ref().or(found.as_ref());
+        if known.is_some_and(|p| !node.may_dial(p)) {
+            if last_failure != NOT_A_DEVICE {
+                let who = known.map(ToString::to_string).unwrap_or_default();
+                node.logf(&format!("cbb: stops dialing {who}: it is no device of the group"));
+                last_failure = NOT_A_DEVICE.to_string();
+            }
+            node.nap(NOT_A_DEVICE_WAIT);
+            continue;
+        }
         if node.is_paused() || known.is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
             node.nap(Duration::from_secs(1));
             continue;
@@ -649,6 +664,12 @@ fn dial_loop_as<P: Peers>(node: Arc<P>, addrs: Addrs, peer: Option<DeviceId>, la
         }
     }
 }
+
+/// Why a dial loop waits, logged once: the device it dials is no device of
+/// the group (removed), and how long it waits before it looks again, since
+/// the records may still bring it back (a newer set, a change of root).
+const NOT_A_DEVICE: &str = "no device of the group";
+const NOT_A_DEVICE_WAIT: Duration = Duration::from_secs(30);
 
 /// The first wait before dialing again, after a connection ended.
 const FIRST_WAIT: Duration = Duration::from_secs(1);

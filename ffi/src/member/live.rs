@@ -301,7 +301,14 @@ fn current_json(c: &Current, now_ms: i64) -> Value {
         "age_ms": now_ms.saturating_sub(c.at_ms).max(0),
         "kind": kind_name(kind),
         "text": c.content.text.clone().unwrap_or_default(),
+        // Its images or files, which the app fetches (the op `fetch`) and
+        // saves, also when the board did not write the copy (a phone
+        // that takes no media by itself), and the lifetime its sender
+        // stamped (D-129), by which the app hides its "Last received".
+        "media": c.content.manifest,
+        "unread": !c.content.writable(),
         "key": id,
+        "ttl_ms": c.content.ttl_ms(),
     })
 }
 
@@ -642,7 +649,7 @@ impl Phone {
                 Ok(json!({ "renewals": r }))
             }
             "away_status" => Ok(self.away_answer()),
-            "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device())),
+            "group" => Ok(group_view(&lock(&l.mesh.set()), &l.mesh.device(), l.mesh.dir())),
             "why" => Ok(json!({ "why": self.why(away_arg(&arg("away"))?) })),
             // The revocation list of Android attestations the app fetched,
             // and how many peers' evidence waits for the root key.
@@ -1496,7 +1503,7 @@ fn watch_records(live: &Arc<Live>, dir: &Path, ev: Events, log: Arc<dyn Fn(&str)
         for n in new_notices(&mut lock(&shown), &now) {
             queue(&Event::Notice { notice: n });
         }
-        queue(&Event::State { state: group_view(set, &me) });
+        queue(&Event::State { state: group_view(set, &me, &dir) });
     }));
 }
 
@@ -1604,7 +1611,11 @@ fn level_name(level: u64) -> &'static str {
     }
 }
 
-fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Value {
+/// The group as the apps show it. `dir` is the member's own, where the
+/// admin keys offered at pairing wait (`cbb_member::offered`): a device that
+/// offered one and is no admin yet `offers_admin`, which the root's "Make it
+/// an admin" needs.
+fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId, dir: &std::path::Path) -> Value {
     use cbb_core::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
     use cbb_core::records::eval::{DeviceState, Stop};
     let role = |r: u64| match r {
@@ -1624,6 +1635,7 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
             json!({
                 "device": id_text(&d.id), "name": d.name, "os": cbb_core::format::print::os_name(d.os),
                 "role": role(d.role), "admin": admin(d), "frozen": d.frozen, "hub": st.hubs.contains(&d.id),
+                "offers_admin": d.admin.is_none() && cbb_member::offered::get(dir, &id_text(&d.id)).ok().flatten().is_some(),
             })
         })
         .collect();
@@ -1678,6 +1690,29 @@ mod tests {
 
     use super::super::Member;
     use super::*;
+
+    /// The op current names the copy's images or files and its lifetime,
+    /// so that the app shows and fetches a copy the board did not write.
+    #[test]
+    fn the_current_copy_carries_its_media_and_lifetime() {
+        let manifest = cbb_core::media::Manifest { size: 3, parts: Vec::new() };
+        let content = cbb_core::content::Content {
+            kind: cbb_core::content::TYPE_FILES,
+            manifest: Some(manifest),
+            ttl: 120_000,
+            ..Default::default()
+        };
+        let d = cbb_core::records::DeviceId([7; 16]);
+        let c = Current { id: [1; 16], content, origin: d, blob: None, from: d, at_ms: 1_000 };
+        let v = current_json(&c, 1_500);
+        assert_eq!(
+            (v["kind"].as_str(), v["age_ms"].as_i64(), v["ttl_ms"].as_u64()),
+            (Some("media"), Some(500), Some(120_000))
+        );
+        assert_eq!(v["media"]["size"], 3);
+        let plain = current_json(&Current { content: cbb_core::content::Content::text("x", false), ..c }, 1_000);
+        assert_eq!((&plain["media"], &plain["ttl_ms"]), (&Value::Null, &Value::Null));
+    }
 
     /// A key the test's callbacks sign with, as an app's would.
     struct Signer(Arc<dyn ExternalKey>);

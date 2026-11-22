@@ -3074,6 +3074,13 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A phone stops dialing a device the group removed, although its app still finds it on the
+  network; it looks again every 30 seconds, in case the records bring the device back.
+- The op `current` gives a phone's app the copy's images or files and its lifetime, so the
+  app fetches files a computer copied even when the board did not write the copy, and hides
+  "Last received" when the copy's own lifetime ends.
+- The group a phone's app shows marks a device that offered an admin key when it paired
+  (`offers_admin`), which the root's "Make it an admin" needs.
 - The bench's phone suite runs under Docker Desktop on macOS and Windows (its relay to the
   phone listens on the loopback, which the members reach as host.docker.internal), and the
   members reach the UDP ports the app holds open, such as the tunnel of a hub on the phone,

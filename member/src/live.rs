@@ -732,6 +732,11 @@ impl Peers for Live {
         st.devices.iter().find(|d| d.id == self.me).is_none_or(|d| d.caps & CAP_DIALS != 0)
     }
 
+    fn may_dial(&self, id: &certs::DeviceId) -> bool {
+        let st = self.mesh.state();
+        st.devices.is_empty() || of(id).is_some_and(|d| st.device(&d).is_some())
+    }
+
     fn networks(&self) -> Option<Arc<Networks>> {
         self.networks.read().unwrap().clone()
     }

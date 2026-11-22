@@ -566,3 +566,23 @@ fn an_invitation_opens_here_on_the_hub_or_through_it() {
     a.close();
     b.close();
 }
+
+/// A removed device is no longer dialed although the app still finds it:
+/// the dial loops ask may_dial, which only the group's devices pass.
+#[test]
+fn a_removed_device_is_not_dialed() {
+    let (da, db) = two_dirs("may-dial");
+    let (a, b) = (open(&da), open(&db));
+    let bid = shown(&b.mesh.device());
+    assert!(a.may_dial(&bid), "a device of the group");
+    assert!(!a.may_dial(&shown(&DeviceId([0x5a; 16]))), "no device of the group");
+    // The group's root removes b in a's records.
+    let now = uptime::wall_ms().max(0) as u64;
+    let root = crate::mesh::tests::root();
+    a.mesh
+        .write_by(&root, |set, k| crate::writers::remove(set, k, &id_text(&b.mesh.device()), now).map(|(_, r)| r))
+        .unwrap();
+    assert!(!a.may_dial(&bid), "removed");
+    a.close();
+    b.close();
+}
