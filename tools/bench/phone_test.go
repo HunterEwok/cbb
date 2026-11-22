@@ -88,3 +88,21 @@ func TestPhoneUDPPorts(t *testing.T) {
 		}
 	}
 }
+
+// TestPhoneAddrs reads the phone's IPv4 addresses from ip -4 -o addr:
+// wlan0's on a recent emulator image, eth0's on an older one, never the
+// loopback's, each once.
+func TestPhoneAddrs(t *testing.T) {
+	out := `1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+3: wlan0    inet 10.0.2.16/24 brd 10.0.2.255 scope global wlan0\       valid_lft forever preferred_lft forever
+4: eth0    inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0\       valid_lft forever preferred_lft forever
+5: eth1    inet 10.0.2.15/24 scope global eth1
+`
+	got := ipv4Addrs(out)
+	if len(got) != 2 || got[0] != "10.0.2.16" || got[1] != "10.0.2.15" {
+		t.Fatalf("ipv4Addrs = %v, want [10.0.2.16 10.0.2.15]", got)
+	}
+	if got := ipv4Addrs("1: lo    inet 127.0.0.1/8 scope host lo\n"); len(got) != 0 {
+		t.Fatalf("ipv4Addrs of the loopback alone = %v", got)
+	}
+}

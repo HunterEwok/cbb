@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -177,7 +178,7 @@ type phoneHelper struct {
 	nextJob int
 	fwd     *phoneForwarder
 	phone   []*phoneRelay
-	udp     map[int]*phoneRelay // the phone's UDP ports the members reach, by port
+	udp     map[int][]*phoneRelay // the phone's UDP ports the members reach, by port: one for each of its addresses
 }
 
 // phoneRelay lets the members reach a TCP port of the phone, its member
@@ -195,9 +196,41 @@ type phoneRelay struct {
 // phoneApp is the app's package, whose UDP ports the members reach.
 const phoneApp = "tools.cbb"
 
-// phoneAddr is the emulator's own address, which the phone names in its
-// invitations and hub offers.
-const phoneAddr = "10.0.2.15"
+// phoneAddrs reads the phone's own IPv4 addresses, which it names in its
+// invitations and hub offers: the active network's, which is wlan0's
+// 10.0.2.16 on recent emulator images and eth0's 10.0.2.15 on older ones.
+func phoneAddrs(ctx context.Context) ([]string, error) {
+	out, err := exec.CommandContext(ctx, adbPath(), "shell", "ip", "-4", "-o", "addr", "show").Output()
+	if err != nil {
+		return nil, fmt.Errorf("adb: the phone's addresses: %w", err)
+	}
+	addrs := ipv4Addrs(string(out))
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("the phone has no IPv4 address but the loopback's: %q", out)
+	}
+	return addrs, nil
+}
+
+// ipv4Addrs reads the addresses of ip -4 -o addr ("2: wlan0    inet
+// 10.0.2.16/24 brd ..." a line), without the loopback's, each once.
+func ipv4Addrs(out string) []string {
+	var addrs []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] != "inet" {
+				continue
+			}
+			ip, _, err := net.ParseCIDR(f[i+1])
+			if err != nil || ip.IsLoopback() || ip.To4() == nil || slices.Contains(addrs, ip.String()) {
+				break
+			}
+			addrs = append(addrs, ip.String())
+			break
+		}
+	}
+	return addrs
+}
 
 // phoneForwarder is the run's forwarder for a hub on the phone. Its port
 // is the same number on this computer, where the emulator dials it at
@@ -332,8 +365,8 @@ func (h *phoneHelper) add(ctx context.Context, udp bool) (*Device, int, error) {
 	h.mu.Lock()
 	fwd := h.fwd
 	relays := append([]*phoneRelay(nil), h.phone...)
-	for _, p := range h.udp {
-		relays = append(relays, p)
+	for _, ps := range h.udp {
+		relays = append(relays, ps...)
 	}
 	h.mu.Unlock()
 	if fwd != nil {
@@ -561,8 +594,16 @@ func (h *phoneHelper) phoneUDP(ctx context.Context, d *Device) error {
 	if err != nil {
 		return fmt.Errorf("adb: the phone's UDP sockets: %w", err)
 	}
+	ports := udpPorts(string(table), uid)
+	if len(ports) == 0 {
+		return nil
+	}
+	addrs, err := phoneAddrs(ctx)
+	if err != nil {
+		return err
+	}
 	var added []*phoneRelay
-	for _, port := range udpPorts(string(table), uid) {
+	for _, port := range ports {
 		h.mu.Lock()
 		_, known := h.udp[port]
 		h.mu.Unlock()
@@ -593,14 +634,17 @@ func (h *phoneHelper) phoneUDP(ctx context.Context, d *Device) error {
 		}()
 		go relayUDP(pc, local)
 		_, at, _ := net.SplitHostPort(pc.LocalAddr().String())
-		p := &phoneRelay{addr: net.JoinHostPort(phoneAddr, fmt.Sprint(port)), relay: net.JoinHostPort(host, at), udp: true}
+		var ps []*phoneRelay
+		for _, a := range addrs {
+			ps = append(ps, &phoneRelay{addr: net.JoinHostPort(a, fmt.Sprint(port)), relay: net.JoinHostPort(host, at), udp: true})
+		}
 		h.mu.Lock()
 		if h.udp == nil {
-			h.udp = map[int]*phoneRelay{}
+			h.udp = map[int][]*phoneRelay{}
 		}
-		h.udp[port] = p
+		h.udp[port] = ps
 		h.mu.Unlock()
-		added = append(added, p)
+		added = append(added, ps...)
 	}
 	h.mu.Lock()
 	members := append([]*Device(nil), h.members...)

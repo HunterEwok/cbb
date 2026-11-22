@@ -47,8 +47,11 @@ func publishMember(t *testing.T, id, tag string, port int, extra ...string) {
 	t.Cleanup(func() { cancel(); <-done })
 }
 
-// TestListenDialed: the members dial a member that does not dial (TXT
-// r=listen) as soon as they find it, whatever the device IDs.
+// TestListenDialed: a member dials a member of the group that does not
+// dial (TXT r=listen) as soon as it finds it, though its device ID is the
+// higher one, which would otherwise wait for the other to dial. Only
+// devices the records hold are dialed, so the one that listens takes the
+// device ID of the other member, which stops.
 func TestListenDialed(t *testing.T) {
 	// On every address: the services dial the addresses mDNS publishes.
 	ln, err := net.Listen("tcp", ":0")
@@ -71,9 +74,17 @@ func TestListenDialed(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, laptop) // the group exists from here
-	// The lowest device ID: a member that dials would wait 30 s for it to dial.
-	publishMember(t, strings.Repeat("0", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port, "r=listen")
-	waitFor(t, "the members dialed the member that listens", func() bool { return dialed.Load() > 0 })
+	group := pi.status(t).Group
+	// The lower device ID stops and listens: the member left, with the
+	// higher one, would wait 30 s for it to dial.
+	lower := pi
+	if laptop.status(t).Device < pi.status(t).Device {
+		lower = laptop
+	}
+	id := lower.status(t).Device
+	lower.stop()
+	publishMember(t, id, group, ln.Addr().(*net.TCPAddr).Port, "r=listen")
+	waitFor(t, "the member dialed the member that listens", func() bool { return dialed.Load() > 0 })
 }
 
 // startAlone runs the small device (Rust, member/) with the state in
@@ -333,11 +344,14 @@ func TestFFIMember(t *testing.T) {
 		return ans.OK
 	}
 	peers := func() int { return len(call("peers", nil)["peers"].([]any)) }
-	waiting := func() map[string]any {
-		c, _ := call("waiting", nil)["copy"].(map[string]any)
-		return c
+	// The one button (D-128) with the clipboard's key: whether it goes to
+	// the group, and the group's copy that comes into it.
+	swap := func(board string) (bool, map[string]any) {
+		a := call("swap", map[string]any{"board": board})
+		c, _ := a["copy"].(map[string]any)
+		return a["sends"].(bool), c
 	}
-	sends := func(board string) bool { return call("sends", map[string]any{"board": board})["sends"].(bool) }
+	sends := func(board string) bool { s, _ := swap(board); return s }
 
 	// The app hands in the computer's address, as Bonjour finds it.
 	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
@@ -361,16 +375,17 @@ func TestFFIMember(t *testing.T) {
 		t.Fatalf("the app heard %q of the second sync command", got)
 	}
 
-	// The computer's copy waits for the phone until the app takes it; then
-	// the clipboard holds the group's text, and the button sends nothing.
+	// The computer's copy comes in on the button over an empty clipboard;
+	// once the app took it, the clipboard holds the group's text, and the
+	// button neither sends it back nor takes it again.
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "for the button"); err != nil {
 		t.Fatal(err)
 	}
 	var c map[string]any
-	waitFor(t, "the copy waits", func() bool { c = waiting(); return c != nil && c["text"] == "for the button" })
+	waitFor(t, "the button takes the copy", func() bool { _, c = swap(""); return c != nil && c["text"] == "for the button" })
 	call("took", map[string]any{"id": c["id"]})
-	if waiting() != nil || sends("for the button") {
-		t.Fatal("a copy the phone took still waits, or goes back")
+	if s, again := swap("for the button"); s || again != nil {
+		t.Fatal("a copy the phone took comes in again, or goes back")
 	}
 
 	// A text from the phone, then an image: the computer fetches the image
@@ -396,7 +411,7 @@ func TestFFIMember(t *testing.T) {
 	if err := pi.copyMedia(t, "", sentPart{Part: control.Part{Type: "image/jpeg", Size: int64(len(jpeg))}, data: jpeg}); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the image waits", func() bool { c = waiting(); return c != nil && c["kind"] == "media" })
+	waitFor(t, "the button takes the image", func() bool { _, c = swap(""); return c != nil && c["kind"] == "media" })
 	out := filepath.Join(t.TempDir(), "image")
 	got := call("fetch", map[string]any{"id": c["id"], "max": 100 << 20, "out": out})["parts"].([]any)
 	if len(got) != 1 {

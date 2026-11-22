@@ -483,6 +483,9 @@ class GroupTest {
     @Test
     fun c1_phoneHubAtHome() {
         val hubNow = { runBlocking { model.refresh() }; model.hub ?: throw AssertionError("the phone cannot be the hub") }
+        // A hub turns sync away from home on; the tests after this one find
+        // it as it was.
+        val awayWasOff = (model.away?.status ?: AwayFromHome.Status.OFF) == AwayFromHome.Status.OFF
         runBlocking { model.setHub(true) }
         assertEquals("turning the hub on says ${model.hubNote}", null, model.hubNote)
         try {
@@ -513,8 +516,10 @@ class GroupTest {
             assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
         } finally {
             runBlocking { model.setHub(false) }
+            if (awayWasOff) runBlocking { model.setAway(false) }
         }
         assertEquals("the hub turned off", HubOnPhone.Status.OFF, hubNow().status)
+        if (awayWasOff) assertEquals("sync away from home off again", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
     }
 
     /**
