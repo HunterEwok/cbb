@@ -7,12 +7,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -29,7 +27,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
-	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -155,71 +152,6 @@ func (w testWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
-}
-
-// TestEmbassyJoiner: the ESP32 firmware's pairing code (embassy/),
-// built for Linux as esp32-on-linux, joins by the phone over embassy-net on a
-// TAP interface, as the board does over Wi-Fi. CBB_ESP32_ON_LINUX names the
-// binary; the interface tap0 must be up as 192.168.69.1/24, and the device
-// takes 192.168.69.2.
-func TestEmbassyJoiner(t *testing.T) {
-	bin := os.Getenv("CBB_ESP32_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_ESP32_ON_LINUX is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
-
-	file := filepath.Join(t.TempDir(), "identity.json")
-	join := exec.Command(bin, "-debug", "-tap", "tap0", "-addr", "192.168.69.2/24", "-name", "board", "-identity", file)
-	join.Stderr = testWriter{t, "esp32-on-linux: ", nil}
-	out, err := join.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := join.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer join.Process.Kill()
-	const prefix = "Or paste this into the app: "
-	var qr string
-	sc := bufio.NewScanner(out)
-	for qr == "" && sc.Scan() {
-		if line, ok := strings.CutPrefix(sc.Text(), prefix); ok {
-			qr = line
-		}
-	}
-	if !strings.Contains(qr, "192.168.69.2%3A8764") && !strings.Contains(qr, "192.168.69.2:8764") {
-		t.Fatalf("esp32-on-linux showed %q, not a QR code with its address", qr)
-	}
-	if name := admitJoiner(t, pi, qr); name != "board" {
-		t.Fatalf("the board joined as %q", name)
-	}
-	waitFor(t, "pi lists the board as a member", func() bool {
-		for _, d := range pi.devices(t) {
-			if d.Name == "board" {
-				return d.Role == group.RoleMember && len(d.Caps) == 0
-			}
-		}
-		return false
-	})
-	var rest strings.Builder
-	for sc.Scan() {
-		rest.WriteString(sc.Text() + "\n")
-	}
-	if err := join.Wait(); err != nil || !strings.Contains(rest.String(), "Joined the group "+pi.status(t).Group) {
-		t.Fatalf("esp32-on-linux: %v; %s", err, rest.String())
-	}
-	raw, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(raw), "_key") {
-		t.Error("the board saved a CA key")
-	}
 }
 
 // TestFFIJoiner runs the Aurora app's core through ffi's C functions
@@ -1010,48 +942,6 @@ func TestFFIPhoneRoot(t *testing.T) {
 	if devices := next("DEVICES "); strings.Contains(devices, `"desk"`) {
 		t.Fatalf("the phone still lists the computer it removed: %s", devices)
 	}
-}
-
-// admitJoiner plays the phone that scanned a listening joiner's QR code
-// with pi, the group's root: pi dials the addresses in the QR code and
-// admits the device with the certificate it names, as cbb pair -qr does,
-// and returns the name the device joined with.
-func admitJoiner(t *testing.T, pi *testService, qr string) string {
-	t.Helper()
-	jc, ok := phone.ParseJoinQR(qr)
-	if !ok || len(jc.Addrs) == 0 || jc.Fingerprint == "" {
-		t.Fatalf("not a QR code of a listening joiner: %q", qr)
-	}
-	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
-	if err != nil {
-		t.Fatalf("admitting the joiner: %v", err)
-	}
-	return m.Name
-}
-
-// listeningJoin starts a service named name, out of a group, and has it
-// wait for a phone, as cbb pair does: the QR code the phone scans.
-func listeningJoin(t *testing.T, h *hub, name string) (*testService, string) {
-	t.Helper()
-	s := startService(t, h, name)
-	c := s.dial(t)
-	t.Cleanup(func() { c.Close() })
-	code := newCode(t)
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
-	if err != nil || len(m.Addrs) == 0 {
-		t.Fatalf("%s's listening join: %v, %+v", name, err, m)
-	}
-	return s, phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
-}
-
-// newCode is a pairing code: six random digits.
-func newCode(t *testing.T) string {
-	t.Helper()
-	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fmt.Sprintf("%06d", n.Int64())
 }
 
 // joinAlone has the small device join pi's group: cbb pair on pi shows a

@@ -131,7 +131,6 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
 | `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
-| `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `embassy/`, run over a TAP interface. |
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
 | `CBB_REAL_FORWARDER` | `TestAwayThroughRealForwarder` | A forwarder on the internet, host:port (`cbb.tools:8764` for the project's): a Rust `cbb` hub registers with it and another, for which no UDP passes, reaches the hub over VLESS with XHTTP and syncs both ways, a check from a network that blocks WireGuard; without it the test is skipped. |
 | `CBB_REAL_FORWARDER_PIN` | `TestAwayThroughRealForwarder` | That forwarder's pin, base64, when it is not the project's. |

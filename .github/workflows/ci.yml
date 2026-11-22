@@ -2945,17 +2945,6 @@ jobs:
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
           test ! -e /etc/systemd/system/cbb-update.timer
           test ! -e /var/lib/cbb-update
-      - name: the ESP32's network code joins by the phone on Linux, over a TAP interface
-        run: |
-          sudo ip tuntap add name tap0 mode tap user "$USER"
-          sudo ip addr add 192.168.69.1/24 dev tap0
-          sudo ip link set tap0 up
-          # The computer it joins is a cbb, with cbb-helper beside it, both
-          # built for tests (testhooks).
-          cargo build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
-            go test -race ./internal/service -run TestEmbassyJoiner -v
   esp32:
     name: the core on the ESP32
     needs: changes

@@ -73,8 +73,6 @@ becomes a vector here.
   without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
   a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with
   `--features testhooks`) run real services of such a group through the hub's tunnel.
-- `TestEmbassyJoiner` runs the Nano ESP32's network code on Linux over a TAP interface
-  (`CBB_ESP32_ON_LINUX`).
 
 ## Service and system tests
 
