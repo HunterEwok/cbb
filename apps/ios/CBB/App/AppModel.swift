@@ -862,7 +862,7 @@ final class AppModel: ObservableObject {
         case .fetched:
             return String(localized: "Ready to paste.", bundle: .app)
         case .swapped:
-            return String(localized: "Sent yours; the group's copy is in the clipboard.", bundle: .app)
+            return String(localized: "Sent.", bundle: .app)
         case .nothingNew:
             return String(localized: "Nothing new to send or fetch.", bundle: .app)
         case .savedFiles(photos: true):

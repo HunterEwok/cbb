@@ -555,7 +555,7 @@
     <string name="signature_n">Подпись %1$d</string>
     <string name="signature_of">Подпись %1$d из %2$d</string>
     <string name="source">Исходный код и лицензия (AGPL-3.0)</string>
-    <string name="swapped">Отправлено. В буфере теперь копия группы.</string>
+    <string name="swapped">Отправлено.</string>
     <string name="sync">Синхронизация</string>
     <string name="sync_off">Синхронизация выключена</string>
     <string name="sync_off_until">Синхронизация выключена до %1$s</string>

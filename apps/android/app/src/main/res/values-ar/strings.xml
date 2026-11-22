@@ -555,7 +555,7 @@
     <string name="signature_n">التوقيع %1$d</string>
     <string name="signature_of">التوقيع %1$d من %2$d</string>
     <string name="source">الشيفرة المصدرية والترخيص (AGPL-3.0)</string>
-    <string name="swapped">أُرسل. نسخة المجموعة الآن في حافظتك.</string>
+    <string name="swapped">تم الإرسال.</string>
     <string name="sync">مزامنة</string>
     <string name="sync_off">المزامنة متوقفة</string>
     <string name="sync_off_until">المزامنة متوقفة حتى %1$s</string>

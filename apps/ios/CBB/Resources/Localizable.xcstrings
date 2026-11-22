@@ -17300,48 +17300,48 @@
         }
       }
     },
-    "Sent. The group's copy is in your clipboard.": {
+    "Sent.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أُرسل. نسخة المجموعة الآن في حافظتك."
+            "value": "تم الإرسال."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviado. Ahora tienes la copia del grupo en el portapapeles."
+            "value": "Enviado."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "נשלח. העותק של הקבוצה נמצא עכשיו בלוח שלך."
+            "value": "נשלח."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "भेज दिया गया। अब आपके क्लिपबोर्ड में समूह की कॉपी है।"
+            "value": "भेज दिया गया।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Отправлено. В буфере теперь копия группы."
+            "value": "Отправлено."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imetumwa. Nakala ya kikundi sasa iko kwenye ubao wako wa kunakili."
+            "value": "Imetumwa."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已发送。剪贴板中现在是群组的副本。"
+            "value": "已发送。"
           }
         }
       }

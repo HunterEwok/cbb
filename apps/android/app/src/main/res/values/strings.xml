@@ -559,7 +559,7 @@
     <string name="signature_n">Signature %1$d</string>
     <string name="signature_of">Signature %1$d of %2$d</string>
     <string name="source">Source code and license (AGPL-3.0)</string>
-    <string name="swapped">Sent. The group\'s copy is in your clipboard.</string>
+    <string name="swapped">Sent.</string>
     <string name="sync">Sync</string>
     <string name="sync_off">Sync is off</string>
     <string name="sync_off_until">Sync is off until %1$s</string>

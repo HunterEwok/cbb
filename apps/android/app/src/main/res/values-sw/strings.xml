@@ -555,7 +555,7 @@
     <string name="signature_n">Sahihi %1$d</string>
     <string name="signature_of">Sahihi %1$d kati ya %2$d</string>
     <string name="source">Msimbo chanzo na leseni (AGPL-3.0)</string>
-    <string name="swapped">Imetumwa. Nakala ya kikundi sasa iko kwenye ubao wako wa kunakili.</string>
+    <string name="swapped">Imetumwa.</string>
     <string name="sync">Sawazisha</string>
     <string name="sync_off">Usawazishaji umezimwa</string>
     <string name="sync_off_until">Usawazishaji umezimwa hadi %1$s</string>

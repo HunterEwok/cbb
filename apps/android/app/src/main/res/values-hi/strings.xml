@@ -555,7 +555,7 @@
     <string name="signature_n">हस्ताक्षर %1$d</string>
     <string name="signature_of">%2$d में से हस्ताक्षर %1$d</string>
     <string name="source">सोर्स कोड और लाइसेंस (AGPL-3.0)</string>
-    <string name="swapped">भेज दिया गया। अब आपके क्लिपबोर्ड में समूह की कॉपी है।</string>
+    <string name="swapped">भेज दिया गया।</string>
     <string name="sync">सिंक</string>
     <string name="sync_off">सिंक बंद है</string>
     <string name="sync_off_until">%1$s तक सिंक बंद है</string>

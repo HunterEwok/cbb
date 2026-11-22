@@ -555,7 +555,7 @@
     <string name="signature_n">Firma %1$d</string>
     <string name="signature_of">Firma %1$d de %2$d</string>
     <string name="source">Código fuente y licencia (AGPL-3.0)</string>
-    <string name="swapped">Enviado. Ahora tienes la copia del grupo en el portapapeles.</string>
+    <string name="swapped">Enviado.</string>
     <string name="sync">Sincronizar</string>
     <string name="sync_off">La sincronización está desactivada</string>
     <string name="sync_off_until">La sincronización está desactivada hasta %1$s</string>

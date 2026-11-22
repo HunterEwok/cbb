@@ -934,7 +934,7 @@
   "Sent to the computers.": {"in": ["android:sent", "harmony:live_sent", "ios"]},
   "Sent to the group.": {"in": ["mac"]},
   "Sent to your computers.": {"in": ["harmony:share_sent"]},
-  "Sent. The group's copy is in your clipboard.": {"in": ["android:swapped", "ios"]},
+  "Sent.": {"in": ["android:swapped", "ios"]},
   "Server": {"in": ["android:kind_server", "ios", "mac", "tray"]},
   "Service version": {"in": ["mac"]},
   "Set": {"in": ["aurora:PinDialog"]},
