@@ -125,11 +125,7 @@ pub fn welcome_message(data: &[u8]) {
     }
     let body = data.get(4..).unwrap_or_default();
     assert!(
-        crate::join::welcome::open(
-            body,
-            &core::array::from_fn::<u8, 64, _>(|i| crate::certs::sha256(b"a tag nobody made")[i % 32])
-        )
-        .is_err(),
+        crate::join::welcome::open(body, &[crate::certs::sha256(b"a tag nobody made"); 2].concat()).is_err(),
         "a Welcome passed a tag nobody made"
     );
 }
