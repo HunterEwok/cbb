@@ -4,8 +4,8 @@
 package forward
 
 import (
+	"bytes"
 	"context"
-	"crypto"
 	"crypto/ecdh"
 	"crypto/sha256"
 	"crypto/tls"
@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HunterEwok/cbb/internal/frame"
+	"github.com/HunterEwok/cbb/internal/blind"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/netguard"
 	"github.com/HunterEwok/cbb/internal/tunnel"
@@ -70,23 +70,12 @@ type HubConfig struct {
 	// the hub's own packets with VLESSID (docs/protocol.md, section 13,
 	// "VLESS").
 	VLESS func() []tunnel.VLESS
-	// Cert returns the hub's member certificate with its chain to the
-	// group's root; it is asked at each registration, so a renewed
-	// certificate is taken.
-	// Authority returns the key of the group's root or of this hub's admin
-	// CA, that admin CA (nil for a root), and the group's authority records
-	// (group.Records.AuthorityRecords): only the root or an admin may
-	// register its group, and the forwarder learns from the records whom
-	// the group removed. A hub whose root or admin key cannot sign without
-	// the user, a phone's, returns a nil key: the records then show the
-	// forwarder that its member key is the root's or an admin's.
-	Authority func() (key crypto.Signer, admin *x509.Certificate, records []group.Record)
-	Cert      func() tls.Certificate
-	// Credentials, if set, returns the chain of the group's hubs'
-	// credentials that lists this hub (docs/protocol.md, section 18), and
-	// HubCert the hub's certificate for it, which names no device. A nil
-	// chain registers with Cert and Authority instead.
-	Credentials func() []group.Credential
+	// Credentials returns the hubs' credential of the forwarder's face
+	// that lists this hub's server key (docs/protocol.md, section 18), an
+	// envelope, and HubCert the certificate of that server key, which
+	// names no device; both are asked at each registration. Without a
+	// credential the hub waits (ErrNotListed).
+	Credentials func() [][]byte
 	HubCert     func() (tls.Certificate, error)
 
 	// Send sends a packet from the hub's WireGuard port, so that the
@@ -144,6 +133,10 @@ const (
 var helloUnseen atomic.Int64
 
 func init() { helloUnseen.Store(int64(20 * time.Second)) }
+
+// ErrNotListed is why a hub does not register yet: its group's credentials
+// for the forwarder's face do not list its server key.
+var ErrNotListed = errors.New("the group's credentials for the forwarder do not list this hub yet")
 
 // errNewCredential ends a registration when the group's hubs' credential
 // changed, so that the hub registers again at once with the new one, and
@@ -208,18 +201,16 @@ func TLSVerifiedByPin(cert tls.Certificate, protocol, what string, pins ...strin
 }
 
 func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error {
-	var creds []group.Credential
+	var creds [][]byte
 	if cfg.Credentials != nil && cfg.HubCert != nil {
 		creds = cfg.Credentials()
 	}
-	var cert tls.Certificate
-	if creds != nil {
-		var err error
-		if cert, err = cfg.HubCert(); err != nil {
-			return fmt.Errorf("the hub's certificate: %w", err)
-		}
-	} else {
-		cert = cfg.Cert()
+	if len(creds) == 0 {
+		return ErrNotListed
+	}
+	cert, err := cfg.HubCert()
+	if err != nil {
+		return fmt.Errorf("the hub's certificate: %w", err)
 	}
 	tlsCfg := TLSVerifiedByPin(cert, Protocol, "forwarder", append([]string{cfg.Link.Pin}, cfg.Link.Also...)...)
 	handshake := func(raw net.Conn) (*tls.Conn, error) {
@@ -279,16 +270,31 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	stop := context.AfterFunc(ctx, func() { raw.Close() })
 	defer stop()
 	cs := tc.ConnectionState()
-	enc, dec := frame.NewEncoder(tc, 1<<20), frame.NewDecoder(io.LimitReader(tc, 1<<20), 1<<20)
-	var ch challenge
-	if err := dec.Decode(&ch); err != nil {
+	in := io.LimitReader(tc, 1<<20)
+	next := func() (answer, error) {
+		t, m, _, err := blind.ReadFrame(in, 1<<20)
+		if err != nil {
+			return answer{}, err
+		}
+		return readAnswer(t, m)
+	}
+	t, m, _, err := blind.ReadFrame(in, 1<<20)
+	if err != nil {
 		return fmt.Errorf("registering with the forwarder: %w", err)
+	}
+	if t == tError {
+		a, _ := readAnswer(t, m)
+		return fmt.Errorf("the forwarder refused the registration: %s", a.Error)
+	}
+	ch, ok := m.Get(2)
+	if t != tChallenge || !ok || !ch.IsBytes() {
+		return errors.New("registering with the forwarder: not its challenge")
 	}
 	priv, err := ecdh.X25519().NewPrivateKey(cfg.Key[:])
 	if err != nil {
 		return err
 	}
-	e, err := ecdh.X25519().NewPublicKey(ch.E)
+	e, err := ecdh.X25519().NewPublicKey(ch.Bytes)
 	if err != nil {
 		return errors.New("registering with the forwarder: a bad challenge")
 	}
@@ -300,27 +306,15 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	if err != nil {
 		return err
 	}
-	c := claim{Key: priv.PublicKey().Bytes(), Proof: p, Obfuscation: cfg.Obfuscation, VLESS: cfg.VLESSID, Credentials: creds}
-	if creds == nil && cfg.Authority != nil {
-		key, admin, records := cfg.Authority()
-		if key != nil {
-			if c.AdminSig, err = SignAdmin(key, cs, c.Key); err != nil {
-				return err
-			}
-			if admin != nil {
-				c.Admin = admin.Raw
-			}
-		}
-		if len(records) > maxClaimRecords {
-			records = records[:maxClaimRecords]
-		}
-		c.Records = records
+	msg, err := msgRegister(register{Key: [32]byte(priv.PublicKey().Bytes()), Proof: [32]byte(p), Obfuscation: cfg.Obfuscation, VLESS: cfg.VLESSID, Credentials: creds})
+	if err != nil {
+		return err
 	}
-	if err := enc.Encode(c); err != nil {
+	if _, err := tc.Write(msg); err != nil {
 		return fmt.Errorf("registering with the forwarder: %w", err)
 	}
-	var a answer
-	if err := dec.Decode(&a); err != nil {
+	a, err := next()
+	if err != nil {
 		return fmt.Errorf("registering with the forwarder: %w", err)
 	}
 	if a.Error != "" {
@@ -335,8 +329,8 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 		if a.VLESS == nil {
 			return errors.New("registering with the forwarder: it gave no VLESS settings")
 		}
-		vl = &tunnel.VLESS{Transport: a.VLESS.Transport, Endpoint: netip.AddrPortFrom(cfg.Link.Endpoint.Addr(), a.VLESS.Port),
-			ServerName: a.VLESS.ServerName, Path: a.VLESS.Path, ID: cfg.VLESSID}
+		vl = &tunnel.VLESS{Transport: tunnel.TransportXHTTP, Endpoint: netip.AddrPortFrom(cfg.Link.Endpoint.Addr(), a.VLESS.Port),
+			ServerName: a.VLESS.Host, Path: a.VLESS.Path, ID: cfg.VLESSID}
 		if err := vl.Check(); err != nil {
 			return fmt.Errorf("registering with the forwarder: its VLESS settings: %w", err)
 		}
@@ -371,8 +365,8 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	failed := make(chan error, 1)
 	go func() {
 		for {
-			var a answer
-			if err := dec.Decode(&a); err != nil {
+			a, err := next()
+			if err != nil {
 				failed <- err
 				return
 			}
@@ -387,8 +381,8 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 	seen := netip.AddrPort{}
 	every := helloFirst
 	firstHello := time.Now()
-	t := time.NewTimer(0)
-	defer t.Stop()
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -400,7 +394,7 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 				seen, every = ep, helloEvery
 				report(Report{Registered: true, Seen: seen, VLESS: vl, OverVLESS: over != nil})
 			}
-		case <-t.C:
+		case <-timer.C:
 			// Over VLESS the hellos go in one flow of the local way, and
 			// a flow whose first request got no answer carries nothing
 			// for as long as packets keep coming: start the way afresh.
@@ -408,14 +402,14 @@ func registerOnce(ctx context.Context, cfg HubConfig, report func(Report)) error
 				return errors.New("the forwarder saw none of the hub's hellos over VLESS")
 			}
 			if creds != nil {
-				if now := cfg.Credentials(); len(now) > 0 && now[len(now)-1].ID() != creds[len(creds)-1].ID() {
+				if now := cfg.Credentials(); len(now) > 0 && !bytes.Equal(now[len(now)-1], creds[len(creds)-1]) {
 					return errNewCredential
 				}
 			}
 			counter = max(counter+1, uint64(time.Now().UnixNano()))
 			// A hello that cannot go out now goes with the next one.
 			_ = cfg.Send(helloTo, hello(&mask, &key, a.ID, counter))
-			t.Reset(every)
+			timer.Reset(every)
 		}
 	}
 }

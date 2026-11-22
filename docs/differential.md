@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Differential fuzzing
 
-For engineers and security reviewers: how CI checks that the four implementations (Go, the
-Rust core of `cbb`, the Swift kit and the Kotlin kit) read what comes from the network
+For engineers and security reviewers: how CI checks that the three implementations (Go, the
+Rust core of `cbb` and the Kotlin kit) read what comes from the network
 alike, and how a case they read differently becomes a test vector.
 
 The interop vectors ([testing](testing.md#interop-vectors)) fix the verdict on bodies chosen
@@ -27,8 +27,9 @@ the same record set of the same signed records in any order and subset.
   another order, some twice, one with its chain dropped or its signature or body changed.
 - Each implementation has a **verdict test** that reads a corpus and writes one line per
   case: Go's `TestVerdicts` in `internal/group` (and in `internal/release` for the release
-  files), the Rust core's `command::verdicts`, the Kotlin kit's `VerdictTest` and the Swift
-  kit's `VerdictTests`. Without a corpus each runs on a small one of its own, so the normal
+  files), the Rust core's `command::verdicts` and the Kotlin kit's `VerdictTest`. The
+  iPhone kit has no verdict test: it reads what comes from the network only through the
+  Rust core (D-126). Without a corpus each runs on a small one of its own, so the normal
   test runs keep it working.
 - `tools/difffuzz compare` reads the corpus and the verdicts and fails on any case the
   implementations read differently. It prints each such case (its body, also in base64,
@@ -40,9 +41,9 @@ the same record set of the same signed records in any order and subset.
 A verdict is one line:
 
 - `refused` when the implementation refuses the body;
-- `skip` when it does not read bodies of that kind: the kits read records (version 2) and
-  record sets only through the Rust core (docs/core-api.md), which the comparison reads as
-  the Rust core's;
+- `skip` when it does not read bodies of that kind: the kits read records (version 2),
+  record sets, and the Kotlin kit commands and server credentials too (D-126), only through
+  the Rust core (docs/core-api.md), which the comparison reads as the Rust core's;
 - `taken` and, for records, commands and server credentials, every field the body gives, as
   ` name=value` in a fixed order (`tools/difffuzz/main.go` lists them): strings as the hex of
   their UTF-8 bytes, integers in decimal, booleans as 0 or 1, bytes in hex, lists joined by
@@ -58,22 +59,33 @@ kits), so a reader that fails in another way also shows as a difference.
 
 - The `differential` job of `ci.yml` runs `.github/differential.sh` with seed 1, 20 000
   changed bodies and 500 record sets on every pull request that changes Go, `cbb`,
-  the kits or the tools. The Swift kit runs in the Swift container, as the phone kit job runs
-  it on Linux.
+  the kits or the tools.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
-  (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
-  (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
+  (`internal/group`), `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
+  registration and the forwarder's answers of `cbb-forward/3`, seeded from
+  `testdata/format/messages3.json`), `FuzzCredential` (`internal/blind`, the forwarder's
+  reader of the format's profile, frames and credentials, seeded from
+  `testdata/format/credentials.json` and `frames.json`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
-  `release`, `wire`, `vless`, and `api`, the core's entry point of [core-api.md](core-api.md)),
-  seeded by `go run ./tools/difffuzz seeds`. `api` starts from requests for every operation,
+  `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
+  which no bytes may pass), `sheet` (the recovery sheet's text and QR code, each one taken
+  written again and read back the same), `yubikey_object` (the hardware key's object, which
+  nothing unsealed opens), `welcome_parts` (the Welcome's assembly from its parts in either
+  order, repeated or cut, finished only after the parts it announced), `welcome_fields`
+  (message 67's Welcome with fields of a later version, written again in one form) and `api`,
+  the core's entry point of [core-api.md](core-api.md)), seeded by
+  `go run ./tools/difffuzz seeds` (the 0.6 targets from the vectors of `testdata/format`). `api` starts from requests for every operation,
   each case of `v2-records.json` among them, and checks that any bytes get one answer of the
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
   answer. `vless` reads the forwarder's VLESS and XHTTP answers in pieces of every size and
   checks that the packets do not depend on how the bytes came. The service's targets in
   `member/fuzz` read the control socket's messages, which cbb-helper's channel uses too
   (`control`: each read message written again reads back the same), and the ZX Spectrum
-  Next's frames on the Pi's UART with its character set (`next_frames`).
+  Next's frames on the Pi's UART with its character set (`next_frames`), and the relay's
+  messages of `cbb-relay/3` as both ends read them (`relay_wire`: a registration or a note
+  written again reads back the same, on the format's grid), which took the place of Go's
+  `FuzzRelayWire` with the Go relay client.
 
 Manifests are read by the rules of signed bodies in their canonical form ([roadmap](roadmap.md),
 item 42), so they fail the run as the other kinds do; `compare -report-only KIND` still prints
@@ -83,7 +95,7 @@ A failed run uploads the cases it found (`failures.jsonl`, or the fuzzer's input
 
 ## Running it yourself
 
-From the repository root, with Go, Rust, JDK 17 and Docker (for the Swift container):
+From the repository root, with Go, Rust and JDK 17:
 
 ```sh
 sh .github/differential.sh 1 20000 500 /tmp/differential

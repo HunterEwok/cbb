@@ -323,6 +323,144 @@
         }
       }
     },
+    "A change of the group's main device is on its way.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيير الجهاز الرئيسي للمجموعة في الطريق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Está en camino un cambio del dispositivo principal del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "החלפה של המכשיר הראשי של הקבוצה בדרך."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के मुख्य डिवाइस का बदलाव आ रहा है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Смена главного устройства группы уже в пути."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mabadiliko ya kifaa kikuu cha kikundi yako njiani."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组主设备的更换正在传来。"
+          }
+        }
+      }
+    },
+    "A copy waits until this device learns which device sent it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنتظر نسخة حتى يعرف هذا الجهاز أيّ جهاز أرسلها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una copia espera hasta que este dispositivo sepa qué dispositivo la envió."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "עותק ממתין עד שהמכשיר הזה יידע איזה מכשיר שלח אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक कॉपी तब तक प्रतीक्षा करती है जब तक यह डिवाइस न जान ले कि उसे किस डिवाइस ने भेजा।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копия ждёт, пока это устройство узнает, какое устройство её отправило."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nakala inasubiri hadi kifaa hiki kijue ni kifaa gani kiliituma."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一份副本在等待，直到此设备得知是哪台设备发送的。"
+          }
+        }
+      }
+    },
+    "A device did not pair: %@": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يقترن جهاز: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo no se emparejó: %@"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר לא צומד: %@"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक डिवाइस पेयर नहीं हुआ: %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство не сопряглось: %@"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kimoja hakikuoanishwa: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有设备未能配对：%@"
+          }
+        }
+      }
+    },
     "A hub needs sync away from home, which is off on this Mac, so this turns it on first. Your devices then reach the group through this Mac when they are away from home, through the project's forwarder at cbb.tools.": {
       "localizations": {
         "ar": {
@@ -1975,6 +2113,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "装饰艺术"
+          }
+        }
+      }
+    },
+    "Ask the group's owner to let it have secrets.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اطلب من مالك المجموعة أن يسمح له بتلقي الأسرار."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pide al propietario del grupo que le permita recibir secretos."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בקשו מבעל הקבוצה לאפשר לו לקבל סודות."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के मालिक से कहें कि वह इसे सीक्रेट पाने दे।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Попросите владельца группы разрешить ему получать секреты."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mwombe mmiliki wa kikundi akiruhusu kupokea siri."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请群组的所有者允许它接收机密内容。"
           }
         }
       }
@@ -5015,52 +5199,6 @@
         }
       }
     },
-    "If the phone cannot connect, the firewall must let it reach TCP port %lld here.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إذا لم يتمكن الهاتف من الاتصال، فيجب أن يسمح له جدار الحماية بالوصول إلى منفذ TCP %lld هنا."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si el teléfono no puede conectarse, el cortafuegos debe dejarle llegar al puerto TCP %lld aquí."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "אם הטלפון לא מצליח להתחבר, חומת האש חייבת לאפשר לו להגיע לפורט TCP %lld כאן."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "अगर फ़ोन कनेक्ट नहीं हो पाता, तो फ़ायरवॉल को उसे यहाँ TCP पोर्ट %lld तक पहुँचने देना होगा।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Если телефон не может подключиться, брандмауэр должен пропускать его к TCP-порту %lld на этом Mac."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ikiwa simu haiwezi kuunganisha, ngome lazima iiruhusu kufikia lango la TCP %lld hapa."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "如果手机无法连接，防火墙必须允许它访问这里的 TCP 端口 %lld。"
-          }
-        }
-      }
-    },
     "If this device was not lost, remove %@ from the group.": {
       "localizations": {
         "ar": {
@@ -5843,6 +5981,52 @@
         }
       }
     },
+    "Join": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضمام"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הצטרפות"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जुड़ें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вступить"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jiunge"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入"
+          }
+        }
+      }
+    },
     "Join a group": {
       "localizations": {
         "ar": {
@@ -5977,6 +6161,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加入群组。"
+          }
+        }
+      }
+    },
+    "Keep this device on near the group's other devices until it arrives.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أبقِ هذا الجهاز قيد التشغيل قرب أجهزة المجموعة الأخرى حتى يصل التغيير."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén este dispositivo encendido cerca de los demás dispositivos del grupo hasta que llegue."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השאירו את המכשיר הזה דלוק ליד שאר מכשירי הקבוצה עד שההחלפה תגיע."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बदलाव आने तक इस डिवाइस को समूह के दूसरे डिवाइसों के पास चालू रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Держите это устройство включённым рядом с другими устройствами группы, пока смена не придёт."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weka kifaa hiki kikiwa kimewashwa karibu na vifaa vingine vya kikundi hadi mabadiliko yafike."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在更换到达前，让此设备保持开启并靠近群组的其他设备。"
           }
         }
       }
@@ -6809,6 +7039,52 @@
         }
       }
     },
+    "Make a new group and join your devices to it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ مجموعة جديدة وضمّ أجهزتك إليها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un grupo nuevo y une tus dispositivos a él."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "צרו קבוצה חדשה וצרפו אליה את המכשירים שלכם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नया समूह बनाएँ और अपने डिवाइस उसमें जोड़ें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создайте новую группу и подключите к ней свои устройства."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unda kikundi kipya na uunganishe vifaa vyako kwacho."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建一个群组，并把你的设备加入其中。"
+          }
+        }
+      }
+    },
     "Make it a hub": {
       "localizations": {
         "ar": {
@@ -7127,6 +7403,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "后移"
+          }
+        }
+      }
+    },
+    "Move the group to a new main device with the group's recovery key.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقل المجموعة إلى جهاز رئيسي جديد بمفتاح استرداد المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mueve el grupo a un nuevo dispositivo principal con la clave de recuperación del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העבירו את הקבוצה למכשיר ראשי חדש בעזרת מפתח השחזור של הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी कुंजी से समूह को नए मुख्य डिवाइस पर ले जाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенесите группу на новое главное устройство с помощью ключа восстановления группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hamisha kikundi kwenda kifaa kikuu kipya kwa ufunguo wa kurejesha wa kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用群组的恢复密钥把群组移到新的主设备。"
           }
         }
       }
@@ -7775,52 +8097,6 @@
         }
       }
     },
-    "No QR code was found in the picture.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يُعثر على رمز QR في الصورة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se encontró ningún código QR en la imagen."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "לא נמצא קוד QR בתמונה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "चित्र में कोई QR कोड नहीं मिला।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На снимке не найден QR-код."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hakuna msimbo wa QR uliopatikana kwenye picha."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "图片中未找到二维码。"
-          }
-        }
-      }
-    },
     "No device of the group is on this network.": {
       "localizations": {
         "ar": {
@@ -8281,6 +8557,52 @@
         }
       }
     },
+    "On a device of the group, open a pairing window: tap + there. Then type the six digits it shows.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على جهاز من المجموعة، افتح نافذة الاقتران: اضغط + هناك. ثم اكتب الأرقام الستة التي تعرضها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En un dispositivo del grupo, abra una ventana de emparejamiento: toque + allí. Luego escriba los seis dígitos que muestra."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "במכשיר של הקבוצה, פתח חלון צימוד: הקש שם על +. ואז הקלד את שש הספרות שהוא מציג."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें: वहाँ + पर टैप करें। फिर वह जो छह अंक दिखाती है उन्हें टाइप करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На устройстве группы откройте окно сопряжения: нажмите там «+». Затем введите шесть цифр, которые оно показывает."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye kifaa cha kikundi, fungua dirisha la kuoanisha: gusa + huko. Kisha andika tarakimu sita zinazoonyeshwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在群组中的某台设备上打开配对窗口：在那里点按 +。然后输入它显示的六位数字。"
+          }
+        }
+      }
+    },
     "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": {
       "localizations": {
         "ar": {
@@ -8323,52 +8645,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只向要加入的人出示或发送它。"
-          }
-        }
-      }
-    },
-    "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على هاتف من المجموعة، اضغط + وامسح هذا الرمز. على حاسوب من المجموعة، اضغط + واكتب الأرقام. أبقِ هذه النافذة مفتوحة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta ventana abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בטלפון של הקבוצה, הקישו על + וסרקו את הקוד הזה. במחשב של הקבוצה, הקישו על + והקלידו את המספרים. השאירו את החלון הזה פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह विंडो खुली रखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте это окно."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha dirisha hili wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在群组的手机上，点按 + 并扫描此代码。在群组的电脑上，点按 + 并输入这些数字。请保持此窗口打开。"
           }
         }
       }
@@ -8419,6 +8695,98 @@
         }
       }
     },
+    "On the group's main device, decide in its alerts.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الجهاز الرئيسي للمجموعة، قرّر من تنبيهاته."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el dispositivo principal del grupo, decide en sus avisos."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "במכשיר הראשי של הקבוצה, החליטו בהתראות שלו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के मुख्य डिवाइस पर, उसकी सूचनाओं में निर्णय लें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На главном устройстве группы примите решение в его оповещениях."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye kifaa kikuu cha kikundi, amua katika arifa zake."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在群组的主设备上，于其提醒中作出决定。"
+          }
+        }
+      }
+    },
+    "On the new computer, choose Join a group and type these six digits. A new phone scans this code.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الحاسوب الجديد، اختر «الانضمام إلى مجموعة» واكتب هذه الأرقام الستة. الهاتف الجديد يمسح هذا الرمز."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el ordenador nuevo, elija Unirse a un grupo y escriba estos seis dígitos. Un teléfono nuevo escanea este código."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "במחשב החדש, בחר \"הצטרף לקבוצה\" והקלד את שש הספרות האלה. טלפון חדש סורק את הקוד הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए कंप्यूटर पर \"समूह से जुड़ें\" चुनें और ये छह अंक टाइप करें। नया फ़ोन यह कोड स्कैन करता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На новом компьютере выберите «Войти в группу» и введите эти шесть цифр. Новый телефон сканирует этот код."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye kompyuta mpya, chagua Jiunge na kikundi na uandike tarakimu hizi sita. Simu mpya huchanganua msimbo huu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新电脑上选择“加入群组”，然后输入这六位数字。新手机扫描此代码。"
+          }
+        }
+      }
+    },
     "On the new computer, run:": {
       "localizations": {
         "ar": {
@@ -8461,52 +8829,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在新电脑上运行："
-          }
-        }
-      }
-    },
-    "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الجهاز الجديد، اختر الانضمام إلى مجموعة: يعرض رمز QR وستة أرقام. يمسح هاتف من المجموعة الرمز؛ وهنا، اكتب الأرقام."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En el dispositivo nuevo, elige Unirse a un grupo: muestra un código QR y seis dígitos. Un teléfono del grupo escanea el código; aquí, escribe los dígitos."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "במכשיר החדש, בחרו ״הצטרפות לקבוצה״: הוא מציג קוד QR ושש ספרות. טלפון של הקבוצה סורק את הקוד; כאן, הקלידו את הספרות."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "नए डिवाइस पर समूह से जुड़ें चुनें: वह एक QR कोड और छह अंक दिखाता है। समूह का कोई फ़ोन कोड स्कैन करता है; यहाँ अंक लिखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На новом устройстве выберите «Войти в группу»: оно покажет QR-код и шесть цифр. Телефон группы сканирует код; здесь введите цифры."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye kifaa kipya, chagua Jiunge na kikundi: kinaonyesha msimbo wa QR na tarakimu sita. Simu ya kikundi huchanganua msimbo; hapa, andika tarakimu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在新设备上选择“加入群组”：它会显示一个二维码和六位数字。群组的手机扫描该代码；在这里输入这些数字。"
           }
         }
       }
@@ -8829,52 +9151,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开图片"
-          }
-        }
-      }
-    },
-    "Open a picture of its QR code": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "فتح صورة لرمز QR الخاص به"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abrir una imagen de su código QR"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "פתיחת תמונה של קוד ה-QR שלו"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "उसके QR कोड का चित्र खोलें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Открыть картинку с его QR-кодом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fungua picha ya msimbo wake wa QR"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开它的二维码图片"
           }
         }
       }
@@ -12973,6 +13249,52 @@
         }
       }
     },
+    "The group sends no secrets to this device.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا ترسل المجموعة أسرارًا إلى هذا الجهاز."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo no envía secretos a este dispositivo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקבוצה לא שולחת סודות למכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह इस डिवाइस को सीक्रेट नहीं भेजता।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа не пересылает этому устройству секреты."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi hakitumi siri kwa kifaa hiki."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组不会向此设备发送机密内容。"
+          }
+        }
+      }
+    },
     "The group sends no secrets until its owner decides.": {
       "localizations": {
         "ar": {
@@ -13015,6 +13337,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "在所有者做出决定之前，群组不会发送任何秘密。"
+          }
+        }
+      }
+    },
+    "The group sends nothing to this device.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا ترسل المجموعة أي شيء إلى هذا الجهاز."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo no envía nada a este dispositivo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקבוצה לא שולחת דבר למכשיר הזה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह इस डिवाइस को कुछ नहीं भेजता।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группа ничего не пересылает этому устройству."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi hakitumi chochote kwa kifaa hiki."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组不会向此设备发送任何内容。"
           }
         }
       }
@@ -13199,6 +13567,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的记录已停止交换。"
+          }
+        }
+      }
+    },
+    "The group's recovery key was used twice, so the group stopped for good.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استُخدم مفتاح استرداد المجموعة مرتين، لذا توقفت المجموعة نهائيًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave de recuperación del grupo se usó dos veces, así que el grupo se detuvo para siempre."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מפתח השחזור של הקבוצה שימש פעמיים, ולכן הקבוצה נעצרה לצמיתות."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी कुंजी दो बार इस्तेमाल हुई, इसलिए समूह हमेशा के लिए रुक गया।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ восстановления группы использовали дважды, поэтому группа остановилась навсегда."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufunguo wa kurejesha wa kikundi ulitumika mara mbili, kwa hivyo kikundi kimesimama kabisa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群组的恢复密钥被使用了两次，因此群组已永久停止。"
           }
         }
       }
@@ -13571,6 +13985,98 @@
         }
       }
     },
+    "The main device's key signed two different histories, so the group stopped.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وقّع مفتاح الجهاز الرئيسي سجلّين مختلفين، لذا توقفت المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La clave del dispositivo principal firmó dos historiales distintos, así que el grupo se detuvo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המפתח של המכשיר הראשי חתם על שתי היסטוריות שונות, ולכן הקבוצה נעצרה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य डिवाइस की कुंजी ने दो अलग-अलग इतिहासों पर हस्ताक्षर किए, इसलिए समूह रुक गया।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ главного устройства подписал две разные истории, поэтому группа остановилась."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ufunguo wa kifaa kikuu ulitia sahihi historia mbili tofauti, kwa hivyo kikundi kimesimama."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主设备的密钥签署了两份不同的历史，因此群组已停止。"
+          }
+        }
+      }
+    },
+    "The main device's records wait for records no device has passed on.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سجلات الجهاز الرئيسي تنتظر سجلات لم يمرّرها أي جهاز بعد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los registros del dispositivo principal esperan registros que ningún dispositivo ha transmitido."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרשומות של המכשיר הראשי ממתינות לרשומות שאף מכשיר עוד לא העביר."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य डिवाइस के रिकॉर्ड ऐसे रिकॉर्ड की प्रतीक्षा कर रहे हैं जिन्हें किसी डिवाइस ने आगे नहीं भेजा।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Записи главного устройства ждут записей, которые ещё ни одно устройство не передало."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekodi za kifaa kikuu zinasubiri rekodi ambazo hakuna kifaa kimezipitisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主设备的记录在等待尚无设备转发的记录。"
+          }
+        }
+      }
+    },
     "The new language shows once CBB opens again.": {
       "localizations": {
         "ar": {
@@ -13801,48 +14307,48 @@
         }
       }
     },
-    "The six digits the new device shows": {
+    "The six digits": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الأرقام الستة التي يعرضها الجهاز الجديد"
+            "value": "الأرقام الستة"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los seis dígitos que muestra el dispositivo nuevo"
+            "value": "Los seis dígitos"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שש הספרות שהמכשיר החדש מציג"
+            "value": "שש הספרות"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "नए डिवाइस पर दिखने वाले छह अंक"
+            "value": "छह अंक"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Шесть цифр, которые показывает новое устройство"
+            "value": "Шесть цифр"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tarakimu sita zinazoonyeshwa na kifaa kipya"
+            "value": "Tarakimu sita"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "新设备显示的六位数字"
+            "value": "六位数字"
           }
         }
       }
@@ -14399,52 +14905,6 @@
         }
       }
     },
-    "This QR code is not of a device that waits to join.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رمز QR هذا ليس لجهاز ينتظر الانضمام."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este código QR no es de un dispositivo que espera unirse."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "קוד ה-QR הזה אינו של מכשיר שממתין להצטרף."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "यह QR कोड जुड़ने का इंतज़ार कर रहे किसी डिवाइस का नहीं है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это QR-код не устройства, которое ждёт входа в группу."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Msimbo huu wa QR si wa kifaa kinachosubiri kujiunga."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此二维码不属于等待加入的设备。"
-          }
-        }
-      }
-    },
     "This computer has not met its group on this network.": {
       "localizations": {
         "ar": {
@@ -14487,6 +14947,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台电脑尚未在此网络中遇到它的群组。"
+          }
+        }
+      }
+    },
+    "This device and the group disagree about which device is the main one.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يختلف هذا الجهاز والمجموعة حول أيّ جهاز هو الرئيسي."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este dispositivo y el grupo no coinciden sobre cuál es el dispositivo principal."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הזה והקבוצה חלוקים לגבי איזה מכשיר הוא הראשי."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस और समूह इस पर असहमत हैं कि मुख्य डिवाइस कौन-सा है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это устройство и группа расходятся в том, какое устройство главное."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa hiki na kikundi hawakubaliani kuhusu kifaa kipi ni kikuu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备与群组对哪台设备是主设备意见不一。"
           }
         }
       }
@@ -15365,6 +15871,52 @@
         }
       }
     },
+    "Turn on the group's other devices.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شغّل أجهزة المجموعة الأخرى."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enciende los demás dispositivos del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הדליקו את שאר מכשירי הקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के दूसरे डिवाइस चालू करें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включите другие устройства группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Washa vifaa vingine vya kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开群组的其他设备。"
+          }
+        }
+      }
+    },
     "Turn sync away from home on?": {
       "localizations": {
         "ar": {
@@ -15499,6 +16051,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开同步。"
+          }
+        }
+      }
+    },
+    "Two admins disagree about a device: the group waits for its main device.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يختلف مشرفان بشأن جهاز: المجموعة تنتظر جهازها الرئيسي."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos administradores no coinciden sobre un dispositivo: el grupo espera a su dispositivo principal."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "שני מנהלים חלוקים לגבי מכשיר: הקבוצה ממתינה למכשיר הראשי שלה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "दो एडमिन एक डिवाइस को लेकर असहमत हैं: समूह अपने मुख्य डिवाइस की प्रतीक्षा कर रहा है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Два админа расходятся во мнении об устройстве: группа ждёт решения главного устройства."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wasimamizi wawili hawakubaliani kuhusu kifaa: kikundi kinasubiri kifaa chake kikuu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两位管理员对一台设备意见不一：群组在等待其主设备决定。"
           }
         }
       }
@@ -15641,48 +16239,48 @@
         }
       }
     },
-    "Type the six digits the new device shows.": {
+    "Type the six digits the pairing window shows.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب الأرقام الستة التي يعرضها الجهاز الجديد."
+            "value": "اكتب الأرقام الستة التي تعرضها نافذة الاقتران."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribe los seis dígitos que muestra el dispositivo nuevo."
+            "value": "Escriba los seis dígitos que muestra la ventana de emparejamiento."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקלידו את שש הספרות שהמכשיר החדש מציג."
+            "value": "הקלד את שש הספרות שחלון הצימוד מציג."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "नए डिवाइस पर दिखने वाले छह अंक लिखें।"
+            "value": "पेयरिंग विंडो जो छह अंक दिखाती है उन्हें टाइप करें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Введите шесть цифр, которые показывает новое устройство."
+            "value": "Введите шесть цифр, которые показывает окно сопряжения."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Andika tarakimu sita zinazoonyeshwa na kifaa kipya."
+            "value": "Andika tarakimu sita zinazoonyeshwa na dirisha la kuoanisha."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入新设备显示的六位数字。"
+            "value": "请输入配对窗口显示的六位数字。"
           }
         }
       }
@@ -16511,52 +17109,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "为什么不同步"
-          }
-        }
-      }
-    },
-    "Without a camera": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "دون كاميرا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sin cámara"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בלי מצלמה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "बिना कैमरे के"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Без камеры"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bila kamera"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有相机"
           }
         }
       }

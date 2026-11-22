@@ -37,6 +37,9 @@ const PIN_REF: u8 = 0x80;
 /// most a few kilobytes.
 const MAX_ANSWER: usize = 16 << 10;
 
+pub mod ccid;
+pub mod recovery;
+
 pub const NO_CARD: &str = "no YubiKey found: plug it in, or hold it to the reader";
 pub const TWO_CARDS: &str = "two YubiKeys hold the recovery key: leave only one plugged in";
 pub const NO_KEY: &str = "this YubiKey holds no recovery key of the group: the root phone puts it in a retired PIV slot with its certificate, and a newer recovery key replaces the older one";
@@ -94,6 +97,15 @@ fn command(c: &mut dyn Card, ins: u8, p1: u8, p2: u8, mut data: &[u8]) -> Result
     }
     apdu.push(0);
     transmit(c, &apdu)
+}
+
+/// Yubico's factory management key, which every YubiKey leaves the factory
+/// with: the bytes 1 to 8, three times. It is public, printed in Yubico's
+/// documentation, and no secret; cbb uses it only to find out whether a
+/// card still has it (`piv::recovery`). Computed here, once for all of
+/// cbb's Rust, rather than written out.
+pub fn factory_management_key() -> [u8; 24] {
+    core::array::from_fn(|i| (i % 8) as u8 + 1)
 }
 
 /// Selects the PIV application.
@@ -177,10 +189,9 @@ pub fn sign(c: &mut dyn Card, slot: u8, public: &[u8], digest: &[u8; 32]) -> Res
     Ok(sig.to_vec())
 }
 
-/// The management key's slot and the key a YubiKey has from the factory:
-/// 3DES before firmware 5.7, AES-192 from it.
+/// The management key's slot.
 const MANAGEMENT_SLOT: u8 = 0x9b;
-pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+
 /// The recovery key's policies: the PIN and a touch before each signature.
 const PIN_ALWAYS: u8 = 0x03;
 const TOUCH_ALWAYS: u8 = 0x02;
@@ -215,7 +226,8 @@ fn is_free(c: &mut dyn Card, slot: u8) -> Result<bool> {
     if certificate_der(c, slot)?.is_some() {
         return Ok(false);
     }
-    Ok(matches!(command(c, 0xf7, 0x00, slot, &[])?.1, 0x6a82 | 0x6d00 | 0x6a81))
+    // YubiKey firmware 5.x answers 6A88 for an empty slot's metadata.
+    Ok(matches!(command(c, 0xf7, 0x00, slot, &[])?.1, 0x6a82 | 0x6a88 | 0x6d00 | 0x6a81))
 }
 
 /// The first free retired slot.
@@ -422,6 +434,28 @@ pub fn sign_with_card(key_hash: &[u8; 32], pin: &str, public: &[u8], digest: &[u
     }
     verify(k.card.as_mut(), pin)?;
     sign(k.card.as_mut(), k.slot, public, digest)
+}
+
+/// The one card of cards that answers SELECT PIV, for a step on a card that
+/// need not hold a key of cbb yet (`inspect`, `seal`): none, or two, is
+/// refused before anything is asked of either.
+pub fn one_piv(cards: Vec<Box<dyn Card>>) -> Result<Box<dyn Card>> {
+    let mut found = Vec::new();
+    for mut c in cards {
+        if select(c.as_mut()).is_ok() {
+            found.push(c);
+        }
+    }
+    match found.len() {
+        0 => Err(Error::msg(NO_CARD)),
+        1 => Ok(found.pop().expect("one card")),
+        _ => Err(Error::msg(TWO_CARDS)),
+    }
+}
+
+/// `one_piv` among the cards PC/SC finds.
+pub fn one_piv_card() -> Result<Box<dyn Card>> {
+    one_piv(cards()?)
 }
 
 /// Every card in the readers PC/SC lists, connected.
@@ -921,7 +955,7 @@ pub(crate) mod tests {
     /// A card whose slot 84 holds a key and its certificate; 82 holds a key
     /// of something else.
     pub fn new_card(n: u8) -> Shared {
-        let mut f = Fake { tries: 3, management: (0x0b, DEFAULT_MANAGEMENT_KEY.to_vec()), ..Fake::default() };
+        let mut f = Fake { tries: 3, management: (0x0b, factory_management_key().to_vec()), ..Fake::default() };
         let k = key(n);
         let c = cert(&k);
         f.slots.insert(0x84, (k, Some(c)));
@@ -1009,6 +1043,29 @@ pub(crate) mod tests {
         assert!(certificate(&mut c, 0x9c).is_err(), "a slot that is not retired");
     }
 
+    #[test]
+    fn one_piv_takes_the_only_card_with_piv() {
+        struct NoPiv;
+        impl Card for NoPiv {
+            fn transmit(&mut self, _: &[u8]) -> Result<Vec<u8>> {
+                Ok(vec![0x6a, 0x82])
+            }
+        }
+        let a = new_card(21);
+        let mut got = one_piv(vec![Box::new(NoPiv), Box::new(a.clone())]).unwrap();
+        select(got.as_mut()).unwrap();
+        assert_eq!(one_piv(vec![Box::new(new_card(22)), Box::new(new_card(23))]).err().unwrap().message(), TWO_CARDS);
+        assert_eq!(one_piv(vec![Box::new(NoPiv)]).err().unwrap().message(), NO_CARD);
+        assert_eq!(one_piv(Vec::new()).err().unwrap().message(), NO_CARD);
+    }
+
+    /// The factory key is Yubico's published one.
+    #[test]
+    fn factory_management_key_is_yubicos() {
+        let hex: String = factory_management_key().iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, "010203040506070801020304050607080102030405060708");
+    }
+
     /// The root phone's steps: the PIN, the management key, a free slot, a
     /// new key there and its admin CA as the slot's certificate, which a new
     /// phone then finds and signs with.
@@ -1018,8 +1075,11 @@ pub(crate) mod tests {
         select(&mut card).unwrap();
         verify(&mut card, "123456").unwrap();
         assert_eq!(generate(&mut card, 0x83).unwrap_err().message(), "the YubiKey wants its management key first");
-        assert_eq!(authenticate(&mut card, &[0; 24]).unwrap_err().message(), MANAGEMENT_KEY);
-        authenticate(&mut card, &DEFAULT_MANAGEMENT_KEY).unwrap();
+        // The factory key with its last byte changed is refused.
+        let mut wrong = factory_management_key();
+        wrong[23] ^= 1;
+        assert_eq!(authenticate(&mut card, &wrong).unwrap_err().message(), MANAGEMENT_KEY);
+        authenticate(&mut card, &factory_management_key()).unwrap();
         let slot = free_slot(&mut card).unwrap();
         assert_eq!(slot, 0x83, "82 and 84 are taken");
         let point = generate(&mut card, slot).unwrap();
@@ -1055,7 +1115,7 @@ pub(crate) mod tests {
             let mut old = new_card(15);
             old.0.lock().unwrap().management.0 = alg;
             select(&mut old).unwrap();
-            assert_eq!(authenticate(&mut old, &DEFAULT_MANAGEMENT_KEY).unwrap_err().message(), OLD_FIRMWARE);
+            assert_eq!(authenticate(&mut old, &factory_management_key()).unwrap_err().message(), OLD_FIRMWARE);
         }
         // Every slot taken.
         let mut full = new_card(16);

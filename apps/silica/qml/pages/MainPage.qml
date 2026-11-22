@@ -134,8 +134,18 @@ Page {
         color: Theme.rgba(Theme.primaryColor, 0.2)
     }
 
-    // Aurora lets an app read the clipboard only in the foreground: what the
-    // user copied goes to the group when the app comes to the front.
+    // A group just made: its recovery sheet, shown once (RecoveryPage).
+    Connections {
+        target: app
+        onGroupMade: {
+            pageStack.completeAnimation()
+            pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
+        }
+    }
+
+    // Aurora lets an app read the clipboard only in the foreground: as the
+    // app comes to the front, what the user copied goes to the group, or the
+    // group's copy comes in (D-128).
     Connections {
         target: Qt.application
         onStateChanged: if (Qt.application.state === Qt.ApplicationActive) sendSoon.restart()
@@ -143,7 +153,7 @@ Page {
     Timer {
         id: sendSoon
         interval: 300
-        onTriggered: app.member.sendClipboard()
+        onTriggered: app.member.opened()
     }
 
     SilicaFlickable {
@@ -193,8 +203,8 @@ Page {
             }
             MenuItem {
                 visible: app.admin && app.member.running
-                text: qsTr("Scan a code")
-                onClicked: pageStack.push(Qt.resolvedUrl("AddDevicePage.qml"))
+                text: qsTr("Add a device")
+                onClicked: pageStack.push(Qt.resolvedUrl("WindowPage.qml"))
             }
         }
 
@@ -214,7 +224,7 @@ Page {
             // join one; the settings and the language are in the pull-down
             // menu, as in every Silica app.
             Column {
-                visible: app.group === ""
+                visible: app.group === "" && !app.before06
                 width: parent.width
                 spacing: Theme.paddingLarge
 
@@ -245,7 +255,7 @@ Page {
                     anchors.horizontalCenter: parent.horizontalCenter
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join a group")
-                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"))
+                    onClicked: pageStack.push(Qt.resolvedUrl("JoinWindowPage.qml"))
                 }
                 Button {
                     visible: app.keyLevel !== "none"
@@ -253,14 +263,6 @@ Page {
                     preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join with an invitation")
                     onClicked: pageStack.push(Qt.resolvedUrl("InvitationPage.qml"))
-                }
-                Button {
-                    visible: app.keyLevel !== "none"
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    preferredWidth: Theme.buttonWidthLarge
-                    text: qsTr("Restore with a recovery sheet")
-                    enabled: !app.busy
-                    onClicked: pageStack.push(Qt.resolvedUrl("RestorePage.qml"))
                 }
                 Label {
                     visible: app.keyLevel === "none" && !app.busy
@@ -270,6 +272,41 @@ Page {
                     text: qsTr("The phone has no key yet. Pull down to check it again.")
                     wrapMode: Text.Wrap
                     color: Theme.highlightColor
+                }
+            }
+
+            // A group made before 0.6, which this version no longer runs
+            // (D-126): a new group is needed, and Leave alone deletes its
+            // files.
+            Column {
+                visible: app.before06
+                width: parent.width
+                spacing: Theme.paddingLarge
+
+                RemorsePopup { id: leaving }
+
+                Item { width: 1; height: Theme.itemSizeLarge }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    text: qsTr("A group from before 0.6")
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeLarge
+                    color: Theme.highlightColor
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    text: qsTr("This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.")
+                    wrapMode: Text.Wrap
+                    color: Theme.secondaryHighlightColor
+                }
+                Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    preferredWidth: Theme.buttonWidthLarge
+                    text: qsTr("Leave the group")
+                    enabled: !app.busy
+                    onClicked: leaving.execute(qsTr("Leaving the group"), function() { app.leave() })
                 }
             }
 
@@ -369,7 +406,7 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
             }
 
-            AlertsCard {}
+            GroupNotices {}
 
             // "Lost phone?" on the group's only admin: how a second phone
             // becomes one. Closed once, it stays closed.
@@ -424,6 +461,46 @@ Page {
                 running: app.busy
                 visible: running
                 size: BusyIndicatorSize.Medium
+            }
+
+            // The last copy that came from another device, with Copy (D-128).
+            Item {
+                visible: app.member.lastFrom !== ""
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                height: visible ? Math.max(received.height, copyReceived.height) : 0
+
+                Column {
+                    id: received
+                    anchors.left: parent.left
+                    anchors.right: copyReceived.left
+                    anchors.rightMargin: Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Label {
+                        width: parent.width
+                        text: qsTr("Last received from %1").arg(app.member.lastFrom)
+                        color: Theme.secondaryColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        truncationMode: TruncationMode.Fade
+                    }
+                    Label {
+                        visible: app.member.lastText !== ""
+                        width: parent.width
+                        text: app.member.lastText
+                        maximumLineCount: 2
+                        wrapMode: Text.Wrap
+                        elide: Text.ElideRight
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+                }
+                Button {
+                    id: copyReceived
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Copy")
+                    onClicked: app.member.copyReceived()
+                }
             }
 
             Label {

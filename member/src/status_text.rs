@@ -58,8 +58,7 @@ pub fn write_status(st: &Status, devs: &[Device], now_ms: i64, limit: &str) -> S
     // The first reason the screen in the apps shows, unless a line above
     // already says it.
     if let Some(r) = st.why.first().filter(|r| {
-        r.level == cbb_core::why::Level::Stop
-            && !matches!(r.code.as_str(), "removed" | "frozen" | "taken_over" | "sync_off")
+        r.level == cbb_core::why::Level::Stop && !matches!(r.code.as_str(), "removed" | "frozen" | "sync_off")
     }) {
         let _ = writeln!(w, "{}", tr!("Why it does not sync: {}", why_line(r)));
     }
@@ -99,26 +98,50 @@ pub fn why_line(r: &cbb_core::why::Reason) -> String {
             tr!("This device was removed from the group."),
             tr!("Leave the group on this device, then join again.")
         ),
-        "taken_over" => format!(
-            "{} {}",
-            tr!("{} took the group over from this device.", r.device),
-            tr!("If this device was not lost, remove {} from the group.", r.device)
-        ),
         "frozen" => format!(
             "{} {}",
             tr!("Another admin froze this device's admin key."),
             tr!("Ask the group's root to unfreeze it.")
         ),
-        "cert_expired" => format!(
+        "recovery_fork" => format!(
             "{} {}",
-            tr!("This device's certificate ended on {}.", crate::cli::local_minute(r.until_ms)),
-            tr!("Bring it home to an admin of the group: the admin renews the certificate.")
+            tr!("The group's recovery key signed two different owners: the group has stopped for good."),
+            tr!("Start a new group and pair the devices again.")
         ),
-        "cert_ending" => format!(
+        "root_two_histories" => format!(
             "{} {}",
-            tr!("This device's certificate ends on {}.", crate::cli::local_minute(r.until_ms)),
-            tr!("Connect it at home to an admin of the group before then.")
+            tr!("The group's root signed two different histories: the group stops."),
+            tr!("The group's root decides on its alerts.")
         ),
+        "admins_conflict" => format!(
+            "{} {}",
+            tr!("Two admins of the group disagree: the group stops."),
+            tr!("The group's root decides on its alerts.")
+        ),
+        "owner_disagrees" => format!(
+            "{} {}",
+            tr!("These devices count another owner of the group: {}.", r.devices.join(", ")),
+            tr!("The group's root decides on its alerts.")
+        ),
+        "nothing_here" => format!(
+            "{} {}",
+            tr!("The group's records give this device nothing."),
+            tr!("Ask the group's root about this device.")
+        ),
+        "no_secrets_here" => format!(
+            "{} {}",
+            tr!("The group seals no secrets to this device."),
+            tr!("Ask the group's root about this device.")
+        ),
+        "change_arriving" => {
+            tr!("A change of the group's root is arriving: CBB asks the other devices for it.").to_string()
+        }
+        "checkpoint_stuck" => format!(
+            "{} {}",
+            tr!("The group's records wait for records no device has offered."),
+            tr!("Connect the group's root, which has them.")
+        ),
+        "copy_waits" => tr!("Copies wait for their senders' records: {}.", r.devices.join(", ")).to_string(),
         "stopped" => format!(
             "{} {}",
             tr!("The group's records stop the exchange."),

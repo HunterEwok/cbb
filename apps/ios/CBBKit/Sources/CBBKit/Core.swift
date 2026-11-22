@@ -123,34 +123,6 @@ public enum Core {
     /// The linked core's version, ABI and the commit it was built from.
     public static func version() throws -> Version { try run("version") }
 
-    /// Checks a signed body that is not a record through the core's
-    /// parse_body (docs/core-api.md, "Signed bodies"): `kind` is
-    /// `command`, `credential`, `keys`, `release`, `channel` or
-    /// `attest-status`. The core alone decides whether the body is taken;
-    /// a body it refuses throws its Refusal.
-    static func checkBody(_ kind: String, _ body: Data) throws {
-        struct Args: Encodable { var kind: String, body: Data }
-        struct Answer: Decodable {}
-        _ = try run("parse_body", Args(kind: kind, body: body), as: Answer.self)
-    }
-
-    /// A command in the open with its orders sealed to key, the
-    /// receiver's key for sealed messages (seal_command, docs/core-api.md,
-    /// "Signed bodies"), for the sender to sign.
-    static func sealCommand(_ body: Data, key: Data) throws -> Data {
-        struct Args: Encodable { var body: Data, key: Data }
-        struct Answer: Decodable { var body: Data }
-        return try run("seal_command", Args(body: body, key: key), as: Answer.self).body
-    }
-
-    /// The public key for sealed messages of secret, 32 random bytes the
-    /// device keeps: the `seal` its pairing and device record carry.
-    public static func sealPublic(_ secret: Data) throws -> Data {
-        struct Args: Encodable { var secret: Data }
-        struct Answer: Decodable { var key: Data }
-        return try run("seal_public", Args(secret: secret), as: Answer.self).key
-    }
-
     /// A recovery sheet (docs/protocol.md, section 10, "The recovery
     /// key"): the QR code's text, the key in groups of four, and the key
     /// hash the `recovery` record names.
@@ -158,6 +130,10 @@ public enum Core {
         public var qr: String
         public var text: String
         public var admin: Data
+
+        public init(qr: String, text: String, admin: Data) {
+            (self.qr, self.text, self.admin) = (qr, text, admin)
+        }
     }
 
     /// The recovery sheet for key (its 32 bytes), its admin CA and the
@@ -227,19 +203,5 @@ public enum Core {
         if let i = a.invitation { return .invitation(i) }
         guard let r = a.refused else { throw Mismatch(reason: "the answer to read_invite has neither invitation nor refused") }
         return .refused(reason: r.reason, message: r.message)
-    }
-
-    /// checkBody, with a refusal in words for the log: the core's message
-    /// and its details.
-    static func bodyRefusal(_ kind: String, _ body: Data) -> String? {
-        do {
-            try checkBody(kind, body)
-            return nil
-        } catch let r as Refusal {
-            guard let d = r.details, !d.isEmpty else { return r.message }
-            return "\(r.message): \(d)"
-        } catch {
-            return "\(error)"
-        }
     }
 }

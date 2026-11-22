@@ -27,6 +27,8 @@ data class WatchState(
     val details: Boolean = false,
     /** The group's tag; null without a group. A watch whose admin key was certified in another group, or whose phone left its group, forgets the key. */
     val group: String? = null,
+    /** Whether the watch's emergency actions work in the phone's group: false in a group of 0.6, where the watch signs nothing and only shows the group (D-124; they come with 0.7); null without a group. */
+    val signs: Boolean? = null,
 ) {
     /**
      * can: what this watch may do to it (the kit's PhoneGroup.WatchAction
@@ -208,6 +210,7 @@ data class WatchState(
         .put("theme", theme)
         .put("details", details)
         .put("group", group ?: JSONObject.NULL)
+        .put("signs", signs ?: JSONObject.NULL)
         .toString()
         .toByteArray()
 
@@ -270,6 +273,7 @@ data class WatchState(
                     theme = o.optString("theme", Tokens.themes.first().name),
                     details = o.optBoolean("details"),
                     group = if (o.isNull("group")) null else o.optString("group"),
+                    signs = if (!o.has("signs") || o.isNull("signs")) null else o.optBoolean("signs"),
                 )
             }.getOrNull()
         }

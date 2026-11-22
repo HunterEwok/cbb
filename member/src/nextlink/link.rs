@@ -28,7 +28,7 @@ use super::esp::{self, Esp, Event};
 use super::frame::{self, Decoder};
 use crate::error::{Context, Error, Result};
 
-pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code] [-paste on|on-enter|off] [-log file] [-trace]";
+pub const USAGE: &str = "usage: cbb next link -to host:port [-port port] [-serve esp-port:local-port] [-udp local-port:host:port] [-zone +hh:mm] [-join code [-window id -fp hash]] [-paste on|on-enter|off] [-log file] [-trace]";
 
 /// The line the link writes once the UART is raw, which `.cbb net on`
 /// waits for before it turns the driver on.
@@ -740,7 +740,7 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
         unsafe { libc::clock_settime(libc::CLOCK_REALTIME, &ts) == 0 }
     };
     if set {
-        log(&format!("set the clock from the Next's: {}", crate::node::date(secs)));
+        log(&format!("set the clock from the Next's: {}", crate::global_cli::utc_date(secs.saturating_mul(1000))));
     } else {
         log(&format!("cannot set the clock: {}", std::io::Error::last_os_error()));
     }
@@ -783,12 +783,41 @@ impl crate::pastehelper::Target for NextKeys {
 
 /// Runs the link on standard input and output until the driver quits or
 /// the UART closes; it takes remote pastes through the service at socket.
+/// Joins, over sock, which the Next's ESP carries to the computer at -to,
+/// a group of 0.6 by its home window, whose ID (and member key) the Next
+/// found by mDNS and the six digits the person typed (`.cbb pair CODE`).
+/// Gives what the log says.
+fn join_window(
+    g: &crate::Global,
+    sock: TcpStream,
+    code: &str,
+    window: Option<[u8; 16]>,
+    fp: Option<cbb_core::format::KeyHash>,
+) -> Result<String> {
+    let Some(id) = window else {
+        drop(sock);
+        return Err(Error::msg(
+            "no pairing window of a group of 0.6 was found on the network: open one with cbb pair on a device of the group, then type its six digits (.cbb pair 123456)",
+        ));
+    };
+    // The Next shows a code as 123-456 and takes it so.
+    let digits: String = code.chars().filter(|c| *c != '-' && !c.is_whitespace()).collect();
+    let invitation = cbb_core::join::invitation::Invitation::typed(id, &digits)
+        .ok_or_else(|| Error::msg("type the six digits the pairing window shows (.cbb pair 123456)"))?;
+    let name = crate::host_name();
+    let me =
+        crate::joining::Me { name: &name, os: cbb_core::format::print::os_number(crate::admin::os_name()), caps: 0 };
+    crate::joining::over(&g.state, sock, "the computer", &me, invitation, fp)?;
+    Ok(format!("joined a group of 0.6 as {name}"))
+}
+
 pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
     let socket: &Path = &g.socket;
     let (mut target, mut port, mut zone_s, mut log_path, mut serve) = (None, PORT, 0i64, None::<String>, None);
     let mut trace = false;
     let mut udp = None;
     let mut join = None;
+    let (mut window, mut fp) = (None, None);
     let mut paste = None;
     let mut i = 0;
     while i < args.len() {
@@ -812,6 +841,20 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
                 ));
             }
             Some("join") => join = Some(value()?),
+            // The home window that the Next found by mDNS: its ID (TXT i)
+            // and the hash of its member's key (TXT f).
+            Some("window") => {
+                window = Some(
+                    cbb_core::join::invitation::hex_bytes::<16>(&value()?)
+                        .ok_or_else(|| Error::msg("-window is the window's ID, 32 hex digits"))?,
+                )
+            }
+            Some("fp") => {
+                fp = Some(cbb_core::format::KeyHash(
+                    cbb_core::join::invitation::hex_bytes::<32>(&value()?)
+                        .ok_or_else(|| Error::msg("-fp is the hash of the window's member key, 64 hex digits"))?,
+                ))
+            }
             Some("paste") => {
                 paste = Some(match value()?.as_str() {
                     "on" => (true, false),
@@ -987,9 +1030,9 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             std::thread::spawn(move || {
                 let res = TcpStream::connect(("127.0.0.1", port))
                     .context("cannot reach the link's port")
-                    .and_then(|s| crate::join_with_code(&g, s, &code));
+                    .and_then(|s| join_window(&g, s, &code, window, fp));
                 let line = match &res {
-                    Ok(id) => format!("joined the group {} as {}", id.tag(), id.id),
+                    Ok(joined) => joined.clone(),
                     Err(e) => format!("cannot join: {}", e.for_user()),
                 };
                 log.send(Msg::Log(line)).ok();
@@ -997,8 +1040,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
             });
         }
         if service_at.is_some_and(|at| clock.is_some() || now >= at) {
-            // And again a while later: a service that stopped (.cbb pair
-            // stops it while cbb next pair waits on its port) starts again.
+            // And again a while later: a service that stopped starts again.
             service_at = Some(now + SERVICE_CHECK);
             match start_service(g, port, udp_port, log_path.as_deref()) {
                 Ok(true) => (link.log)("started the service"),
@@ -1102,6 +1144,52 @@ fn service_args(port: u16, udp: Option<u16>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::nextlink::frame::{Frame, encode};
+
+    /// `.cbb pair 123-456`: the link joins a home window of 0.6 by the ID
+    /// and member key the Next found by mDNS, over a connection the ESP
+    /// would carry; wrong digits and another key are refused.
+    #[test]
+    fn the_link_joins_a_home_window() {
+        use std::sync::Mutex;
+        let desk = crate::admitting::tests_support::root_mesh("nextlink");
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = ln.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let d2 = desk.clone();
+        let (open, digits) =
+            crate::admitting::home_window(crate::admitting::home_window_ms(), Duration::from_secs(300));
+        let id = open.invitation.id;
+        let open = Mutex::new(open);
+        desk.on_pair(Some(Box::new(move |sock, s, x| {
+            let got = crate::admitting::at_home(&d2, sock, s, x, &mut open.lock().unwrap());
+            let _ = tx.lock().unwrap().send(got.map(|i| i.name));
+        })));
+        let d3 = desk.clone();
+        std::thread::spawn(move || {
+            for sock in ln.incoming().take(4).flatten() {
+                let _ = d3.accept_port(sock);
+            }
+        });
+        let state = std::env::temp_dir().join(format!("cbb-nextlink-pi-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&state);
+        let g = crate::Global { state: state.clone(), socket: state.join("sock") };
+        let dial = || TcpStream::connect(addr).unwrap();
+        let code = format!("{}-{}", &digits[..3], &digits[3..]);
+        let e = join_window(&g, dial(), &code, Some(id), Some(cbb_core::format::KeyHash([7; 32]))).unwrap_err();
+        assert!(e.message().contains("the computer is not the window's member"), "{e:?}");
+        assert!(rx.recv_timeout(Duration::from_secs(10)).unwrap().is_err(), "the member admitted no one");
+        let wrong = if digits == "000000" { "000-001" } else { "000-000" };
+        assert!(join_window(&g, dial(), wrong, Some(id), None).is_err());
+        assert!(rx.recv_timeout(Duration::from_secs(10)).unwrap().is_err());
+        assert!(join_window(&g, dial(), "12345", Some(id), None).unwrap_err().message().contains("six digits"));
+        let said = join_window(&g, dial(), &code, Some(id), Some(desk.own().hash())).unwrap();
+        assert!(said.starts_with("joined a group of 0.6 as "), "{said}");
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap(), crate::host_name());
+        assert!(crate::set::load(&state, &crate::set::local_key(&state).unwrap()).unwrap().is_some());
+        desk.close();
+        let _ = std::fs::remove_dir_all(&state);
+    }
 
     #[test]
     fn away_the_home_peer_is_dialled_rarely() {

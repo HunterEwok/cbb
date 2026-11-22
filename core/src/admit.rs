@@ -28,6 +28,7 @@ use alloc::vec::Vec;
 
 use p256::ecdsa::signature::Verifier as _;
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::authority::{self, Body, Hash, Record};
 use crate::certs::{self, Cert, DeviceId, KeyHash, b64};
@@ -298,7 +299,7 @@ pub struct Admission {
     admitter: Admitter,
     view: GroupView,
     /// The CPace password: the code's digits, or an invitation's secret.
-    password: Vec<u8>,
+    password: Zeroizing<Vec<u8>>,
     /// The admin confirms the device before it is admitted (an
     /// invitation's window).
     confirming: bool,
@@ -339,7 +340,7 @@ impl Admission {
             exporter,
             admitter,
             view,
-            password: code.into_bytes(),
+            password: Zeroizing::new(code.as_bytes().to_vec()),
             confirming: false,
             fingerprint: fingerprint.to_string(),
             sid: [0; 32],
@@ -364,7 +365,7 @@ impl Admission {
         exporter: Arc<Exporter>,
     ) -> Result<Admission> {
         let code = pair::normalize_code(code)?;
-        Self::accepting(admitter, view, code.into_bytes(), false, session, exporter)
+        Self::accepting(admitter, view, Zeroizing::new(code.as_bytes().to_vec()), false, session, exporter)
     }
 
     /// An admission like accept for a remote invitation's window, with its
@@ -381,13 +382,13 @@ impl Admission {
         if secret.len() < pair::MIN_SECRET {
             return Err(Error::msg("the invitation's secret is too short"));
         }
-        Self::accepting(admitter, view, secret.to_vec(), true, session, exporter)
+        Self::accepting(admitter, view, Zeroizing::new(secret.to_vec()), true, session, exporter)
     }
 
     fn accepting(
         admitter: Admitter,
         view: GroupView,
-        password: Vec<u8>,
+        password: Zeroizing<Vec<u8>>,
         confirming: bool,
         session: Session,
         exporter: Arc<Exporter>,
@@ -494,7 +495,7 @@ impl Admission {
     /// pairing protocol, exactly one certificate, the QR code's
     /// fingerprint, a P-256 key and a device ID other than this one's.
     fn handshake_done(&mut self) -> Result<()> {
-        if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+        if !crate::alpn::is_pair(self.session.alpn_protocol()) {
             return Err(Error::msg("the device does not offer pairing"));
         }
         let certs_in = self.session.peer_certificates().unwrap_or_default();

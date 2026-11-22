@@ -8,7 +8,6 @@
 use cbb_core::why::{AwayFacts, DeviceFacts, Facts, Reason};
 
 use crate::control::{Device, Status};
-use crate::node::Node;
 
 /// The reasons for st, with the group's devices devs (this one among them
 /// or not), at now_ms.
@@ -50,8 +49,6 @@ pub fn facts(st: &Status, devs: &[Device]) -> Facts {
         in_group: !st.group.is_empty(),
         removed: st.removed,
         frozen: st.frozen,
-        taken_over_by: st.taken_over_by.clone(),
-        cert_ends_ms: st.cert_ends_ms,
         stop: st.stop.clone(),
         sync_off: st.mode == "own",
         sync_until_ms: if st.mode == "own" { st.sync_until_ms } else { 0 },
@@ -73,81 +70,8 @@ pub fn facts(st: &Status, devs: &[Device]) -> Facts {
         quiet: st.quiet.clone(),
         unreached: st.unreached.iter().map(|id| name(id)).collect(),
         away,
+        ..Facts::default()
     }
-}
-
-/// The group's part of a member's status: the claims and conflicts that
-/// wait or stop the group, the records of a later version, and whether an
-/// admin froze this computer's admin key or took the group over from it,
-/// as Go's statusWithRemoved says.
-pub fn group_status(node: &Node) -> Status {
-    let ident = node.identity();
-    let own: Vec<cbb_core::certs::Cert> = std::iter::once(ident.cert.clone()).chain(ident.issuer.clone()).collect();
-    let records = node.records();
-    let rs = records.lock().unwrap();
-    let st = rs.state();
-    // An old root that an admin took the group over from, or a frozen
-    // admin, is refused but not removed.
-    let taken = rs.taken_over(&own);
-    let refused = matches!(rs.refused(&own), Some(cbb_core::group::Refusal::Refused(_)));
-    let frozen = taken.is_none() && refused && own.iter().any(|c| rs.frozen(&c.key_hash()));
-    // A signer's device for the user, as Go's SignerName.
-    let name = |k: &cbb_core::authority::Hash| -> String {
-        st.devices
-            .iter()
-            .find(|d| d.admin.as_ref() == Some(k))
-            .or_else(
-                || if st.roots.contains(k) { st.devices.iter().find(|d| d.device == st.root_device) } else { None },
-            )
-            .map_or_else(|| k.text(), |d| d.name.clone())
-    };
-    Status {
-        claims: st
-            .claims
-            .iter()
-            .filter(|c| matches!(c.state, "pending" | "competing" | "disputed"))
-            .map(|c| crate::control::Claim { by: name(&c.claimant), state: c.state.into(), left_ms: c.left_ms })
-            .collect(),
-        conflicts: st
-            .conflicts
-            .iter()
-            .map(|c| crate::control::Conflict { kind: c.kind.into(), devices: c.signers.iter().map(name).collect() })
-            .collect(),
-        newer: st.newer.len(),
-        frozen,
-        taken_over_by: taken
-            .map(|(dev, _)| st.devices.iter().find(|d| d.device == dev).map_or(dev, |d| d.name.clone()))
-            .unwrap_or_default(),
-        ..Default::default()
-    }
-}
-
-/// The group's devices as `facts` reads them (the name, whether a device
-/// is online, its sync and mute), lighter than the devices op: one look at
-/// the records and the peers, since status answers it on every call.
-pub fn devices(node: &Node) -> Vec<Device> {
-    let me = node.identity().id.to_string();
-    let peers = node.peers();
-    let named: Vec<(String, String)> = {
-        let records = node.records();
-        let rs = records.lock().unwrap();
-        rs.state().devices.iter().map(|d| (d.device.clone(), d.name.clone())).collect()
-    };
-    named
-        .into_iter()
-        .map(|(id, name)| {
-            let peer = peers.iter().find(|p| p.id.as_str() == id);
-            Device {
-                this: id == me,
-                online: peer.is_some() || id == me,
-                mode: peer.map(|p| p.mode.clone()).unwrap_or_default(),
-                muted: peer.is_some_and(|p| p.muted),
-                id,
-                name,
-                ..Default::default()
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]

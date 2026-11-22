@@ -30,11 +30,13 @@ export const keyEnsure: (which: Which) => Promise<string>;
 export const keyForget: () => Promise<string>;
 
 export const groupNew: (request: string) => Promise<string>;
-export const restore: (request: string) => Promise<string>;
 // The YubiKey on the phone's NFC: the app's function sends an APDU to the
 // IsoDep tag and answers the card's answer, its status word last; piv runs a
-// step of cbb_piv on it.
-export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>) => void;
+// step of cbb_piv on it (inspect, seal or open: the recovery secret of 0.6).
+// With bulk, the YubiKey on USB-C: the function writes the bytes it is given
+// to the CCID interface and answers [0], or for an empty buffer reads one
+// transfer and answers [0] and what came (the request's transport ccid_bulk).
+export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>, bulk?: boolean) => void;
 // The watch that memberManageWatch has sign: it is shown the body and
 // answers its signature, DER.
 export const setWatch: (sign: (body: ArrayBuffer) => Promise<ArrayBuffer>) => void;
@@ -44,29 +46,18 @@ export const qrRead: (gray: ArrayBuffer, width: number, height: number, stride: 
 export const memberStart: (request: string, onEvent: (event: string) => void) => Promise<Made>;
 export const memberCall: (member: Handle, request: string) => Promise<string>;
 export const memberManage: (member: Handle, request: string, which: Which) => Promise<string>;
-export const memberManageCard: (member: Handle, request: string) => Promise<string>;
 export const memberManageWatch: (member: Handle, request: string) => Promise<string>;
-export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
-
-export const joinNew: (request: string) => Promise<Made>;
-export const joinAccept: (join: Handle) => Promise<string>;
-export const joinFeed: (join: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const joinFinish: (join: Handle, saved: boolean) => Promise<string>;
-export const joinAnnounce: (join: Handle, port: number) => boolean;
-export const joinAnswered: (join: Handle) => boolean;
-export const joinFree: (join: Handle) => Promise<void>;
-
-export const admitNew: (member: Handle, request: string, which: Which) => Promise<Made>;
-export const admitDial: (admit: Handle) => Promise<string>;
-export const admitFeed: (admit: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
-export const admitFree: (admit: Handle) => Promise<void>;
 
 export const inviteNew: (member: Handle, request: string, which: Which) => Promise<Made>;
 export const inviteNext: (invite: Handle, version: number, timeoutMs: number) => Promise<string>;
 export const inviteAnswer: (invite: Handle, yes: boolean) => void;
 export const inviteFree: (invite: Handle) => Promise<void>;
 
-export const tunnel: (request: string) => Promise<string>;
-export const tunnelRegister: (request: string) => Promise<string>;
-export const tunnelRelay: (request: string, onEvent: (event: string) => void) => Promise<string>;
+// Pairing in a group of 0.6: the admin's window and the new phone's joiner.
+export const windowNew: (member: Handle, request: string, which: Which) => Promise<Made>;
+export const windowNext: (window: Handle, version: number, timeoutMs: number) => Promise<string>;
+export const windowFree: (window: Handle) => Promise<void>;
+export const joinerNew: (request: string) => Promise<Made>;
+export const joinerNext: (joiner: Handle, version: number, timeoutMs: number) => Promise<string>;
+export const joinerFree: (joiner: Handle) => Promise<void>;

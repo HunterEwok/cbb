@@ -19,13 +19,26 @@ import { t } from '../core/Text';
 import { app } from '../model/AppModel';
 import { EVENT_KINDS } from '../model/Events';
 import { watch } from '../model/Watch';
-import { BusyLine, ErrorText } from './Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON } from './Common';
 import { WhySection } from './WhySection';
 
 // The languages of the apps (docs/apps.md, Languages), '' for the phone's.
 const LANGUAGES: string[] = ['', 'en', 'zh-Hans', 'es', 'ru', 'ar', 'sw', 'he', 'hi'];
-const DELAY_HOURS: number[] = [0, 1, 24, 72, 168];
 const KEY_LEVELS: string[] = ['proven', 'hardware', 'files'];
+// The lifetimes a copy and a secret may have (D-129), in milliseconds,
+// inside the core's bounds: 1 min to 1 h, and 5 s to 1 min.
+const TTL_CHOICES: number[] = [60000, 300000, 900000, 1800000, 3600000];
+const SECRET_TTL_CHOICES: number[] = [5000, 15000, 30000, 60000];
+
+// The choices with the group's own when it is none of them.
+function withCurrent(choices: number[], current: number): number[] {
+  return choices.indexOf(current) >= 0 ? choices : choices.concat([current]).sort((a: number, b: number) => a - b);
+}
+
+function lifetime(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s >= 60 && s % 60 === 0 ? t('ttl_minutes', s / 60) : t('ttl_seconds', s);
+}
 
 
 @ComponentV2
@@ -199,23 +212,6 @@ export struct SettingsBody {
           }
           if (app.isRoot() && app.member.running) {
             Row() {
-              Text($r('app.string.settings_delay')).fontColor($r('app.color.text')).layoutWeight(1)
-              Select([
-                { value: t('settings_delay_0') } as SelectOption, { value: t('settings_delay_1h') } as SelectOption,
-                { value: t('settings_delay_1d') } as SelectOption, { value: t('settings_delay_3d') } as SelectOption,
-                { value: t('settings_delay_7d') } as SelectOption
-              ])
-                .selected(Math.max(DELAY_HOURS.indexOf(Math.round((app.member.rootView.delay_ms ?? 0) / 3600000)), 0))
-                .value([t('settings_delay_0'), t('settings_delay_1h'), t('settings_delay_1d'), t('settings_delay_3d'),
-                  t('settings_delay_7d')][Math.max(DELAY_HOURS.indexOf(Math.round((app.member.rootView.delay_ms ?? 0) / 3600000)), 0)])
-                .onSelect((index: number) => {
-                  if (DELAY_HOURS[index] * 3600000 !== app.member.rootView.delay_ms) {
-                    app.setTakeoverDelay(DELAY_HOURS[index]);
-                  }
-                })
-            }
-            .width('100%')
-            Row() {
               Column({ space: 2 }) {
                 Text($r('app.string.settings_key_level')).fontColor($r('app.color.text'))
                 if (app.belowLevel.length > 0) {
@@ -228,20 +224,50 @@ export struct SettingsBody {
                 { value: t('settings_level_proven') } as SelectOption, { value: t('settings_level_hardware') } as SelectOption,
                 { value: t('settings_level_files') } as SelectOption
               ])
-                .selected(Math.max(KEY_LEVELS.indexOf(app.member.rootView.key_level ?? 'hardware'), 0))
+                .selected(Math.max(KEY_LEVELS.indexOf(app.member.keyLevel), 0))
                 .value([t('settings_level_proven'), t('settings_level_hardware'),
-                  t('settings_level_files')][Math.max(KEY_LEVELS.indexOf(app.member.rootView.key_level ?? 'hardware'), 0)])
+                  t('settings_level_files')][Math.max(KEY_LEVELS.indexOf(app.member.keyLevel), 0)])
                 .onSelect((index: number) => {
-                  if (KEY_LEVELS[index] !== app.member.rootView.key_level) {
+                  if (KEY_LEVELS[index] !== app.member.keyLevel) {
                     app.setGroupKeyLevel(KEY_LEVELS[index]);
                   }
                 })
             }
             .width('100%')
+          }
+          if (app.isAdmin() && app.member.running) {
+            Row() {
+              Text($r('app.string.settings_ttl_copies')).fontColor($r('app.color.text')).layoutWeight(1)
+              Select(withCurrent(TTL_CHOICES, app.member.ttlMs).map((ms: number) => ({ value: lifetime(ms) } as SelectOption)))
+                .selected(withCurrent(TTL_CHOICES, app.member.ttlMs).indexOf(app.member.ttlMs))
+                .value(lifetime(app.member.ttlMs))
+                .onSelect((index: number) => {
+                  const ms = withCurrent(TTL_CHOICES, app.member.ttlMs)[index];
+                  if (ms !== app.member.ttlMs) {
+                    app.setGroupTtl(ms, undefined);
+                  }
+                })
+            }
+            .width('100%')
+            Row() {
+              Text($r('app.string.settings_ttl_secrets')).fontColor($r('app.color.text')).layoutWeight(1)
+              Select(withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs).map((ms: number) => ({ value: lifetime(ms) } as SelectOption)))
+                .selected(withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs).indexOf(app.member.secretTtlMs))
+                .value(lifetime(app.member.secretTtlMs))
+                .onSelect((index: number) => {
+                  const ms = withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs)[index];
+                  if (ms !== app.member.secretTtlMs) {
+                    app.setGroupTtl(undefined, ms);
+                  }
+                })
+            }
+            .width('100%')
+          }
+          if (app.isRoot() && app.member.running) {
             if (this.part.length === 0) {
               Row() {
                 Text($r('app.string.recovery_title')).fontColor($r('app.color.text')).layoutWeight(1)
-                Text(app.member.rootView.recovery === true ? t('recovery_made') : t('recovery_no')).fontColor($r('app.color.secondary'))
+                Text(t('recovery_made')).fontColor($r('app.color.secondary'))
               }
               .width('100%')
               .onClick(() => {
@@ -253,22 +279,15 @@ export struct SettingsBody {
             if (watch.linked || watch.admin) {
               Column({ space: 6 }) {
                 Text($r('app.string.watch_admin_title')).fontColor($r('app.color.text'))
-                Text(watch.admin ? $r('app.string.watch_made_admin') : $r('app.string.watch_admin_body'))
+                // The watch signs nothing in a group of 0.6 (D-124).
+                Text($r('app.string.watch_later'))
                   .fontSize(12).fontColor($r('app.color.secondary'))
-                if (!watch.admin) {
-                  Button($r('app.string.watch_make_admin'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-                    .enabled(!watch.making && !app.busy)
-                    .onClick(() => {
-                      watch.makeAdmin();
-                    })
-                  BusyLine({ busy: watch.making })
-                }
               }
               .alignItems(HorizontalAlign.Start)
               .width('100%')
             }
           }
-          Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .fontColor($r('app.color.error'))
             .enabled(!app.busy)

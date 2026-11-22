@@ -15,6 +15,12 @@ import kotlinx.coroutines.launch
 /** The app: one model for every screen, and later for the service and the tile. */
 class CBBApp : Application() {
     val model: AppModel by lazy { AppModel(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Push while the app is closed: the platform's token, when on.
+        runCatching { PushSetup.start(this) }.onFailure { PushSetup.failed(this, it) }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -41,11 +47,14 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // The phone is the group's hub while the app is open (D-64).
         model.group.setForeground(true)
-        sentOnOpen = false
+        // Turning the screen makes the activity again; that is no opening (D-128).
+        if (!model.turning) model.sentOnOpen = false
+        model.turning = false
         model.apkUpdate.runIfDue()
     }
 
     override fun onStop() {
+        model.turning = isChangingConfigurations
         model.group.setForeground(false)
         super.onStop()
     }
@@ -56,15 +65,17 @@ class MainActivity : ComponentActivity() {
         model.group.activity = this
     }
 
-    /** Whether the app sent what was copied since it came to the front. */
-    private var sentOnOpen = false
-
-    /** Android lets an app read the clipboard only while one of its windows has the focus: once each time the app comes to the front. */
+    /**
+     * Android lets an app read the clipboard only while one of its windows
+     * has the focus: once each time the app comes to the front. A system
+     * overlay that took the focus (the notification shade, a prompt) gives
+     * it back without an opening (D-128).
+     */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus || sentOnOpen) return
-        sentOnOpen = true
-        lifecycleScope.launch { model.sendOnOpen() }
+        if (!hasFocus || model.sentOnOpen) return
+        model.sentOnOpen = true
+        lifecycleScope.launch { model.opened() }
     }
 
     override fun onPause() {

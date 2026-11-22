@@ -3,9 +3,9 @@
   "id": "cbb-audit-1",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -16,6 +16,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -63,9 +68,9 @@
   "id": "cbb-audit-2",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -76,6 +81,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -123,9 +133,9 @@
   "id": "cbb-audit-4",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -136,6 +146,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -183,9 +198,9 @@
   "id": "cbb-audit-5",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -196,6 +211,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -243,36 +263,6 @@
   "id": "cbb-audit-6",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "records"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "manifests"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testRecords"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testManifests"
-   },
-   {
     "lang": "go",
     "file": "internal/clip/media_test.go",
     "name": "TestStrictManifests"
@@ -280,7 +270,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -308,36 +298,6 @@
   "id": "cbb-audit-7",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "records"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "manifests"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testRecords"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testManifests"
-   },
-   {
     "lang": "go",
     "file": "internal/clip/media_test.go",
     "name": "TestStrictManifests"
@@ -345,7 +305,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -376,52 +336,12 @@
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "strict_mutants"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testMutants"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "mutants"
    }
   ]
  },
  {
   "id": "cbb-audit-8",
   "tests": [
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "records"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "manifests"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testRecords"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testManifests"
-   },
    {
     "lang": "go",
     "file": "internal/clip/media_test.go",
@@ -430,7 +350,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -458,36 +378,6 @@
   "id": "cbb-audit-9",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "records"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "manifests"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testRecords"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testManifests"
-   },
-   {
     "lang": "go",
     "file": "internal/clip/media_test.go",
     "name": "TestStrictManifests"
@@ -495,7 +385,7 @@
    {
     "lang": "go",
     "file": "internal/forward/forward_test.go",
-    "name": "TestRegistrationUnderVerifiedRoot"
+    "name": "TestRegistrationUnderFirstPeriodKey"
    },
    {
     "lang": "go",
@@ -523,24 +413,9 @@
   "id": "cbb-audit-10",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt",
-    "name": "aheadVectors"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goAuthority"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/ClockTests.swift",
-    "name": "testAheadVectors"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoAuthority"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
     "lang": "go",
@@ -558,9 +433,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -578,24 +453,9 @@
   "id": "cbb-audit-11",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt",
-    "name": "aheadVectors"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goAuthority"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/ClockTests.swift",
-    "name": "testAheadVectors"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoAuthority"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
     "lang": "go",
@@ -613,9 +473,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -633,24 +493,9 @@
   "id": "cbb-audit-12",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt",
-    "name": "aheadVectors"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goAuthority"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/ClockTests.swift",
-    "name": "testAheadVectors"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoAuthority"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
     "lang": "go",
@@ -668,9 +513,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -688,24 +533,9 @@
   "id": "cbb-audit-13",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt",
-    "name": "aheadVectors"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goAuthority"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/ClockTests.swift",
-    "name": "testAheadVectors"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoAuthority"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
     "lang": "go",
@@ -723,9 +553,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -743,24 +573,9 @@
   "id": "cbb-audit-14",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt",
-    "name": "aheadVectors"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goAuthority"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/ClockTests.swift",
-    "name": "testAheadVectors"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoAuthority"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    },
    {
     "lang": "go",
@@ -778,9 +593,9 @@
     "name": "TestAheadVectors"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/member_test.go",
-    "name": "TestCallsBounded"
+    "lang": "rust",
+    "file": "member/src/nettest/relay.rs",
+    "name": "notes_of_the_watch"
    },
    {
     "lang": "rust",
@@ -798,9 +613,9 @@
   "id": "cbb-audit-15",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -811,6 +626,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -858,9 +678,9 @@
   "id": "cbb-audit-16",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -871,6 +691,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -918,9 +743,9 @@
   "id": "cbb-audit-17",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -931,6 +756,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -978,9 +808,9 @@
   "id": "cbb-audit-18",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -991,6 +821,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -1038,9 +873,9 @@
   "id": "cbb-audit-27",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -1051,6 +886,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -1098,9 +938,9 @@
   "id": "cbb-audit-28",
   "tests": [
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "rust",
@@ -1111,6 +951,11 @@
     "lang": "go",
     "file": "internal/service/paste_test.go",
     "name": "TestCommandSignedBeforeStart"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/commands/tests.rs",
+    "name": "the_root_commands_a_member_once"
    },
    {
     "lang": "rust",
@@ -1209,28 +1054,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1255,22 +1085,12 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheWideNetwork"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestVersionsWideNetworkLeavesRoom"
    },
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
     "name": "TestRefusedRegistrationLeavesForwarder"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsGroupsThatAreAway"
    }
   ]
  },
@@ -1279,28 +1099,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1329,28 +1134,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -1378,14 +1168,9 @@
   "id": "cbb-audit-52",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1409,8 +1194,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1438,9 +1223,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1463,14 +1248,9 @@
   "id": "cbb-audit-53",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1494,8 +1274,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1523,9 +1303,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1548,14 +1328,9 @@
   "id": "cbb-audit-54",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1579,8 +1354,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1608,9 +1383,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1633,14 +1408,9 @@
   "id": "cbb-audit-55",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1664,8 +1434,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1693,9 +1463,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1718,14 +1488,9 @@
   "id": "cbb-audit-56",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1749,8 +1514,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1778,9 +1543,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1803,14 +1568,9 @@
   "id": "cbb-audit-58",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1834,8 +1594,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1863,9 +1623,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1888,14 +1648,9 @@
   "id": "cbb-audit-59",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -1919,8 +1674,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -1948,9 +1703,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -1973,14 +1728,9 @@
   "id": "cbb-audit-60",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -2004,8 +1754,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -2033,9 +1783,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2066,16 +1816,6 @@
     "lang": "rust",
     "file": "core/src/vectors.rs",
     "name": "go_commands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "goCommands"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testGoCommands"
    }
   ]
  },
@@ -2083,14 +1823,9 @@
   "id": "cbb-audit-61",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -2114,8 +1849,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -2143,9 +1878,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2168,14 +1903,9 @@
   "id": "cbb-audit-62",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -2199,8 +1929,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -2228,9 +1958,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2253,14 +1983,9 @@
   "id": "cbb-audit-63",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -2284,8 +2009,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -2313,9 +2038,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2369,13 +2094,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoEnvelopes"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goEnvelopes"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -2399,13 +2119,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoEnvelopes"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goEnvelopes"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -2429,13 +2144,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoEnvelopes"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goEnvelopes"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -2443,9 +2153,9 @@
   "id": "cbb-audit-69",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2478,19 +2188,9 @@
     "name": "strict"
    },
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    },
    {
     "lang": "go",
@@ -2530,12 +2230,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2595,12 +2290,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -2638,14 +2328,9 @@
     "name": "go_commands"
    },
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "goCommands"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testGoCommands"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    }
   ]
  },
@@ -2653,9 +2338,9 @@
   "id": "cbb-audit-72",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2688,19 +2373,9 @@
     "name": "strict"
    },
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    }
   ]
  },
@@ -2708,9 +2383,9 @@
   "id": "cbb-audit-73",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2743,19 +2418,9 @@
     "name": "strict"
    },
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    }
   ]
  },
@@ -2763,9 +2428,9 @@
   "id": "cbb-audit-74",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/refused_test.go",
-    "name": "TestRefusedRegistrationLeavesState"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_refused_registration_leaves_nothing"
    },
    {
     "lang": "go",
@@ -2798,19 +2463,9 @@
     "name": "strict"
    },
    {
-    "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "gets_are_bounded"
-   },
-   {
-    "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/StrictTests.swift",
-    "name": "testCommands"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt",
-    "name": "commands"
+    "lang": "go",
+    "file": "internal/service/media_away_test.go",
+    "name": "TestMediaAway"
    }
   ]
  },
@@ -2818,14 +2473,9 @@
   "id": "cbb-audit-76",
   "tests": [
    {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt",
-    "name": "cleanReason"
-   },
-   {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CommandTests.swift",
-    "name": "testCleanReason"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testSyncsTheButtonAndCommands"
    },
    {
     "lang": "go",
@@ -2849,8 +2499,8 @@
    },
    {
     "lang": "rust",
-    "file": "member/src/node.rs",
-    "name": "frames_are_bounded"
+    "file": "member/src/link/tests.rs",
+    "name": "the_rounds_are_bounded"
    },
    {
     "lang": "rust",
@@ -2878,9 +2528,9 @@
     "name": "TestImageDIBV5SubImage"
    },
    {
-    "lang": "go",
-    "file": "internal/relay/cost_test.go",
-    "name": "TestRecordBytesBounded"
+    "lang": "rust",
+    "file": "member/src/relayd/wire3.rs",
+    "name": "frames_are_read_exactly"
    },
    {
     "lang": "go",
@@ -2904,28 +2554,13 @@
   "tests": [
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryBoundsGroupAndTotal"
+    "file": "internal/forward/budget_test.go",
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepsRegisteredGroups"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryMergesByID"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestMemoryKeepIsLinear"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/memory_test.go",
-    "name": "TestRegistrationKeepsBoundedRecords"
+    "file": "internal/forward/forward_test.go",
+    "name": "TestRegistrationRemembersVersions"
    },
    {
     "lang": "go",
@@ -2990,12 +2625,7 @@
    {
     "lang": "go",
     "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryKeepsEveryEnvelope"
-   },
-   {
-    "lang": "go",
-    "file": "internal/forward/budget_test.go",
-    "name": "TestMemoryChargesTheSource"
+    "name": "TestRegistrationKeepsNoRecords"
    },
    {
     "lang": "go",
@@ -3018,9 +2648,14 @@
   "id": "cbb-audit-80",
   "tests": [
    {
-    "lang": "go",
-    "file": "internal/relay/relay_test.go",
-    "name": "TestRemovedAdmin"
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "a_device_left_out_goes"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/nettest/relayd.rs",
+    "name": "credentials_it_refuses"
    }
   ]
  },
@@ -3039,13 +2674,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoRemovedAdmin"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goRemovedAdmin"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -3064,13 +2694,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoRemovedAdmins"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goRemovedAdmins"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -3104,13 +2729,8 @@
    },
    {
     "lang": "swift",
-    "file": "apps/ios/CBBKit/Tests/CBBKitTests/RootTests.swift",
-    "name": "testGoRemovedAdmins"
-   },
-   {
-    "lang": "kotlin",
-    "file": "apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt",
-    "name": "goRemovedAdmins"
+    "file": "apps/ios/CBBKit/Tests/CBBKitTests/CoreMemberTests.swift",
+    "name": "testTheRootSignsItsOwnRecordsInTheCore"
    }
   ]
  },
@@ -3150,12 +2770,12 @@
    {
     "lang": "go",
     "file": "internal/service/evidence_tpm_test.go",
-    "name": "TestRootInTPMCountsAsFiles"
+    "name": "TestRootKeyLevelFollowsItsStore"
    },
    {
     "lang": "rust",
-    "file": "member/src/admin.rs",
-    "name": "a_group_made_here_keeps_its_root_key"
+    "file": "member/src/service/on_live/tests.rs",
+    "name": "a_computer_pairs_with_the_window_of_a_new_group"
    }
   ]
  }

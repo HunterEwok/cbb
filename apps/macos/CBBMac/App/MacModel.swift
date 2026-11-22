@@ -27,17 +27,17 @@ final class MacModel: ObservableObject {
     /// goes back only when the change is refused.
     @Published private(set) var pendingMute: [String: Bool] = [:]
     @Published private(set) var busy = false
-    /// Whether a join of a phone's group runs (JoinSheet), and its QR code
-    /// once cbb wrote it.
-    @Published private(set) var joining = false
-    @Published private(set) var join: JoinCode?
+    /// Whether a pairing window is open (AddDeviceSheet), and its digits
+    /// and QR code once cbb wrote them.
+    @Published private(set) var pairing = false
+    @Published private(set) var window: PairingWindow?
     /// The window asks before Everywhere turns on (D-82); the menu bar's
     /// item sets it and opens the window.
     @Published var askingAway = false
     /// Settings, a sheet on the window, which the menu bar item opens too.
     @Published var settingsShown = false
-    private var joinFile: URL?
-    private var joinCancelled = false
+    private var windowFile: URL?
+    private var windowCancelled = false
     /// The bug report the window asks about (BugSheet), in release mode.
     @Published private(set) var bug: BugOffer?
     private var askingBug = false
@@ -459,71 +459,91 @@ final class MacModel: ObservableObject {
         }
     }
 
-    /// What cbb pair -app writes (cmd/cbb/joinapp.go), with when the wait
-    /// ends.
-    struct JoinCode: Decodable, Equatable {
+    /// What cbb pair -app writes in a group (member/src/admit_cli.rs): the
+    /// window's six digits, its QR code's text, its address and how long it
+    /// stays open, the last device that failed and the one that joined;
+    /// with when it closes.
+    struct PairingWindow: Decodable, Equatable {
+        let code: String
         let qr: String
+        let address: String?
         let expires: Int
-        let port: Int
+        let refused: String?
+        let done: Bool?
+        let name: String?
         var ends = Date()
 
-        private enum CodingKeys: String, CodingKey { case qr, expires, port }
+        private enum CodingKeys: String, CodingKey { case code, qr, address, expires, refused, done, name }
 
-        /// The six digits in the code, as "123 456", for a computer of the
-        /// group to type; nil when the code holds none.
+        /// The six digits as "123 456"; nil when cbb wrote no such code.
         var digits: String? {
-            let code = URLComponents(string: qr)?.queryItems?.first { $0.name == "code" }?.value ?? ""
             guard code.count == 6, code.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
             return String(code.prefix(3)) + " " + String(code.suffix(3))
         }
     }
 
-    /// Joins the group of the device that admits this Mac: a phone scans the
-    /// QR code, a computer of the group takes the six digits. cbb runs as the
-    /// administrator and writes the code into a file the app made, which
-    /// the app reads while cbb waits; cancelJoin removes the file.
-    func joinGroup() async {
-        guard !joining, !busy else { return }
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-join-\(UUID().uuidString).json")
+    /// Opens a pairing window for a new device on the root or an admin: cbb
+    /// pair -app runs as the administrator and writes the window's six
+    /// digits, which a new computer types, and its QR code, which a new
+    /// phone scans (D-119), into a file the app made; closeWindow removes
+    /// the file, and cbb closes the window. With asAdmin, on the group's
+    /// root, the phone that joins becomes an admin. Returns when the window
+    /// closes.
+    func openWindow(asAdmin: Bool = false) async {
+        guard !pairing else { return }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-window-\(UUID().uuidString).json")
         guard FileManager.default.createFile(atPath: file.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
             message = Self.describe(Admin.Failure.failed(String(localized: "The app could not make the file for the QR code."), detail: file.path))
             return
         }
-        joining = true
-        joinFile = file
-        joinCancelled = false
+        pairing = true
+        windowFile = file
+        windowCancelled = false
         let poll = Task { [weak self] in
+            var ends: Date?
             while !Task.isCancelled {
-                if let data = try? Data(contentsOf: file), var code = try? JSONDecoder().decode(JoinCode.self, from: data) {
-                    code.ends = Date().addingTimeInterval(TimeInterval(code.expires))
-                    self?.join = code
-                    return
+                if let data = try? Data(contentsOf: file), var w = try? JSONDecoder().decode(PairingWindow.self, from: data) {
+                    let end = ends ?? Date().addingTimeInterval(TimeInterval(w.expires))
+                    ends = end
+                    w.ends = end
+                    if self?.window != w { self?.window = w }
                 }
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Task.sleep(for: .milliseconds(400))
             }
         }
         let details = Self.showsErrorDetails
         await act { [weak self] in
             do {
-                _ = try await Admin.run(["pair", "-app", file.path], details: details)
+                _ = try await Admin.run(["pair", "-app", file.path] + (asAdmin ? ["-admin"] : []), details: details)
             } catch {
-                if self?.joinCancelled == true { throw Admin.Failure.cancelled }
+                if self?.windowCancelled == true { throw Admin.Failure.cancelled }
                 throw error
             }
-            return String(localized: "Joined the group.")
+            return String(localized: "It joined the group.")
         }
         poll.cancel()
         try? FileManager.default.removeItem(at: file)
-        joinFile = nil
-        join = nil
-        joining = false
+        windowFile = nil
+        window = nil
+        pairing = false
     }
 
-    /// Ends the wait: cbb sees its file gone and hangs up.
-    func cancelJoin() {
-        guard let file = joinFile else { return }
-        joinCancelled = true
+    /// Closes the pairing window: cbb sees its file gone and hangs up.
+    func closeWindow() {
+        guard let file = windowFile else { return }
+        windowCancelled = true
         try? FileManager.default.removeItem(at: file)
+    }
+
+    /// Joins a group by the six digits of a pairing window open on one of
+    /// its devices: cbb pair -code as the administrator, with the digits on
+    /// its standard input, never its command line (D-119).
+    func joinGroup(_ text: String) async {
+        guard let digits = Self.shownCode(text) else {
+            message = String(localized: "Type the six digits the pairing window shows.")
+            return
+        }
+        await admin(["pair", "-code"], input: digits + "\n", done: String(localized: "Joined the group."))
     }
 
     /// What cbb invite -app writes (member/src/admit_cli.rs): the
@@ -614,38 +634,12 @@ final class MacModel: ObservableObject {
         try? FileManager.default.removeItem(at: state)
     }
 
-    /// Admits the new device that shows a code and waits: the six digits it
-    /// shows, typed here, or its QR code's text; cbb pair -qr does it as the
-    /// administrator with the code on its standard input, finding the device
-    /// by its digits on the home network. With asAdmin, on the group's root,
-    /// a phone that asks to be an admin becomes one.
-    func admit(_ text: String, asAdmin: Bool = false) async {
-        var text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let digits = Self.shownCode(text) {
-            text = digits
-        } else if !Self.isWaitingJoiner(text) {
-            message = String(localized: "Type the six digits the new device shows.")
-            return
-        }
-        await admin(["pair", "-qr"] + (asAdmin ? ["-admin"] : []), input: text + "\n", done: String(localized: "It joined the group."))
-    }
-
-    /// The six digits a new device shows, as typed: spaces and dashes
+    /// The six digits a pairing window shows, as typed: spaces and dashes
     /// between them are fine; nil when text is not such a code.
     nonisolated static func shownCode(_ text: String) -> String? {
         let kept = text.filter { $0 != " " && $0 != "-" }
         guard kept.count == 6, kept.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
         return kept
-    }
-
-    /// Whether text is the QR code of a device that listens for the member
-    /// that admits it (docs/protocol.md, section 6): a code, an address and
-    /// a fingerprint.
-    nonisolated static func isWaitingJoiner(_ text: String) -> Bool {
-        guard let c = URLComponents(string: text), c.scheme?.lowercased() == "cbb", c.host?.lowercased() == "join" else { return false }
-        let items = c.percentEncodedQueryItems ?? []
-        func has(_ name: String) -> Bool { items.contains { $0.name == name && !($0.value ?? "").isEmpty } }
-        return has("code") && has("addr") && has("fp")
     }
 
     private func admin(_ arguments: [String], answer: Bool = false, input: String? = nil, done: String) async {

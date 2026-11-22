@@ -15,22 +15,21 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { read, Result } from '../core/Core';
-import { fromBase64, shortLine, toBase64 } from '../core/Bytes';
+import { shortLine, toBase64 } from '../core/Bytes';
 import { Errors, Failure } from '../core/Errors';
-import { Joined, Membership, sealSecret } from '../core/Membership';
-import { OS, osVersion, STORE } from '../core/Phone';
+import { Membership } from '../core/Membership';
+import { OS, osVersion } from '../core/Phone';
 import { t } from '../core/Text';
 import { ensure } from '../core/Keys';
-import { CheckedPaste, PasteAnswer } from './Paste';
 
 // The most bytes the phone fetches of a copy, or sends of shared files.
 const MAX_FETCH_BYTES: number = 200 * 1024 * 1024;
 export const MAX_SEND_BYTES: number = 50 * 1024 * 1024;
 // How often the devices, the mute and sync away from home are brought up to date.
 const POLL_MS: number = 3000;
-// The commands carried out, by ID, until they expire.
-const MAX_COMMANDS: number = 4096;
 export const IMAGE_TYPES: string[] = ['image/png', 'image/jpeg', 'image/gif'];
+// How long a secret the button took stays in the pasteboard (docs/design.md, "Secrets").
+const SECRET_TTL_MS: number = 60000;
 
 // A device of the group, as the member's devices op lists it.
 export interface Device {
@@ -53,23 +52,7 @@ export interface Device {
 }
 
 // What the group's records stop and what ends it (the member's alerts).
-export interface Alert {
-  kind: string;
-  names?: string[];
-  devices?: string[];
-  records?: string[];
-  left_ms?: number;
-  count?: number;
-}
-
 // The root's settings as the records hold them (the member's root_view).
-export interface RootView {
-  delay_ms?: number;
-  key_level?: string;
-  recovery?: boolean;
-  handed_to?: string;
-}
-
 interface Peer {
   device: string;
   name?: string;
@@ -83,10 +66,6 @@ interface Devices {
   devices?: Device[];
 }
 
-interface Alerts {
-  alerts?: Alert[];
-}
-
 // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does not
 // sync"), the reason that stops the most first.
 export interface Why {
@@ -97,6 +76,22 @@ export interface Why {
   devices?: string[];
   value?: string;
   detail?: string;
+}
+
+// A device as the group view names it: whether it offered this phone an
+// admin key when it paired and is no admin yet.
+interface GroupDevice {
+  device?: string;
+  offers_admin?: boolean;
+}
+
+// The member's group of 0.6, the part the app reads: its key level and
+// how long copies and secrets live (D-129), null for the default.
+interface GroupView {
+  key_level?: string;
+  devices?: GroupDevice[];
+  ttl_ms?: number | null;
+  secret_ttl_ms?: number | null;
 }
 
 interface Whys {
@@ -136,8 +131,11 @@ interface Muted {
   muted_ms?: number;
 }
 
-interface Sends {
+// What the paste button's swap or the app's opening does (D-128): whether
+// the pasteboard goes to the group, and the group's copy that comes in.
+interface Swap {
   sends?: boolean;
+  copy?: Copy;
 }
 
 interface Server {
@@ -162,10 +160,6 @@ interface Away {
   relay?: Server;
 }
 
-interface Servers {
-  period_due?: boolean;
-}
-
 interface Attest {
   pending?: number;
   revoked?: number;
@@ -178,15 +172,32 @@ const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
 // A signed file of the mirror is far smaller.
 const ATTEST_MAX: number = 2 * 1024 * 1024;
 
+// The forwarder the group's root set for this phone as a hub (a group of 0.6).
+interface RootForwarder {
+  endpoint: string;
+  key: string;
+}
+
 interface AwayAnswer {
   away?: Away;
+  root_forwarder?: RootForwarder;
+  // On the root phone of a group of 0.6: the group's server credentials
+  // need its root key, or expired already.
+  period_due?: boolean;
+  period_overdue?: boolean;
 }
 
 interface Copy {
   id: string;
+  origin?: string;
   kind?: string;
   text?: string;
+  ttl_ms?: number;
 }
+
+// How long a copy and a secret live when the copy does not say (D-129).
+const DEFAULT_TTL_MS = 300000;
+const DEFAULT_SECRET_TTL_MS = 60000;
 
 interface Part {
   type?: string;
@@ -203,66 +214,14 @@ interface Fetched {
   parts?: Part[];
 }
 
-interface CommandBody {
-  id: string;
-  type: string;
-  by?: string;
-  time_ms: number;
-  expires_ms: number;
-  // A paste's.
-  text?: string;
-  enter?: boolean;
-  kind?: string;
-}
-
-interface Checked {
-  command: CommandBody;
-  verified?: boolean;
-  sender?: string;
-  clean?: string;
-}
-
 interface MemberEvent {
   type: string;
   line?: string;
   text?: string;
   kind?: string;
   ttl_ms?: number;
-  cert?: string;
-  issuer?: string;
-  roots?: string[];
-  token?: number;
-  from?: string;
-  command?: Object;
   copy?: Copy;
   details?: string;
-  message?: PeerMessage;
-}
-
-// A peer's message the core hands over as it came: the root's admin
-// message carries the admin CA.
-interface PeerMessage {
-  t?: string;
-  admin_ca?: string;
-}
-
-// P-256's SubjectPublicKeyInfo before the 65-byte point.
-const P256_SPKI_PREFIX: number[] = [
-  0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a,
-  0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00
-];
-
-// The SubjectPublicKeyInfo of a P-256 point in base64, base64; none for a
-// point of another length.
-export function p256Spki(point: string): string | undefined {
-  const p = new Uint8Array(fromBase64(point));
-  if (p.length !== 65) {
-    return undefined;
-  }
-  const out = new Uint8Array(P256_SPKI_PREFIX.length + p.length);
-  out.set(P256_SPKI_PREFIX, 0);
-  out.set(p, P256_SPKI_PREFIX.length);
-  return toBase64(out);
 }
 
 interface Started {
@@ -279,14 +238,26 @@ export class Member {
   // The names of the members connected now.
   @Trace peers: string[] = [];
   @Trace devices: Device[] = [];
-  @Trace alerts: Alert[] = [];
-  @Trace rootView: RootView = {};
   @Trace why: Why[] = [];
+  // The group's key level (proven, hardware or files), as its records set it.
+  @Trace keyLevel: string = 'hardware';
+  // The devices that offered this phone an admin key at pairing and are no
+  // admins yet: the root may make them admins.
+  @Trace offersAdmin: string[] = [];
+  // How long a copy and a secret live, in milliseconds (D-129).
+  @Trace ttlMs: number = DEFAULT_TTL_MS;
+  @Trace secretTtlMs: number = DEFAULT_SECRET_TTL_MS;
   // The tiles; viewed is false until the member gave them.
   @Trace view: View = { tiles: [] };
   @Trace viewed: boolean = false;
   // What the pasteboard got or sent last, shortened, for the main page.
   @Trace last: string = '';
+  // The last copy that came from another device (D-128): its ID, the
+  // device's name and its text, empty for a secret, for the main page's
+  // line with Copy; lastId is empty when there is none to show.
+  @Trace lastId: string = '';
+  @Trace lastFrom: string = '';
+  @Trace lastText: string = '';
   @Trace error: string = '';
   // Sync turned off (design.md, "Sync on and off"), until pausedUntil
   // (ms since the epoch) or, when 0, until the user turns it on.
@@ -314,17 +285,21 @@ export class Member {
   // The blind relay the phone meets the group at, "" for none, and whether
   // the link is up.
   @Trace relayAt: string = '';
+  // On a group of 0.6, the forwarder the group's root set for this phone as
+  // a hub and its key's pin, "" while it set none.
+  @Trace rootForwarder: string = '';
+  @Trace rootForwarderKey: string = '';
+  // On the root phone of a group of 0.6, the group's server credentials
+  // expired: its relay and its hubs' forwarders take nobody until the root
+  // key renews them.
+  @Trace periodOverdue: boolean = false;
+  private periodDueAway: boolean = false;
   @Trace relayConnected: boolean = false;
   @Trace relayOnline: number = 0;
   @Trace relayError: string = '';
   // The root's next period of the server credentials waits for the user.
   @Trace periodDue: boolean = false;
 
-  // An admin renewed the certificate, or a takeover made a new root.
-  onIdentity: (cert: string, issuer: string, roots: string[]) => void = () => {};
-  // The root made this phone an admin: its admin message brought the admin
-  // CA (base64) for the key the hellos offer, not yet checked.
-  onAdminCa: (ca: string, from: string) => void = () => {};
   // The images or files of a copy are in folder.
   onSaved: (folder: string, count: number) => void = () => {};
   // The devices changed, for the notifications.
@@ -332,29 +307,29 @@ export class Member {
   // Something in the member broke (docs/core-api.md, "Panics"): details say
   // what and where. The app shows it and starts the member again.
   onPanic: (details: string) => void = () => {};
-  // A paste or paste-off command, checked: the paste receiver carries it
-  // out; name is the sender's when the records show it signed.
-  onPaste: (c: CheckedPaste, name: string) => PasteAnswer = () => {
-    const a = new PasteAnswer();
-    a.reason = 'this phone takes no remote pastes';
-    return a;
-  };
 
   // The member's recent log lines, oldest first, for a bug report.
   recentLog: string[] = [];
 
   private handle: Handle | null = null;
+  // The member port is open (listen), for a pairing window of 0.6.
+  private listening: boolean = false;
   private timer: number = -1;
   private dir: string = '';
   private tookImage: string = '';
   private awayFailure: string = '';
-  private seen: Map<string, number> = new Map<string, number>();
-  private startedMs: number = 0;
   // Bumped by every change of the pasteboard, so that a secret leaves it
   // only when nothing replaced it.
   private boardChanges: number = 0;
   private watching: boolean = false;
   private starting: boolean = false;
+  // Whether the app is on the screen: only then does the phone write the
+  // group's copies (D-128).
+  private foreground: boolean = false;
+  // boardChanges as the app last saw the pasteboard, -1 when it does not
+  // know; and the key of what it held then.
+  private seenChanges: number = -1;
+  private seenKey: string = '';
 
   // The core's member, for adding a device and invitations; null when stopped.
   core(): Handle | null {
@@ -377,46 +352,20 @@ export class Member {
 
   private async begin(m: Membership, dir: string, name: string): Promise<void> {
     this.dir = dir;
-    const secret = sealSecret(dir);
-    if (secret instanceof Failure) {
-      this.error = Errors.shown(secret);
-      return;
-    }
     const key = await ensure('member');
     if (key.ok === undefined) {
       this.error = Errors.shown(key.failure as Failure);
       return;
     }
-    const j: Joined = m.member;
     const request: Record<string, Object> = {
       'dir': dir,
       'name': name,
       'os': OS,
       'os_version': osVersion(),
-      'key_store': STORE,
       'version': AppStorage.get<string>('version') ?? '',
-      'device': j.device,
-      'public': key.ok.public,
-      'seal': secret,
-      'cert': j.cert,
-      'group_ca': j.group_ca,
-      'roots': j.roots
+      'device': m.member.device,
+      'public': key.ok.public
     };
-    if (j.issuer !== undefined && j.issuer.length > 0) {
-      request['issuer'] = j.issuer;
-    }
-    // A member phone's hellos offer its admin key, for the root's "Make it
-    // an admin" (docs/protocol.md, section 10, "Admins"). HUKS makes it
-    // without asking; only a signature asks for the user's consent.
-    if (!m.isAdmin()) {
-      const admin = await ensure('admin');
-      const spki = admin.ok !== undefined ? p256Spki(admin.ok.public) : undefined;
-      if (spki !== undefined) {
-        request['admin_key'] = spki;
-      } else {
-        Errors.log(`member: no admin key to offer: ${admin.failure?.message ?? 'not a P-256 point'} (${admin.failure?.details ?? ''})`);
-      }
-    }
     const made = await cbb.memberStart(JSON.stringify(request), (e: string) => {
       this.event(e);
     });
@@ -428,19 +377,11 @@ export class Member {
     this.handle = made.handle;
     this.running = true;
     this.error = '';
-    this.startedMs = Date.now();
-    this.seen.clear();
     this.watchBoard();
     Errors.log(`member: started in the group ${m.groupTag()}`);
     this.timer = setInterval(() => {
       this.poll();
     }, POLL_MS);
-    // The server credentials, the hub and the relay (cbb_member_servers),
-    // with the keys for the servers in HUKS.
-    const servers = read<Object>(await cbb.memberServers(made.handle, `${dir}/server-keys.txt`), 'member');
-    if (servers.failure !== undefined) {
-      Errors.log(`member: the server credentials: ${servers.failure.message} (${servers.failure.details})`);
-    }
     await this.pollMuted();
     await this.pollDevices();
   }
@@ -451,13 +392,13 @@ export class Member {
       return;
     }
     this.handle = null;
+    this.listening = false;
     clearInterval(this.timer);
     this.timer = -1;
     await cbb.memberStop(h);
     this.running = false;
     this.peers = [];
     this.devices = [];
-    this.alerts = [];
     this.why = [];
     this.view = { tiles: [] };
     this.viewed = false;
@@ -467,6 +408,20 @@ export class Member {
     this.readAway(undefined);
     this.periodDue = false;
     Errors.log('member: stopped');
+  }
+
+  // Opens the member port at home, which a pairing window of 0.6 needs
+  // (the member's listen op); a second call keeps it open.
+  async listen(): Promise<Failure | undefined> {
+    if (this.listening) {
+      return undefined;
+    }
+    const r = await this.call<Object>('listen', { 'kind': 'home' } as Record<string, Object>);
+    if (r.ok === undefined) {
+      return r.failure;
+    }
+    this.listening = true;
+    return undefined;
   }
 
   // Asks the member: {"op","args"}.
@@ -515,11 +470,14 @@ export class Member {
     return r;
   }
 
-  // Reads the pasteboard and sends it when the core's rule says so: neither
-  // the group's copy nor what this phone sent or took last. Called from the
-  // paste button's tap, the one moment HarmonyOS lets the app read it, and
-  // from a quick sync (quiet: a pasteboard the app may not read is no
-  // error then). Answers whether it sent.
+  // The one button (docs/design.md, "The one button", D-128): reads the
+  // pasteboard and swaps it with the group's copy. What it holds goes to the
+  // group, unless it is the group's copy or what this phone sent or took
+  // last, and the group's copy comes into the pasteboard; an empty
+  // pasteboard only takes. Called from the paste button's tap, the one
+  // moment HarmonyOS lets the app read it, and from a quick sync (quiet: a
+  // pasteboard the app may not read is no error then). Answers whether it
+  // sent.
   async sendPasteboard(quiet?: boolean): Promise<boolean> {
     if (this.handle === null || this.muted) {
       return false;
@@ -536,25 +494,43 @@ export class Member {
       }
       return false;
     }
+    let pixels: image.PixelMap | undefined = undefined;
     for (let i = 0; i < data.getRecordCount(); i++) {
       const record = data.getRecord(i);
       if (record.mimeType === pasteboard.MIMETYPE_PIXELMAP && record.pixelMap !== undefined) {
-        await this.sendImage(record.pixelMap);
-        return true;
+        pixels = record.pixelMap;
+        break;
       }
     }
-    const text = data.getPrimaryText();
-    if (text === undefined || text.length === 0) {
+    let png: ArrayBuffer | undefined = undefined;
+    let key = '';
+    if (pixels !== undefined) {
+      png = await this.packed(pixels);
+      if (png === undefined) {
+        return false;
+      }
+      key = Member.imageKey(png);
+    } else {
+      key = data.getPrimaryText() ?? '';
+    }
+    this.seen(this.boardChanges, key);
+    const swap = await this.call<Swap>('swap', { 'board': key } as Record<string, Object>);
+    if (swap.ok === undefined) {
+      this.error = Errors.shown(swap.failure as Failure);
       return false;
     }
-    const sends = await this.call<Sends>('sends', { 'board': text } as Record<string, Object>);
-    if (sends.ok === undefined) {
-      this.error = Errors.shown(sends.failure as Failure);
-      return false;
+    let sent = false;
+    if (swap.ok.sends === true) {
+      sent = png !== undefined ? await this.sendImage(png) : await this.sendText(key);
     }
-    if (sends.ok.sends !== true) {
-      return false;
+    if (swap.ok.copy !== undefined) {
+      await this.takeCopy(swap.ok.copy);
     }
+    return sent;
+  }
+
+  // Sends a text the pasteboard held to the group.
+  private async sendText(text: string): Promise<boolean> {
     const sent = await this.call<Object>('copy', { 'text': text, 'board': true } as Record<string, Object>);
     if (sent.ok === undefined) {
       this.error = Errors.shown(sent.failure as Failure);
@@ -563,6 +539,96 @@ export class Member {
     this.error = '';
     this.setLast(text, false);
     return true;
+  }
+
+  // The app came to the screen (on) or left it. Coming to it is an opening
+  // (D-128), which swaps nothing: the phone takes the group's copy when the
+  // pasteboard is as the app last saw it. HarmonyOS lets the app read the
+  // pasteboard only on the paste button's tap, so one changed since stays
+  // as it is, for the button to send.
+  setForeground(on: boolean): void {
+    const opening = on && !this.foreground;
+    this.foreground = on;
+    if (opening) {
+      this.opened();
+    }
+  }
+
+  private async opened(): Promise<void> {
+    if (this.handle === null || this.paused || !this.watching || this.seenChanges !== this.boardChanges) {
+      return;
+    }
+    const a = await this.call<Swap>('opened', { 'board': this.seenKey, 'changed': false } as Record<string, Object>);
+    if (a.ok === undefined) {
+      Errors.log(`member: opening: ${(a.failure as Failure).details}`);
+      return;
+    }
+    if (a.ok.copy !== undefined) {
+      await this.takeCopy(a.ok.copy);
+    }
+  }
+
+  // Puts a copy of the group into the pasteboard, as the button or the
+  // opening took it: a text, or images and files fetched; then the core
+  // knows the phone took it.
+  private async takeCopy(copy: Copy): Promise<void> {
+    if (copy.kind === 'media') {
+      await this.take(copy);
+      return;
+    }
+    if ((copy.text ?? '').length === 0) {
+      return;
+    }
+    this.write(copy.text ?? '', copy.kind === 'secret', copy.kind === 'secret' ? (copy.ttl_ms ?? SECRET_TTL_MS) : 0);
+    await this.call<Object>('took', { 'id': copy.id } as Record<string, Object>);
+    this.dismissReceived();
+  }
+
+  // Notes the pasteboard as the app saw it: its change count and key.
+  private seen(changes: number, key: string): void {
+    this.seenChanges = changes;
+    this.seenKey = key;
+  }
+
+  // A copy from another device, for the main page's last received line.
+  private cameIn(copy: Copy): void {
+    const me = this.devices.find((d: Device) => d.self === true);
+    if (copy.origin === undefined || (me !== undefined && copy.origin === me.id)) {
+      return;
+    }
+    const from = this.devices.find((d: Device) => d.id === copy.origin);
+    this.lastId = copy.id;
+    this.lastFrom = from !== undefined ? from.name : copy.origin;
+    this.lastText = copy.kind === 'secret' || copy.kind === 'media' ? '' : copy.text ?? '';
+    // The line goes when the copy's lifetime runs out (D-129).
+    const id = copy.id;
+    const ttl = copy.ttl_ms ?? (copy.kind === 'secret' ? DEFAULT_SECRET_TTL_MS : DEFAULT_TTL_MS);
+    setTimeout(() => {
+      if (this.lastId === id) {
+        this.dismissReceived();
+      }
+    }, Math.min(ttl, 24 * 3600 * 1000));
+  }
+
+  // Copy on the last received line: the group's copy into the pasteboard,
+  // if it is still the group's latest.
+  async copyReceived(): Promise<void> {
+    const id = this.lastId;
+    this.dismissReceived();
+    const a = await this.call<Swap>('opened', { 'board': '', 'changed': false } as Record<string, Object>);
+    if (a.ok === undefined) {
+      this.error = Errors.shown(a.failure as Failure);
+      return;
+    }
+    if (a.ok.copy !== undefined && a.ok.copy.id === id) {
+      await this.takeCopy(a.ok.copy);
+    }
+  }
+
+  private dismissReceived(): void {
+    this.lastId = '';
+    this.lastFrom = '';
+    this.lastText = '';
   }
 
   // Makes the group's copy of files (paths in the app's sandbox), up to
@@ -672,18 +738,6 @@ export class Member {
     this.readAway(a.ok.away);
   }
 
-  // After joining by a remote invitation: sync away from home on, the
-  // tunnel key offered through the invitation's guest tunnel.
-  async joinedByInvite(invite: string): Promise<void> {
-    const a = await this.call<AwayAnswer>('joined_by_invite', { 'invite': invite } as Record<string, Object>);
-    if (a.ok === undefined) {
-      this.error = Errors.shown(a.failure as Failure);
-      return;
-    }
-    Errors.log('member: joined by an invitation; sync away from home is on');
-    this.readAway(a.ok.away);
-  }
-
   async pollDevices(): Promise<void> {
     if (this.handle === null) {
       return;
@@ -695,12 +749,28 @@ export class Member {
       return;
     }
     const devices = d.ok.devices ?? [];
-    const al = await this.call<Alerts>('alerts');
     const w = await this.call<Whys>('why');
-    const rv = await this.call<RootView>('root_view');
-    const alerts = al.ok !== undefined ? (al.ok.alerts ?? []) : this.alerts;
     const why = w.ok !== undefined ? (w.ok.why ?? []) : this.why;
-    const rootView = rv.ok !== undefined ? rv.ok : this.rootView;
+    const g = await this.call<GroupView>('group');
+    const level = g.ok?.key_level;
+    if (level !== undefined && level !== this.keyLevel) {
+      this.keyLevel = level;
+    }
+    if (g.ok !== undefined) {
+      const offers = (g.ok.devices ?? []).filter((d: GroupDevice) => d.offers_admin === true)
+        .map((d: GroupDevice) => d.device ?? '');
+      if (JSON.stringify(offers) !== JSON.stringify(this.offersAdmin)) {
+        this.offersAdmin = offers;
+      }
+      const ttl = g.ok.ttl_ms ?? DEFAULT_TTL_MS;
+      const secretTtl = g.ok.secret_ttl_ms ?? DEFAULT_SECRET_TTL_MS;
+      if (ttl !== this.ttlMs) {
+        this.ttlMs = ttl;
+      }
+      if (secretTtl !== this.secretTtlMs) {
+        this.secretTtlMs = secretTtl;
+      }
+    }
     await this.readView(await this.call<Viewed>('view'));
     if (JSON.stringify(why) !== JSON.stringify(this.why)) {
       this.why = why;
@@ -708,12 +778,6 @@ export class Member {
     if (JSON.stringify(devices) !== JSON.stringify(this.devices)) {
       this.devices = devices;
       this.onDevices(devices);
-    }
-    if (JSON.stringify(alerts) !== JSON.stringify(this.alerts)) {
-      this.alerts = alerts;
-    }
-    if (JSON.stringify(rootView) !== JSON.stringify(this.rootView)) {
-      this.rootView = rootView;
     }
   }
 
@@ -755,16 +819,15 @@ export class Member {
     await this.pollMuted();
     await this.pollDevices();
     await this.pollAway();
-    const s = await this.call<Servers>('servers');
-    const due = s.ok?.period_due === true;
-    if (due !== this.periodDue) {
-      this.periodDue = due;
+    if (this.periodDueAway !== this.periodDue) {
+      this.periodDue = this.periodDueAway;
     }
   }
 
   // Makes this phone one of the group's hubs, reached away from home
   // through the forwarder at forwarder whose key's pin is key ('default'
-  // for the project's), hidden as disguise says ('plain' WireGuard,
+  // for the project's; both empty on a group of 0.6: the one the root set),
+  // hidden as disguise says ('plain' WireGuard,
   // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
   // or stops it being one. Answers why it failed.
   async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
@@ -779,7 +842,8 @@ export class Member {
     if (a.ok === undefined) {
       return a.failure;
     }
-    Errors.log(on ? `member: this phone is a hub of the group, through ${forwarder}` : 'member: this phone is no hub any more');
+    const through = forwarder.length > 0 ? forwarder : (a.ok.root_forwarder?.endpoint ?? '');
+    Errors.log(on ? `member: this phone is a hub of the group, through ${through}` : 'member: this phone is no hub any more');
     this.readAway(a.ok.away);
     return undefined;
   }
@@ -829,18 +893,6 @@ export class Member {
     }
   }
 
-  // Meets the group at the blind relay at relay whose key's pin is key
-  // ('default' for the project's), or leaves it with relay empty.
-  async setRelay(relay: string, key: string): Promise<Failure | undefined> {
-    const a = await this.call<AwayAnswer>('relay', { 'relay': relay, 'key': key } as Record<string, Object>);
-    if (a.ok === undefined) {
-      return a.failure;
-    }
-    Errors.log(relay.length > 0 ? `member: meets the group at the relay ${relay}` : 'member: left the relay');
-    this.readAway(a.ok.away);
-    return undefined;
-  }
-
   private async pollMuted(): Promise<void> {
     const a = await this.call<Muted>('muted');
     if (a.ok !== undefined) {
@@ -872,6 +924,12 @@ export class Member {
       const f = a.failure as Failure;
       Errors.log(`member: sync away from home: ${f.message} (${f.details})`);
       return;
+    }
+    this.rootForwarder = a.ok.root_forwarder?.endpoint ?? '';
+    this.rootForwarderKey = a.ok.root_forwarder?.key ?? '';
+    this.periodDueAway = a.ok.period_due === true;
+    if (this.periodOverdue !== (a.ok.period_overdue === true)) {
+      this.periodOverdue = a.ok.period_overdue === true;
     }
     this.readAway(a.ok.away);
   }
@@ -960,95 +1018,26 @@ export class Member {
       Errors.log(`member: ${e.details ?? ''}`);
       this.onPanic(e.details ?? '');
     } else if (e.type === 'write') {
-      this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
-    } else if (e.type === 'identity') {
-      this.onIdentity(e.cert ?? '', e.issuer ?? '', e.roots ?? []);
-    } else if (e.type === 'mute') {
+      // While on the screen the phone listens like a computer; in the
+      // background it writes nothing (D-128).
+      if (this.foreground) {
+        this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
+      }
+    } else if (e.type === 'mute' || e.type === 'sync') {
       this.pollMuted();
-    } else if (e.type === 'command') {
-      if (e.command !== undefined) {
-        this.command(e.token ?? 0, e.from ?? '', e.command);
-      } else {
-        this.answer(e.token ?? 0, 'refused', 'the command has no body');
-      }
-    } else if (e.type === 'message') {
-      if (e.message?.t === 'admin' && (e.message.admin_ca ?? '').length > 0) {
-        this.onAdminCa(e.message.admin_ca ?? '', e.from ?? '');
-      }
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync
       // is on, as texts do through write.
-      if (e.copy !== undefined && e.copy.kind === 'media' && !this.paused) {
+      if (e.copy !== undefined) {
+        this.cameIn(e.copy);
+        // A text written as it came is the app's own write, no copy to send back.
+        if (this.foreground && e.copy.kind !== 'media' && (e.copy.text ?? '').length > 0) {
+          this.call<Object>('took', { 'id': e.copy.id } as Record<string, Object>);
+        }
+      }
+      if (e.copy !== undefined && e.copy.kind === 'media' && !this.paused && this.foreground) {
         this.take(e.copy);
       }
-    }
-  }
-
-  // A command for the phone itself (docs/protocol.md, section 15): checked
-  // with the records, not carried out before, signed after the member started.
-  private async command(token: number, from: string, record: Object): Promise<void> {
-    const refuse = (reason: string): Promise<void> => {
-      Errors.log(`member: refused a command from ${from}: ${reason}`);
-      return this.answer(token, 'refused', reason);
-    };
-    const c = await this.call<Checked>('check_command', { 'command': record } as Record<string, Object>);
-    if (c.ok === undefined) {
-      const f = c.failure as Failure;
-      await refuse(f.details.length > 0 ? f.details : f.message);
-      return;
-    }
-    const body = c.ok.command;
-    const now = Date.now();
-    if (body.time_ms < this.startedMs) {
-      await refuse('this device started after the command was signed, so it may have carried it out already; send it again');
-      return;
-    }
-    this.seen.forEach((expires: number, id: string) => {
-      if (expires <= now) {
-        this.seen.delete(id);
-      }
-    });
-    if (this.seen.has(body.id)) {
-      await refuse('this command was carried out already');
-      return;
-    }
-    if (this.seen.size >= MAX_COMMANDS) {
-      await refuse('too many commands; try again in a minute');
-      return;
-    }
-    this.seen.set(body.id, body.expires_ms);
-    if (body.type === 'away-off') {
-      Errors.log(`member: ${body.by ?? from} turned sync away from home off`);
-      if (this.awayOn) {
-        await this.setAway(false);
-      }
-      await this.answer(token, 'done', '');
-    } else if (body.type === 'actions-off') {
-      // A phone has no quick actions, so none of them stays on.
-      await this.answer(token, 'done', '');
-    } else if (body.type === 'paste' || body.type === 'paste-off') {
-      let name = '';
-      if (c.ok.verified === true) {
-        const d = this.devices.find((d: Device) => d.id === body.by);
-        name = d !== undefined ? d.name : '';
-      }
-      const paste: CheckedPaste = {
-        command: { type: body.type, by: body.by, text: body.text, enter: body.enter, kind: body.kind },
-        verified: c.ok.verified,
-        sender: c.ok.sender,
-        clean: c.ok.clean
-      };
-      const a = this.onPaste(paste, name);
-      await this.answer(token, a.status, a.reason);
-    } else {
-      await refuse(`this phone takes no ${body.type} commands`);
-    }
-  }
-
-  private async answer(token: number, status: string, reason: string): Promise<void> {
-    const a = await this.call<Object>('answer', { 'token': token, 'status': status, 'reason': reason } as Record<string, Object>);
-    if (a.failure !== undefined) {
-      Errors.log(`member: answering a command: ${a.failure.message} (${a.failure.details})`);
     }
   }
 
@@ -1065,6 +1054,9 @@ export class Member {
     const board = pasteboard.getSystemPasteboard();
     board.setData(data).then(() => {
       const mark = this.boardChanges;
+      // The app's own write is no copy: the next opening finds the
+      // pasteboard as it left it.
+      this.seen(mark + 1, text);
       if (secret && ttlMs > 0) {
         setTimeout(() => {
           if (this.boardChanges === mark + 1) {
@@ -1101,37 +1093,34 @@ export class Member {
     return `\u0000image:${hex}`;
   }
 
-  private async sendImage(pixels: image.PixelMap): Promise<void> {
+  // A pasteboard image as PNG, undefined when it does not pack.
+  private async packed(pixels: image.PixelMap): Promise<ArrayBuffer | undefined> {
     const packer = image.createImagePacker();
-    let png: ArrayBuffer;
     try {
-      png = await packer.packToData(pixels, { format: 'image/png', quality: 100 });
+      return await packer.packToData(pixels, { format: 'image/png', quality: 100 });
     } catch (e) {
       this.error = Errors.shown(Errors.unexpected(t('error_image'), e as Object));
-      return;
+      return undefined;
     } finally {
       packer.release();
     }
-    const key = Member.imageKey(png);
-    if (key === this.tookImage || png.byteLength > MAX_SEND_BYTES) {
-      return;
-    }
-    const sends = await this.call<Sends>('sends', { 'board': key } as Record<string, Object>);
-    if (sends.ok === undefined) {
-      this.error = Errors.shown(sends.failure as Failure);
-      return;
-    }
-    if (sends.ok.sends !== true) {
-      return;
+  }
+
+  // Sends an image the pasteboard held to the group, unless it is the one
+  // the phone took or too large.
+  private async sendImage(png: ArrayBuffer): Promise<boolean> {
+    if (Member.imageKey(png) === this.tookImage || png.byteLength > MAX_SEND_BYTES) {
+      return false;
     }
     const part: Record<string, Object> = { 'type': 'image/png', 'data': toBase64(png) };
     const sent = await this.call<Object>('copy_media', { 'parts': [part], 'board': true } as Record<string, Object>);
     if (sent.ok === undefined) {
       this.error = Errors.shown(sent.failure as Failure);
-      return;
+      return false;
     }
     this.error = '';
     this.last = t('last_image');
+    return true;
   }
 
   // Takes the group's images or files: fetched into the app's folder of

@@ -4,74 +4,48 @@
 package service
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/HunterEwok/cbb/internal/control"
-	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/seal"
 )
 
-// TestSealKeysRecorded: each computer makes its key for sealed messages
-// and offers it in its hello, and the root puts it in the device records,
-// its own included, which every member then holds.
+// TestSealKeysRecorded: on the records of 0.6 each member offers its
+// sealing key in its statement, which the others hold; a command's orders
+// are sealed to the receiver's key (format section 6), so the deck takes a
+// command only when the root holds its key, and again after a restart,
+// whose keys stay.
 func TestSealKeysRecorded(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
-	want := map[string][]byte{}
-	for _, s := range []*testService{pi, deck} {
-		secret, err := group.LoadSealSecret(s.dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want[s.name], err = seal.PublicKey(secret); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, s := range []*testService{pi, deck} {
-		waitFor(t, s.name+" holds both keys", func() bool {
-			id, err := group.Load(s.dir)
-			if err != nil {
-				return false
-			}
-			recs, err := group.LoadRecords(s.dir, id.GroupCA.Cert)
-			if err != nil {
-				return false
-			}
-			n := 0
-			for _, d := range recs.Devices() {
-				if bytes.Equal(d.Seal, want[d.Name]) {
-					n++
-				}
-			}
-			return n == 2
-		})
-	}
-	// A command for the deck is sealed to its key, and the deck opens it.
 	var deckID string
 	for _, d := range pi.devices(t) {
 		if d.Name == "deck" {
 			deckID = d.ID
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: deckID, On: control.Bool(false)}, ""); err != nil {
-		t.Fatal(err)
+	command := func(on bool, word string) {
+		t.Helper()
+		// Until the root holds the deck's statement it has no key to
+		// seal to, and says so; it holds it once they talked.
+		waitFor(t, "the root seals a command to the deck", func() bool {
+			_, err := pi.do(t, control.Header{Op: control.OpSync, Device: deckID, On: control.Bool(on)}, "")
+			return err == nil
+		})
+		waitFor(t, "the deck opens the sealed command", func() bool { return deck.logged("turned sync " + word + " here") })
 	}
+	command(false, "off")
 	if deck.status(t).Mode != "own" {
 		t.Error("the deck did not take the sealed mode command")
 	}
-	if !deck.logged("opened a sealed mode command") {
-		t.Error("the mode command was not sealed")
-	}
-
-	// The secret stays: loading it again gives the same key.
-	again, err := group.LoadSealSecret(deck.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pub, _ := seal.PublicKey(again); !bytes.Equal(pub, want["deck"]) {
-		t.Error("the deck's key changed")
+	// The deck's sealing keys stay across a restart: a command sealed to
+	// them still opens.
+	deck.stop()
+	deck = restartService(t, &h, deck)
+	waitFor(t, "the deck is back", func() bool { return len(pi.status(t).Peers) == 1 })
+	command(true, "on")
+	if deck.status(t).Mode != "shared" {
+		t.Error("the deck did not take the sealed mode command after a restart")
 	}
 }

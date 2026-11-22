@@ -31,21 +31,21 @@ frozen until the root decides (`cbb unfreeze` or `cbb remove` on the root, or
 
 ## 3. If it was the root: take the group over
 
-The root holds the group's root key. When it is gone, an admin becomes the root, and every
-other device stays in the group:
+The root holds the group's root key. When it is gone, another device of the group becomes the
+root with the group's **recovery key**, the sheet or the YubiKey you kept when you made the
+group, and every other device stays in the group:
 
-- with phones: on the other phone, which is an admin, remove the lost one; the app takes the
-  group over in the same step;
-- with computers: on an admin computer, `sudo cbb takeover NAME`, where NAME is the lost
-  root.
+- with phones: on your other phone, open the recovery in the app and give it the recovery key;
+- with computers: on another computer of the group, `sudo cbb recovery` with the recovery
+  sheet (`sudo cbb recovery -yubikey` with the YubiKey), naming the lost device with
+  `-leave NAME`.
 
-If someone else holds a removed admin's device, they can stop the group for a while by
-signing claims of their own: the devices say the group is stopped. Then the old root ends it,
-if you still have it; in 0.6 the new root cannot, and a group whose old root is lost too is
-set up again ([protocol](../protocol.md), section 10, "Known limits in 0.6").
+It shows who stays and who leaves and asks once; the change takes effect at once, and the
+group refuses the lost device from then on. Nobody takes the group over without the recovery
+key, not even an admin.
 
-If the group had no other admin, it cannot be taken over: make a new group and add the devices again. That is why the apps
-suggest a second admin phone, or an admin computer, as soon as the group has a single admin.
+Without the recovery key the group cannot be taken over: make a new group and add the devices
+again. That is why the app asks how to keep it as soon as the group is made.
 
 ## 4. Turn off what it could reach
 

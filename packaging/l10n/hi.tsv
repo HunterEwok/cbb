@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	सेवा ने 10 सेकं�
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है। इसे हटाने के लिए: sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: यह System > Diagnostics > Services में दिखता है, और इसके नियम हर फ़िल्टर रीलोड के साथ बने रहते हैं।
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense समर्थित नहीं है: pfSense का अपडेट CBB को हटा सकता है; अपडेट के बाद यह इंस्टॉलर फिर से चलाएँ।
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	आगे: root के रूप में cbb pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें; ऐप के बिना, docs/guide/without-app.md देखें।
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	आगे: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर यहाँ cbb pair -code (root के रूप में) चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें।
 CBB is removed, with this device's keys; it left its group.	CBB हटा दिया गया, इस डिवाइस की कुंजियों के साथ; इसने अपना समूह छोड़ दिया।
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /var/db/cbb में रहती हैं; --purge उन्हें हटाता है।
 --port needs a port number	--port को पोर्ट संख्या चाहिए
@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json %s के लिए है, %s के लिए नहीं
 release.json does not list %s	release.json में %s सूचीबद्ध नहीं है
 %s does not match the signed release.json; not installing it	%s हस्ताक्षरित release.json से मेल नहीं खाता; इसे इंस्टॉल नहीं किया जा रहा
-The release's signature checks out (%s).	रिलीज़ का हस्ताक्षर सही है (%s)।
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	रिलीज़ का हस्ताक्षर सही है (%s): ES256 और SLH-DSA-SHA2-128s।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, इसके लिए OpenSSL 3.5 या नया चाहिए।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, PowerShell इसे जाँच नहीं सकता।
 could not download %s	%s डाउनलोड नहीं हो सका
 stable.json names no release	stable.json किसी रिलीज़ का नाम नहीं देता
 Downloading %s (%s)...	%s डाउनलोड हो रहा है (%s)...
@@ -108,8 +110,7 @@ the desktop agent did not start; it starts at your next login	डेस्कट
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB तब तक चलता है जब तक आप लॉग इन हैं। लॉग आउट के बाद भी इसे चलाए रखने के लिए, एक व्यवस्थापक चलाता है: sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB %s के लिए TCP पोर्ट %s पर चल रहा है, root के बिना इंस्टॉल किया हुआ: यह कभी समूह का रूट, व्यवस्थापक या हब नहीं बन सकता। अगर यहाँ कोई फ़ायरवॉल आने वाले कनेक्शन सीमित करता है, तो एक व्यवस्थापक होम नेटवर्क से TCP %s और UDP 5353 की अनुमति देता है। इसे हटाने के लिए: %s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	tmux में कॉपी और पेस्ट के लिए, यह पंक्ति ~/.tmux.conf में जोड़ें: source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	आगे: member/README.md देखें; संक्षेप में, यहाँ %s pair, और उसका QR कोड फ़ोन ऐप से स्कैन करें।
-Next: run %s pair and scan its QR code with the CBB app on your phone.	आगे: %s pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें।
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	आगे: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर यहाँ %s pair -code चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें।
 this archive has no install-rootless.sh, so it cannot install without root	इस आर्काइव में install-rootless.sh नहीं है, इसलिए यह root के बिना इंस्टॉल नहीं कर सकता
 systemd is required	systemd ज़रूरी है
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	यहाँ cbb नाम का एक खाता है जो इस सेवा का नहीं है (उसकी टिप्पणी "cbb service" नहीं है); उसे समूह की कुंजियाँ मिल जातीं। उसका नाम बदलें या उसे हटाएँ, फिर install.sh फिर से चलाएँ।
@@ -123,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	uinput सहा�
 the desktop agent of %s did not start again; it starts at their next login	%s का डेस्कटॉप एजेंट फिर से शुरू नहीं हुआ; यह उनके अगले लॉग इन पर शुरू होगा
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow विफल रहा; सेवा चलने पर sudo cbb global allow चलाएँ।
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है। इसे हटाने के लिए: sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	आगे: member/README.md देखें; संक्षेप में, यहाँ sudo -u cbb %s pair, और उसका QR कोड फ़ोन ऐप से स्कैन करें।
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	आगे: sudo %s pair चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें; ऐप के बिना, docs/guide/without-app.md देखें।
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	आगे: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर यहाँ sudo -u cbb %s pair -code चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें।
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	आगे: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर यहाँ sudo %s pair -code चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें।
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए %s/cbb में रहती हैं; --purge उन्हें हटाता है।
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /var/lib/cbb में रहती हैं; --purge उन्हें हटाता है।
 %s does not run on this Mac	%s इस Mac पर नहीं चलता
@@ -141,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	ऊपर का निय�
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	कोई फ़ायरवॉल नियम नहीं जोड़ा गया। CBB तभी काम करता है जब फ़ायरवॉल ऊपर के नियम की अनुमति देता है। इसे हाथ से जोड़ने के लिए, चलाएँ:
 To let CBB add and manage it, run the installer again with --express.	CBB को इसे जोड़ने और सँभालने देने के लिए, इंस्टॉलर --express के साथ फिर से चलाएँ।
 CBB is running on TCP port %s, in its group.	CBB TCP पोर्ट %s पर चल रहा है, अपने समूह में।
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB TCP पोर्ट %s पर चल रहा है। किसी समूह से जुड़ें: sudo cbb pair, और उसका QR कोड फ़ोन से स्कैन करें या cbb pair का कोड समूह के रूट या किसी व्यवस्थापक पर टाइप करें; या समूह शुरू करें: sudo cbb new।
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	CBB TCP पोर्ट %s पर चल रहा है। किसी समूह से जुड़ें: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर sudo cbb pair -code चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें; या समूह शुरू करें: sudo cbb new।
 CBB is removed, with this Mac's keys; it left its group.	CBB हटा दिया गया, इस Mac की कुंजियों के साथ; इसने अपना समूह छोड़ दिया।
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए %s/state में रहती हैं; --purge उन्हें हटाता है।
 this installer is for OpenWrt	यह इंस्टॉलर OpenWrt के लिए है
@@ -152,9 +153,9 @@ the service did not answer within 40 s: %s	सेवा ने 40 सेकं�
 see logread -e cbb	logread -e cbb देखें
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB TCP पोर्ट %s पर चल रहा है, lan ज़ोन में। इसे हटाने के लिए: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	OpenWrt के फ़ीड से बाहर के पैकेज attended sysupgrade (ASU, owut) में छूट जाते हैं: उसके बाद इसे फिर से इंस्टॉल करें।
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	आगे: su -s /bin/sh cbb -c 'cbb pair -name router' चलाएँ और उसका QR कोड फ़ोन पर CBB ऐप से स्कैन करें।
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	आगे: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर यहाँ su -s /bin/sh cbb -c 'cbb pair -code -name router' चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें।
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB हटा दिया गया। इसकी कुंजियाँ दोबारा इंस्टॉल के लिए /etc/cbb में रहती हैं; --purge उन्हें हटाता है।
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	यह डिवाइस अभी किसी समूह में नहीं है, इसलिए यह अब पेयरिंग शुरू करता है (--no-pair इसे छोड़ देता है)।
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	यह डिवाइस अभी किसी समूह में नहीं है। समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें (वहाँ cbb pair), फिर वह जो छह अंक दिखाती है उन्हें यहाँ टाइप करें (--no-pair इसे छोड़ देता है)।
 could not record how CBB was installed; cbb update takes it as get.sh	यह दर्ज नहीं हो सका कि CBB कैसे इंस्टॉल हुआ; cbb update इसे get.sh मानेगा
 automatic updates are on or off, not %s	स्वचालित अपडेट on या off होते हैं, %s नहीं
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB दिन में एक बार प्रोजेक्ट द्वारा हस्ताक्षरित रिलीज़ जाँचकर उसे इंस्टॉल कर सकता है; यह जाँच GitHub को इस डिवाइस का पता बताती है, जैसे कोई भी डाउनलोड।
@@ -236,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	स्वचालित अपडेट %s नहीं किए जा सके; व्यवस्थापक के रूप में cbb update -auto %s चलाएँ।
 CBB %s is running on TCP port %s; %s may use it.	CBB %s TCP पोर्ट %s पर चल रहा है; %s इसे इस्तेमाल कर सकते हैं।
 It stays in its group.	यह अपने समूह में बना रहता है।
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	आगे, व्यवस्थापक के रूप में खोले गए टर्मिनल में: cbb pair, और उसका QR कोड फ़ोन से स्कैन करें या cbb pair का कोड समूह के रूट या किसी व्यवस्थापक पर टाइप करें; या समूह शुरू करें: cbb new।
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	आगे, किसी समूह से जुड़ने के लिए: समूह के किसी डिवाइस पर पेयरिंग विंडो खोलें, फिर व्यवस्थापक के रूप में खोले गए टर्मिनल में cbb pair -code चलाएँ और वह जो छह अंक दिखाती है उन्हें टाइप करें; या वहाँ समूह शुरू करें: cbb new।
 To remove it: Settings, Apps, CBB, Uninstall.	इसे हटाने के लिए: Settings, Apps, CBB, Uninstall।
 Y	हाँ
 Yes	हाँ
@@ -258,3 +259,6 @@ cbb runs here with its helper, which may hold its keys; without it cbb cannot us
 --uinput needs cbb's helper, which runs the desktop connector	--uinput को cbb का सहायक चाहिए, जो डेस्कटॉप कनेक्टर चलाता है
 the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	व्यवस्थापक क्रियाओं की पुष्टि करने वाली polkit क्रियाएँ नहीं लिखी गईं; ऐप्स इसके बजाय व्यवस्थापक का पासवर्ड पूछेंगे
 the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	व्यवस्थापक क्रियाओं की पुष्टि करने वाले अधिकार नहीं लिखे गए; Mac ऐप इसके बजाय व्यवस्थापक का पासवर्ड पूछेगा
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s में SLH-DSA-SHA2-128s है, पर यह उसे उस तरह नहीं जाँचता जैसे cbb हस्ताक्षर करता है; openssl अपडेट करें (या बिना जाँच इंस्टॉल करने के लिए CBB_VERIFY=skip)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	%s में रिलीज़ की जाँच के लिए कोई रूट कुंजी नहीं; इसे इंस्टॉल नहीं किया जा रहा (CBB_VERIFY=skip इसे बिना जाँच इंस्टॉल करता है)
+Checked against the roots in %s, not the built-in ones.	%s की रूट कुंजियों से जाँचा गया, अंतर्निहित कुंजियों से नहीं।

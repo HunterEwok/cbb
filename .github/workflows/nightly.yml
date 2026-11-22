@@ -1,9 +1,11 @@
-# Nightly: the differential comparison of the four implementations with a
+# Nightly: the differential comparison of the three implementations with a
 # fresh seed and more cases than a pull request's run, the native fuzz
 # targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
 # testing"), the Rust core's branch coverage, a check that cbb and cbb-helper build
-# the same bytes twice (.github/reproducible.sh), and the members' tests run many times over, to find the ones
+# the same bytes twice (.github/reproducible.sh), the group simulation with fresh
+# seeds (docs/testing.md, "The simulation"), and the members' tests run many times
+# over, to find the ones
 # that fail only now and then (docs/testing.md, "Unstable tests"). It only
 # reads the repository; a failure prints the cases, which become vectors of
 # testdata/interop.
@@ -55,8 +57,9 @@ jobs:
         include:
           - { package: ./internal/group, target: FuzzRecordBody }
           - { package: ./internal/group, target: FuzzCommand }
-          - { package: ./internal/relay, target: FuzzRelayWire }
           - { package: ./internal/forward, target: FuzzForwardWire }
+          - { package: ./internal/forward, target: FuzzRegister }
+          - { package: ./internal/blind, target: FuzzCredential }
           - { package: ./internal/pasteboard, target: FuzzDecodeDIB }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzUnpack }
           - { package: ./internal/tvremote/appletv/wire, target: FuzzDecodePlist }
@@ -81,6 +84,25 @@ jobs:
           path: "**/testdata/fuzz/"
           if-no-files-found: ignore
 
+  simulation:
+    name: the group simulation, a thousand fresh seeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: core/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: a thousand seeds from a fresh start, each failure with its replay
+        run: |
+          first=$(( $(date +%s) * 1000 ))
+          echo "seeds $first to $((first + 999))"
+          SIM_ALL=1 SIM_FIRST=$first SIM_SEEDS=1000 cargo test --release -p cbb-core --lib sim::
+
   cargo-fuzz:
     name: cargo fuzz (${{ matrix.target }})
     runs-on: ubuntu-latest
@@ -88,7 +110,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, vless, api]
+        target: [record_body, command, credential, release, wire, vless, api, format, welcome_message, sheet, yubikey_object, welcome_parts, welcome_fields]
     defaults:
       run:
         working-directory: core/
@@ -130,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [control, next_frames]
+        target: [control, next_frames, relay_wire]
     defaults:
       run:
         working-directory: member/

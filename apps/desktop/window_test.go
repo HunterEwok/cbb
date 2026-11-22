@@ -63,6 +63,11 @@ func TestWindow(t *testing.T) {
 	t.Cleanup(srv.Close)
 	w.page = startBrowser(t, exe)
 	w.url = srv.URL + "/index.html"
+	// What a subtest does not put in adminRun's place stands in too: the
+	// add dialog opens a pairing window as soon as it opens.
+	oldRun := adminRun
+	adminRun = fakeDangerousRun
+	t.Cleanup(func() { adminRun = oldRun })
 
 	t.Run("themes", w.themes)
 	t.Run("collections", w.collections)
@@ -76,6 +81,7 @@ func TestWindow(t *testing.T) {
 	t.Run("switches", w.switches)
 	t.Run("add", w.add)
 	t.Run("join", w.joinGroup)
+	t.Run("dangerous screens", w.dangerous)
 }
 
 // window is the page under test and what stands around it.
@@ -637,8 +643,8 @@ func (w *window) admin(t *testing.T) {
 }
 
 // joinGroup joins a group from a computer in none, from the start window:
-// the window shows the QR code cbb pair -app writes and its six digits, and
-// closing the dialog removes the file, which cancels.
+// the window asks for the six digits of the group's pairing window and
+// runs cbb pair -code with them on standard input; Cancel runs nothing.
 func (w *window) joinGroup(t *testing.T) {
 	w.t = t
 	t.Setenv("CBB_DEBUG", "0")
@@ -651,28 +657,15 @@ func (w *window) joinGroup(t *testing.T) {
 		w.svc.status.Group = group
 		w.svc.mu.Unlock()
 	}()
-	joined := make(chan struct{})
-	ran := make(chan []string, 4)
+	type run struct {
+		args []string
+		in   string
+	}
+	ran := make(chan run, 4)
 	old := adminRun
-	adminRun = func(args []string, _ string, _ bool) error {
-		ran <- args
-		if len(args) != 3 || args[0] != "pair" || args[1] != "-app" {
-			return fmt.Errorf("ran %q", args)
-		}
-		code := `{"qr":"cbb://join?code=123456&addr=192.168.1.20%3A8764&fp=q83vEjRWeJA","expires":300,"port":8764}` + "\n"
-		if err := os.WriteFile(args[2], []byte(code), 0o600); err != nil {
-			return err
-		}
-		for {
-			select {
-			case <-joined:
-				return nil
-			case <-time.After(20 * time.Millisecond):
-			}
-			if _, err := os.Stat(args[2]); err != nil {
-				return &adminError{msg: "cancelled"}
-			}
-		}
+	adminRun = func(args []string, in string, _ bool) error {
+		ran <- run{args, in}
+		return nil
 	}
 	defer func() { adminRun = old }()
 	w.open("en")
@@ -683,24 +676,25 @@ func (w *window) joinGroup(t *testing.T) {
 		t.Error("the switches or + show on the start window")
 	}
 
-	// Cancelled: the file is gone, and the window says nothing.
+	// Cancelled: nothing runs, and the window says nothing.
 	w.eval(`$click("#join")`, nil)
-	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden && $q("#join-qr").src.startsWith("data:image/png;base64,")`)
-	w.wait(`$q("#join-text").textContent.startsWith("cbb://join?code=123456") && $q("#join-port").textContent.includes("8764")`)
-	w.wait(`$q("#join-digits").textContent === "123 456"`)
-	w.eval(`$clickText("#join-dialog menu button", "Cancel")`, nil)
-	w.wait(`!$q("#join-dialog").open`)
-	w.wait(`$q("#join") && !$q("#join").disabled && $q("#message").textContent === ""`)
-	if args := <-ran; args[0] != "pair" {
-		t.Errorf("join ran %q", args)
+	w.wait(`$q("#confirm").open && !$q("#confirm-input").hidden && $q("#confirm-text").textContent.includes("six digits")`)
+	w.eval(`$clickText("#confirm menu button", "Cancel")`, nil)
+	w.wait(`!$q("#confirm").open && $q("#message").textContent === ""`)
+	select {
+	case r := <-ran:
+		t.Errorf("a cancelled join ran %q", r.args)
+	default:
 	}
 
-	// Joined: the dialog closes by itself and the window says so.
+	// Joined: the digits go on standard input, never the command line.
 	w.eval(`$click("#join")`, nil)
-	w.wait(`$q("#join-dialog").open && !$q("#join-code").hidden`)
-	<-ran
-	close(joined)
-	w.wait(`!$q("#join-dialog").open && $q("#message").textContent === "Joined the group."`)
+	w.wait(`$q("#confirm").open`)
+	w.eval(`$q("#confirm-input").value = " 123 456 "; $click("#confirm-ok"); true`, nil)
+	w.wait(`$q("#message").textContent === "Joined the group."`)
+	if r := <-ran; !reflect.DeepEqual(r.args, []string{"pair", "-code"}) || r.in != "123 456\n" {
+		t.Errorf("join ran %q with %q", r.args, r.in)
+	}
 }
 
 // switches: the house turns sync off and on with no administrator, and
@@ -775,34 +769,62 @@ func (w *window) switches(t *testing.T) {
 	}
 }
 
-// add: + admits the new device by the six digits it shows, typed here,
-// with cbb pair -qr as the administrator.
+// add: + opens a pairing window with cbb pair -app as the administrator
+// and shows its six digits and QR code; closing the dialog closes the
+// window, a device that joins closes the dialog, and on the root the box
+// below opens it again for an admin phone (cbb pair -admin).
 func (w *window) add(t *testing.T) {
 	w.t = t
 	old := adminRun
-	var args []string
-	var input string
-	var mu sync.Mutex
-	adminRun = func(a []string, in string, _ bool) error {
-		mu.Lock()
-		defer mu.Unlock()
-		args, input = a, in
-		return nil
+	ran := make(chan []string, 8)
+	var join atomic.Bool
+	adminRun = func(a []string, _ string, _ bool) error {
+		ran <- a
+		if len(a) < 3 || a[0] != "pair" || a[1] != "-app" {
+			return fmt.Errorf("ran %q", a)
+		}
+		line := `{"code":"654321","qr":"cbb://pair?c=654321","address":"192.168.1.5:8764","expires":300}`
+		if err := os.WriteFile(a[2], []byte(line+"\n"), 0o600); err != nil {
+			return err
+		}
+		for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+			if _, err := os.Stat(a[2]); err != nil {
+				return &adminError{msg: "cancelled"}
+			}
+			if join.Load() {
+				done := `{"code":"654321","qr":"cbb://pair?c=654321","expires":300,"done":true,"name":"laptop"}`
+				return os.WriteFile(a[2], []byte(done+"\n"), 0o600)
+			}
+		}
+		return errors.New("the window never closed")
 	}
 	defer func() { adminRun = old }()
 	w.open("en")
 	w.wait(`!$q("#add").hidden`)
+
+	// Closed: the window closes with the dialog, and nothing is said.
 	w.eval(`$click("#add")`, nil)
-	w.wait(`$q("#add-dialog").open && !$q("#admit-box").hidden`)
-	w.eval(`$q("#admit-code").value = "12"; $click("#admit")`, nil)
-	w.wait(`!$q("#admit-error").hidden`)
-	w.eval(`$q("#admit-code").value = "246 810"; $click("#admit")`, nil)
-	w.wait(`$q("#message").textContent === "It joined the group."`)
-	mu.Lock()
-	defer mu.Unlock()
-	if !reflect.DeepEqual(args, []string{"pair", "-qr"}) || input != "246810\n" {
-		t.Errorf("admitting by the code ran %q with %q", args, input)
+	w.wait(`$q("#add-dialog").open && !$q("#admit-window").hidden && $q("#admit-digits").textContent === "654 321"`)
+	w.wait(`$q("#admit-qr").src.startsWith("data:image/png;base64,") && $q("#admit-ends").textContent.includes("5")`)
+	if a := <-ran; !reflect.DeepEqual(a[:2], []string{"pair", "-app"}) || len(a) != 3 {
+		t.Errorf("the window ran %q", a)
 	}
+	// On the root, the box opens it again for an admin phone.
+	w.wait(`!$q("#admit-admin-row").hidden`)
+	w.eval(`$click("#admit-admin")`, nil)
+	if a := <-ran; len(a) != 4 || a[3] != "-admin" {
+		t.Errorf("the admin's window ran %q", a)
+	}
+	w.wait(`!$q("#admit-window").hidden`)
+	w.eval(`$clickText("#add-dialog menu button", "Cancel")`, nil)
+	w.wait(`!$q("#add-dialog").open && $q("#message").textContent === ""`)
+
+	// Joined: the dialog closes by itself and the window says so.
+	w.eval(`$click("#add")`, nil)
+	w.wait(`$q("#add-dialog").open && !$q("#admit-window").hidden`)
+	<-ran
+	join.Store(true)
+	w.wait(`!$q("#add-dialog").open && $q("#message").textContent === "It joined the group."`)
 }
 
 // fakeService answers the window's status and devices requests on a

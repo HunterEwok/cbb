@@ -17,7 +17,7 @@
 
 namespace {
 
-// The longest side of a camera frame the QR reader gets, as Admit's.
+// The longest side of a camera frame the QR reader gets.
 const int maxFrameSide = 1024;
 
 // How often the page's state is asked of the core.
@@ -65,17 +65,15 @@ void Invite::setPreparing()
     setState(QStringLiteral("preparing"));
 }
 
-void Invite::open(cbb_member *member, const QByteArray &publicKey, const QByteArray &adminCa, int seconds)
+void Invite::open(cbb_member *member, const QByteArray &publicKey, int seconds)
 {
     close();
     if (!member)
         return fail({QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("invite: no member")});
-    QJsonObject req{
+    const QJsonObject req{
         {QStringLiteral("public"), QString::fromLatin1(publicKey.toBase64())},
         {QStringLiteral("expires"), seconds},
     };
-    if (!adminCa.isEmpty())
-        req.insert(QStringLiteral("admin_ca"), QString::fromLatin1(adminCa.toBase64()));
     auto *thread = new OpenThread;
     thread->member = member;
     thread->request = QJsonDocument(req).toJson(QJsonDocument::Compact);

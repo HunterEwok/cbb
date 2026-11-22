@@ -54,8 +54,8 @@ static const char usage_text[] = "CBB " VERSION "  .cbb COMMAND\n\n"
            "text WORDS\tsend the words\n"
            "copy -s FILE\tsend a password\n"
            "text -s WORDS\tor any secret\n"
-           "pair [CODE]\tjoin: scan the QR\n"
-           "\tor cbb pair CODE\n"
+           "pair [CODE]\tjoin with the\n"
+           "\tcode of cbb pair\n"
            "net on [HOST]\tthe network\n"
            "net [off]\tstate, or stop it\n"
            "install\tfetch the rest\n"
@@ -91,12 +91,11 @@ static void at(uint8_t row, uint8_t col)
     rom_char(col);
 }
 
-// The QR code's line, as wide as its wait; the install screen's
-// from PRESS.
-static const char qr_key[] = "SCAN, THEN PRESS ANY KEY";
+// The install screen's last line.
+static const char press_key[] = "PRESS ANY KEY";
 
 // After a key, a clear screen in BASIC's colours and border (BORDCR,
-// ATTR_P), for what the QR code or the install screen showed.
+// ATTR_P), for what the install screen showed.
 static void key_clear(void)
 {
     in_wait_nokey();
@@ -868,9 +867,6 @@ static uint8_t esp_speed(uint32_t speed)
 static const char net_port[] = ":8764";
 static const char net_serve[] = " -serve 8764:8764";
 
-// net_pair starts the network under its QR code, without a word.
-static uint8_t quiet;
-
 // Finds a computer of the group on the home network, as cbb on small devices
 // on a network of their own do with mDNS: the question for _cbb._tcp.local
 // goes from the ESP's UDP port 5354, which the members answer to that port
@@ -887,15 +883,39 @@ static const char *const mdns_cmds[] = {"AT+CIPMODE=0", "AT+CIPMUX=1", "AT+CIPCL
                                         "AT+CIPSTART=4,\"UDP\",\"224.0.0.251\",5353,5354,2"};
 static const char ipd[] = "+IPD,";
 static char net_to[32];
+// " -window ID -fp HASH" for .cbb pair CODE: the window's ID (TXT i, 32
+// hex digits) and its member key's hash (TXT f, 64), by which the Pi's
+// cbb joins a group of 0.6 with the six digits. It keeps text[]'s last
+// bytes, which an ESP's answer (a UDP datagram, under 1500 bytes) never
+// reaches, from net_find() until the link's line is sent.
+#define NET_WINDOW 112
+#define net_window ((char *)text + MAX_TEXT - NET_WINDOW)
 
-// Whether the n bytes at p hold s.
-static uint8_t holds(const uint8_t *p, uint16_t n, const char *s)
+// Where the n bytes at p hold s, or 0.
+static const uint8_t *holds(const uint8_t *p, uint16_t n, const char *s)
 {
     uint8_t k = strlen(s);
     for (; n >= k; n--, p++) {
-        if (memcmp(p, s, k) == 0) return 1;
+        if (memcmp(p, s, k) == 0) return p;
     }
     return 0;
+}
+
+// The value of the TXT string key (its length byte, then "k=") in the
+// answer of n bytes in text[]: len lowercase hex digits, into out. Only
+// hex digits go on to the Pi's shell. A value cut off by the answer's
+// end reads on into text[]'s older bytes, which at worst make an ID that
+// no window has, and the window refuses it.
+static uint8_t txt_hex(uint16_t n, const char *key, uint8_t len, char *out)
+{
+    const uint8_t *v = holds(text, n, key);
+    if (!v) return 0;
+    memcpy(out, v + 3, len);
+    out[len] = 0;
+    while (len) {
+        if (!strchr("0123456789abcdef", out[--len])) return 0;
+    }
+    return 1;
 }
 
 // The end of the name at i in the answer of n bytes.
@@ -943,7 +963,7 @@ static uint8_t mdns_answer(void)
     p = strchr(head, ',');
     if (!p) return 2;
     for (n = 0, p++; *p >= '0' && *p <= '9'; p++) n = n * 10 + *p - '0';
-    if (n > sizeof text) return 2;
+    if (n > sizeof text - NET_WINDOW) return 2;
     for (i = 0; i < n; i++) {
         if (link_recv(text + i, 3)) return 2;
     }
@@ -961,6 +981,12 @@ static uint8_t mdns_answer(void)
     // open (TXT p=1).
     if (pair_code && !holds(text, n, "p=1")) return 1;
     sprintf(net_to, "-to %s:%u ", ip, srv_port(n));
+    // A window of 0.6 names its ID, and the code's six digits are a
+    // password only with it (net_cmd() emptied net_window).
+    if (pair_code && txt_hex(n, "\x22i=", 32, net_window + 9)) {
+        memcpy(net_window, " -window ", 9);
+        if (txt_hex(n, "\x42" "f=", 64, net_window + 46)) memcpy(net_window + 41, " -fp ", 5);
+    }
     return 0;
 }
 
@@ -1011,7 +1037,7 @@ again:
     }
     link_use(LINK_PI);
     if (!got) return fail("found no computer of the group; .cbb net on HOST names one", 0);
-    if (!quiet) printf("Found %s\n", net_to + 4);
+    printf("Found %s\n", net_to + 4);
     return 0;
 failed:
     // A mode the network or an earlier tool left that the ESP keeps until
@@ -1126,6 +1152,7 @@ static int net_start(int argc, char **argv)
     // Without -to, a computer is found each time: its address may change.
     // Just after power-on the ESP may not be on the Wi-Fi network yet.
     net_to[0] = 0;
+    net_window[0] = 0;
     if (booting) {
         for (i = 0; i < 20 && !esp_address(line, sizeof line); i++) {
             n = FRAMES_LO;
@@ -1153,6 +1180,7 @@ static int net_start(int argc, char **argv)
     if (pair_code) {
         start_send(" -join ");
         start_send(pair_code);
+        start_send(net_window);
     }
     if (paste_load()) {
         start_send(" -paste ");
@@ -1164,7 +1192,7 @@ static int net_start(int argc, char **argv)
         if (driver(DRV_BOOT, BOOT_GO)) return fail(boot_cannot, boot_call);
         img_banks_on = 1;
         far_img_banks();
-        if (!quiet) printf(boot_wait);
+        printf(boot_wait);
         return 0;
     }
     // The driver may only start once the link has made the UART raw: the
@@ -1196,7 +1224,7 @@ static int net_start(int argc, char **argv)
     if (driver(DRV_SWITCH, 1)) return fail("the driver did not start", "M_DRVAPI 124 failed");
     img_banks_on = 1;
     far_img_banks();
-    if (!quiet) printf("The Pi's network runs through\nthe ESP in the background.\n");
+    printf("The Pi's network runs through\nthe ESP in the background.\n");
     return 0;
 }
 
@@ -1224,57 +1252,26 @@ static uint8_t esp_address(char *ip, uint8_t max)
     return found && plain(ip);
 }
 
-// Sets one pixel of the ULA screen.
-static void plot(uint8_t x, uint8_t y)
-{
-    *zx_pxy2saddr(x, y) |= zx_px2bitmask(x);
-}
-
-// Draws a QR code row by row as it arrives, dark modules in black on white,
-// centred, as large as the screen allows.
-static int qr(uint8_t size)
-{
-    // From the top, row 21 left for the key under it.
-    // cbb next pair's codes are far under 168 modules.
-    uint8_t scale = 168 / size, x, row, col, d, px, py, err;
-    if (scale > 4) scale = 4;
-    // White on white until the network runs (net_pair).
-    zx_border(INK_WHITE);
-    zx_cls(PAPER_WHITE | INK_WHITE);
-    for (row = 0; row < size; row++) {
-        err = link_line(line, sizeof line, ANSWER_SECONDS);
-        if (err) return link_fail(err);
-        x = 128 - size * scale / 2;
-        for (col = 0; col < size; col++, x += scale) {
-            d = hex_digit(line[col >> 2]);
-            if (d == 255) return fail("the Pi sent a damaged QR code", line);
-            if (!(d & (8 >> (col & 3)))) continue;
-            for (py = 0; py < scale; py++)
-                for (px = 0; px < scale; px++) plot(x + px, row * scale + py);
-        }
-    }
-    return 0;
-}
-
 // Joins the group through the ESP (.cbb pair when /cbb/NET.CFG holds the
-// network's settings): cbb next pair waits on the Pi for the
-// phone, at the ESP's address and the port -serve leads to, while the
-// network runs under the QR code the phone scans.
+// network's settings), with the code of a computer's pairing window: the
+// link joins through the ESP to that computer, and the computer's cbb pair
+// says when it is done. Without a code it says how to get one: a group of
+// 0.6 admits a device only through a window (docs/protocol.md, "Pairing in
+// 0.6").
 static int net_stop(void);
 extern int far_pair_check(void);
-static const char pair_cmd[] = "(%s; " CBB_PI " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
-static const char pair_pkill[] = PKILL_SERVICE;
-static const char qr_wait[] = "WAIT: THE NETWORK STARTS";
-static const char qr_after[] = "The app shows the Next\nonce it joins.\n";
+static const char pair_how[] = "On a computer of the group,\nsudo cbb pair shows a code;\nthen type .cbb pair 123-456\n";
 
 // Not static: far_net_pair() (far.asm) calls it.
 int net_pair(void)
 {
-    char ip[40], cmd[224], *serve, *colon = 0, *end;
-    uint32_t len, crc;
-    int err;
+    if (!pair_code) {
+        printf(pair_how);
+        return 0;
+    }
+    if (!plain(pair_code)) return fail("the code is digits and dashes", pair_code);
     // The network holds the Pi's line: it stops for the pairing, and
-    // starts again after it.
+    // starts again with the code.
     if (net_on() && net_stop()) return 1;
     if (far_pair_check()) return 1;
     // Without settings, the defaults, as .cbb net on saves them.
@@ -1282,52 +1279,8 @@ int net_pair(void)
         strcpy(net_args, net_serve + 1);
         if (net_save()) return 1;
     }
-    // With a computer's code, the link joins through the ESP to that
-    // computer, and the computer's cbb pair says when it is done.
-    if (pair_code) {
-        if (!plain(pair_code)) return fail("the code is digits and dashes", pair_code);
-        if (net_start(0, 0)) return 1;
-        printf("Joining with the code; cbb pair\non the computer says when it\nis done.\n");
-        return 0;
-    }
-    serve = strstr(net_args, "-serve ");
-    if (serve) colon = strchr(serve + 7, ':');
-    if (!colon) return fail("the settings need -serve", net_args);
-    if (!esp_address(ip, sizeof ip)) return fail("the ESP gave no address; is it on the Wi-Fi network?", line);
-    // -addr the ESP's address and port, -port where -serve leads.
-    *colon = 0;
-    end = strchr(colon + 1, ' ');
-    if (end) *end = 0;
-    // Settings too long for the command are refused, never cut.
-    // The service, which a network started, listens on the member port
-    // that the phone reaches: it stops while cbb next pair waits there, and
-    // once more after it, so that the link starts it again in the group.
-    if (snprintf(cmd, sizeof cmd, pair_cmd, pair_pkill, ip, serve + 7, colon + 1, pair_pkill) >= (int)sizeof cmd)
-        return fail("the -serve setting is too long", net_args);
-    if (link_shell()) return pi_silent();
-    link_send_str(cmd);
-    link_prompt();
-    link_send_str("until grep -q 'CBBQ\\|CBBERR' /ram/cbbjoin; do sleep 1; done; sleep 1; cat /ram/cbbjoin\n");
-    if (expect(LINE_QR, &len, &crc, ANSWER_SECONDS) != LINE_QR) return 1;
-    if (qr((uint8_t)len)) return 1;
-    link_prompt();
-    quiet = 1;
-    // The phone reaches the Pi through the network, which takes some
-    // seconds to start: a scan before that would be refused, so the code
-    // stays white on white until it runs, under the line that says so
-    // (in ATTR_T, BASIC's colours).
-    at(21, 4);
-    printf(qr_wait);
-    // An error shows in black.
-    err = net_start(0, 0);
-    memset((uint8_t *)0x5800, PAPER_WHITE | INK_BLACK, 768);
-    if (err) return err;
-    // Nothing else on the screen while the phone scans: the rest after a
-    // key, on a clear screen in BASIC's colours.
-    at(21, 4);
-    printf(qr_key);
-    key_clear();
-    printf(qr_after);
+    if (net_start(0, 0)) return 1;
+    printf("Joining with the code; cbb pair\non the computer says when it\nis done.\n");
     return 0;
 }
 
@@ -1766,10 +1719,9 @@ static void progress(uint8_t row, uint32_t got, uint32_t size, uint16_t start)
 #pragma constseg PAGE_19
 #pragma bssseg PAGE_19
 
-// Whether the Pi is in a group: cbb next pair and -join refuse then, the
-// one in the Pi's background and the other in the link's log, which the
-// Next would never show.
-static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/identity.json && echo CBB$((1))IN; echo CBB$((1))END\n";
+// Whether the Pi is in a group (its state holds the group's set): the
+// link's -join refuses then in its log, which the Next would never show.
+static const char in_group_cmd[] = "test -e " PI_DIR "/cbb-state/group.cbor && echo CBB$((1))IN; echo CBB$((1))END\n";
 static const char in_group_yes[] = "CBB1IN", in_group_end[] = "CBB1END";
 static const char in_group[] = "the Pi is in a group\nalready: .cbb leave first";
 static const char in_none[] = "the Pi is in no group:\nnothing to leave";
@@ -2847,7 +2799,7 @@ void screen_open(void)
 void screen_close(void)
 {
     at(KEY_ROW, PANEL);
-    printf(qr_key + 11);
+    printf(press_key);
     key_clear();
     palette(1);
     screen_row = 0;
@@ -2899,13 +2851,13 @@ static int install(void)
         far_autoexec();
     }
     far_screen_close();
-    // After the first install, a Pi in no group joins one at once: the
-    // pairing's QR code, under which the network starts.
+    // After the first install, a Pi in no group is told how to join one
+    // (.cbb pair without a code), and the network starts.
     if (!err && !install_update) {
         pair_probe = 1;
         if (!far_pair_check()) {
             pair_probe = 0;
-            return far_net_pair();
+            far_net_pair();
         }
         pair_probe = 0;
     }

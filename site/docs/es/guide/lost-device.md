@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: e2e81b2b8ff6 -->
+<!-- source: e056f57a7649 -->
 # Si se pierde o roban un dispositivo
 
 Para quien ha perdido un teléfono, un ordenador u otro dispositivo del grupo. Quítalo del grupo en cuanto puedas; los demás dispositivos siguen en el grupo y continúan sincronizando.
@@ -26,14 +26,22 @@ Un administrador congelado no puede congelar a la raíz ni a un teléfono admini
 
 ## 3. Si era la raíz: asume el grupo
 
-La raíz guarda la clave raíz del grupo. Cuando desaparece, un administrador pasa a ser la raíz y todos los demás dispositivos siguen en el grupo:
+La raíz guarda la clave raíz del grupo. Cuando falta, otro dispositivo del grupo pasa a ser la
+raíz con la **clave de recuperación** del grupo, la hoja o la YubiKey que guardaste al crear el
+grupo, y todos los demás dispositivos siguen en el grupo:
 
-- con teléfonos: en el otro teléfono, que es administrador, quita el perdido; la app asume el grupo en el mismo paso;
-- con ordenadores: en un ordenador administrador, `sudo cbb takeover NAME`, donde NAME es la raíz perdida.
+- con teléfonos: en tu otro teléfono, abre la recuperación en la app y dale la clave de
+  recuperación;
+- con ordenadores: en otro ordenador del grupo, `sudo cbb recovery` con la hoja de
+  recuperación (`sudo cbb recovery -yubikey` con la YubiKey), nombrando el dispositivo
+  perdido con `-leave NAME`.
 
-Si otra persona tiene el dispositivo de un administrador quitado, puede detener el grupo un tiempo firmando reclamaciones propias: los dispositivos dicen que el grupo está detenido. Entonces lo termina la raíz antigua, si aún la tienes; en 0.6 la raíz nueva no puede, y un grupo cuya raíz antigua también se perdió se crea de nuevo ([protocolo](../protocol.md), sección 10, "Known limits in 0.6").
+Muestra quién se queda y quién sale y pregunta una vez; el cambio vale al instante, y desde
+entonces el grupo rechaza el dispositivo perdido. Nadie asume el grupo sin la clave de
+recuperación, ni siquiera un administrador.
 
-Si el grupo no tenía otro administrador, no se puede asumir: crea un grupo nuevo y añade de nuevo los dispositivos. Por eso las apps sugieren un segundo teléfono administrador, o un ordenador administrador, en cuanto el grupo tiene un solo administrador.
+Sin la clave de recuperación el grupo no se puede asumir: crea un grupo nuevo y añade los
+dispositivos otra vez. Por eso la app pregunta cómo guardarla en cuanto se crea el grupo.
 
 ## 4. Desactiva lo que podía alcanzar
 

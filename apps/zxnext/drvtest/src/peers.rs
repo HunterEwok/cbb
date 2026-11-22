@@ -770,7 +770,7 @@ impl Pi {
             self.say(now + 100_000, &out);
             return self.prompt(now + 100_000);
         }
-        if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/identity.json && echo CBB$((1))IN") {
+        if cmd.starts_with("test -e /NextPi/nextpi/cbb-state/group.cbor && echo CBB$((1))IN") {
             let s = if self.in_group {
                 "CBB1IN\r\nCBB1END\r\n"
             } else {

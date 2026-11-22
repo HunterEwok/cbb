@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	huduma haikujibu ndani ya sekunde 10:
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s. Kuiondoa: sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: inaonekana chini ya System > Diagnostics > Services, na kanuni zake hufuata kila upakiaji upya wa kichujio.
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense haitumiki: sasisho la pfSense linaweza kuondoa CBB; endesha kisakinishi hiki tena baada ya sasisho.
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Kinachofuata: endesha cbb pair kama root na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako; bila programu, angalia docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	Kinachofuata: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha cbb pair -code kama root hapa na uandike tarakimu sita zinazoonyeshwa.
 CBB is removed, with this device's keys; it left its group.	CBB imeondolewa, pamoja na funguo za kifaa hiki; kimeondoka kwenye kikundi chake.
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /var/db/cbb kwa usakinishaji upya; --purge huziondoa.
 --port needs a port number	--port inahitaji namba ya mlango
@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json s
 release.json is for %s, not %s	release.json ni ya %s, si %s
 release.json does not list %s	release.json haiorodheshi %s
 %s does not match the signed release.json; not installing it	%s hailingani na release.json iliyosainiwa; haisakinishwi
-The release's signature checks out (%s).	Sahihi ya toleo ni sahihi (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	Sahihi ya toleo ni sahihi (%s): ES256 na SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	Sahihi ya toleo ni sahihi (%s): ES256; SLH-DSA-SHA2-128s haikukaguliwa, inahitaji OpenSSL 3.5 au mpya zaidi.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	Sahihi ya toleo ni sahihi (%s): ES256; SLH-DSA-SHA2-128s haikukaguliwa, PowerShell haiwezi kuikagua.
 could not download %s	imeshindwa kupakua %s
 stable.json names no release	stable.json haitaji toleo lolote
 Downloading %s (%s)...	Inapakua %s (%s)...
@@ -108,8 +110,7 @@ the desktop agent did not start; it starts at your next login	wakala wa eneo-kaz
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB huendeshwa ukiwa umeingia. Ili iendelee kuendeshwa baada ya kutoka, msimamizi anaendesha: sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB inaendeshwa kwa ajili ya %s kwenye mlango wa TCP %s, imesakinishwa bila root: haiwezi kamwe kuwa mzizi wa kikundi, msimamizi au kitovu. Ikiwa firewall inazuia miunganisho inayoingia hapa, msimamizi anaruhusu TCP %s na UDP 5353 kutoka mtandao wa nyumbani. Kuiondoa: %s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	Kwa kunakili na kubandika katika tmux, ongeza mstari huu kwenye ~/.tmux.conf: source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	Kinachofuata: angalia member/README.md; kwa ufupi, %s pair hapa, na uchanganue msimbo wake wa QR kwa programu ya simu.
-Next: run %s pair and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha %s pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	Kinachofuata: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha %s pair -code hapa na uandike tarakimu sita zinazoonyeshwa.
 this archive has no install-rootless.sh, so it cannot install without root	kumbukumbu hii haina install-rootless.sh, kwa hiyo haiwezi kusakinisha bila root
 systemd is required	systemd inahitajika
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	akaunti iitwayo cbb ipo hapa na si ya huduma hii (maelezo yake si "cbb service"); ingepata funguo za kikundi. Ibadilishe jina au iondoe, kisha endesha install.sh tena.
@@ -123,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	msaidizi wa uinput
 the desktop agent of %s did not start again; it starts at their next login	wakala wa eneo-kazi wa %s haukuanza tena; utaanza watakapoingia tena
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow imeshindwa; endesha sudo cbb global allow huduma ikishaanza.
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s. Kuiondoa: sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	Kinachofuata: angalia member/README.md; kwa ufupi, sudo -u cbb %s pair hapa, na uchanganue msimbo wake wa QR kwa programu ya simu.
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Kinachofuata: endesha sudo %s pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako; bila programu, angalia docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	Kinachofuata: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha sudo -u cbb %s pair -code hapa na uandike tarakimu sita zinazoonyeshwa.
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	Kinachofuata: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha sudo %s pair -code hapa na uandike tarakimu sita zinazoonyeshwa.
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s/cbb kwa usakinishaji upya; --purge huziondoa.
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /var/lib/cbb kwa usakinishaji upya; --purge huziondoa.
 %s does not run on this Mac	%s haiendeshi kwenye Mac hii
@@ -141,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	Kanuni iliyo hapo juu imeong
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	Hakuna kanuni ya firewall iliyoongezwa. CBB hufanya kazi tu wakati firewall inaruhusu kanuni iliyo hapo juu. Kuiongeza kwa mkono, endesha:
 To let CBB add and manage it, run the installer again with --express.	Ili CBB iiongeze na kuisimamia, endesha kisakinishi tena kwa --express.
 CBB is running on TCP port %s, in its group.	CBB inaendeshwa kwenye mlango wa TCP %s, katika kikundi chake.
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB inaendeshwa kwenye mlango wa TCP %s. Jiunge na kikundi: sudo cbb pair, na uchanganue msimbo wake wa QR kwa simu au andika msimbo kutoka cbb pair kwenye mzizi wa kikundi au kwa msimamizi; au anzisha kikundi: sudo cbb new.
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	CBB inaendeshwa kwenye mlango wa TCP %s. Jiunge na kikundi: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha sudo cbb pair -code na uandike tarakimu sita zinazoonyeshwa; au anzisha kikundi: sudo cbb new.
 CBB is removed, with this Mac's keys; it left its group.	CBB imeondolewa, pamoja na funguo za Mac hii; imeondoka kwenye kikundi chake.
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s/state kwa usakinishaji upya; --purge huziondoa.
 this installer is for OpenWrt	kisakinishi hiki ni cha OpenWrt
@@ -152,9 +153,9 @@ the service did not answer within 40 s: %s	huduma haikujibu ndani ya sekunde 40:
 see logread -e cbb	angalia logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s, katika eneo la lan. Kuiondoa: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Vifurushi vilivyo nje ya vyanzo vya OpenWrt huachwa na attended sysupgrade (ASU, owut): isakinishe tena baada ya uboreshaji huo.
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha su -s /bin/sh cbb -c 'cbb pair -name router' na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	Kinachofuata: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha endesha su -s /bin/sh cbb -c 'cbb pair -code -name router' hapa na uandike tarakimu sita zinazoonyeshwa.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /etc/cbb kwa usakinishaji upya; --purge huziondoa.
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	Kifaa hiki bado hakimo katika kikundi chochote, kwa hiyo kinaanza kuoanisha sasa (--no-pair huruka hili).
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	Kifaa hiki bado hakimo katika kikundi chochote. Fungua dirisha la kuoanisha kwenye kifaa cha kikundi (cbb pair huko), kisha andika hapa tarakimu sita zinazoonyeshwa (--no-pair huruka hili).
 could not record how CBB was installed; cbb update takes it as get.sh	imeshindwa kurekodi jinsi CBB ilivyosakinishwa; cbb update itaichukulia kama get.sh
 automatic updates are on or off, not %s	masasisho ya kiotomatiki ni on au off, si %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB inaweza kukagua mara moja kwa siku toleo lililosainiwa na mradi na kulisakinisha; ukaguzi huo huiambia GitHub anwani ya kifaa hiki, kama upakuaji wowote.
@@ -236,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	Imeshindwa kuweka masasisho ya kiotomatiki %s; endesha cbb update -auto %s kama msimamizi.
 CBB %s is running on TCP port %s; %s may use it.	CBB %s inaendeshwa kwenye mlango wa TCP %s; %s wanaweza kuitumia.
 It stays in its group.	Inabaki katika kikundi chake.
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	Kinachofuata, katika terminal iliyofunguliwa kama msimamizi: cbb pair, na uchanganue msimbo wake wa QR kwa simu au andika msimbo kutoka cbb pair kwenye mzizi wa kikundi au kwa msimamizi; au anzisha kikundi: cbb new.
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	Kinachofuata, kujiunga na kikundi: fungua dirisha la kuoanisha kwenye kifaa cha kikundi, kisha katika terminal iliyofunguliwa kama msimamizi endesha cbb pair -code na uandike tarakimu sita zinazoonyeshwa; au anzisha kikundi huko: cbb new.
 To remove it: Settings, Apps, CBB, Uninstall.	Kuiondoa: Settings, Apps, CBB, Uninstall.
 Y	Y
 Yes	Ndiyo
@@ -258,3 +259,6 @@ cbb runs here with its helper, which may hold its keys; without it cbb cannot us
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
 the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	vitendo vya polkit vinavyothibitisha vitendo vya msimamizi havikuandikwa; programu zitauliza nenosiri la msimamizi badala yake
 the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	haki zinazothibitisha vitendo vya msimamizi hazikuandikwa; programu ya Mac itauliza nenosiri la msimamizi badala yake
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s ina SLH-DSA-SHA2-128s lakini haiikagui jinsi cbb inavyosaini; sasisha openssl (au CBB_VERIFY=skip kusakinisha bila kukagua)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	hakuna funguo za mzizi katika %s za kukagua toleo; halisakinishwi (CBB_VERIFY=skip hulisakinisha bila kukaguliwa)
+Checked against the roots in %s, not the built-in ones.	Imekaguliwa kwa mizizi iliyo katika %s, si ile iliyojengwa ndani.

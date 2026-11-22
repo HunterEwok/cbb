@@ -98,38 +98,19 @@
   <dialog id="add-dialog">
     <form method="dialog">
       <h2 data-t>Add a device</h2>
-      <p class="dim" data-t>On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.</p>
       <div id="admit-box">
-        <input id="admit-code" class="field code mono" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="123 456" data-t-title="The six digits the new device shows">
-        <label id="admit-admin-row" class="check" hidden><input type="checkbox" id="admit-admin"> <span data-t>Admit it as an admin: only for your own phone.</span></label>
-        <p id="admit-error" class="dim" hidden></p>
-        <div class="buttons">
-          <button type="button" id="admit-picture" class="glass" data-t>Open a picture of its QR code</button>
-          <button type="button" id="admit" class="accent" data-t>Admit</button>
+        <p id="admit-wait" class="dim" data-t>Allow cbb to run as the administrator; the code shows next.</p>
+        <div id="admit-window" hidden>
+          <img id="admit-qr" alt="">
+          <p class="code mono" id="admit-digits"></p>
+          <p data-t>On the new computer, choose Join a group and type these six digits. A new phone scans this code.</p>
+          <p class="dim small" id="admit-ends"></p>
+          <p class="dim small" id="admit-refused" hidden></p>
         </div>
-        <input id="admit-file" type="file" accept="image/png,image/jpeg" hidden>
+        <label id="admit-admin-row" class="check" hidden><input type="checkbox" id="admit-admin"> <span data-t>Admit it as an admin: only for your own phone.</span></label>
       </div>
       <p id="admit-none" class="dim" data-t hidden>This computer is no admin of the group: add the device on the phone or on an admin computer.</p>
       <p class="small"><button type="button" class="link" id="invite" data-t>Device far away? Send an invitation</button></p>
-      <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
-    </form>
-  </dialog>
-
-  <dialog id="join-dialog">
-    <form method="dialog">
-      <h2 data-t>Join a group</h2>
-      <p id="join-wait" class="dim" data-t>Allow cbb to run as the administrator; the code shows next.</p>
-      <div id="join-code" hidden>
-        <img id="join-qr" alt="">
-        <p class="code mono" id="join-digits"></p>
-        <p data-t>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.</p>
-        <details>
-          <summary class="dim small" data-t>Without a camera</summary>
-          <code id="join-text" class="mono"></code>
-        </details>
-        <p class="dim small" id="join-ends"></p>
-        <p class="dim small" id="join-port"></p>
-      </div>
       <menu><button value="cancel" class="glass" data-t>Cancel</button></menu>
     </form>
   </dialog>

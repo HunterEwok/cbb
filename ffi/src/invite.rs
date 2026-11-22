@@ -2,12 +2,15 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A remote invitation that an admin phone makes (docs/protocol.md,
-//! section 12), with the admin key where the app keeps it: the member opens
-//! the invitation's guest tunnel on the phone when it is the group's hub,
-//! else through a connected hub of the group, and runs its pairing window.
-//! The app shows the invitation's text as a QR code (or shares it), waits
-//! for its next state off its main thread, and answers whether to admit
-//! each device that uses it, by the fingerprint the device shows.
+//! section 12), with the admin key where the app keeps it. The phone's
+//! member opens it (`Live::open_invitation`, a `cbb://join#` invitation),
+//! its guest's pairing connections come to the phone, and each attempt runs
+//! as a home window's does (`window::admit_on`) with the admin's answer
+//! before anything is written; the key that admits is the app's admin key,
+//! or the root's. The app shows the invitation's text as a QR code (or
+//! shares it), waits for its next state off its main thread, and answers
+//! whether to admit each device that uses it, by the fingerprint the device
+//! shows.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -15,10 +18,11 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use cbb_core::admit::Admitter;
-use cbb_core::certs::{self, Cert, DeviceId};
+use cbb_core::certs;
 use cbb_core::error::{Error, Result};
-use cbb_member::phone::Member as Node;
+use cbb_core::identity::ExternalKey;
+use cbb_core::records::Key;
+use cbb_member::live::Live;
 use serde::{Deserialize, Serialize};
 
 use crate::join::{AppKey, ErrorAnswer, SignFn, answer};
@@ -30,9 +34,6 @@ struct NewArgs {
     /// root.
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
-    /// The phone's admin CA, DER; absent when it issues with the root.
-    #[serde(with = "certs::b64::opt", default)]
-    admin_ca: Option<Vec<u8>>,
     /// How long the invitation is valid, in seconds: an hour when 0, a day
     /// at most.
     #[serde(default)]
@@ -41,11 +42,15 @@ struct NewArgs {
     /// of the group when empty.
     #[serde(default)]
     hub: String,
+    /// The kind of device it is for: "computer" (the default) or
+    /// "phone".
+    #[serde(default)]
+    kind: String,
 }
 
 #[derive(Serialize)]
 struct NewAnswer {
-    /// The invitation's text, cbb://invite#..., for the QR code.
+    /// The invitation's text, cbb://join#..., for the QR code.
     invite: String,
     /// How long it is valid, in seconds.
     expires: u64,
@@ -100,116 +105,116 @@ impl Shared {
 
 /// An open invitation of an admin phone.
 pub struct Invite {
-    inv: Arc<cbb_member::phone::Invite>,
     shared: Arc<Shared>,
     answers: mpsc::SyncSender<bool>,
     closed: Arc<AtomicBool>,
     waiter: Option<JoinHandle<()>>,
 }
 
+/// The app's answer about a device that proved the invitation's secret:
+/// the state says joining with the device until the answer, or until the
+/// admin's time or the invitation is up.
+fn ask(shared: &Shared, closed: &AtomicBool, asked: &mpsc::Receiver<bool>, joining: Joining) -> bool {
+    // Drops an answer left from before.
+    while asked.try_recv().is_ok() {}
+    shared.set(|st| {
+        st.state = "joining";
+        st.joining = Some(joining);
+    });
+    let until = Instant::now().checked_add(cbb_member::pair::CONFIRM_WAIT);
+    let yes = loop {
+        if closed.load(Ordering::SeqCst) || until.is_none_or(|u| Instant::now() > u) {
+            break false;
+        }
+        match asked.recv_timeout(Duration::from_millis(200)) {
+            Ok(yes) => break yes,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break false,
+        }
+    };
+    shared.set(|st| {
+        st.state = "open";
+        st.joining = None;
+    });
+    yes
+}
+
+fn new_shared() -> Arc<Shared> {
+    Arc::new(Shared {
+        st: Mutex::new(StateAnswer {
+            version: 1,
+            state: "open",
+            joining: None,
+            name: String::new(),
+            device: String::new(),
+            error: None,
+        }),
+        changed: Condvar::new(),
+    })
+}
+
 impl Invite {
-    /// An invitation from the app's request (NewArgs) and the issuing key's
-    /// callback, with its answer.
-    pub fn new(node: Arc<Node>, request: &[u8], sign: SignFn, ctx: usize) -> (Option<Invite>, Vec<u8>) {
-        match Invite::make(node, request, sign, ctx) {
+    /// An invitation on the phone's member, from the app's request
+    /// (NewArgs) and the admitting key's callback, with its answer.
+    pub fn new_live(live: Arc<Live>, request: &[u8], sign: SignFn, ctx: usize) -> (Option<Invite>, Vec<u8>) {
+        match Invite::make_live(live, request, sign, ctx) {
             Ok((i, ans)) => (Some(i), answer(Ok(ans))),
             Err(e) => (None, answer::<()>(Err(e))),
         }
     }
 
-    fn make(node: Arc<Node>, request: &[u8], sign: SignFn, ctx: usize) -> Result<(Invite, NewAnswer)> {
+    fn make_live(live: Arc<Live>, request: &[u8], sign: SignFn, ctx: usize) -> Result<(Invite, NewAnswer)> {
+        use cbb_core::records::body::{ROLE_MEMBER, ROLE_PHONE};
         let a: NewArgs = serde_json::from_slice(request)
             .map_err(|e| Error::msg(format!("the invite request does not decode: {e}")))?;
-        let identity = (*node.identity()).clone();
-        let ca = match &a.admin_ca {
-            Some(der) => Cert::parse(der)?,
-            None => identity.root().clone(),
-        };
-        if ca.public_key() != a.public.as_slice() {
-            return Err(Error::msg("the key does not belong to the CA this phone issues with"));
+        let key: Arc<dyn ExternalKey> = Arc::new(AppKey { public: a.public, sign, ctx });
+        let state = live.mesh.state();
+        let hash = Key::es256(key.public()).hash();
+        if state.roots.last() != Some(&hash) && !state.devices.iter().any(|d| d.admin == Some(hash)) {
+            return Err(Error::msg(
+                "only an admin makes an invitation: this key is neither the group's root nor an admin key",
+            ));
         }
-        let hub = match a.hub.as_str() {
+        let named = match a.hub.as_str() {
             "" => None,
-            h => Some(DeviceId::parse(h).map_err(|_| Error::msg(format!("{h:?} is not a device ID")))?),
+            h => Some(cbb_member::writers::find(&state, h)?.id),
         };
-        let admitter =
-            Admitter { identity, ca, ca_key: Arc::new(AppKey { public: a.public, sign, ctx }), make_admins: false };
-
-        let shared = Arc::new(Shared {
-            st: Mutex::new(StateAnswer {
-                version: 1,
-                state: "open",
-                joining: None,
-                name: String::new(),
-                device: String::new(),
-                error: None,
-            }),
-            changed: Condvar::new(),
-        });
+        let role = match a.kind.as_str() {
+            "" | "computer" => ROLE_MEMBER,
+            "phone" => ROLE_PHONE,
+            k => return Err(Error::msg(format!("an invitation is for a computer or a phone, not {k:?}"))),
+        };
+        let expires = (a.expires > 0).then(|| Duration::from_secs(a.expires));
+        let mut o = live.open_invitation(named, role, expires)?;
+        let text = o.open.invitation.text();
+        let ans =
+            NewAnswer { invite: text.clone(), expires: o.lifetime.as_secs(), modules: crate::join::modules(&text)? };
+        let shared = new_shared();
         let closed = Arc::new(AtomicBool::new(false));
         let (answers, asked) = mpsc::sync_channel::<bool>(1);
-        let confirm: cbb_member::phone::Confirm = {
-            let (shared, closed) = (shared.clone(), closed.clone());
-            let asked = Mutex::new(asked);
-            Box::new(move |req: &cbb_core::admit::Request| {
-                let asked = asked.lock().unwrap_or_else(|e| e.into_inner());
-                // Drops an answer left from before.
-                while asked.try_recv().is_ok() {}
-                shared.set(|st| {
-                    st.state = "joining";
-                    st.joining = Some(Joining {
-                        device: req.device.as_str().to_string(),
-                        name: req.name.clone(),
-                        os: req.os.clone(),
-                        fingerprint: req.fingerprint.clone(),
-                    });
-                });
-                let until = Instant::now().checked_add(cbb_member::phone::CONFIRM_WAIT);
-                let yes = loop {
-                    if closed.load(Ordering::SeqCst) || until.is_none_or(|u| Instant::now() > u) {
-                        break false;
-                    }
-                    match asked.recv_timeout(Duration::from_millis(200)) {
-                        Ok(yes) => break yes,
-                        Err(mpsc::RecvTimeoutError::Timeout) => {}
-                        Err(mpsc::RecvTimeoutError::Disconnected) => break false,
-                    }
-                };
-                shared.set(|st| {
-                    st.state = "open";
-                    st.joining = None;
-                });
-                yes
-            })
-        };
-        let lifetime = Duration::from_secs(a.expires);
-        let inv = Arc::new(node.invite(admitter, lifetime, hub.as_ref(), confirm)?);
-        let ans = NewAnswer {
-            invite: inv.text.clone(),
-            expires: inv.lifetime.as_secs(),
-            modules: crate::join::modules(&inv.text)?,
-        };
         let waiter = {
-            let (inv, shared, closed) = (inv.clone(), shared.clone(), closed.clone());
+            let (shared, closed) = (shared.clone(), closed.clone());
             std::thread::spawn(move || {
-                let end = inv.wait(&|| closed.load(Ordering::SeqCst));
+                let mut admitted = None;
+                let end = run_live(&live, key.as_ref(), &mut o, &shared, &closed, &asked, &mut admitted);
+                live.invitation_ended(&o, admitted);
                 shared.set(|st| {
                     st.joining = None;
                     match end {
-                        Ok(j) => {
+                        Ok((device, name)) => {
                             st.state = "done";
-                            st.name = j.name;
-                            st.device = j.device;
+                            st.name = name;
+                            st.device = device;
                         }
                         Err(why) => {
                             st.state = "failed";
-                            st.error = Some(ErrorAnswer::of(&Error::with("the invitation ended", why)));
+                            st.error = Some(ErrorAnswer::of(&why.context("the invitation ended")));
                         }
                     }
                 });
             })
         };
-        Ok((Invite { inv, shared, answers, closed, waiter: Some(waiter) }, ans))
+        Ok((Invite { shared, answers, closed, waiter: Some(waiter) }, ans))
     }
 
     /// Waits up to timeout_ms for a state past version, and answers the
@@ -238,9 +243,68 @@ impl Drop for Invite {
     /// key's callback is not called after the app lets go of it.
     fn drop(&mut self) {
         self.closed.store(true, Ordering::SeqCst);
-        self.inv.close();
         if let Some(w) = self.waiter.take() {
             let _ = w.join();
+        }
+    }
+}
+
+/// The invitation's window on 0.6: takes its guest's pairing connections
+/// until a device is admitted (noted in admitted), the invitation's time
+/// is up, it closed after three failures, or the app freed it.
+fn run_live(
+    live: &Arc<Live>,
+    key: &dyn ExternalKey,
+    o: &mut cbb_member::live::invite::Opening,
+    shared: &Shared,
+    closed: &AtomicBool,
+    asked: &mpsc::Receiver<bool>,
+    admitted: &mut Option<cbb_core::records::DeviceId>,
+) -> Result<(String, String)> {
+    use cbb_core::join::invitation::Network;
+    let now = || cbb_member::uptime::wall_ms().max(0).unsigned_abs();
+    let end = Instant::now().checked_add(o.lifetime).unwrap_or_else(Instant::now);
+    let profile = o.open.invitation.profile;
+    loop {
+        if closed.load(Ordering::SeqCst) {
+            return Err(Error::msg("the app closed the invitation"));
+        }
+        let left = end.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(Error::msg("the invitation's time is over: no device joined with it"));
+        }
+        let (sock, session, exporter) = match o.pairs.recv_timeout(left.min(Duration::from_secs(1))) {
+            Ok(p) => p,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return Err(Error::msg("the hub let the invitation go")),
+        };
+        let mut device = None;
+        let mut confirm = |a: &cbb_member::admitting::Asked<'_>| {
+            device = Some(a.device);
+            let joining = Joining {
+                device: cbb_member::roster::id_text(&a.device),
+                name: a.info.name.clone(),
+                os: cbb_core::format::print::os_name(a.info.os).to_string(),
+                fingerprint: a.fingerprint.clone(),
+            };
+            ask(shared, closed, asked, joining)
+        };
+        let way = cbb_member::join::Way { open: &mut o.open, network: Network::Guest };
+        match crate::window::admit_on(live, key, way, sock, session, exporter, Some(&profile), &mut confirm) {
+            Ok(got) => {
+                *admitted = device;
+                return Ok(got);
+            }
+            Err(e) => {
+                if let Err(closed) = o.open.may_use(Network::Guest, now()) {
+                    let why = match closed {
+                        cbb_core::join::PairError::TooMany => "the invitation closed after three failed attempts",
+                        _ => "the invitation closed",
+                    };
+                    return Err(e.context(why));
+                }
+                shared.set(|st| st.error = Some(ErrorAnswer::of(&e)));
+            }
         }
     }
 }

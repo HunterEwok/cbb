@@ -10,6 +10,9 @@
 #![cfg(unix)]
 #![allow(dead_code, reason = "each test file uses its own part of the harness")]
 
+mod bin;
+pub use bin::cbb;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -148,7 +151,7 @@ impl Svc {
 
     fn spawn(&mut self, extra: &[&str], env: &[(&str, &str)]) {
         let log = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("log")).unwrap();
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_cbb"));
+        let mut cmd = Command::new(cbb());
         cmd.arg("-state")
             .arg(self.dir.join("s"))
             .arg("-socket")
@@ -297,17 +300,35 @@ impl Svc {
         st
     }
 
-    /// Admits joiner through a pairing window here, the joiner dialing
-    /// this member's port with the window's code; returns the name the
-    /// window reports.
-    pub fn admit(&self, joiner: &Svc, admins: bool) -> String {
-        let (_conn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
+    /// Opens a home window here: its six digits, and the link of its QR
+    /// code with this member's loopback address, for a joiner here.
+    pub fn window(&self, admins: bool) -> (UnixStream, BufReader<UnixStream>, String, String) {
+        let (wconn, mut r) = self.open(true, &json!({"op": "pair", "admins": admins}), b"");
         let opened = read(&mut r).unwrap_or_else(|| panic!("no window:\n{}", self.log()));
         assert!(opened.error().is_empty(), "the window: {}\n{}", opened.error(), self.log());
-        let code = opened.s("code").to_string();
-        assert_eq!(code.len(), 6, "{:?}", opened.h);
-        let joined = joiner.ask(true, json!({"op": "join", "code": code, "address": self.addr()}), b"");
-        assert!(joined.error().is_empty(), "join: {}\n{}\n{}", joined.error(), joiner.log(), self.log());
+        assert_eq!(opened.s("kind"), "home-window", "{:?}", opened.h);
+        let digits = opened.s("code").to_string();
+        assert_eq!(digits.len(), 6, "{:?}", opened.h);
+        let mut link = cbb_core::join::invitation::WindowLink::parse(opened.s("invite"))
+            .unwrap_or_else(|| panic!("no QR code text: {:?}", opened.h));
+        link.addrs = vec![self.addr()];
+        (wconn, r, digits, link.text())
+    }
+
+    /// Admits joiner through a home window here, the joiner dialing this
+    /// member's port with the window's link (its six digits, ID and key);
+    /// returns the name the window reports.
+    pub fn admit(&self, joiner: &Svc, admins: bool) -> String {
+        let (_wconn, mut r, _, link) = self.window(admins);
+        let (_jconn, mut jr) = joiner.open(true, &json!({"op": "join", "code": link}), b"");
+        let joined = read(&mut jr).unwrap_or_else(|| panic!("the join did not end:\n{}", joiner.log()));
+        assert!(
+            joined.error().is_empty() && joined.done(),
+            "join: {}\n{}\n{}",
+            joined.error(),
+            joiner.log(),
+            self.log()
+        );
         let closed = read(&mut r).unwrap_or_else(|| panic!("the window did not close:\n{}", self.log()));
         assert!(closed.error().is_empty(), "the window: {}", closed.error());
         joiner.port();
@@ -321,8 +342,9 @@ impl Svc {
 
     /// Waits until the devices list shows name connected.
     pub fn wait_peer(&self, name: &str) {
+        // A peer the status lists is connected, and says so.
         self.wait(&format!("{} sees {name}", self.name), |st| {
-            st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == name))
+            st["peers"].as_array().is_some_and(|ps| ps.iter().any(|p| p["name"] == name && p["online"] == true))
         });
     }
 

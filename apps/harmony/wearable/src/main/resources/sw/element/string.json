@@ -35,6 +35,7 @@
     {"name": "stale", "value": "Kama simu ilivyosema mwisho."},
     {"name": "sync", "value": "Sawazisha"},
     {"name": "watch_admin", "value": "Saa hii ni msimamizi wa kikundi."},
+    {"name": "watch_later", "value": "Katika kikundi hiki saa inaonyesha vifaa tu: vitendo vyake vya dharura vitakuja na CBB 0.7."},
     {"name": "watch_phone", "value": "Simu ya saa hii"}
   ]
 }

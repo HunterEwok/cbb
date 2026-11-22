@@ -7,7 +7,8 @@
 use std::path::Path;
 
 use crate::error::{Error, Result};
-use crate::{actions, identity, records, remotepaste, sealkey};
+use crate::identity::Stored as _;
+use crate::{actions, identity, records, remotepaste};
 
 /// The answer to a leave in no group.
 pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is nothing to leave; cbb pair joins one";
@@ -15,25 +16,53 @@ pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is noth
 /// What a device keeps of its group in the state directory, as Go's
 /// groupFiles: its keys, the tunnel's (only in builds with it), the entry
 /// points and the revocation list it took, the parts of copies, the logs
-/// that name the group's devices, the mute, a group left before 0.6, and
-/// the records last, so that a leave cut short is seen as a group still.
+/// that name the group's devices, the mute, a group left before 0.6, the
+/// group's faces toward its servers and the phones' push registrations,
+/// and the records last, so that a leave cut short is seen as a group
+/// still.
 pub const GROUP_FILES: &[&str] = &[
     identity::FILE_NAME,
-    sealkey::FILE_NAME,
+    // The secret for sealed commands of a group made before 0.6.
+    "seal.json",
     "tunnel.json",
     crate::entries::FILE,
     crate::evidence::STATUS_FILE,
     crate::content::DIR,
     crate::networks::FILE,
-    crate::credentials::FILE,
-    crate::credentials::KEYS_FILE,
+    // The hub credentials and server keys of a group made before 0.6.
+    "credentials.json",
+    "server-keys.json",
     remotepaste::LOG_FILE,
     actions::LOG_FILE,
     crate::mute::FILE_NAME,
-    crate::signed::FILE_NAME,
-    records::OLD_GROUP_DIR,
+    // The log of the records signed in a group made before 0.6.
+    "signed.json",
+    crate::set::OLD_GROUP_DIR,
+    crate::set::LOCAL_FILE,
+    crate::offered::FILE_NAME,
+    crate::own::FILE_NAME,
+    crate::epochs::FILE_NAME,
+    crate::sealed::FILE_NAME,
+    crate::commands::FILE_NAME,
+    crate::mesh::MARKS_FILE,
+    crate::mesh::SIGNED_FILE,
+    crate::mesh::PUSH_FILE,
+    crate::mesh::PUSH_PREVIOUS_FILE,
+    crate::faces::FILE,
+    crate::faces::PERIOD_KEY_FILE,
+    crate::faces::SECRET_FILE,
+    crate::faces::FORWARDERS_FILE,
+    crate::live::invite::GUEST_FILE,
     records::FILE_NAME,
+    crate::set::FILE_NAME,
 ];
+
+/// Whether dir holds a group, of 0.6 or from before it: its records or
+/// the device's identity, as a leave cut short leaves them last.
+pub fn in_group(dir: &Path) -> bool {
+    matches!(identity::Identity::load(dir), Ok(Some(_)) | Err(_))
+        || [records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| dir.join(f).exists())
+}
 
 /// Deletes the group's files from dir and turns remote paste and the quick
 /// actions off, since they were allowed to the admins of the group it
@@ -72,8 +101,8 @@ mod tests {
     #[test]
     fn deletes_the_group_and_keeps_the_settings() {
         let dir = std::env::temp_dir().join(format!("cbb-leave-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join(records::OLD_GROUP_DIR)).unwrap();
-        for name in GROUP_FILES.iter().filter(|n| **n != records::OLD_GROUP_DIR) {
+        std::fs::create_dir_all(dir.join(crate::set::OLD_GROUP_DIR)).unwrap();
+        for name in GROUP_FILES.iter().filter(|n| **n != crate::set::OLD_GROUP_DIR) {
             std::fs::write(dir.join(name), b"{}").unwrap();
         }
         std::fs::write(dir.join("sync.json"), br#"{"off":true}"#).unwrap();

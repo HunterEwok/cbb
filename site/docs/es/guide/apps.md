@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 29c68a9ea0e4 -->
+<!-- source: adedc68707fc -->
 # Las apps
 
 Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps de teléfono llevan el grupo; las de escritorio son una ventana al servicio que ya se ejecuta en el ordenador.
@@ -18,17 +18,15 @@ Copy Beyond Borders tiene apps para teléfonos, relojes y escritorios. Las apps 
 
 ### Crear un grupo
 
-1. [Instala](install.md) Copy Beyond Borders en un ordenador y ejecuta allí `sudo cbb pair`. Muestra un código QR.
-2. Abre la app, pulsa **Connect a new device** y escanea el código. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), añade el ordenador y abre Inicio.
-3. Añade cada ordenador adicional con **+** en Inicio. Un dispositivo pequeño se une de la misma manera (`sudo -u cbb cbb pair` en él muestra su código).
-
-Cuando no se puede usar la cámara: en un iPhone, escribe los seis dígitos que muestra el ordenador; en Android, pega el texto del código QR, que `cbb pair` también imprime.
+1. Abre la app y pulsa **Crear un grupo**. La app crea la clave del grupo en el chip de seguridad del teléfono (el Secure Enclave en un iPhone, el Keystore en Android), pregunta cómo guardar la clave de recuperación (**Escribir en una hoja** o **Escribir en la YubiKey**) y abre Inicio.
+2. Pulsa **+** en Inicio (Añadir un dispositivo). Muestra un código QR y seis dígitos, y espera unos minutos con la pantalla abierta.
+3. En un ordenador, [instala](install.md) Copy Beyond Borders y ejecuta `sudo cbb pair -code`, o haz clic en **Unirse a un grupo** en su app de la bandeja o de la barra de menús, y escribe los seis dígitos. Un dispositivo pequeño se une de la misma manera (`sudo -u cbb cbb pair -code` en él). Un teléfono nuevo pulsa **Unirse a un grupo** y escanea el código, o escribe los dígitos.
 
 ### Cada día
 
 - **Inicio** muestra todos los dispositivos del grupo, como iconos o como lista, con un punto que indica si está en línea. El botón grande toma una copia de otro dispositivo que aún esté vigente (un minuto por defecto; un administrador lo cambia en Ajustes) y, si no, envía lo que tiene el teléfono.
 - **iPhone**: iOS solo deja a una app usar el portapapeles mientras está en primer plano, así que el iPhone sincroniza con un solo gesto: la acción «Sync clipboard» en Tocar atrás o en el botón de Acción, el control del Centro de control o el widget de la pantalla de inicio. Compartir, Copy Beyond Borders envía de inmediato un texto o un enlace.
-- **Android**: las copias de los ordenadores llegan solas. Para que también se envíen solas las copias del teléfono, activa **Send my copies by themselves** (un servicio de accesibilidad; la app explica qué lee). Sin él, basta una pulsación: el icono **Send clipboard** de Ajustes rápidos, Send en la notificación, el widget de la pantalla de inicio, o Compartir y la selección de texto, Copy Beyond Borders.
+- **Android**: las copias de los ordenadores llegan solas. Para que también se envíen solas las copias del teléfono, activa **Clipboard sync** (un servicio de accesibilidad; la app explica qué lee). Sin él, basta una pulsación: el icono **Send clipboard** de Ajustes rápidos, Send en la notificación, el widget de la pantalla de inicio, o Compartir y la selección de texto, Copy Beyond Borders.
 - **Las notificaciones** avisan cuando un dispositivo se une o se elimina, se convierte en administrador, o el hub no responde fuera de casa. Cada tipo tiene su propio interruptor en Ajustes.
 
 ### Dispositivos
@@ -40,8 +38,8 @@ Pulsa un dispositivo para ver su tipo, sistema, versión y rol. En un teléfono 
 
 ### Un segundo teléfono y un teléfono perdido
 
-- **Un segundo teléfono**: en él, pulsa **I already use Copy Beyond Borders on another phone**; muestra un código QR que el primer teléfono escanea con **+**. El primer teléfono, la raíz, lo convierte en administrador, para que perder un teléfono no suponga perder nada.
-- **Un teléfono perdido**: en tu otro teléfono, elimínalo de la lista de dispositivos. Los ordenadores siguen en el grupo; si el teléfono perdido era la raíz, el otro teléfono asume el grupo en el mismo paso. Más en [si se pierde o roban un dispositivo](lost-device.md).
+- **Un segundo teléfono**: pulsa **+** en el primer teléfono; en el segundo, pulsa **Unirse a un grupo** y escanea el código. El primer teléfono, la raíz, lo convierte en administrador, para que perder un teléfono no suponga perder nada.
+- **Un teléfono perdido**: en tu otro teléfono, elimínalo de la lista de dispositivos. Los ordenadores siguen en el grupo; si el teléfono perdido era la raíz, abre en su lugar la recuperación en el otro teléfono y dale la clave de recuperación, que deja fuera el teléfono perdido. Más en [si se pierde o roban un dispositivo](lost-device.md).
 
 ### Ajustes
 
@@ -57,6 +55,6 @@ Las apps de Apple Watch y Wear OS muestran los dispositivos del grupo y si está
 
 ## Apps de escritorio
 
-La app para Mac y la app de bandeja para Linux y Windows muestran lo mismo que el teléfono: los dispositivos como iconos, lista u órbitas, los detalles de un dispositivo, **Send the clipboard** y **Fetch**, y el interruptor de la sincronización fuera de casa. Los cambios en el grupo (renombrar, eliminar, hacer administrador) piden la contraseña del administrador. Añadir un dispositivo sigue haciéndose en la terminal (`sudo cbb pair`). El servicio sigue sincronizando tanto si la app está abierta como si no.
+La app para Mac y la app de bandeja para Linux y Windows muestran lo mismo que el teléfono: los dispositivos como iconos, lista u órbitas, los detalles de un dispositivo, **Send the clipboard** y **Fetch**, y el interruptor de la sincronización fuera de casa. Los cambios en el grupo (renombrar, eliminar, hacer administrador) piden la contraseña del administrador. **+** abre una ventana de emparejamiento con un código QR y seis dígitos para un dispositivo nuevo, y fuera de un grupo **Unirse a un grupo** se une a una ventana por sus seis dígitos. El servicio sigue sincronizando tanto si la app está abierta como si no.
 
 Cuando algo no funciona, consulta [Solución de problemas](troubleshooting.md).

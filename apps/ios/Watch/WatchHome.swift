@@ -70,7 +70,9 @@ struct WatchHome: View {
                 Text("Latest")
             }
         }
-        if model.admission != nil {
+        if model.state.signs == false {
+            Text("In this group the watch shows the devices only: its emergency actions come with CBB 0.7.").font(.caption2).foregroundStyle(palette.textDim)
+        } else if model.admission != nil {
             Text("This watch is an admin of the group.").font(.caption2).foregroundStyle(palette.textDim)
         }
         if !model.reachable {

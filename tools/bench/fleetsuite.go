@@ -53,7 +53,7 @@ func FleetSuite(ctx context.Context, r *Report, cbb string, size int, timeout ti
 		{"M4-mode-kept", func() { modeKept(ctx, r, f, timeout) }},
 		{"M8-sync-off", func() { syncOffHere(ctx, r, f, timeout) }},
 		{"M9-admin-mute", func() { muteByAdmin(ctx, r, f, timeout) }},
-		{"M10-incoming", func() { incoming(ctx, r, f, timeout) }},
+		{"M10-ttl", func() { lifetimes(ctx, r, f, timeout) }},
 		{"G4-paths", func() { joinPaths(ctx, r, f, timeout) }},
 		{"G7-two-windows", func() { twoWindows(ctx, r, f) }},
 		{"D2-who-dials", func() { whoDials(ctx, r, f, timeout) }},

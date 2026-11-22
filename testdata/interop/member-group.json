@@ -1,0 +1,38 @@
+{
+  "group": {
+    "group": "q83vEjRWeJCrze8SNFZ4kA==",
+    "root": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "root_device": "01010101010101010101010101010101",
+    "me": {"device": "02020202020202020202020202020202", "role": "phone", "admin": true, "frozen": false, "leaf": false},
+    "stop": "secrets",
+    "halted": false,
+    "update_needed": false,
+    "too_old": true,
+    "change_arriving": true,
+    "devices": [
+      {"device": "01010101010101010101010101010101", "name": "Root phone", "os": "ios", "role": "phone", "admin": false, "frozen": false, "hub": false},
+      {"device": "02020202020202020202020202020202", "name": "Pixel", "os": "android", "role": "phone", "admin": true, "frozen": false, "hub": false},
+      {"device": "03030303030303030303030303030303", "name": "Desk", "os": "linux", "role": "computer", "admin": false, "frozen": true, "hub": true, "offers_admin": true}
+    ]
+  },
+  "notices": [
+    {"id": "n1", "kind": "admins_silent", "args": {"device": "03030303030303030303030303030303", "days_left": 5}, "dismissable": true},
+    {"id": "n2", "kind": "change_arriving", "args": {}, "dismissable": false},
+    {"id": "n3", "kind": "root_room_waiting", "args": {"percent": 72}}
+  ],
+  "preview": {
+    "rows": [
+      {"device": "01010101010101010101010101010101", "name": "Root phone", "os": "ios", "outcome": "out", "frozen": false},
+      {"device": "02020202020202020202020202020202", "name": "Pixel", "os": "android", "outcome": "admin_kept", "frozen": false},
+      {"device": "03030303030303030303030303030303", "name": "Desk", "os": "linux", "outcome": "stays", "frozen": true},
+      {"device": "04040404040404040404040404040404", "name": "Old laptop", "os": "windows", "outcome": "removed_earlier", "frozen": false}
+    ],
+    "waiting": true
+  },
+  "events": {
+    "state": {"type": "state", "state": {"group": "q83vEjRWeJCrze8SNFZ4kA==", "stop": "full", "halted": true, "devices": []}},
+    "notice": {"type": "notice", "notice": {"id": "n4", "kind": "recovery_not_saved", "args": {}, "dismissable": false}},
+    "root_changed": {"type": "root_changed", "from": "01010101010101010101010101010101", "to": "02020202020202020202020202020202", "seq": 2, "record": "AAEC"},
+    "key_done": {"type": "key_done", "public": "BAAB"}
+  }
+}

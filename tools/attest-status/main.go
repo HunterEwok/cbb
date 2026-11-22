@@ -6,7 +6,7 @@
 // key that keys.json certifies (docs/protocol.md, section 17, "Revoked
 // attestations"). The mirror runs it once a day:
 //
-//	attest-status -key status-key.pem -out DIR [-days 8] [-allow-drop]
+//	attest-status -key status-key.pem[,status-pq.pem] -out DIR [-days 8] [-allow-drop]
 //
 // DIR holds the published files: it reads the attest-status.json there to
 // raise the sequence number, and refuses a list that drops a serial
@@ -16,10 +16,7 @@
 package main
 
 import (
-	"crypto"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -57,7 +54,7 @@ func main() {
 
 func run(args []string) error {
 	fs := flag.NewFlagSet("attest-status", flag.ExitOnError)
-	keyPath := fs.String("key", "", "the status key, P-256 in a PEM file")
+	keyPath := fs.String("key", "", "the status key's two halves, P-256 and SLH-DSA, in PEM files, comma-separated (or one file with both)")
 	out := fs.String("out", "", "the directory of the published files")
 	days := fs.Int("days", 8, "days until the list expires, at most 8")
 	allowDrop := fs.Bool("allow-drop", false, "take a list that drops serial numbers the last one revoked")
@@ -178,25 +175,23 @@ func readLast(path string) (release.Status, bool, error) {
 	return s, true, nil
 }
 
-func readKey(path string) (crypto.Signer, error) {
-	data, err := os.ReadFile(path)
+// readKey reads the status key's halves from the PEM files paths names,
+// comma-separated.
+func readKey(paths string) (release.Signer, error) {
+	var texts [][]byte
+	for _, p := range strings.Split(paths, ",") {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		texts = append(texts, data)
+	}
+	s, err := release.ParseSigner(texts...)
+	for _, t := range texts {
+		clear(t)
+	}
 	if err != nil {
-		return nil, err
-	}
-	b, _ := pem.Decode(data)
-	if b == nil {
-		return nil, fmt.Errorf("%s holds no PEM key", path)
-	}
-	if k, err := x509.ParseECPrivateKey(b.Bytes); err == nil {
-		return k, nil
-	}
-	k, err := x509.ParsePKCS8PrivateKey(b.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	s, ok := k.(crypto.Signer)
-	if !ok {
-		return nil, fmt.Errorf("%s holds no signing key", path)
+		return nil, fmt.Errorf("%s: %w", paths, err)
 	}
 	return s, nil
 }

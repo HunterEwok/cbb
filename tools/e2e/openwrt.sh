@@ -159,13 +159,17 @@ vm)
 		for i in $(seq 30); do cbb status 2>&1 | grep -q "Not in a group" && break; sleep 1; done
 		cbb status 2>&1 | grep -q "Not in a group"
 		logread -e cbb | grep -q "work only on br-lan"
-		# Out of a group the member port opens only for a join: cbb pair
-		# waits for the phone there.
-		cbb pair </dev/null >/tmp/pair.out 2>&1 &
+		# Out of a group no member port listens; a group of its own opens
+		# it, and cbb pair there opens a pairing window with six digits.
+		if netstat -ltn | grep -q ":9000 "; then echo "port 9000 listens in no group" >&2; exit 1; fi
+		cbb new >/tmp/new.out 2>&1
 		for i in $(seq 20); do netstat -ltn | grep -q ":9000 " && break; sleep 1; done
 		netstat -ltn | grep -q ":9000 "
+		cbb pair </dev/null >/tmp/pair.out 2>&1 &
+		for i in $(seq 20); do grep -q "Pairing code" /tmp/pair.out && break; sleep 1; done
+		grep -q "Pairing code" /tmp/pair.out
 		kill $!
-		echo "vm: the service runs on br-lan, and a join waits on port 9000"
+		echo "vm: the service runs on br-lan, its group listens on port 9000 and opens a pairing window"
 
 		# The port of the hub: service data, which fw4 loads. fw4 names such
 		# a rule by its source (ubus:cbb[instance1] rule N) in
@@ -269,12 +273,22 @@ vm)
 		# The init script writes nothing into the service'"'"'s own folder.
 		: >/tmp/elsewhere
 		ln -sf /tmp/elsewhere /var/run/cbb/interfaces
+		svcpid() { pgrep -x -f "/usr/bin/cbb service.*" | head -n1; }
+		old=$(svcpid)
 		/etc/init.d/cbb restart
 		test ! -s /tmp/elsewhere
 		test ! -e /var/run/cbb/interfaces
-		# The service opens its control socket a moment after the restart.
+		# procd starts the new process before the old one has stopped, and
+		# the old one answers until it does: the status counts only from the
+		# new process, which opens its control socket a moment after.
+		for i in $(seq 30); do p=$(svcpid); [ -n "$p" ] && [ "$p" != "$old" ] && ! kill -0 "$old" 2>/dev/null && break; sleep 1; done
 		for i in $(seq 30); do cbb status 2>&1 | grep -q "Not in a group" && break; sleep 1; done
-		cbb status 2>&1 | grep -q "Not in a group"
+		if ! cbb status 2>&1 | grep -q "Not in a group"; then
+			echo "no status after the restart; it said, and the log:" >&2
+			cbb status >&2 || true
+			logread -e cbb | tail -n 40 >&2 || true
+			exit 1
+		fi
 		sh /usr/share/cbb/uninstall.sh --purge
 	'
 	run "$removed"

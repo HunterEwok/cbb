@@ -12,6 +12,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::certs::{self, b64};
 use crate::error::{Context, Error, Result};
@@ -436,8 +437,8 @@ struct HubClient {
     device: String,
     #[serde(with = "b64", default)]
     key: Vec<u8>,
-    #[serde(with = "b64", default)]
-    psk: Vec<u8>,
+    #[serde(with = "b64::secret", default)]
+    psk: Zeroizing<Vec<u8>>,
 }
 
 /// The members every command's body has.

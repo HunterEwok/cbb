@@ -8,9 +8,12 @@
 
 #![cfg(unix)]
 
+#[path = "common/bin.rs"]
+mod bin;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixListener;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -183,7 +186,7 @@ fn run_with(dir: &Path, args: &[&str], stdin: &str, handle: Handler, env: &[(&st
     let got = Arc::new(Mutex::new(Vec::new()));
     serve(UnixListener::bind(&sock).unwrap(), handle.clone(), got.clone());
     serve(UnixListener::bind(&admin).unwrap(), handle, got.clone());
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cbb"));
+    let mut cmd = Command::new(bin::cbb());
     cmd.args(args)
         .current_dir(dir)
         .env("CBB_SOCKET", &sock)
@@ -377,25 +380,33 @@ fn device_commands() {
                 ..Case::default()
             },
             Case {
-                name: "incoming",
-                args: &["incoming", "90s"],
-                sent: Some(("incoming", Some(|s| s.s("value") == "90s"))),
-                stdout: "for 1m30s after it arrives",
+                name: "ttl",
+                args: &["ttl", "90s", "-"],
+                answer: status(json!({"group": "g", "ttl_ms": 90_000, "secret_ttl_ms": 60_000})),
+                sent: Some(("ttl", Some(|s| s.s("value") == "90s -"))),
+                stdout: "A copy lives 1m30s in the group and a secret 1m",
                 ..Case::default()
             },
             Case {
-                name: "incoming shown",
-                args: &["incoming"],
-                answer: status(json!({"group": "g", "incoming_ms": 3_600_000})),
+                name: "ttl shown",
+                args: &["ttl"],
+                answer: status(json!({"group": "g", "ttl_ms": 3_600_000, "secret_ttl_ms": 5_000})),
                 sent: Some(("status", None)),
-                stdout: "for 1h after it arrives",
+                stdout: "A copy lives 1h in the group and a secret 5s",
                 ..Case::default()
             },
             Case {
-                name: "incoming not a duration",
-                args: &["incoming", "soon"],
+                name: "ttl not a duration",
+                args: &["ttl", "soon"],
                 code: 2,
-                stderr: "usage: cbb incoming",
+                stderr: "usage: cbb ttl",
+                ..Case::default()
+            },
+            Case {
+                name: "ttl of a secret past a minute",
+                args: &["ttl", "5m", "2m"],
+                code: 2,
+                stderr: "a secret lives from 5s to 1m",
                 ..Case::default()
             },
             Case {
@@ -923,11 +934,13 @@ fn pair_with_a_code() {
     run_cases(
         "pair-code",
         vec![
+            // The window's six digits from standard input, never the
+            // command line; the service finds the window.
             Case {
                 name: "pair -code",
                 args: &["pair", "-code"],
                 stdin: "123 456\n",
-                sent: Some(("join", Some(|s| s.s("code") == "123456"))),
+                sent: Some(("join", Some(|s| s.s("code") == "123456" && s.s("address").is_empty()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -936,7 +949,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS",
                 args: &["pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some((
                     "join",
                     Some(|s| {
@@ -952,7 +965,7 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -name -caps -code ADDRESS",
                 args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
                 stdout: "Joined the group",
                 ..Case::default()
@@ -960,8 +973,17 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -caps none -code",
                 args: &["pair", "-caps", "none", "-code"],
-                stdin: "123 456\n",
+                stdin: "123456\n",
                 sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // The window's QR code text goes as it is.
+            Case {
+                name: "pair -code with the QR code's text",
+                args: &["pair", "-code"],
+                stdin: WINDOW_LINK,
+                sent: Some(("join", Some(|s| s.s("code") == WINDOW_LINK.trim()))),
                 stdout: "Joined the group",
                 ..Case::default()
             },
@@ -969,9 +991,9 @@ fn pair_with_a_code() {
             Case {
                 name: "pair -code ADDRESS, no service",
                 args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
-                stdin: "123 456\n",
+                stdin: WINDOW_LINK,
                 code: 1,
-                stderr: "cannot connect to 127.0.0.1:1",
+                stderr: "cannot reach 127.0.0.1:1",
                 ..Case::default()
             },
             Case {
@@ -986,6 +1008,30 @@ fn pair_with_a_code() {
                 args: &["pair", "-code", "123", "456"],
                 code: 2,
                 stderr: "usage",
+                ..Case::default()
+            },
+            // On 0.6 no device waits for a phone to dial it (D-119): cbb
+            // pair in no group, and the QR code's old flags, say to dial a
+            // pairing window instead.
+            Case {
+                name: "pair in no group",
+                args: &["pair"],
+                code: 1,
+                stderr: "open a pairing window",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -app",
+                args: &["pair", "-app", "join.json"],
+                code: 1,
+                stderr: "open a pairing window",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -port -addr",
+                args: &["pair", "-port", "0", "-addr", "192.0.2.7"],
+                code: 1,
+                stderr: "open a pairing window",
                 ..Case::default()
             },
             Case {
@@ -1019,19 +1065,10 @@ fn pair_with_a_code() {
                 stderr: "invitation",
                 ..Case::default()
             },
-            // A bad code fails before the service is asked or the address
-            // dialed.
+            // Not six digits: refused here, before the service hears of it.
             Case {
-                name: "five digits",
+                name: "five digits on standard input",
                 args: &["pair", "-code"],
-                stdin: "12345\n",
-                code: 1,
-                stderr: "six digits",
-                ..Case::default()
-            },
-            Case {
-                name: "five digits with an address",
-                args: &["pair", "-code", "127.0.0.1:1"],
                 stdin: "12345\n",
                 code: 1,
                 stderr: "six digits",
@@ -1041,18 +1078,98 @@ fn pair_with_a_code() {
     );
 }
 
+/// A home window's QR code text, as standard input gives it.
+const WINDOW_LINK: &str = "cbb://pair?addr=192.168.1.5:8764&fp=1111111111111111111111111111111111111111111111111111111111111111&i=22222222222222222222222222222222&c=123456\n";
+
+/// A join of 0.6 needs no answer: the six digits are CPace's password. A
+/// home window shows its digits, its address, each failed try, and the
+/// device's name.
+#[test]
+fn pairing_by_a_home_window() {
+    let dir = tempdir("compare");
+    let r = run_with(&dir, &["pair", "-code"], "123456\n", group_then("", |_| vec![done(json!({}))]), &[]);
+    want("join", &r, 0, "Joined the group", "");
+    assert!(!r.sent.iter().any(|s| s.op() == "answer"), "nothing to answer");
+    let window = group_then("g1", |s| match s.op() {
+        "pair" => vec![
+            (
+                json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                       "invite": WINDOW_LINK.trim()}),
+                Vec::new(),
+            ),
+            (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
+            done(json!({"name": "laptop"})),
+        ],
+        "devices" => vec![done(json!({}))],
+        _ => Vec::new(),
+    });
+    let r = run_with(&dir, &["pair"], "", window, &[]);
+    want("window", &r, 0, "cbb pair -code 192.168.1.5:8764", "");
+    for part in ["Pairing code: 654 321", "scan this QR code", "A device did not pair", "laptop joined the group"] {
+        assert!(r.stdout.contains(part), "{part}: {:?}", r.stdout);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// cbb pair -app FILE, for the desktop apps: the window goes into the
+/// app's own file as one line of JSON, rewritten when a device fails and
+/// when one joins; cbb writes only over a file the app made.
+#[test]
+fn pairing_window_for_an_app() {
+    let dir = tempdir("pair-app");
+    let window = || {
+        group_then("g1", |s| match s.op() {
+            "pair" => vec![
+                (
+                    json!({"kind": "home-window", "code": "654321", "expires": 300, "address": "192.168.1.5:8764",
+                           "invite": WINDOW_LINK.trim()}),
+                    Vec::new(),
+                ),
+                (json!({"refused": true, "detail": "the code did not match (pairing error 1)"}), Vec::new()),
+                done(json!({"name": "laptop"})),
+            ],
+            _ => Vec::new(),
+        })
+    };
+    let file = dir.join("window.json");
+    let path = file.to_str().unwrap().to_string();
+    let r = run_with(&dir, &["pair", "-app", &path], "", window(), &[]);
+    want("pair -app without its file", &r, 1, "", "");
+    std::fs::write(&file, "").unwrap();
+    let r = run_with(&dir, &["pair", "-app", &path], "", window(), &[]);
+    want("pair -app", &r, 0, "", "");
+    let line: Value = serde_json::from_str(std::fs::read_to_string(&file).unwrap().trim()).unwrap();
+    assert_eq!(line["code"], "654321", "{line}");
+    assert_eq!(line["qr"], WINDOW_LINK.trim(), "{line}");
+    assert_eq!(line["address"], "192.168.1.5:8764", "{line}");
+    assert_eq!(line["expires"], 300, "{line}");
+    assert!(line["done"] == true && line["name"] == "laptop", "{line}");
+    assert!(r.sent.iter().any(|s| s.op() == "pair"), "pair -app sent {:?}", ops(&r));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn new_group() {
     let dir = tempdir("new");
     let r = run_with(&dir, &["new"], "", group_then("g1", |_| vec![done(status(json!({"group": "g1"})))]), &[]);
     want("new", &r, 0, "group g1", "");
     assert!(ops(&r).contains(&"new"), "new sent {:?}", ops(&r));
+    // The recovery sheet shows, once, as the service gives it.
+    let sheet = json!({"sheet": "AAAA BBBB CCCC DDDD\nEEEE FFFF GGGG HHHH", "qr": "CBBR1XYZ"}).to_string();
+    let with_sheet = group_then("g1", move |_| {
+        let (h, _) = done(status(json!({"group": "g1", "key_level": "hardware"})));
+        vec![(h, sheet.clone().into_bytes())]
+    });
+    let r = run_with(&dir, &["new"], "", with_sheet, &[]);
+    want("new with its sheet", &r, 0, "EEEE FFFF GGGG HHHH", "");
+    assert!(r.stdout.contains("recovery key") && !r.stdout.contains("root key is a file"), "{:?}", r.stdout);
     let r = run_in(&dir, &["new", "x"], "", json!({}), b"");
     want("new with an argument", &r, 2, "", "");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// cbb pair in a group opens a window and shows its code and address.
+/// cbb pair in a group opens a home window of 0.6 and shows its code and
+/// address.
 #[test]
 fn pair_in_a_group() {
     let dir = tempdir("pair-group");
@@ -1062,7 +1179,10 @@ fn pair_in_a_group() {
         "",
         group_then("g1", |_| {
             vec![
-                (json!({"code": "123456", "expires": 300, "address": "192.168.1.5:8764"}), Vec::new()),
+                (
+                    json!({"kind": "home-window", "code": "123456", "expires": 300, "address": "192.168.1.5:8764"}),
+                    Vec::new(),
+                ),
                 done(json!({"name": "deck"})),
             ]
         }),
@@ -1074,49 +1194,6 @@ fn pair_in_a_group() {
     want("pair", &r, 0, "deck joined", "");
     assert_eq!(ops(&r).first(), Some(&"status"), "pair asked first {:?}", ops(&r));
     assert!(ops(&r).contains(&"pair"), "pair sent {:?}", ops(&r));
-}
-
-/// In no group cbb pair listens for the phone itself and shows a QR code
-/// with its code, addresses and fingerprint, and the same as text to paste
-/// into the app; this test stops it while it waits.
-#[test]
-fn pair_shows_the_phone_a_code() {
-    let dir = tempdir("pair-phone");
-    let sock = dir.join("control.sock");
-    serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b""), Arc::new(Mutex::new(Vec::new())));
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-port", "0", "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let mut out = String::new();
-    let mut r = BufReader::new(child.stdout.take().unwrap());
-    let mut line = String::new();
-    while r.read_line(&mut line).unwrap_or(0) > 0 {
-        out.push_str(&line);
-        line.clear();
-        if out.contains("Waiting up to 5 minutes") {
-            break;
-        }
-    }
-    child.kill().ok();
-    child.wait().ok();
-    let _ = std::fs::remove_dir_all(&dir);
-    assert!(out.contains("Scan a code") && out.contains("\x1b["), "no QR code: {out:?}");
-    let link = out
-        .lines()
-        .find_map(|l| l.strip_prefix("Or paste this into the app: "))
-        .unwrap_or_else(|| panic!("no link: {out:?}"));
-    let code = link.split("code=").nth(1).map(|c| c.split('&').next().unwrap()).unwrap_or("");
-    assert!(link.starts_with("cbb://join?"), "{link}");
-    assert!(code.len() == 6 && code.bytes().all(|b| b.is_ascii_digit()), "the code in {link}");
-    assert!(link.contains("addr=192.0.2.7%3A") && link.contains("&fp="), "{link}");
 }
 
 #[test]
@@ -1166,11 +1243,12 @@ fn status_lines() {
 }
 
 #[test]
+#[cfg_attr(target_os = "macos", ignore = "macOS has no /dev/full")]
 fn paste_write_error() {
     let dir = tempdir("paste-full");
     let sock = dir.join("control.sock");
     serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b"text"), Arc::new(Mutex::new(Vec::new())));
-    let out = Command::new(env!("CARGO_BIN_EXE_cbb"))
+    let out = Command::new(bin::cbb())
         .arg("paste")
         .env("CBB_SOCKET", &sock)
         .env("LC_ALL", "C")
@@ -1214,7 +1292,7 @@ fn paste_terminal() {
 fn fail_details() {
     let dir = tempdir("fail");
     for (debug, detail) in [("0", false), ("1", true)] {
-        let out = Command::new(env!("CARGO_BIN_EXE_cbb"))
+        let out = Command::new(bin::cbb())
             .arg("status")
             .env("CBB_SOCKET", dir.join("none.sock"))
             .env("CBB_DEBUG", debug)
@@ -2033,6 +2111,12 @@ fn global_commands() {
                 ..Case::default()
             },
             Case {
+                name: "relay off",
+                args: &["global", "relay", "off"],
+                sent: Some(("away", Some(|s| s.s("relay") == "off" && !s.b("consent")))),
+                ..Case::default()
+            },
+            Case {
                 name: "the project's relay takes no key",
                 args: &["global", "relay", "default", "-key", "K"],
                 code: 2,
@@ -2309,87 +2393,16 @@ fn stop_lines() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The QR code's text that cbb pair -qr reads arrives whole, fingerprint and
-/// all, though it is longer than a pairing code's line.
+/// cbb pair -qr admitted a device that waited for the group to dial it,
+/// which is gone on 0.6 (D-119): it says so, reads nothing and sends
+/// nothing to the service.
 #[test]
-fn pair_reads_the_qr_text() {
+fn pair_qr_is_gone() {
     let dir = tempdir("pair-qr");
-    let text = "cbb://join?code=123456&addr=192.168.0.179%3A8764&addr=10.0.0.2%3A8764&addr=%5Bfe80%3A%3A1%5D%3A8764&addr=172.16.5.5%3A8764&fp=sdyYqdtKW%2BHR%2B0ALkJovRReX54G3FuWvIEXFFSKjNGs%3D\n";
-    let r = run_with(&dir, &["pair", "-qr"], text, group_then("g1", |_| vec![done(json!({"name": "phone"}))]), &[]);
+    let r = run_with(&dir, &["pair", "-qr"], "123456\n", group_then("g1", |_| vec![done(json!({}))]), &[]);
     let _ = std::fs::remove_dir_all(&dir);
-    want("pair -qr", &r, 0, "phone joined the group.", "");
-    let p = r.sent.iter().find(|s| s.op() == "pair").expect("pair -qr sent no pair");
-    assert!(
-        p.s("code") == "123456"
-            && p.list("addrs").len() == 4
-            && p.s("fingerprint") == "sdyYqdtKW+HR+0ALkJovRReX54G3FuWvIEXFFSKjNGs=",
-        "pair -qr sent {:?}",
-        p.h
-    );
-}
-
-/// cbb pair -app, for a desktop app that runs cbb as the administrator:
-/// the QR code's text goes into the app's own file as one line of JSON, and
-/// removing the file cancels the wait. cbb writes only over a regular file
-/// the app made: never one that is not there, a folder or a link.
-#[test]
-fn pair_for_an_app() {
-    let dir = tempdir("pair-app");
-    let sock = dir.join("control.sock");
-    serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b""), Arc::new(Mutex::new(Vec::new())));
-    let file = dir.join("join.json");
-    std::fs::write(&file, "").unwrap();
-    let child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-app", file.to_str().unwrap(), "-port", "0", "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut written = String::new();
-    for _ in 0..300 {
-        written = std::fs::read_to_string(&file).unwrap_or_default();
-        if !written.is_empty() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
-    let port = j["port"].as_u64().unwrap_or(0);
-    assert!(
-        j["qr"].as_str().is_some_and(|q| q.starts_with("cbb://join?")) && j["expires"] == 300 && port != 0,
-        "the file holds {j}"
-    );
-    assert!(j["qr"].as_str().unwrap().contains(&format!("addr=192.0.2.7%3A{port}")), "{j}");
-    // The app closes its window.
-    std::fs::remove_file(&file).unwrap();
-    let out = child.wait_with_output().unwrap();
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        out.status.code() == Some(1) && stderr.contains("cancelled"),
-        "after the file went: {:?} {stderr:?}",
-        out.status
-    );
-
-    for (what, path) in [("a file that is not there", dir.join("none")), ("a folder", dir.clone())] {
-        let r = run_in(&dir, &["pair", "-app", path.to_str().unwrap(), "-port", "0"], "", json!({}), b"");
-        assert!(r.code == 1, "{what}: {} {:?}", r.code, r.stderr);
-    }
-    let other = dir.join("other");
-    std::fs::write(&other, "kept").unwrap();
-    let link = dir.join("link");
-    std::os::unix::fs::symlink(&other, &link).unwrap();
-    let r = run_in(&dir, &["pair", "-app", link.to_str().unwrap(), "-port", "0"], "", json!({}), b"");
-    assert!(r.code == 1 && r.stderr.contains("not a regular file"), "a link: {} {:?}", r.code, r.stderr);
-    assert_eq!(std::fs::read_to_string(&other).unwrap(), "kept");
-    std::fs::write(&file, "").unwrap();
-    let r = run_in(&dir, &["pair", "-app", file.to_str().unwrap(), "-code"], "", json!({}), b"");
-    want("pair -app -code", &r, 2, "", "usage");
-    let _ = std::fs::remove_dir_all(&dir);
+    want("pair -qr", &r, 1, "", "no device waits for the group to dial it");
+    assert!(!r.sent.iter().any(|s| s.op() == "pair"), "pair -qr sent {:?}", ops(&r));
 }
 
 /// The service's side of cbb copy FILE: it takes the copy-media request, its
@@ -2642,56 +2655,26 @@ fn run_basics() {
     );
 }
 
-/// Out of a group cbb pair waits for the phone on the service's own port,
-/// which its firewall rule opens (OpenWrt's comes from /etc/config/cbb),
-/// not on the default one.
-#[test]
-fn pair_waits_on_the_service_port() {
-    let dir = tempdir("pair-port");
-    let port = std::net::TcpListener::bind("0.0.0.0:0").unwrap().local_addr().unwrap().port();
-    let sock = dir.join("control.sock");
-    serve(
-        UnixListener::bind(&sock).unwrap(),
-        always(status(json!({"port": port})), b""),
-        Arc::new(Mutex::new(Vec::new())),
-    );
-    let file = dir.join("join.json");
-    std::fs::write(&file, "").unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
-        .args(["pair", "-app", file.to_str().unwrap(), "-addr", "192.0.2.7"])
-        .env("CBB_SOCKET", &sock)
-        .env("CBB_STATE", dir.join("state"))
-        .env("LC_ALL", "C")
-        .env("HOME", &dir)
-        .env_remove("CBB_PORT")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let mut written = String::new();
-    for _ in 0..300 {
-        written = std::fs::read_to_string(&file).unwrap_or_default();
-        if !written.is_empty() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    let _ = std::fs::remove_dir_all(&dir);
-    let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
-    assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
-}
-
 /// cbb own-command writes the user's own command in the user's settings
 /// folder, refuses a link there, and under sudo writes only as the user
 /// who ran it: what that user cannot write stays unwritten.
 #[test]
 fn own_command_as_the_user() {
     let dir = tempdir("own-command");
-    let config = dir.join(".config");
-    let env = [("XDG_CONFIG_HOME", config.to_str().unwrap())];
+    // The user's settings folder for a home (actions::user_config_dir): on
+    // a Mac ~/Library/Application Support; elsewhere XDG_CONFIG_HOME, set
+    // here so the runner's own does not count.
+    let settings = |home: &Path| -> (PathBuf, Vec<(&'static str, String)>) {
+        if cfg!(target_os = "macos") {
+            (home.join("Library/Application Support"), vec![("HOME", home.to_str().unwrap().to_string())])
+        } else {
+            let c = home.join(".config");
+            let v = c.to_str().unwrap().to_string();
+            (c, vec![("XDG_CONFIG_HOME", v)])
+        }
+    };
+    let (config, env) = settings(&dir);
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     let none = || always(json!({}), b"");
     let r = run_with(&dir, &["own-command", "backup", "--", "/usr/local/bin/backup", "--quick"], "", none(), &env);
     want("own-command", &r, 0, "", "");
@@ -2707,10 +2690,10 @@ fn own_command_as_the_user() {
     // A link in place of the folder is not followed.
     let elsewhere = dir.join("elsewhere");
     std::fs::create_dir_all(&elsewhere).unwrap();
-    let linked = dir.join("linked");
+    let (linked, env) = settings(&dir.join("linked"));
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
     std::fs::create_dir_all(&linked).unwrap();
     std::os::unix::fs::symlink(&elsewhere, linked.join("cbb")).unwrap();
-    let env = [("XDG_CONFIG_HOME", linked.to_str().unwrap())];
     let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
     assert_ne!(r.code, 0);
     assert!(!elsewhere.join("own-actions.json").exists());
@@ -3037,6 +3020,7 @@ fn global_entries() {
 /// cbb update's settings in a rootless install, whose user owns the
 /// updater's folder: where updates come from, and what installed this copy.
 #[test]
+#[cfg_attr(not(target_os = "linux"), ignore = "rootless installs are Linux only (D-79)")]
 fn update_settings_rootless() {
     let dir = tempdir("update-rootless");
     let state = dir.join("xdg-state");

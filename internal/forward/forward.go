@@ -8,8 +8,10 @@
 // forwarder"; docs/protocol.md, section 13).
 //
 // It listens on one port, UDP for the packets and TCP for the hubs'
-// registrations. A hub keeps one TLS connection to it, proves there that it
-// is a member of a group and holds its WireGuard key, and then sends hellos
+// registrations (`cbb-forward/3`). A hub keeps one TLS connection to it,
+// shows there the certificate of its server key and its group's hubs'
+// credential that lists that key (read by internal/blind), proves it holds
+// its WireGuard key, and then sends hellos
 // from its WireGuard port so that the forwarder learns where that port is
 // reached. A client's handshake goes to the hub whose public key its mac1
 // field is keyed with; the hub's answer and the data that follow go by the
@@ -17,9 +19,9 @@
 // cannot tell groups apart, and a packet goes only to its own group's hub
 // or to a client of that hub. The forwarder keeps everything in memory and
 // writes nothing about the groups or their devices, not even to its log;
-// with a state file it keeps there only, under a hash of each group's tag,
-// the version of the group's newest credential and a hash of its root
-// (versions).
+// with a state file it keeps there only, under a hash of each period's tag,
+// the version of the group's newest hubs' credential and a hash of its
+// period key (versions).
 package forward
 
 import (
@@ -110,7 +112,6 @@ type Forwarder struct {
 
 	mu        sync.Mutex
 	regs      map[string]*reg // by group tag
-	memory    *memory         // the authority records of the groups that register with them
 	versions  *versions       // the newest credential of each group that registers with one
 	byID      map[uint64]*reg // by registration ID, for hellos
 	byHubEP   map[netip.AddrPort]*reg
@@ -320,7 +321,6 @@ func Listen(cfg Config) (*Forwarder, error) {
 		sources: newLRU[sourceKey, *bucket](4 * limits.Groups), netScans: newLRU[scanKey, *bucket](4 * limits.Groups),
 		refused: cfg.Refused, done: make(chan struct{}),
 	}
-	f.memory = newMemory(f.registered)
 	if f.versions, err = newVersions(cfg.StateFile, cfg.Cert.PrivateKey); err != nil {
 		udp.Close()
 		tcp.Close()
@@ -390,6 +390,15 @@ func Listen(cfg Config) (*Forwarder, error) {
 // Addr returns the forwarder's UDP address.
 func (f *Forwarder) Addr() netip.AddrPort {
 	return f.udp.LocalAddr().(*net.UDPAddr).AddrPort()
+}
+
+// VLESSPort returns the port of the forwarder's VLESS listener, 0 without
+// VLESS.
+func (f *Forwarder) VLESSPort() uint16 {
+	if f.vless == nil {
+		return 0
+	}
+	return f.vless.Port()
 }
 
 // Serve forwards packets and takes registrations until ctx is done or the
@@ -998,15 +1007,6 @@ func (b *bucket) full(now time.Time) bool {
 // device or address is in it.
 type Stats struct {
 	Groups, Sessions, Waiting int
-}
-
-// registered reports whether a hub of the group is registered now. The
-// memory calls it with its own lock held, so nothing may call the memory
-// while holding f.mu.
-func (f *Forwarder) registered(tag string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.regs[tag] != nil
 }
 
 // Stats returns what the forwarder holds now.

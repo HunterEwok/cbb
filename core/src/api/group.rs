@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use zeroize::Zeroizing;
 
 use super::{Code, Refusal, b64_value, bad_args, json, refuse};
 use crate::authority::{Body, Hash, Record};
@@ -353,8 +354,8 @@ struct SealCopyArgs {
     blob: Option<Blob>,
     /// The copy's key, which sealed its blob; the core makes one when
     /// there is no blob and it is left out.
-    #[serde(with = "b64::opt", default)]
-    key: Option<Vec<u8>>,
+    #[serde(with = "b64::secret::opt", default)]
+    key: Option<Zeroizing<Vec<u8>>>,
 }
 
 /// `group_seal_copy`: seals a copy to the readers the set names
@@ -417,8 +418,8 @@ struct SealCopyToArgs {
     media: Option<Manifest>,
     #[serde(default)]
     blob: Option<Blob>,
-    #[serde(with = "b64")]
-    key: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    key: Zeroizing<Vec<u8>>,
 }
 
 /// `seal_copy_to`: seals a copy to the readers the caller names, for a
@@ -467,8 +468,8 @@ struct CommandArgs {
     me: String,
     /// The member's secret for sealed messages, which opens a sealed
     /// command; left out by a member that has none.
-    #[serde(with = "b64", default)]
-    secret: Vec<u8>,
+    #[serde(with = "b64::secret", default)]
+    secret: Zeroizing<Vec<u8>>,
 }
 
 /// `group_command`: checks a command for the member `me` and gives its

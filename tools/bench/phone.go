@@ -6,6 +6,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -15,6 +16,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -175,6 +178,62 @@ type phoneHelper struct {
 	jobs    map[string]*phoneJob
 	nextJob int
 	fwd     *phoneForwarder
+	phone   []*phoneRelay
+	udp     map[int][]*phoneRelay // the phone's UDP ports the members reach, by port: one for each of its addresses
+
+	relayOnce sync.Once // udprelay built and on the phone
+	relayErr  error
+}
+
+// phoneRelay lets the members reach a TCP port of the phone, its member
+// port, where its pairing window answers (D-119): adb forwards a port on
+// this computer's loopback to the phone's, a relay on the fleet network's
+// gateway passes connections there, and each member sends what it
+// addresses to the phone's own address at that port to the relay, so the
+// address in the window's QR code, which names the phone's, reaches it.
+type phoneRelay struct {
+	addr  string // the phone's address and port, as it names them
+	relay string // the relay on the gateway
+	udp   bool   // a UDP port, else TCP
+}
+
+// phoneApp is the app's package, whose UDP ports the members reach.
+const phoneApp = "tools.cbb"
+
+// phoneAddrs reads the phone's own IPv4 addresses, which it names in its
+// invitations and hub offers: the active network's, which is wlan0's
+// 10.0.2.16 on recent emulator images and eth0's 10.0.2.15 on older ones.
+func phoneAddrs(ctx context.Context) ([]string, error) {
+	out, err := exec.CommandContext(ctx, adbPath(), "shell", "ip", "-4", "-o", "addr", "show").Output()
+	if err != nil {
+		return nil, fmt.Errorf("adb: the phone's addresses: %w", err)
+	}
+	addrs := ipv4Addrs(string(out))
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("the phone has no IPv4 address but the loopback's: %q", out)
+	}
+	return addrs, nil
+}
+
+// ipv4Addrs reads the addresses of ip -4 -o addr ("2: wlan0    inet
+// 10.0.2.16/24 brd ..." a line), without the loopback's, each once.
+func ipv4Addrs(out string) []string {
+	var addrs []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] != "inet" {
+				continue
+			}
+			ip, _, err := net.ParseCIDR(f[i+1])
+			if err != nil || ip.IsLoopback() || ip.To4() == nil || slices.Contains(addrs, ip.String()) {
+				break
+			}
+			addrs = append(addrs, ip.String())
+			break
+		}
+	}
+	return addrs
 }
 
 // phoneForwarder is the run's forwarder for a hub on the phone. Its port
@@ -188,9 +247,10 @@ type phoneForwarder struct {
 	key  string
 }
 
-// phoneRequest is what a test asks: op is add, addr, forwarder, run, copy,
+// phoneRequest is what a test asks: op is add, addr, forwarder, phone, run, copy,
 // arrives, logs, start, output or stop. add with udp also publishes a UDP port, the same
-// number on this computer and in the container, for a hub's tunnel.
+// number on this computer and in the container, for a hub's tunnel; phone with addr,
+// the phone's own address and TCP port, lets every member reach it there.
 type phoneRequest struct {
 	Op      string `json:"op"`
 	UDP     bool   `json:"udp,omitempty"`
@@ -199,6 +259,7 @@ type phoneRequest struct {
 	Text    string `json:"text,omitempty"`
 	ID      string `json:"id,omitempty"`
 	Seconds int    `json:"seconds,omitempty"`
+	Addr    string `json:"addr,omitempty"`
 }
 
 type phoneAnswer struct {
@@ -291,6 +352,11 @@ func (h *phoneHelper) add(ctx context.Context, udp bool) (*Device, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	// A hub on the phone listens on a UDP port of its own choosing, which
+	// its invitations name: the members reach each the app has open now.
+	if err := h.phoneUDP(ctx, d); err != nil {
+		return nil, 0, err
+	}
 	out, err := docker(ctx, "port", d.Container, "8764/tcp")
 	if err != nil {
 		return nil, 0, err
@@ -302,9 +368,18 @@ func (h *phoneHelper) add(ctx context.Context, udp bool) (*Device, int, error) {
 	}
 	h.mu.Lock()
 	fwd := h.fwd
+	relays := append([]*phoneRelay(nil), h.phone...)
+	for _, ps := range h.udp {
+		relays = append(relays, ps...)
+	}
 	h.mu.Unlock()
 	if fwd != nil {
 		if err := fwd.reach(ctx, d); err != nil {
+			return nil, 0, err
+		}
+	}
+	for _, p := range relays {
+		if err := p.reach(ctx, d); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -342,6 +417,13 @@ func (h *phoneHelper) do(ctx context.Context, req phoneRequest, a *phoneAnswer) 
 			return err
 		}
 		a.Addr, a.Out = net.JoinHostPort(emulatorHost, fmt.Sprint(fwd.port)), fwd.key
+		return nil
+	case "phone":
+		p, err := h.phonePort(ctx, req.Addr)
+		if err != nil {
+			return err
+		}
+		a.Addr = p.relay
 		return nil
 	}
 	d, err := h.member(req.Dev)
@@ -404,6 +486,427 @@ func (h *phoneHelper) forwarder(ctx context.Context) (*phoneForwarder, error) {
 		}
 	}
 	return fwd, nil
+}
+
+// phonePort lets every member reach the phone's TCP port at addr, the
+// phone's own address and port ("10.0.2.15:8764"), once for each addr.
+func (h *phoneHelper) phonePort(ctx context.Context, addr string) (*phoneRelay, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || net.ParseIP(host).To4() == nil {
+		return nil, fmt.Errorf("the phone's address %q is no IPv4 address and port", addr)
+	}
+	h.mu.Lock()
+	for _, p := range h.phone {
+		if p.addr == addr {
+			h.mu.Unlock()
+			return p, nil
+		}
+	}
+	var first *Device
+	if len(h.members) > 0 {
+		first = h.members[0]
+	}
+	h.mu.Unlock()
+	if first == nil {
+		return nil, errors.New("no member runs yet")
+	}
+	out, err := exec.CommandContext(ctx, adbPath(), "forward", "tcp:0", "tcp:"+port).Output()
+	if err != nil {
+		return nil, fmt.Errorf("adb forward to the phone's port %s: %w", port, err)
+	}
+	local := net.JoinHostPort("127.0.0.1", strings.TrimSpace(string(out)))
+	ln, relay, err := h.relayListener(ctx, first)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
+	go relayTo(ln, local)
+	p := &phoneRelay{addr: addr, relay: relay}
+	h.mu.Lock()
+	members := append([]*Device(nil), h.members...)
+	h.phone = append(h.phone, p)
+	h.mu.Unlock()
+	for _, m := range members {
+		if err := p.reach(ctx, m); err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
+// relayListener opens a TCP relay to the phone where the members reach
+// this computer (relayHost), and gives the address they dial.
+func (h *phoneHelper) relayListener(ctx context.Context, first *Device) (net.Listener, string, error) {
+	bind, host, err := h.relayHost(ctx, first)
+	if err != nil {
+		return nil, "", err
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(bind, "0"))
+	if err != nil {
+		return nil, "", fmt.Errorf("a relay to the phone on %s: %w", bind, err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	return ln, net.JoinHostPort(host, port), nil
+}
+
+// relayHost gives where a relay to the phone listens and the address the
+// members dial it at. On Linux that is the fleet network's gateway, which
+// is this computer's. Docker Desktop (macOS, Windows) runs the network
+// inside its own VM, whose gateway this computer cannot bind: there the
+// relay listens on the loopback, which Docker Desktop passes
+// host.docker.internal to, and the members dial that name's address.
+func (h *phoneHelper) relayHost(ctx context.Context, first *Device) (bind, host string, err error) {
+	if runtime.GOOS == "linux" {
+		at := fmt.Sprintf("{{with index .NetworkSettings.Networks %q}}{{.Gateway}}{{end}}", h.f.net)
+		gw, err := docker(ctx, "inspect", "-f", at, first.Container)
+		if err != nil {
+			return "", "", err
+		}
+		gw = strings.TrimSpace(gw)
+		return gw, gw, nil
+	}
+	out, err := Run(ctx, first, "getent ahostsv4 host.docker.internal | awk 'NR==1 {print $1}'", "")
+	host = strings.TrimSpace(out)
+	if err != nil || net.ParseIP(host).To4() == nil {
+		return "", "", fmt.Errorf("the members find no IPv4 address for host.docker.internal (%q): %v", host, err)
+	}
+	return "127.0.0.1", host, nil
+}
+
+// phoneUDP lets every member reach each UDP port the app
+// has open on the phone that it does not reach yet: udprelay on the phone
+// passes datagrams that come to it over TCP, through adb forward, to that
+// port; a relay where the members reach this computer carries each
+// sender's datagrams there; and each member sends what it addresses to the
+// phone's address at that port to the relay. The tunnel of a hub on the
+// phone listens on such a port. d, the member being added, finds where the
+// relay listens; add then lets it reach the new relays with the others.
+// (The emulator console's UDP redirect never reaches an image whose only
+// network is the emulator's Wi-Fi, as Android 35's.)
+func (h *phoneHelper) phoneUDP(ctx context.Context, d *Device) error {
+	adb := adbPath()
+	uidOut, err := exec.CommandContext(ctx, adb, "shell", "pm", "list", "packages", "-U", phoneApp).Output()
+	if err != nil {
+		return fmt.Errorf("adb: the app's uid: %w", err)
+	}
+	uid := appUID(string(uidOut), phoneApp)
+	if uid < 0 {
+		return nil // the app is not installed yet
+	}
+	table, err := exec.CommandContext(ctx, adb, "shell", "cat", "/proc/net/udp", "/proc/net/udp6").Output()
+	if err != nil {
+		return fmt.Errorf("adb: the phone's UDP sockets: %w", err)
+	}
+	ports := udpPorts(string(table), uid)
+	if len(ports) == 0 {
+		return nil
+	}
+	addrs, err := phoneAddrs(ctx)
+	if err != nil {
+		return err
+	}
+	var added []*phoneRelay
+	for _, port := range ports {
+		h.mu.Lock()
+		_, known := h.udp[port]
+		h.mu.Unlock()
+		if known {
+			continue
+		}
+		local, err := h.phoneRelayTo(ctx, net.JoinHostPort(addrs[0], fmt.Sprint(port)))
+		if err != nil {
+			return err
+		}
+		bind, host, err := h.relayHost(ctx, d)
+		if err != nil {
+			return err
+		}
+		pc, err := net.ListenPacket("udp", net.JoinHostPort(bind, "0"))
+		if err != nil {
+			return fmt.Errorf("a UDP relay to the phone on %s: %w", bind, err)
+		}
+		go func() {
+			<-ctx.Done()
+			pc.Close()
+		}()
+		go relayUDPOverTCP(pc, local)
+		_, at, _ := net.SplitHostPort(pc.LocalAddr().String())
+		var ps []*phoneRelay
+		for _, a := range addrs {
+			ps = append(ps, &phoneRelay{addr: net.JoinHostPort(a, fmt.Sprint(port)), relay: net.JoinHostPort(host, at), udp: true})
+		}
+		h.mu.Lock()
+		if h.udp == nil {
+			h.udp = map[int][]*phoneRelay{}
+		}
+		h.udp[port] = ps
+		h.mu.Unlock()
+		added = append(added, ps...)
+	}
+	h.mu.Lock()
+	members := append([]*Device(nil), h.members...)
+	h.mu.Unlock()
+	for _, p := range added {
+		for _, m := range members {
+			if err := p.reach(ctx, m); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// adbPath is adb in ANDROID_HOME's platform tools, else on PATH.
+func adbPath() string {
+	if home := os.Getenv("ANDROID_HOME"); home != "" {
+		return filepath.Join(home, "platform-tools", "adb")
+	}
+	return "adb"
+}
+
+// appUID reads the uid of pkg from pm list packages -U ("package:NAME
+// uid:NUMBER" a line), -1 when it is not listed.
+func appUID(out, pkg string) int {
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || f[0] != "package:"+pkg || !strings.HasPrefix(f[1], "uid:") {
+			continue
+		}
+		var uid int
+		if _, err := fmt.Sscan(strings.TrimPrefix(f[1], "uid:"), &uid); err == nil {
+			return uid
+		}
+	}
+	return -1
+}
+
+// udpPorts reads the UDP ports uid listens on, on every address, from the
+// lines of /proc/net/udp and udp6, each once, in order.
+func udpPorts(table string, uid int) []int {
+	var ports []int
+	seen := map[int]bool{}
+	for _, line := range strings.Split(table, "\n") {
+		f := strings.Fields(line)
+		// sl local_address rem_address st tx_queue:rx_queue tr:tm->when retrnsmt uid ...
+		if len(f) < 8 || f[0] == "sl" || f[3] != "07" {
+			continue
+		}
+		var u int
+		if _, err := fmt.Sscan(f[7], &u); err != nil || u != uid {
+			continue
+		}
+		at := strings.LastIndexByte(f[1], ':')
+		if at < 0 || loopbackHex(f[1][:at]) {
+			continue
+		}
+		var port int
+		if _, err := fmt.Sscanf(f[1][at+1:], "%X", &port); err != nil || port == 0 || seen[port] {
+			continue
+		}
+		seen[port] = true
+		ports = append(ports, port)
+	}
+	return ports
+}
+
+// loopbackHex says whether an address as /proc/net/udp writes it (hex, in
+// the kernel's byte order) is the loopback: 127.x, ::1 or 127.x mapped.
+func loopbackHex(a string) bool {
+	a = strings.ToUpper(a)
+	switch len(a) {
+	case 8:
+		return strings.HasSuffix(a, "7F")
+	case 32:
+		return a == "00000000000000000000000001000000" || (a[:24] == "0000000000000000FFFF0000" && strings.HasSuffix(a, "7F"))
+	}
+	return false
+}
+
+// relayUDPOverTCP passes the datagrams pc takes to udprelay on the phone,
+// which adb forwards to the TCP address to: each sender over a connection
+// of its own, its datagrams as udprelay frames them, and the answers back
+// to that sender.
+func relayUDPOverTCP(pc net.PacketConn, to string) {
+	var mu sync.Mutex
+	outs := map[string]net.Conn{}
+	buf := make([]byte, 64*1024)
+	for {
+		n, from, err := pc.ReadFrom(buf)
+		if err != nil {
+			mu.Lock()
+			for _, o := range outs {
+				o.Close()
+			}
+			mu.Unlock()
+			return
+		}
+		mu.Lock()
+		o := outs[from.String()]
+		if o == nil {
+			o, err = net.DialTimeout("tcp", to, 10*time.Second)
+			if err != nil {
+				mu.Unlock()
+				continue
+			}
+			outs[from.String()] = o
+			go func(o net.Conn, key string, from net.Addr) {
+				r := bufio.NewReader(o)
+				for {
+					d, err := readFrame(r)
+					if err != nil {
+						break
+					}
+					pc.WriteTo(d, from)
+				}
+				// The next datagram from this sender connects again.
+				mu.Lock()
+				if outs[key] == o {
+					delete(outs, key)
+				}
+				mu.Unlock()
+				o.Close()
+			}(o, from.String(), from)
+		}
+		mu.Unlock()
+		if writeFrame(o, buf[:n]) != nil {
+			o.Close()
+		}
+	}
+}
+
+// writeFrame writes d as udprelay reads it: its length in two bytes,
+// big-endian, then d.
+func writeFrame(w io.Writer, d []byte) error {
+	if len(d) > 0xffff {
+		return fmt.Errorf("a datagram of %d bytes", len(d))
+	}
+	b := make([]byte, 2+len(d))
+	binary.BigEndian.PutUint16(b, uint16(len(d)))
+	copy(b[2:], d)
+	_, err := w.Write(b)
+	return err
+}
+
+// readFrame reads one datagram as udprelay writes it.
+func readFrame(r io.Reader) ([]byte, error) {
+	var n [2]byte
+	if _, err := io.ReadFull(r, n[:]); err != nil {
+		return nil, err
+	}
+	d := make([]byte, binary.BigEndian.Uint16(n[:]))
+	_, err := io.ReadFull(r, d)
+	return d, err
+}
+
+// udprelayPath is where udprelay runs on the phone.
+const udprelayPath = "/data/local/tmp/cbb-udprelay"
+
+// phoneRelayTo starts udprelay on the phone toward its UDP address to, and
+// answers the TCP address on this computer's loopback that adb forwards to
+// it. The first call builds udprelay for the phone's CPU and puts it there.
+func (h *phoneHelper) phoneRelayTo(ctx context.Context, to string) (string, error) {
+	adb := adbPath()
+	h.relayOnce.Do(func() { h.relayErr = pushUDPRelay(ctx, adb) })
+	if h.relayErr != nil {
+		return "", h.relayErr
+	}
+	cmd := exec.CommandContext(ctx, adb, "shell", udprelayPath, "-listen", "127.0.0.1:0", "-to", to)
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("adb shell %s: %w", udprelayPath, err)
+	}
+	go func() { _ = cmd.Wait() }()
+	line, err := bufio.NewReader(out).ReadString('\n')
+	var phonePort int
+	if _, perr := fmt.Sscan(strings.TrimSpace(line), &phonePort); err != nil || perr != nil || phonePort == 0 {
+		return "", fmt.Errorf("udprelay on the phone toward %s did not start: %q %s", to, line, stderr.String())
+	}
+	fwd, err := exec.CommandContext(ctx, adb, "forward", "tcp:0", fmt.Sprintf("tcp:%d", phonePort)).Output()
+	if err != nil {
+		return "", fmt.Errorf("adb forward to udprelay's port %d: %w", phonePort, err)
+	}
+	var hostPort int
+	if _, err := fmt.Sscan(strings.TrimSpace(string(fwd)), &hostPort); err != nil || hostPort == 0 {
+		return "", fmt.Errorf("adb forward to udprelay's port %d answered %q", phonePort, fwd)
+	}
+	go func() {
+		<-ctx.Done()
+		_ = exec.Command(adb, "forward", "--remove", fmt.Sprintf("tcp:%d", hostPort)).Run()
+		_ = exec.Command(adb, "shell", "pkill", "-f", udprelayPath).Run()
+	}()
+	return net.JoinHostPort("127.0.0.1", fmt.Sprint(hostPort)), nil
+}
+
+// pushUDPRelay builds udprelay (tools/bench/udprelay) for the phone's CPU,
+// static, and puts it on the phone.
+func pushUDPRelay(ctx context.Context, adb string) error {
+	abi, err := exec.CommandContext(ctx, adb, "shell", "getprop", "ro.product.cpu.abi").Output()
+	if err != nil {
+		return fmt.Errorf("adb: the phone's CPU: %w", err)
+	}
+	arch, ok := map[string]string{"arm64-v8a": "arm64", "x86_64": "amd64", "armeabi-v7a": "arm", "x86": "386"}[strings.TrimSpace(string(abi))]
+	if !ok {
+		return fmt.Errorf("udprelay for the phone's CPU %q: not known", strings.TrimSpace(string(abi)))
+	}
+	dir, err := os.MkdirTemp("", "cbb-udprelay")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	bin := filepath.Join(dir, "udprelay")
+	build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", bin, "github.com/HunterEwok/cbb/tools/bench/udprelay")
+	build.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+arch, "GOARM=7", "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		return fmt.Errorf("building udprelay for %s: %v: %s", arch, err, out)
+	}
+	if out, err := exec.CommandContext(ctx, adb, "push", bin, udprelayPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("adb push udprelay: %v: %s", err, out)
+	}
+	if out, err := exec.CommandContext(ctx, adb, "shell", "chmod", "755", udprelayPath).CombinedOutput(); err != nil {
+		return fmt.Errorf("adb shell chmod udprelay: %v: %s", err, out)
+	}
+	return nil
+}
+
+// relayTo passes each connection ln takes to the address to, both ways.
+func relayTo(ln net.Listener, to string) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer c.Close()
+			o, err := net.DialTimeout("tcp", to, 10*time.Second)
+			if err != nil {
+				return
+			}
+			defer o.Close()
+			done := make(chan struct{}, 2)
+			go func() { io.Copy(o, c); done <- struct{}{} }()
+			go func() { io.Copy(c, o); done <- struct{}{} }()
+			<-done
+		}()
+	}
+}
+
+// reach sends what d addresses to the phone's address and port to the relay.
+func (p *phoneRelay) reach(ctx context.Context, d *Device) error {
+	host, port, _ := net.SplitHostPort(p.addr)
+	proto := "tcp"
+	if p.udp {
+		proto = "udp"
+	}
+	_, err := Run(ctx, d, fmt.Sprintf("iptables -t nat -A OUTPUT -d %s -p %s --dport %s -j DNAT --to-destination %s", host, proto, port, p.relay), "")
+	return err
 }
 
 // reach sends what d addresses to 10.0.2.2 at the forwarder's port to the

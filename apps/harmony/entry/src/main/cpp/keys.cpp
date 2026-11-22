@@ -164,14 +164,8 @@ bool ensure(Which which, Key *key, Failure *failure)
     return ensureAt(aliasOf(which), which == Which::Admin, nameOf(which), key, failure);
 }
 
-namespace {
-bool forgetServerKeys(const std::vector<std::string> &keep, Failure *failure);
-} // namespace
-
 bool forget(Failure *failure)
 {
-    if (!forgetServerKeys({}, failure))
-        return false;
     Params empty(nullptr, 0);
     for (const Which which : {Which::Member, Which::Admin}) {
         const std::string name = aliasOf(which);
@@ -323,138 +317,6 @@ int32_t signMember(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
 int32_t signAdmin(void *, const uint8_t *digest, uint8_t *sig, size_t *sigLen)
 {
     return signFor(Which::Admin, digest, sig, sigLen);
-}
-
-// The keys for the servers.
-
-namespace {
-
-std::mutex serverMu;
-std::string serverIndex; // the file that lists the keys for the servers made
-
-const char serverPrefix[] = "cbb-srv-";
-
-// The alias of the key for the servers the core names name ("server TAG",
-// "period TAG"): the prefix and the name with its space as a dash.
-std::string serverAlias(const std::string &name)
-{
-    std::string a = serverPrefix + name;
-    std::replace(a.begin(), a.end(), ' ', '-');
-    return a;
-}
-
-std::vector<std::string> readIndex()
-{
-    std::vector<std::string> names;
-    if (serverIndex.empty())
-        return names;
-    std::ifstream f(serverIndex);
-    for (std::string line; std::getline(f, line);) {
-        if (!line.empty())
-            names.push_back(line);
-    }
-    return names;
-}
-
-bool writeIndex(const std::vector<std::string> &names)
-{
-    if (serverIndex.empty())
-        return false;
-    const std::string tmp = serverIndex + ".tmp";
-    {
-        std::ofstream f(tmp, std::ios::trunc);
-        for (const auto &n : names)
-            f << n << '\n';
-        if (!f)
-            return false;
-    }
-    return std::rename(tmp.c_str(), serverIndex.c_str()) == 0;
-}
-
-bool forgetServerKeys(const std::vector<std::string> &keep, Failure *failure)
-{
-    std::lock_guard<std::mutex> lock(serverMu);
-    std::vector<std::string> left;
-    Params empty(nullptr, 0);
-    for (const auto &name : readIndex()) {
-        if (std::find(keep.begin(), keep.end(), name) != keep.end()) {
-            left.push_back(name);
-            continue;
-        }
-        const std::string a = serverAlias(name);
-        OH_Huks_Blob alias = blobOf(a);
-        const OH_Huks_Result r = OH_Huks_DeleteKeyItem(&alias, empty.get());
-        if (r.errorCode != OH_HUKS_SUCCESS && r.errorCode != OH_HUKS_ERR_CODE_ITEM_NOT_EXIST) {
-            *failure = {"The phone could not delete its key.", why(("delete the key " + name).c_str(), r)};
-            left.push_back(name);
-        }
-    }
-    if (!serverIndex.empty() && !writeIndex(left) && !failure->failed())
-        *failure = {"The phone could not keep the list of its keys.", "keys: cannot write " + serverIndex};
-    return !failure->failed();
-}
-
-} // namespace
-
-void setServerIndex(const std::string &path)
-{
-    std::lock_guard<std::mutex> lock(serverMu);
-    serverIndex = path;
-}
-
-int32_t serverKeys(void *, int32_t op, const uint8_t *name, size_t nameLen, const uint8_t *digest, uint8_t *out, size_t *outLen)
-{
-    const std::string n(reinterpret_cast<const char *>(name), nameLen);
-    switch (op) {
-    case 0: { // has
-        const std::string a = serverAlias(n);
-        OH_Huks_Blob alias = blobOf(a);
-        Params empty(nullptr, 0);
-        return OH_Huks_IsKeyItemExist(&alias, empty.get()).errorCode == OH_HUKS_SUCCESS ? 0 : 1;
-    }
-    case 1: { // the public key, made first
-        Key key;
-        Failure failure;
-        {
-            std::lock_guard<std::mutex> lock(serverMu);
-            if (!ensureAt(serverAlias(n), false, "key " + n, &key, &failure))
-                return 1;
-            if (key.created) {
-                std::vector<std::string> names = readIndex();
-                if (std::find(names.begin(), names.end(), n) == names.end())
-                    names.push_back(n);
-                writeIndex(names);
-            }
-        }
-        if (key.point.size() > 72)
-            return 1;
-        std::memcpy(out, key.point.data(), key.point.size());
-        *outLen = key.point.size();
-        return 0;
-    }
-    case 2: { // sign
-        uint8_t sig[128];
-        uint32_t sigLen = sizeof(sig);
-        if (signOnceAt(serverAlias(n), digest, {}, sig, &sigLen).errorCode != OH_HUKS_SUCCESS)
-            return 1;
-        std::vector<uint8_t> der;
-        if (!derOf(sig, sigLen, &der))
-            return 1;
-        std::memcpy(out, der.data(), der.size());
-        *outLen = der.size();
-        return 0;
-    }
-    case 3: { // keep only these, one a line
-        std::vector<std::string> keep;
-        std::istringstream lines(n);
-        for (std::string line; std::getline(lines, line);)
-            keep.push_back(line);
-        Failure failure;
-        return forgetServerKeys(keep, &failure) ? 0 : 1;
-    }
-    default:
-        return 1;
-    }
 }
 
 } // namespace keys

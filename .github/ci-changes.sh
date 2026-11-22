@@ -60,6 +60,8 @@ for f in $files; do
 	apps/harmony/*) harmony=true ;;
 	site/* | docs/* | *.md | LICENSE) site=true ;;
 	.github/workflows/codeql-swift.yml) swift=true ;;
+	.github/*.sh | .github/*.ps1) all=true ;; # the scripts ci.yml's jobs run
+	.github/workflows/release.yml) all=true ;; # its lists and steps, which the check job and the rehearsal read
 	.github/*) ;; # other workflows, templates and settings: no job of ci.yml reads them
 	*) all=true ;;
 	esac

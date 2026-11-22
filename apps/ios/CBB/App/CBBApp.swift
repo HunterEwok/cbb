@@ -20,6 +20,9 @@ struct CBBApp: App {
     }
 
     @Environment(\.scenePhase) private var scenePhase
+    /// Whether the app was in the background (or not started) since it was
+    /// last active.
+    @State private var wasAway = true
 
     var body: some Scene {
         WindowGroup {
@@ -30,14 +33,16 @@ struct CBBApp: App {
         .onChange(of: scenePhase, initial: true) { _, phase in
             model.group.setForeground(phase == .active)
             model.group.setBackground(phase == .background)
-            // A copy from another device that waits comes in as the app
-            // opens, and what was copied here goes out.
-            if phase == .active {
-                Task {
-                    await model.takePending()
-                    await model.sendOnOpen()
-                }
+            // The app's opening (D-128): what was copied here goes out, or
+            // the group's copy comes in. Only from the background or at the
+            // start: Control Center, a notification or a system prompt over
+            // the app makes it inactive, and coming back from that is no
+            // opening.
+            if phase == .active, wasAway {
+                Task { await model.opened() }
             }
+            if phase == .active { wasAway = false }
+            if phase == .background { wasAway = true }
             if phase == .background { BackgroundRefresh.schedule() }
         }
         .backgroundTask(.appRefresh(BackgroundRefresh.id)) {

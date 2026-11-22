@@ -18,5 +18,7 @@ target/release/esp32-on-linux -tap tap0 -addr 192.168.69.2/24 -name board -ident
 
 It prints the `cbb://join` link to paste into the app, waits up to five minutes
 for the phone, and writes the identity the phone's Welcome gives it to the file. `-debug`
-shows the details of errors. The Go test `TestEmbassyJoiner` (internal/service) plays the
-phone.
+shows the details of errors. This is the pairing of 0.5, where the new device waits for the
+phone to dial it; 0.6 has no such device (D-119), so a group of 0.6 does not take the board.
+The ESP32 moves to the records of 0.6, joining by a pairing window, in 0.7, and its test
+against `cbb` comes back with it.

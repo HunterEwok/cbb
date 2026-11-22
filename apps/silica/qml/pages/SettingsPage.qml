@@ -16,6 +16,12 @@ Page {
     // How the last change of the admin PIN went.
     property string pinNote: ""
 
+    // A lifetime as the settings show it: whole minutes, else seconds.
+    function lifetime(ms) {
+        var s = Math.round(ms / 1000)
+        return s >= 60 && s % 60 === 0 ? qsTr("%1 min").arg(s / 60) : qsTr("%1 s").arg(s)
+    }
+
     RemorsePopup { id: remorse }
 
     SilicaFlickable {
@@ -105,26 +111,8 @@ Page {
                 visible: app.group !== ""
                 text: qsTr("Group")
             }
-            // The root's settings (cbb_core::root), each signed with the root
-            // key: how long a claim from a lost root waits, which keys may be
-            // admins, and the recovery key.
-            ComboBox {
-                id: delay
-                visible: app.root && app.member.running
-                label: qsTr("A claim to take the group over waits")
-                property var hours: [0, 1, 24, 72, 168]
-                currentIndex: Math.max(hours.indexOf(Math.round((app.member.rootView.delay_ms || 0) / 3600000)), 0)
-                menu: ContextMenu {
-                    Repeater {
-                        model: [qsTr("No time"), qsTr("1 hour"), qsTr("1 day"), qsTr("3 days"), qsTr("7 days")]
-                        MenuItem {
-                            text: modelData
-                            onClicked: if (delay.hours[index] * 3600000 !== app.member.rootView.delay_ms)
-                                           app.setTakeoverDelay(delay.hours[index])
-                        }
-                    }
-                }
-            }
+            // The root's settings, each signed with the root key: which keys
+            // may be admins, and the recovery key.
             ComboBox {
                 id: level
                 visible: app.root && app.member.running
@@ -132,14 +120,51 @@ Page {
                 description: app.belowLevel.length > 0
                              ? qsTr("Some admins keep weaker keys; they stay until removed") : ""
                 property var levels: ["proven", "hardware", "files"]
-                currentIndex: Math.max(levels.indexOf(app.member.rootView.key_level || "hardware"), 0)
+                currentIndex: Math.max(levels.indexOf(app.member.groupState.key_level || "hardware"), 0)
                 menu: ContextMenu {
                     Repeater {
                         model: [qsTr("Proven hardware only"), qsTr("Hardware"), qsTr("Hardware or a file")]
                         MenuItem {
                             text: modelData
-                            onClicked: if (level.levels[index] !== app.member.rootView.key_level)
+                            onClicked: if (level.levels[index] !== app.member.groupState.key_level)
                                            app.setGroupKeyLevel(level.levels[index])
+                        }
+                    }
+                }
+            }
+            // How long a copy and a secret live for the whole group (D-129),
+            // inside the core's bounds: 1 min to 1 h, and 5 s to 1 min.
+            ComboBox {
+                id: copyTtl
+                visible: app.admin && app.member.running
+                label: qsTr("Copy lifetime")
+                property var choices: withCurrent([60000, 300000, 900000, 1800000, 3600000], current)
+                property double current: app.member.groupState.ttl_ms || 300000
+                currentIndex: choices.indexOf(current)
+                menu: ContextMenu {
+                    Repeater {
+                        model: copyTtl.choices
+                        MenuItem {
+                            text: page.lifetime(modelData)
+                            onClicked: if (modelData !== copyTtl.current) app.setGroupTtl(modelData, 0)
+                        }
+                    }
+                }
+                function withCurrent(list, ms) { return list.indexOf(ms) >= 0 ? list : list.concat([ms]).sort(function (a, b) { return a - b }) }
+            }
+            ComboBox {
+                id: secretTtl
+                visible: app.admin && app.member.running
+                label: qsTr("Secret lifetime")
+                property var choices: copyTtl.withCurrent([5000, 15000, 30000, 60000], current)
+                property double current: app.member.groupState.secret_ttl_ms || 60000
+                currentIndex: choices.indexOf(current)
+                menu: ContextMenu {
+                    Repeater {
+                        model: secretTtl.choices
+                        MenuItem {
+                            text: page.lifetime(modelData)
+                            onClicked: if (modelData !== secretTtl.current) app.setGroupTtl(0, modelData)
                         }
                     }
                 }
@@ -147,26 +172,15 @@ Page {
             ValueButton {
                 visible: app.root && app.member.running
                 label: qsTr("Recovery key")
-                value: app.member.rootView.recovery ? qsTr("Made") : qsTr("None")
+                value: qsTr("Made")
                 onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
             }
-            // A member phone that joined without an admin key makes it now,
-            // for the root's "Make an admin".
             Button {
-                visible: app.group !== "" && !app.admin && !app.adminOffered && app.adminPin !== "locked"
+                visible: !app.root && app.member.running
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Get ready to be an admin")
+                text: qsTr("Move the group to this phone")
                 enabled: !app.busy
-                onClicked: app.prepareAdmin()
-            }
-            Label {
-                visible: app.group !== "" && app.adminOffered
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.secondaryHighlightColor
-                text: qsTr("The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.")
+                onClicked: pageStack.push(Qt.resolvedUrl("ChangeRootPage.qml"))
             }
             // The admin PIN, which the TEE checks before the admin key signs.
             Button {
@@ -201,7 +215,7 @@ Page {
                 height: Theme.paddingLarge * 2
             }
             // The root's key goes with it: the group then has no root until
-            // an admin phone takes it over.
+            // its recovery key moves it to another device.
             Button {
                 visible: app.group !== ""
                 anchors.horizontalCenter: parent.horizontalCenter

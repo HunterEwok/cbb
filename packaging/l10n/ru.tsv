@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	служба не ответила з
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	CBB работает на TCP-порту %s. Удалить: sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: служба видна в System > Diagnostics > Services, а её правила сохраняются при каждой перезагрузке фильтра.
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense не поддерживается: обновление pfSense может удалить CBB; после обновления запустите этот установщик ещё раз.
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Дальше: запустите cbb pair от root и отсканируйте QR-код приложением CBB на телефоне; без приложения см. docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	Дальше: откройте окно сопряжения на устройстве группы, затем запустите здесь cbb pair -code от root и введите шесть цифр, которые оно показывает.
 CBB is removed, with this device's keys; it left its group.	CBB удалён вместе с ключами этого устройства; оно вышло из группы.
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /var/db/cbb для переустановки; --purge удаляет и их.
 --port needs a port number	--port требует номер порта
@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json для %s, а не для %s
 release.json does not list %s	в release.json нет %s
 %s does not match the signed release.json; not installing it	%s не совпадает с подписанным release.json; установка отменена
-The release's signature checks out (%s).	Подпись выпуска верна (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	Подпись выпуска верна (%s): ES256 и SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, для неё нужен OpenSSL 3.5 или новее.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, PowerShell не умеет её проверять.
 could not download %s	не удалось скачать %s
 stable.json names no release	stable.json не называет выпуск
 Downloading %s (%s)...	Скачивание %s (%s)...
@@ -108,8 +110,7 @@ the desktop agent did not start; it starts at your next login	агент раб�
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB работает, пока вы в системе. Чтобы он работал и после выхода, администратор выполняет: sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	CBB работает для %s на TCP-порту %s, установлен без root: он не может быть корнем группы, администратором или хабом. Если брандмауэр здесь ограничивает входящие подключения, администратор разрешает TCP %s и UDP 5353 из домашней сети. Удалить: %s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	Для копирования и вставки в tmux добавьте в ~/.tmux.conf строку: source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	Дальше: см. member/README.md; коротко: %s pair здесь, и отсканируйте QR-код приложением на телефоне.
-Next: run %s pair and scan its QR code with the CBB app on your phone.	Дальше: запустите %s pair и отсканируйте QR-код приложением CBB на телефоне.
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	Дальше: откройте окно сопряжения на устройстве группы, затем запустите здесь %s pair -code и введите шесть цифр, которые оно показывает.
 this archive has no install-rootless.sh, so it cannot install without root	в этом архиве нет install-rootless.sh, поэтому установить без root нельзя
 systemd is required	нужен systemd
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	здесь есть учётная запись cbb, и она не принадлежит службе (её комментарий не «cbb service»); она получила бы ключи группы. Переименуйте или удалите её и запустите install.sh ещё раз.
@@ -123,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	помощник u
 the desktop agent of %s did not start again; it starts at their next login	агент рабочего стола %s не перезапустился; он запустится при следующем входе этого пользователя
 cbb global allow failed; run sudo cbb global allow once the service runs.	cbb global allow не удалось; выполните sudo cbb global allow, когда служба заработает.
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	CBB работает на TCP-порту %s. Удалить: sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	Дальше: см. member/README.md; коротко: sudo -u cbb %s pair здесь, и отсканируйте QR-код приложением на телефоне.
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	Дальше: запустите sudo %s pair и отсканируйте QR-код приложением CBB на телефоне; без приложения см. docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	Дальше: откройте окно сопряжения на устройстве группы, затем запустите здесь sudo -u cbb %s pair -code и введите шесть цифр, которые оно показывает.
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	Дальше: откройте окно сопряжения на устройстве группы, затем запустите здесь sudo %s pair -code и введите шесть цифр, которые оно показывает.
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в %s/cbb для переустановки; --purge удаляет и их.
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /var/lib/cbb для переустановки; --purge удаляет и их.
 %s does not run on this Mac	%s не запускается на этом Mac
@@ -141,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	Правило выше до
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	Правило брандмауэра не добавлено. CBB работает, только пока брандмауэр разрешает правило выше. Чтобы добавить его вручную, выполните:
 To let CBB add and manage it, run the installer again with --express.	Чтобы CBB добавил его и следил за ним, запустите установщик ещё раз с --express.
 CBB is running on TCP port %s, in its group.	CBB работает на TCP-порту %s, в своей группе.
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	CBB работает на TCP-порту %s. Войти в группу: sudo cbb pair, затем отсканируйте QR-код телефоном или введите код из cbb pair на корне группы или администраторе; или создать группу: sudo cbb new.
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	CBB работает на TCP-порту %s. Войти в группу: откройте окно сопряжения на устройстве группы, затем запустите sudo cbb pair -code и введите шесть цифр, которые оно показывает; или создать группу: sudo cbb new.
 CBB is removed, with this Mac's keys; it left its group.	CBB удалён вместе с ключами этого Mac; он вышел из группы.
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в %s/state для переустановки; --purge удаляет и их.
 this installer is for OpenWrt	этот установщик для OpenWrt
@@ -152,9 +153,9 @@ the service did not answer within 40 s: %s	служба не ответила з
 see logread -e cbb	см. logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB работает на TCP-порту %s, в зоне lan. Удалить: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Attended sysupgrade (ASU, owut) не переносит пакеты не из лент OpenWrt: после такого обновления установите CBB ещё раз.
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Дальше: выполните su -s /bin/sh cbb -c 'cbb pair -name router' и отсканируйте QR-код приложением CBB на телефоне.
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	Дальше: откройте окно сопряжения на устройстве группы, затем запустите здесь su -s /bin/sh cbb -c 'cbb pair -code -name router' и введите шесть цифр, которые оно показывает.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB удалён. Его ключи остаются в /etc/cbb для переустановки; --purge удаляет и их.
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	Это устройство пока не в группе, поэтому сейчас начнётся сопряжение (--no-pair пропускает его).
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	Это устройство пока не в группе. Откройте окно сопряжения на устройстве группы (там cbb pair) и введите здесь шесть цифр, которые оно показывает (--no-pair пропускает это).
 could not record how CBB was installed; cbb update takes it as get.sh	не удалось записать, как установлен CBB; cbb update будет считать, что через get.sh
 automatic updates are on or off, not %s	автообновления бывают on или off, а не %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	CBB может раз в день проверять, есть ли подписанный проектом выпуск, и устанавливать его; при проверке GitHub видит адрес этого устройства, как при любом скачивании.
@@ -236,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	Не удалось переключить автообновления в %s; выполните cbb update -auto %s от имени администратора.
 CBB %s is running on TCP port %s; %s may use it.	CBB %s работает на TCP-порту %s; %s может им пользоваться.
 It stays in its group.	Он остаётся в своей группе.
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	Дальше, в терминале, открытом от имени администратора: cbb pair, затем отсканируйте QR-код телефоном или введите код из cbb pair на корне группы или администраторе; или создайте группу: cbb new.
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	Дальше, чтобы войти в группу: откройте окно сопряжения на устройстве группы, затем в терминале, открытом от имени администратора, запустите cbb pair -code и введите шесть цифр, которые оно показывает; или создайте там группу: cbb new.
 To remove it: Settings, Apps, CBB, Uninstall.	Удалить: Параметры, Приложения, CBB, Удалить.
 Y	Д
 Yes	Да
@@ -258,3 +259,6 @@ cbb runs here with its helper, which may hold its keys; without it cbb cannot us
 --uinput needs cbb's helper, which runs the desktop connector	--uinput требует помощника cbb, в котором работает коннектор рабочего стола
 the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	действия polkit для подтверждения админ-действий не записаны; приложения будут спрашивать пароль администратора
 the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	права для подтверждения админ-действий не записаны; приложение для Mac будет спрашивать пароль администратора
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s знает SLH-DSA-SHA2-128s, но проверяет её не так, как подписывает cbb; обновите openssl (или CBB_VERIFY=skip, чтобы установить без проверки)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	в %s нет корневых ключей для проверки выпуска; установка отменена (CBB_VERIFY=skip устанавливает без проверки)
+Checked against the roots in %s, not the built-in ones.	Проверено по корням из %s, а не по встроенным.

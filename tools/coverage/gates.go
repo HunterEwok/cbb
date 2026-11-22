@@ -105,13 +105,44 @@ func auditGate(file, root string) (gate, error) {
 
 var fieldRule = regexp.MustCompile(`Rule::field\("([^"]+)"\)`)
 
+// ruleConst is a rule's constant: `pub const RULE_LATE: Rule = Rule::field("welcome/late")`.
+var ruleConst = regexp.MustCompile(`(?:const|let)\s+(\w+)(?:\s*:\s*Rule)?\s*=\s*Rule::field\("([^"]+)"\)`)
+
+// refusesMark is a Rust test marked with the rules it sees refused:
+// `// refuses: commands/stale, commands/late`, then the test's attributes,
+// then its fn.
+var refusesMark = regexp.MustCompile(`(?m)^[ \t]*// refuses: ([a-z0-9/-]+(?:, [a-z0-9/-]+)*)[ \t]*\n(?:[ \t]*#\[[^\n]*\n)*[ \t]*#\[test\][ \t]*\n(?:[ \t]*#\[[^\n]*\n)*[ \t]*fn \w+[^{]*\{`)
+
+// fnBody is the text of the function whose opening brace ends text[:open],
+// up to its closing brace; strings and comments are not told apart, which
+// a test's braces never need.
+func fnBody(text string, open int) string {
+	depth := 1
+	for i := open; i < len(text); i++ {
+		switch text[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return text[open:i]
+			}
+		}
+	}
+	return text[open:]
+}
+
 // formatGate checks that each rule a reader in src names with Rule::field is
-// the expected refusal of at least one vector in vectors (*.json). Until the
-// 0.6 core's readers are in the tree (no Rule::field in src) it is not
-// measured.
+// the expected refusal of at least one vector in vectors (*.json), or, for a
+// rule whose refusal depends on what the reader already holds, of a Rust
+// test in src marked `// refuses: <rule>` whose body names the rule (its
+// string or one of its constants). Until the 0.6 core's readers are in the
+// tree (no Rule::field in src) it is not measured.
 func formatGate(src, vectors string) (gate, error) {
-	g := gate{name: "format rules with a refused vector"}
+	g := gate{name: "format rules with a refused vector or test"}
 	rules := map[string]bool{}
+	consts := map[string][]string{}
+	var sources []string
 	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -123,8 +154,17 @@ func formatGate(src, vectors string) (gate, error) {
 		if err != nil {
 			return err
 		}
+		sources = append(sources, string(b))
+		// A test's own rules (a made-up table in core/src/msg/tests.rs)
+		// are no reader's.
+		if filepath.Base(p) == "tests.rs" {
+			return nil
+		}
 		for _, m := range fieldRule.FindAllStringSubmatch(string(b), -1) {
 			rules[m[1]] = true
+		}
+		for _, m := range ruleConst.FindAllStringSubmatch(string(b), -1) {
+			consts[m[2]] = append(consts[m[2]], m[1])
 		}
 		return nil
 	})
@@ -155,6 +195,20 @@ func formatGate(src, vectors string) (gate, error) {
 		}
 		refusals(v, refused)
 	}
+	for _, text := range sources {
+		for _, m := range refusesMark.FindAllStringSubmatchIndex(text, -1) {
+			body := fnBody(text, m[1])
+			for _, r := range strings.Split(text[m[2]:m[3]], ", ") {
+				names := append([]string{`"` + r + `"`}, consts[r]...)
+				for _, n := range names {
+					if regexp.MustCompile(`(^|[^\w])` + regexp.QuoteMeta(n) + `($|[^\w])`).MatchString(body) {
+						refused[r] = true
+						break
+					}
+				}
+			}
+		}
+	}
 	for r := range rules {
 		g.of++
 		if refused[r] {
@@ -177,6 +231,11 @@ func refusals(v any, into map[string]bool) {
 			if verdict, has := x["verdict"]; !has || verdict == "refuse" {
 				into[r] = true
 			}
+		} else if v, ok := x["verdict"].(string); ok && strings.Contains(v, "/") {
+			// The vectors of wave 4 and of push name the rule that
+			// refuses in the verdict itself ("content/type"), beside
+			// verdicts such as take, keep and hold.
+			into[v] = true
 		}
 		for _, e := range x {
 			refusals(e, into)

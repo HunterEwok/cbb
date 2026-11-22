@@ -13,14 +13,16 @@ fn problems_in_short() {
     assert!(problem("its key is not the one given", false).contains("-key"));
     assert!(problem("reaching the relay: refused", false).contains("could not be reached"));
     assert!(problem("the relay's tunnel does not answer", false).contains("UDP port"));
+    assert!(problem("the group's credentials do not list this device yet", false).contains("credentials"));
     assert!(problem("other", false).contains("failed"));
 }
 
 #[test]
 fn pins() {
-    assert!(pin_of(PROJECT_PINS[0]).is_ok());
-    assert!(pin_of("AAAA").is_err());
-    assert!(pin_of(&("A".repeat(43) + "B")).is_err(), "not canonical");
+    use crate::away::serve::{PROJECT_PINS, pin_bytes};
+    assert!(pin_bytes(PROJECT_PINS[0]).is_ok());
+    assert!(pin_bytes("AAAA").is_err());
+    assert!(pin_bytes(&("A".repeat(43) + "B")).is_err(), "not canonical");
     assert!(test_resolve("cbb.tools").is_none(), "no port");
 }
 

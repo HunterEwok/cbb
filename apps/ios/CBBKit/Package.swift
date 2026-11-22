@@ -1,12 +1,10 @@
 // swift-tools-version:5.9
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// CBBKit is the protocol core of the phone app: pairing (CPace, the
-// frames, the welcome), the join QR code and the member protocol. It has no
-// UI and runs on Linux too, so its tests run against the Go implementation's
-// test vectors anywhere. The group's rules come from the Rust core
-// (CCbbCore), whose static library ffi/bind.sh builds: the kit's tests
-// run as swift test -Xlinker -L<its folder>.
+// CBBKit is the phone app's way to the Rust core (CCbbCore): the member,
+// pairing, the recovery key and the group's state, with no UI. It runs on
+// Linux too. The core's static library comes from ffi/bind.sh: the kit's
+// tests run as swift test -Xlinker -L<its folder>.
 import PackageDescription
 
 let package = Package(
@@ -23,8 +21,6 @@ let package = Package(
         .target(name: "CBBKit", dependencies: [
             "CCbbCore",
             .product(name: "Crypto", package: "swift-crypto"),
-            // RSA, for Google's attestation root (AndroidAttestation).
-            .product(name: "_CryptoExtras", package: "swift-crypto"),
         ], linkerSettings: [
             .linkedLibrary("cbb_ffi"),
             // The Rust cbb's smart card signer (member/src/piv.rs) on a
@@ -41,7 +37,5 @@ let package = Package(
             .linkedLibrary("gcc_s", .when(platforms: [.linux])),
         ]),
         .testTarget(name: "CBBKitTests", dependencies: ["CBBKit"]),
-        // Plays the phone against the Go code in the Go tests; not shipped.
-        .executableTarget(name: "cbb-interop", dependencies: ["CBBKit"]),
     ]
 )

@@ -13,6 +13,14 @@ on:
 permissions:
   contents: read
 
+# The builds the end-to-end tests run read the test hooks, the variables that
+# change whom cbb and cbb-helper trust or their clock (member/src/testbuild.rs,
+# internal/testhook); a release's never do, which the job "a release build
+# ignores the test hooks" shows. The packaging jobs install release builds.
+env:
+  E2E_FEATURES: testhooks
+  E2E_TAGS: testhooks
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -105,6 +113,8 @@ jobs:
         run: go run ./tools/site check -strict
       - name: shellcheck, every shell script
         run: sh .github/shellcheck.sh
+      - name: CI builds every target of the release by the release's list of programs
+        run: sh .github/release-targets.sh
       - name: typos, the spelling of the English text (_typos.toml)
         run: pipx run typos==1.51.1
       - name: Biome, the tray app's HTML, CSS and JavaScript (biome.json)
@@ -247,10 +257,10 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-          cargo build --locked --release -p cbb-member
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES"
           mkdir -p "$RUNNER_TEMP/e2e"
           cp target/release/cbb "$RUNNER_TEMP/e2e/cbb"
-          go build -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/e2e/cbb-helper" ./cmd/cbb-helper
+          go build -tags "$E2E_TAGS" -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/e2e/cbb-helper" ./cmd/cbb-helper
           CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/e2e/cbb"
           sudo chown -R "$(id -u)" "$RUNNER_TEMP/e2e-cover"
           go tool covdata textfmt -i "$RUNNER_TEMP/e2e-cover" -o cover-go-e2e.out
@@ -266,7 +276,7 @@ jobs:
   # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, androidkit, rust, service, service-coverage]
+    needs: [changes, test, gocover, kit, androidkit, rust-coverage, service, service-coverage]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -628,7 +638,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -660,7 +670,11 @@ jobs:
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
             go version
-            go test ./... </dev/null
+            # The release tools sign with SLH-DSA-SHA2-128s, a third of a
+            # second a signature natively and far slower in this machine:
+            # release-sign alone takes about ten minutes here, Go's default
+            # limit for a package.
+            go test -timeout 25m ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
@@ -987,8 +1001,8 @@ jobs:
           systemd-analyze verify /etc/systemd/system/cbb.service
           sudo rm -rf /etc/systemd/system/cbb.service /etc/systemd/system/cbb.service.d
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-forward" ./cmd/cbb-forward
-          cp target/release/cbb-relay "$RUNNER_TEMP/cbb-relay"
-          for u in cbb-forward cbb-relay; do
+          cp target/release/cbb-relay target/release/cbb-push "$RUNNER_TEMP/"
+          for u in cbb-forward cbb-relay cbb-push; do
             sudo install -m 0755 "$RUNNER_TEMP/$u" "/usr/local/bin/$u"
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20
@@ -1088,16 +1102,28 @@ jobs:
           go run ./tools/release-sign drill "$RUNNER_TEMP/other" "$RUNNER_TEMP/other.pem"
           CBB_RELEASE_ROOTS="$RUNNER_TEMP/other.pem" refused "keys.json from other roots"
           CBB_RELEASE_ROOTS='' refused "keys.json from throwaway roots instead of the pinned ones"
-          # keys.json with each fault that no reader takes.
-          for f in empty-use upper-case twice null no-time status-brace; do
+          # keys.json or release.json with each fault that no reader takes.
+          for f in empty-use upper-case twice null no-time status-brace high-s broken-twin alg-zero pin-alg-zero pin-not-p256 path-version; do
             go run ./tools/release-sign drill -version 0.6.0 -fault "$f" "$rel" "$RUNNER_TEMP/roots.pem"
-            refused "keys.json with the fault $f"
+            refused "signed files with the fault $f"
           done
           go run ./tools/release-sign drill -version 0.6.0 "$rel" "$RUNNER_TEMP/roots.pem"
           sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "signature checks out" >/dev/null
           rm "$rel/stable.json"
           refused "no stable.json"
           CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "Not checked" >/dev/null
+      - name: get.sh checks both signatures where openssl checks SLH-DSA (OpenSSL 3.5, Debian trixie)
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/release-sign" ./tools/release-sign
+          docker run --rm -v "$PWD:/src:ro" -v "$RUNNER_TEMP/release-sign:/usr/local/bin/release-sign:ro" -w /src \
+            debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6 sh .github/get-sh-pq.sh /usr/local/bin/release-sign
+      - name: get.sh reads every envelope of release.json as Go and the core do (OpenSSL 3.5 and 3.0)
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/release-sign" ./tools/release-sign
+          for image in debian:trixie@sha256:9c6e381421d0f48d1b8133e573f33c185ee16cbf505eda9c4a8a4791b25ea8a6 debian:bookworm; do
+            docker run --rm -v "$PWD:/src:ro" -v "$RUNNER_TEMP/release-sign:/usr/local/bin/release-sign:ro" -w /src \
+              "$image" sh .github/get-sh-envelopes.sh /usr/local/bin/release-sign
+          done
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
           # cbb and its helper of one version: a release cbb takes only a
@@ -1107,7 +1133,7 @@ jobs:
           version() {
             CBB_VERSION=$1 cargo build --locked --release -p cbb-member ${3:+--features "$3"}
             cp target/release/cbb "$2/cbb"
-            CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
+            CGO_ENABLED=0 go build -tags "$E2E_TAGS" -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
           }
           mkdir -p "$RUNNER_TEMP/release060" "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
           version 0.6.0 "$RUNNER_TEMP/release060"
@@ -1403,13 +1429,13 @@ jobs:
             $out = Get-Content packaging/windows/get.ps1 -Raw | Invoke-Expression 6>&1 | Out-String
             Write-Host $out
             if ($out -notmatch 'failed') { throw 'get.ps1 installed a release.json of another channel' }
-            # keys.json with each fault that no reader takes.
-            foreach ($f in 'empty-use', 'upper-case', 'twice', 'null', 'no-time', 'status-brace') {
+            # keys.json or release.json with each fault that no reader takes.
+            foreach ($f in 'empty-use', 'upper-case', 'twice', 'null', 'no-time', 'status-brace', 'high-s', 'broken-twin', 'alg-zero', 'pin-alg-zero', 'pin-not-p256', 'path-version') {
               cmd /c "go run ./tools/release-sign drill -version 0.6.0 -fault $f `"$rel`" `"$roots`" 2>&1"
               if ($LASTEXITCODE -ne 0) { throw 'release-sign drill failed' }
               $out = Get-Content packaging/windows/get.ps1 -Raw | Invoke-Expression 6>&1 | Out-String
               Write-Host $out
-              if ($out -notmatch 'failed') { throw "get.ps1 installed a release whose keys.json has the fault $f" }
+              if ($out -notmatch 'failed') { throw "get.ps1 installed a release whose signed files have the fault $f" }
             }
             cmd /c "go run ./tools/release-sign drill -version 0.6.0 -channel-key `"$rel`" `"$roots`" 2>&1"
             if ($LASTEXITCODE -ne 0) { throw 'release-sign drill failed' }
@@ -1423,6 +1449,15 @@ jobs:
           }
           # Not the exit code of the last program get.ps1 ran.
           exit 0
+      - name: get.ps1 reads every envelope of release.json as Go and the core do, in Windows PowerShell and pwsh
+        shell: pwsh
+        run: |
+          go build -o "$env:RUNNER_TEMP\release-sign.exe" ./tools/release-sign
+          if ($LASTEXITCODE -ne 0) { throw 'release-sign did not build' }
+          powershell -NoProfile -File .github/get-ps1-envelopes.ps1 -Sign "$env:RUNNER_TEMP\release-sign.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'get.ps1 in Windows PowerShell read an envelope otherwise' }
+          pwsh -NoProfile -File .github/get-ps1-envelopes.ps1 -Sign "$env:RUNNER_TEMP\release-sign.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'get.ps1 in pwsh read an envelope otherwise' }
       - name: install.ps1 keeps a port and the firewall rules follow it, and uninstall.ps1 removes it all
         env:
           CBB_ERROR_DETAILS: "1"
@@ -1482,6 +1517,11 @@ jobs:
           awayAllow 'on'
           homeOnly 'Outbound Block True'
           if ((blocked cbb-home-only).Count -ne 9) { throw "with no servers: $(blocked cbb-home-only)" }
+          # The root names itself the group's hub first: only a device the
+          # records name is a hub (cbb global hubs). cbb new named it after
+          # the computer.
+          & $cbb global hubs $env:COMPUTERNAME
+          if ($LASTEXITCODE -ne 0) { throw 'cbb global hubs failed' }
           & $cbb global hub -forwarder 198.51.100.9:8764 -forwarder-key "$('A' * 43)="
           if ($LASTEXITCODE -ne 0) { throw 'cbb global hub -forwarder failed' }
           awayAllow 'on 198.51.100.9'
@@ -1575,7 +1615,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
             Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
-            go build -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
+            go build -tags $env:E2E_TAGS -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
             Copy-Item -Recurse packaging\l10n "$dir\packaging\"
@@ -1648,52 +1688,13 @@ jobs:
         run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
       - name: swift test (in the Swift container on Linux)
         if: env.KIT == 'true' && runner.os == 'Linux'
-        run: |
-          mkdir interop-out
-          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
-            swift test -Xlinker -L/core
-            swift build -c release --product cbb-interop --static-swift-stdlib -Xlinker -L/core
-            cp "$(swift build -c release --show-bin-path)/cbb-interop" /src/cbb-interop'
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: env.KIT == 'true' && runner.os == 'Linux'
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the core and Go read what the Swift phone wrote
-        if: env.KIT == 'true' && runner.os == 'Linux'
-        run: |
-          # swift test just wrote testdata/interop/swift-member.json, and to
-          # interop-out the records it signed, a certificate it renewed and
-          # what an admin phone makes.
-          cargo test --locked -p cbb-core --lib vectors::swift_member_frames
-          CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
+        run: docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit swift:6.2-noble swift test -Xlinker -L/core
       - name: swift test
         if: env.KIT == 'true' && runner.os == 'macOS'
         working-directory: apps/ios/CBBKit
         run: |
           swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
           cp "$(swift test --show-codecov-path)" "$GITHUB_WORKSPACE/coverage-swift-kit.json"
-          swift build --product cbb-interop -Xlinker -L"$RUNNER_TEMP/core"
-          cp "$(swift build --show-bin-path)/cbb-interop" "$GITHUB_WORKSPACE/cbb-interop"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        run: |
-          # The computer is the Rust cbb, with cbb-helper beside it, both
-          # built for tests (testhooks: the tests' hooks, never a release's).
-          cargo build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          # A throwaway keychain for the tool's identity, unlocked and the default.
-          security create-keychain -p ci ci.keychain
-          security list-keychains -d user -s ci.keychain
-          security default-keychain -s ci.keychain
-          security unlock-keychain -p ci ci.keychain
-          security set-keychain-settings ci.keychain
-          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the Rust build into this pull request's cache
         if: env.KIT == 'true' && runner.os == 'macOS'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
@@ -2061,33 +2062,24 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the protocol core's tests
         working-directory: apps/android
-        # The kit writes what it signs for the Go tests, as the Swift kit does.
-        run: CBB_INTEROP_OUT="$GITHUB_WORKSPACE/interop-out" ./gradlew --no-daemon -p kit test jacocoTestReport
+        run: ./gradlew --no-daemon -p kit test jacocoTestReport
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-kotlin-kit
           path: apps/android/kit/build/reports/jacoco/test/jacocoTestReport.xml
           retention-days: 7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Go reads what the Kotlin kit signed
-        run: CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
-      - name: the Kotlin kit pairs both ways with the computers' cbb and syncs with it over TLS
-        # The Kotlin twin of cbb-interop plays the phone; Conscrypt
-        # gives it TLS 1.3 on Linux as on Android.
-        run: |
-          (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
-          tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          # The computer is the Rust cbb, with cbb-helper beside it, both
-          # built for tests (testhooks: the tests' hooks, never a release's).
-          rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
 
   android:
     name: Android app
@@ -2115,6 +2107,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2173,6 +2175,28 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Gradle from the cache
+        id: gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-dist-${{ runner.os }}-${{ hashFiles('apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - name: Gradle, its download tried three times when it is not in the cache
+        if: steps.gradle.outputs.cache-hit != 'true'
+        working-directory: apps/android
+        run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2185,11 +2209,11 @@ jobs:
       - name: the fleet's cbb, and cbb-helper, cbb-forward and cbb-relay beside it
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
+          cargo +stable build --locked --release -p cbb-member --features "$E2E_FEATURES"
           mkdir -p "$RUNNER_TEMP/fleet"
           cp target/release/cbb target/release/cbb-relay "$RUNNER_TEMP/fleet/"
           for p in cbb-helper cbb-forward; do
-            CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
+            CGO_ENABLED=0 go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
           done
       - name: an emulator, with KVM
         # The runner has KVM for its user once udev lets it.
@@ -2210,7 +2234,8 @@ jobs:
           ls -l /dev/kvm
           "$ANDROID_HOME/emulator/emulator" -accel-check
           "$ANDROID_HOME/emulator/emulator" -avd bench -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
-            -accel on -gpu swiftshader_indirect -camera-back emulated -camera-front none >"$RUNNER_TEMP/emulator.log" 2>&1 &
+            -accel on -gpu swiftshader_indirect -camera-back emulated -camera-front none \
+            >"$RUNNER_TEMP/emulator.log" 2>&1 &
           adb="$ANDROID_HOME/platform-tools/adb"
           # An emulator that does not start says why in its log.
           timeout 300 "$adb" wait-for-device || { tail -100 "$RUNNER_TEMP/emulator.log"; exit 1; }
@@ -2322,6 +2347,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: one/apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: build twice and compare
         run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/cbb"
 
@@ -2383,6 +2418,20 @@ jobs:
           printf '#include <ifaddrs.h>\n#include <stdio.h>\nint main(void){struct ifaddrs *a; if (getifaddrs(&a)) return 1; for (struct ifaddrs *p = a; p; p = p->ifa_next) puts(p->ifa_name); return 0;}\n' >"$RUNNER_TEMP/ifaddrs.c"
           python3 -m ziglang cc -target mips-linux-musleabi -msoft-float -static -o "$RUNNER_TEMP/ifaddrs" "$RUNNER_TEMP/ifaddrs.c"
           timeout 60 "$RUNNER_TEMP/qemu/bin/qemu-mips" "$RUNNER_TEMP/ifaddrs"
+      - name: build for mips and mipsel, as a release builds them, with the release's list of programs
+        # MIPS_TARGETS: the release's routers' targets, which
+        # .github/release-targets.sh finds built here.
+        env:
+          MIPS_TARGETS: linux/mips linux/mipsle
+        run: |
+          for t in $MIPS_TARGETS; do
+            dir=$(sh packaging/build.sh "$t")
+            set --
+            for p in $(sh .github/release-programs.sh all linux "${t#linux/}"); do
+              set -- "$@" "$dir/$p"
+            done
+            sh .github/hooks-marker.sh absent "$@"
+          done
       # For the service's tests: their hooks (testhooks) steer the MIPS cbb too.
       - name: build for mips and mipsel, for tests (testhooks)
         run: |
@@ -2412,9 +2461,58 @@ jobs:
             CBB_TEST_ALONE="$RUNNER_TEMP/cbb-$a" go test ./internal/service -run 'TestAlone' -skip "$skip" -v
           done
 
-  # The service's tests (internal/service) against the Rust service that
-  # every release ships: each member is a Rust cbb with cbb-helper beside
-  # it, a phone is phone-on-linux, and they find each other by mDNS.
+  # The test hooks: cbb and cbb-helper built as a release builds them
+  # read none of them (.github/release-ignores-hooks.sh), and a build with
+  # them carries the marker the release workflow looks for.
+  hooks:
+    name: a release build ignores the test hooks
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: cbb and cbb-helper as the release builds them, without the hooks, with all the hooks set
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo build --locked --release -p cbb-member
+          exe=$(go env GOEXE)
+          go build -trimpath -o "$RUNNER_TEMP/cbb-helper$exe" ./cmd/cbb-helper
+          go build -o "$RUNNER_TEMP/release-sign$exe" ./tools/release-sign
+          go build -o "$RUNNER_TEMP/hookprobe$exe" ./tools/hookprobe
+          sh .github/hooks-marker.sh absent "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe"
+          sh .github/release-ignores-hooks.sh "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe"
+      - name: a build with the hooks carries the release workflow's marker, and the checks refuse it
+        # The controls of the step above: each must fail for the hooks, not
+        # for another reason, so each looks for the words it fails with.
+        run: |
+          exe=$(go env GOEXE)
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES" --target-dir "$RUNNER_TEMP/hooks"
+          go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/cbb-helper-hooks$exe" ./cmd/cbb-helper
+          cbb=$RUNNER_TEMP/hooks/release/cbb$exe helper=$RUNNER_TEMP/cbb-helper-hooks$exe
+          sh .github/hooks-marker.sh present "$cbb" "$helper"
+          if out=$(sh .github/release-ignores-hooks.sh "$cbb" "$helper" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe" 2>&1); then
+            echo "$out"; echo "the script took a build with the hooks" >&2; exit 1
+          fi
+          echo "$out"
+          echo "$out" | grep -qF "the test hooks changed what it does" || { echo "the script failed for another reason" >&2; exit 1; }
+          said=$("$RUNNER_TEMP/hookprobe$exe" "$helper")
+          echo "$said"
+          case $said in *"cbb-helper took an attestation"*) ;; *) echo "hookprobe did not see the hook" >&2; exit 1 ;; esac
   # The service's tests run in parts at the same time (docs/testing.md,
   # "Running tests in parallel"): service-build builds every program once,
   # instrumented for the coverage, and runs the Rust cbb's own tests; each
@@ -2464,15 +2562,17 @@ jobs:
       - name: the Rust cbb's own tests, instrumented
         run: |
           mkdir -p target
+          # The phone's member on Linux first: tests/phone_push.rs runs it.
+          cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
           cargo test --locked --release -p cbb-member --features testhooks --no-run --message-format=json |
             jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
-          cargo test --locked --release -p cbb-member --features testhooks
-      - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
+          CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
+            cargo test --locked --release -p cbb-member --features testhooks
+      - name: the Rust cbb, the phone's member on Linux, cbb-helper, and the Go tests' binaries
         run: |
           # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
           cargo build --locked --release -p cbb-member --features testhooks
           cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
-          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           # Built with -cover: the Go side's coverage counts what the helper
           # does under these tests too; each part puts a script in the
           # helper's place that gives it GOCOVERDIR, since cbb hands its
@@ -2481,7 +2581,7 @@ jobs:
           # Each Go package runs as a test binary built with -cover, with
           # GOCOVERDIR for it and the helpers it starts.
           mkdir -p target/go-tests
-          for p in service connector relay tunnel; do
+          for p in service connector; do
             go test -c -cover -coverpkg="$COVERPKG" -o "target/go-tests/$p.test" "./internal/$p"
           done
       - name: the Rust build into this pull request's cache
@@ -2586,17 +2686,6 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
             "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
-      # The relay and the phones' tunnel, which the rust job checks from
-      # outside, count here too: their Go tests run the same instrumented
-      # build.
-      - name: the relay and the phones' tunnel, from Go's side, for the coverage
-        if: matrix.part == 'others'
-        run: |
-          (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
-            "$GITHUB_WORKSPACE/target/go-tests/relay.test" -test.timeout 10m -test.v)
-          (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
-            CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
-            "$GITHUB_WORKSPACE/target/go-tests/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         if: matrix.part == 'others'
         run: |
@@ -2709,6 +2798,12 @@ jobs:
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features tunnel --all-targets -- -D warnings
+          cargo clippy --locked -p cbb-core --features fuzzing -- -D warnings # the fuzz targets' readers, without std
+      - name: the core's timed tests, in a build no coverage slows
+        # cbb (Rust) runs the core's tests under coverage, which slows the
+        # code it measures and not the crates it does not, so a test that
+        # compares the two times runs here.
+        run: cargo test --locked -p cbb-core --lib a_full_group_fills_in_about_the_time_of_its_signatures
       - name: cargo clippy for Windows, macOS and FreeBSD (the service builds there too)
         run: |
           for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do
@@ -2734,12 +2829,80 @@ jobs:
           retention-days: 14
 
 
-  rust:
-    name: cbb (Rust)
+  # The Rust workspace's tests under coverage, in three steps that run as
+  # the service tests' do: rust-build builds every test once into a
+  # cargo-nextest archive, four parts run a share of its tests each at the
+  # same time, and rust-coverage puts their profiles together into the one
+  # report the coverage job reads (docs/testing.md, "Running tests in
+  # parallel"). The optimized builds and the installers run beside them, in
+  # rustinstall.
+  rust-build:
+    name: cbb (Rust), the build of the tests
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
+    env:
+      NEXTEST: 0.9.151
+      NEXTEST_SHA256: 1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4
+      LLVM_COV: 0.9.1
+      LLVM_COV_SHA256: b3f68e625481fed9b16444174f3fa5ebcdbde4a1878803a35eabe2dcefcdc41a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain with llvm-tools
+        run: |
+          rustup toolchain install stable --profile minimal --component llvm-tools-preview
+          rustup default stable
+      - name: cargo-llvm-cov and cargo-nextest, their release builds (downloaded by hash)
+        run: |
+          curl -fsSL --retry 3 -o nextest.tar.gz "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$NEXTEST/cargo-nextest-$NEXTEST-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$NEXTEST_SHA256  nextest.tar.gz" | sha256sum -c -
+          curl -fsSL --retry 3 -o llvm-cov.tar.gz "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v$LLVM_COV/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz"
+          echo "$LLVM_COV_SHA256  llvm-cov.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/tools"
+          tar -xzf nextest.tar.gz -C "$RUNNER_TEMP/tools" && tar -xzf llvm-cov.tar.gz -C "$RUNNER_TEMP/tools"
+          rm nextest.tar.gz llvm-cov.tar.gz
+          echo "$RUNNER_TEMP/tools" >>"$GITHUB_PATH"
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: rust-tests
+      - name: the workspace's tests, instrumented, in one archive
+        run: |
+          cargo llvm-cov nextest-archive --locked --workspace --archive-file "$RUNNER_TEMP/rust-tests.tar.zst"
+          rustc --version | cut -d' ' -f2 >"$RUNNER_TEMP/rustc-version"
+          ls -l "$RUNNER_TEMP/rust-tests.tar.zst"
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: rust-tests
+          save: "true"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-tests
+          path: |
+            ${{ runner.temp }}/rust-tests.tar.zst
+            ${{ runner.temp }}/rustc-version
+            ${{ runner.temp }}/tools
+          retention-days: 1
+          compression-level: 0
+
+  rust:
+    name: cbb (Rust) (${{ matrix.part }})
+    needs: [changes, rust-build]
+    if: needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # A share of every test binary's tests each (cargo-nextest's
+        # --partition), as many parts as RUST_PARTS says.
+        part: ["1", "2", "3", "4"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RUST_PARTS: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2750,20 +2913,110 @@ jobs:
           packages: swtpm xvfb xclip
           cache: rust-tests
           no-recommends: "true"
-      - name: the Rust toolchain, and swtpm for the key in a TPM
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-tests
+          path: ${{ runner.temp }}/rust-tests
+      - name: the Rust toolchain that built the tests, and swtpm for the key in a TPM
         run: |
-          rustup toolchain install stable --profile minimal --component llvm-tools-preview
-          rustup default stable
+          v=$(cat "$RUNNER_TEMP/rust-tests/rustc-version")
+          rustup toolchain install "$v" --profile minimal --component llvm-tools-preview
+          rustup default "$v"
+          chmod 755 "$RUNNER_TEMP"/rust-tests/tools/*
+          echo "$RUNNER_TEMP/rust-tests/tools" >>"$GITHUB_PATH"
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
-      - name: cargo-llvm-cov, for the tests' coverage
-        run: cargo install --locked cargo-llvm-cov@0.9.1
-      - name: cargo test (the interop vectors in testdata/interop too), with coverage
-        run: cargo llvm-cov --locked --workspace --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust.json"
+      - name: this part of the workspace's tests (the interop vectors in testdata/interop too), with coverage
+        env:
+          CBB_FULL_SIZE: "1" # the records' tests at real size too
+          PART: ${{ matrix.part }}
+        # nextest unpacks the archive into target/llvm-cov-target, which
+        # has to be there already.
+        run: |
+          mkdir -p target/llvm-cov-target
+          cargo llvm-cov nextest --archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" --no-report \
+            --partition "hash:$PART/$RUST_PARTS"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: rust-profiles-${{ matrix.part }}
+          path: target/llvm-cov-target/*.profraw
+          retention-days: 1
+          if-no-files-found: error
+
+  rust-coverage:
+    name: cbb (Rust), the coverage
+    needs: [changes, rust-build, rust]
+    if: always() && needs.rust-build.result == 'success' && (needs.rust.result == 'success' || needs.rust.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-tests
+          path: ${{ runner.temp }}/rust-tests
+      # Each part's profiles under a name of their own: two machines can give
+      # a process the same ID, and so a profile the same name.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rust-profiles-*
+          path: ${{ runner.temp }}/profiles
+      # The report reads the test binaries where the parts ran them: the
+      # archive unpacked into target/llvm-cov-target.
+      - name: every part's profiles, the test binaries, and the compiler that built them
+        run: |
+          mkdir -p target/llvm-cov-target
+          tar -I zstd -xf "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" -C target/llvm-cov-target
+          # Cargo keeps each test binary in build/<package>/<hash>/out, and
+          # cargo-llvm-cov reads such a directory as a build script's output,
+          # and passes it by, unless a fingerprint directory beside it shows
+          # the new layout. The archive holds no fingerprints: mark each unit.
+          for d in target/llvm-cov-target/target/debug/build/*/*/out; do
+            mkdir -p "${d%/out}/fingerprint"
+          done
+          for d in "$RUNNER_TEMP"/profiles/*/; do
+            part=$(basename "$d")
+            for f in "$d"*.profraw; do
+              [ -e "$f" ] && mv "$f" "target/llvm-cov-target/$part-$(basename "$f")"
+            done
+          done
+          echo "$(find target/llvm-cov-target -name '*.profraw' | wc -l) profiles"
+          v=$(cat "$RUNNER_TEMP/rust-tests/rustc-version")
+          rustup toolchain install "$v" --profile minimal --component llvm-tools-preview
+          rustup default "$v"
+          chmod 755 "$RUNNER_TEMP"/rust-tests/tools/*
+          echo "$RUNNER_TEMP/rust-tests/tools" >>"$GITHUB_PATH"
+      - name: the workspace's coverage, from every part
+        run: |
+          cargo llvm-cov report --nextest-archive-file "$RUNNER_TEMP/rust-tests/rust-tests.tar.zst" \
+            --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-rust
           path: coverage-rust.json
           retention-days: 7
+  rustinstall:
+    name: cbb (Rust), the optimized builds and the installers
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: the stack one change of root's verify needs, in the optimized builds a board may run
+        run: |
+          cargo test --locked --release -p cbb-core --features std,tls,web --test slhdsa the_stack_a_verify_needs
+          # A crate that takes the core under its own profile, without LTO.
+          CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+            cargo test --locked --release -p cbb-core --features std,tls,web --test slhdsa the_stack_a_verify_needs
       - name: cargo build
         run: |
           cargo build --locked --release
@@ -2909,24 +3162,6 @@ jobs:
           sudo sh /usr/local/share/cbb/uninstall.sh --purge
           test ! -e /etc/systemd/system/cbb-update.timer
           test ! -e /var/lib/cbb-update
-      - name: the ESP32's network code joins by the phone on Linux, over a TAP interface
-        run: |
-          sudo ip tuntap add name tap0 mode tap user "$USER"
-          sudo ip addr add 192.168.69.1/24 dev tap0
-          sudo ip link set tap0 up
-          # The computer it joins is a cbb, with cbb-helper beside it, both
-          # built for tests (testhooks).
-          cargo build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
-            go test -race ./internal/service -run TestEmbassyJoiner -v
-      - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
-        run: |
-          cargo test --locked -p cbb-ffi --features tunnel tunnel && cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-          CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" \
-            go test -race ./internal/tunnel -run TestRustPhone -v
-      - name: the relay in Rust, checked from outside by a device's side in Go
-        run: CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v
   esp32:
     name: the core on the ESP32
     needs: changes
@@ -3236,6 +3471,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the versions Gradle resolves
         working-directory: apps/android
         # The init script locks every configuration, so --write-locks writes each
@@ -3362,11 +3607,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # The four implementations read the same changed bodies and record sets
+  # The three implementations read the same changed bodies and record sets
   # alike (docs/differential.md); the nightly workflow runs it with a fresh
   # seed and more cases.
   differential:
-    name: differential (Go, Rust, Kotlin, Swift)
+    name: differential (Go, Rust, Kotlin)
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true' || needs.changes.outputs.android == 'true' || needs.changes.outputs.tools == 'true'
     runs-on: ubuntu-latest
@@ -3391,7 +3636,17 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
-      - name: a corpus of the fixed seed, read by all four
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
+      - name: a corpus of the fixed seed, read by all three
         run: sh .github/differential.sh 1 20000 500 "$RUNNER_TEMP/differential"
       - name: the cases read differently
         if: failure()
@@ -3418,10 +3673,61 @@ jobs:
           $quint test --backend=typescript docs/model/claims.qnt
           $quint run --backend=typescript --invariant=promises --max-steps=12 --max-samples=20000 docs/model/claims.qnt
 
+  format:
+    name: the frozen format (testdata/format)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Every commit after the base, each checked against its parent.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: the vectors match the manifest, and no commit changes a frozen one without counting a break
+        # tools/formatfreeze: once the owner declares the freeze, a listed vector changes only
+        # with a counted break, at most one before 1.0. Runs on every pull request, whatever
+        # it changes, so that no path around it exists.
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            go run ./tools/formatfreeze -check -since "$BASE"
+          else
+            go run ./tools/formatfreeze -check
+          fi
+      - name: gen.py writes the same bytes again
+        # In Python 3.13, whose Unicode 15.1 the names' tables follow.
+        run: |
+          out="$RUNNER_TEMP/format"
+          mkdir -p "$out"
+          # The SLH-DSA signer gen.py otherwise builds with Go, which the
+          # container has not: built here, static.
+          (cd testdata/format/check && CGO_ENABLED=0 go build -o "$RUNNER_TEMP/slh-signer" .)
+          docker run --rm -v "$PWD:/src:ro" -v "$out:/out" -v "$RUNNER_TEMP/slh-signer:/usr/local/bin/slh-signer:ro" \
+            -e CBB_SLH_SIGNER=/usr/local/bin/slh-signer -w /src python:3.13-slim sh -euc '
+            pip install -q --no-cache-dir --root-user-action=ignore cryptography==50.0.1
+            python3 -I testdata/format/gen.py /out'
+          # The files gen.py writes; bounds.json, push.json and the mutants
+          # come from their own generators.
+          for f in "$out"/*.json; do
+            g="testdata/format/$(basename "$f")"
+            cmp "$g" "$f" || { echo "gen.py writes $g differently"; exit 1; }
+          done
+          cmp core/src/content/unicode.rs "$out/unicode.rs" || { echo "gen.py writes core/src/content/unicode.rs differently"; exit 1; }
+          cmp testdata/format/check/unicode.go "$out/check/unicode.go" || { echo "gen.py writes testdata/format/check/unicode.go differently"; exit 1; }
+      - name: the second reader, in Go (testdata/format/check)
+        # The Rust core reads the same vectors in the rust job (format::, msg::).
+        working-directory: testdata/format/check
+        run: go run . ..
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust-build, rust, rust-coverage, rustinstall, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

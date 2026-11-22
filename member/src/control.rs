@@ -15,7 +15,7 @@ use crate::error::{Context, Error, Result};
 const MAX_HEADER: usize = 64 << 10;
 const MAX_PAYLOAD: usize = (1 << 20) + 64;
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Header {
     #[serde(default)]
     pub op: String,
@@ -163,6 +163,11 @@ pub struct Header {
     pub relay: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub relay_key: String,
+    /// away relay: the relays after the first, each its address and its
+    /// key's pin with a space between, which only the root of a group of
+    /// 0.6 takes (cbb global relay with several).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relays: Vec<String>,
     /// away hub: plain WireGuard, without AmneziaWG, which a hub offers by
     /// default; it goes with vless_off where there is a forwarder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -180,6 +185,10 @@ pub struct Header {
     /// In hubs: the table of main hubs, names or device IDs in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<String>,
+    /// In recover: the devices that do not stay in the group, names or
+    /// device IDs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leave: Vec<String>,
     /// In an inject to a desktop session, the grant its desktop connector
     /// hands the uinput helper, which asks with keys whether it may press
     /// the paste's keys.
@@ -202,6 +211,75 @@ pub struct Header {
     /// In invite: a device to confirm, before it is admitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub joining: Option<Joining>,
+}
+
+impl core::fmt::Debug for Header {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Header")
+            .field("op", &self.op)
+            .field("kind", &self.kind)
+            .field("via", &self.via)
+            .field("seq", &self.seq)
+            .field("ttl_ms", &self.ttl_ms)
+            .field("len", &self.len)
+            .field("error", &self.error)
+            .field("details", &self.details)
+            .field("done", &self.done)
+            .field("consent", &self.consent)
+            .field("name", &self.name)
+            .field("device", &self.device)
+            .field("status", &self.status)
+            .field("devices", &self.devices)
+            .field("view", &self.view)
+            .field("arrange", &self.arrange)
+            .field("method", &self.method)
+            .field("enter", &self.enter)
+            .field("console", &self.console)
+            .field("no_lock_check", &self.no_lock_check)
+            .field("inject", &self.inject)
+            .field("paste_only", &self.paste_only)
+            .field("images", &self.images)
+            .field("files", &self.files)
+            .field("html", &self.html)
+            .field("refused", &self.refused)
+            .field("detail", &self.detail)
+            .field("actions", &self.actions)
+            .field("all", &self.all)
+            .field("for_ms", &self.for_ms)
+            .field("value", &self.value)
+            .field("part", &self.part)
+            .field("allow_file_key", &self.allow_file_key)
+            .field("on", &self.on)
+            .field("standing", &self.standing)
+            .field("new_name", &self.new_name)
+            .field("below", &self.below)
+            .field("code", &cbb_core::secret::Redacted(self.code.len()))
+            .field("addrs", &self.addrs)
+            .field("leave", &self.leave)
+            .field("fingerprint", &self.fingerprint)
+            .field("admins", &self.admins)
+            .field("expires", &self.expires)
+            .field("address", &self.address)
+            .field("listen", &self.listen)
+            .field("port", &self.port)
+            .field("forwarder", &self.forwarder)
+            .field("forwarder_key", &self.forwarder_key)
+            .field("relay", &self.relay)
+            .field("relay_key", &self.relay_key)
+            .field("obfuscate_off", &self.obfuscate_off)
+            .field("vless_off", &self.vless_off)
+            .field("keep", &self.keep)
+            .field("force", &self.force)
+            .field("forward_only", &self.forward_only)
+            .field("hubs", &self.hubs)
+            .field("keys", &self.keys)
+            .field("keyboard", &self.keyboard)
+            .field("act", &self.act)
+            .field("command", &self.command)
+            .field("invite", &self.invite)
+            .field("joining", &self.joining)
+            .finish()
+    }
 }
 
 /// A device that used a remote invitation, for the admin to confirm, as
@@ -258,6 +336,11 @@ pub struct Status {
     pub quiet: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub group: String,
+    /// The group as a blind relay of the owner's lists it: its root key and
+    /// the two halves of its recovery key in hex, separated by colons, the
+    /// value of `cbb relay -group` (cbb status -relay); empty in no group.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relay_group: String,
     pub role: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub os: String,
@@ -331,9 +414,12 @@ pub struct Status {
     /// TPM or a Secure Enclave.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub key_problem: String,
-    /// How long a copy from another device stays live after it arrives.
+    /// How long a copy lives in the group, by the root's word (D-129).
     #[serde(default, skip_serializing_if = "is_zero_i")]
-    pub incoming_ms: i64,
+    pub ttl_ms: i64,
+    /// How long a secret lives in the group.
+    #[serde(default, skip_serializing_if = "is_zero_i")]
+    pub secret_ttl_ms: i64,
     /// The claims to take the group over that wait or stop the group.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub claims: Vec<Claim>,
@@ -568,6 +654,11 @@ pub struct Device {
     /// hub, or a hub whose offer it keeps.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hub: bool,
+    /// Its place in the group's order of hubs, from 1, which every member
+    /// derives from the records alone (docs/protocol.md, section 11,
+    /// "Several hubs"); 0 when it may not serve.
+    #[serde(default, skip_serializing_if = "is_zero_us")]
+    pub hub_rank: usize,
 }
 
 /// A header and its payload.
@@ -715,7 +806,6 @@ pub fn reply(header: Header, payload: Vec<u8>) -> Message {
 }
 
 /// An answer to a request that more answers follow: op reply, not done.
-#[cfg_attr(not(feature = "tunnel"), allow(dead_code))]
 pub fn partial(header: Header) -> Message {
     Message::new(Header { op: "reply".into(), done: false, ..header }, Vec::new())
 }

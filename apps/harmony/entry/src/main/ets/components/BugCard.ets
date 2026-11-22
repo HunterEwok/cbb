@@ -8,6 +8,7 @@
 
 import { t } from '../core/Text';
 import { Bugs } from '../model/Bugs';
+import { NORMAL_BUTTON } from './Common';
 
 @ComponentV2
 export struct BugCard {
@@ -46,7 +47,7 @@ export struct BugCard {
             .copyOption(CopyOptions.LocalDevice)
         }
         Row({ space: 12 }) {
-          Button($r('app.string.cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .layoutWeight(1)
             .onClick(() => {
               this.bugs.cancel();

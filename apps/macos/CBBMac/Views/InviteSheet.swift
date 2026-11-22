@@ -31,7 +31,7 @@ struct InviteSheet: View {
                     }
                 } else {
                     VStack(spacing: Tokens.spacingMedium) {
-                        if let image = JoinSheet.qrImage(inv.invite) {
+                        if let image = QRCode.image(inv.invite) {
                             Image(nsImage: image)
                                 .interpolation(.none)
                                 .resizable()

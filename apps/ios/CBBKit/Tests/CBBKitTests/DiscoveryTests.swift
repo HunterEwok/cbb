@@ -30,16 +30,16 @@ final class DiscoveryTests: XCTestCase {
         // added by its known address.
         XCTAssertEqual(Discovery.withKnown(found, known: [dev, other], group: "g1"), found.union([FoundMember(device: other, group: "g1")]))
         XCTAssertEqual(Discovery.withKnown(found, known: [], group: "g1"), found)
-        XCTAssertTrue(JoinCode.isHome("10.1.2.3:8764"))
-        XCTAssertFalse(JoinCode.isHome("100.64.0.1:8764"))
-        XCTAssertFalse(JoinCode.isHome("[fd00::5]"))
+        XCTAssertTrue(LocalAddresses.isHome("10.1.2.3:8764"))
+        XCTAssertFalse(LocalAddresses.isHome("100.64.0.1:8764"))
+        XCTAssertFalse(LocalAddresses.isHome("[fd00::5]"))
     }
 
     #if canImport(Network) && os(macOS)
     /// Publishes a service as a Linux member does and finds it with
     /// BonjourBrowser, through the system's mDNSResponder.
     func testBonjourBrowser() async throws {
-        let device = Member.newID()
+        let device = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let listener = try NWListener(using: .tcp)
         listener.service = NWListener.Service(name: device, type: Discovery.serviceType, domain: "local.",
                                               txtRecord: NWTXTRecord(["v": "1", "g": "0011223344556677"]))
@@ -63,7 +63,7 @@ final class DiscoveryTests: XCTestCase {
         let none = await browser.addresses(of: "none")
         XCTAssertEqual(none, [])
         // A phone that is the hub publishes itself, and is found too.
-        let hubPhone = Member.newID()
+        let hubPhone = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let published = try BonjourPublisher(name: hubPhone, port: port, txt: ["v": "1", "g": "0011223344556677", "r": "phone"])
         for _ in 0..<200 where !seen.has(hubPhone) {
             try await Task.sleep(nanoseconds: 50_000_000)

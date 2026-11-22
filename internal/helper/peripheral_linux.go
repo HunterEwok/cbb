@@ -13,7 +13,8 @@ import (
 )
 
 // testBus is the bus of a test's BlueZ (internal/blekeyboard/bluetest)
-// that CBB_TEST_BLUEZ names, for the Rust service's tests; nil, the system
+// that CBB_TEST_BLUEZ names in a build with the test hooks, for the Rust
+// service's tests; nil, the system
 // bus, otherwise.
 func testBus() peripheral.BusDialer {
 	addr := testhook.Getenv("CBB_TEST_BLUEZ")

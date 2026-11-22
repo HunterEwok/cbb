@@ -1,108 +1,113 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import AppKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// Adding a device: the new device chooses Join a group and shows a QR code
-/// and six digits; a phone of the group scans the code, and here, on the
-/// root or an admin, the user types the digits, or pastes the code's text or
-/// opens a picture of it (cbb pair -qr). A device far away gets an
-/// invitation.
+/// Adding a device: on the root or an admin the sheet opens a pairing
+/// window (MacModel.openWindow) and shows its six digits, which a new
+/// computer types, and its QR code, which a new phone scans (D-119).
+/// Closing the sheet closes the window; a device that joins closes the
+/// sheet. On the root, a toggle opens it again for a phone that joins as an
+/// admin. A device far away gets an invitation.
 struct AddDeviceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @EnvironmentObject private var model: MacModel
-    @State private var qrText = ""
-    @State private var qrError: String?
     @State private var asAdmin = false
-
-    private var typed: Bool {
-        let text = qrText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return MacModel.shownCode(text) != nil || MacModel.isWaitingJoiner(text)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
             Text("Add a device").font(.title2.weight(.semibold))
-            Text("On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.")
-                .foregroundStyle(palette.textDim)
-                .fixedSize(horizontal: false, vertical: true)
             if model.isAdmin {
-                admit
-            } else {
-                Text("This Mac is no admin of the group: add the device on the phone or on an admin computer.")
-                    .foregroundStyle(palette.textDim)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if model.isAdmin {
+                window
+                // Only the group's root makes admins.
+                if model.isRoot {
+                    Toggle(isOn: $asAdmin) { Text("Admit it as an admin: only for your own phone.") }
+                }
                 Button {
                     dismiss()
                     Task { await model.invite() }
                 } label: { Text("Device far away? Send an invitation") }
                     .buttonStyle(.link)
                     .font(.callout)
+            } else {
+                Text("This Mac is no admin of the group: add the device on the phone or on an admin computer.")
+                    .foregroundStyle(palette.textDim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer()
                 Button(role: .cancel) { dismiss() } label: { Text("Cancel") }.keyboardShortcut(.cancelAction)
-                if model.isAdmin {
-                    Button {
-                        let text = qrText, admin = asAdmin && model.isRoot
-                        dismiss()
-                        Task { await model.admit(text, asAdmin: admin) }
-                    } label: { Text("Admit") }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!typed || model.busy)
-                }
             }
         }
         .padding(Tokens.spacingLarge)
         .frame(width: 460)
         .background(AppBackground())
-    }
-
-    private var admit: some View {
-        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
-            TextField(text: $qrText, prompt: Text(verbatim: "123 456")) { Text("The six digits the new device shows") }
-                .font(.system(.title2, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel(Text("The six digits the new device shows"))
-            // Only the group's root makes admins.
-            if model.isRoot {
-                Toggle(isOn: $asAdmin) { Text("Admit it as an admin: only for your own phone.") }
+        // A new window for each choice: the last one closes first. The
+        // window that ends by itself (a device joined, or it ran out)
+        // closes the sheet.
+        .task(id: asAdmin) {
+            guard model.isAdmin else { return }
+            if model.pairing {
+                model.closeWindow()
+                while model.pairing, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(50)) }
             }
-            if let qrError { Text(qrError).foregroundStyle(palette.textDim) }
-            Button { openPicture() } label: { Text("Open a picture of its QR code") }
-                .buttonStyle(.link)
-                .font(.callout)
+            if Task.isCancelled { return }
+            await model.openWindow(asAdmin: asAdmin && model.isRoot)
+            if !Task.isCancelled { dismiss() }
         }
+        .onDisappear { model.closeWindow() }
     }
 
-    private func openPicture() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        switch Self.readQR(url) {
-        case .some(let text) where MacModel.isWaitingJoiner(text):
-            qrText = text
-            qrError = nil
-        case .some:
-            qrError = String(localized: "This QR code is not of a device that waits to join.")
-        case .none:
-            qrError = String(localized: "No QR code was found in the picture.")
+    @ViewBuilder private var window: some View {
+        if let w = model.window, let digits = w.digits {
+            VStack(spacing: Tokens.spacingMedium) {
+                if let image = QRCode.image(w.qr) {
+                    Image(nsImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 240, height: 240)
+                        .padding(12)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 8))
+                        .accessibilityLabel(Text("QR code"))
+                }
+                Text(verbatim: digits)
+                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
+                    .textSelection(.enabled)
+                    .accessibilityLabel(Text("The six digits: \(digits)"))
+                Text("On the new computer, choose Join a group and type these six digits. A new phone scans this code.")
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let minutes = max(0, Int((w.ends.timeIntervalSince(context.date) / 60).rounded(.up)))
+                    Text("The code is valid for \(minutes) more min.").font(.caption).foregroundStyle(palette.textDim)
+                }
+                if let refused = w.refused, !refused.isEmpty {
+                    Text("A device did not pair: \(refused)").font(.caption).foregroundStyle(palette.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            HStack(spacing: Tokens.spacingMedium) {
+                ProgressView().controlSize(.small)
+                Text("Allow cbb to run as the administrator; the code shows next.").foregroundStyle(palette.textDim)
+            }
         }
     }
+}
 
-    /// The text of the QR code in the picture at url, through Core Image.
-    static func readQR(_ url: URL) -> String? {
-        guard let image = CIImage(contentsOf: url),
-              let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
-        else { return nil }
-        return detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }.first?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+/// QR codes the app draws: a pairing window's, an invitation's.
+enum QRCode {
+    /// The QR code of text, one pixel a module; the view scales it up
+    /// without smoothing.
+    static func image(_ text: String) -> NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage,
+              let cg = CIContext().createCGImage(output, from: output.extent) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: output.extent.width, height: output.extent.height))
     }
 }

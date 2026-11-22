@@ -143,6 +143,12 @@ impl Session {
         self.common().peer_certificates()
     }
 
+    /// The key exchange group agreed (X25519MLKEM768, or X25519 with a
+    /// peer that lacks the hybrid).
+    pub fn kx_group(&self) -> Option<rustls::NamedGroup> {
+        self.common().negotiated_key_exchange_group().map(|g| g.name())
+    }
+
     fn common(&self) -> &CommonState {
         match &self.conn {
             Side::Client(c) => c,
@@ -152,7 +158,7 @@ impl Session {
 
     fn run(&mut self, action: Action<'_>) -> Result<()> {
         if let Some(e) = &self.bufs.failed {
-            return Err(Error::with("the TLS connection failed", TlsError(e.clone())));
+            return Err(failed(e.clone()));
         }
         let res = match &mut self.conn {
             Side::Client(c) => pump(c, &mut self.incoming, &mut self.bufs, action, |c, b| c.process_tls_records(b)),
@@ -163,7 +169,7 @@ impl Session {
             Ok(false) => Err(Error::msg("the TLS handshake is not over")),
             Err(e) => {
                 self.bufs.failed = Some(e.clone());
-                Err(Error::with("the TLS connection failed", TlsError(e)))
+                Err(failed(e))
             }
         }
     }
@@ -308,3 +314,14 @@ const _: () = {
     const fn send<T: Send>() {}
     send::<Session>();
 };
+
+/// The error of a failed connection; one without a common ALPN name, on
+/// either side, says the other device runs another version of cbb.
+fn failed(e: rustls::Error) -> Error {
+    let other = matches!(
+        e,
+        rustls::Error::NoApplicationProtocol
+            | rustls::Error::AlertReceived(rustls::AlertDescription::NoApplicationProtocol)
+    );
+    Error::with(if other { crate::alpn::OTHER_VERSION } else { "the TLS connection failed" }, TlsError(e))
+}

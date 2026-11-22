@@ -40,6 +40,14 @@ android {
         create("full") {
             dimension = "build"
             buildConfigField("boolean", "SELF_UPDATE", "true")
+            // The project's Firebase app for push (FCM), named by the build: -Pcbb.firebase.appId=…
+            // or CBB_FIREBASE_APP_ID and the like (the release workflow's), never a
+            // google-services.json in the repository. Without them the build has no push.
+            for ((field, name) in listOf("FIREBASE_APP_ID" to "appId", "FIREBASE_PROJECT_ID" to "projectId", "FIREBASE_API_KEY" to "apiKey", "FIREBASE_SENDER_ID" to "senderId")) {
+                val value = findProperty("cbb.firebase.$name") as String? ?: System.getenv("CBB_$field") ?: ""
+                require(value.all { it.isLetterOrDigit() || it in ":-_." }) { "cbb.firebase.$name has characters it may not" }
+                buildConfigField("String", field, "\"$value\"")
+            }
         }
         create("fdroid") {
             dimension = "build"
@@ -166,6 +174,10 @@ dependencies {
     // Only the full build has it (src/full/.../WatchLink.kt): F-Droid takes no Play services.
     "fullImplementation"("com.google.android.gms:play-services-wearable:20.0.1")
     "fullImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
+    // Push while the app is closed (PushPlatform): FCM in the full build, UnifiedPush through the
+    // user's distributor in the F-Droid build, which has no Google library.
+    "fullImplementation"("com.google.firebase:firebase-messaging:26.0.1")
+    "fdroidImplementation"("org.unifiedpush.android:connector:3.3.5")
     // The QR scanner: CameraX for the frames, ZXing to read them, without Google Play services.
     implementation("androidx.camera:camera-camera2:1.6.2")
     implementation("androidx.camera:camera-lifecycle:1.6.2")
@@ -202,6 +214,10 @@ dependencies {
     // test rule, the system's own screens (notifications, the share sheet) with UI Automator.
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Compose's test rule brings Espresso 3.5, whose touches reach for
+    // InputManager.getInstance, which Android 17 no longer has; 3.7 takes
+    // the system's InputManager service.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

@@ -8,9 +8,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import android.Manifest
-import android.icu.text.MeasureFormat
-import android.icu.util.Measure
-import android.icu.util.MeasureUnit
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -76,8 +73,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import tools.cbb.kit.Arrangement as Tiles
-import tools.cbb.kit.GroupAlert
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -117,8 +112,6 @@ internal fun HomeScreen(model: AppModel) {
         }
     }
     LaunchedEffect(Unit) {
-        model.group.renewOwnCertificate()
-        model.group.finishTakeOverIfDue()
         model.group.signDue()
     }
     BackgroundSync()
@@ -197,6 +190,7 @@ private fun HomeMain(model: AppModel, open: (HomePage) -> Unit, openCollection: 
         LostPhoneCard(model)
         model.message?.let { NoteText(it, dim = true) }
         FallbackSend(model)
+        LastReceived(model)
         Devices(model, search, layout, select, openCollection)
     }
 }
@@ -505,116 +499,14 @@ private fun SwitchFace(
 }
 
 /**
- * What the group's records stop and what ends it: the stop, each conflict and
- * each claim (GroupAlert). On the root phone each comes with what ends it,
- * after the fingerprint or the screen lock: voiding both histories of a key,
- * cancelling a claim, or removing one of two admins that removed each other.
+ * What the person should know about the group: that the group removed
+ * this phone, a change of its root, and the member's notices.
  */
 @Composable
 internal fun Alerts(model: AppModel) {
     RemovedCard(model)
-    Handed(model)
-    if (model.alerts.isEmpty()) return
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        for (alert in model.alerts) {
-            Text(
-                alertText(alert),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (alert.kind == GroupAlert.Kind.NEWER) palette.text else palette.danger,
-            )
-            when (alert.kind) {
-                GroupAlert.Kind.TWO_HISTORIES ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.void_both_histories), onClick = { scope.launch { model.resolve(alert) } })
-                    } else {
-                        RootDecides()
-                    }
-                GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.cancel_claim), onClick = { scope.launch { model.resolve(alert) } })
-                    } else {
-                        RootDecides()
-                    }
-                GroupAlert.Kind.ADMINS ->
-                    if (model.isRoot) {
-                        for ((id, name) in alert.devices.zip(alert.names)) {
-                            QuietButton(stringResource(R.string.remove_device, name), onClick = { scope.launch { model.remove(id) } })
-                        }
-                    } else {
-                        RootDecides()
-                    }
-                else -> {}
-            }
-        }
-    }
-}
-
-/** The root handed the group to this phone (cbb handover): the button that takes it. */
-@Composable
-private fun Handed(model: AppModel) {
-    if (!model.handedOver) return
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        Text(stringResource(R.string.handed_title), style = MaterialTheme.typography.titleMedium, color = palette.text)
-        Text(stringResource(R.string.handed_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
-        // Taking the group makes this device its main one: a device that guards its keys less well than a phone says so first.
-        LaunchedEffect(Unit) { model.checkKeys() }
-        if (model.guardsLikeAPhone == false) Text(stringResource(R.string.key_guard_weak), style = MaterialTheme.typography.bodySmall, color = palette.danger)
-        AccentButton(stringResource(R.string.handed_take), enabled = !busy, onClick = {
-            busy = true
-            scope.launch {
-                try {
-                    model.takeHandedGroup()
-                } finally {
-                    busy = false
-                }
-            }
-        })
-    }
-}
-
-@Composable
-private fun RootDecides() {
-    Text(stringResource(R.string.alert_root_decides), style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim)
-}
-
-/** A wait in days, hours or minutes, in the user's language. */
-private fun roughly(ms: Long): String {
-    val h = ms / 3_600_000
-    val m = when {
-        h >= 48 -> Measure(h / 24, MeasureUnit.DAY)
-        h >= 2 -> Measure(h, MeasureUnit.HOUR)
-        else -> Measure(maxOf(1, ms / 60_000), MeasureUnit.MINUTE)
-    }
-    return MeasureFormat.getInstance(Locale.getDefault(), MeasureFormat.FormatWidth.WIDE).format(m)
-}
-
-/** The alert in a sentence. */
-@Composable
-private fun alertText(alert: GroupAlert): String {
-    val who = if (alert.names.isEmpty()) stringResource(R.string.alert_unknown_devices) else alert.names.joinToString(", ")
-    return when (alert.kind) {
-        GroupAlert.Kind.STOPPED -> stringResource(R.string.alert_stopped)
-        GroupAlert.Kind.SECRETS_STOPPED -> stringResource(R.string.alert_secrets_stopped)
-        GroupAlert.Kind.TWO_HISTORIES -> stringResource(R.string.alert_two_histories, who)
-        GroupAlert.Kind.ADMINS -> stringResource(R.string.alert_admins, who)
-        GroupAlert.Kind.CLAIMS -> stringResource(R.string.alert_claims, who)
-        GroupAlert.Kind.CLAIM_PENDING -> {
-            val ms = alert.leftMS
-            if (ms == null || ms <= 0) {
-                stringResource(R.string.alert_claim_pending, who)
-            } else {
-                val left = roughly(ms)
-                stringResource(R.string.alert_claim_pending_left, who, left)
-            }
-        }
-        GroupAlert.Kind.CLAIM_STOPPED -> stringResource(R.string.alert_claim_stopped, who)
-        GroupAlert.Kind.NEWER -> stringResource(R.string.alert_newer, alert.count)
-    }
+    RootChangedCard(model)
+    NoticesCard(model)
 }
 
 /**
@@ -651,6 +543,30 @@ internal fun FallbackSend(model: AppModel) {
     if (!model.sendFailed) return
     val scope = rememberCoroutineScope()
     QuietButton(stringResource(R.string.send_copy), enabled = !model.busy, onClick = { scope.launch { model.sync() } })
+}
+
+/**
+ * The last copy that came from another device (D-128): from which device
+ * and its text, a secret without it, with Copy, which puts it in the
+ * clipboard. Copy, or a newer copy, takes the line away.
+ */
+@Composable
+internal fun LastReceived(model: AppModel) {
+    val r = model.received ?: return
+    val scope = rememberCoroutineScope()
+    // The line goes when the copy's own lifetime ends (D-129).
+    LaunchedEffect(r.id, r.untilMS) {
+        kotlinx.coroutines.delay(maxOf(0L, r.untilMS - System.currentTimeMillis()))
+        model.receivedExpired(r.id)
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.last_received, r.from), style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim)
+            if (r.text.isNotEmpty()) Text(r.text, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(Tokens.spacingSmall))
+        QuietButton(stringResource(R.string.push_copy), enabled = !model.busy, onClick = { scope.launch { model.copyReceived() } })
+    }
 }
 
 /** The devices as tiles or as a list; each one opens its details. */

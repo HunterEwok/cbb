@@ -129,14 +129,19 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
-// The patterns read what cbb prints; keep them in step with cmd/cbb/commands.go and
+// The patterns read what cbb prints; keep them in step with member/src/admit_cli.rs and
 // member/src/status_text.rs.
 func TestPatterns(t *testing.T) {
 	if m := codeRE.FindStringSubmatch("Pairing code: 123 456"); m == nil || m[1]+m[2] != "123456" {
 		t.Fatalf("code: %v", m)
 	}
-	if m := addrRE.FindStringSubmatch("If it cannot find this one: cbb pair -code 192.168.1.10:8764"); m == nil || m[1] != "192.168.1.10:8764" {
-		t.Fatalf("address: %v", m)
+	for _, s := range []string{
+		"If it cannot find this one: cbb pair -code 192.168.1.10:8764",
+		"If it cannot find this one: cbb pair -code 192.168.1.10:8764, and type this line instead of the code:",
+	} {
+		if m := addrRE.FindStringSubmatch(s); m == nil || m[1] != "192.168.1.10:8764" {
+			t.Fatalf("address in %q: %v", s, m)
+		}
 	}
 	for _, s := range []string{
 		"Device desktop (Linux, full), group 0a1b2c3d4e5f6a7b",

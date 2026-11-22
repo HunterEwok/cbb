@@ -49,12 +49,16 @@ const DATA_MIN: usize = 32; // the header and an empty message's tag
 const NONCE: usize = 12;
 const COOKIE_LIFE: Duration = Duration::from_secs(120 - 5);
 
-// The bounds of internal/tunnel's Check, so that both sides take the same
-// settings.
-const MAX_JUNK_COUNT: u32 = 16;
-const MAX_JUNK_SIZE: u32 = 1000;
+// The bounds of the format's table `obfuscation` (core
+// `msg::tables::OBFUSCATION`), so that the member takes every offer the
+// format takes.
+const MAX_JUNK_COUNT: u32 = 128;
+const MAX_JUNK_SIZE: u32 = 1280;
 const MIN_PADDING: u32 = 16;
 const MAX_PADDING: u32 = 64;
+/// The most padding a hub's settings may give a message (the format's
+/// `obfuscation/s`); a hub makes its own at most MAX_PADDING.
+const MAX_PADDING_READ: u32 = 1280;
 
 /// An inclusive range of a message's type field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,14 +116,29 @@ fn random(b: &mut [u8]) {
 }
 
 /// The group's AmneziaWG settings, as the hub's offer carries them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Obfuscation {
     pub jc: u32,
     pub jmin: u32,
     pub jmax: u32,
     pub s: [u32; 4],
     pub h: [Range; 4],
-    pub header_key: [u8; 32],
+    /// The header protection key; None for none, plain AmneziaWG junk
+    /// and headers only.
+    pub header_key: Option<[u8; 32]>,
+}
+
+impl core::fmt::Debug for Obfuscation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Obfuscation")
+            .field("jc", &self.jc)
+            .field("jmin", &self.jmin)
+            .field("jmax", &self.jmax)
+            .field("s", &self.s)
+            .field("h", &self.h)
+            .field("header_key", &self.header_key.map(|k| cbb_core::secret::Redacted(k.len())))
+            .finish()
+    }
 }
 
 #[derive(Deserialize)]
@@ -136,7 +155,8 @@ struct Raw {
     h2: String,
     h3: String,
     h4: String,
-    header_protection_key: String,
+    #[serde(default)]
+    header_protection_key: Option<String>,
 }
 
 impl Obfuscation {
@@ -146,11 +166,16 @@ impl Obfuscation {
         let r: Raw = serde_json::from_value(v.clone())
             .map_err(|e| Error::msg(format!("the hub's AmneziaWG settings do not read: {e}")))?;
         use base64::Engine as _;
-        let key = base64::engine::general_purpose::STANDARD
-            .decode(&r.header_protection_key)
-            .ok()
-            .and_then(|k| <[u8; 32]>::try_from(k).ok())
-            .ok_or_else(|| Error::msg("the hub's header protection key is not 32 bytes in base64"))?;
+        let key = r
+            .header_protection_key
+            .map(|k| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(&k)
+                    .ok()
+                    .and_then(|k| <[u8; 32]>::try_from(k).ok())
+                    .ok_or_else(|| Error::msg("the hub's header protection key is not 32 bytes in base64"))
+            })
+            .transpose()?;
         let o = Obfuscation {
             jc: r.jc,
             jmin: r.jmin,
@@ -194,7 +219,7 @@ impl Obfuscation {
         });
         let mut header_key = [0u8; 32];
         getrandom::fill(&mut header_key).map_err(|_| Error::msg("cannot make a key: the system has no randomness"))?;
-        let o = Obfuscation { jc, jmin, jmax, s, h, header_key };
+        let o = Obfuscation { jc, jmin, jmax, s, h, header_key: Some(header_key) };
         o.check()?;
         Ok(o)
     }
@@ -211,12 +236,65 @@ impl Obfuscation {
     pub fn to_value(&self) -> Value {
         use base64::Engine as _;
         let r = |r: &Range| format!("{}-{}", r.min, r.max);
-        serde_json::json!({
+        let mut v = serde_json::json!({
             "jc": self.jc, "jmin": self.jmin, "jmax": self.jmax,
             "s1": self.s[0], "s2": self.s[1], "s3": self.s[2], "s4": self.s[3],
             "h1": r(&self.h[0]), "h2": r(&self.h[1]), "h3": r(&self.h[2]), "h4": r(&self.h[3]),
-            "header_protection_key": base64::engine::general_purpose::STANDARD.encode(self.header_key),
-        })
+        });
+        if let (Some(k), Some(m)) = (self.header_key, v.as_object_mut()) {
+            m.insert("header_protection_key".into(), base64::engine::general_purpose::STANDARD.encode(k).into());
+        }
+        v
+    }
+
+    /// The settings as the format's table `obfuscation` encodes them, for
+    /// a hub's offer of 0.6: field 6 only with header protection.
+    pub fn to_cbor(&self) -> Vec<u8> {
+        use cbb_core::format::cbor::Value as V;
+        let s: Vec<V<'_>> = self.s.iter().map(|x| V::Uint(u64::from(*x))).collect();
+        let h: Vec<V<'_>> =
+            self.h.iter().map(|r| V::Array(vec![V::Uint(u64::from(r.min)), V::Uint(u64::from(r.max))])).collect();
+        let mut m = vec![
+            (1, V::Uint(u64::from(self.jc))),
+            (2, V::Uint(u64::from(self.jmin))),
+            (3, V::Uint(u64::from(self.jmax))),
+            (4, V::Array(s)),
+            (5, V::Array(h)),
+        ];
+        if let Some(k) = &self.header_key {
+            m.push((6, V::Bytes(k)));
+        }
+        V::Map(m).encode()
+    }
+
+    /// Reads the settings as the format's table `obfuscation` carries them
+    /// in a hub's offer (core `msg::tables::OBFUSCATION`, already checked
+    /// against it): field 6, the header protection key, absent for none.
+    pub fn from_cbor(v: &cbb_core::format::cbor::Value<'_>) -> Result<Obfuscation> {
+        use cbb_core::format::cbor::Value as V;
+        let bad = || Error::msg("the hub's AmneziaWG settings do not read");
+        let n = |f: u16| v.get(f).and_then(V::as_uint).and_then(|x| u32::try_from(x).ok()).ok_or_else(bad);
+        let list = |f: u16| v.get(f).and_then(V::as_array).filter(|a| a.len() == 4).ok_or_else(bad);
+        let mut s = [0u32; 4];
+        for (d, x) in s.iter_mut().zip(list(4)?) {
+            *d = x.as_uint().and_then(|x| u32::try_from(x).ok()).ok_or_else(bad)?;
+        }
+        let mut h = [Range { min: 0, max: 0 }; 4];
+        for (d, x) in h.iter_mut().zip(list(5)?) {
+            let r = x.as_array().filter(|r| r.len() == 2).ok_or_else(bad)?;
+            let end = |i: usize| r.get(i).and_then(V::as_uint).and_then(|x| u32::try_from(x).ok()).ok_or_else(bad);
+            *d = Range { min: end(0)?, max: end(1)? };
+            if d.min > d.max {
+                return Err(bad());
+            }
+        }
+        let header_key = match v.get(6) {
+            None => None,
+            Some(k) => Some(k.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok()).ok_or_else(bad)?),
+        };
+        let o = Obfuscation { jc: n(1)?, jmin: n(2)?, jmax: n(3)?, s, h, header_key };
+        o.check()?;
+        Ok(o)
     }
 
     fn check(&self) -> Result<()> {
@@ -226,16 +304,20 @@ impl Obfuscation {
         if self.jmin > self.jmax || self.jmax > MAX_JUNK_SIZE {
             return Err(Error::msg(format!("the hub's settings have junk of {} to {} bytes", self.jmin, self.jmax)));
         }
-        if self.header_key.iter().all(|&b| b == 0) {
-            return Err(Error::msg("the hub's settings have no header protection key"));
+        if self.header_key.is_some_and(|k| k.iter().all(|&b| b == 0)) {
+            return Err(Error::msg("the hub's settings have a header protection key of zeros"));
         }
         let [s1, s2, s3, _] = self.s.map(|s| s as usize);
         let (a, b, c) = (INITIATION + s1, RESPONSE + s2, COOKIE_REPLY + s3);
         if a == b || a == c || b == c {
             return Err(Error::msg("the hub's settings give two handshake messages the same size"));
         }
-        if self.s.iter().any(|&s| !(MIN_PADDING..=MAX_PADDING).contains(&s)) {
-            return Err(Error::msg("the hub's settings pad a message by less than 16 or more than 64 bytes"));
+        // The header protection's nonce is the start of the padding.
+        if self.header_key.is_some() && self.s.iter().any(|&s| s < MIN_PADDING) {
+            return Err(Error::msg("the hub's settings protect headers with a padding under 16 bytes"));
+        }
+        if self.s.iter().any(|&s| s > MAX_PADDING_READ) {
+            return Err(Error::msg("the hub's settings pad a message by more than 1280 bytes"));
         }
         for (i, h) in self.h.iter().enumerate() {
             if h.min <= 4 {
@@ -302,8 +384,9 @@ impl Awg {
     }
 
     fn protect(&self, nonce: &[u8], data: &mut [u8]) {
+        let Some(key) = self.o.header_key else { return };
         let nonce: &[u8; NONCE] = nonce[..NONCE].try_into().expect("NONCE bytes");
-        let mut c = ChaCha20::new(&self.o.header_key.into(), nonce.into());
+        let mut c = ChaCha20::new(&key.into(), nonce.into());
         c.apply_keystream(data);
     }
 
@@ -390,7 +473,7 @@ impl Awg {
             }
             _ => {
                 let m1 = mac1_at(msg.len());
-                if mac(&self.mac1_in, &msg[..m1]) != msg[m1..m1 + 16] {
+                if !cbb_core::secret::ct_eq(&mac(&self.mac1_in, &msg[..m1]), &msg[m1..m1 + 16]) {
                     return None;
                 }
                 msg[..4].copy_from_slice(&(kind as u32 + 1).to_le_bytes());
@@ -441,7 +524,7 @@ mod tests {
                 Range { min: 3_221_225_488, max: 3_221_291_023 },
             ],
             // The same for every end in a run, as a group's settings are.
-            header_key: *HEADER_KEY.get_or_init(key),
+            header_key: Some(*HEADER_KEY.get_or_init(key)),
         }
     }
 
@@ -524,6 +607,46 @@ mod tests {
         }
     }
 
+    /// The settings of a hub's offer of 0.6 (table `obfuscation`): with
+    /// field 6 the headers are protected and a padding under 16 bytes is
+    /// refused; without it nothing is protected, a padding of 0 is taken,
+    /// and the two ends still talk; more than 1280 is refused.
+    #[test]
+    fn reads_the_offers_settings() {
+        use cbb_core::format::cbor::Value as V;
+        let map = |s: [u64; 4], key: Option<&'static [u8; 32]>| {
+            let h = [(5u64, 9u64), (10, 19), (20, 29), (30, 39)].map(|(a, b)| V::Array(vec![V::Uint(a), V::Uint(b)]));
+            let mut m = vec![
+                (1, V::Uint(3)),
+                (2, V::Uint(40)),
+                (3, V::Uint(140)),
+                (4, V::Array(s.map(V::Uint).to_vec())),
+                (5, V::Array(h.to_vec())),
+            ];
+            if let Some(k) = key {
+                m.push((6, V::Bytes(k)));
+            }
+            V::Map(m)
+        };
+        static KEY: [u8; 32] = [7; 32];
+        let o = Obfuscation::from_cbor(&map([20, 33, 17, 25], Some(&KEY))).unwrap();
+        assert_eq!(o.header_key, Some(KEY));
+        assert_eq!(Obfuscation::from_offer(&o.to_value()).unwrap(), o, "kept in tunnel.json as it came");
+        assert!(Obfuscation::from_cbor(&map([0, 33, 17, 25], Some(&KEY))).is_err());
+        let plain = Obfuscation::from_cbor(&map([0, 3, 17, 25], None)).unwrap();
+        assert_eq!(plain.header_key, None);
+        assert_eq!(Obfuscation::from_offer(&plain.to_value()).unwrap(), plain);
+        assert!(Obfuscation::from_cbor(&map([0, 3, 17, 1281], None)).is_err());
+        let (hub, dev) = ([1u8; 32], [2u8; 32]);
+        let mut out = Awg::new(plain.clone(), &hub, &dev);
+        let mut back = Awg::new(plain, &dev, &hub);
+        let mut init = vec![0u8; INITIATION];
+        init[0] = 1;
+        let sent = out.outgoing(&init);
+        let got = back.incoming(sent.last().unwrap()).unwrap();
+        assert_eq!(got[..4], [1, 0, 0, 0]);
+    }
+
     /// The settings are read as Go writes them, and Check's refusals are
     /// the same.
     #[test]
@@ -537,7 +660,10 @@ mod tests {
             let v: Value = serde_json::from_str(&go.replace(from, to)).unwrap();
             Obfuscation::from_offer(&v).is_err()
         };
-        assert!(bad("\"jc\":5", "\"jc\":17"));
+        assert!(bad("\"jc\":5", "\"jc\":129"));
+        assert!(!bad("\"jc\":5", "\"jc\":128"), "the format's most junk packets");
+        assert!(bad("\"jmax\":300", "\"jmax\":1281"));
+        assert!(!bad("\"jmax\":300", "\"jmax\":1280"), "the format's largest junk");
         assert!(bad("\"s1\":20", "\"s1\":12"));
         assert!(bad("1000016-1065551", "01000016-1065551"));
         assert!(bad("1000016-1065551", "1073741840-1073807375"), "overlapping");

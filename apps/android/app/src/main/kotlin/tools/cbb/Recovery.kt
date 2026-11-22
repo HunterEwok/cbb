@@ -70,101 +70,81 @@ import java.time.format.FormatStyle
 
 /**
  * Settings' recovery key, on the root phone (docs/protocol.md, section 10,
- * "The recovery key"): whether the group has one and since when, making a
- * new one, which shows its sheet once, and removing it.
+ * "The recovery key"): on a group of 0.6 the key is made with the group and
+ * fixed in its ID, its sheet shown once at founding; nothing makes or
+ * removes it later (D-126).
  */
 @Composable
 internal fun RecoverySection(model: AppModel) {
     val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var asking by remember { mutableStateOf<Int?>(null) }
-    // The sheet just made, while it shows; nothing keeps it after.
-    var sheet by remember { mutableStateOf<Pair<Core.RecoverySheet, Instant>?>(null) }
-    var askingPin by remember { mutableStateOf(false) }
-    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    fun make() {
-        busy = true
-        scope.launch {
-            sheet = model.makeRecovery()?.let { it to Instant.now() }
-            busy = false
-        }
-    }
     Section(stringResource(R.string.recovery_title)) {
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            val made = model.recoveryMade
-            if (made != null) {
-                Text(stringResource(R.string.recovery_made, longDate(made)), fontWeight = FontWeight.SemiBold)
-                QuietButton(stringResource(R.string.recovery_make_new), onClick = { asking = R.string.recovery_replace_title }, enabled = !busy)
-                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
-                TextButton(onClick = { asking = R.string.recovery_remove_title }, enabled = !busy) {
-                    Text(stringResource(R.string.recovery_remove), color = palette.danger)
-                }
-            } else {
-                Text(stringResource(R.string.recovery_none), color = palette.textDim)
-                AccentButton(stringResource(R.string.recovery_make), onClick = ::make, enabled = !busy)
-                QuietButton(stringResource(R.string.yubikey_put), onClick = { askingPin = true }, enabled = !busy)
-            }
+            Text(stringResource(R.string.recovery_06), color = palette.textDim)
             model.recoveryNote?.let { NoteText(it) }
             Tip(R.string.recovery_body)
         }
     }
-    when (asking) {
-        R.string.recovery_replace_title -> Confirm(
-            stringResource(R.string.recovery_replace_title),
-            stringResource(R.string.recovery_replace_body),
-            stringResource(R.string.recovery_replace_action),
-            dismiss = { asking = null },
-            confirm = ::make,
-        )
-        R.string.recovery_remove_title -> Confirm(
-            stringResource(R.string.recovery_remove_title),
-            stringResource(R.string.recovery_remove_body),
-            stringResource(R.string.remove),
-            dismiss = { asking = null },
-            confirm = {
-                busy = true
-                scope.launch {
-                    model.removeRecovery()
-                    busy = false
-                }
-            },
-        )
-    }
-    sheet?.let { (s, at) -> RecoverySheetDialog(s, at) { sheet = null } }
-    if (askingPin) {
-        YubiKeyPinDialog(
-            stringResource(R.string.yubikey_put_title),
-            stringResource(R.string.yubikey_put_body),
-            dismiss = { askingPin = false },
-        ) { pin ->
-            busy = true
-            onCard = scope.launch {
-                try {
-                    model.makeRecoveryOnCard(pin)
-                } finally {
-                    busy = false
-                    onCard = null
-                }
-            }
-        }
-    }
-    YubiKeyPrompt(model) { onCard?.cancel() }
 }
 
 /**
- * The recovery sheet, shown once and kept out of screenshots and the recent
- * apps: its QR code and text, printing it or saving it as a PDF through
- * Android's printing, and closing it, after which the phone has no copy.
+ * The new group's recovery key, shown once and kept out of screenshots and
+ * the recent apps. It first offers where to save it: "Write on a sheet"
+ * shows the sheet (its QR code and text) with printing it or saving it as a
+ * PDF through Android's printing; "Write to YubiKey" (with model) waits for
+ * a YubiKey plugged in or held to the phone, then asks its PIN, and the core
+ * seals the key into the card's first empty retired slot (docs/protocol.md,
+ * "The recovery key on a YubiKey (0.6)"). Both are allowed. Leaving without
+ * either asks first; afterwards the phone has no copy. Internal for the
+ * sheet of the dangerous screens (DangerousScreensTest).
  */
 @Composable
-private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: () -> Unit) {
+internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model: AppModel? = null, done: () -> Unit) {
     val palette = LocalPalette.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var onSheet by remember { mutableStateOf(false) }
+    var sheetSeen by remember { mutableStateOf(false) }
+    var printed by remember { mutableStateOf(false) }
     var askingDone by remember { mutableStateOf(false) }
+    var askingUnsaved by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<AppModel.Note?>(null) }
+    // The YubiKey found, waiting for its PIN: true on USB, false over NFC.
+    var foundUsb by remember { mutableStateOf<Boolean?>(null) }
+    var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var sealedNote by remember { mutableStateOf<AppModel.Note?>(null) }
+    var sealed by remember { mutableStateOf(false) }
+    fun findKey() {
+        val m = model ?: return
+        if (onCard != null) return
+        sealedNote = null
+        onCard = scope.launch {
+            try {
+                foundUsb = m.findKey { sealedNote = it }
+            } finally {
+                onCard = null
+            }
+        }
+    }
+    fun seal(pin: String, usb: Boolean) {
+        val m = model ?: return
+        if (onCard != null) return
+        onCard = scope.launch {
+            try {
+                val (note, ok) = m.sealOnCard(sheet.qr, pin, usb)
+                sealedNote = note
+                if (ok) sealed = true
+            } finally {
+                onCard = null
+            }
+        }
+    }
+    fun leave() = when {
+        sealed || printed -> done()
+        sheetSeen -> askingDone = true
+        else -> askingUnsaved = true
+    }
     Dialog(
-        onDismissRequest = { askingDone = true },
+        onDismissRequest = { if (onSheet) onSheet = false else leave() },
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
@@ -172,27 +152,57 @@ private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: 
             usePlatformDefaultWidth = false,
         ),
     ) {
-        BackHandler { askingDone = true }
+        BackHandler { if (onSheet) onSheet = false else leave() }
         Column(
             Modifier.fillMaxSize().background(palette.background).safeDrawingPadding().verticalScroll(rememberScrollState())
                 .padding(Tokens.spacingLarge),
             verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
-            Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
-            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
-            AccentButton(stringResource(R.string.recovery_print), onClick = {
-                failure = try {
-                    printSheet(context, sheet, made)
-                    null
-                } catch (e: Exception) {
-                    Log.e(TAG, "printing the recovery sheet", e)
-                    AppModel.Note(R.string.recovery_print_failed, e.toString(), error = true)
+            Text(stringResource(R.string.recovery_save_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
+            if (onSheet) {
+                Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
+                RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
+                AccentButton(stringResource(R.string.recovery_print), onClick = {
+                    failure = try {
+                        printSheet(context, sheet, made)
+                        printed = true
+                        null
+                    } catch (e: Exception) {
+                        Log.e(TAG, "printing the recovery sheet", e)
+                        AppModel.Note(R.string.recovery_print_failed, e.toString(), error = true)
+                    }
+                }, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.recovery_file_warning), textAlign = TextAlign.Center, color = palette.textDim)
+                failure?.let { NoteText(it) }
+                QuietButton(stringResource(R.string.back), onClick = { onSheet = false }, modifier = Modifier.fillMaxWidth())
+            } else {
+                Text(stringResource(R.string.recovery_save_body), textAlign = TextAlign.Center, color = palette.textDim)
+                AccentButton(stringResource(R.string.recovery_write_sheet), onClick = {
+                    onSheet = true
+                    sheetSeen = true
+                }, modifier = Modifier.fillMaxWidth())
+                if (model != null) {
+                    AccentButton(
+                        stringResource(R.string.yubikey_write),
+                        onClick = { findKey() },
+                        enabled = onCard == null && !sealed,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    sealedNote?.let { NoteText(it) }
                 }
-            }, modifier = Modifier.fillMaxWidth())
-            failure?.let { NoteText(it) }
-            QuietButton(stringResource(R.string.recovery_done), onClick = { askingDone = true }, modifier = Modifier.fillMaxWidth())
+                QuietButton(stringResource(R.string.recovery_done), onClick = { leave() }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        if (model != null) {
+            foundUsb?.let { usb ->
+                YubiKeyPinDialog(
+                    stringResource(R.string.yubikey_write),
+                    stringResource(if (usb) R.string.yubikey_pin_type else R.string.yubikey_pin_then_hold),
+                    dismiss = { foundUsb = null },
+                ) { pin -> seal(pin, usb) }
+            }
+            YubiKeyPrompt(model) { onCard?.cancel() }
         }
         if (askingDone) {
             AlertDialog(
@@ -201,6 +211,18 @@ private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: 
                 text = { Text(stringResource(R.string.recovery_done_body)) },
                 confirmButton = { TextButton(onClick = done) { Text(stringResource(R.string.recovery_kept), color = palette.accent) } },
                 dismissButton = { TextButton(onClick = { askingDone = false }) { Text(stringResource(R.string.back)) } },
+                containerColor = palette.surface,
+                titleContentColor = palette.text,
+                textContentColor = palette.textDim,
+            )
+        }
+        if (askingUnsaved) {
+            AlertDialog(
+                onDismissRequest = { askingUnsaved = false },
+                title = { Text(stringResource(R.string.recovery_unsaved_title)) },
+                text = { Text(stringResource(R.string.recovery_unsaved_body)) },
+                confirmButton = { TextButton(onClick = done) { Text(stringResource(R.string.recovery_leave_unsaved), color = palette.danger) } },
+                dismissButton = { TextButton(onClick = { askingUnsaved = false }) { Text(stringResource(R.string.back)) } },
                 containerColor = palette.surface,
                 titleContentColor = palette.text,
                 textContentColor = palette.textDim,

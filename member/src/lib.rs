@@ -16,80 +16,102 @@ mod l10n;
 mod actions;
 mod admin;
 mod admit_cli;
+pub mod admitting;
 mod agent;
 #[cfg(feature = "tunnel")]
 mod away;
 #[cfg(not(feature = "tunnel"))]
 #[path = "away_off.rs"]
 mod away;
+/// A forwarder as a hub command names it, which the phone's root names too.
+pub use away::forwarder_named;
 mod awaynet;
 #[cfg(feature = "tunnel")]
 mod awg;
 mod benchtime;
+pub mod board;
 #[cfg(feature = "tunnel")]
 pub mod bugd;
 mod bugs;
 pub mod button;
 mod cli;
+pub mod commands;
 mod confirm;
 pub mod content;
 pub mod control;
 mod copies;
-pub mod credentials;
 mod device;
 mod devices_cli;
 pub mod discovery;
-pub mod entries;
+mod entries;
+mod epochs;
 pub mod error;
 mod evidence;
+pub mod faces;
 pub mod files;
 #[cfg(feature = "tunnel")]
-pub mod forward;
-#[cfg(feature = "fuzzing")]
+mod forward;
+pub mod founding;
+#[cfg(any(feature = "fuzzing", test))]
 #[allow(clippy::expect_used, clippy::panic, reason = "a fuzz target reports a broken promise by panicking")]
 pub mod fuzzing;
 mod global_cli;
-pub mod helper;
+pub mod hello;
+mod helper;
 #[cfg(feature = "tunnel")]
-pub mod hub;
+mod hub;
 mod hubport;
-pub mod identity;
+mod identity;
 mod interfaces;
 mod inviter;
+pub mod join;
+pub mod joining;
 mod keys;
 mod leave;
+mod link;
+pub mod live;
 mod logfile;
 mod media_cli;
-mod mute;
+mod mesh;
+pub mod mute;
 #[cfg(all(test, feature = "tunnel"))]
 mod nettest;
-pub mod networks;
+mod networks;
 mod next;
 mod nextimage;
 #[cfg(unix)]
 mod nextlink;
-pub mod node;
+
+pub mod offered;
+pub mod orders;
+pub mod own;
 pub mod pair;
 #[cfg(unix)]
 mod pastehelper;
-pub mod peer;
+mod peer;
 mod peripheral;
-pub mod phone;
-#[cfg(feature = "tunnel")]
-mod phone_attest;
 pub mod piv;
-pub mod records;
 #[cfg(feature = "tunnel")]
-pub mod relay;
+mod push;
+#[cfg(feature = "tunnel")]
+pub mod pushd;
+#[cfg(feature = "tunnel")]
+mod pusher;
+mod records;
+#[cfg(feature = "tunnel")]
+mod relay;
 #[cfg(feature = "tunnel")]
 pub mod relayd;
-pub mod releases;
+mod releases;
 mod remotepaste;
-pub mod restore;
+mod restore;
 mod rootless;
-pub mod sealkey;
+pub mod roster;
+mod sealed;
 mod sekey;
+pub mod set;
 mod status_text;
+pub mod writers;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod third_party {
     pub mod pcsclite;
@@ -97,11 +119,9 @@ mod third_party {
 mod servers;
 mod service;
 mod settings;
-mod signed;
 pub mod sync;
 mod sys;
-pub mod takeover;
-pub mod testbuild;
+mod testbuild;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -110,18 +130,17 @@ mod update_os;
 pub mod uptime;
 pub mod view;
 #[cfg(feature = "tunnel")]
-pub mod vless;
+mod vless;
 pub mod why;
-mod window;
-pub mod wire;
+mod wire;
 
 use crate::sys::UnixStream;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use cbb_core::{certs, clip, hlc};
+use cbb_core::{certs, clip};
 use error::{Context, Error, Result};
 use identity::Stored as _;
 
@@ -162,19 +181,16 @@ Commands:
   rename <name or ID> <new name>
                           Give a device of the group another name (on an admin).
   admin <name or ID>      Make a phone or a computer an admin (on the group's root).
-  takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
-  takeover -delay <duration>
-                          Set how long such a claim waits, 0s to 168h (on the root; 72h by default).
   keys [proven|hardware|files]
                           Show or set which keys may be the group's root, an admin or a hub
                           (on the root; hardware by default, files for a root with a key in a file).
-  incoming [duration]     Show or set how long a copy from another device stays live after it
-                          arrives, 5s to 1h (on the root or an admin; 1m by default): it goes
-                          into the clipboard until then, and never after.
-  recovery [-yubikey]     Claim the group with its recovery key, typed from the sheet or on a
-                          YubiKey, when every phone with the group is lost; it waits as a
-                          takeover does.
-  handover <name or ID>   Let an admin take the group over at once, as a new phone (on the root).
+  ttl [copy [secret]]     Show or set how long a copy lives in the group: an ordinary copy 1m to
+                          1h (5m by default), a secret 5s to 1m (1m by default); on the root or
+                          an admin, and every device's copies then carry it; - keeps one.
+  recovery [-yubikey] [-leave <name or ID>]...
+                          Make this computer the group's root with the recovery key, typed
+                          from the sheet or sealed on a YubiKey, when the root is lost;
+                          -leave names a device, such as the lost root, that the group refuses.
   freeze <name or ID>     Stop an admin computer, as a stolen one, until the root decides.
   unfreeze <name or ID>   Make a frozen admin computer an admin again (on the group's root).
   resolve                 Void both histories of a key that signed two (on the group's root).
@@ -203,16 +219,13 @@ Commands:
   config [max-copy|max-copy-away SIZE]
                           Show or set the largest copy of images and files this device
                           sends or fetches, at home and away from home.
-  pair [-name name] [-port port] [-addr host[:port]]...
-                          In no group: join one by the phone's QR code, shown here (-addr:
-                          where the phone reaches this device, when the code would name
-                          the wrong addresses); -caps joins as a member that can do a
-                          comma-separated subset of admin,dials,hub (by default all three).
-  pair [-admin]           In a group, on its root or an admin: show a code for a new
-                          computer, or with -admin for a phone that becomes an admin.
-  pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
-                          type its code, or paste its QR code's text.
-  pair -code [address]    Join with the code from cbb pair on the root or an admin.
+  pair [-admin]           In a group, on its root or an admin: open a pairing window, whose
+                          six digits and QR code a new computer or phone joins by; with
+                          -admin the new device becomes an admin.
+  pair -code [address] [-name name] [-caps LIST]
+                          In no group: join a pairing window by its six digits, typed here;
+                          -caps joins as a member that can do a comma-separated subset of
+                          admin,dials,hub (by default all three).
   pair -invite file|-     Join from afar with an invitation from cbb invite
                           (its file, or with - its text pasted on standard input).
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
@@ -306,7 +319,7 @@ pub fn main() {
             let rest = &args[1..];
             let res = match cmd {
                 "pair" if in_group(&g) => admit_cli::pair(&g, rest),
-                "pair" => join(&g, rest, false),
+                "pair" => join(&g, rest),
                 "invite" => admit_cli::invite(&g, rest),
                 "keyboard" => devices_cli::keyboard(&g, rest),
                 "recovery" => cli::recovery(&g, rest),
@@ -331,7 +344,7 @@ pub fn main() {
                 "rename" => cli::rename(&g, rest),
                 "takeover" => cli::takeover(&g, rest),
                 "keys" => cli::keys(&g, rest),
-                "incoming" => cli::incoming(&g, rest),
+                "ttl" => cli::ttl(&g, rest),
                 "handover" => cli::handover(&g, rest),
                 "freeze" | "unfreeze" => cli::freeze(&g, rest, cmd == "freeze"),
                 "resolve" => cli::resolve(&g, rest),
@@ -400,7 +413,7 @@ pub(crate) fn flag(a: &str) -> Option<&str> {
     a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|f| !f.is_empty())
 }
 
-fn host_name() -> String {
+pub(crate) fn host_name() -> String {
     let name = sys::host_name();
     let name: String = name.split('.').next().unwrap_or("").chars().take(64).collect();
     if records::valid_name(&name) { name } else { "member".into() }
@@ -413,18 +426,12 @@ pub(crate) fn resolve(s: &str) -> Result<SocketAddr> {
         .ok_or_else(|| Error::msg(format!("{s:?} has no address")))
 }
 
-/// host:port, with brackets around an IPv6 host.
-fn join_host_port(host: &str, port: u16) -> String {
-    if host.contains(':') && !host.starts_with('[') { format!("[{host}]:{port}") } else { format!("{host}:{port}") }
-}
-
 /// What a member can do unless told otherwise: everything on a computer,
-/// a Raspberry Pi or a router; the Pi inside a ZX Spectrum Next, which is
-/// on only while the Next is and reaches the network through it, is never
-/// a hub (docs/protocol.md, section 4, "Capabilities").
-fn default_caps(for_next: bool) -> Vec<String> {
-    let all = cbb_core::authority::CAPS.iter();
-    all.filter(|c| !for_next || **c != cbb_core::authority::CAP_HUB).map(|c| (*c).to_string()).collect()
+/// a Raspberry Pi or a router (docs/protocol.md, section 4,
+/// "Capabilities"); the Pi inside a ZX Spectrum Next joins through its link
+/// with none (nextlink).
+fn default_caps() -> Vec<String> {
+    cbb_core::authority::CAPS.iter().map(|c| (*c).to_string()).collect()
 }
 
 /// Reads -caps: names of cbb_core::authority::CAPS joined by commas, or
@@ -447,31 +454,33 @@ fn member_port() -> u16 {
     settings::get("CBB_PORT").and_then(|p| p.trim().parse().ok()).unwrap_or(8764)
 }
 
-/// Joins a group. For the Next (for_next), the QR code and the outcome come
-/// in its frames, and so do the log lines, as `CBB#` lines it skips.
-/// cbb pair's usage in no group.
-const PAIR_USE: &str =
-    "cbb pair [-code [ADDRESS:PORT] | -invite FILE | -app FILE] [-caps LIST] [-name NAME] [-port PORT] [-addr ADDRESS]";
+/// Why the only hub of a group does not stop without the user's word.
+pub(crate) const NO_OTHER_HUB: &str = "the group has no other hub, so its devices away from home stop syncing until a device is a hub again; move the hub to another computer instead (cbb global move DEVICE), or stop it anyway with -yes";
 
-fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
+/// How a device in no group joins on 0.6: it dials a pairing window.
+const JOIN_BY_WINDOW: &str = "to join a group, open a pairing window with cbb pair on a device of the group, then run cbb pair -code here and type the six digits it shows (or scan its QR code with a phone)";
+
+/// Why an invitation of a group made before 0.6 joins nothing.
+pub(crate) const OLD_INVITATION: &str = "this invitation comes from a group made before 0.6, which a device joins only at home with cbb pair; ask for an invitation of a group of 0.6";
+
+/// cbb pair's usage in no group.
+const PAIR_USE: &str = "cbb pair [-code [ADDRESS:PORT] | -invite FILE] [-caps LIST] [-name NAME]";
+
+/// Joins a group: by a pairing window's six digits (-code) or by a remote
+/// invitation (-invite).
+fn join(g: &Global, args: &[String]) -> Result<()> {
     let mut name = host_name();
     // -name and -caps as given, which a join through the running service
     // takes in place of its own.
     let (mut given_name, mut given_caps) = (None, None);
-    // The service's own port, which its firewall rule opens (OpenWrt's
-    // init script passes the one in /etc/config/cbb); out of a group the
-    // service does not listen on it, so the phone finds cbb pair there.
-    let mut port = service_port(g).unwrap_or_else(member_port);
-    let mut addrs = Vec::new();
     let mut code_addr = None;
-    let mut caps = default_caps(for_next);
+    let mut caps = default_caps();
     let mut invite = None;
-    let mut app = None;
     let mut i = 0;
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
-            Some("caps") if !for_next => {
+            Some("caps") => {
                 caps = parse_caps(&next()?)?;
                 given_caps = Some(caps.clone());
             }
@@ -479,11 +488,9 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 name = next()?;
                 given_name = Some(name.clone());
             }
-            Some("port") => port = next()?.parse().context("the port is a number")?,
-            Some("addr") => addrs.push(next()?),
             // -code [address:port], as Go's: the code from standard input,
             // the address of the window when mDNS cannot find it.
-            Some("code") if !for_next => match args.get(i + 1).filter(|a| !a.starts_with('-') && a.contains(':')) {
+            Some("code") => match args.get(i + 1).filter(|a| !a.starts_with('-') && a.contains(':')) {
                 Some(a) => code_addr = Some(a.clone()),
                 None => {
                     code_addr = Some(String::new());
@@ -491,47 +498,61 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                     continue;
                 }
             },
-            Some("invite") if !for_next => invite = Some(next()?),
-            Some("app") if !for_next => app = Some(next()?),
+            Some("invite") => invite = Some(next()?),
+            // The QR code a computer showed for a phone to dial it (D-119).
+            Some("app" | "port" | "addr") => return Err(Error::msg(JOIN_BY_WINDOW)),
             _ => return Err(cli::usage(PAIR_USE)),
         }
         i += 2;
     }
     // The code comes from standard input, never from the command line, and
     // an invitation brings its own way in.
-    if [invite.is_some(), code_addr.is_some(), app.is_some()].iter().filter(|b| **b).count() > 1 {
+    if invite.is_some() && code_addr.is_some() {
         return Err(cli::usage(PAIR_USE));
     }
-    // For a desktop app, which runs cbb as the administrator and sees what
-    // it prints only once it ends: the app's own file, opened before
-    // anything else, gets the QR code's text.
-    let app_file = match &app {
-        Some(path) => Some(std::sync::Mutex::new(Some(open_app_file(path)?))),
-        None => None,
-    };
     // As Go's joinWithCode: the service joins, by the window that mDNS finds
     // or at the address given, and keeps the identity it gets, with its own
     // -name and -caps unless cbb pair gives them. With an address and no
     // service running, cbb joins itself, into its state folder, before its
     // service starts.
-    if invite.is_none() && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g)) {
-        use std::io::IsTerminal;
-        if std::io::stdin().is_terminal() {
-            print!("{}", tr!("Pairing code: "));
-            std::io::stdout().flush().ok();
-        }
-        let mut line = String::new();
-        std::io::stdin().read_line(&mut line).context("cannot read the code")?;
-        let code = pair::normalize_code(line.trim())?;
+    // A home window of 0.6: the six digits it shows, or its QR code's
+    // text, from standard input, never the command line, where other users
+    // could read them.
+    let code = match &code_addr {
+        Some(_) if invite.is_none() => Some(admit_cli::window_code()?),
+        _ => None,
+    };
+    if let Some(code) = &code
+        && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g))
+    {
         let h = control::Header {
             op: "join".into(),
-            code,
             address: code_addr.unwrap_or_default(),
+            code: code.to_string(),
             name: given_name.unwrap_or_default(),
             caps: given_caps,
             ..Default::default()
         };
-        request(g, &control::Message::new(h, Vec::new()))?;
+        println!("{}", tr!("Looking for the computer with the pairing window..."));
+        std::io::stdout().flush().ok();
+        let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        while !m.header.done {
+            m = check(admit_cli::next(&mut r)?)?;
+        }
+        println!("{}", tr!("Joined the group."));
+        return Ok(());
+    }
+    // With an address and no service running, cbb joins itself, into its
+    // state folder, before its service starts.
+    if let (Some(code), Some(a)) = (&code, &code_addr) {
+        let me = joining::Me {
+            name: &name,
+            os: cbb_core::format::print::os_number(admin::os_name()),
+            caps: roster::caps_number(&caps),
+        };
+        let (addrs, invitation, fp) = joining::window_of(code, Some(resolve(a)?))?;
+        let addr = addrs.first().copied().ok_or_else(|| Error::msg("no address to dial"))?;
+        joining::at_home(&g.state, addr, &me, invitation, fp)?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
     }
@@ -539,106 +560,73 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(invite_consent(&path)?),
         None => None,
     };
-    let (joiner, save) = joiner(&g.state, &name)?;
-    let joiner = joiner.as_member(admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
-    let save = &*save;
-    let invited = invite.is_some();
-    let id = match invite {
-        Some((path, text)) => {
-            let shown = |fp: &str| {
-                println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
-                println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
-                println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
-                std::io::stdout().flush().ok();
-            };
-            let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
-            let id = away::join_invite(&g.state, &joiner, save, &text, &shown, log)?;
-            // It is used up, and was a secret; nothing needs it any more.
-            if !path.is_empty() {
-                let _ = std::fs::remove_file(&path);
-            }
-            id
+    if let Some((path, text)) =
+        invite.as_ref().filter(|(_, t)| t.trim_start().starts_with(cbb_core::join::invitation::PREFIX))
+    {
+        join_invited(g, &name, &caps, given_name, given_caps, text)?;
+        // It is used up, and was a secret; nothing needs it any more.
+        if !path.is_empty() {
+            let _ = std::fs::remove_file(path);
         }
-        None if code_addr.is_some() => {
-            let a = code_addr.unwrap_or_default();
-            print!("{}", tr!("Pairing code: "));
-            std::io::stdout().flush().ok();
-            let mut line = String::new();
-            std::io::stdin().read_line(&mut line).context("cannot read the code")?;
-            let code = pair::normalize_code(line.trim())?;
-            let sock = TcpStream::connect_timeout(&resolve(&a)?, Duration::from_secs(10))
-                .context(format!("cannot connect to {a}"))?;
-            pair::join(&joiner, sock, &code, save)?
-        }
-        None => {
-            let ln = TcpListener::bind(("::", port))
-                .or_else(|_| TcpListener::bind(("0.0.0.0", port)))
-                .or_else(|_| TcpListener::bind(("0.0.0.0", 0)))
-                .context("cannot listen for the phone")?;
-            // An address without a port gets the one listened on.
-            let bound = ln.local_addr().context("cannot listen for the phone")?.port();
-            let addrs: Vec<String> =
-                addrs.into_iter().map(|a| if resolve(&a).is_ok() { a } else { join_host_port(&a, bound) }).collect();
-            let code = pair::new_code();
-            let shown = |text: &str| {
-                if let (Some(file), Some(path)) = (&app_file, &app) {
-                    let f = file.lock().unwrap_or_else(|e| e.into_inner()).take();
-                    if let Err(e) = f.map_or(Ok(()), |f| write_app_join(f, text, bound)) {
-                        eprintln!("cbb: writing {path}: {}", e.for_user());
-                        std::process::exit(1);
-                    }
-                    watch_app_file(path.clone());
-                    return;
-                }
-                if for_next {
-                    let frame = next::qr_frame(text);
-                    let mut out = std::io::stdout();
-                    if frame.is_empty() {
-                        // Fail now rather than leave the Next waiting for a
-                        // pairing nobody can start.
-                        out.write_all(b"CBBERR cannot make the QR code\r").ok();
-                        out.flush().ok();
-                        std::process::exit(1);
-                    }
-                    out.write_all(&frame).ok();
-                    out.flush().ok();
-                    return;
-                }
-                println!(
-                    "{}\n",
-                    tr!("On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:")
-                );
-                print!("{}", qr(text));
-                println!("\n{}", tr!("Or paste this into the app: {}", text));
-                println!("\n{}", tr!("Waiting up to 5 minutes. Press Ctrl+C to cancel."));
-                println!(
-                    "{}",
-                    tr!(
-                        "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here."
-                    )
-                );
-                std::io::stdout().flush().ok();
-            };
-            let log = |s: &str| {
-                if for_next {
-                    print!("CBB# {}\r", next::to_spectrum(s).escape_ascii());
-                    std::io::stdout().flush().ok();
-                } else {
-                    eprintln!("{s}");
-                }
-            };
-            pair::listen(&joiner, ln, (!addrs.is_empty()).then_some(addrs), &code, pair::LIFETIME, &shown, save, &log)?
-        }
-    };
-    wait_for_group(g);
-    if for_next {
-        print!("CBB# joined the group {} as {}\r", id.tag(), id.id);
-    } else {
-        println!("{}", tr!("Joined the group {} as {}.", id.tag(), id.id));
-    }
-    if invited {
+        println!("{}", tr!("Joined the group."));
         wait_for_hub(g);
+        return Ok(());
     }
+    if invite.is_some() {
+        // An invitation of a group made before 0.6, which joins only at home.
+        return Err(Error::msg(OLD_INVITATION));
+    }
+    // A device in no group waits for no group to dial it on 0.6 (D-119):
+    // it dials a pairing window by its six digits.
+    Err(Error::msg(JOIN_BY_WINDOW))
+}
+
+/// Joins a group of 0.6 by a remote invitation (cbb pair -invite): through
+/// the running service, with its own -name and -caps unless cbb pair gives
+/// them, or with no service running, into the state folder, before the
+/// service starts. Shows this device's key fingerprint, which the admin
+/// compares before admitting it.
+fn join_invited(
+    g: &Global,
+    name: &str,
+    caps: &[String],
+    given_name: Option<String>,
+    given_caps: Option<Vec<String>>,
+    text: &str,
+) -> Result<()> {
+    let shown = |fp: &str| {
+        println!("{}", tr!("\nThis device's key fingerprint:  {}", fp.get(..23).unwrap_or(fp)));
+        println!("{}", tr!("Whoever invited you sees it on the hub and admits this device if it matches."));
+        println!("{}", tr!("Waiting for them; press Ctrl+C to give up."));
+        std::io::stdout().flush().ok();
+    };
+    if service_answers(g) {
+        let h = control::Header {
+            op: "join".into(),
+            invite: text.trim().to_string(),
+            consent: true,
+            name: given_name.unwrap_or_default(),
+            caps: given_caps,
+            ..Default::default()
+        };
+        let (_w, mut r, mut m) = admit_cli::stream(g, h)?;
+        loop {
+            if !m.header.fingerprint.is_empty() {
+                shown(&m.header.fingerprint);
+            }
+            if m.header.done {
+                return Ok(());
+            }
+            m = check(admit_cli::next(&mut r)?)?;
+        }
+    }
+    let me =
+        joining::Me { name, os: cbb_core::format::print::os_number(admin::os_name()), caps: roster::caps_number(caps) };
+    std::fs::create_dir_all(&g.state).context(format!("cannot create {}", g.state.display()))?;
+    let fp = own::Own::load(&g.state)?.hash();
+    shown(&base64::Engine::encode(&base64::engine::general_purpose::STANDARD, fp.0));
+    let log: std::sync::Arc<dyn Fn(&str) + Send + Sync> = std::sync::Arc::new(|s: &str| eprintln!("{s}"));
+    live::invite::join(&g.state, &me, text, log)?;
     Ok(())
 }
 
@@ -717,16 +705,6 @@ fn open_app_file_with(path: &str, write: bool) -> Result<std::fs::File> {
     Ok(f)
 }
 
-/// Writes what cbb pair -app hands the app, one line of JSON: the QR code's
-/// text, how long the wait lasts, and the member port the phone dials.
-fn write_app_join(mut f: std::fs::File, text: &str, port: u16) -> Result<()> {
-    let line = serde_json::json!({"qr": text, "expires": pair::LIFETIME.as_secs(), "port": port});
-    f.set_len(0)
-        .and_then(|_| f.write_all(format!("{line}\n").as_bytes()))
-        .and_then(|_| f.sync_all())
-        .context("cannot write the code")
-}
-
 /// Ends cbb pair -app once the app removes its file: the app closed its
 /// window, and the wait for the phone ends with it.
 pub(crate) fn watch_app_file(path: String) {
@@ -757,16 +735,26 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
         (String::new(), line.trim().to_string())
-    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX)
+        || path.trim_start().starts_with(cbb_core::join::invitation::PREFIX)
+    {
         return Err(Error::msg(tr!(
             "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
         )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
-    let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
-    if inv.expired(uptime::wall_ms() / 1000) {
-        return Err(Error::msg("the invitation has expired; ask for a new one"));
+    if text.trim_start().starts_with(cbb_core::join::invitation::PREFIX) {
+        // An invitation of 0.6 carries no expiry: the hub refuses it once
+        // its time is over.
+        let inv = cbb_core::join::invitation::Invitation::parse(text.trim())
+            .map_err(|r| Error::msg(format!("this is not an invitation: {r}")))?;
+        live::invite::guest_path(&inv)?;
+    } else {
+        let inv = cbb_core::invite::parse(&text).map_err(|r| Error::msg(r.message()))?;
+        if inv.expired(uptime::wall_ms() / 1000) {
+            return Err(Error::msg("the invitation has expired; ask for a new one"));
+        }
     }
     println!(
         "{}",
@@ -782,74 +770,6 @@ fn invite_consent(path: &str) -> Result<(String, String)> {
         return Err(Error::msg("nothing changed"));
     }
     Ok((path, text))
-}
-
-/// The joiner of a device in no group yet, and how it saves the group it
-/// joins.
-pub(crate) fn joiner(state: &std::path::Path, name: &str) -> Result<(pair::Joiner, Box<pair::Save>)> {
-    if identity::Identity::load(state)?.is_some() {
-        return Err(Error::msg(format!(
-            "this device is already in a group, and it admits no devices here (use the phone app or \
-             an admin computer); to join another group, stop the service and remove {}",
-            state.join(identity::FILE_NAME).display()
-        )));
-    }
-    std::fs::create_dir_all(state).context(format!(
-        "cannot create {0}; make it for the service's user first: \
-         sudo install -d -o cbb -g cbb -m 0700 {0}",
-        state.display()
-    ))?;
-    let mut joiner = pair::Joiner::new(name)?;
-    // The device key goes into the TPM or the Secure Enclave where cbb-helper
-    // can put it there, as on a Go member, and into the identity file
-    // otherwise.
-    match keys::new_device_key() {
-        (Some(key), _) => joiner = joiner.holding_key(key)?,
-        (None, why) if !why.is_empty() => eprintln!("{}", tr!("cbb: the device key stays in a file: {}", why)),
-        (None, _) => {}
-    }
-    // The key for sealed messages the service will offer in its hello goes
-    // with the info, so that a phone records it as it admits this member.
-    match sealkey::load(state)
-        .and_then(|s| cbb_core::seal::public_key(&s).map_err(|e| e.context("the key for sealed messages")))
-    {
-        Ok(public) => joiner.seal = public,
-        Err(e) => eprintln!("{}", tr!("cbb: the key for sealed commands: {}; commands will come unsealed", e)),
-    }
-    let state = state.to_path_buf();
-    let save = move |id: &identity::Identity, rs: &[records::Record], ts: &[records::ClaimTime]| {
-        let mut set = records::new(&id.group_ca);
-        let _ = set.add_all(rs);
-        set.take_claim_times(ts);
-        records::Stored::save(&set, &state)?;
-        id.save(&state)
-    };
-    Ok((joiner, Box::new(save)))
-}
-
-/// Joins with the code from cbb pair on a full member, through a
-/// connection to it: the Next's link joins this way through the ESP.
-#[cfg(unix)]
-pub(crate) fn join_with_code(g: &Global, sock: TcpStream, code: &str) -> Result<identity::Identity> {
-    let (joiner, save) = joiner(&g.state, &host_name())?;
-    let code = pair::normalize_code(code)?;
-    pair::join(&joiner, sock, &code, &*save)
-}
-
-/// Waits until a running service has taken the group that join saved: it
-/// looks for the identity every two seconds, and a command right after cbb
-/// join would otherwise find it in no group. A service that is not running
-/// takes the group when it starts.
-fn wait_for_group(g: &Global) {
-    let status = control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new());
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
-        match request(g, &status) {
-            Ok(m) if m.header.status.as_ref().is_some_and(|s| !s.group.is_empty()) => return,
-            Ok(_) => std::thread::sleep(Duration::from_millis(200)),
-            Err(_) => return,
-        }
-    }
 }
 
 /// Draws text as a QR code with half blocks, black on white whatever the
@@ -887,7 +807,7 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         mdns: true,
         port: Some(member_port()),
         tunnel_via: None,
-        caps: default_caps(false),
+        caps: default_caps(),
     };
     let mut run_user = None;
     let mut i = 0;
@@ -998,13 +918,6 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 fn service_answers(g: &Global) -> bool {
     request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
         .is_ok()
-}
-
-fn service_port(g: &Global) -> Option<u16> {
-    let m =
-        request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
-            .ok()?;
-    m.header.status.and_then(|s| u16::try_from(s.port).ok()).filter(|p| *p != 0)
 }
 
 /// Whether the service runs in a group: cbb pair then admits a device
@@ -1196,13 +1109,24 @@ fn terminal_text(text: &str, all: bool) -> (String, usize) {
 }
 
 fn cmd_status(g: &Global, args: &[String]) -> Result<()> {
-    if !args.is_empty() {
-        return Err(cli::usage("status takes no arguments"));
-    }
+    let relay = match args {
+        [] => false,
+        [a] if flag(a) == Some("relay") => true,
+        _ => return Err(cli::usage("cbb status [-relay]")),
+    };
     let ask = |op: &str| {
         request(g, &control::Message::new(control::Header { op: op.into(), ..Default::default() }, Vec::new()))
     };
     let s = ask("status")?.header.status.ok_or_else(|| Error::msg("the service sent no status"))?;
+    if relay {
+        // The group as a blind relay of the owner's lists it, alone, for
+        // `cbb relay -group` on the server.
+        if s.relay_group.is_empty() {
+            return Err(Error::msg(tr!("this device is in no group")));
+        }
+        println!("{}", s.relay_group);
+        return Ok(());
+    }
     let devs = if s.group.is_empty() { Vec::new() } else { ask("devices")?.header.devices };
     let limit = awaynet::limit_note(&awaynet::Net::system(), s.away.as_ref());
     print!("{}", status_text::write_status(&s, &devs, uptime::wall_ms(), &limit));
@@ -1227,7 +1151,7 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
     };
     // In no group there is nothing to ask about; a state this user cannot
     // read gets the question, and the service says what it can do.
-    if matches!(identity::Identity::load(&g.state), Ok(None)) && !g.state.join(records::FILE_NAME).exists() {
+    if !leave::in_group(&g.state) {
         return Err(Error::msg(leave::NOTHING_TO_LEAVE));
     }
     if !yes {
@@ -1251,7 +1175,9 @@ fn cmd_leave(g: &Global, args: &[String]) -> Result<()> {
         request(g, &control::Message::new(control::Header { op: "leave".into(), ..Default::default() }, Vec::new()))?;
         println!("{}", tr!("Left the group. The service restarts in no group: cbb pair joins one."));
     } else {
-        if identity::Identity::load(&g.state).ok().flatten().is_none() && !g.state.join(records::FILE_NAME).exists() {
+        if identity::Identity::load(&g.state).ok().flatten().is_none()
+            && ![records::FILE_NAME, crate::set::FILE_NAME].iter().any(|f| g.state.join(f).exists())
+        {
             return Err(Error::msg(leave::NOTHING_TO_LEAVE));
         }
         leave::leave_group(&g.state)?;
@@ -1309,6 +1235,7 @@ fn cmd_sync(g: &Global, args: &[String]) -> Result<()> {
 /// The tunnel address of a device (docs/protocol.md, section 11):
 /// fd00:cbb::/32 followed by the first 96 bits of its ID (32 lowercase hex
 /// characters).
+#[cfg(feature = "tunnel")]
 pub(crate) fn tunnel_addr(id: &str) -> Option<std::net::Ipv6Addr> {
     if !certs::is_id(id) {
         return None;
@@ -1319,18 +1246,6 @@ pub(crate) fn tunnel_addr(id: &str) -> Option<std::net::Ipv6Addr> {
         *b = u8::from_str_radix(&id[2 * i..2 * i + 2], 16).ok()?;
     }
     Some(std::net::Ipv6Addr::from(a))
-}
-
-/// The tunnel address of a remote invitation's guest (docs/protocol.md,
-/// section 12): fd00:cbc::/32 followed by the first 96 bits of SHA-256 of
-/// the guest's public key, as hub::guest_addr; here also without the
-/// tunnel, for an admin that makes invitations through a hub.
-pub(crate) fn tunnel_guest_addr(key: &[u8]) -> std::net::Ipv6Addr {
-    let sum = certs::sha256(key);
-    let mut a = [0u8; 16];
-    a[0..4].copy_from_slice(&[0xfd, 0x00, 0x0c, 0xbc]);
-    a[4..].copy_from_slice(&sum[..12]);
-    std::net::Ipv6Addr::from(a)
 }
 
 /// Reads a duration as Go writes one, such as 0s, 90s, 15m, 72h or 1h30m,
@@ -1864,12 +1779,20 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let (roots, sources) = match testbuild::env_os("CBB_RELEASE_DIR") {
             Some(d) => {
                 let roots = match testbuild::env_os("CBB_RELEASE_ROOTS") {
-                    Some(f) => update::read_roots(std::path::Path::new(&f))?,
-                    None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
+                    Some(f) => {
+                        let f = std::path::Path::new(&f);
+                        let roots = update::read_roots(f)?;
+                        eprintln!(
+                            "cbb: release files are checked against the roots in {}, not the built-in ones (CBB_RELEASE_ROOTS, for tests only)",
+                            f.display()
+                        );
+                        roots
+                    }
+                    None => cbb_core::release::pinned_roots(),
                 };
                 (roots, vec![update::Source::Dir(PathBuf::from(d))])
             }
-            None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
+            None => (cbb_core::release::pinned_roots(), update::Source::defaults(&st.mirror)?),
         };
         let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
@@ -1989,13 +1912,11 @@ impl ServiceLink<'_> {
 }
 
 impl update::Group for ServiceLink<'_> {
-    fn share(&self, set: &serde_json::Value) {
-        if let Ok(data) = serde_json::to_vec(set) {
-            let _ = self.ask("release", data);
-        }
+    fn share(&self, set: &serde_json::value::RawValue) {
+        let _ = self.ask("release", set.get().as_bytes().to_vec());
     }
 
-    fn held(&self) -> Result<serde_json::Value> {
+    fn held(&self) -> Result<Box<serde_json::value::RawValue>> {
         let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }
@@ -2010,7 +1931,8 @@ impl update::Group for ServiceLink<'_> {
         if first.header.part.as_ref().map(|p| p.size) != Some(size) {
             return Err(Error::msg("the service answered with another file"));
         }
-        let mut f = std::fs::File::create(path).context("cannot keep the archive")?;
+        // Whole or not at all: a download that breaks leaves nothing.
+        let mut f = crate::files::Atomic::create(path, 0o644).map_err(|e| e.context("cannot keep the archive"))?;
         let mut got: i64 = 0;
         loop {
             let m = Self::answer(&mut r)?;
@@ -2026,7 +1948,7 @@ impl update::Group for ServiceLink<'_> {
         if got != size {
             return Err(Error::msg("the service sent less than the archive"));
         }
-        Ok(())
+        f.commit().map_err(|e| e.context("cannot keep the archive"))
     }
 
     fn keep(&self, sha: &str, size: i64, path: &std::path::Path) {

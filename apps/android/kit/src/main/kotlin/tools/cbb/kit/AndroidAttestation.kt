@@ -227,3 +227,6 @@ object AndroidAttestation {
         }
     }
 }
+
+/** An attestation's certificate whose DER does not parse as the attestation needs. */
+class MalformedException(message: String = "malformed DER") : Exception(message)

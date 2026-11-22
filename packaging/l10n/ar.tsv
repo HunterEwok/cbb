@@ -39,7 +39,7 @@ the service did not answer within 10 s: %s	لم تستجب الخدمة خلال
 CBB is running on TCP port %s. To remove it: sh /usr/local/share/cbb/uninstall.sh	يعمل CBB على منفذ TCP %s. لإزالته: sh /usr/local/share/cbb/uninstall.sh
 OPNsense: it shows under System > Diagnostics > Services, and its rules follow every filter reload.	OPNsense: يظهر في System > Diagnostics > Services، وتبقى قواعده بعد كل إعادة تحميل للمرشّح.
 pfSense is not supported: an update of pfSense may remove CBB; run this installer again after one.	pfSense غير مدعوم: قد يزيل تحديث pfSense برنامج CBB؛ شغّل هذا المثبّت مرة أخرى بعد التحديث.
-Next: run cbb pair as root and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	التالي: شغّل cbb pair بصلاحيات root وامسح رمز QR بتطبيق CBB على هاتفك؛ وبدون التطبيق، راجع docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run cbb pair -code as root here and type the six digits it shows.	التالي: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل هنا cbb pair -code بصلاحيات root واكتب الأرقام الستة التي تعرضها.
 CBB is removed, with this device's keys; it left its group.	أُزيل CBB مع مفاتيح هذا الجهاز؛ وقد غادر مجموعته.
 CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /var/db/cbb لإعادة التثبيت؛ ويحذفها --purge.
 --port needs a port number	يحتاج --port إلى رقم منفذ
@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json يخص %s، وليس %s
 release.json does not list %s	لا يذكر release.json الملف %s
 %s does not match the signed release.json; not installing it	لا يطابق %s ملف release.json الموقّع؛ لن يُثبَّت
-The release's signature checks out (%s).	توقيع الإصدار صحيح (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	توقيع الإصدار صحيح (%s): ES256 و SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، فهو يحتاج إلى OpenSSL 3.5 أو أحدث.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، لا يستطيع PowerShell التحقق منه.
 could not download %s	تعذّر تنزيل %s
 stable.json names no release	لا يسمّي stable.json أي إصدار
 Downloading %s (%s)...	جارٍ تنزيل %s (%s)...
@@ -108,8 +110,7 @@ the desktop agent did not start; it starts at your next login	لم يبدأ وك
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	يعمل CBB ما دمت مسجّل الدخول. ليستمر بعد تسجيل الخروج، يشغّل المسؤول: sudo loginctl enable-linger %s
 CBB is running for %s on TCP port %s, installed without root: it can never be the group's root, an admin or the hub. If a firewall limits incoming connections here, an administrator allows TCP %s and UDP 5353 from the home network. To remove it: %s	يعمل CBB للمستخدم %s على منفذ TCP %s، مثبّتًا دون root: لا يمكنه أبدًا أن يكون جذر المجموعة أو مسؤولًا أو المحور. إذا كان جدار الحماية هنا يقيّد الاتصالات الواردة، يسمح المسؤول بـ TCP %s وUDP 5353 من الشبكة المنزلية. لإزالته: %s
 For copy and paste in tmux, add this line to ~/.tmux.conf: source-file -q %s/tmux.conf	للنسخ واللصق في tmux، أضف هذا السطر إلى ~/.tmux.conf: source-file -q %s/tmux.conf
-Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app.	التالي: راجع member/README.md؛ باختصار، %s pair هنا، وامسح رمز QR بتطبيق الهاتف.
-Next: run %s pair and scan its QR code with the CBB app on your phone.	التالي: شغّل %s pair وامسح رمز QR بتطبيق CBB على هاتفك.
+Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows.	التالي: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل هنا %s pair -code واكتب الأرقام الستة التي تعرضها.
 this archive has no install-rootless.sh, so it cannot install without root	لا يحتوي هذا الأرشيف على install-rootless.sh، لذا لا يمكنه التثبيت دون root
 systemd is required	يلزم systemd
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	يوجد هنا حساب باسم cbb لا يخص هذه الخدمة (تعليقه ليس "cbb service")؛ وسيحصل على مفاتيح المجموعة. أعد تسميته أو احذفه، ثم شغّل install.sh مرة أخرى.
@@ -123,8 +124,8 @@ the uinput helper did not start; see journalctl -u cbb-uinput	لم يبدأ مس
 the desktop agent of %s did not start again; it starts at their next login	لم يُعِد وكيل سطح المكتب الخاص بـ %s التشغيل؛ سيبدأ عند تسجيل دخوله التالي
 cbb global allow failed; run sudo cbb global allow once the service runs.	فشل cbb global allow؛ شغّل sudo cbb global allow بعد أن تعمل الخدمة.
 CBB is running on TCP port %s. To remove it: sudo sh %s/uninstall.sh	يعمل CBB على منفذ TCP %s. لإزالته: sudo sh %s/uninstall.sh
-Next: see member/README.md; in short, sudo -u cbb %s pair here, and scan its QR code with the phone app.	التالي: راجع member/README.md؛ باختصار، sudo -u cbb %s pair هنا، وامسح رمز QR بتطبيق الهاتف.
-Next: run sudo %s pair and scan its QR code with the CBB app on your phone; without the app, see docs/guide/without-app.md.	التالي: شغّل sudo %s pair وامسح رمز QR بتطبيق CBB على هاتفك؛ وبدون التطبيق، راجع docs/guide/without-app.md.
+Next: open a pairing window on a device of the group, then run sudo -u cbb %s pair -code here and type the six digits it shows.	التالي: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل هنا sudo -u cbb %s pair -code واكتب الأرقام الستة التي تعرضها.
+Next: open a pairing window on a device of the group, then run sudo %s pair -code here and type the six digits it shows.	التالي: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل هنا sudo %s pair -code واكتب الأرقام الستة التي تعرضها.
 CBB is removed. Its keys stay in %s/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في %s/cbb لإعادة التثبيت؛ ويحذفها --purge.
 CBB is removed. Its keys stay in /var/lib/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /var/lib/cbb لإعادة التثبيت؛ ويحذفها --purge.
 %s does not run on this Mac	لا يعمل %s على جهاز Mac هذا
@@ -141,7 +142,7 @@ Added the rule above%s. CBB manages it from now on.	أُضيفت القاعدة 
 No firewall rule was added. CBB works only while the firewall allows the rule above. To add it by hand, run:	لم تُضف قاعدة لجدار الحماية. لا يعمل CBB إلا ما دام جدار الحماية يسمح بالقاعدة أعلاه. لإضافتها يدويًا، شغّل:
 To let CBB add and manage it, run the installer again with --express.	ليضيفها CBB ويديرها، شغّل المثبّت مرة أخرى مع --express.
 CBB is running on TCP port %s, in its group.	يعمل CBB على منفذ TCP %s، ضمن مجموعته.
-CBB is running on TCP port %s. Join a group: sudo cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: sudo cbb new.	يعمل CBB على منفذ TCP %s. للانضمام إلى مجموعة: sudo cbb pair، ثم امسح رمز QR بالهاتف أو اكتب الرمز من cbb pair على جذر المجموعة أو على مسؤول؛ أو لإنشاء مجموعة: sudo cbb new.
+CBB is running on TCP port %s. Join a group: open a pairing window on a device of the group, then run sudo cbb pair -code and type the six digits it shows; or start a group: sudo cbb new.	يعمل CBB على منفذ TCP %s. للانضمام إلى مجموعة: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل sudo cbb pair -code واكتب الأرقام الستة التي تعرضها؛ أو لإنشاء مجموعة: sudo cbb new.
 CBB is removed, with this Mac's keys; it left its group.	أُزيل CBB مع مفاتيح جهاز Mac هذا؛ وقد غادر مجموعته.
 CBB is removed. Its keys stay in %s/state for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في %s/state لإعادة التثبيت؛ ويحذفها --purge.
 this installer is for OpenWrt	هذا المثبّت مخصّص لـ OpenWrt
@@ -152,9 +153,9 @@ the service did not answer within 40 s: %s	لم تستجب الخدمة خلال
 see logread -e cbb	راجع logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	يعمل CBB على منفذ TCP %s، في منطقة lan. لإزالته: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	الترقية المُساعَدة (ASU، owut) تستبعد الحزم التي ليست من مستودعات OpenWrt: ثبّته مرة أخرى بعد الترقية.
-Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	التالي: شغّل su -s /bin/sh cbb -c 'cbb pair -name router' وامسح رمز QR بتطبيق CBB على هاتفك.
+Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows.	التالي: افتح نافذة الاقتران على جهاز من المجموعة، ثم شغّل هنا su -s /bin/sh cbb -c 'cbb pair -code -name router' واكتب الأرقام الستة التي تعرضها.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	أُزيل CBB. تبقى مفاتيحه في /etc/cbb لإعادة التثبيت؛ ويحذفها --purge.
-This device is in no group yet, so it starts pairing now (--no-pair skips this).	هذا الجهاز ليس في أي مجموعة بعد، لذا يبدأ الاقتران الآن (--no-pair يتخطّى ذلك).
+This device is in no group yet. Open a pairing window on a device of the group (cbb pair there), then type the six digits it shows here (--no-pair skips this).	هذا الجهاز ليس في أي مجموعة بعد. افتح نافذة الاقتران على جهاز من المجموعة (cbb pair هناك)، ثم اكتب هنا الأرقام الستة التي تعرضها (--no-pair يتخطّى ذلك).
 could not record how CBB was installed; cbb update takes it as get.sh	تعذّر تسجيل طريقة تثبيت CBB؛ سيعدّها cbb update تثبيتًا عبر get.sh
 automatic updates are on or off, not %s	التحديثات التلقائية on أو off، وليست %s
 CBB can check once a day for a release the project signed and install it; the check tells GitHub this device's address, as any download does.	يمكن لـ CBB أن يبحث مرة يوميًا عن إصدار وقّعه المشروع ويثبّته؛ ويُطلع البحث GitHub على عنوان هذا الجهاز، كما يفعل أي تنزيل.
@@ -236,7 +237,7 @@ Update automatically? [y/N] No console to answer on; not now. Later: cbb update 
 Could not turn automatic updates %s; run cbb update -auto %s as administrator.	تعذّر ضبط التحديثات التلقائية على %s؛ شغّل cbb update -auto %s كمسؤول.
 CBB %s is running on TCP port %s; %s may use it.	يعمل CBB %s على منفذ TCP %s؛ ويمكن لـ %s استخدامه.
 It stays in its group.	يبقى في مجموعته.
-Next, in a terminal opened as administrator: cbb pair, and scan its QR code with the phone or type the code from cbb pair on the group's root or an admin; or start a group: cbb new.	التالي، في طرفية مفتوحة كمسؤول: cbb pair، ثم امسح رمز QR بالهاتف أو اكتب الرمز من cbb pair على جذر المجموعة أو على مسؤول؛ أو أنشئ مجموعة: cbb new.
+Next, to join a group: open a pairing window on a device of the group, then, in a terminal opened as administrator, run cbb pair -code and type the six digits it shows; or start a group there: cbb new.	التالي، للانضمام إلى مجموعة: افتح نافذة الاقتران على جهاز من المجموعة، ثم في طرفية مفتوحة كمسؤول شغّل cbb pair -code واكتب الأرقام الستة التي تعرضها؛ أو أنشئ مجموعة هناك: cbb new.
 To remove it: Settings, Apps, CBB, Uninstall.	لإزالته: الإعدادات، التطبيقات، CBB، إلغاء التثبيت.
 Y	ن
 Yes	نعم
@@ -258,3 +259,6 @@ cbb runs here with its helper, which may hold its keys; without it cbb cannot us
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput يحتاج إلى مساعد cbb، الذي يشغّل موصل سطح المكتب
 the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	لم تُكتب إجراءات polkit التي تؤكد إجراءات الإدارة؛ ستطلب التطبيقات كلمة مرور المسؤول بدلًا من ذلك
 the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	لم تُكتب الصلاحيات التي تؤكد إجراءات الإدارة؛ سيطلب تطبيق Mac كلمة مرور المسؤول بدلًا من ذلك
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s يدعم SLH-DSA-SHA2-128s لكنه لا يتحقق منه كما يوقّع cbb؛ حدِّث openssl (أو CBB_VERIFY=skip للتثبيت دون تحقق)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	لا توجد مفاتيح جذر في %s للتحقق من الإصدار؛ لن يُثبَّت (CBB_VERIFY=skip يثبّته دون تحقق)
+Checked against the roots in %s, not the built-in ones.	تم التحقق بالجذور الموجودة في %s، لا بالجذور المدمجة.

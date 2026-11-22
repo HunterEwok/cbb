@@ -5,8 +5,6 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -23,19 +21,25 @@ import (
 
 func TestMirror(t *testing.T) {
 	dir := t.TempDir()
-	root, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	status, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	der, _ := x509.MarshalECPrivateKey(status)
-	keyPath := filepath.Join(dir, "status-key.pem")
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0o600); err != nil {
+	root, _ := release.GenerateSigner()
+	status, _ := release.GenerateSigner()
+	// The halves in two files, as a server keeps its credentials.
+	ec, _ := x509.MarshalECPrivateKey(status[0].(*ecdsa.PrivateKey))
+	pq, _ := release.MarshalSLHPEM(status[1])
+	ecPath, pqPath := filepath.Join(dir, "status-key.pem"), filepath.Join(dir, "status-pq.pem")
+	if err := os.WriteFile(ecPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ec}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	rootSPKI, _ := x509.MarshalPKIXPublicKey(&root.PublicKey)
-	statusSPKI, _ := x509.MarshalPKIXPublicKey(&status.PublicKey)
+	if err := os.WriteFile(pqPath, pq, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keyPath := ecPath + "," + pqPath
+	statusKeys, _ := status.Keys("status", release.UseStatus)
+	rootKeys, _ := root.Keys("root-1", release.UseRoot)
 	t0 := time.UnixMilli(1_800_000_000_000)
 	now = func() time.Time { return t0 }
 	keys, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: t0.UnixMilli(), ExpiresMS: t0.Add(90 * 24 * time.Hour).UnixMilli(),
-		Keys: []release.Key{{Key: statusSPKI, Name: "status", Use: release.UseStatus}}}, root)
+		Keys: statusKeys}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +63,7 @@ func TestMirror(t *testing.T) {
 		if err := json.Unmarshal(data, &f); err != nil {
 			t.Fatal(err)
 		}
-		s, _, err := release.CheckStatus(keys, f, [][]byte{rootSPKI}, now(), release.Seen{})
+		s, _, err := release.CheckStatus(keys, f, rootKeys, now(), release.Seen{})
 		if err != nil {
 			t.Fatal(err)
 		}

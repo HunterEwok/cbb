@@ -3,6 +3,7 @@
 
 package tools.cbb
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.KeyguardManager
@@ -36,7 +37,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 /**
- * "Send my copies by themselves" (docs/apps.md, "Android: the clipboard
+ * "Clipboard sync" (docs/apps.md, "Android: the clipboard
  * without taps"): an accessibility service that notices a copy, a click on
  * a "Copy" action or the system's clipboard overlay of Android 13 and
  * later, and then takes the input focus for a moment with a 1-pixel
@@ -63,6 +64,19 @@ class CopyWatcher : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         running = this
+        // The accessibility button or gesture (the floating button, a swipe
+        // with two fingers, both volume keys held) is the one button on every
+        // Android, whoever made the phone (D-128): it swaps the clipboard
+        // with the group's copy, as the tile does. Not on a TV.
+        if (!tv) accessibilityButtonController.registerAccessibilityButtonCallback(button)
+    }
+
+    private val button = object : AccessibilityButtonController.AccessibilityButtonCallback() {
+        override fun onClicked(controller: AccessibilityButtonController) {
+            Log.i(TAG, "the accessibility button: the one button")
+            runCatching { startActivity(SendActivity.intent(this@CopyWatcher)) }
+                .onFailure { Log.w(TAG, "the accessibility button could not open the send screen", it) }
+        }
     }
 
     /** The labels of a copy action: the platform's in the system's language, and English. */
@@ -87,6 +101,7 @@ class CopyWatcher : AccessibilityService() {
 
     override fun onDestroy() {
         if (running === this) running = null
+        if (!tv) runCatching { accessibilityButtonController.unregisterAccessibilityButtonCallback(button) }
         removeOverlay()
         scope.cancel()
         super.onDestroy()

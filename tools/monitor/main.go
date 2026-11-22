@@ -22,6 +22,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -184,7 +185,12 @@ func (c *checker) file(f signed) {
 		c.fail("%s: %s", f.url, resp.Status)
 		return
 	}
-	expires, err := expiry(io.LimitReader(resp.Body, 2*release.MaxBody))
+	data, err := release.ReadAll(resp.Body)
+	if err != nil {
+		c.fail("%s: %v", f.url, err)
+		return
+	}
+	expires, err := expiry(bytes.NewReader(data))
 	if err != nil {
 		c.fail("%s: %v", f.url, err)
 		return

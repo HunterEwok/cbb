@@ -9,13 +9,12 @@
 // the root is final, so the page asks first and says so.
 
 import { router } from '@kit.ArkUI';
-import { guardsLikeAPhone } from '../core/Keys';
 import { t } from '../core/Text';
-import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
+import { kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
 import { Device as DeviceInfo } from '../model/Member';
 
-import { BusyLine, ErrorText, PageTitle } from './Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from './Common';
 
 // Members take remote pastes, and the phones that type them on a keyboard
 // or into their own focus; an iPhone cannot.
@@ -59,19 +58,9 @@ export struct DeviceDetail {
     }
   }
 
-  claimLine(): string {
-    if (app.claimState === 'pending') {
-      return t('device_claim_left', Math.ceil(app.claimLeftMs / 3600000));
-    }
-    if (app.claimState === 'none') {
-      return t('device_claim_none');
-    }
-    return t('device_claim_disputed');
-  }
-
   @Builder
   action(label: string, danger: boolean, act: () => void) {
-    Button(label, { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+    Button(label, { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
       .width('100%')
       .fontColor(danger ? $r('app.color.error') : $r('app.color.text'))
       .enabled(!app.busy)
@@ -129,13 +118,6 @@ export struct DeviceDetail {
             .width('100%')
           }
 
-          if (app.isRoot() && app.member.rootView.handed_to === this.deviceId) {
-            Text($r('app.string.device_handed_over')).fontSize(14).fontColor($r('app.color.accent'))
-          }
-          if ((this.device() as DeviceInfo).root === true && app.claimState.length > 0) {
-            Text(this.claimLine()).fontSize(14).fontColor($r('app.color.accent'))
-          }
-
           if (this.renaming) {
             TextInput({ text: this.name, placeholder: $r('app.string.device_name') })
               .maxLength(64)
@@ -143,7 +125,7 @@ export struct DeviceDetail {
                 this.name = v;
               })
             Row({ space: 8 }) {
-              Button(t('cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
+              Button(t('cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON).onClick(() => {
                 this.renaming = false;
               })
               Button(t('device_rename'), { type: ButtonType.Capsule }).enabled(this.name.trim().length > 0).onClick(() => {
@@ -167,30 +149,14 @@ export struct DeviceDetail {
                 })
               }
               if (this.acts(this.device() as DeviceInfo)) {
-                if ((this.device() as DeviceInfo).root === true && !app.isRoot() && app.claimState.length === 0) {
-                  this.action(t('device_take_over'), true, () => {
-                    // Before this device becomes the group's main device: how well it guards the group.
-                    const weak = guardsLikeAPhone() ? '' : `\n\n${t('key_guard_weak')}`;
-                    this.confirm(t('device_take_over_confirm') + weak, t('device_take_over'), () => {
-                      app.takeOver(this.deviceId);
-                    });
-                  })
-                }
-                // The admin key comes from the device's hello: a computer's
-                // with the admin capability, or a phone's.
+                // The admin key is the one the device offered this phone
+                // when it paired, as the group view says (offers_admin).
                 if (app.isRoot() && (this.device() as DeviceInfo).admin !== true &&
-                  ((this.device() as DeviceInfo).role === 'phone' || can(this.device() as DeviceInfo, 'admin'))) {
+                  app.member.offersAdmin.indexOf(this.deviceId) >= 0) {
                   this.action(t('device_make_admin'), false, () => {
                     const phone = (this.device() as DeviceInfo).role === 'phone';
                     this.confirm(t(phone ? 'device_make_admin_phone_confirm' : 'device_make_admin_confirm'), t('device_make_admin'), () => {
                       app.manage('make_admin', this.deviceId);
-                    });
-                  })
-                }
-                if (app.isRoot() && (this.device() as DeviceInfo).admin === true && (this.device() as DeviceInfo).frozen !== true) {
-                  this.action(t('device_hand_over'), true, () => {
-                    this.confirm(t('device_hand_over_confirm'), t('device_hand_over'), () => {
-                      app.handOver(this.deviceId);
                     });
                   })
                 }

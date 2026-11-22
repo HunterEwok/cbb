@@ -56,7 +56,7 @@ const (
 	OpTakeOver    = "take_over"      // client → service: on an admin, take the group over from the lost root Device names
 	OpDelay       = "takeover_delay" // client → service: on the root, set how long a claim waits to Value, a duration
 	OpKeyLevel    = "key_level"      // client → service: on the root, set the group's key level to Value (proven, hardware or files); answer: Below
-	OpIncoming    = "incoming"       // client → service: on the root or an admin, set how long a copy from another device stays live to Value, a duration
+	OpTTL         = "ttl"            // client → service: on the root or an admin, set how long a copy and a secret live in the group to Value, "COPY [SECRET]", durations, "-" keeping one
 	OpRecover     = "recover"        // client → service: claim the group with its recovery key, the payload the sheet's text or QR code, or with Name RecoveryCard the YubiKey's PIN
 	OpHandOver    = "hand_over"      // client → service: on the root, hand the group to the admin Device names, whose claim then takes effect at once
 	OpHubs        = "hubs"           // client → service: on the root or an admin with hub, sign the table of main hubs Hubs (names or device IDs)
@@ -169,6 +169,9 @@ type Header struct {
 	// Below names, in the answer to key-level, the admins and hubs whose
 	// keys the new level would not let in: they stay until removed.
 	Below []string `json:"below,omitempty"`
+	// Leave, in recover, names the devices that do not stay in the group,
+	// by name or device ID, such as a lost root.
+	Leave []string `json:"leave,omitempty"`
 
 	// Keyboard, in keyboard on, are the Bluetooth keyboard's settings.
 	Keyboard *Keyboard `json:"keyboard,omitempty"`
@@ -188,6 +191,7 @@ type Header struct {
 	ForwarderKey string   `json:"forwarder_key,omitempty"`
 	Relay        string   `json:"relay,omitempty"` // away relay: the relay's address, with its key in RelayKey
 	RelayKey     string   `json:"relay_key,omitempty"`
+	Relays       []string `json:"relays,omitempty"`        // away relay: the relays after the first, each "address pin", which only the root of a group of 0.6 takes
 	ObfuscateOff bool     `json:"obfuscate_off,omitempty"` // away hub: plain WireGuard, without the AmneziaWG a hub offers by default
 	VLESSOff     bool     `json:"vless_off,omitempty"`     // away hub: no VLESS at the forwarder, which a hub with one asks for by default
 	Keep         bool     `json:"keep,omitempty"`          // away hub: keep the hub's addresses, port and forwarder where the message gives none
@@ -289,6 +293,10 @@ type WhyReason struct {
 type Status struct {
 	Device string `json:"device"`
 	Group  string `json:"group,omitempty"` // the group tag; empty when in no group
+	// RelayGroup is the group as a blind relay of the owner's lists it:
+	// its root key and the two halves of its recovery key in hex,
+	// separated by colons (cbb relay -group, cbb status -relay).
+	RelayGroup string `json:"relay_group,omitempty"`
 	// LeftOldGroup says that the device left a group made before 0.6 when
 	// the service started, since 0.6 does not read its records: the group
 	// is set up again.
@@ -296,10 +304,12 @@ type Status struct {
 	// KeyLevel is the group's key level: which keys may be its root, an
 	// admin or a hub (proven, hardware or files).
 	KeyLevel string `json:"key_level,omitempty"`
-	// IncomingMS is how long a copy from another device stays live after
-	// it arrives, as the group's records set it (one minute by default):
-	// written to the clipboard until then, never after.
-	IncomingMS int64 `json:"incoming_ms,omitempty"`
+	// TTLMS is how long a copy lives in the group, as the group's records
+	// set it (five minutes by default); every device's copies carry it.
+	TTLMS int64 `json:"ttl_ms,omitempty"`
+	// SecretTTLMS is how long a secret lives in the group (a minute by
+	// default).
+	SecretTTLMS int64 `json:"secret_ttl_ms,omitempty"`
 	// KeyProblem says why this device's own key is in a file although the
 	// machine has a TPM it may use; empty when nothing failed.
 	KeyProblem string `json:"key_problem,omitempty"`
@@ -537,6 +547,10 @@ type Device struct {
 	// the copies on: none is sealed to it (docs/protocol.md, section 11).
 	ForwardOnly bool `json:"forward_only,omitempty"`
 	Hub         bool `json:"hub,omitempty"` // one of the group's hubs, as this device knows: itself while it is a hub, or a hub whose offer it keeps; Away.HubDevice says which one it uses
+	// HubRank is its place in the group's order of hubs, from 1, which
+	// every member derives from the records alone (docs/protocol.md,
+	// section 11, "Several hubs"); 0 when it may not serve.
+	HubRank int `json:"hub_rank,omitempty"`
 }
 
 // Can reports whether d is a member with the capability c.

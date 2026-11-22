@@ -2,22 +2,19 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The relay's tests that look inside it: the budget of an open relay
-//! counted at each payer, the registrations of devices with no connection,
-//! and the records verified once. The tests that check it from outside run
-//! in Go against cbb-relay, with Go's side of a device (internal/relay,
-//! CBB_TEST_RUST_RELAY).
+//! counted at each payer, and the registrations of devices with no
+//! connection. The tests that check it from outside, with a device's side
+//! of `cbb-relay/3`, are relayd::net_tests and relay::net_tests.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 
-use cbb_core::admit::{OwnDevice, new_group};
-use cbb_core::authority::{self, Body, Hash, Record};
 use cbb_core::certs::{self, Cert, DeviceId};
-use cbb_core::identity::{self, ExternalKey, FileKey};
+use cbb_core::identity::ExternalKey;
 
-use super::budget::{Count, Level};
+use super::budget::Level;
 use super::keys::Keys;
 use super::limits::{self, DEFAULT_OPEN, Limits, SETUP_COST};
 use super::server::{
@@ -30,7 +27,7 @@ fn relay(open: bool, limits: Limits) -> Relay {
 }
 
 fn relay_with(open: bool, limits: Limits, refused: Option<Arc<super::refused::List>>) -> Relay {
-    let groups = if open { Vec::new() } else { vec!["0123456789abcdef".into()] };
+    let groups = if open { Vec::new() } else { vec![crate::nettest::blind::Blind::new(1).listed()] };
     Relay::start(Config {
         listen: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
         keys: Keys::new().unwrap(),
@@ -113,7 +110,6 @@ fn counted(inner: &Inner, from: Option<IpAddr>, share: &Arc<GroupShare>) -> Arc<
         tag: String::new(),
         device: String::new(),
         leaf: [0; 32],
-        chain: Vec::new(),
         key: certs::random_bytes(),
         psk: certs::random_bytes(),
         from,
@@ -138,7 +134,6 @@ fn fake_member(inner: &Inner, tag: &str, from: Option<IpAddr>) -> Result<Arc<Mem
         tag: tag.into(),
         device: DeviceId::random().to_string(),
         leaf: [0; 32],
-        chain: Vec::new(),
         key: certs::random_bytes(),
         psk: certs::random_bytes(),
         from,
@@ -359,30 +354,6 @@ fn allowance_bound_by_provider() {
     assert!(!a.take(from6(9, 99, 1), 1.0, later), "the provider took more than it earned");
 }
 
-/// The records an open relay keeps are bounded by the wide network and by
-/// the IPv6 provider they came from, each a few groups' worth.
-#[test]
-fn record_caps_of_wide_network_and_provider() {
-    let g = DEFAULT_OPEN.group_record_bytes;
-    let caps = DEFAULT_OPEN.record_caps();
-    assert!(caps.wide == 16 * g && caps.provider == 64 * g && caps.all > caps.provider, "{caps:?}");
-    let fill = |c: &mut Count, wides: usize, networks: usize| {
-        let mut held = 0;
-        for w in 0..wides {
-            for n in 0..networks {
-                while c.take(from6(w, n, 1), g) {
-                    held += g;
-                }
-            }
-        }
-        held
-    };
-    assert_eq!(fill(&mut Count::new(caps), 1, 2 * caps.wide / caps.network), caps.wide);
-    let mut c = Count::new(caps);
-    assert_eq!(fill(&mut c, 2 * caps.provider / caps.wide, caps.wide / caps.network), caps.provider);
-    assert!(c.take(ip("2001:db9::1"), g), "another provider refused");
-}
-
 /// The registrations from the wide networks of one IPv6 provider, however
 /// many, are bounded by the provider's share.
 #[test]
@@ -479,7 +450,7 @@ fn open_relay_budget_property() {
 
 /// What an open relay holds after many strangers registered and left is
 /// bounded by the budget's numbers: nothing of their groups, registrations
-/// or records, and of what their sources may start, only the sources that
+/// or periods, and of what their sources may start, only the sources that
 /// spent some in the last half minute, which it then forgets.
 #[test]
 fn open_relay_forgets_strangers() {
@@ -506,119 +477,19 @@ fn open_relay_forgets_strangers() {
         st.allow.sweep(now);
         assert_eq!(st.allow.payers(), 0, "a minute later the allowance holds sources");
         assert!(
-            st.groups.is_empty()
-                && st.by_addr.is_empty()
-                && st.members.is_empty()
-                && st.records.is_empty()
-                && st.periods.is_empty()
-                && st.tag_locks.is_empty(),
-            "after the strangers left the relay holds {} groups, {} devices, {} states, {} groups' records, {} periods, {} locks",
+            st.groups.is_empty() && st.by_addr.is_empty() && st.members.is_empty() && st.periods.is_empty(),
+            "after the strangers left the relay holds {} groups, {} devices, {} states, {} periods",
             st.groups.len(),
             st.by_addr.len(),
             st.members.len(),
-            st.records.len(),
-            st.periods.len(),
-            st.tag_locks.len()
+            st.periods.len()
         );
         assert!(
-            st.held.payers() == 0 && st.record_bytes.payers() == 0 && st.held.held(None, Level::All) == 0,
-            "after the strangers left the counts hold\n{}\n{}",
-            st.held,
-            st.record_bytes
+            st.held.payers() == 0 && st.held.held(None, Level::All) == 0,
+            "after the strangers left the counts hold\n{}",
+            st.held
         );
     }
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64
-}
-
-fn new_key() -> FileKey {
-    FileKey::new(&identity::new_key().unwrap()).unwrap()
-}
-
-/// A group of n devices: its root and its records, each device's signed by
-/// the root.
-fn group(n: usize) -> (Cert, Vec<Record>) {
-    let root_key = new_key();
-    let point = new_key().public();
-    let now = now_ms();
-    let own = OwnDevice {
-        name: "computer",
-        os: "linux",
-        role: authority::ROLE_MEMBER,
-        caps: &[],
-        member_point: &point,
-        store: "file",
-        seal: Vec::new(),
-    };
-    let g = new_group(&root_key, &own, now).unwrap();
-    let mut rs = g.records;
-    for _ in 1..n {
-        let b = Body {
-            v: 2,
-            alg: authority::ALG_ES256.into(),
-            kind: authority::TYPE_DEVICE.into(),
-            signer: Hash(g.root.key_hash()),
-            time_ms: now,
-            device: DeviceId::random().to_string(),
-            name: "device".into(),
-            role: authority::ROLE_MEMBER.into(),
-            key: Some(Hash(certs::random_bytes())),
-            ..Default::default()
-        };
-        let body = rs.next_body(b).unwrap();
-        let sig = identity::sign_external(&root_key, &body).unwrap();
-        assert!(rs.add(&Record::new(body, sig, None)).unwrap(), "a device record of the group");
-    }
-    (g.root, rs.all())
-}
-
-/// The relay verifies a record when it first gets it and keeps the
-/// verified set: a group's later registrations, which send the same
-/// records again, cost no more checks; new records are paid for by their
-/// source; records that do not verify are not kept.
-#[test]
-fn records_verified_once() {
-    let r = relay(true, Limits::default());
-    let inner = r.inner();
-    let now = Instant::now();
-    inner.lock().now = Some(now);
-    let from = ip("127.0.0.1");
-    let (root, recs) = group(8);
-    let tag = certs::tag(&root);
-    let (set, fresh, err) = inner.check_records(&tag, &root, from, &recs);
-    assert!(fresh && err.is_none(), "{err:?}");
-    assert_eq!(set.unwrap().lock().unwrap().set.len(), recs.len());
-    let left = || inner.lock().allow.left(from, Level::Address);
-    let before = left();
-    for _ in 0..3 {
-        let (_, fresh, err) = inner.check_records(&tag, &root, from, &recs);
-        assert!(!fresh && err.is_none(), "the same records again: {fresh} {err:?}");
-    }
-    assert_eq!(left(), before, "the same records again spent the allowance");
-    // New records of another group, past what the source has left.
-    let (other, more) = group(8);
-    let other_tag = certs::tag(&other);
-    inner.lock().allow.take(from, before - 4.0, now);
-    let (_, _, err) = inner.check_records(&other_tag, &other, from, &more);
-    assert!(err.as_deref().is_some_and(|e| e.contains("try again later")), "{err:?}");
-    inner.forget_records(&other_tag);
-    // A record whose signature is of another body is not kept, nor paid.
-    inner.lock().now = Some(now + Duration::from_secs(60));
-    let bad = Record::new(more[1].body.clone(), more[2].sig.clone(), None);
-    let held = inner.lock().record_bytes.held(from, Level::Address);
-    let (set, fresh, err) = inner.check_records(&other_tag, &other, from, &[bad]);
-    assert!(!fresh && err.is_none(), "{err:?}");
-    let set = set.unwrap();
-    let s = set.lock().unwrap();
-    assert!(s.set.is_empty() && s.bytes == 0 && s.paid.is_empty(), "{} records, {} bytes kept", s.set.len(), s.bytes);
-    drop(s);
-    assert_eq!(
-        inner.lock().record_bytes.held(from, Level::Address),
-        held,
-        "a record that does not verify was paid for"
-    );
 }
 
 /// A group on the operator's list cannot register, one put on it is
@@ -627,7 +498,7 @@ fn records_verified_once() {
 /// the forwarder; docs/relay-budget.md, "Abuse reports").
 #[test]
 fn refused_groups() {
-    let (a, b, c) = ("0123456789abcdef", "fedcba9876543210", "00112233445566ff");
+    let (a, b, c) = ("0123456789abcdef", "fedcba9876543210", "00112233445566778899aabbccddeeff");
     let dir = std::env::temp_dir().join(format!("cbb-relay-refused-{}", certs::random_id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("refused-groups");
@@ -678,22 +549,21 @@ fn setup_ends_at_its_deadline() {
     let r = relay(true, Limits::default());
     let inner = r.inner().clone();
     inner.lock().setup_wait = Duration::from_secs(2);
-    let k = new_key();
-    let point = k.public();
-    let cert = certs::server_cert_by(&point, &mut |m| identity::sign_external(&k, m)).unwrap();
+    let k = crate::faces::ServerKey::from_scalar(&[7; 32]).unwrap();
+    let cert = k.cert().unwrap();
     let pins = vec![Cert::parse(&inner.cfg.keys.cert).unwrap().key_hash()];
     let key: Arc<dyn ExternalKey> = Arc::new(k);
     let mut reg =
-        crate::forward::Registrar::connect(r.addr(), &pins, &[cert], &key, crate::relay::PROTOCOL, "relay").unwrap();
+        crate::forward::Registrar::connect(r.addr(), &pins, &[cert], &key, super::wire3::PROTOCOL, "relay").unwrap();
     let stop = std::sync::atomic::AtomicBool::new(false);
-    let _challenge: serde_json::Value = reg.read(&stop).unwrap();
-    // A claim of 1000 bytes, one byte every half second.
-    reg.raw_write(&1000u32.to_be_bytes()).unwrap();
+    let _challenge = reg.next_frame(&stop).unwrap();
+    // A claim of 1024 bytes, one byte every half second.
+    reg.send(&1024u32.to_be_bytes()).unwrap();
     let from = ip("127.0.0.1");
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(6) {
         std::thread::sleep(Duration::from_millis(500));
-        if reg.raw_write(b" ").is_err() {
+        if reg.send(b" ").is_err() {
             break;
         }
     }
@@ -777,7 +647,7 @@ fn stream_port_knows_only_the_hub_s_connections() {
         assert!(start.elapsed() < Duration::from_secs(5), "a stranger's connection was held");
     }
     assert!(r.inner().lock().members.is_empty());
-    // Many at once wait their moment side by side: none holds up the port.
+    // Many at once are closed one after another: none holds up the port.
     let start = Instant::now();
     let many: Vec<TcpStream> =
         (0..200).map(|_| TcpStream::connect((Ipv4Addr::LOCALHOST, r.streams_port())).unwrap()).collect();

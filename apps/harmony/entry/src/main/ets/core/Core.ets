@@ -71,6 +71,11 @@ export function read<T>(text: string, what: string): Result<T> {
 // Asks the core: {"abi","op","args"}; the ABI is checked first, as the
 // other apps do.
 export function call<T>(op: string, args?: Object): Result<T> {
+  // A module that did not load (a package without it) is a broken build,
+  // shown with why, never a crash.
+  if (cbb === undefined || cbb === null) {
+    return Result.failed<T>(new Failure(BROKEN, 'core: libcbb_napi.so did not load'));
+  }
   const got = cbb.abi();
   if (got !== ABI) {
     return Result.failed<T>(new Failure(BROKEN, `core: the linked core speaks ABI ${got}, not ${ABI}`));

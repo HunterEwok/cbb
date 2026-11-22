@@ -154,10 +154,11 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+CBB_FULL_SIZE=1 cargo test -p cbb-core --features std,tls,web records   # the records' tests at real size too (minutes; CI's rust job)
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
-cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
-  go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+cargo build --release -p cbb-member --features testhooks && go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper && \
+  CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
 
 Every test of `internal/service` at once, in parts that run in Docker containers side by side
@@ -166,6 +167,19 @@ Every test of `internal/service` at once, in parts that run in Docker containers
 ```sh
 sh tools/e2e/parallel.sh -n 6 IMAGE
 ```
+
+The end-to-end tests run `cbb` and `cbb-helper` built with the test hooks (the feature and
+build tag `testhooks`; `member/src/testbuild.rs`, `internal/testhook`): only such a build reads the variables that change whom they trust or
+their clock (`CBB_TEST_AHEAD_FILE`, `CBB_RELEASE_ROOTS`, `CBB_HELPER`,
+`CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`, `CBB_TEST_LISTS_MIRROR`), and says so in `cbb version`
+and its log. Never install one; a release never has them. CI's `hooks` job runs
+`.github/release-ignores-hooks.sh` on `cbb` and `cbb-helper` built as the release builds them:
+with every hook set they answer as without, and `tools/hookprobe` checks that the helper still
+refuses an attestation under the roots `CBB_TEST_ATTEST_ROOTS` names. The release workflow does
+not run them; it looks with `.github/hooks-marker.sh` for the line a hooks build says itself
+with in every program it publishes, and the `hooks` job checks that the same script finds that
+line in a hooks build. A new hook that changes whom they trust or their clock goes into the
+list in `.github/release-ignores-hooks.sh`.
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 
@@ -197,15 +211,10 @@ sh ffi/bind.sh host /tmp/cbb-core
 cd apps/ios/CBBKit && swift test -Xlinker -L/tmp/cbb-core
 ```
 
-The phones' tunnel (WireGuard for sync away from home) is in the Rust core's library
-(`ffi/src/tunnel.rs`, feature `tunnel`), which `ffi/bind.sh` builds for both apps; its tests
-run it against the Go hub, clients and forwarder:
-
-```sh
-cargo test -p cbb-ffi --features tunnel tunnel
-cargo build --release -p cbb-ffi --features tunnel --example tunnel-on-linux
-CBB_TUNNEL_ON_LINUX="$PWD/target/release/examples/tunnel-on-linux" go test -race ./internal/tunnel -run TestRustPhone
-```
+The phones' sync away from home is the Live member's own tunnel (`member/src/live/away.rs`),
+which the feature `tunnel` builds into the Rust core's library (`ffi/bind.sh` builds it for
+every app); `cargo test --workspace` and the service tests (`TestFFIPhoneAway`,
+`TestFFIPhoneHub`) run it.
 
 The group rules of records `v:2` (docs/records-v2.md) reach the phones from the Rust core:
 `ffi/` exports the core's one entry point (`cbb_core::api`, docs/core-api.md) as the C
@@ -262,37 +271,28 @@ signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter 
 OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
 before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
 runs its host test and `check.sh`, which checks both modules, the phone's `entry` and the
-watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+watch's `wearable`. DevEco Studio's Previewer loads no native module and takes the stand-in in
+`entry/src/mock/` instead, which answers every request with an error, so the pages show as on a
+phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
+`wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator.
 
 ```sh
-apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
 ```
 
-The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
-container; [docs/differential.md](docs/differential.md)):
+The differential run of all three implementations (Go, Rust and JDK 17;
+[docs/differential.md](docs/differential.md)):
 
 ```sh
 sh .github/differential.sh 1 20000 500 /tmp/differential
 ```
 
-Cross tests between Go and Swift: Swift tests write vectors that Go reads, and the other way.
-
-- `CBB_INTEROP_OUT=<dir> swift test -Xlinker -L<core>` writes fresh `swift-records.json`,
-  `swift-renewal.json` and `swift-admin.json`; then
-  `CBB_INTEROP_OUT=<dir> go test ./internal/group -run 'TestSwift'` reads them.
-  Without the variable Go reads the committed copies in `testdata/interop`.
-- `CBB_SWIFT_INTEROP=<path to cbb-interop>` runs
-  `TestSwiftMemberAdmitsGoJoiner` (pairing over plain TCP); on macOS
-  `CBB_SWIFT_INTEROP_TLS` runs the real-TLS pairing and member tests (see the
-  `phone kit` job in `.github/workflows/ci.yml` for the keychain setup).
-- The Kotlin kit does the same: `CBB_INTEROP_OUT=<dir> ./gradlew -p kit test` writes the
-  same files, and `./gradlew -p kit interopScript` builds
-  `kit/build/interop/cbb-interop`, which plays the Android phone in those three
-  Go tests on Linux too (TLS from Conscrypt; the `Android kit` job runs them).
+Go's tests of the records of 0.5 read the committed `testdata/interop/swift-*.json`, which
+the Swift kit of 0.5 wrote; the kit of 0.6 writes none (D-126).
 
 The app (macOS with Xcode):
 

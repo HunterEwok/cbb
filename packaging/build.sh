@@ -19,7 +19,7 @@ set -eu
 
 cd "$(dirname "$0")/.."
 nightly=$(sed -n 's/^nightly="\(.*\)"$/\1/p' packaging/mips.sh)
-tool=build toolchain=stable std='' features=''
+tool=build toolchain=stable std='' features='' flags=''
 case ${1:-} in
 linux/amd64) target=x86_64-unknown-linux-musl ;;
 linux/arm64) target=aarch64-unknown-linux-musl ;;
@@ -37,7 +37,11 @@ freebsd/arm64) target=aarch64-unknown-freebsd tool=zigbuild toolchain=$nightly s
 darwin/amd64) target=x86_64-apple-darwin ;;
 darwin/arm64) target=aarch64-apple-darwin ;;
 windows/amd64) target=x86_64-pc-windows-gnu tool=zigbuild features=windowless ;;
-windows/arm64) target=aarch64-pc-windows-gnullvm tool=zigbuild features=windowless ;;
+windows/arm64)
+	# Rust's std for gnullvm unwinds through LLVM's libunwind, which zig
+	# links only when asked (from Rust 1.100).
+	target=aarch64-pc-windows-gnullvm tool=zigbuild features=windowless flags=',"-Clink-arg=-lunwind"'
+	;;
 *)
 	echo "usage: sh packaging/build.sh GOOS/GOARCH[/GOARM]" >&2
 	exit 2
@@ -60,6 +64,6 @@ fi
 remap="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo"
 # shellcheck disable=SC2086 # std and the features are one word or none
 cargo "+$toolchain" "$tool" --locked --release -p cbb-member --target "$target" \
-	--config "target.$target.rustflags=[\"$remap\"]" \
+	--config "target.$target.rustflags=[\"$remap\"$flags]" \
 	${std} ${features:+--features "$features"} >&2
 echo "target/$target/release"

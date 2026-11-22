@@ -12,7 +12,6 @@ struct StartView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
     @State private var adding = false
-    @State private var restoring = false
     @State private var invited = false
     @State private var settings = false
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -34,7 +33,6 @@ struct StartView: View {
         }
         .task { model.prepare() }
         .sheet(isPresented: $adding) { AddDeviceView() }
-        .sheet(isPresented: $restoring) { AddDeviceView(restore: true) }
         .sheet(isPresented: $invited) { InvitationView() }
         .sheet(item: $model.pendingInvite) { p in InvitationAnswerView(invite: p) }
         // Settings cover the whole screen on an iPad, as a sheet does on a
@@ -108,22 +106,6 @@ struct StartView: View {
                 .buttonStyle(GlassButtonStyle())
             Button { invited = true } label: { Text("Join with an invitation") }
                 .buttonStyle(GlassButtonStyle())
-            // Small, yet as large to touch as any button (44 points).
-            Button { restoring = true } label: {
-                Text("Restore with the recovery key")
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, Tokens.spacingSmall)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            // Plain, as the other buttons have styles of their own, so that
-            // its label is laid out as plain text in every script. Medium,
-            // as the other buttons' labels: at the regular weight Xcode's
-            // clipped text check flags Hindi's line in any text style, at
-            // the medium weight in none.
-            .buttonStyle(.plain)
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(palette.textDim)
         }
     }
 }

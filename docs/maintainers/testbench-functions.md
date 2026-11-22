@@ -153,7 +153,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.70 | Every pair of joiner, admitter and path | G41 |
 | G.71 | Leaving and joining again | G42 |
 | G.72 | Groups side by side on one network | G43, S13 |
-| G.73 | A device that shows a code, typed on a computer of the group (mDNS `j=1`, `cbb pair -qr` with six digits) | G44 |
+| G.73 | A new computer types a pairing window's six digits (mDNS finds the window, `cbb pair -code`) | G44 |
 | G.74 | Taking the group over from a phone through the core (iPhone, Android, Aurora) | G26, A1, A19 |
 
 ## K. Certificates and keys
@@ -267,7 +267,7 @@ line here with every new function, and a case for it in the catalogue.
 | M.11 | `cbb sync` without the helper | M1 |
 | M.12 | `cbb sync off [-for]` and `cbb sync on` on the device itself | M8 |
 | M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
-| M.14 | The group's copies setting (`cbb incoming`) | M10 |
+| M.14 | The group's copies setting (`cbb ttl`) | M10 |
 
 ## O. Images, files and formatted text
 

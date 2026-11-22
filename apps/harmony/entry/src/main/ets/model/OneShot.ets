@@ -12,8 +12,8 @@ import { fileIo } from '@kit.CoreFileKit';
 import { read } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure } from '../core/Keys';
-import { Membership, sealSecret } from '../core/Membership';
-import { OS, osVersion, STORE } from '../core/Phone';
+import { Membership } from '../core/Membership';
+import { OS, osVersion } from '../core/Phone';
 import { t } from '../core/Text';
 import { Shared } from '../common/Share';
 import { IMAGE_TYPES, MAX_SEND_BYTES } from './Member';
@@ -100,6 +100,9 @@ export async function sendOnce(filesDir: string, s: Shared, name: string): Promi
   if (m instanceof Failure) {
     return m;
   }
+  if (m.isBefore06()) {
+    return new Failure(t('before06_title'), 'share: a group from before 0.6');
+  }
   let parts: Record<string, Object>[] = [];
   if (s.files.length > 0) {
     const p = partsOf(s);
@@ -110,33 +113,28 @@ export async function sendOnce(filesDir: string, s: Shared, name: string): Promi
   } else if (s.text.trim().length === 0) {
     return new Failure(t('error_share_nothing'), 'share: no text');
   }
-  const secret = sealSecret(filesDir);
-  if (secret instanceof Failure) {
-    return secret;
-  }
   const key = await ensure('member');
   if (key.ok === undefined) {
     return key.failure as Failure;
   }
-  // A folder of its own with the group's records: the app's member keeps
-  // the other, and may run.
+  // A folder of its own with a copy of the group's set: the app's member
+  // keeps the other, and may run.
   const dir = `${filesDir}/share-member`;
   removeDir(dir);
   try {
     fileIo.mkdirSync(dir, true);
-    fileIo.copyFileSync(`${filesDir}/records.json`, `${dir}/records.json`);
+    for (const name of ['group.cbor', 'local.json']) {
+      if (fileIo.accessSync(`${filesDir}/${name}`)) {
+        fileIo.copyFileSync(`${filesDir}/${name}`, `${dir}/${name}`);
+      }
+    }
   } catch (e) {
     return Errors.unexpected('share: the folder', e as Object);
   }
-  const j = m.member;
   const request: Record<string, Object> = {
-    'dir': dir, 'name': name, 'os': OS, 'os_version': osVersion(), 'key_store': STORE,
-    'version': AppStorage.get<string>('version') ?? '', 'device': j.device, 'public': key.ok.public,
-    'seal': secret, 'cert': j.cert, 'group_ca': j.group_ca, 'roots': j.roots
+    'dir': dir, 'name': name, 'os': OS, 'os_version': osVersion(),
+    'version': AppStorage.get<string>('version') ?? '', 'device': m.member.device, 'public': key.ok.public
   };
-  if (j.issuer !== undefined && j.issuer.length > 0) {
-    request['issuer'] = j.issuer;
-  }
   const made = await cbb.memberStart(JSON.stringify(request), (e: string) => {});
   const answer = read<Started>(made.answer, 'share: member');
   const h = made.handle;

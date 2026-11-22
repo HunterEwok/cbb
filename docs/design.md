@@ -162,7 +162,7 @@ forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
 Windows, quick actions, TVs and the Bluetooth keyboard.
 
 - **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
-  program or from `CBB_HELPER` (empty for none), and talks to it only over the child's
+  program (a build with the test hooks takes `CBB_HELPER` instead, empty for none), and talks to it only over the child's
   standard input and output, the pipes it inherits; the helper logs to its standard error,
   which goes to `cbb`'s log. No socket or pipe has a name, so no other process can ask the
   helper for anything, and above all for a signature with a device's key. Started by hand,
@@ -235,68 +235,56 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   flag, all three by default and `admin` and `dials` for the ZX Next's Pi); with `dials` it
   dials the members with a higher device ID, without it it publishes `r=listen` and waits.
   On the root or an admin it takes `remove`, `rename`, `freeze`, `thaw`, `resolve`, `make_admin`,
-  `key_level`, `takeover_delay`, `incoming`, `hand_over`, `mute` and `unmute` of another
-  device (a command from the core's `manage::order`), and `pair` with a QR code's addresses (`cbb pair -qr`, the core's admission),
+  `key_level`, `ttl`, `mute` and `unmute` of another
+  device (a command from the core's `manage::order`), and `pair`, a pairing window that a new device dials (`cbb pair`, the core's admission),
   each a record signed with the root's key or the admin key under its admin CA, by Go's rules
   and with Go's messages; the admin's fields of `identity.json` stay as Go writes them when
   `cbb` saves it again. The Go command line runs against it, and a Go computer joins, syncs
   and takes each record (`TestAloneRoot`). `cbb pair` opens a pairing window as Go's does: a
   six-digit code, `p=1` in its mDNS record, one attempt at a time, closed by three failed
   ones, after five minutes or once a device joined. Its member port then offers both ALPN
-  protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
+  protocols, `cbb/4` and `cbb-pair/3`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
-  (`Admission::accept`, `TestAloneRootWindow`). With the capability `admin`, it is a computer's service
-  before its own device record arrives: its hellos offer an admin key (in the hardware where
-  cbb-helper can put it, else `admin_key`), and an `admin` message's admin CA makes it an
-  admin with a member certificate from that CA. On such an admin `take_over` keeps the new
-  root's key as `claim` and `claim_key` and signs the claim; a loop looks at the claims every
-  two seconds, as Go's `claimLoop` does, and once the records lead to that root it becomes
-  the root (`root_key`) and signs a new root's first records; as root the same loop gives
-  each connected admin whose admin CA is from an earlier root a new one for the same key, as
-  Go's `renewAdminCAs` (`TestAloneTakeover`). Any
-  member claims the group the same way with the recovery key (`recover`): the sheet's key,
-  or with `yubikey` the card's, which `cbb` signs with after the PIN (`member/src/piv.rs`), signs the
-  claim under the recovery key's admin CA from the records or the sheet (`TestAloneRecovery`).
-- **The hub.** On an admin whose key level allows it, `hub` makes the Rust service the
-  group's hub as Go's `cbb global hub` does: the state in `tunnel.json` becomes a hub's
-  (`is_hub`, `endpoints`, `listen_port`, obfuscation kept or made), and its hellos offer the
-  hub's tunnel key. A member's hello with a tunnel key is admitted by Go's `Admit` rules
-  (`members`, at most 256) and answered with the hub's offer and the offers of the hubs
-  after it in the group's order. The hub serves while no hub above it has an offer: GotaTun
-  through `hub.rs` on the UDP port (8764 when none is set), each tunneled TCP connection to
-  the member port passed to a loopback listener of its own, where the node takes it only
-  from the device whose tunnel address it came from (`Node::accept_tunneled`). The claim
-  loop drops members the records refuse or no longer list. `hub off` passes the next hub's
-  offer to the clients as `moved`, waits up to ten seconds for them to leave, and keeps the
-  state as `retired` (`TestAloneHub`). With several hubs (`away/hubs.rs`, Go's `hubs.go`) it
-  sends each peer that may be a hub its `hubs` share after the hello, and again when it
-  starts or stops serving or admits a client; it takes the clients and the offer another hub
-  shares, and a device that stopped being a hub tells the computers and the possible hubs
-  so. The run loop serves only while no hub above answers: starting, it tries them once;
-  having lost the hub above, for a minute (`CBB_TEST_STANDBY_GRACE` in tests); while it serves,
-  every 15 minutes, and when a hub above shares that it serves, after passing that hub's
-  offer on to its clients and waiting for those in its tunnel to leave (`TestAloneHubs`). Hub
-  commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
-  `manage::Order::Hub`, signed by the admin and sealed to the receiver: `move` hands over the
-  clients and this device, passes the new hub's offer on as `moved` and keeps it as a
-  client; `hub -on` makes an admin computer a hub as well; `hub off -on` sends a stop order.
-  Received, a hub command makes this device a hub at the order's addresses, serving at once
-  and answering with its offer in the result's `tunnel`, or with a stop order stops it after
-  the result went back (`TestAloneHubCommands`). A hub with a forwarder (`tunnel.json`'s
-  `forwarder`, from a request or a hub command; `default` stands for the project's, by the
-  pins this release knows) registers while it serves through the phones' `forward.rs`: its
-  member certificate with the roots, the group's records as the proof that it is the root or
-  an admin, and hellos from its WireGuard port; status shows the registration as Go's
-  `forwarder` (`TestAloneHubForwarder`). Unless `-no-vless` turned it off it registers the group's VLESS user ID
-  (kept in `tunnel.json`'s forwarder, as Go's), keeps the forwarder's VLESS settings once the
-  registration returns them (`vless_learned`, Go's `vlessLearnedLocked`) and has the members
-  connect again for the offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). An admin signs the `hubs` record of main hubs as Go's
-  `setHubs` and sends `away-off` (`manage::Order::AwayOff`) to another device. `hub -on
-  DEVICE -forward-only` on an admin that admitted the device signs its record with
-  `forward_only` first (`Admin::mark_forward_only`); such a Rust member takes the hub command
-  without being an admin once that record is in, seals no copies (`node::FORWARD_ONLY`) and
-  refuses paste and action commands (`TestAloneForwardOnly`).
+  (`Admission::accept`, `TestAloneRootWindow`). On the records of 0.6 a computer becomes an admin
+  only with the admin key it offered, with its proof over the pairing session, when it
+  paired with the root: the root keeps that key by device (`offered.json`) and `make_admin`
+  writes it into the device's record, so no admin CA travels (D-118). The root changes only
+  with the group's recovery key (rule 33, D-117): `take_over`, `takeover_delay` and
+  `hand_over` answer an error that points to `cbb recovery`, and an admin keeps its rights
+  (`TestAloneTakeover`). `recover` takes the sheet's text or its QR code's
+  (`cbb_core::sheet`), checks it against the group's recovery keys, leaves out the devices
+  `-leave` names, makes a new root key and writes the change of root with both halves of the
+  recovery key, then restarts to sign with the new key; a device the records name the root
+  already is refused, and the other members follow the new root (`TestAloneRecovery`). A
+  recovery key on a YubiKey is not done yet on 0.6.
+- **The hub.** On the records of 0.6 (`member/src/live/away.rs`; docs/protocol.md, section
+  11) a device the records allow a hub (named in the root's hubs record, or an admin) becomes
+  one with `cbb global hub` or a `hub` command: the state in `tunnel.json` becomes a hub's,
+  with its port, addresses, obfuscation and forwarder. A device with sync away from home on
+  sends each possible hub `tunnel` (t 15) with its key toward that hub and the tag of the
+  connection's exported pre-shared key, at home or at the group's relay alike; the hub keeps
+  the key (`away/held.rs`) and answers with its offer, which no hub passes on to another
+  (A-22). The hub serves while no hub above it in the records' order said it serves (`hubs`,
+  t 16), and again a minute after it lost the last such hub (`CBB_TEST_STANDBY_GRACE` in
+  tests): GotaTun through `hub.rs` on the UDP port (8764 when none is set), one tunnel per
+  pre-shared key it accepts of each client, each tunneled TCP connection to the member port
+  passed to a loopback listener of its own, where the node takes it only from the device
+  whose tunnel address it came from. Its key changes with the period of its forwarder's face,
+  the next key offered ahead (`Away::rotate_live`). Hub commands go through the core's
+  `Order::Hub`, signed and sealed to the receiver: field 10 names the hub by its address and
+  member key, field 11 the forwarders with the pins the root signs (D-121); `hub off -on`
+  sends a stop order, after which the hub sends its clients `moved`. `move` makes the new
+  hub one and keeps serving its clients until the new hub serves and then up to five minutes,
+  while they meet the new hub at home or at the relay (option C of D-122, `TestMoveHub`;
+  `CBB_TEST_MOVE_LINGER` in tests). A hub with a forwarder registers with the hubs'
+  credential of the forwarder's face (`TestAloneHubCredential`), keeps the forwarder's VLESS
+  settings once the registration returns them and has the members connect again for the
+  offer with them; VLESS brings AmneziaWG (`TestAloneHubVLESS`). The root signs the `hubs`
+  record and sends `away-off` (`Order::AwayOff`) to another device. `hub -on DEVICE
+  -forward-only` on the root signs the device's record with `forward_only` first; an
+  admin's is refused as not done yet (D-122). Such a member takes the hub command, seals no
+  copies and refuses paste and action commands (`TestAloneForwardOnly`).
 - **The server credentials.** `credentials.rs` keeps the group's credentials as Go's
   `credentials.go`: the core's `credential::Store` (Go's `group.Credentials`, the same rules
   of what counts) in `credentials.json`, the keys for the servers in `server-keys.json` (in
@@ -308,6 +296,39 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   credentials with the period key when their lists are stale, and an admin that the hubs'
   credential lists signs the members' credential (`credential::sign` and the `*_body`
   functions, the key behind a callback).
+  On the records of 0.6 `faces.rs` does the same with the format's credentials
+  (`blind::credential`, signed by `Credential::sign`): `server-credentials.cbor` keeps the
+  current period's, checked against the set (the period by the current root, a server key
+  by a member's key, the lists by the period key or a listed admin); the server key is
+  derived from the device's own `server-secret` and the period's tag
+  (`blind::alias::server_key`), so it needs no key store, and the root keeps its period key
+  in `period-key`. Peers get them in message `member-credentials` (t 11) when a connection
+  opens, and the mesh brings them up to date when the set changes and on the sealing key's
+  beat. Each server gets a face of its own (A-55): the root makes a period for each server's
+  pin (the project's relay, forwarder and push service, the group's own relays, and the
+  forwarders of its hubs, which the root keeps in `hub-forwarders.json` from its `hub`
+  commands and its own hub; D-121), and every message `credentials` names the server it is
+  for. A hub of 0.6 serves with a key of its own for each period of its forwarder's face
+  (protocol section 11, "The hub's key"; `Away::rotate_live`).
+- **Push.** On the records of 0.6 the mesh drives the push sender (`pusher.rs`) through its
+  seam (`mesh/push.rs`): message `push` (t 28) from a phone or a computer over its own
+  connection is its registration, kept in `push.cbor` (each device's message as it came) and
+  taken again after a restart; a connection that opens gets its `push-renew` messages (t 29)
+  and marks the device connected; a removed or frozen device's registration goes when the
+  set changes; a copy made here (the origin) or received by a device with the `hub` right is
+  offered to the sender with `push::copy_body`. The push service's face is the group's face
+  toward the service's pin in the newest `keys.json` (use `push`): the current period's
+  server key and its hubs' and members' credentials, and the previous period's face, kept
+  until it expires for the registrations made under it and never for a new one. The phones'
+  events (rule 33: a device joined or was removed, the root changed, a device's own record
+  changed, the group stopped) come from the records
+  applied, each with the first 16 bytes of its record's ID as its ID, sent by a hub, else
+  the root's or an admin's device ([core API](core-api.md), "Push"). `mesh::push_e2e` runs it
+  end to end: three members, a push service with a fake platform that `keys.json` names, a
+  device that registers and goes away, one body for a copy (from the origin or the hub) and
+  one for a removal, none while it is connected, each opened under its registration, and a
+  send under a replaced registration answered `stale`; the same with the phones' app follows
+  when the phones run on the records of 0.6 (D-122).
 - **The relay.** `relay` meets the group at a blind relay as Go's `away relay`: with the
   user's consent, `tunnel.json` keeps only the device's keys and the relay (`default` for
   the project's, whose pins are the newest `keys.json`'s for `cbb.tools:8765` or the built-in
@@ -528,12 +549,10 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
 - Every phone app syncs through the same member: `cbb`'s node in the Rust core,
   which runs in the app's process (`ffi/`, docs/core-api.md, "The member"; D-86). The
   iPhone, Android and Aurora apps keep only what is theirs: their keys and the prompts that
-  unlock them, pairing, the records they sign, finding the computers on the network (Bonjour,
-  NSD) and handing their addresses in, the tunnel and the blind relay, and the answers to what
-  the member asks (renewals, admin CAs, the hub's offers, commands for the phone, the caller
-  of a relay's call). One implementation of the member protocol, the clipboard rule and the
-  button then serves every phone, and the cross tests drive it through the kits
-  (`cbb-interop`, `InteropMain`).
+  unlock them, the prompts before the records they sign, finding the computers on the network
+  (Bonjour, NSD) and handing their addresses in, and the tunnel. One implementation of the
+  member protocol, the records, the clipboard rule and the button then serves every phone, and
+  the kits' tests drive it through `ffi/`.
 
 ### Watches
 
@@ -559,7 +578,7 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
    taken over, a certificate close to expiry that did not renew, the hub unreachable while
    away from home, a remote paste received or refused. Each is a setting.
 2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
-   as the app's switch does (`AwayFromHome`, `RustTunnel`).
+   as the app's switch does (the Live member's `away`).
 3. **Emergency actions** with the watch's own admin key: freeze an admin computer, remove an
    ordinary device, turn remote paste off on a member, turn sync away from home **off** on a
    member. The watch shows what it signs and asks for a tap; the phone only carries the
@@ -618,23 +637,45 @@ starting the Android app's listener for the Wear OS switch, and the delay of not
 
 ### The one button
 
-A phone app sends and fetches with one button (a tap, the Action button or Back Tap on the
-iPhone, a double tap where the phone offers one), and follows the rule of every device
-(`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
+Devices that always listen (computers and small devices, whose watcher reports every copy)
+work with the group's buffer as their own: their clipboard always equals it, so what they
+copy goes to the group, and each copy that becomes the group's current one comes into their
+clipboard while it lives (the sync model below). How long a copy lives is the group's
+setting, which the root (or an admin) sets with `cbb ttl` or on a phone and every device
+stamps on the copies it makes (D-129): an ordinary copy 5 minutes by default (1 minute to 1
+hour), a secret 60 seconds by default (5 seconds to 1 minute). A phone listens only
+sometimes, since Android and iOS let an app read the clipboard only while it is on screen, so
+it follows two rules of its own (the owner, 2026-11-22; D-128):
 
-1. A copy from another device waits for the phone (it is live and the phone has not taken
-   it yet) → it comes to the phone. The button does this with sync on or off; by
-   themselves, while sync is on, Android and Aurora take such a copy at once and the iPhone
-   when the app comes to the front.
-2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
-   text already or what this phone itself sent or took last: a text the phone sent before
-   it shared an image or files stays out, rather than go over that newer copy. A copy whose
-   live window passed is gone, and there is no separate button to fetch it.
+1. **The gesture swaps.** One button (a tap, the Action button or Back Tap on the iPhone, a
+   double tap, the quick tile or the share action where the phone offers one) always swaps
+   the phone's own clipboard and the group's buffer: the phone's text goes to the group as a
+   copy, and the group's text comes into the phone's clipboard. There is no time rule and no
+   guess at which is newer; what the phone's own clipboard holds is the person's business. A
+   phone whose clipboard is empty, or holds the group's text already, only takes the
+   group's text, so a gesture never empties the group's buffer. A password or other secret
+   swaps like any text and keeps its secret mark.
+2. **Opening the app makes the phone listen like the others.** When the app starts or comes
+   back from the background (both alike), the phone works as a device that always listens
+   while it is on screen; closing it and sending it to the background are alike too, and the
+   phone then works with its own clipboard again. Opening swaps nothing (the owner,
+   2026-11-22): a phone whose clipboard changed since the app last saw it (the system's
+   change count, read without the text) sends that copy, as a watcher reports a copy, and
+   otherwise it takes the group's buffer, so a phone that copied nothing never sends back an
+   old text. A group copy that waited and so did not reach the phone's clipboard is not lost
+   silently: the app shows the last copy that came, with its device, and takes it into the
+   clipboard with one tap. The line shows only while that copy is not in the phone's
+   clipboard: it hides when the person takes it, when a newer copy comes, and at once when
+   the copy's own lifetime runs out. Coming back from the system's own windows (the notification shade, a
+   fingerprint or Face ID prompt, a permission dialog, a rotation) is not an opening.
 
-The button reads the phone's clipboard only in the second case. On the iPhone the button
-is the system's Paste button, which iOS lets read the clipboard without asking, and the
-"CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard", so neither asks for
-permission to paste.
+What the app itself wrote into the phone's clipboard is never a new copy (no echo). On the
+iPhone the button is the system's Paste button, which iOS lets read the clipboard without
+asking, and the "CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard"; reading
+the clipboard when the app opens and while it is on screen asks the person to allow pasting
+unless they allowed CBB to paste from other apps in Settings, so the app explains that
+setting. How convenient the swap is in daily use is tried on real phones before the rule is
+final.
 
 ### Build
 
@@ -682,7 +723,7 @@ sync away from home, the admins, and remote paste.
   never earlier than the CA's start, so a Raspberry Pi that boots with a clock years behind
   real time still accepts them; expired certificates are rejected. The root and the admins
   admit new devices. TLS 1.3 only, with the ALPN protocol
-  `cbb/3`; a client checks that the server's certificate names the device it found in
+  `cbb/4`; a client checks that the server's certificate names the device it found in
   discovery.
 - **End of a CA's life**: certificates end no later than their CA. A member certificate that
   already ends with its CA is not renewed again; replacing a CA after 20 years works like
@@ -698,7 +739,7 @@ sync away from home, the admins, and remote paste.
   the user runs `cbb pair -code` and types the code (it is read from the terminal or standard input, never
   from the command line, where other users of the machine could read it). The new device
   connects to the member's port with
-  the ALPN protocol `cbb-pair/2` and presents a self-signed certificate for the key
+  the ALPN protocol `cbb-pair/3` and presents a self-signed certificate for the key
   it will keep. The two run the CPace password-authenticated key exchange
   (CPACE-X25519-SHA512) with the code, bound to the TLS session by an exporter and to both
   certificates, and confirm the key, the new device first. An attacker gets one guess per
@@ -724,8 +765,10 @@ sync away from home, the admins, and remote paste.
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
   settings stay. The group's root leaves only alone; otherwise it hands the group over
-  first. A removed device (`cbb status` says so) and one whose group file is damaged leave
-  the same way. `cbb leave` does it through the service, or by
+  first. A removed device and one whose group file is damaged leave the same way; a removed
+  device need not learn that it was removed, since the group refuses it and gives it no
+  records (protocol section 10, "Exchange in the member protocol").
+  `cbb leave` does it through the service, or by
   itself when the service does not run. The phones, the tray app and the Mac app have a
   "Leave the group" button (docs/apps.md), and a phone's watch forgets its admin key with
   it. The group keeps the device's entry until an admin removes it.
@@ -861,20 +904,19 @@ sync away from home, the admins, and remote paste.
 - **Group state and each member's own clipboard are separate.** The group's current text is
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
-  - a live event that becomes the group's current event is written while sync is on. An event is live for the group's live window after it was
-    copied: one minute unless the root or an admin sets another, from 5 seconds to an hour
-    (`cbb incoming`, the phones' Settings; a signed `copies` record, docs/protocol.md
-    section 10). The age is counted in durations (the event's age plus the time since it
-    arrived), never by comparing clocks;
-  - nothing else is written: a group text the member already knew is not written again, a
-    copy whose window passed is gone for this member, and a member that wakes up, starts or
-    lost its peers keeps its clipboard. Every device follows this one rule, computers and
-    phones alike;
+  - on a device that always listens, an event that becomes the group's current event is
+    written while sync is on and the event lives (its own `ttl`, D-129; the owner, 2026-11-22;
+    D-128): its own
+    clipboard always equals the group's buffer. A copy made before the current one never
+    becomes current, so it changes nothing; a member back from offline whose live copy was
+    made after the current one makes it current, and every member writes it;
+  - a phone, which listens only sometimes, follows "The one button" above: a gesture swaps
+    its own clipboard and the group's buffer, and while its app is on screen it works as a
+    device that always listens;
   - a copy from a device the group removed, or one a taken-over root admitted, is dropped,
     also when it has not been written yet.
 
-  So a member that returns with an old copy does not overwrite the clipboards of the others,
-  and a copy made while away is replaced only by a live copy made after it. Writes carry a sequence number, so they are applied in order. On a member
+  Writes carry a sequence number, so they are applied in order. On a member
   without a desktop, the service keeps this own clipboard text itself, and `cbb paste`,
   tmux and the console helper use it.
 - **No echo.** A member does not report a text it wrote into its clipboard as a new copy,
@@ -988,7 +1030,9 @@ the admin socket is out of reach, and the service takes it once confirmed:
 - **Linux**: two polkit actions of the same names, `auth_admin_keep` and `auth_admin`, for
   the active session only, which the installer writes to `/usr/share/polkit-1/actions`
   (`cbb confirm-setup`), owned by the service's user (`org.freedesktop.policykit.owner`), so
-  that polkit answers the service about another user's process. The service runs `pkcheck`
+  that polkit answers the service about another user's process. A service running as root
+  writes them itself at start; one that is not root never tries, and logs at start when they
+  are not set up for its user. The service runs `pkcheck`
   for the calling process: its ID and user from the kernel, and the start time `cbb` sends in
   `auth`, which polkit checks against the process itself; a start time after the connection
   came is refused, so a process that took the ID of one that connected and left is never asked
@@ -1320,14 +1364,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   group.
 - **Keys.** The hub's WireGuard key lives in the phone's keychain or Keystore for this device
   only (Curve25519 does not fit the Secure Enclave), and the clients hand their keys to it in
-  their hellos at home, as with any hub. The phone's root or admin key signs only after
-  Face ID, so the hub registers with the forwarder by its member key instead, which signs
-  without the user: the group's records show the forwarder that this member key is the
-  root's or an admin's (docs/protocol.md, section 13). Asking for Face ID on every
-  registration (each time the app opens or the network changes) would make the phone hub
-  useless. Stealing the member key would let someone displace the registration, which a
-  root or admin computer's key in a file allows too, and nothing more: the clients take
-  only the hub key of the offer they met at home. A device far away joins with a remote invitation
+  their hellos at home, as with any hub. The hub registers with the forwarder by its server
+  key of the period, which signs without the user, and the period's hubs' credential that
+  lists it (docs/protocol.md, section 13); asking for Face ID on every registration (each
+  time the app opens or the network changes) would make the phone hub useless. Stealing the
+  server key would let someone displace the registration until the period ends, and
+  nothing more: the clients take only the hub key of the offer they met at home. A device far away joins with a remote invitation
   made on the phone, which is then both the admin who confirms the device and the hub that
   serves the guest tunnel, so no invitation has to be handed over.
 - **Android** may keep the hub running in its foreground service while the app is in the
@@ -1345,7 +1387,11 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   TV in another city) move without coming home; then it becomes the new hub's client. The
   new hub admits each key only for a device the group's records list. A computer that is
   the hub moves the role the same way (`cbb global move`). Built in 0.5 (docs/protocol.md,
-  section 11, "Moving the hub").
+  section 11, "Moving the hub"). On the records of 0.6 no hub passes on another's offer or
+  clients: the old hub keeps serving its clients until the new one serves, they meet the new
+  hub at home or at the group's relay and take its offer there, and then the old hub tells
+  them it moved; a client away with neither home nor a relay loses the hub until it meets
+  the new one (D-122).
 - **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
   takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
   its offer because the records no longer make the lost phone an admin. Clients at home learn
@@ -1370,7 +1416,9 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 
 ##### Steps
 
-All built in 0.5, but for what each step names as still to do.
+All built in 0.5, but for what each step names as still to do. In 0.6 the Live member is
+the phone's hub and its client (D-122), and the apps' own tunnel, hub, invitation window and
+hub commands are gone with the phones' groups of 0.5, which sync at home only (D-123).
 
 1. Done: the hub's side in the Rust core's tunnel (`hub_start`, `cbb_tunnel_register`): the clients' tunnels,
    the member port leading to the kit's member listener, and the registration with the
@@ -1495,10 +1543,9 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
   restart. The files of earlier versions, one per group with its roots and removals, are
-  deleted. Built in Go, in the Rust hub and in both phone kits, whose hub registers by the
-  credential once it lists the phone's server key; hubs from before the credentials still
-  register with their member certificate, a signature by the root or an admin CA, and the group's authority records,
-  which the forwarder keeps in memory only.
+  deleted. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
+  and in the Rust hub, which the phones run too; a hub registers once the credential lists
+  its server key, and shows that credential alone (`cbb-forward/3`, D-106).
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
   memory. A group that reaches a limit is slowed down alone. Limits per source: registrations
   per address, per network (/24, /64), per wide network (/16, /48) and per IPv6 provider
@@ -1606,6 +1653,11 @@ devices alike.
     admin signs its certificate as for any other device. In a phone group whose hub holds
     no CA keys the request goes to the admin phone through the hub, inside member TLS, at
     home or through the phone's own tunnel.
+  - On the records of 0.6 the invitation (`cbb://join#...`) names no hub and no group: its
+    guest path holds the hub's key and addresses, the guest key pair and the obfuscation
+    settings, and the guest dials the hub at the hub's guest address `fd00:cbc::1`, which
+    only guests reach. Once the device proved the secret the admin confirms it, and only
+    then is its record written; it is invited as a computer or as a phone.
   - With its certificate the device offers its own tunnel key in its first hello through
     the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
     with its own key as an ordinary client. The guest stays for a day after the admission
@@ -1642,7 +1694,8 @@ and asks, and the phone apps say it before their switch. The relay keeps nothing
 the devices in its logs, but a user who would rather nobody saw even that runs their own
 relay, or a hub.
 
-- `cbb relay -group TAG` runs a relay for the groups whose tags it is given and no other;
+- `cbb relay -group GROUP` runs a relay for the groups it is given (each by its root key and
+  recovery key, as `cbb status -relay` prints them) and no other;
   `cbb relay -open` serves every group that registers, as the project's relay does, within
   limits that keep groups nobody vouches for from filling it (finding 3 of the security
   audit): 4096 groups, 16 registrations from one address, 64 from one network (an IPv4
@@ -1652,28 +1705,27 @@ relay, or a hub.
   ([the servers' budget](relay-budget.md)). An open relay forgets a group once its last
   device leaves.
 - Each device turns it on with `cbb global relay ADDRESS -key KEY`, in place of a hub, after
-  the user agrees; the key is the pin of the relay's own key, as with the forwarder.
-- A device registers with its member certificate and proves it holds its WireGuard key, as
-  a hub does with the forwarder. The relay then gives it a tunnel, a preshared key and a
-  tunnel address of the relay's choosing, and drops it when the registration ends.
+  the user agrees; the key is the pin of the relay's own key, as with the forwarder. In a
+  group of 0.6 the root runs it once and signs the relay in the group's settings (field 15,
+  D-121), and every device takes it from the records and shows the relay a face of its own.
+- A device registers with the certificate of its server key for the period and the period's
+  credentials (D-67, D-75, protocol.md, section 18), and proves it holds a fresh WireGuard
+  key. The relay then gives it a tunnel, a preshared key and a tunnel address of the relay's
+  choosing, and drops it when the registration ends.
 - Inside the tunnels the relay listens on one port. Each device keeps a connection there
   for notes: which of its group's devices are on the relay, and calls. The device with the
-  lower ID dials the other through the relay; the relay calls the other, joins the two
+  lower pseudonym dials the other through the relay; the relay calls the other, joins the two
   connections once it answers, and copies the bytes. Member TLS then runs end to end
   between the two devices, and the answering device checks that the certificate is the
   caller's, so the relay cannot pose as a device.
 - The relay sees which devices of a group are online, which of them talk, when and how
-  much; it cannot read the clipboard or pose as a device. A device still revoked by the
-  group's records can register, since the relay does not read the records, but the other
-  devices' member TLS refuses it, so it learns only who is online.
-- A device whose group's credentials list it registers with them instead (D-67, D-75,
-  protocol.md, section 18): the relay then sees a certificate of the device's server key and
-  the period's hubs' and members' credentials, knows the device only by a pseudonym, the hash
-  of that key, under the period's tag, and gets a fresh WireGuard key at each registration;
-  all of it changes each month, and it holds no device ID, root or record. It refuses a
+  much; it cannot read the clipboard or pose as a device. It knows a device only by a
+  pseudonym, the hash of its server key, under the period's tag; all of it changes each
+  month, and it holds no device ID or record. It refuses a
   device the members' credential does not list, and drops one a newer credential leaves out.
   A relay that serves a fixed list of groups also sees the period credential and the group's
-  roots, since it knows its groups by them; an open relay never does.
+  root key, since it knows its groups by them; an open relay never does. It speaks only
+  `cbb-relay/3`: there is no registration of 0.5.
 - The wire format is in docs/protocol.md, section 14.
 
 #### Blocked networks
@@ -1880,6 +1932,19 @@ with their names, systems and dates:
 - What stays: the period's tag and pseudonyms (for a month), roughly how many hubs or
   members there are, addresses, timing and sizes.
 - Inside the group every device keeps using the full records.
+- **Push, the one exception.** A phone's push registration names the group's face toward
+  the push service in the period it was made (the send key signs it), so the registration
+  holds only on that group's connection. A new period would leave a phone whose app is
+  closed without push until it registers again, so a member keeps the previous face's
+  server key and credentials for push only: until they expire, or until no registration it
+  holds names the old face, whichever is first. It uses them for nothing but sends to
+  registrations that name the old face, which also wake the phone to sync and register under
+  the new one; never for a registration of a device the records show removed (that
+  registration is dropped at the removal); nothing else of an ended period is kept. The
+  sender decides which faces it still needs (`member/src/pusher.rs`, `Sender::needs_face`);
+  the member keeps the previous face in `push-previous.cbor` while it serves and makes its
+  server key again from the server secret and the period's tag, so a restart keeps it too
+  (`member/src/mesh/push.rs`).
 
 #### What is left to hide
 
@@ -2073,7 +2138,8 @@ fingerprint. So the question is what an admin computer may do to another admin.
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
 another admin, and hands the group over only from a lost root computer (below). Instead, **any admin freezes another admin
 computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
-counts beyond the records it signed before, its connections are refused, and it cannot
+counts beyond the records it signed before, its connections are refused, it gets no records
+and so learns nothing of the group until it is unfrozen and connects again, and it cannot
 paste. The root or an admin phone then decides: Unfreeze in the apps (`cbb unfreeze` on a
 root computer) makes it an admin again, Remove takes it out for good. Nobody freezes the
 root or an admin phone. How the records say it is in protocol section 10, "Removals and freezes keep what the author saw".
@@ -2845,7 +2911,7 @@ service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardw
   skipped, and such an offer makes no event (see the sync model).
 - Explicit actions may carry a secret: "send even if secret" on the Mac and the console
   paste. Secret events are kept only in memory and
-  expire 60 seconds after the copy, judged by the event's age. When a secret that a connector
+  expire after their own lifetime (the group's, 60 seconds by default), judged by the event's age. When a secret that a connector
   wrote expires, the connector gives up the clipboard, so the desktop does not keep it.
 - Secrets stay out of swap where the system allows it: on Linux the service's unit sets
   `MemorySwapMax=0`, and macOS encrypts its swap. Windows does not encrypt its page file by

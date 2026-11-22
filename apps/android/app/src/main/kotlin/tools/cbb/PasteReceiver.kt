@@ -11,7 +11,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import tools.cbb.kit.Commands
 import tools.cbb.kit.Member
 import tools.cbb.kit.RemotePaste
 import java.io.File
@@ -40,11 +39,20 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
         get() = runCatching { RemotePaste.decodeLog(logFile.readBytes()) }.getOrDefault(emptyList())
 
     /**
-     * Carries out a paste command that Commands.verify took, from sender
-     * (RecordSet.commandSender), verified when the records show that the
-     * device by names signed; name is that device's, when known.
+     * A paste command for this device, as the member took and checked it
+     * (docs/protocol.md, section 15): its ID, the device by that sent it,
+     * its text (for media the copy's ID), paste or type (mode), Enter after
+     * it, and its kind: text, secret or media.
      */
-    fun paste(body: Commands.Body, sender: String, verified: Boolean, name: String?, image: () -> Pair<File, String>): Member.CommandResult {
+    data class Request(val id: String, val by: String, val text: String?, val mode: String?, val enter: Boolean, val kind: String)
+
+    /**
+     * Carries out a paste command the member took, from sender, verified
+     * when the records show that the device by names signed; name is that
+     * device's, when known. The member of 0.6 hands a phone no paste yet
+     * (docs/core-api.md, "The member").
+     */
+    fun paste(body: Request, sender: String, verified: Boolean, name: String?, image: () -> Pair<File, String>): Member.CommandResult {
         val set = settings
         val nowMS = System.currentTimeMillis()
         val res = when {
@@ -89,7 +97,7 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
         logFile.delete()
     }
 
-    private fun inject(body: Commands.Body, text: String): Member.CommandResult {
+    private fun inject(body: Request, text: String): Member.CommandResult {
         if (text.isEmpty()) return refused(body, "the text has nothing that may be pasted: only control characters")
         val k = keyboard.settings
         if (k.on && k.pastes) return typeOnHost(body, text)
@@ -116,7 +124,7 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
      * text field: image fetches it, the accessibility service puts it on the
      * clipboard and pastes it. The Bluetooth keyboard types only text.
      */
-    private fun injectImage(body: Commands.Body, image: () -> Pair<File, String>): Member.CommandResult {
+    private fun injectImage(body: Request, image: () -> Pair<File, String>): Member.CommandResult {
         val k = keyboard.settings
         if (k.on && k.pastes) return refused(body, "this device sends its pastes to the Bluetooth keyboard, which types only text")
         val target = CopyWatcher.running ?: return refused(body, "this device pastes through CBB's accessibility service, which is off; its user turns it on in the app's settings")
@@ -136,7 +144,7 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
      * there, so a line break presses Enter: a text with one is refused
      * unless the user allowed Enter, as for a typed paste on a computer.
      */
-    private fun typeOnHost(body: Commands.Body, text: String): Member.CommandResult {
+    private fun typeOnHost(body: Request, text: String): Member.CommandResult {
         if ('\n' in text && !settings.enter) {
             return refused(body, "the text has a line break, which the Bluetooth keyboard types as Enter; this device's user allows Enter in the app's settings")
         }
@@ -144,7 +152,7 @@ class PasteReceiver(private val context: Context, dir: File, private val keyboar
         return Member.CommandResult(body.id, if (f.refused) "refused" else "failed", f.reason)
     }
 
-    private fun refused(body: Commands.Body, reason: String) = Member.CommandResult(body.id, "refused", reason)
+    private fun refused(body: Request, reason: String) = Member.CommandResult(body.id, "refused", reason)
 
     private fun notifyPasted(name: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&

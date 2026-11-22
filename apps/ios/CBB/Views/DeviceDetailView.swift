@@ -22,8 +22,6 @@ struct DeviceDetailView: View {
     @State private var pasting = false
     @State private var confirmingAction: String?
     @State private var turningOff = false
-    @AppStorage("AdvancedSettings") private var advanced = false
-    @State private var hubbing = false
     @State private var more = false
 
     private var device: AppModel.Computer? { model.devices.first { $0.id == id } }
@@ -82,25 +80,6 @@ struct DeviceDetailView: View {
             } else {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.")
             }
-        }
-        .confirmationDialog(Text("Make \(device?.name ?? "") a hub?"), isPresented: $hubbing, titleVisibility: .visible) {
-            // A hub that reads the copies is an admin, whose keys the
-            // group's key level checks; one that only passes them on is no
-            // admin and needs no such keys.
-            if let d = device, d.admin || d.canMakeAdmin {
-                Button {
-                    Task { await model.makeHub(id) }
-                } label: { Text("A hub that reads the copies") }
-            }
-            if let d = device, !d.admin, !d.isRoot {
-                Button {
-                    Task { await model.makeHub(id, forwardOnly: true) }
-                } label: { Text("A hub that only passes them on") }
-            }
-        } message: {
-            Text("Your devices then reach the group through it when they are away from home, through the project's forwarder at cbb.tools. Sync away from home must be on there already; only its own user turns it on.")
-                + Text(verbatim: " ")
-                + Text("A hub that reads the copies is an admin. A hub that only passes them on cannot read them: they are sealed to your other devices only, so its keys need no hardware.")
         }
         .alert(Text("Rename \(device?.name ?? "")"), isPresented: $renaming) {
             TextField(text: $newName) { Text("Name") }
@@ -242,7 +221,7 @@ struct DeviceDetailView: View {
     }
 
     /// The menu of what an admin phone may do with it: rename, unfreeze,
-    /// make it an admin or a hub, remove.
+    /// make it an admin, remove.
     private func menu(_ d: AppModel.Computer) -> some View {
         Menu {
             Button { newName = d.name; renaming = true } label: { Label { Text("Rename") } icon: { Image(systemName: "pencil") } }
@@ -251,13 +230,6 @@ struct DeviceDetailView: View {
             }
             if d.canMakeAdmin {
                 Button { promoting = true } label: { Label { Text("Make it an admin") } icon: { Image(systemName: "person.badge.key") } }
-            }
-            // An admin member that may be a hub, or one the root makes an admin
-            // first; this phone is the hub under Settings. A member that is no
-            // admin can be a hub that only passes the copies on. The hub is
-            // chosen by itself: making one is in the advanced settings.
-            if advanced, !d.isSelf, d.online, !d.throughHub, d.can("hub"), !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
-                Button { hubbing = true } label: { Label { Text("Make it a hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") } }
             }
             if !d.isSelf {
                 Button(role: .destructive) { removing = true } label: { Label { Text("Remove") } icon: { Image(systemName: "trash") } }

@@ -65,7 +65,7 @@ pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
 /// began a rekey, so a rekey, which WireGuard starts once a session is two
 /// minutes old, does not leave an endpoint that works.
 pub(crate) const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
-const MAX_ENDPOINTS: usize = 8;
+pub const MAX_ENDPOINTS: usize = 8;
 pub(crate) const TCP_BUFFER: usize = 64 << 10;
 /// The connections through the tunnel's local port at once; this member
 /// makes one or two.
@@ -94,6 +94,16 @@ pub struct State {
     /// The offers of the group's hubs, one per hub.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hubs: Vec<Hub>,
+    /// On the records of 0.6, the pre-shared keys toward each hub this
+    /// device sent `tunnel` to (`cbb_core::hubkey::DeviceSide`), by the
+    /// hub's device ID in hex.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub toward: std::collections::BTreeMap<String, Toward>,
+    /// On a hub of the records of 0.6, each client's WireGuard key toward
+    /// it and the pre-shared keys it holds for that client
+    /// (`cbb_core::hubkey::HubSide`), by the client's device ID in hex.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub held: std::collections::BTreeMap<String, Held>,
     /// The key sealed by the TPM or the Secure Enclave, as Go keeps it;
     /// key stays out of the file then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -166,7 +176,7 @@ pub struct State {
 /// A client as its hub keeps it: its WireGuard key, its own preshared key,
 /// and the chain it presented with the key, so that the hub drops it when
 /// the records revoke it; empty for one another hub handed over.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Member {
     pub device: String,
     #[serde(with = "b64")]
@@ -177,10 +187,21 @@ pub struct Member {
     pub chain: Vec<Vec<u8>>,
 }
 
+impl core::fmt::Debug for Member {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Member")
+            .field("device", &self.device)
+            .field("key", &self.key)
+            .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("chain", &self.chain)
+            .finish()
+    }
+}
+
 /// A hub's forwarder or a device's relay: its address, for UDP and TCP,
 /// and the pin of its key; for a forwarder the group's VLESS user ID and
 /// way once it registered, and whether it is the project's.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Forwarder {
     pub endpoint: SocketAddr,
     #[serde(rename = "key")]
@@ -191,6 +212,18 @@ pub struct Forwarder {
     pub vless: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub project: bool,
+}
+
+impl core::fmt::Debug for Forwarder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Forwarder")
+            .field("endpoint", &self.endpoint)
+            .field("pin", &self.pin)
+            .field("vless_id", &cbb_core::secret::Redacted(self.vless_id.len()))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("project", &self.project)
+            .finish()
+    }
 }
 
 fn is_false(b: &bool) -> bool {
@@ -225,8 +258,93 @@ mod b64_list {
     }
 }
 
+/// A client of a hub of 0.6, as `tunnel.json` keeps it: its WireGuard key
+/// toward this hub, and `cbb_core::hubkey::HubSide`: the keys of the last
+/// connections it sent `tunnel` over and of the last handshakes, newest
+/// first.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Held {
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    received: Vec<Vec<u8>>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    handshaked: Vec<Vec<u8>>,
+}
+
+impl std::fmt::Debug for Held {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Held").field("received", &self.received.len()).finish_non_exhaustive()
+    }
+}
+
+impl Held {
+    /// The keys as the core keeps them; a damaged entry is left out.
+    pub fn side(&self) -> cbb_core::hubkey::HubSide {
+        cbb_core::hubkey::HubSide {
+            received: self.received.iter().filter_map(|k| key32(k).ok()).collect(),
+            handshaked: self.handshaked.iter().filter_map(|k| key32(k).ok()).collect(),
+        }
+    }
+
+    pub fn of(key: [u8; 32], side: &cbb_core::hubkey::HubSide) -> Held {
+        Held {
+            key: key.to_vec(),
+            received: side.received.iter().map(|k| k.to_vec()).collect(),
+            handshaked: side.handshaked.iter().map(|k| k.to_vec()).collect(),
+        }
+    }
+}
+
+/// The pre-shared keys toward one hub, as `tunnel.json` keeps
+/// `cbb_core::hubkey::DeviceSide`: the keys of the last connections it sent
+/// `tunnel` over with their tags, newest first, the one the hub confirmed and
+/// the last handshake's.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct Toward {
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    sent: Vec<Vec<u8>>,
+    #[serde(with = "b64_list", default, skip_serializing_if = "Vec::is_empty")]
+    confirms: Vec<Vec<u8>>,
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    confirmed: Vec<u8>,
+    #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
+    handshaked: Vec<u8>,
+}
+
+impl std::fmt::Debug for Toward {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Toward").field("sent", &self.sent.len()).finish_non_exhaustive()
+    }
+}
+
+impl Toward {
+    /// The keys as the core keeps them; a damaged entry is left out.
+    pub fn side(&self) -> cbb_core::hubkey::DeviceSide {
+        cbb_core::hubkey::DeviceSide {
+            handshaked: key32(&self.handshaked).ok(),
+            confirmed: key32(&self.confirmed).ok(),
+            sent: self
+                .sent
+                .iter()
+                .zip(&self.confirms)
+                .filter_map(|(k, c)| Some(cbb_core::hubkey::Psk { key: key32(k).ok()?, confirm: key32(c).ok()? }))
+                .collect(),
+        }
+    }
+
+    pub fn of(side: &cbb_core::hubkey::DeviceSide) -> Toward {
+        Toward {
+            sent: side.sent.iter().map(|p| p.key.to_vec()).collect(),
+            confirms: side.sent.iter().map(|p| p.confirm.to_vec()).collect(),
+            confirmed: side.confirmed.map(|k| k.to_vec()).unwrap_or_default(),
+            handshaked: side.handshaked.map(|k| k.to_vec()).unwrap_or_default(),
+        }
+    }
+}
+
 /// The offer of one of the group's hubs, as this member keeps it.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Hub {
     pub device: String,
     #[serde(with = "b64")]
@@ -253,6 +371,33 @@ pub struct Hub {
     pub next_obfuscation: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_vless: Option<serde_json::Value>,
+    /// The hub's own key on each forwarder endpoint (its key for that
+    /// face, the offer's field 9); an endpoint not named takes `key`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub faces: Vec<Face>,
+}
+
+/// The key a hub serves WireGuard under on one forwarder endpoint.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+pub struct Face {
+    pub endpoint: SocketAddr,
+    #[serde(with = "b64")]
+    pub key: Vec<u8>,
+}
+
+impl core::fmt::Debug for Hub {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Hub")
+            .field("device", &self.device)
+            .field("key", &self.key)
+            .field("psk", &cbb_core::secret::Redacted(self.psk.len()))
+            .field("endpoints", &self.endpoints)
+            .field("next", &self.next)
+            .field("obfuscation", &self.obfuscation.as_ref().map(|_| "<hidden>"))
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("faces", &self.faces)
+            .finish()
+    }
 }
 
 /// The hubs that VLESS reached last, which try it first the next time
@@ -293,10 +438,64 @@ impl Hub {
         !self.endpoints.is_empty() || self.vless.is_some()
     }
 
+    /// The ways to the hub on the records of 0.6, one per key it serves
+    /// under: its own key on the endpoints no face names, and each
+    /// forwarder face's key on that face's endpoints; the way over VLESS
+    /// goes with the face of its forwarder, the first face (else `key`).
+    /// Each way has its key in `key` and no faces.
+    pub fn ways(&self) -> Vec<Hub> {
+        let vless_key = self.faces.first().map_or(&self.key, |f| &f.key).clone();
+        let mut ways: Vec<Hub> = Vec::new();
+        let way = |ways: &mut Vec<Hub>, key: &[u8]| -> usize {
+            if let Some(i) = ways.iter().position(|w| w.key == key) {
+                return i;
+            }
+            ways.push(Hub {
+                key: key.to_vec(),
+                endpoints: Vec::new(),
+                vless: None,
+                next_vless: None,
+                faces: Vec::new(),
+                ..self.clone()
+            });
+            ways.len() - 1
+        };
+        for e in &self.endpoints {
+            let i = way(&mut ways, self.key_at(e));
+            if let Some(w) = ways.get_mut(i) {
+                w.endpoints.push(*e);
+            }
+        }
+        if self.vless.is_some() {
+            let i = way(&mut ways, &vless_key);
+            if let Some(w) = ways.get_mut(i) {
+                w.vless = self.vless.clone();
+                w.next_vless = self.next_vless.clone();
+            }
+        }
+        ways
+    }
+
+    /// The hub's key on the endpoint at: its key for that forwarder's face,
+    /// or `key`.
+    pub fn key_at(&self, at: &SocketAddr) -> &[u8] {
+        self.faces.iter().find(|f| f.endpoint == *at).map_or(&self.key, |f| &f.key)
+    }
+
     /// The offer as the hub serves it with its next key: that key, and the
     /// AmneziaWG settings and the way over VLESS that go with it, or the
     /// present ones from a hub that gives none.
     pub fn with_next(&self) -> Hub {
+        // A face the hub serves under its own key (`endpoint-keys` naming
+        // field 1) moves to the next key with it.
+        let faces = self
+            .faces
+            .iter()
+            .map(|f| Face {
+                endpoint: f.endpoint,
+                key: if f.key == self.key { self.next.clone() } else { f.key.clone() },
+            })
+            .collect();
         Hub {
             key: self.next.clone(),
             next: Vec::new(),
@@ -304,6 +503,7 @@ impl Hub {
             vless: self.next_vless.clone().or_else(|| self.vless.clone()),
             next_obfuscation: None,
             next_vless: None,
+            faces,
             ..self.clone()
         }
     }
@@ -384,6 +584,8 @@ impl State {
             key: Vec::new(),
             psk: Vec::new(),
             hubs: Vec::new(),
+            toward: Default::default(),
+            held: Default::default(),
             key_tpm: None,
             key_se: None,
             is_hub: false,
@@ -559,7 +761,7 @@ impl State {
     }
 
     /// Whether pub is one of this device's public keys.
-    fn own_key(&self, public: &[u8]) -> bool {
+    pub(crate) fn own_key(&self, public: &[u8]) -> bool {
         [&self.key, &self.serving, &self.next].iter().any(|k| !k.is_empty() && public_of(k) == public)
     }
 
@@ -594,7 +796,7 @@ impl State {
                 if self.own_key(&key) {
                     return Err(Error::msg("a client has the hub's key"));
                 }
-                Ok(crate::hub::Peer { key, psk, addr, until: None, source: None })
+                Ok(crate::hub::Peer { key, psk, older_psks: Vec::new(), addr, until: None, source: None })
             })
             .collect()
     }
@@ -621,7 +823,7 @@ impl State {
         }
         if let Some(i) = i {
             let c = &mut self.members[i];
-            if c.key == public && (psk.is_empty() || c.psk == psk) && c.chain == chain {
+            if c.key == public && (psk.is_empty() || cbb_core::secret::ct_eq(&c.psk, psk)) && c.chain == chain {
                 return Ok((c.clone(), false));
             }
             if !psk.is_empty() {
@@ -664,7 +866,7 @@ impl State {
         }
         if let Some(i) = i {
             let c = &mut self.members[i];
-            if !c.chain.is_empty() || c.key == public && c.psk == psk {
+            if !c.chain.is_empty() || c.key == public && cbb_core::secret::ct_eq(&c.psk, psk) {
                 return Ok(false);
             }
             (c.key, c.psk) = (public.to_vec(), psk.to_vec());
@@ -945,6 +1147,7 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
         vless: o.vless.clone(),
         next_obfuscation: o.next_obfuscation.clone(),
         next_vless: o.next_vless.clone(),
+        faces: Vec::new(),
     })
 }
 
@@ -986,6 +1189,38 @@ impl Link {
         peer: Ipv6Addr,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Link> {
+        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
+        let psk: [u8; 32] = hub.psk.as_slice().try_into().context("the tunnel's preshared key is not 32 bytes")?;
+        Link::start_with(st.secret(), hub_key, psk, hub, own, peer, log)
+    }
+
+    /// Starts a link of this device (me) to the hub on the records of 0.6,
+    /// with this device's own key toward that hub (`hubkey::key_for`) and
+    /// one of the pre-shared keys of its connections with it. `hub` is one
+    /// way of `Hub::ways`: the endpoints under one key of the hub's.
+    pub fn start_toward(
+        secret: [u8; 32],
+        psk: [u8; 32],
+        hub: &Hub,
+        me: &cbb_core::records::DeviceId,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Link> {
+        let own = crate::tunnel_addr(&cbb_core::certs::hex(&me.0))
+            .ok_or_else(|| Error::msg("this device's ID gives no tunnel address"))?;
+        let peer = addr(&hub.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", hub.device)))?;
+        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
+        Link::start_with(StaticSecret::from(secret), hub_key, psk, hub, own, peer, log)
+    }
+
+    fn start_with(
+        secret: StaticSecret,
+        hub_key: [u8; 32],
+        psk: [u8; 32],
+        hub: &Hub,
+        own: Ipv6Addr,
+        peer: Ipv6Addr,
+        log: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Result<Link> {
         if !hub.reachable() {
             return Err(Error::msg("the group's hub has no address away from home yet"));
         }
@@ -1016,10 +1251,7 @@ impl Link {
         ln.set_nonblocking(true).context("cannot open the tunnel's local port")?;
         let port = ln.local_addr().context("cannot open the tunnel's local port")?.port();
 
-        let secret = st.secret();
         let public = PublicKey::from(&secret);
-        let hub_key: [u8; 32] = hub.key.as_slice().try_into().context("the hub's key is not 32 bytes")?;
-        let psk: [u8; 32] = hub.psk.as_slice().try_into().context("the tunnel's preshared key is not 32 bytes")?;
         let awg = match &hub.obfuscation {
             Some(v) => Some(crate::awg::Awg::new(crate::awg::Obfuscation::from_offer(v)?, &hub_key, public.as_bytes())),
             None => None,
@@ -1068,6 +1300,11 @@ impl Link {
     /// Reports whether the hub has answered through the tunnel.
     pub fn answered(&self) -> bool {
         self.answered.load(Ordering::SeqCst)
+    }
+
+    /// What answered reads, for a watch on another thread.
+    pub fn answered_flag(&self) -> Arc<AtomicBool> {
+        self.answered.clone()
     }
 }
 
@@ -1614,7 +1851,7 @@ pub(crate) fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) ->
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     std::thread_local! {
@@ -1724,6 +1961,8 @@ mod tests {
     /// the same.
     #[test]
     fn a_go_hubs_state_saves_the_same() {
+        // The file's own form: a Mac's Secure Enclave would seal the key.
+        crate::keys::files_only_on_this_thread();
         let want: serde_json::Value =
             serde_json::from_str(include_str!("../../testdata/interop/tunnel-state.json")).unwrap();
         let dir = std::env::temp_dir().join(format!("cbb-tunnel-go-{}", std::process::id()));
@@ -2095,7 +2334,8 @@ mod tests {
         p
     }
 
-    fn syn(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+    /// An IPv6 packet with a TCP SYN from src's port 40000 to dst's port.
+    pub(crate) fn syn(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
         let mut t = vec![0u8; 20];
         t[0..2].copy_from_slice(&40000u16.to_be_bytes());
         t[2..4].copy_from_slice(&port.to_be_bytes());
@@ -2106,7 +2346,8 @@ mod tests {
         ip6(src, dst, 6, t, 16)
     }
 
-    fn udp(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
+    /// An IPv6 packet with a UDP datagram from src's port 40000 to dst's port.
+    pub(crate) fn udp(src: Ipv6Addr, dst: Ipv6Addr, port: u16) -> Vec<u8> {
         let mut u = vec![0u8; 8];
         u[0..2].copy_from_slice(&40000u16.to_be_bytes());
         u[2..4].copy_from_slice(&port.to_be_bytes());

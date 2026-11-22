@@ -3,7 +3,7 @@
 
 // Home (docs/apps.md, "Screens"): sync on and off, Everywhere (sync away
 // from home), the paste button that sends what the user copied, what came
-// last, the group's alerts and its devices as tiles or a list, in the
+// last and the group's devices as tiles or a list, in the
 // user's order and collections. A tap opens a device, a long press arranges
 // its tile. The Aurora app's MainPage, on ArkUI. A big screen (from 720 vp
 // wide: a tablet, a foldable open) shows the devices on orbits around this
@@ -14,22 +14,18 @@
 // right click's menu on a tile, and drag and drop: on a tile to paste on its
 // device, beside the tiles to send to the group.
 
-import { common } from '@kit.AbilityKit';
 import { unifiedDataChannel, uniformTypeDescriptor } from '@kit.ArkData';
 import { router } from '@kit.ArkUI';
 import { KeyCode } from '@kit.InputKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
-import { scanQr } from '../common/Scan';
 import { copyIn, Shared } from '../common/Share';
 import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
-import { Admit } from '../model/Admit';
-import { isInvitation } from '../model/Invite';
-import { Alert, Device, Member } from '../model/Member';
+import { Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
-import { BusyLine, ErrorText } from '../components/Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON } from '../components/Common';
 import { DeviceDetail, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
 import { SettingsBody } from '../components/SettingsBody';
@@ -76,6 +72,8 @@ function settingsLabel(key: string): string {
       return t('settings_notifications');
     case 'p:recovery':
       return t('recovery_title');
+    case 'p:change_root':
+      return t('change_root');
     case 'p:hub':
       return t('hub_title');
     case 's:group':
@@ -119,6 +117,9 @@ struct Main {
     if (app.membership === undefined) {
       router.clear();
       router.replaceUrl({ url: 'pages/Start' });
+    } else if (app.isBefore06()) {
+      router.clear();
+      router.replaceUrl({ url: 'pages/Before06' });
     }
   }
 
@@ -148,6 +149,8 @@ struct Main {
     const rows: string[] = ['s:general', 's:notifications'];
     if (app.isRoot()) {
       rows.push('p:recovery');
+    } else if (app.member.running) {
+      rows.push('p:change_root');
     }
     if (app.member.running) {
       rows.push('p:hub');
@@ -180,6 +183,8 @@ struct Main {
     this.drawer = false;
     if (section === 'p:recovery') {
       router.pushUrl({ url: 'pages/Recovery' });
+    } else if (section === 'p:change_root') {
+      router.pushUrl({ url: 'pages/ChangeRoot' });
     } else if (section === 'p:hub') {
       router.pushUrl({ url: 'pages/Hub' });
     } else if (section !== this.section) {
@@ -292,7 +297,7 @@ struct Main {
       return true;
     }
     if (ctrl && e.keyCode === KeyCode.KEYCODE_N && app.isAdmin()) {
-      this.scanCode();
+      this.addDevice();
       return true;
     }
     if (ctrl || this.section.startsWith('s:')) {
@@ -384,22 +389,9 @@ struct Main {
     });
   }
 
-  // Scans a code: a device's join code adds it, an invitation opens its page.
-  async scanCode(): Promise<void> {
-    const s = await scanQr(getContext(this) as common.UIAbilityContext);
-    if (s.text === undefined) {
-      if (s.failure !== undefined) {
-        this.error = Errors.shown(s.failure);
-      }
-      return;
-    }
-    if (Admit.isJoinCode(s.text)) {
-      router.pushUrl({ url: 'pages/AddDevice', params: { 'qr': s.text } as Record<string, Object> });
-    } else if (isInvitation(s.text)) {
-      this.error = t('main_invitation_in_group');
-    } else {
-      this.error = t('error_not_join_code');
-    }
+  // Adds a device: the new device dials this phone's pairing window.
+  addDevice(): void {
+    router.pushUrl({ url: 'pages/OpenWindow' });
   }
 
   // Saves the files of the last copy where the user picks.
@@ -449,7 +441,7 @@ struct Main {
   menu(): MenuElement[] {
     const items: MenuElement[] = [];
     if (app.isAdmin()) {
-      items.push({ value: t('main_scan'), action: () => { this.scanCode(); } });
+      items.push({ value: t('admit_title'), action: () => { this.addDevice(); } });
       items.push({ value: t('main_invite'), action: () => { router.pushUrl({ url: 'pages/Invite' }); } });
     }
     items.push({ value: t('collection_new'), action: () => { router.pushUrl({ url: 'pages/CollectionName' }); } });
@@ -474,6 +466,8 @@ struct Main {
     }
     if (app.isRoot()) {
       items.push({ value: t('recovery_title'), action: () => { router.pushUrl({ url: 'pages/Recovery' }); } });
+    } else if (app.member.running) {
+      items.push({ value: t('change_root'), action: () => { router.pushUrl({ url: 'pages/ChangeRoot' }); } });
     }
     items.push({ value: t('settings_title'), action: () => { router.pushUrl({ url: 'pages/Settings' }); } });
     return items;
@@ -493,47 +487,6 @@ struct Main {
         }))
       Text(label).fontSize(11).fontColor($r('app.color.secondary'))
     }
-  }
-
-  @Builder
-  alertCard(a: Alert) {
-    Column({ space: 8 }) {
-      Text(alertText(a)).fontColor(a.kind === 'newer' ? $r('app.color.accent') : $r('app.color.error')).fontSize(14)
-      if (app.isRoot() && a.kind === 'two_histories') {
-        Button(t('alert_void_both'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
-          this.confirm(t('alert_void_both_confirm'), () => { app.resolve(a.records ?? []); });
-        })
-      }
-      if (app.isRoot() && (a.kind === 'claims' || a.kind === 'claim_pending' || a.kind === 'claim_stopped')) {
-        Button(t('alert_cancel_claim'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
-          this.confirm(t('alert_cancel_claim_confirm'), () => { app.resolve(a.records ?? []); });
-        })
-      }
-      if (app.isRoot() && a.kind === 'admins') {
-        ForEach(a.devices ?? [], (id: string, i: number) => {
-          Button(t('alert_remove', (a.names ?? [])[i] ?? id), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-            .onClick(() => {
-              this.confirm(t('device_remove_confirm_final'), () => { app.manage('remove', id); });
-            })
-        }, (id: string) => id)
-      }
-      if (!app.isRoot() && ['two_histories', 'admins', 'claims', 'claim_pending', 'claim_stopped'].includes(a.kind)) {
-        Text(t('alert_root_decides')).fontSize(13).fontColor($r('app.color.secondary'))
-      }
-    }
-    .alignItems(HorizontalAlign.Start)
-    .padding(12)
-    .borderRadius(14)
-    .backgroundColor($r('app.color.surface'))
-    .width('100%')
-  }
-
-  confirm(message: string, yes: () => void): void {
-    this.getUIContext().showAlertDialog({
-      message: message,
-      primaryButton: { value: t('cancel'), action: () => {} },
-      secondaryButton: { value: t('confirm'), fontColor: $r('app.color.error'), action: yes }
-    });
   }
 
   @Builder
@@ -636,7 +589,7 @@ struct Main {
     .width('100%')
   }
 
-  // Where sync stands, the paste button, what came last, the alerts and the tip.
+  // Where sync stands, the paste button, what came last and the tip.
   @Builder
   top() {
     // Where sync stands, its switch and Everywhere's.
@@ -688,20 +641,37 @@ struct Main {
       Text(app.member.last).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
     }
+    // The last copy that came from another device, with Copy (D-128).
+    if (app.member.lastId.length > 0) {
+      Row({ space: 12 }) {
+        Column() {
+          Text(t('main_last_received', app.member.lastFrom)).fontSize(13).fontColor($r('app.color.secondary'))
+          if (app.member.lastText.length > 0) {
+            Text(app.member.lastText).fontSize(15).fontColor($r('app.color.text')).maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        Button($r('app.string.main_copy_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
+          .enabled(app.member.running)
+          .onClick(() => {
+            app.member.copyReceived();
+          })
+      }
+      .width('100%')
+    }
     if (app.member.fetching) {
       BusyLine({ busy: true, label: $r('app.string.main_fetching') })
     }
     if (app.member.received.length > 0) {
-      Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+      Button($r('app.string.main_save_received'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
         .onClick(() => {
           this.saveReceived();
         })
     }
 
     BugCard({ bugs: app.bugs })
-    ForEach(app.member.alerts, (a: Alert) => {
-      this.alertCard(a);
-    }, (a: Alert) => `${a.kind}:${(a.records ?? []).join(',')}`)
 
     // "Lost phone?" on the group's only admin: how a second phone
     // becomes one. Closed once, it stays closed.
@@ -982,29 +952,3 @@ struct Main {
   }
 }
 
-// What an alert says (docs/core-api.md, the member's alerts).
-function alertText(a: Alert): string {
-  const who = (a.names ?? []).length > 0 ? (a.names ?? []).join(', ') : t('alert_unknown_devices');
-  switch (a.kind) {
-    case 'stopped':
-      return t('alert_stopped');
-    case 'secrets_stopped':
-      return t('alert_secrets_stopped');
-    case 'two_histories':
-      return t('alert_two_histories', who);
-    case 'admins':
-      return t('alert_admins', who);
-    case 'claims':
-      return t('alert_claims', who);
-    case 'claim_pending': {
-      const hours = Math.ceil((a.left_ms ?? 0) / 3600000);
-      return hours <= 0 ? t('alert_claim_pending', who) : t('alert_claim_pending_left', who, hours);
-    }
-    case 'claim_stopped':
-      return t('alert_claim_stopped', who);
-    case 'newer':
-      return t('alert_newer', a.count ?? 0);
-    default:
-      return a.kind;
-  }
-}

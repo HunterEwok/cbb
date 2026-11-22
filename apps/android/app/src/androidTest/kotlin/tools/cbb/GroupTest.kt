@@ -15,8 +15,6 @@ import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -87,10 +85,18 @@ class GroupTest {
         compose.waitUntil(10_000) { compose.runOnUiThread { compose.activity.hasWindowFocus() } }
     }
 
-    /** Waits on the test's thread until ok holds, up to seconds. */
+    /**
+     * Waits on the test's thread until ok holds, up to seconds. Each round
+     * lets Compose run first: the rule runs the screens' effects (Add a
+     * device's window, the sync as the window takes the focus) on its own
+     * dispatcher, which moves only while the test waits for Compose, so a
+     * bare sleep would hold them until the next interaction.
+     */
     private fun until(seconds: Int, what: String, ok: () -> Boolean) {
         val deadline = System.currentTimeMillis() + seconds * 1000L
-        while (!ok()) {
+        while (true) {
+            compose.waitForIdle()
+            if (ok()) return
             if (System.currentTimeMillis() > deadline) throw AssertionError("not within ${seconds}s: $what")
             Thread.sleep(250)
         }
@@ -110,16 +116,17 @@ class GroupTest {
         return text
     }
 
-    /** A1: Start, "Create a group", the QR code's text, Add: the phone's own group with the computer in it. */
+    /**
+     * A1: Start, "Create a group": the phone makes its group and opens its
+     * pairing window, and the computer joins with the six digits it shows
+     * (D-119): the phone's own group with the computer in it.
+     */
     @Test
     fun a1_admitComputer() {
         assertEquals(AppModel.Phase.START, model.phase)
         compose.onNodeWithText(str(R.string.create_group)).performClick()
-        val (code, pairing) = Bench.pairCode(Bench.PC)
-        typeAndAdd(code)
-        until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
-        val out = pairing.finish(60)
-        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group"))
+        joinWindow(Bench.PC)
+        until(30, "the phone at Home; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
         until(30, "${Bench.PC} in the phone's devices: ${model.group.devices.map { it.name }}") {
             model.group.devices.any { it.name == Bench.PC }
         }
@@ -144,15 +151,19 @@ class GroupTest {
         }
     }
 
-    /** A1: the big button sends the phone's copy to the computer. */
+    /** A1: the big button sends the phone's copy to the computer, and swaps in the group's copy before it, if any (D-128). */
     @Test
     fun a2_sendToComputer() {
         settled(Bench.PC)
+        val before = model.group.latestCopy
         val text = "cbb-bench phone A1 from the phone ${System.currentTimeMillis()}"
         setClip(text)
         runBlocking { model.sync() }
-        assertEquals("the button says ${model.message}", R.string.sent, model.message?.text)
+        assertTrue("the button says ${model.message}", model.message?.text in setOf(R.string.sent, R.string.swapped))
         Bench.arrives(Bench.PC, text)
+        if (before != null && before.text.isNotEmpty() && model.message?.text == R.string.swapped) {
+            assertEquals("the group's copy before the swap is in the phone's clipboard", before.text, clip())
+        }
     }
 
     /** A1: the big button fetches the computer's copy onto the phone's clipboard. */
@@ -217,18 +228,24 @@ class GroupTest {
         }
     }
 
-    /** Q8: a quick action the computer allows runs from the phone; turned all off, the next is refused. */
+    /**
+     * Q8: quick actions from the phone. On the records of 0.6 the core does
+     * not run them yet (0.7, plans): the phone asks, and the core answers
+     * that this build does not do it, which the note shows in a debug build,
+     * and the computer's service keeps running. Turning a computer's actions
+     * off is a command of 0.6 and works.
+     */
     @Test
     fun a7_quickActions() {
         val pc = idOf(Bench.PC)
         Bench.run(Bench.PC, "cbb action enable restart -any-key -yes")
         val pid = { Bench.run(Bench.PC, "pgrep -o -f '^cbb service'").trim() }
         val before = pid()
-        assertTrue("restart refused: ${model.message}", runBlocking { model.runAction(pc, "restart") })
-        until(30, "the service on ${Bench.PC} restarted") { runCatching { pid() }.getOrDefault(before).let { it.isNotEmpty() && it != before } }
-        until(60, "the phone connected to ${Bench.PC} again") { model.group.devices.any { it.name == Bench.PC && it.online } }
-        assertTrue("turning all off refused: ${model.message}", runBlocking { model.actionsOff(pc) })
-        assertFalse("restart ran after all were turned off", runBlocking { model.runAction(pc, "restart") })
+        val notYet = "does not work in this build yet"
+        assertFalse("restart ran on the records of 0.6", runBlocking { model.runAction(pc, "restart") })
+        assertTrue("the note names the core's answer: ${model.message}", model.message?.detail.orEmpty().contains(notYet))
+        assertTrue("turning all off was refused: ${model.message}", runBlocking { model.actionsOff(pc) })
+        assertEquals("the service on ${Bench.PC} restarted", before, pid())
     }
 
     /** A1: a second computer admitted, renamed and removed; the removed one says so. */
@@ -260,7 +277,17 @@ class GroupTest {
         try {
             runBlocking { model.remove(id) }
             assertEquals("removing says ${model.message}", R.string.removed, model.message?.text)
-            until(60, "$second says it was removed") { Bench.run(second, "cbb status").contains("removed from the group") }
+            // A removed device need not learn of it (the owner, 2026-11-20): the group refuses it.
+            until(60, "$second gone from the phone's devices: ${model.group.devices.map { it.name }}") {
+                runBlocking { model.refresh() }
+                model.group.devices.none { it.id == id }
+            }
+            val late = "cbb-bench phone A6 from the removed computer ${System.currentTimeMillis()}"
+            runCatching { Bench.copy(second, late) }
+            Thread.sleep(10_000)
+            val pasted = runCatching { Bench.run(Bench.PC, "cbb paste -terminal 2>&1") }.getOrElse { it.toString() }
+            assertFalse("${Bench.PC} took a copy from the removed $second: $pasted", pasted.contains(late))
+            assertFalse("the phone took a copy from the removed $second: ${model.group.latestCopy}", model.group.latestCopy?.text == late)
             runBlocking { model.refresh() }
             Thread.sleep(2_000)
             val removed = context.getString(R.string.event_removed, "bench-second")
@@ -273,44 +300,35 @@ class GroupTest {
     }
 
     /**
-     * Types the QR code's text on the add page and taps Add once the button
-     * takes it, scrolled into view: below a working camera's preview the
-     * page scrolls, and a tap outside the screen reaches nothing.
+     * Joins dev, a member in no group, through the window the phone opened:
+     * the recovery sheet of a new group is kept, and dev is given the text
+     * of the window's QR code (Bench.joinWindow). Fails with what cbb pair printed and the app's state.
      */
-    private fun typeAndAdd(code: String) {
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextInput(code)
-        val add = compose.onNodeWithText(str(R.string.add))
-        until(10, "Add takes the code") { runCatching { add.assertIsEnabled() }.isSuccess }
-        // The keyboard that the text brought up shrinks the page as it
-        // slides in, and a tap below the page's new bottom reaches nothing:
-        // scroll to Add once the page settled, and again if a tap was lost
-        // (a second tap while the app admits does nothing).
-        // Pairing takes seconds: the app is busy, or it says why it is not.
-        val started = { model.busy || model.message != null }
-        for (i in 1..3) {
-            // Admitted already, the page closed.
-            if (i > 1 && runCatching { add.assertExists() }.isFailure) return
-            compose.waitForIdle()
-            add.performScrollTo()
-            compose.waitForIdle()
-            add.performClick()
-            if (runCatching { until(5, "the app starts admitting") { started() } }.isSuccess) return
+    private fun joinWindow(dev: String) {
+        try {
+            until(60, "the phone's pairing window open") { model.windowQr != null }
+        } catch (e: AssertionError) {
+            throw AssertionError("${e.message}\n${appState()}")
         }
-        throw AssertionError("not within 15s: the app starts admitting\n${appState()}")
-    }
-
-    /** Admits a member in no group from Home's + menu, by its QR code's text. */
-    private fun admit(dev: String) {
-        compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
-        compose.onNodeWithText(str(R.string.scan_code)).performClick()
-        val (code, pairing) = Bench.pairCode(dev)
-        typeAndAdd(code)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { model.newSheet = null }
         val out = try {
-            pairing.finish(90)
+            Bench.joinWindow(dev, model.windowQr!!)
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
         }
-        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group"))
+        assertTrue("cbb pair -code on $dev did not join:\n$out\n${appState()}", out.contains("Joined the group"))
+        until(30, "the window says $dev joined: ${model.message}") { model.message?.text == R.string.window_joined }
+        // The emulator's network passes no mDNS: the phone is told where dev
+        // listens, as NSD would tell it at home.
+        until(30, "$dev in the phone's devices: ${model.group.devices.map { it.name }}") { model.group.devices.any { it.name == dev } }
+        model.group.dialInTests(idOf(dev), Bench.addr(dev))
+    }
+
+    /** Admits a member in no group from Home's + menu, through the phone's pairing window. */
+    private fun admit(dev: String) {
+        compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
+        compose.onNodeWithText(str(R.string.scan_code)).performClick()
+        joinWindow(dev)
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }
 
@@ -342,11 +360,7 @@ class GroupTest {
         try {
             // Settles what earlier tests left, so the send screen finds the group connected.
             runBlocking { model.sync() }
-            // A computer's copy of a moment ago, from an earlier test, is what the button
-            // fetches first instead of sending.
-            until((model.group.incomingMS / 1000).toInt() + 15, "no copy of a moment ago from another device: ${model.group.recentCopy}") {
-                model.group.recentCopy == null
-            }
+            // The send screen swaps (D-128): the phone's text goes out, whatever the group holds.
             setClip(text)
             InstrumentationRegistry.getInstrumentation().runOnMainSync { model.message = null }
             // What the widget's and the tile's PendingIntent start.
@@ -355,9 +369,9 @@ class GroupTest {
             try {
                 Bench.arrives(Bench.PC, text)
             } catch (e: Throwable) {
-                throw AssertionError("${e.message}; the send screen says ${model.message}; the latest copy ${model.group.recentCopy}; the phone's clipboard has ${clip()}", e)
+                throw AssertionError("${e.message}; the send screen says ${model.message}; the latest copy ${model.group.latestCopy}; the phone's clipboard has ${clip()}", e)
             }
-            until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text == R.string.sent }
+            until(10, "the send screen says it sent; it says ${model.message}") { model.message?.text in setOf(R.string.sent, R.string.swapped) }
         } finally {
             model.group.setOwnMode("shared")
         }
@@ -399,10 +413,9 @@ class GroupTest {
         val copied = Bench.run(Bench.PC, "mkdir -p /tmp/o11src && printf 'cbb-bench phone O11 from the computer $stamp' >/tmp/o11src/$back && cbb copy /tmp/o11src/$back 2>&1")
         try {
             // The button waits until the computer's copy is here: pressed
-            // before it, it sends what the phone's clipboard holds (a9's
-            // text, which the phone's own files replaced), and that newer
-            // copy wins over the computer's (SyncRule.decide).
-            until(30, "${Bench.PC}'s files reach the phone") { model.group.recentCopy?.media?.isFiles == true }
+            // before it, it would swap in the phone's own files instead
+            // (D-128).
+            until(30, "${Bench.PC}'s files reach the phone") { model.group.latestCopy?.media?.isFiles == true }
             until(60, "the phone saves ${Bench.PC}'s file") {
                 runBlocking { model.sync() }
                 model.message?.text == R.string.files_saved
@@ -461,56 +474,23 @@ class GroupTest {
     }
 
     /**
-     * W16 and G14: the phone is the group's hub while its app is open, at a
-     * forwarder: a wrong key is refused with the reason, the right one
-     * registers, a computer away reaches the phone through it, an
-     * invitation the phone serves admits a computer, and the network the
-     * phone is on becomes a home network.
+     * G14: the phone is the group's hub while its app is open. In a group
+     * of 0.6 its forwarder is the root's setting, and this phone, the root,
+     * names none, so the hub serves at home only; an invitation the phone
+     * serves admits a computer, and the network the phone is on becomes a
+     * home network.
      */
     @Test
-    fun c1_phoneHub() {
+    fun c1_phoneHubAtHome() {
         val hubNow = { runBlocking { model.refresh() }; model.hub ?: throw AssertionError("the phone cannot be the hub") }
-        val (fwd, key) = Bench.forwarder()
+        // A hub turns sync away from home on; the tests after this one find
+        // it as it was.
+        val awayWasOff = (model.away?.status ?: AwayFromHome.Status.OFF) == AwayFromHome.Status.OFF
         runBlocking { model.setHub(true) }
+        assertEquals("turning the hub on says ${model.hubNote}", null, model.hubNote)
         try {
-            // Turned on, the hub takes the project's forwarder, or none, for
-            // home only, when the emulator cannot look its name up.
-            hubNow().let {
-                if (it.forwarder == null) {
-                    assertEquals("the hub without a forwarder: ${model.hubNote}", HubOnPhone.Status.HOME_ONLY, it.status)
-                } else {
-                    assertTrue("the hub's first forwarder is not the project's: ${it.forwarder}", it.forwarder?.isProject == true)
-                }
-            }
-            runBlocking { model.setForwarder(fwd, java.util.Base64.getEncoder().encodeToString(ByteArray(32))) }
-            until(60, "a wrong key refused with the reason; the app says ${model.hub}") {
-                hubNow().let { it.status == HubOnPhone.Status.FAILED && it.error != null }
-            }
-            runBlocking { model.setForwarder(fwd, key) }
-            assertEquals("setting the forwarder says ${model.hubNote}", null, model.hubNote)
-            until(60, "the phone registered at $fwd; the app says ${model.hub}") { hubNow().status == HubOnPhone.Status.REGISTERED }
-
-            // At home the computer learns the phone hub's offer over its connection to the phone.
-            Bench.run(Bench.PC, "cbb global on", stdin = "yes\n")
-            var global = ""
-            try {
-                until(120, "${Bench.PC} learns the phone hub's offer") {
-                    // The computer connects again for its hello to carry its tunnel key; the phone dials it.
-                    runBlocking { model.sync() }
-                    global = runCatching { Bench.run(Bench.PC, "cbb global") }.getOrElse { it.toString() }
-                    global.contains("the hub is")
-                }
-                // Away: the phone no longer reaches the computer's member port, whose connection ends,
-                // so the computer reaches the phone through the forwarder.
-                Bench.run(Bench.PC, CUT_HOME)
-                until(180, "${Bench.PC} connected to the phone hub") {
-                    // What the phone sends on its old connection meets the reset.
-                    runBlocking { model.sync() }
-                    global = runCatching { Bench.run(Bench.PC, "cbb global") }.getOrElse { it.toString() }
-                    global.contains("connected to the hub")
-                }
-            } catch (e: AssertionError) {
-                throw AssertionError("${e.message}:\n$global\nthe app says ${model.hub}\n${Bench.PC}'s log:\n${Bench.logs(Bench.PC)}")
+            until(60, "the hub at home only, with no forwarder the root named; the app says ${model.hub}") {
+                hubNow().let { it.status == HubOnPhone.Status.HOME_ONLY && it.forwarder == null }
             }
 
             // G14: an invitation the phone makes and serves, used by a new computer.
@@ -535,18 +515,20 @@ class GroupTest {
             assertEquals("adding the home network says (${networks()})", null, model.hubNote)
             assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
         } finally {
-            runCatching { Bench.run(Bench.PC, CUT_HOME.replace(" -A ", " -D ")) }
-            runCatching { Bench.run(Bench.PC, "cbb global off", stdin = "yes\n") }
             runBlocking { model.setHub(false) }
+            if (awayWasOff) runBlocking { model.setAway(false) }
         }
         assertEquals("the hub turned off", HubOnPhone.Status.OFF, hubNow().status)
+        if (awayWasOff) assertEquals("sync away from home off again", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
     }
 
     /**
      * W42 and W5: a computer the phone made an admin is the hub; it admits a
      * computer by itself, which the phone lists (G36); with sync away from
      * home on, the phone, which finds no hub on its network (the emulator
-     * sees no mDNS), reaches it through the tunnel in the app's process,
+     * sees no mDNS) and whose direct connection the hub refuses then (the
+     * bench's relay on the emulator's host would keep it at home), reaches
+     * it through the tunnel in the app's process,
      * marks it as the hub in use and shows the computer behind it online; the app and cbb global say where it stands, also while the hub
      * does not answer.
      */
@@ -570,7 +552,8 @@ class GroupTest {
         val guest = Bench.add()
         val window = Bench.start(hub, "cbb pair </dev/null")
         val code = window.line("Pairing code:").replace(" ", "")
-        val at = window.line("If it cannot find this one: cbb pair -code")
+        // "cbb pair -code ADDRESS, and type this line instead of the code:"
+        val at = window.line("If it cannot find this one: cbb pair -code").substringBefore(",").trim()
         val joined = Bench.run(guest, "cbb pair -code $at", stdin = "$code\n", seconds = 90)
         assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group"))
         val admitted = window.finish(60)
@@ -582,6 +565,31 @@ class GroupTest {
         assertEquals("off before it is turned on", AwayFromHome.Status.OFF, model.away?.status ?: AwayFromHome.Status.OFF)
         runBlocking { model.setAway(true) }
         assertEquals("turning it on says ${model.awayNote}", null, model.awayNote)
+        // The hub's offer comes over the phone's connection with it.
+        until(60, "the phone holds $hub's offer; the app says ${model.away}") {
+            runBlocking { model.refresh() }
+            model.away?.status == AwayFromHome.Status.AT_HOME
+        }
+        // The bench lets the phone reach every member over the emulator's
+        // host, so the phone stays connected to the hub directly and counts
+        // itself at home with it. Away from home it has no such path: the
+        // hub refuses what comes from the emulator's host to its member port
+        // from here on (the tunnel's datagrams still pass), and the phone
+        // takes the tunnel. Nor does the hub reach the phone by its own dial,
+        // which goes to the bench's relay to the phone on the same host.
+        val gateway = "\$(ip route | awk '/^default/ {print \$3; exit}')"
+        Bench.run(hub, "iptables -I INPUT -p tcp --dport 8764 -s $gateway -j REJECT --reject-with tcp-reset")
+        Bench.run(hub, "iptables -I OUTPUT -p tcp -d $gateway -j REJECT --reject-with tcp-reset")
+        try {
+            awayThrough(hub, guest)
+        } finally {
+            Bench.run(hub, "iptables -D OUTPUT -p tcp -d $gateway -j REJECT --reject-with tcp-reset")
+            Bench.run(hub, "iptables -D INPUT -p tcp --dport 8764 -s $gateway -j REJECT --reject-with tcp-reset")
+        }
+    }
+
+    /** c2 once the phone holds the hub's offer: the phone through hub's tunnel, guest behind it. */
+    private fun awayThrough(hub: String, guest: String) {
         val status = { runBlocking { model.refresh() }; model.away }
         until(120, "the phone connected through $hub's tunnel; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
         // The phone's devices list marks the computer as the hub it reaches.
@@ -612,15 +620,5 @@ class GroupTest {
         until(120, "the phone through the tunnel again; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
         runBlocking { model.setAway(false) }
         assertEquals("off again", AwayFromHome.Status.OFF, status()?.status ?: AwayFromHome.Status.OFF)
-    }
-
-    private companion object {
-        /**
-         * Cuts the phone off from a member's port: both ends of a connection
-         * there are reset, so neither keeps a stale one. With -D in place of
-         * -A it undoes it.
-         */
-        const val CUT_HOME = "iptables -A INPUT -p tcp --dport 8764 -j REJECT --reject-with tcp-reset && " +
-            "iptables -A OUTPUT -p tcp --sport 8764 -j REJECT --reject-with tcp-reset"
     }
 }

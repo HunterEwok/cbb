@@ -16,8 +16,8 @@ enum DeviceLayout: String {
 /// Home: the phone's one page, or on a big screen (an iPad, a foldable
 /// iPhone's inner screen) the sidebar and the devices (PadHome). Both share
 /// the sheets: adding a device, an invitation, the paste note, and remote
-/// paste from a tile's menu. What was copied goes out as the app opens
-/// (AppModel.sendOnOpen).
+/// paste from a tile's menu. What was copied goes out as the app opens,
+/// or the group's copy comes in (AppModel.opened).
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -86,6 +86,7 @@ struct PhoneHome: View {
                     if let message = model.message {
                         Text(message).foregroundStyle(palette.textDim)
                     }
+                    LastReceived()
                     if arrange.on { ArrangeBar() }
                     if many { DeviceFilters(filter: $filter) }
                     if searching {
@@ -700,5 +701,34 @@ struct DeviceFilters: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(filter == f ? .isSelected : [])
+    }
+}
+
+/// The last copy that came from another device (D-128): from which device
+/// and its text, a secret without it, with Copy, which puts it in the
+/// clipboard. Copy, a newer copy, or the end of the copy's lifetime
+/// (D-129) takes the line away.
+struct LastReceived: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if let r = model.received {
+            HStack(alignment: .center, spacing: Tokens.spacingSmall) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Last received from \(r.from)").font(.footnote).foregroundStyle(palette.textDim)
+                    if !r.text.isEmpty { Text(r.text).lineLimit(2).truncationMode(.tail) }
+                }
+                Spacer(minLength: 0)
+                Button { Task { await model.copyReceived() } } label: { Text("Copy") }
+                    .buttonStyle(.bordered)
+                    .disabled(model.busy)
+            }
+            .task(id: r.id) {
+                let left = r.until.timeIntervalSinceNow
+                if left > 0 { try? await Task.sleep(for: .seconds(left)) }
+                if !Task.isCancelled { model.receivedExpired(r.id) }
+            }
+        }
     }
 }

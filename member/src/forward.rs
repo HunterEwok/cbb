@@ -2,12 +2,12 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A hub's registration with the group's forwarder (docs/protocol.md,
-//! section 13), as Go's forward.Register does it: TLS 1.3 to the forwarder
-//! known by the pin of its key, the member certificate with the key kept
-//! where the app keeps it, the proof of the hub's WireGuard key, the
-//! group's records, then hellos from the hub's WireGuard port so that the
-//! forwarder learns where that port is reached. The phones' hub in Rust
-//! (ffi/) registers through it.
+//! section 13), by `cbb-forward/3` alone: TLS 1.3 to the forwarder known by
+//! the pin of its key, the certificate of the hub's server key for the
+//! forwarder's face, the proof of the hub's WireGuard key and the face's
+//! hubs' credential in the format's messages (`v3`), then hellos from the
+//! hub's WireGuard port so that the forwarder learns where that port is
+//! reached. The phones' hub in Rust (ffi/) registers through it.
 //!
 //! When the forwarder's TCP port does not answer and the group's clients
 //! come over VLESS, the registration goes inside VLESS with XHTTP, as the Go
@@ -20,7 +20,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
@@ -31,11 +31,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
 
-use crate::certs::{self, b64};
+use crate::certs;
 use crate::error::{Context, Error, Result};
 
+pub(crate) mod v3;
+
 /// The registration's protocol and the labels of the keys it takes from TLS.
-pub const PROTOCOL: &[u8] = b"cbb-forward/2";
+pub use v3::PROTOCOL;
 const PROOF_LABEL: &[u8] = b"cbb forwarder key";
 const HELLO_LABEL: &[u8] = b"cbb forwarder hello";
 
@@ -45,7 +47,6 @@ const HELLO_FIRST: Duration = Duration::from_secs(1);
 const MIN_BACKOFF: Duration = Duration::from_secs(1);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const MAX_FRAME: usize = 1 << 20;
-const MAX_RECORDS: usize = 1024;
 /// A hello: the type, the registration's ID, a counter and a MAC, behind the
 /// mask's nonce and before up to HELLO_TAIL random bytes.
 const NONCE: usize = 12;
@@ -62,25 +63,18 @@ pub struct Config {
     /// key may have.
     pub endpoint: SocketAddr,
     pub pins: Vec<certs::KeyHash>,
-    /// The hub's member certificate chain (the leaf, its admin CA if it has
-    /// one, the group's roots) and its key.
-    pub chain: Vec<Vec<u8>>,
-    pub key: Arc<dyn crate::identity::ExternalKey>,
     /// The hub's WireGuard private key.
     pub wg_key: [u8; 32],
     /// The group's AmneziaWG settings, as the offers carry them.
     pub obfuscation: Option<Value>,
     /// The group's VLESS user ID, for a hub whose clients come over VLESS.
     pub vless_id: Option<String>,
-    /// The group's authority records, which show the forwarder that the
-    /// member key is the root's or an admin's; the next registration takes
-    /// what is there then.
-    pub records: Arc<Mutex<Vec<Value>>>,
     /// Sends a datagram from the hub's WireGuard port.
     pub send: SendFn,
-    /// The period's hubs' credential that lists the hub's server key, as Go's
-    /// HubConfig.Credentials; asked at each registration and checked while
-    /// it lasts, so that a newer one makes the hub register again.
+    /// The hubs' credential of the forwarder's face that lists the hub's
+    /// server key; asked at each registration and checked while it lasts,
+    /// so that a newer one makes the hub register again. Without it the hub
+    /// waits ([`NOT_LISTED`]).
     pub credential: Option<CredentialFn>,
 
     /// The project's ways in over VLESS, for a hub whose forwarder is the
@@ -176,21 +170,26 @@ fn vless_ways(addr: std::net::IpAddr, id: &str, learned: Option<&Value>, ways: &
 /// user ID (internal/forward's register.go).
 pub const VLESS_ID_TAKEN: &str = "another group registered that VLESS user ID";
 
-/// The hubs' credential a hub registers with in place of its member
-/// certificate and the records (docs/protocol.md, section 18).
+/// What a hub registers with (docs/protocol.md, section 18): the hubs'
+/// credential of the forwarder's face, and its server key for that face
+/// with the key's certificate, which names no device.
 #[derive(Clone)]
 pub struct HubCredential {
-    pub credentials: Vec<cbb_core::credential::Credential>,
-    /// The certificate of the server key, which names no device.
+    /// The credentials' envelopes: the face's hubs' credential.
+    pub credentials: Vec<Vec<u8>>,
     pub cert: Vec<u8>,
     pub key: Arc<dyn crate::identity::ExternalKey>,
 }
+
+/// Why a hub does not register yet: its group's credentials for the
+/// forwarder's face do not list its server key.
+pub const NOT_LISTED: &str = "the group's credentials for the forwarder do not list this hub yet";
 
 /// Gives the hub's credential now, None when it has none.
 pub type CredentialFn = Arc<dyn Fn() -> Option<HubCredential> + Send + Sync>;
 
 /// How the registration stands.
-#[derive(Clone, Default, Serialize, Debug)]
+#[derive(Clone, Default, Serialize)]
 pub struct Report {
     #[serde(skip_serializing_if = "core::ops::Not::not")]
     pub registered: bool,
@@ -204,6 +203,17 @@ pub struct Report {
     /// Why it is not registered.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+impl core::fmt::Debug for Report {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Report")
+            .field("registered", &self.registered)
+            .field("seen", &self.seen)
+            .field("vless", &self.vless.as_ref().map(|_| "<hidden>"))
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 /// The running registration; dropping it stops it.
@@ -272,58 +282,9 @@ pub(crate) struct SystemClock;
 
 impl rustls::time_provider::TimeProvider for SystemClock {
     fn current_time(&self) -> Option<UnixTime> {
-        SystemTime::now().duration_since(UNIX_EPOCH).ok().map(UnixTime::since_unix_epoch)
+        // The service's one wall clock, which the tests move.
+        u64::try_from(crate::uptime::wall_ms()).ok().map(|ms| UnixTime::since_unix_epoch(Duration::from_millis(ms)))
     }
-}
-
-#[derive(Deserialize)]
-struct Challenge {
-    #[serde(with = "b64")]
-    e: Vec<u8>,
-}
-
-#[derive(Serialize)]
-struct Claim<'a> {
-    #[serde(with = "b64")]
-    key: Vec<u8>,
-    #[serde(with = "b64")]
-    proof: Vec<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    obfuscation: Option<&'a Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    vless: Option<&'a str>,
-    /// A phone's root or admin key cannot sign without the user: the
-    /// records show the forwarder that its member key is the root's or an
-    /// admin's.
-    admin_sig: Option<()>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    records: Vec<Value>,
-    #[serde(skip_serializing_if = "<[_]>::is_empty")]
-    credentials: &'a [cbb_core::credential::Credential],
-}
-
-#[derive(Deserialize, Default)]
-struct Answer {
-    #[serde(default)]
-    id: u64,
-    #[serde(with = "certs::b64::opt", default)]
-    mask: Option<Vec<u8>>,
-    #[serde(default)]
-    vless: Option<VlessAnswer>,
-    #[serde(default)]
-    error: String,
-    #[serde(default)]
-    seen: String,
-}
-
-#[derive(Deserialize)]
-struct VlessAnswer {
-    #[serde(default)]
-    transport: String,
-    port: u16,
-    server_name: String,
-    #[serde(default)]
-    path: String,
 }
 
 /// One registration, until it breaks or stop; true when it ends because
@@ -335,15 +296,13 @@ fn once(
     stop: &AtomicBool,
     log: &Arc<dyn Fn(&str) + Send + Sync>,
 ) -> Result<bool> {
-    // With a credential the hub shows its server key's certificate and the
-    // credential, and neither its member certificate nor the records.
-    let cred = cfg.credential.as_ref().and_then(|f| f());
-    let (chain, key) = match &cred {
-        Some(c) => (std::slice::from_ref(&c.cert), &c.key),
-        None => (&cfg.chain[..], &cfg.key),
+    // The hub shows its server key's certificate alone, and the face's
+    // hubs' credential.
+    let Some(cred) = cfg.credential.as_ref().and_then(|f| f()) else { return Err(Error::msg(NOT_LISTED)) };
+    let chain = std::slice::from_ref(&cred.cert);
+    let connect = |at: SocketAddr, tcp: TcpStream| {
+        Registrar::handshake(tcp, at, &cfg.pins, chain, &cred.key, PROTOCOL, "forwarder")
     };
-    let connect =
-        |at: SocketAddr, tcp: TcpStream| Registrar::handshake(tcp, at, &cfg.pins, chain, key, PROTOCOL, "forwarder");
     // The stream over VLESS the registration took, and its way in.
     let mut over: Option<(crate::vless::Stream, cbb_core::vless::Link)> = None;
     let mut reg = match TcpStream::connect_timeout(&cfg.endpoint, SETUP_TIMEOUT) {
@@ -380,31 +339,33 @@ fn once(
     };
     let proof_key = reg.export(PROOF_LABEL)?;
     let hello_key = reg.export(HELLO_LABEL)?;
-    let ch: Challenge = reg.read(stop)?;
-    let (public, proof) = prove(&cfg.wg_key, &ch.e, &proof_key)
+    let e = v3::read_challenge(&reg.setup_frame(stop)?)?;
+    let (public, proof) = prove(&cfg.wg_key, &e, &proof_key)
         .ok_or_else(|| Error::msg("registering with the forwarder: a bad challenge"))?;
-    let mut records =
-        if cred.is_some() { Vec::new() } else { cfg.records.lock().map(|r| r.clone()).unwrap_or_default() };
-    records.truncate(MAX_RECORDS);
-    let claim = Claim {
-        key: public.to_vec(),
-        proof,
-        obfuscation: cfg.obfuscation.as_ref(),
-        vless: cfg.vless_id.as_deref(),
-        admin_sig: None,
-        records,
-        credentials: cred.as_ref().map_or(&[], |c| &c.credentials[..]),
+    let obfuscation = match &cfg.obfuscation {
+        Some(o) => Some(
+            cbb_core::invite::obfuscation_from_json(o)
+                .and_then(|o| obfuscation_encoding(&o))
+                .ok_or_else(|| Error::msg("the group's obfuscation settings do not fit the format"))?,
+        ),
+        None => None,
     };
-    reg.write(&claim)?;
-    let a: Answer = reg.read(stop)?;
-    if !a.error.is_empty() {
-        return Err(Error::msg(format!("the forwarder refused the registration: {}", a.error)));
-    }
-    let mask: [u8; 32] = a
-        .mask
-        .as_deref()
-        .and_then(|m| m.try_into().ok())
-        .ok_or_else(|| Error::msg("registering with the forwarder: no key for the hellos' mask"))?;
+    let vless_user = match &cfg.vless_id {
+        Some(id) => {
+            Some(cbb_core::vless::parse_id(id).map_err(|_| Error::msg("the group's VLESS user ID is not one"))?)
+        }
+        None => None,
+    };
+    let claim = v3::Register {
+        key: public,
+        proof: proof.try_into().map_err(|_| Error::msg("registering with the forwarder: a bad proof"))?,
+        obfuscation,
+        vless: vless_user,
+        credentials: cred.credentials.clone(),
+    };
+    reg.send(&claim.write())?;
+    let a = v3::Registered::read(&reg.setup_frame(stop)?)?;
+    let mask = a.mask;
     let vless = match (&cfg.vless_id, a.vless) {
         (Some(id), Some(v)) => Some(vless_offer(cfg.endpoint, id, v)),
         // A forwarder without VLESS registers the hub for UDP alone.
@@ -437,9 +398,7 @@ fn once(
     if let Ok(mut r) = report.lock() {
         *r = Report { registered: true, vless: vless.clone(), ..Report::default() };
     }
-    if cred.is_some() {
-        log("cbb: the hub registered with the forwarder with the group's hubs' credential");
-    }
+    log("cbb: the hub registered with the forwarder with the group's hubs' credential");
 
     // Hellos until the connection breaks: every second until the forwarder
     // saw one, then every HELLO_EVERY; between them, its answers.
@@ -452,22 +411,18 @@ fn once(
         if Instant::now() >= next {
             // A newer credential makes the hub register again with it.
             let now = cfg.credential.as_ref().and_then(|f| f());
-            if now
-                .as_ref()
-                .and_then(|n| n.credentials.last())
-                .is_some_and(|n| cred.as_ref().and_then(|c| c.credentials.last()) != Some(n))
-            {
+            if now.as_ref().and_then(|n| n.credentials.last()).is_some_and(|n| cred.credentials.last() != Some(n)) {
                 return Ok(true);
             }
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+            let now = u64::try_from(crate::uptime::wall_ms()).unwrap_or(0).saturating_mul(1_000_000);
             counter = counter.saturating_add(1).max(now);
             (cfg.send)(hello_to, &hello(&mask, &hello_key, a.id, counter));
             next = Instant::now() + every;
         }
         let Some(f) = reg.next_frame(stop)? else { continue };
-        let a: Answer = serde_json::from_slice(&f).unwrap_or_default();
-        if !a.seen.is_empty() && a.seen != seen && a.seen.parse::<SocketAddr>().is_ok() {
-            seen.clone_from(&a.seen);
+        let Some(at) = v3::read_seen(&f) else { continue };
+        if at != seen && at.parse::<SocketAddr>().is_ok() {
+            seen = at;
             every = HELLO_EVERY;
             if let Ok(mut r) = report.lock() {
                 *r = Report { registered: true, seen: Some(seen.clone()), vless: vless.clone(), ..Report::default() };
@@ -477,14 +432,14 @@ fn once(
     Ok(false)
 }
 
-/// The VLESS settings an offer carries, from the forwarder's answer.
-fn vless_offer(endpoint: SocketAddr, id: &str, v: VlessAnswer) -> Value {
+/// The VLESS settings an offer carries, from the forwarder's answer: XHTTP
+/// at the forwarder's address, on the web server's port (443 when the
+/// answer names none).
+fn vless_offer(endpoint: SocketAddr, id: &str, v: v3::Way) -> Value {
     let mut m = serde_json::Map::new();
-    if !v.transport.is_empty() {
-        m.insert("transport".into(), Value::from(v.transport));
-    }
-    m.insert("endpoint".into(), Value::from(SocketAddr::new(endpoint.ip(), v.port).to_string()));
-    m.insert("server_name".into(), Value::from(v.server_name));
+    m.insert("transport".into(), Value::from("xhttp"));
+    m.insert("endpoint".into(), Value::from(SocketAddr::new(endpoint.ip(), v.port.unwrap_or(443)).to_string()));
+    m.insert("server_name".into(), Value::from(v.host));
     if !v.path.is_empty() {
         m.insert("path".into(), Value::from(v.path));
     }
@@ -492,10 +447,28 @@ fn vless_offer(endpoint: SocketAddr, id: &str, v: VlessAnswer) -> Value {
     Value::Object(m)
 }
 
+/// The group's AmneziaWG settings as the format's table `obfuscation`
+/// writes them; None when they do not fit it.
+fn obfuscation_encoding(o: &cbb_core::invite::Obfuscation) -> Option<Vec<u8>> {
+    use cbb_core::format::cbor::Value as V;
+    let s: Vec<V<'_>> = o.s.iter().map(|x| V::Uint(u64::from(*x))).collect();
+    let h: Vec<V<'_>> =
+        o.h.iter().map(|r| V::Array(vec![V::Uint(u64::from(r.min)), V::Uint(u64::from(r.max))])).collect();
+    let v = V::Map(vec![
+        (1, V::Uint(u64::from(o.jc))),
+        (2, V::Uint(u64::from(o.jmin))),
+        (3, V::Uint(u64::from(o.jmax))),
+        (4, V::Array(s)),
+        (5, V::Array(h)),
+        (6, V::Bytes(&o.header_protection_key)),
+    ]);
+    let b = v.encode();
+    cbb_core::msg::Obfuscation::decode(&b, "forward/register/obfuscation").ok().map(|o| o.encoding().to_vec())
+}
+
 /// The TLS connection of a registration with a server known by the pin
-/// of its key, the forwarder or the relay (what, in the errors), as Go's
-/// forward.TLSVerifiedByPin: its frames, JSON behind a 4-byte length, and
-/// the keys exported from its TLS.
+/// of its key, the forwarder or the relay (what, in the errors): its
+/// frames, the format's on its grid, and the keys exported from its TLS.
 pub(crate) struct Registrar {
     s: rustls::StreamOwned<rustls::ClientConnection, TcpStream>,
     inbox: Vec<u8>,
@@ -505,13 +478,6 @@ pub(crate) struct Registrar {
 }
 
 impl Registrar {
-    /// Writes bytes as they are, for the tests of a server's setup.
-    #[cfg(test)]
-    pub(crate) fn raw_write(&mut self, b: &[u8]) -> Result<()> {
-        use std::io::Write as _;
-        self.s.write_all(b).and_then(|()| self.s.flush()).map_err(|e| Error::msg(format!("{e}")))
-    }
-
     pub(crate) fn connect(
         endpoint: SocketAddr,
         pins: &[certs::KeyHash],
@@ -554,6 +520,15 @@ impl Registrar {
         Ok(Registrar { s, inbox: Vec::new(), what, waiting: false })
     }
 
+    /// Sends a whole frame as it is.
+    pub(crate) fn send(&mut self, frame: &[u8]) -> Result<()> {
+        let what = self.what;
+        self.s
+            .write_all(frame)
+            .and_then(|()| self.s.flush())
+            .map_err(|e| Error::msg(format!("registering with the {what}: {e}")))
+    }
+
     /// A key from the registration's TLS under label.
     pub(crate) fn export(&self, label: &[u8]) -> Result<[u8; 32]> {
         let out = self
@@ -564,20 +539,9 @@ impl Registrar {
         out[..].try_into().map_err(|_| Error::msg(format!("registering with the {}: a short key", self.what)))
     }
 
-    pub(crate) fn write<T: Serialize>(&mut self, v: &T) -> Result<()> {
-        let what = self.what;
-        let f = crate::wire::json_frame(v, MAX_FRAME)?;
-        self.s
-            .write_all(&f)
-            .and_then(|()| self.s.flush())
-            .map_err(|e| Error::msg(format!("registering with the {what}: {e}")))
-    }
-
-    /// The next message during the setup.
-    pub(crate) fn read<T: serde::de::DeserializeOwned>(&mut self, stop: &AtomicBool) -> Result<T> {
-        let f =
-            self.next_frame(stop)?.ok_or_else(|| Error::msg(format!("registering with the {}: stopped", self.what)))?;
-        serde_json::from_slice(&f).map_err(|_| Error::msg(format!("registering with the {}: a bad message", self.what)))
+    /// The next frame during the setup, its body.
+    pub(crate) fn setup_frame(&mut self, stop: &AtomicBool) -> Result<Vec<u8>> {
+        self.next_frame(stop)?.ok_or_else(|| Error::msg(format!("registering with the {}: stopped", self.what)))
     }
 
     /// Ends the setup: from now on reads wait a moment only, so that the
@@ -594,7 +558,8 @@ impl Registrar {
         let mut buf = [0u8; 4096];
         loop {
             if let Some(head) = self.inbox.get(..4).and_then(|h| <[u8; 4]>::try_from(h).ok()) {
-                let n = crate::wire::frame_len(head, MAX_FRAME)?;
+                let n = cbb_core::format::frame::length(head, MAX_FRAME)
+                    .map_err(|r| Error::msg(format!("the {}'s frame breaks {r}", self.what)))?;
                 if self.inbox.len() >= 4 + n {
                     let f = self.inbox[4..4 + n].to_vec();
                     self.inbox.drain(..4 + n);

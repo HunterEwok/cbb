@@ -15,12 +15,6 @@ object Interop {
 
     fun read(name: String): JsonElement = Json.parseToJsonElement(File(dir, name).readText())
 
-    /**
-     * Where the kit's tests write what they make for the Go tests to check,
-     * named as the Swift kit names them, so that the same Go tests read
-     * them: CBB_INTEROP_OUT, or null to write nothing.
-     */
-    val out: File? = System.getenv("CBB_INTEROP_OUT")?.let { File(it).apply { mkdirs() } }
 }
 
 fun b64(s: String): ByteArray = Base64.getDecoder().decode(s)

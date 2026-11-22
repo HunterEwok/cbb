@@ -1,186 +1,198 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
+#if canImport(Network)
 @testable import CBBKit
 import Foundation
 import XCTest
 
-/// The phone's member in the Rust core (CoreMember): two phones of one
-/// group, one listening as the hub, the other dialing the address it was
-/// handed, sync, follow the button's rule and answer commands.
+/// The phone's member in the Rust core (CoreMember): a phone makes a group,
+/// a second phone joins it by its window, and the two sync, follow the
+/// button's rule and carry out the root's actions.
 final class CoreMemberTests: XCTestCase {
+    /// One phone of the group: its member, key and device ID.
+    struct Phone {
+        let member: CoreMember
+        let key: SoftwareSigner
+        let device: String
+        let dir: URL
+    }
+
+    /// A group of two phones: a root that listens at home, and a phone that
+    /// joined by its window and dials it.
+    struct Group {
+        let root: Phone
+        let rootKey: SoftwareSigner
+        let phone: Phone
+        let port: UInt16
+    }
+
+    private func temporary(_ name: String) -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-core-member-\(name)-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        return dir
+    }
+
+    private func start(_ dir: URL, _ name: String, _ device: String, _ key: SoftwareSigner) throws -> CoreMember {
+        let m = try CoreMember(.init(dir: dir, name: name, device: device, publicKeyDER: key.publicKeyDER)) { try key.signature(digest: $0) }
+        addTeardownBlock { m.stop() }
+        return m
+    }
+
+    /// The root phone alone: its group made, its member running.
+    private func rootPhone() throws -> (Phone, SoftwareSigner) {
+        let rootKey = SoftwareSigner(), key = SoftwareSigner()
+        let dir = temporary("root")
+        let made = try CorePairing.newGroup(dir: dir, name: "Root phone", store: Records.hardware, rootPublic: rootKey.publicKeyDER,
+                                            publicKey: key.publicKeyDER) { try rootKey.signature(digest: $0) }
+        return (Phone(member: try start(dir, "Root phone", made.device, key), key: key, device: made.device, dir: dir), rootKey)
+    }
+
+    private func group() throws -> Group {
+        let (root, rootKey) = try rootPhone()
+        let port = try root.member.listen(.home)
+        let w = try CorePairing.Window(member: root.member, publicKey: rootKey.publicKeyDER, addrs: ["127.0.0.1"]) {
+            try rootKey.signature(digest: $0)
+        }
+        defer { w.close() }
+        let key = SoftwareSigner()
+        let dir = temporary("phone")
+        let j = try CorePairing.Joiner(dir: dir, qr: w.qr, name: "Phone B", os: "ios", publicKey: key.publicKeyDER) {
+            try key.signature(digest: $0)
+        }
+        defer { j.close() }
+        var v: UInt64 = 0
+        var device = ""
+        for _ in 0..<200 {
+            let s = try j.next(after: v, timeout: .milliseconds(100))
+            if s.state == "done" { device = s.device; break }
+            if s.state == "failed" { throw s.failure ?? CorePairing.Failure("the join failed") }
+            v = s.version
+        }
+        XCTAssertFalse(device.isEmpty, "the phone joined")
+        let phone = Phone(member: try start(dir, "Phone B", device, key), key: key, device: device, dir: dir)
+        try phone.member.found(root.device, addrs: ["127.0.0.1:\(port)"], device: root.device)
+        return Group(root: root, rootKey: rootKey, phone: phone, port: port)
+    }
+
+    private func until(_ what: String, _ cond: () throws -> Bool) async throws {
+        for _ in 0..<500 {
+            if try cond() { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTFail("timed out waiting for \(what)")
+    }
+
     func testSyncsTheButtonAndCommands() async throws {
-        let t = try CoreGroup(test: self)
-        let (a, b) = (t.phones[0], t.phones[1])
-        try await t.connect(1, to: 0)
-        // B heard of A with A's chain.
-        let peer = try await b.peer(a.device)
-        XCTAssertEqual(peer.chain.first, t.g.memberCert)
-        XCTAssertEqual(peer.name, "Root phone")
-        XCTAssertEqual(peer.role, "phone")
-        XCTAssertTrue(peer.servesMedia)
+        let t = try group()
+        let (a, b) = (t.root, t.phone)
         let up = try await b.member.wait(timeout: .seconds(10))
         XCTAssertTrue(up)
-        XCTAssertEqual(b.member.connected(), [a.device])
+        try await until("a sees b") { a.member.connected().contains(b.device) }
+        let peer = try XCTUnwrap(try b.member.peers().first { $0.device == a.device })
+        XCTAssertEqual(peer.name, "Root phone")
+        XCTAssertEqual(peer.role, "phone")
 
-        // B's text reaches A, waits there for the button, and once taken
-        // neither waits nor goes back.
+        // B's text reaches A; A's button swaps it in for what A holds, and
+        // once taken it neither comes again nor goes back (D-128).
         try b.member.copy("from phone B")
-        let copy = try await a.copy("from phone B")
-        XCTAssertEqual(copy.origin, b.device)
-        XCTAssertEqual(copy.key, "from phone B")
-        XCTAssertEqual(try a.member.waiting()?.id, copy.id)
-        XCTAssertEqual(try a.member.current()?.id, copy.id)
+        try await until("the copy at A") { try a.member.current()?.origin == b.device }
+        let copy = try XCTUnwrap(try a.member.current())
+        XCTAssertEqual(copy.text, "from phone B")
+        let swap = try a.member.swap(board: "copied on A")
+        XCTAssertTrue(swap.sends, "the button sends what A holds")
+        XCTAssertEqual(swap.copy?.id, copy.id, "and takes the group's copy")
         try a.member.took(copy.id)
-        XCTAssertNil(try a.member.waiting())
-        XCTAssertFalse(try a.member.sends(board: "from phone B"))
-        XCTAssertTrue(try a.member.sends(board: "copied on A"))
+        XCTAssertNil(try a.member.swap(board: copy.text).copy, "a clipboard holding the group's copy takes nothing")
+        XCTAssertFalse(try a.member.swap(board: copy.text).sends, "the app's own write is no copy")
+        XCTAssertEqual(try a.member.opened(board: "copied on A", changed: false).copy?.id, copy.id, "opening on an unchanged clipboard takes")
+        let opened = try a.member.opened(board: "copied on A", changed: true)
+        XCTAssertTrue(opened.sends && opened.copy == nil, "opening on a changed clipboard only sends")
 
-        // The root's command for B goes to B's app, whose answer comes back.
-        let c = try t.g.modeCommand(to: b.device, mode: "receive", caSigner: t.ca, now: Date())
-        async let result = a.member.command(c)
-        let (token, from, got) = try await b.next("the command") { e -> (UInt64, String, Member.Record)? in
-            if case let .command(token, from, cmd) = e { return (token, from, cmd) }
-            return nil
-        }
-        XCTAssertEqual(from, a.device)
-        XCTAssertEqual(got, c)
-        try b.member.answer(token, result: .init(id: "", status: "done"))
-        let r = try await result
-        XCTAssertTrue(r.done, "\(r)")
-        XCTAssertEqual(r.id, Commands.id(of: c))
-        XCTAssertThrowsError(try b.member.answer(token, result: .init(id: "", status: "done")), "a second answer finds no command")
+        // The root renames B and turns its sync off; B carries the order out.
+        let sign = { [k = t.rootKey] (d: Data) throws -> Data in try k.signature(digest: d) }
+        _ = try a.member.act(["action": .string("rename"), "device": .string(b.device), "name": .string("Desk phone")],
+                             public: t.rootKey.publicKeyDER, sign: sign)
+        XCTAssertTrue(try a.member.group().devices.contains { $0.device == b.device && $0.name == "Desk phone" })
+        let r = try a.member.act(["action": .string("sync_off"), "device": .string(b.device)], public: t.rootKey.publicKeyDER, sign: sign)
+        XCTAssertEqual(r["status"]?.string, "done", "\(r)")
+        XCTAssertThrowsError(try a.member.act(["action": .string("rename"), "device": .string(b.device), "name": .string("x")],
+                                              public: b.key.publicKeyDER) { try b.key.signature(digest: $0) },
+                             "a key that is no admin's signs nothing the group takes")
+    }
 
-        // A tunnel key goes into the hellos; one of the wrong size does not.
-        try b.member.setTunnelKey(Data(repeating: 1, count: 32), psk: Data(repeating: 2, count: 32))
-        try b.member.setTunnelKey(nil, psk: nil)
-        XCTAssertThrowsError(try b.member.setTunnelKey(Data(repeating: 1, count: 3), psk: Data(repeating: 2, count: 32)))
-        try b.member.setEvidence([])
-        XCTAssertFalse(try a.member.records().isEmpty)
-        // A device let go is dialed again.
-        try b.member.disconnect(a.device)
+    /// The app in the background closes every connection; resumed, the
+    /// phone connects again.
+    func testPausesAndResumes() async throws {
+        let t = try group()
+        let b = t.phone
+        let up = try await b.member.wait(timeout: .seconds(10))
+        XCTAssertTrue(up)
+        try b.member.pause()
+        try await until("the pause") { b.member.connected().isEmpty }
+        try b.member.resume()
         let again = try await b.member.wait(timeout: .seconds(10))
         XCTAssertTrue(again)
     }
 
-    /// A command the app does not answer is refused after ten seconds; the
-    /// pause closes every connection.
-    func testPausesAndRefusesUnansweredCommands() async throws {
-        let t = try CoreGroup(test: self)
-        let (a, b) = (t.phones[0], t.phones[1])
-        try await t.connect(1, to: 0)
-        try b.member.pause()
-        try await b.until("the pause") { b.member.connected().isEmpty }
-        try b.member.resume()
-        let up = try await b.member.wait(timeout: .seconds(10))
-        XCTAssertTrue(up)
-        let c = try t.g.modeCommand(to: b.device, mode: "send", caSigner: t.ca, now: Date())
-        let r = try await a.member.command(c, timeout: .seconds(20))
-        XCTAssertEqual(r.status, "refused")
-        XCTAssertEqual(r.reason, "the app did not answer")
-    }
-
-    /// A blind relay's port serves a call only when the app names its
-    /// caller and the call's certificate names the same device; the relay's
-    /// and the tunnel's ports are on the loopback address only.
-    func testRelayServesOnlyTheAnnouncedCaller() async throws {
-        let t = try CoreGroup(test: self)
-        let (a, b) = (t.phones[0], t.phones[1])
-        let port = try b.member.listen(.relay)
-        XCTAssertEqual(try b.member.listen(.relay), port, "a port already open stays")
-        try a.member.found("relay", addrs: ["127.0.0.1:\(port)"], device: b.device)
-        // A call the relay announced from another device is closed.
-        let first = try await b.next("the first call") { e -> (UInt64, UInt16, String)? in
-            if case let .caller(token, port, device) = e { return (token, port, device) }
-            return nil
-        }
-        XCTAssertEqual(first.2, a.device)
-        try b.member.caller(first.0, device: Member.newID())
-        try await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertEqual(b.member.connected(), [])
-        XCTAssertThrowsError(try b.member.caller(first.0, device: a.device), "a call is named once")
-        // The next one, which the relay announced from the device its
-        // certificate names, is served.
-        let second = try await b.next("the second call") { e -> UInt64? in
-            if case let .caller(token, _, _) = e, token != first.0 { return token }
-            return nil
-        }
-        try b.member.caller(second, device: a.device)
-        try await b.until("the announced caller connected") { b.member.connected() == [a.device] }
-        // On another address than the loopback one, the relay's and the
-        // tunnel's ports take nothing.
-        let tunnel = try b.member.listen(.tunnel)
-        for host in LocalAddresses.current().filter({ !$0.contains(":") }) {
-            for p in [port, tunnel] { XCTAssertFalse(Self.connects(host, p), "\(host):\(p) took a connection") }
-        }
-        XCTAssertTrue(Self.connects("127.0.0.1", tunnel))
-        // Closed, the port takes nothing once the listener's thread let go.
-        try b.member.unlisten(.relay)
-        try await b.until("the relay's port closed") { !Self.connects("127.0.0.1", port) }
-    }
-
-    /// Whether a TCP connection to host:port is taken.
-    static func connects(_ host: String, _ port: UInt16) -> Bool {
-        #if os(Linux)
-        let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
-        #else
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        #endif
-        guard fd >= 0 else { return false }
-        defer { close(fd) }
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = port.bigEndian
-        inet_pton(AF_INET, host, &addr.sin_addr)
-        return withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
-        }
-    }
-
-    /// A hub share goes to the one peer the app names; from a device that
-    /// may not be a hub, the member drops it.
-    func testSendsAHubShareToOnePeer() async throws {
-        let t = try CoreGroup(3, test: self)
-        let (root, b, c) = (t.phones[0], t.phones[1], t.phones[2])
-        try await t.connect(1, to: 0)
-        try await t.connect(2, to: 0)
-        let share = Member.HubShare(serving: true)
-        XCTAssertEqual(try root.member.sendHubs(share, to: b.device), [b.device])
-        _ = try await b.next("the share") { if case let .message(_, .hubs(h)) = $0 { return h }; return nil }
-        // C, no hub, sends one to the root, which drops it.
-        XCTAssertEqual(try c.member.sendHubs(share, to: root.device), [root.device])
-        try c.member.copy("after the share")
-        _ = try await root.copy("after the share")
-        XCTAssertTrue(root.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty)
-        XCTAssertTrue(c.all { if case .message(_, .hubs) = $0 { return true }; return nil }.isEmpty, "C was not named")
-    }
-
-    /// A mode change connects again so the hellos say it, and the member
-    /// dials its peer again at once, however many changes come in a row.
+    /// A change of the phone's sync reaches the peer's hellos at once:
+    /// sync off says "own", on says "shared".
     func testReconnectsAtOnceAfterAModeChange() async throws {
-        let t = try CoreGroup(test: self)
-        let (a, b) = (t.phones[0], t.phones[1])
-        try await t.connect(1, to: 0)
-        // Sync off says "own" in the hellos, on says "shared".
+        let t = try group()
+        let (a, b) = (t.root, t.phone)
+        try await until("a sees b") { a.member.connected().contains(b.device) }
         for (i, on) in [false, true, false, true].enumerated() {
             let mode = on ? "shared" : "own"
             try b.member.setSync(on: on)
             let start = Date()
-            try await b.until("the peer's hello with mode \(mode), change \(i + 1)") {
+            try await until("the peer's hello with mode \(mode), change \(i + 1)") {
                 try a.member.peers().contains { $0.device == b.device && $0.mode == mode }
             }
             XCTAssertLessThan(Date().timeIntervalSince(start), 3, "change \(i + 1) took \(Date().timeIntervalSince(start)) s")
         }
     }
 
-    /// why says what the phone sees: sync off first, and the app's own
-    /// tunnel when it hands it in; a connected group with sync on has no
-    /// reason that stops.
+    /// A picture and a folder of files go from one phone to the other: the
+    /// other fetches the sealed blob within its limit and opens the parts.
+    func testNodesFetch() async throws {
+        let t = try group()
+        let (a, b) = (t.root, t.phone)
+        try await until("a sees b") { a.member.connected().contains(b.device) }
+        // A picture of 5 MiB and a bit, more than a fetch asks for ahead.
+        var rng = SystemRandomNumberGenerator()
+        let png = Data((0..<(5 << 20 + 1234)).map { _ in UInt8.random(in: 0...255, using: &rng) })
+        let sent = try a.member.copyMedia([.data(png, type: "image/png")], board: true)
+        XCTAssertEqual(sent.kind, .media)
+        try await until("the picture at B") { try b.member.current()?.id == sent.id }
+        let out = temporary("fetch")
+        try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        let parts = try await b.member.fetch(sent.id, max: 64 << 20, into: out.appendingPathComponent("picture"))
+        XCTAssertEqual(parts.count, 1)
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: parts[0].file)), png)
+
+        // Files and a folder go the same way, with their paths.
+        let src = out.appendingPathComponent("src")
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try Data("one".utf8).write(to: src.appendingPathComponent("one.txt"))
+        let files = try a.member.copyMedia([.folder(path: "docs"), .file(src.appendingPathComponent("one.txt"), path: "docs/one.txt")])
+        try await until("the files at B") { try b.member.current()?.id == files.id }
+        // Over the limit, nothing is fetched.
+        do {
+            _ = try await b.member.fetch(files.id, max: 1, into: out.appendingPathComponent("small"))
+            XCTFail("fetched a copy over the limit")
+        } catch is Core.Refusal {}
+        let opened = try await b.member.fetch(files.id, max: 1 << 20, into: out.appendingPathComponent("files"))
+        XCTAssertEqual(opened.map(\.path), ["docs", "docs/one.txt"])
+        let file = try XCTUnwrap(opened.first { !$0.dir })
+        XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: file.file)), Data("one".utf8))
+    }
+
+    /// why says what the phone sees: sync off first; a connected group with
+    /// sync on has no reason that stops; the view carries the same reasons.
     func testSaysWhyItDoesNotSync() async throws {
-        let t = try CoreGroup(test: self)
-        let b = t.phones[1]
-        try await t.connect(1, to: 0)
-        try await b.until("b connected") { !(try b.member.peers().isEmpty) }
+        let t = try group()
+        let b = t.phone
+        try await until("b connected") { !(try b.member.peers().isEmpty) }
         XCTAssertFalse(try b.member.why().contains { $0.level == "stop" })
         try b.member.setSync(on: false)
         XCTAssertEqual(try b.member.why().first?.code, "sync_off")
@@ -197,8 +209,7 @@ final class CoreMemberTests: XCTestCase {
     /// never reach freed memory: an event's handler that called the member
     /// as the app restarted it crashed the Android app.
     func testStopsWhileCalled() throws {
-        let t = try CoreGroup(test: self)
-        let m = t.phones[0].member
+        let m = try rootPhone().0.member
         let done = DispatchGroup()
         let calls = NSLock()
         var n = 0
@@ -221,60 +232,40 @@ final class CoreMemberTests: XCTestCase {
     /// The root's own records, which the core builds, checks and signs with
     /// the root key outside it (cbb_core::root).
     func testTheRootSignsItsOwnRecordsInTheCore() throws {
-        var t = try CoreGroup(test: self)
-        let m = t.root.member
-        let key = t.root.key
-        let rootKey = t.ca
+        let (phone, rootKey) = try rootPhone()
+        let m = phone.member
         let pub = rootKey.publicKeyDER
         let root = { (d: Data) throws -> Data in try rootKey.signature(digest: d) }
         func refused(_ f: () throws -> Void, _ line: UInt = #line) {
             XCTAssertThrowsError(try f(), line: line) { XCTAssertTrue($0 is Core.Refusal, "\($0)", line: line) }
         }
-        refused { try m.setTakeoverDelay(ms: 3_600_000, public: key.publicKeyDER) { try key.signature(digest: $0) } }
-        refused { try m.setTakeoverDelay(ms: -1, public: pub, sign: root) }
-        refused { try m.setKeyLevel("any", public: pub, sign: root) }
-        try m.setTakeoverDelay(ms: 3_600_000, public: pub, sign: root)
+        refused { _ = try m.setKeyLevel(Records.levelFiles, public: phone.key.publicKeyDER) { try phone.key.signature(digest: $0) } }
+        refused { _ = try m.setKeyLevel("any", public: pub, sign: root) }
         XCTAssertEqual(try m.setKeyLevel(Records.levelFiles, public: pub, sign: root), [])
-        _ = t.g.add(try m.records())
-        XCTAssertEqual(t.g.keyLevel, Records.levelFiles)
-        XCTAssertEqual(t.g.settings(of: Records.keyHash(spki: pub)).delay, 3_600_000, "the level keeps the delay")
-        refused { try m.handOver(to: t.g.device, public: pub, sign: root) }
-        refused { try m.handOver(to: Member.newID(), public: pub, sign: root) }
-        refused { try m.removeRecovery(public: pub, sign: root) }
-
-        let sheet = try m.makeRecovery(public: pub, sign: root)
-        XCTAssertTrue(sheet.qr.hasPrefix("cbb://recover?g=\(t.g.tag)&"), sheet.qr)
-        XCTAssertEqual(sheet.text.count, 69)
-        _ = t.g.add(try m.records())
-        XCTAssertEqual(t.g.records.recovery, sheet.admin, "the records name the sheet's key")
-        // A YubiKey's key replaces it; its admin CA goes into the card.
-        let card = SoftwareSigner()
-        let ca = try m.recoveryFor(card.publicKeyDER, public: pub, sign: root)
-        XCTAssertEqual(try CertificateInfo(der: ca).publicKey, card.publicKeyDER)
-        _ = t.g.add(try m.records())
-        XCTAssertEqual(t.g.records.recovery, try Records.keyHash(cert: ca))
-        try m.removeRecovery(public: pub, sign: root)
-        _ = t.g.add(try m.records())
-        XCTAssertNil(t.g.records.recovery)
+        XCTAssertEqual(try m.group().keyLevel, Records.levelFiles)
+        try m.setTtl(ms: 120_000, secretMS: nil, public: pub, sign: root)
+        XCTAssertEqual(try m.group().ttlMS, 120_000)
+        try m.setTtl(ms: nil, secretMS: 30_000, public: pub, sign: root)
+        XCTAssertEqual(try m.group().ttlMS, 120_000, "a left-out lifetime keeps its value")
+        XCTAssertEqual(try m.group().secretTtlMS, 30_000)
     }
 
     func testRefusesWhatItDoesNotKnowAndStops() throws {
-        let t = try CoreGroup(test: self)
-        let a = t.phones[0]
-        XCTAssertThrowsError(try a.member.run("no such op", Optional<Int>.none, as: Int.self)) { e in
+        let m = try rootPhone().0.member
+        XCTAssertThrowsError(try m.run("no such op", Optional<Int>.none, as: Int.self)) { e in
             XCTAssertTrue(e is Core.Refusal, "\(e)")
         }
-        XCTAssertNil(try a.member.current())
-        XCTAssertEqual(try a.member.peers(), [])
-        a.member.stop()
-        XCTAssertThrowsError(try a.member.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
+        XCTAssertNil(try m.current())
+        XCTAssertEqual(try m.peers(), [])
+        m.stop()
+        XCTAssertThrowsError(try m.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
     }
 
     /// The member keeps the tiles' order: a change shows in its view, and
     /// one that does not fit throws and changes nothing.
     func testKeepsTheTilesOrder() throws {
-        let t = try CoreGroup(test: self)
-        let m = t.phones[0].member
+        let t = try group()
+        let m = t.root.member
         let v = try m.view()
         XCTAssertFalse(v.custom)
         let me = try XCTUnwrap(v.devices.first?.id)
@@ -289,13 +280,21 @@ final class CoreMemberTests: XCTestCase {
         guard case .collection = try XCTUnwrap(m.view().tiles.first) else { return XCTFail("the collection did not move first") }
     }
 
+    /// A folder without a group of 0.6, or a device ID the key does not
+    /// make, starts no member.
     func testRefusesABadStart() throws {
         let k = SoftwareSigner()
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-core-bad-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let bad = try CoreMember.Config(dir: dir, name: "x", device: "nope", publicKeyDER: k.publicKeyDER, seal: CoreGroup.seal,
-                                        cert: Data([1, 2, 3]), issuer: nil, groupCA: Data([4]), roots: [])
-        XCTAssertThrowsError(try CoreMember(bad) { try k.signature(digest: $0) }) { XCTAssertTrue($0 is Core.Refusal, "\($0)") }
+        let dir = temporary("bad")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        XCTAssertThrowsError(try CoreMember(.init(dir: dir, name: "x", device: "nope", publicKeyDER: k.publicKeyDER)) {
+            try k.signature(digest: $0)
+        }) { XCTAssertTrue($0 is Core.Refusal, "\($0)") }
+        let (phone, _) = try rootPhone()
+        phone.member.stop()
+        let wrong = String(repeating: "0", count: 32)
+        XCTAssertThrowsError(try CoreMember(.init(dir: phone.dir, name: "x", device: wrong, publicKeyDER: phone.key.publicKeyDER)) {
+            try phone.key.signature(digest: $0)
+        }) { XCTAssertTrue($0 is Core.Refusal, "\($0)") }
     }
 
     /// The core's events read as the kit's.
@@ -305,17 +304,14 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertEqual(text, "hi")
         XCTAssertEqual(kind, .secret)
         XCTAssertEqual(ttl, 5000)
-        guard case let .message(from, .admin(ca))? = e(#"{"type":"message","from":"d","message":{"t":"admin","admin_ca":"AQI="}}"#) else {
-            return XCTFail()
-        }
-        XCTAssertEqual(from, "d")
-        XCTAssertEqual(ca, Data([1, 2]))
-        guard case .message(_, .other("future"))? = e(#"{"type":"message","from":"d","message":{"t":"future"}}"#) else { return XCTFail() }
         guard case let .copy(c)? = e(#"{"type":"copy","copy":{"id":"i","origin":"o","age_ms":3,"kind":"text","via":"copy","text":"t","media":null,"unread":false,"key":"t"}}"#) else {
             return XCTFail()
         }
-        XCTAssertEqual(c.event.id, "i")
-        XCTAssertEqual(c.event.ageMS, 3)
+        XCTAssertEqual(c.id, "i")
+        XCTAssertEqual(c.ageMS, 3)
+        guard case let .sync(off, by)? = e(#"{"type":"sync","off":true,"by":"Root phone"}"#) else { return XCTFail() }
+        XCTAssertTrue(off)
+        XCTAssertEqual(by, "Root phone")
         guard case let .panic(details)? = e(#"{"type":"panic","details":"panic: boom at member/src/x.rs:1:2"}"#) else { return XCTFail() }
         XCTAssertEqual(details, "panic: boom at member/src/x.rs:1:2")
         XCTAssertNil(e(#"{"type":"from the future"}"#))
@@ -323,38 +319,78 @@ final class CoreMemberTests: XCTestCase {
     }
 
     /// The member's small calls: muting the phone and lifting it, a lost
-    /// member, no credentials to send; a peer's mute as the app shows it.
-    func testSmallCalls() async throws {
-        let t = try CoreGroup(test: self)
-        let (root, b) = (t.root, t.phones[1])
-        try await t.connect(1, to: 0)
-        try b.member.setMute(untilMS: Records.ms(Date()) + 60_000)
-        try b.member.setMute(untilMS: 0)
-        try b.member.setMute(untilMS: nil)
-        try b.member.lost("phone 0")
-        XCTAssertEqual(try root.member.sendCredentials([]), [])
+    /// member; a peer's mute as the app shows it.
+    func testSmallCalls() throws {
+        let m = try rootPhone().0.member
+        try m.setMute(untilMS: Records.ms(Date()) + 60_000)
+        try m.setMute(untilMS: 0)
+        try m.setMute(untilMS: nil)
+        try m.lost("phone 0")
 
+        let device = String(repeating: "0b", count: 16)
         let at = Date(timeIntervalSince1970: 1)
-        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true, mutedForMS: 1000).mutedUntilMS(now: at), 2000)
-        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true).mutedUntilMS(now: at), 0, "until an admin lifts it")
-        XCTAssertNil(CoreMember.Peer(device: b.device).mutedUntilMS(now: at))
-        XCTAssertFalse(CoreMember.Peer(device: b.device).servesMedia)
-        let c = CoreMember.Copy(id: "i", origin: b.device, text: "t")
+        XCTAssertEqual(CoreMember.Peer(device: device, muted: true, mutedForMS: 1000).mutedUntilMS(now: at), 2000)
+        XCTAssertEqual(CoreMember.Peer(device: device, muted: true).mutedUntilMS(now: at), 0, "until an admin lifts it")
+        XCTAssertNil(CoreMember.Peer(device: device).mutedUntilMS(now: at))
+        XCTAssertFalse(CoreMember.Peer(device: device).servesMedia)
+        let c = CoreMember.Copy(id: "i", origin: device, text: "t")
         XCTAssertEqual([c.text, c.key], ["t", ""])
         XCTAssertFalse(c.unread)
     }
 
-    /// An invitation needs the key of the CA the phone issues with and a
-    /// hub to open its guest tunnel on: a group of phones has none.
-    func testInvitingRefuses() async throws {
-        let t = try CoreGroup(test: self)
-        try await t.connect(1, to: 0)
-        let ca = t.ca
-        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: SoftwareSigner().publicKeyDER, adminCA: nil,
-                                                      expires: 600) { try ca.signature(digest: $0) })
-        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil,
-                                                      expires: 600) { try ca.signature(digest: $0) })
-        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil, expires: 600,
-                                                      hub: "not a device") { try ca.signature(digest: $0) })
+    /// An invitation needs the root's or an admin's key and a hub to open
+    /// its guest tunnel on: a group of phones has none.
+    func testInvitingRefuses() throws {
+        let (phone, rootKey) = try rootPhone()
+        let m = phone.member
+        XCTAssertThrowsError(try CorePairing.Inviting(member: m, publicKey: SoftwareSigner().publicKeyDER, expires: 600) {
+            try rootKey.signature(digest: $0)
+        })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: m, publicKey: rootKey.publicKeyDER, expires: 600) { try rootKey.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: m, publicKey: rootKey.publicKeyDER, expires: 600, hub: "not a device") {
+            try rootKey.signature(digest: $0)
+        })
+    }
+
+    /// The root phone's calls for away from home and the group's servers, alone in its group: its first period of
+    /// server credentials is due, and the relay its root key sets renews them; it names no forwarder for itself, and it
+    /// may be a hub without an admin key, as the root's own device; push and the notices answer, and the member port closes.
+    func testTheRootPhonesAwayCalls() throws {
+        let (phone, rootKey) = try rootPhone()
+        let m = phone.member
+        let pub = rootKey.publicKeyDER
+        let root = { (d: Data) throws -> Data in try rootKey.signature(digest: d) }
+        func refused(_ what: String, _ f: () throws -> Void, _ line: UInt = #line) {
+            XCTAssertThrowsError(try f(), what, line: line)
+        }
+        XCTAssertTrue(try m.periods().due, "the root phone's first period is due")
+        let pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        refused("not a relay's key") { _ = try m.setRelays(["127.0.0.1:1 nope"], public: pub, sign: root) }
+        refused("default goes alone") { _ = try m.setRelays(["default", "127.0.0.1:1 \(pin)"], public: pub, sign: root) }
+        refused("a member key is no root key") { _ = try m.setRelays(["127.0.0.1:1 \(pin)"], public: phone.key.publicKeyDER) { try phone.key.signature(digest: $0) } }
+        XCTAssertEqual(try m.setRelays(["127.0.0.1:9 \(pin)"], public: pub, sign: root), ["127.0.0.1:9"])
+        XCTAssertEqual(try m.periods(), CoreMember.Periods(), "the relay's root key renewed the credentials")
+        XCTAssertEqual(try m.renewPeriod(public: pub, sign: root), CoreMember.Periods())
+        refused("the root names no forwarder for its own phone") { _ = try m.nameForwarder("Root phone", forwarder: "127.0.0.1:1", key: pin, public: pub, sign: root) }
+        XCTAssertNil(try m.rootForwarder())
+        XCTAssertEqual(try m.serveAsHub(port: 0, addrs: ["127.0.0.1:9"])?.hub, true, "the root's phone may be a hub")
+        XCTAssertNotEqual(try m.stopHub()?.hub, true, "the root's phone stops being a hub")
+        refused("a phone that is no hub cannot stop being one") { _ = try m.stopHub() }
+        let on = try m.setAway(true)
+        XCTAssertEqual(try m.awayStatus()?.isOn, on?.isOn)
+        let off = try m.setAway(false)
+        XCTAssertTrue(off == nil || off?.isOn == false, "sync away from home is off: \(String(describing: off))")
+
+        if let face = try m.pushFace() { XCTAssertEqual(face.count, 16) }
+        XCTAssertThrowsError(try m.setPush(Data([1, 2, 3])), "bytes that are no push registration")
+        try m.setPush(nil)
+        XCTAssertEqual(try m.pushRenewals(), [])
+        try m.setEvidence([])
+        _ = try m.notices()
+        try m.rootChangeSeen()
+        _ = try m.listen(.home)
+        try m.unlisten(.home)
+        try m.unlisten()
     }
 }
+#endif

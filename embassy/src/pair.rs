@@ -172,7 +172,7 @@ impl Pairing {
     async fn prove(&self, link: &mut Link<'_, '_>, exporter: &tls::Exporter) -> Result<(pair::Exchange, Vec<u8>)> {
         let j = &self.joiner;
         link.handshake().await.wrap("the TLS handshake failed")?;
-        if link.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+        if !cbb_core::alpn::is_pair(link.session.alpn_protocol()) {
             return Err(Error::msg("the device does not offer pairing"));
         }
         let member_der = link

@@ -272,7 +272,7 @@ function render() {
   } else if (!inGroup) {
     // The start window: a group made here, one joined, or a lost group
     // claimed with its recovery key.
-    const busy = state.busy || joining ? "disabled" : "";
+    const busy = state.busy ? "disabled" : "";
     box.innerHTML = `<div class="notice start"><span class="logo" aria-hidden="true"></span><h2>${esc(t("Copy Beyond Borders"))}</h2>` +
       `<div class="start-buttons"><button class="accent" id="create" ${busy}>${esc(t("Create a group"))}</button>` +
       `<button class="glass" id="join" ${busy}>${esc(t("Join a group"))}</button></div>` +
@@ -1086,6 +1086,15 @@ function whyTitle(r) {
     case "devices_sync_off": return t("Sync is off on: %s.", names);
     case "devices_muted": return t("Muted: %s.", names);
     case "update": return t("CBB %s is available.", r.value);
+    case "admins_conflict": return t("Two admins disagree about a device: the group waits for its main device.");
+    case "root_two_histories": return t("The main device's key signed two different histories, so the group stopped.");
+    case "recovery_fork": return t("The group's recovery key was used twice, so the group stopped for good.");
+    case "change_arriving": return t("A change of the group's main device is on its way.");
+    case "checkpoint_stuck": return t("The main device's records wait for records no device has passed on.");
+    case "owner_disagrees": return t("This device and the group disagree about which device is the main one.");
+    case "no_secrets_here": return t("The group sends no secrets to this device.");
+    case "nothing_here": return t("The group sends nothing to this device.");
+    case "copy_waits": return t("A copy waits until this device learns which device sent it.");
     default: return r.code;
   }
 }
@@ -1112,6 +1121,14 @@ function whyAction(r) {
     case "muted": return t("Unmute it from a trusted device of the group.");
     case "forwarder_down": return t("Devices away from home may not reach it; CBB tries again by itself.");
     case "entries_stale": return t("Update CBB on a computer of the group.");
+    case "admins_conflict": return t("On the group's main device, decide in its alerts.");
+    case "root_two_histories": return t("Move the group to a new main device with the group's recovery key.");
+    case "recovery_fork": return t("Make a new group and join your devices to it.");
+    case "change_arriving": return t("Keep this device on near the group's other devices until it arrives.");
+    case "checkpoint_stuck": return t("Turn on the group's other devices.");
+    case "owner_disagrees": return t("Leave the group on this device, then join again.");
+    case "no_secrets_here": return t("Ask the group's owner to let it have secrets.");
+    case "nothing_here": return t("Ask the group's owner to restore its rights.");
     case "newer": return t("Update CBB on this device.");
     case "unreached": return t("Let CBB through this computer's firewall.");
     default: return "";
@@ -1135,9 +1152,13 @@ function renderWhy() {
     : row(why[0], true) + (why.length > 1 ? `<h3>${esc(t("Also"))}</h3>` + why.slice(1).map((r) => row(r, false)).join("") : "");
 }
 
-// The add dialog: on the root or an admin it admits the new device that
-// shows a code and waits (cbb pair -qr), by its six digits typed here, its
-// QR code's text or a picture of it.
+// The add dialog: on the root or an admin it opens a pairing window
+// (cbb pair -app as the administrator, admit.go) and shows its six digits,
+// which a new computer types, and its QR code, which a new phone scans
+// (D-119). Closing the dialog closes the window; on the root, the box
+// below opens it again for a phone that joins as an admin.
+let windowSeq = 0, windowRun = null;
+
 function openAdd() {
   const me = state.devices.find((x) => x.self);
   $("admit-box").hidden = !me?.admin;
@@ -1146,39 +1167,53 @@ function openAdd() {
   // Only the group's root makes admins.
   $("admit-admin-row").hidden = !me?.root;
   $("admit-admin").checked = false;
-  $("admit-code").value = "";
-  admitError("");
-  $("add-dialog").showModal();
-  if (me?.admin) $("admit-code").focus();
+  const dlg = $("add-dialog");
+  dlg.onclose = () => closeWindow();
+  dlg.showModal();
+  if (me?.admin) openWindow(false);
 }
 
-function admitError(text) {
-  $("admit-error").textContent = text;
-  $("admit-error").hidden = !text;
+async function closeWindow() {
+  windowSeq++;
+  if (!windowRun) return;
+  await call("CloseWindow").catch((e) => console.error("CloseWindow", e));
+  await windowRun;
 }
 
-$("admit-file").addEventListener("change", () => {
-  const file = $("admit-file").files[0];
-  $("admit-file").value = "";
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async () => {
+async function openWindow(admin) {
+  await closeWindow();
+  const id = ++windowSeq;
+  $("admit-wait").hidden = false;
+  $("admit-window").hidden = true;
+  $("admit-refused").hidden = true;
+  let running = true;
+  const ended = call("OpenWindow", admin).catch((e) => console.error("OpenWindow", e)).finally(() => { running = false; });
+  windowRun = ended;
+  const dlg = $("add-dialog");
+  while (running && dlg.open && id === windowSeq) {
+    let w;
     try {
-      $("admit-code").value = await call("ReadQR", String(reader.result).replace(/^data:[^,]*,/, ""));
-      admitError("");
+      w = await call("WindowState");
     } catch (e) {
-      admitError(String(e?.message ?? e));
+      console.error("WindowState", e);
     }
-  };
-  reader.readAsDataURL(file);
-});
-
-async function admit() {
-  const text = $("admit-code").value.trim();
-  if (!/^\d{3}[ -]?\d{3}$/.test(text) && !text.startsWith("cbb://join?")) return admitError(t("Type the six digits the new device shows."));
-  const admin = !$("admit-admin-row").hidden && $("admit-admin").checked;
-  $("add-dialog").close();
-  await act("Admit", text, admin);
+    if (w?.code && id === windowSeq) {
+      $("admit-wait").hidden = true;
+      $("admit-window").hidden = false;
+      $("admit-qr").hidden = !w.image;
+      if (w.image) $("admit-qr").src = w.image;
+      $("admit-digits").textContent = w.code;
+      const min = Math.max(0, Math.ceil((w.ends - Date.now()) / 60000));
+      $("admit-ends").textContent = t("The code is valid for %d more min.", min);
+      $("admit-refused").hidden = !w.refused;
+      $("admit-refused").textContent = w.refused ? t("A device did not pair: %s", w.refused) : "";
+    }
+    await new Promise((r) => setTimeout(r, w?.code ? 1000 : 300));
+  }
+  await ended;
+  if (windowRun === ended) windowRun = null;
+  if (id === windowSeq && dlg.open) dlg.close("done");
+  await refresh();
 }
 
 // A remote invitation for a device far away (docs/protocol.md, section
@@ -1244,50 +1279,11 @@ async function recovery() {
   if (key?.trim()) await act("Recover", key.trim());
 }
 
-// Joining a group: JoinGroup runs until the join ends, while the dialog
-// asks JoinState for the QR code and the digits cbb writes once it runs as
-// the administrator (join.go). Closing the dialog cancels.
-let joining = false;
-
+// Joining a group: the six digits of a pairing window open on a device
+// of the group, which cbb pair -code takes as the administrator (join.go).
 async function joinGroup() {
-  if (joining) return;
-  joining = true;
-  render();
-  const dlg = $("join-dialog");
-  $("join-wait").hidden = false;
-  $("join-code").hidden = true;
-  let running = true;
-  const ended = call("JoinGroup").catch((e) => console.error("JoinGroup", e)).finally(() => {
-    running = false;
-    if (dlg.open) dlg.close("done");
-  });
-  dlg.onclose = () => {
-    if (running) call("CancelJoin").catch((e) => console.error("CancelJoin", e));
-  };
-  dlg.returnValue = "";
-  dlg.showModal();
-  while (running && dlg.open) {
-    let j;
-    try {
-      j = await call("JoinState");
-    } catch (e) {
-      console.error("JoinState", e);
-    }
-    if (j?.image) {
-      $("join-wait").hidden = true;
-      $("join-code").hidden = false;
-      $("join-qr").src = j.image;
-      $("join-text").textContent = j.text;
-      $("join-digits").textContent = j.code ?? "";
-      const min = Math.max(0, Math.ceil((j.ends - Date.now()) / 60000));
-      $("join-ends").textContent = t("The code is valid for %d more min.", min);
-      $("join-port").textContent = t("If the phone cannot connect, the firewall must let it reach TCP port %d here.", j.port);
-    }
-    await new Promise((r) => setTimeout(r, j?.image ? 1000 : 300));
-  }
-  await ended;
-  joining = false;
-  await refresh();
+  const code = await ask(t("Join a group"), t("On a device of the group, open a pairing window: tap + there. Then type the six digits it shows."), t("Join"), "");
+  if (code?.trim()) await act("JoinGroup", code.trim());
 }
 
 async function refresh() {
@@ -1309,7 +1305,7 @@ async function refresh() {
   }
   if (asked === "settings" && !document.querySelector("dialog[open]")) openSettings();
   if (asked === "away") await turnAway();
-  if (state.status && state.status.bug && !askingBug && !document.querySelector("dialog[open]")) await askBug();
+  if (state.status?.bug && !askingBug && !document.querySelector("dialog[open]")) await askBug();
 }
 
 // askBug asks about the bug report of the service's panic before its last
@@ -1397,8 +1393,6 @@ document.addEventListener("click", async (e) => {
     case "collection-back": opened = null; return render();
     case "update": return act("Update");
     case "add": return openAdd();
-    case "admit-picture": return $("admit-file").click();
-    case "admit": return admit();
     case "invite": return invite();
     case "create": return act("CreateGroup");
     case "join": return joinGroup();
@@ -1448,12 +1442,7 @@ $("at-login").addEventListener("change", async (e) => {
   renderSettings();
 });
 $("advanced").addEventListener("change", (e) => saveSettings({ advanced: e.target.checked }));
-$("admit-code").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    admit();
-  }
-});
+$("admit-admin").addEventListener("change", (e) => openWindow(e.target.checked));
 
 // The house: a tap turns sync off until turned on again, or on; holding it
 // (or its context menu) picks a time first.

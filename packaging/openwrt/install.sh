@@ -18,8 +18,8 @@
 # not touched. --auto-update on|off (or CBB_AUTO_UPDATE) answers whether the
 # service updates itself once a day to a signed release, from cron,
 # which it asks otherwise and keeps (packaging/update.sh). cbb, once
-# running and in no group, starts pairing and shows its QR code at once
-# (packaging/pair.sh); --no-pair (CBB_PAIR=no) leaves that for later. uninstall.sh
+# running and in no group, starts pairing at once and takes a pairing
+# window's six digits (packaging/pair.sh); --no-pair (CBB_PAIR=no) leaves that for later. uninstall.sh
 # removes it all again.
 set -eu
 
@@ -179,5 +179,5 @@ say "Packages from outside OpenWrt's feeds are left out by attended sysupgrade (
 # shellcheck source=packaging/pair.sh
 . "$here/../pair.sh"
 if ! CBB_SOCKET=/var/run/cbb/control.sock pair_now /usr/bin/cbb cbb -name router; then
-	say "Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone."
+	say "Next: open a pairing window on a device of the group, then run su -s /bin/sh cbb -c 'cbb pair -code -name router' here and type the six digits it shows."
 fi

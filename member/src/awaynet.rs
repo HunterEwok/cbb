@@ -88,10 +88,18 @@ pub(crate) fn grant_for(a: Option<&Away>, cgnat: bool) -> Grant {
         }
     }
     g.addrs.sort();
-    if a.hub && !a.endpoints.is_empty() {
+    if own_address(a) {
         g.hub_port = a.port;
     }
     g
+}
+
+/// The device is a hub that its clients reach at an address of its own,
+/// not only through its forwarder: the status lists the forwarder's
+/// endpoint among the hub's.
+pub(crate) fn own_address(a: &Away) -> bool {
+    let forwarder = a.forwarder.as_ref().map(|f| f.endpoint.as_str());
+    a.hub && a.endpoints.iter().any(|e| Some(e.as_str()) != forwarder)
 }
 
 /// One system's way of keeping the service on the home network and the
@@ -271,7 +279,9 @@ impl Limit for Systemd {
             if let Some(dir) = self.drop_in.parent() {
                 std::fs::create_dir_all(dir).map_err(fail)?;
             }
-            std::fs::write(&self.drop_in, drop_in_text(g)).map_err(fail)?;
+            // Whole or not at all: systemd never reads half a drop-in.
+            crate::files::write_atomic(&self.drop_in, drop_in_text(g).as_bytes(), 0o644)
+                .map_err(|e| Error::msg(format!("{}: {e}", self.drop_in.display())))?;
         } else if let Err(e) = std::fs::remove_file(&self.drop_in)
             && e.kind() != std::io::ErrorKind::NotFound
         {
@@ -539,6 +549,19 @@ mod tests {
         // A hub reached only through its forwarder answers nobody else.
         let a = Away { hub: true, port: 8764, allow: vec!["198.51.100.9".into()], ..Default::default() };
         assert_eq!(grant_for(Some(&a), false).hub_port, 0);
+        // The status lists the forwarder's endpoint among the hub's.
+        let a = Away {
+            hub: true,
+            port: 8764,
+            endpoints: vec!["198.51.100.9:8764".into()],
+            allow: vec!["198.51.100.9".into()],
+            forwarder: Some(crate::control::Forwarder { endpoint: "198.51.100.9:8764".into(), ..Default::default() }),
+            ..Default::default()
+        };
+        assert_eq!(grant_for(Some(&a), false).hub_port, 0, "a hub reached only through its forwarder");
+        assert_eq!(crate::hubport::hub_port_for(Some(&a)), 0);
+        let a = Away { endpoints: vec!["203.0.113.7:8764".into(), "198.51.100.9:8764".into()], ..a };
+        assert_eq!(grant_for(Some(&a), false).hub_port, 8764, "and at its own address too");
     }
 
     /// A unit in a temporary folder, its systemctl calls recorded.
@@ -590,6 +613,27 @@ mod tests {
         assert!(net.granted(&Grant::default()).same(&client));
         net.set(&Grant::default()).unwrap();
         assert_eq!(calls.borrow().len(), 12);
+        let _ = std::fs::remove_dir_all(drop_in.parent().unwrap().parent().unwrap());
+    }
+
+    /// A drop-in write cut at every step leaves the drop-in before it.
+    #[test]
+    fn a_drop_in_cut_short_is_the_one_before() {
+        use crate::files::faults::{self, How};
+        let (net, drop_in, _) = fake_unit(true);
+        let client = Grant { on: true, addrs: vec![fwd_addr(), hub_addr()], ..Default::default() };
+        net.set(&client).unwrap();
+        let before = std::fs::read_to_string(&drop_in).unwrap();
+        let other = Grant { on: true, ..Default::default() };
+        for step in 0..drop_in_text(&other).len() + 3 {
+            for how in [How::Dies, How::Fails] {
+                faults::at(step, how);
+                assert!(net.set(&other).is_err(), "step {step}");
+                assert_eq!(std::fs::read_to_string(&drop_in).unwrap(), before, "step {step} ({how:?})");
+            }
+        }
+        net.set(&other).unwrap();
+        assert!(!std::fs::read_to_string(&drop_in).unwrap().contains("IPAddressAllow"));
         let _ = std::fs::remove_dir_all(drop_in.parent().unwrap().parent().unwrap());
     }
 

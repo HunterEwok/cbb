@@ -341,7 +341,7 @@ pub fn server_cert_by(point: &[u8], sign: &mut dyn FnMut(&[u8]) -> Result<Vec<u8
 
 /// A self-signed P-256 certificate with cn as its subject and issuer, key
 /// usage digital signature and the extension ext.
-fn self_signed_cert(
+pub(crate) fn self_signed_cert(
     cn: &str,
     point: &[u8],
     ext: &[u8],
@@ -546,6 +546,16 @@ pub mod b64 {
         s.serialize_str(&STANDARD.encode(b))
     }
 
+    /// Standard base64 with padding.
+    pub fn encode(b: &[u8]) -> String {
+        STANDARD.encode(b)
+    }
+
+    /// The bytes of standard base64 with padding.
+    pub fn decode_str(s: &str) -> Option<Vec<u8>> {
+        STANDARD.decode(s).ok()
+    }
+
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
         let s = Option::<String>::deserialize(d)?.unwrap_or_default();
         STANDARD.decode(s).map_err(serde::de::Error::custom)
@@ -565,6 +575,36 @@ pub mod b64 {
             match Option::<String>::deserialize(d)? {
                 Some(s) => STANDARD.decode(s).map(Some).map_err(serde::de::Error::custom),
                 None => Ok(None),
+            }
+        }
+    }
+
+    /// A secret in base64, read into a buffer wiped when dropped; the
+    /// base64 text is wiped as well.
+    pub mod secret {
+        use super::*;
+        use zeroize::{Zeroize, Zeroizing};
+
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Zeroizing<Vec<u8>>, D::Error> {
+            let mut s = Option::<String>::deserialize(d)?.unwrap_or_default();
+            let b = STANDARD.decode(&s).map(Zeroizing::new).map_err(serde::de::Error::custom);
+            s.zeroize();
+            b
+        }
+
+        /// The same for an optional secret.
+        pub mod opt {
+            use super::*;
+
+            pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Zeroizing<Vec<u8>>>, D::Error> {
+                match Option::<String>::deserialize(d)? {
+                    Some(mut s) => {
+                        let b = STANDARD.decode(&s).map(|b| Some(Zeroizing::new(b))).map_err(serde::de::Error::custom);
+                        s.zeroize();
+                        b
+                    }
+                    None => Ok(None),
+                }
             }
         }
     }

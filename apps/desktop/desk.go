@@ -50,11 +50,14 @@ type Desk struct {
 	// acting holds the action running now; the next one waits for it.
 	acting sync.Mutex
 
-	// joinPath is the file of the join running now (join.go), "" when
-	// none; joinCancelled whether the window cancelled it.
-	joinPath      string
-	join          Join
-	joinCancelled bool
+	// windowPath is the file of the pairing window open now (admit.go),
+	// "" when none; windowCancelled whether the window closed it;
+	// windowSeen the one whose end windowEndsMs is.
+	windowPath      string
+	windowCancelled bool
+	windowSeen      string
+	windowEndsMs    int64
+
 	// invitePath and answersPath are the files of the invitation open now
 	// (invite.go), "" when none; inviteCancelled whether the window
 	// cancelled it.

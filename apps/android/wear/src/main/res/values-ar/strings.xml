@@ -34,5 +34,6 @@
     <string name="stale">كما قال الهاتف آخر مرة.</string>
     <string name="sync">مزامنة</string>
     <string name="watch_admin">هذه الساعة مشرف في المجموعة.</string>
+    <string name="watch_later">في هذه المجموعة تعرض الساعة الأجهزة فقط: ستأتي إجراءاتها الطارئة مع CBB 0.7.</string>
     <string name="watch_phone">هاتف هذه الساعة</string>
 </resources>

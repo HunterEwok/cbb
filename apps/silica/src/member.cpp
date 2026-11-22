@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QMimeData>
 #include <QMimeDatabase>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QThread>
 #include <QCoreApplication>
@@ -100,38 +101,19 @@ void Member::start(const Membership &membership, const QString &name, const QByt
 {
     if (m_member || membership.isNull() || publicKey.isEmpty())
         return;
-    Failure failure;
-    const QByteArray seal = sealSecret(&failure);
-    if (seal.isEmpty()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
-    }
-    QJsonArray roots;
-    for (const QByteArray &r : membership.roots)
-        roots.append(b64(r));
-    QJsonObject req{
+    // The records name the group's devices and keys, so the member takes
+    // no certificates (ffi's StartArgs).
+    const QJsonObject req{
         {QStringLiteral("dir"), Membership::directory()},
         {QStringLiteral("name"), name},
         {QStringLiteral("os"), os},
         {QStringLiteral("os_version"), osVersion},
-        {QStringLiteral("key_store"), KeyStore::store()},
         {QStringLiteral("version"), QCoreApplication::applicationVersion()},
         {QStringLiteral("device"), membership.device},
         {QStringLiteral("public"), b64(publicKey)},
-        {QStringLiteral("seal"), b64(seal)},
-        {QStringLiteral("cert"), b64(membership.cert)},
-        {QStringLiteral("group_ca"), b64(membership.groupCa)},
-        {QStringLiteral("roots"), roots},
     };
-    if (!membership.issuer.isEmpty())
-        req.insert(QStringLiteral("issuer"), b64(membership.issuer));
-    // The admin key the hellos offer the root, as a SubjectPublicKeyInfo:
-    // P-256's fixed prefix before the point.
-    if (!membership.isAdmin() && membership.adminOffer.size() == 65)
-        req.insert(QStringLiteral("admin_key"),
-                   b64(QByteArray::fromHex("3059301306072a8648ce3d020106082a8648ce3d030107034200") + membership.adminOffer));
     const QByteArray bytes = QJsonDocument(req).toJson(QJsonDocument::Compact);
+    Failure failure;
     current.store(this);
     uint8_t *answer = nullptr;
     size_t len = 0;
@@ -169,9 +151,10 @@ void Member::stop()
     m_peerTimer.stop();
     cbb_member_stop(m_member);
     m_member = nullptr;
+    m_listening = false;
     m_peers.clear();
     m_devices.clear();
-    m_alerts.clear();
+    m_groupState.clear();
     emit devicesChanged();
     m_paused = m_muted = false;
     readAway(QJsonValue());
@@ -179,33 +162,109 @@ void Member::stop()
     emit changed();
 }
 
-void Member::sendClipboard()
+// The clipboard as the app last saw it, as a hash: Aurora has no change
+// count, so opening compares the clipboard with it to tell a copy made
+// since (D-128). It keeps across starts.
+static QString seenHash()
 {
-    // A muted phone's copies stay its own; the main page says so.
-    if (!m_member || m_muted)
+    return QSettings().value(QStringLiteral("board/seen")).toString();
+}
+
+static QString hashOf(const QString &key)
+{
+    return QString::fromLatin1(QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha256).toHex());
+}
+
+static void seen(const QString &key)
+{
+    if (!key.isEmpty())
+        QSettings().setValue(QStringLiteral("board/seen"), hashOf(key));
+}
+
+void Member::opened()
+{
+    if (!m_member || m_paused)
         return;
     const QMimeData *data = QGuiApplication::clipboard()->mimeData();
+    QImage image;
+    QByteArray png;
+    QString key;
     if (data && data->hasImage() && !data->hasText()) {
-        sendImage(qvariant_cast<QImage>(data->imageData()));
-        return;
+        image = qvariant_cast<QImage>(data->imageData());
+        if (!image.isNull()) {
+            QBuffer buf(&png);
+            buf.open(QIODevice::WriteOnly);
+            image.save(&buf, "PNG");
+            key = imageKey(png);
+            // Read back, the image the phone took is encoded anew, so the
+            // core cannot tell it: nothing changed while the group still
+            // holds that copy.
+            if (key == m_tookImage) {
+                Failure f;
+                const QJsonObject cur = call(m_member, QStringLiteral("current"), QJsonObject(), &f).value(QStringLiteral("copy")).toObject();
+                if (cur.value(QStringLiteral("id")).toString() == m_tookImageCopy)
+                    return;
+                key.clear();
+                png.clear();
+            }
+        }
+    } else {
+        key = QGuiApplication::clipboard()->text();
     }
-    const QString text = QGuiApplication::clipboard()->text();
-    if (text.isEmpty())
-        return;
+    const bool moved = !key.isEmpty() && hashOf(key) != seenHash();
+    seen(key);
     Failure failure;
-    const bool sends = call(m_member, QStringLiteral("sends"), QJsonObject{{QStringLiteral("board"), text}}, &failure)
-                           .value(QStringLiteral("sends"))
-                           .toBool();
-    if (failure.isNull() && sends)
-        call(m_member, QStringLiteral("copy"), QJsonObject{{QStringLiteral("text"), text}, {QStringLiteral("board"), true}},
-             &failure);
+    const QJsonObject a = call(m_member, QStringLiteral("opened"),
+                               QJsonObject{{QStringLiteral("board"), key}, {QStringLiteral("changed"), moved}}, &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
         return;
     }
-    if (!sends)
+    if (a.value(QStringLiteral("sends")).toBool()) {
+        // A muted phone's copies stay its own; the main page says so.
+        if (m_muted)
+            return;
+        if (!png.isEmpty())
+            sendImage(png, key);
+        else
+            sendBoardText(key);
         return;
+    }
+    const QJsonObject copy = a.value(QStringLiteral("copy")).toObject();
+    if (!copy.isEmpty())
+        take(copy);
+}
+
+void Member::copyReceived()
+{
+    const QString id = m_lastId;
+    m_lastId.clear();
+    m_lastFrom.clear();
+    m_lastText.clear();
+    emit changed();
+    if (!m_member || id.isEmpty())
+        return;
+    Failure failure;
+    const QJsonObject copy = call(m_member, QStringLiteral("current"), QJsonObject(), &failure).value(QStringLiteral("copy")).toObject();
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
+    if (copy.value(QStringLiteral("id")).toString() == id)
+        take(copy);
+}
+
+void Member::sendBoardText(const QString &text)
+{
+    Failure failure;
+    call(m_member, QStringLiteral("copy"), QJsonObject{{QStringLiteral("text"), text}, {QStringLiteral("board"), true}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+        return;
+    }
     m_known = text;
     m_error.clear();
     setLast(text, false);
@@ -231,34 +290,19 @@ QString Member::imageKey(const QByteArray &png)
     return QChar(0) + QStringLiteral("image:") + QString::fromLatin1(QCryptographicHash::hash(png, QCryptographicHash::Sha256).toHex());
 }
 
-void Member::sendImage(const QImage &image)
+void Member::sendImage(const QByteArray &png, const QString &key)
 {
-    if (image.isNull())
-        return;
-    QByteArray png;
-    QBuffer buf(&png);
-    buf.open(QIODevice::WriteOnly);
-    image.save(&buf, "PNG");
-    const QString key = imageKey(png);
     if (key == m_tookImage || png.size() > maxSendBytes)
         return;
     Failure failure;
-    const bool sends = call(m_member, QStringLiteral("sends"), QJsonObject{{QStringLiteral("board"), key}}, &failure)
-                           .value(QStringLiteral("sends"))
-                           .toBool();
-    if (failure.isNull() && sends) {
-        const QJsonObject part{{QStringLiteral("type"), QStringLiteral("image/png")},
-                               {QStringLiteral("data"), b64(png)}};
-        call(m_member, QStringLiteral("copy_media"),
-             QJsonObject{{QStringLiteral("parts"), QJsonArray{part}}, {QStringLiteral("board"), true}}, &failure);
-    }
+    const QJsonObject part{{QStringLiteral("type"), QStringLiteral("image/png")}, {QStringLiteral("data"), b64(png)}};
+    call(m_member, QStringLiteral("copy_media"), QJsonObject{{QStringLiteral("parts"), QJsonArray{part}}, {QStringLiteral("board"), true}},
+         &failure);
     if (!failure.isNull()) {
         m_error = Errors::shown(failure);
         emit changed();
         return;
     }
-    if (!sends)
-        return;
     m_error.clear();
     m_last = tr("An image");
     emit changed();
@@ -330,7 +374,10 @@ void Member::take(const QJsonObject &copy)
     const QString id = copy.value(QStringLiteral("id")).toString();
     const QString kind = copy.value(QStringLiteral("kind")).toString();
     if (kind != QStringLiteral("media")) {
-        write(copy.value(QStringLiteral("text")).toString(), kind == QStringLiteral("secret"), 0);
+        // A secret the phone took leaves the clipboard when its lifetime runs
+        // out, a minute unless its sender set another (D-129).
+        const qint64 ttl = copy.value(QStringLiteral("ttl_ms")).isDouble() ? qint64(copy.value(QStringLiteral("ttl_ms")).toDouble()) : 60000;
+        write(copy.value(QStringLiteral("text")).toString(), kind == QStringLiteral("secret"), kind == QStringLiteral("secret") ? ttl : 0);
         Failure failure;
         call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
         return;
@@ -402,6 +449,7 @@ void Member::take(const QJsonObject &copy)
                 buf.open(QIODevice::WriteOnly);
                 img.save(&buf, "PNG");
                 m_tookImage = imageKey(png);
+                m_tookImageCopy = id;
             }
         }
         m_error.clear();
@@ -426,20 +474,31 @@ void Member::event(const QByteArray &json)
         if (m_recentLog.size() > 300)
             m_recentLog.removeFirst();
     } else if (type == QStringLiteral("write")) {
-        write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
-              qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));
-    } else if (type == QStringLiteral("identity")) {
-        QList<QByteArray> roots;
-        for (const QJsonValue &r : e.value(QStringLiteral("roots")).toArray())
-            roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
-        emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
-                             QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
+        // While on the screen the phone listens like a computer; in the
+        // background it writes nothing (D-128).
+        if (qGuiApp->applicationState() == Qt::ApplicationActive)
+            write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
+                  qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));
     } else if (type == QStringLiteral("panic")) {
         const QString details = e.value(QStringLiteral("details")).toString();
         Errors::log(QStringLiteral("member: %1").arg(details));
         emit panicked(details);
-    } else if (type == QStringLiteral("mute")) {
+    } else if (type == QStringLiteral("mute") || type == QStringLiteral("sync")) {
         pollMuted();
+    } else if (type == QStringLiteral("root_changed")) {
+        // Every device shows it until the person saw it, and nobody turns it off.
+        const QString from = e.value(QStringLiteral("from")).toString();
+        const QString to = e.value(QStringLiteral("to")).toString();
+        Errors::log(QStringLiteral("member: the group's root changed from %1 to %2").arg(from, to));
+        m_rootChanged = QVariantMap{
+            {QStringLiteral("from"), deviceName(from)},
+            {QStringLiteral("to"), deviceName(to)},
+            {QStringLiteral("seq"), e.value(QStringLiteral("seq")).toDouble()},
+        };
+        emit devicesChanged();
+        pollDevices();
+    } else if (type == QStringLiteral("state") || type == QStringLiteral("notice")) {
+        pollDevices();
     } else if (type == QStringLiteral("command")) {
         command(e.value(QStringLiteral("token")).toDouble(), e.value(QStringLiteral("from")).toString(),
                 e.value(QStringLiteral("command")).toObject());
@@ -447,23 +506,51 @@ void Member::event(const QByteArray &json)
         // Images or files from another device come by themselves while
         // sync is on, as texts do through write.
         const QJsonObject copy = e.value(QStringLiteral("copy")).toObject();
-        if (copy.value(QStringLiteral("kind")).toString() == QStringLiteral("media") && !m_paused)
+        const QString kind = copy.value(QStringLiteral("kind")).toString();
+        const bool active = qGuiApp->applicationState() == Qt::ApplicationActive;
+        // The main page's last received line.
+        m_lastId = copy.value(QStringLiteral("id")).toString();
+        m_lastFrom = deviceName(copy.value(QStringLiteral("origin")).toString());
+        m_lastText = kind == QStringLiteral("text") ? copy.value(QStringLiteral("text")).toString() : QString();
+        emit changed();
+        // The line goes when the copy's lifetime runs out (D-129): its own
+        // ttl, else the group's default, five minutes or a minute for a secret.
+        const qint64 ttl = copy.contains(QStringLiteral("ttl_ms")) && !copy.value(QStringLiteral("ttl_ms")).isNull()
+            ? qint64(copy.value(QStringLiteral("ttl_ms")).toDouble())
+            : (kind == QStringLiteral("secret") ? 60000 : 300000);
+        const QString shown = m_lastId;
+        QTimer::singleShot(int(qMin<qint64>(ttl, 24 * 3600 * 1000)), this, [this, shown]() {
+            if (m_lastId != shown)
+                return;
+            m_lastId.clear();
+            m_lastFrom.clear();
+            m_lastText.clear();
+            emit changed();
+        });
+        if (kind == QStringLiteral("media") && !m_paused && active) {
             take(copy);
-    } else if (type == QStringLiteral("message")) {
-        const QJsonObject m = e.value(QStringLiteral("message")).toObject();
-        if (m.value(QStringLiteral("t")).toString() == QStringLiteral("admin"))
-            emit adminCaArrived(QByteArray::fromBase64(m.value(QStringLiteral("admin_ca")).toString().toLatin1()));
+        } else if (active && !copy.value(QStringLiteral("text")).toString().isEmpty()) {
+            // The text written as it came is the app's own write, no copy to send back.
+            Failure f;
+            call(m_member, QStringLiteral("took"), QJsonObject{{QStringLiteral("id"), m_lastId}}, &f);
+        }
     }
 }
 
-bool Member::takeAdminCa(const QByteArray &ca, Failure *failure)
+bool Member::listen(Failure *failure)
 {
     if (!m_member) {
         *failure = {QCoreApplication::translate("Errors", "The phone is not connected to its group yet. Try again in a moment."), QStringLiteral("member: not running")};
         return false;
     }
-    call(m_member, QStringLiteral("take_admin_ca"), QJsonObject{{QStringLiteral("key"), b64(ca)}}, failure);
-    return failure->isNull();
+    if (m_listening)
+        return true;
+    const QJsonObject a = call(m_member, QStringLiteral("listen"), QJsonObject{{QStringLiteral("kind"), QStringLiteral("home")}}, failure);
+    if (!failure->isNull())
+        return false;
+    m_listening = true;
+    Errors::log(QStringLiteral("member: listening on port %1").arg(a.value(QStringLiteral("port")).toInt()));
+    return true;
 }
 
 void Member::command(double token, const QString &from, const QJsonObject &record)
@@ -605,6 +692,7 @@ void Member::write(const QString &text, bool secret, qint64 ttlMs)
     QClipboard *board = QGuiApplication::clipboard();
     board->setText(text);
     m_known = text;
+    seen(text);
     setLast(text, secret);
     // A secret leaves the clipboard when its time is up, unless something
     // else replaced it meanwhile.
@@ -641,21 +729,6 @@ void Member::pollPeers()
     pollMuted();
     pollDevices();
     pollAway();
-}
-
-void Member::joinedByInvite(const QString &invite)
-{
-    if (!m_member)
-        return;
-    Failure failure;
-    const QJsonObject a = call(m_member, QStringLiteral("joined_by_invite"), QJsonObject{{QStringLiteral("invite"), invite}}, &failure);
-    if (!failure.isNull()) {
-        m_error = Errors::shown(failure);
-        emit changed();
-        return;
-    }
-    Errors::log(QStringLiteral("member: joined by an invitation; sync away from home is on"));
-    readAway(a.value(QStringLiteral("away")));
 }
 
 void Member::setAway(bool on)
@@ -745,21 +818,67 @@ void Member::pollDevices()
         d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("device")).toString()));
         v = d;
     }
-    const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
-    const QVariantList alerts =
-        failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
     const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
     const QVariantList why = failure.isNull() ? w.value(QStringLiteral("why")).toArray().toVariantList() : m_why;
-    Failure viewFailure;
-    const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
-    const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
-    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView) {
+    Failure groupFailure;
+    const QJsonObject g = call(m_member, QStringLiteral("group"), QJsonObject(), &groupFailure);
+    QVariantMap groupState = groupFailure.isNull() ? g.toVariantMap() : m_groupState;
+    // The devices are listed above, with what the hellos add; of the group
+    // view's own list only the devices that offered this phone an admin key
+    // at pairing and are no admins yet stay, as offers_admin.
+    if (groupFailure.isNull()) {
+        QStringList offers;
+        for (const QJsonValue &d : g.value(QStringLiteral("devices")).toArray()) {
+            if (d.toObject().value(QStringLiteral("offers_admin")).toBool())
+                offers << d.toObject().value(QStringLiteral("device")).toString();
+        }
+        groupState.insert(QStringLiteral("offers_admin"), offers);
+    }
+    groupState.remove(QStringLiteral("devices"));
+    Failure noticesFailure;
+    const QJsonObject ns = call(m_member, QStringLiteral("notices"), QJsonObject(), &noticesFailure);
+    const QVariantList notices =
+        noticesFailure.isNull() ? ns.value(QStringLiteral("notices")).toArray().toVariantList() : m_notices;
+    if (devices != m_devices || why != m_why || groupState != m_groupState || notices != m_notices) {
         m_devices = devices;
-        m_alerts = alerts;
         m_why = why;
-        m_rootView = rootView;
+        m_groupState = groupState;
+        m_notices = notices;
         emit devicesChanged();
     }
+}
+
+void Member::dismissNotice(const QString &id)
+{
+    if (!m_member)
+        return;
+    Failure failure;
+    call(m_member, QStringLiteral("dismiss"), QJsonObject{{QStringLiteral("id"), id}}, &failure);
+    if (!failure.isNull()) {
+        m_error = Errors::shown(failure);
+        emit changed();
+    }
+    pollDevices();
+}
+
+void Member::rootChangeSeen()
+{
+    if (m_rootChanged.isEmpty())
+        return;
+    m_rootChanged.clear();
+    emit devicesChanged();
+}
+
+QString Member::deviceName(const QString &id) const
+{
+    for (const QVariant &v : m_devices) {
+        const QVariantMap d = v.toMap();
+        if (d.value(QStringLiteral("device")).toString() == id) {
+            const QString name = d.value(QStringLiteral("name")).toString();
+            return name.isEmpty() ? id : name;
+        }
+    }
+    return id;
 }
 
 QJsonObject Member::view(const QJsonValue &op, Failure *failure) const

@@ -16,11 +16,11 @@ use super::keys::Keys;
 use super::server::{Config, Relay};
 use crate::error::{Error, Result};
 
-const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] [-refused FILE] (-group TAGS | -open) [-show-key]
+const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] [-refused FILE] (-group GROUPS | -open) [-show-key]
   -listen ADDRESS  the address to listen on, UDP and TCP (default :8764)
   -key FILE        the relay's keys, made on the first run
   -refused FILE    the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the key; \"none\" refuses none)
-  -group TAGS      the tags of the groups to serve, separated by commas, as cbb status shows them
+  -group GROUPS    the groups to serve, separated by commas, each by ROOT:RECOVERY:RECOVERY2, its keys in hex, as cbb status -relay shows it on any of its devices
   -open            serve every group that registers, within limits per group and per network, in place of -group
   -show-key        print the key for cbb global relay -key and stop";
 
@@ -77,7 +77,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
 }
 
 /// The address to listen on: ":port" for every address.
-fn listen_addr(s: &str) -> Result<SocketAddr> {
+pub(crate) fn listen_addr(s: &str) -> Result<SocketAddr> {
     if let Some(port) = s.strip_prefix(':') {
         let port = port.parse::<u16>().map_err(|_| Error::msg(format!("{s:?} is not an address to listen on")))?;
         return Ok(SocketAddr::from((Ipv6Addr::UNSPECIFIED, port)));
@@ -101,8 +101,6 @@ fn test_limits() -> Result<super::limits::Limits> {
         per_wide: usize,
         per_provider: usize,
         byte_rate: f64,
-        group_record_bytes: usize,
-        record_bytes: usize,
         streams: usize,
     }
     let Ok(v) = std::env::var("CBB_RELAY_LIMITS") else { return Ok(Default::default()) };
@@ -114,8 +112,6 @@ fn test_limits() -> Result<super::limits::Limits> {
         per_wide: l.per_wide,
         per_provider: l.per_provider,
         byte_rate: l.byte_rate,
-        group_record_bytes: l.group_record_bytes,
-        record_bytes: l.record_bytes,
         streams: l.streams,
     })
 }
@@ -210,8 +206,8 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         "cbb relay: listening on UDP and TCP port {} for {serving}; its key, for cbb global relay -key: {pin}",
         relay.addr().port()
     ));
-    // The Go tests that run against this relay (internal/relay) read its
-    // counts more often than once a minute.
+    // Tests that run against this relay read its counts more often than
+    // once a minute.
     let every = std::env::var("CBB_RELAY_STATS_MS").ok().and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0);
     let tick = Duration::from_millis(every.unwrap_or(1000));
     let mut ticks = 0u64;

@@ -16,7 +16,6 @@ import android.security.keystore.UserNotAuthenticatedException
 import android.security.keystore.StrongBoxUnavailableException
 import tools.cbb.kit.Attestation
 import tools.cbb.kit.CertificateSigner
-import tools.cbb.kit.PeriodKeys
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
@@ -235,25 +234,13 @@ object Keys {
         if (s.containsAlias(alias)) s.deleteEntry(alias)
     }
 
-    /** The prefix of the keys for the servers, one per kind and period. */
+    /** The prefix of the keys for the servers, one per kind and period, of a group from before 0.6. */
     private const val PERIOD = "cbb.period."
 
-    /** The keys for the servers of each period, in the TEE, without the user's authentication, since they sign in the background. */
-    object PhoneKeys : PeriodKeys {
-        private fun alias(kind: String, tag: String) = "$PERIOD$kind.$tag"
-
-        override fun get(kind: String, tag: String): CertificateSigner =
-            load(alias(kind, tag)) ?: generate(alias(kind, tag), auth = false, strongBox = false, challenge = null)
-
-        override fun has(kind: String, tag: String): Boolean = store().containsAlias(alias(kind, tag))
-
-        override fun keep(tag: String) {
-            val s = store()
-            for (a in s.aliases().toList()) if (a.startsWith(PERIOD) && !a.endsWith(".$tag")) s.deleteEntry(a)
-        }
-
-        /** Drops every key for the servers, as when the phone leaves the group. */
-        fun clear() = keep("")
+    /** Drops the keys for the servers that a phone of a group from before 0.6 made, as when it leaves the group (D-126). */
+    fun clearPeriodKeys() {
+        val s = store()
+        for (a in s.aliases().toList()) if (a.startsWith(PERIOD)) s.deleteEntry(a)
     }
 
     @Suppress("DEPRECATION")

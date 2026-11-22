@@ -1,21 +1,29 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 46c1b3ed05bb -->
+<!-- source: 1de61d3165d2 -->
 # Kuanza haraka
 
 Copy Beyond Borders huipa simu yako na kompyuta zako ubao mmoja wa kunakili: unanakili kwenye kimoja na kubandika kwenye kingine. Vifaa huunda **kikundi** kwenye mtandao wako wa nyumbani. Simu hushikilia ufunguo wa kikundi na kuruhusu kila kifaa kipya kuingia, kwa hiyo hakuna anayeweza kujiunga bila wewe.
 
-![Simu huongeza kila kompyuta kwa msimbo wake wa QR; kisha vifaa vinatumia ubao mmoja wa kunakili](../images/group.svg)
+![Kila kompyuta inajiunga na kikundi cha simu kwa tarakimu sita ambazo simu inaonyesha; kisha vifaa vinashiriki ubao mmoja wa kunakili](../images/group.svg)
 
-Ni hatua nne: sakinisha programu, sakinisha Copy Beyond Borders kwenye kompyuta, changanua msimbo wa QR wa kompyuta, kisha washa ushiriki kwenye kompyuta hiyo.
+Ni hatua nne: sakinisha programu na uunde kikundi, sakinisha Copy Beyond Borders kwenye
+kompyuta, andika kwenye kompyuta tarakimu sita ambazo simu inaonyesha, kisha nakili.
 
-Kikundi kinaweza kuwa na kompyuta moyoni mwake au kuundwa na simu pekee: njia zote mbili zinafanya kazi, na tunapendekeza kompyuta inayowashwa mara nyingi, kwa sababu inaweka usawazishaji ukiwa mbali na nyumbani ukiendelea wakati wowote ([aina mbili za kikundi](how-it-works.md#two-kinds-of-group)). Ukiwa na simu pekee, ruka hatua 2 hadi 4: kwenye kila simu nyingine gusa **I already use Copy Beyond Borders on another phone**, kisha changanua msimbo unaoonyesha kwa **Connect a new device** kwenye simu ya kwanza (**+** ikishakuwa na vifaa).
+Kikundi kinaweza kuwa na kompyuta katikati yake au kuwa cha simu tu: vyote vinafanya kazi, na
+tunapendekeza kompyuta ambayo huwa imewashwa mara nyingi, ambayo huweka usawazishaji ukiwa mbali
+na nyumbani wakati wowote ([aina mbili za kikundi](how-it-works.md#two-kinds-of-group)).
+Kwa simu tu, ruka hatua ya 2 na 3: gusa **+** kwenye simu ya kwanza, kisha kwenye kila simu
+nyingine gusa **Jiunge na kikundi** na uchanganue msimbo ambao ya kwanza inaonyesha.
 
 ## 1. Sakinisha programu kwenye simu yako
 
 - **Android** 10 au mpya zaidi: pakua `cbb-X.Y.Z.apk` kutoka [toleo la hivi karibuni](https://github.com/HunterEwok/cbb/releases/latest) kwenye simu yenyewe na uifungue; ruhusu kivinjari kusakinisha programu Android inapouliza.
 - **iPhone**: programu itakuja kupitia TestFlight, ambayo bado haijafunguliwa. Hadi hapo, kikundi huanza kwenye Android au kwenye kompyuta: tazama [Bila programu](without-app.md).
 
-Fungua programu. Utaongeza kompyuta ya kwanza katika hatua ya 3.
+Fungua programu na uguse **Unda kikundi**. Programu inaunda ufunguo wa kikundi (inaomba alama
+ya kidole, uso au nambari ya siri) kisha inauliza jinsi ya kuhifadhi ufunguo wa urejeshaji:
+**Andika kwenye karatasi** au **Andika kwenye YubiKey**. Uweke mbali na vifaa vyako; unarudisha
+kikundi simu ikipotea ([funguo](keys.md)).
 
 ## 2. Sakinisha Copy Beyond Borders kwenye kompyuta
 
@@ -37,23 +45,29 @@ Kisakinishi huangalia faili ulizopakua, huanzisha Copy Beyond Borders na kuuliza
 
 ## 3. Ongeza kompyuta
 
+Kwenye programu, gusa **+** (Ongeza kifaa). Inaonyesha msimbo wa QR na tarakimu sita chini yake,
+na inasubiri dakika chache.
+
 Kwenye kompyuta:
 
 ```sh
-sudo cbb pair
+sudo cbb pair -code
 ```
 
-Kwenye Windows, endesha `cbb pair` kwenye terminal ya msimamizi. Huonyesha msimbo wa QR. Au, bila terminal, fungua programu ya CBB kwenye kompyuta (programu ya trei kwenye Windows na Linux, ya upau wa menyu kwenye Mac) na ubofye **Join a phone's group**: huomba nenosiri la msimamizi na huonyesha msimbo ule ule.
+Kwenye Windows, endesha `cbb pair -code` kwenye terminali ya msimamizi. Andika tarakimu sita:
+kompyuta inapata dirisha la kuoanisha la simu kwenye mtandao wa nyumbani na inajiunga. Au, bila
+terminali, fungua programu ya CBB kwenye kompyuta (programu ya trei kwenye Windows na Linux,
+programu ya upau wa menyu kwenye Mac), bofya **Jiunge na kikundi** na uandike tarakimu hapo;
+kwanza inaomba nenosiri la msimamizi.
 
-Kwenye programu, gusa **Connect a new device** na uchanganue msimbo. Programu huunda ufunguo wa kikundi (huomba alama ya kidole, uso au nambari ya siri) na kuongeza kompyuta. Hicho ndicho kikundi.
-
-Ongeza kompyuta nyingine zote vivyo hivyo: sakinisha, `sudo cbb pair`, na **+** kwenye programu.
+Ongeza kila kompyuta nyingine kwa njia hiyo hiyo: sakinisha, **+** kwenye programu, na
+`sudo cbb pair -code`.
 
 ## 4. Nakili kwenye kimoja, bandika kwenye kingine
 
 Unachonakili kwenye kompyuta kinafika kwenye kikundi, na kikundi kinachonakili kinafika kwake. Nakili kwenye kompyuta na ubandike kwenye simu, au kinyume chake:
 
-- **Android** hupokea nakala za kompyuta zenyewe. Ili kutuma nakala za simu, gusa kitufe kikubwa kwenye Mwanzo wa programu, kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, au Send kwenye arifa; au washa **Send my copies by themselves** kwenye programu ili ifanyike yenyewe.
+- **Android** hupokea nakala za kompyuta zenyewe. Ili kutuma nakala za simu, gusa kitufe kikubwa kwenye Mwanzo wa programu, kigae cha **Send clipboard** kwenye Mipangilio ya Haraka, au Send kwenye arifa; au washa **Clipboard sync** kwenye programu ili ifanyike yenyewe.
 - **Kati ya kompyuta**: nakili kwenye moja, bandika kwenye nyingine. Hakuna cha kubonyeza.
 
 Ili ubao wa kunakili wa kifaa ubaki wake peke yake kwa muda, zima usawazishaji: kitufe cha nyumba kwenye skrini ya kwanza ya programu, au `cbb sync off` ([amri](../reference/cli.md#cbb)). Mengine ambayo programu hufanya yako katika [Programu](apps.md).
@@ -65,7 +79,9 @@ Kikundi hufanya kazi na simu pekee, lakini mambo mawili ni bora kwenye kompyuta 
 - **Ifanye msimamizi.** Kwenye simu, gusa kompyuta kwenye Mwanzo kisha **Make it an admin**. Kompyuta isiyo na TPM wala Secure Enclave huweka funguo zake kwenye faili, na programu hukuonya kwanza ([funguo](keys.md#the-three-levels)). Baada ya hapo inaweza pia kuongeza na kuondoa vifaa (`sudo cbb pair`, `sudo cbb revoke NAME`), kwa hiyo huhitaji simu mkononi kila mara. Simu inabaki mzizi wa kikundi, kifaa chake kinachoaminika zaidi: ufunguo wa mzizi haondoki kamwe kwenye chipu ya usalama ya simu.
 - **Ifanye kitovu**, ili vifaa vyako viendelee kusawazisha vikiwa mbali na nyumbani. Tazama [Mbali na nyumbani](away-from-home.md).
 
-Ongeza pia simu ya pili, ili kupoteza simu moja kusipoteze chochote: kwenye simu ya pili gusa **I already use Copy Beyond Borders on another phone** na uchanganue msimbo wake kwa **+** kwenye ya kwanza. Simu ya kwanza huifanya msimamizi.
+Ongeza simu ya pili pia, ili kupoteza simu moja kusipoteze chochote: gusa **+** kwenye simu ya
+kwanza, kisha kwenye ya pili gusa **Jiunge na kikundi** na uchanganue msimbo. Simu ya kwanza
+inaifanya msimamizi.
 
 ## Hatua zinazofuata
 

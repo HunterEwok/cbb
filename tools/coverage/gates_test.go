@@ -110,6 +110,52 @@ func TestFormatGate(t *testing.T) {
 		t.Fatalf("all refused: %+v, %v", g, err)
 	}
 
+	// A verdict that names the refusing rule counts; a test's own rules
+	// do not.
+	writeIn(t, dir, "src/content.rs", `Err(Rule::field("content/type"))`)
+	writeIn(t, dir, "src/msg/tests.rs", `Err(Rule::field("t/made-up"))`)
+	g, err = formatGate(src, vectors)
+	if err != nil || !g.failed() || g.of != 4 || strings.Join(g.missing, ",") != "content/type" {
+		t.Fatalf("a rule refused by no verdict: %+v, %v", g, err)
+	}
+	writeIn(t, dir, "vectors/d.json", `{"contents": [{"name": "type 0", "verdict": "content/type"},
+		{"name": "text", "verdict": "take"}]}`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.failed() || g.met != 4 {
+		t.Fatalf("refused by a verdict: %+v, %v", g, err)
+	}
+
+	// A rule refused by what the reader holds: a test marked with it
+	// counts when its body names the rule or one of its constants.
+	writeIn(t, dir, "src/commands/mod.rs", `pub const RULE_STALE: Rule = Rule::field("commands/stale");
+pub const RULE_LATE: Rule = Rule::field("commands/late");
+let bad = Rule::field("counters/shape");`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.of != 7 || strings.Join(g.missing, ",") != "commands/late,commands/stale,counters/shape" {
+		t.Fatalf("before the tests: %+v, %v", g, err)
+	}
+	writeIn(t, dir, "src/commands/tests.rs", `
+// refuses: commands/stale, commands/late
+#[test]
+fn a_stale_command() {
+    assert_eq!(take(&old), Err(RULE_STALE));
+}
+
+// refuses: counters/shape
+#[test]
+#[cfg(feature = "x")]
+fn saved_counters() {
+    assert_eq!(Counters::decode(&[0xa0]).err(), Some(Rule::field("counters/shape")));
+}
+
+// refuses: commands/late
+fn not_a_test() { RULE_LATE }
+`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.met != 6 || strings.Join(g.missing, ",") != "commands/late" {
+		t.Fatalf("marked tests: %+v, %v", g, err)
+	}
+
 	writeIn(t, dir, "vectors/c.json", `{`)
 	if _, err := formatGate(src, vectors); err == nil {
 		t.Error("bad vectors: taken")

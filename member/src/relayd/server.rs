@@ -4,12 +4,13 @@
 //! The running relay: the registrations' TCP port, the
 //! WireGuard hub on the UDP port of the same number, and the connections the
 //! devices open through their tunnels to the relay's member port, which it
-//! joins two by two within one group. Each member registers with its member
-//! certificate (or the group's credentials) and proves its WireGuard key;
-//! the member protocol's TLS then runs between two members, and the relay
-//! passes only its ciphertext.
+//! joins two by two within one group. Each member registers with the
+//! certificate of its server key for the period and the period's server
+//! credentials (`cbb-relay/3`) and proves its WireGuard key; the member
+//! protocol's TLS then runs between two members, and the relay passes only
+//! its ciphertext.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -17,13 +18,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use cbb_core::certs::{self, Cert, KeyHash};
+use cbb_core::certs::{self, KeyHash};
 
 use super::budget::{Caps, Count, Rates};
 use super::keys::Keys;
 use super::limits::{self, ByteRate, Limits};
-use super::records::{Period, RecordSet, TagLock};
-use super::wire::{self, Note};
+use super::period::Period;
+use super::wire::Note;
 use crate::error::{Context, Error, Result};
 use crate::hub::{Hub, Peer};
 
@@ -102,10 +103,6 @@ impl AcceptErrors {
 /// again.
 pub(super) const ACCEPT_BACKOFF: Duration = Duration::from_millis(50);
 
-/// How long a connection to the relay's loopback port waits for the hub
-/// to note its tunnel address, and how many wait at once.
-const STREAM_ADDR_WAIT: Duration = Duration::from_millis(100);
-const MAX_WAITING_STREAMS: usize = 256;
 pub const MAX_REQUESTS_GROUP: usize = 32;
 
 /// How often the list of refused groups is read again.
@@ -134,8 +131,9 @@ pub struct Config {
     /// (registrations); port 0 for any.
     pub listen: SocketAddr,
     pub keys: Keys,
-    /// The tags of the groups the relay serves; it refuses every other
-    /// group. The user runs it for their own groups.
+    /// The groups the relay serves, each by its root and recovery key
+    /// (`register3::Listed`); it refuses every other group. The user runs
+    /// it for their own groups.
     pub groups: Vec<String>,
     /// Serve any group that registers, in place of groups, within limits:
     /// the project's relay, or one a user runs for others.
@@ -165,10 +163,8 @@ pub(super) struct Member {
     pub id: u64,
     pub tag: String,
     pub device: String,
-    /// The key of its member certificate (or server certificate), and that
-    /// certificate with the ones it came with.
+    /// The hash of its server key, its pseudonym.
     pub leaf: KeyHash,
-    pub chain: Vec<Cert>,
     pub key: [u8; 32],
     pub psk: [u8; 32],
     /// The address it registered from.
@@ -215,14 +211,6 @@ pub(super) struct State {
     /// The connections of calls, waiting or joined, by the address each
     /// end registered from (an open relay's).
     pub streams: Count,
-    /// Each group's authority records, from all its members'
-    /// registrations, verified once and kept in memory while the relay
-    /// runs, and what they take by the source that brought them.
-    pub records: HashMap<String, Arc<Mutex<RecordSet>>>,
-    pub record_bytes: Count,
-    /// Keep the registrations of one group one at a time while they check
-    /// its records.
-    pub tag_locks: HashMap<String, Arc<TagLock>>,
     /// What each source may still start.
     pub allow: Rates,
     /// What it holds of the groups that registered with credentials, by
@@ -251,7 +239,8 @@ impl State {
 /// The shared part of a running relay.
 pub(super) struct Inner {
     pub cfg: Config,
-    pub allowed: Vec<String>,
+    /// The groups of 0.6 the relay serves, by their root and recovery key.
+    pub listed: Vec<super::register3::Listed>,
     pub limits: Limits,
     pub tls: Arc<rustls::ServerConfig>,
     pub hub: Mutex<Option<Hub>>,
@@ -278,27 +267,17 @@ impl Relay {
             (true, false) => return Err(Error::msg("relay: an open relay serves every group; give no group's tag")),
             (false, true) => {
                 return Err(Error::msg(
-                    "relay: no group to serve; give the tags of your groups (cbb status shows them)",
+                    "relay: no group to serve; give your groups by their root and recovery keys (cbb status shows them)",
                 ));
             }
             _ => {}
         }
-        for g in &cfg.groups {
-            if g.len() != 16 || !g.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(Error::msg(format!(
-                    "relay: {g:?} is not a group's tag, 16 hex characters as cbb status shows it"
-                )));
-            }
-        }
+        let listed = cfg.groups.iter().map(|g| super::register3::Listed::parse(g)).collect::<Result<Vec<_>>>()?;
         let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
-        let tls = cbb_core::tls::registration_server(&cfg.keys.cert, &cfg.keys.key, crate::relay::PROTOCOL, &clock)?;
+        let tls = cbb_core::tls::registration_server(&cfg.keys.cert, &cfg.keys.key, super::wire3::PROTOCOL, &clock)?;
         let (tcp, local) = listen(cfg.listen)?;
         let limits = if cfg.open { cfg.limits.with_defaults() } else { Limits::default() };
-        let (held, record_bytes) = if cfg.open {
-            (Count::new(limits.registration_caps()), Count::new(limits.record_caps()))
-        } else {
-            (Count::new(Caps::default()), Count::new(Caps::default()))
-        };
+        let held = Count::new(if cfg.open { limits.registration_caps() } else { Caps::default() });
         let state = State {
             groups: HashMap::new(),
             members: HashMap::new(),
@@ -308,9 +287,6 @@ impl Relay {
             setups: Count::new(SETUP_CAPS),
             requests: Count::new(REQUEST_CAPS),
             streams: Count::new(if cfg.open { limits.stream_caps() } else { Caps::default() }),
-            records: HashMap::new(),
-            record_bytes,
-            tag_locks: HashMap::new(),
             allow: limits::allowance(),
             periods: HashMap::new(),
             next_id: 0,
@@ -318,10 +294,9 @@ impl Relay {
             request_wait: REQUEST_TIMEOUT,
             now: None,
         };
-        let allowed = cfg.groups.iter().map(|g| g.to_ascii_lowercase()).collect();
         let inner = Arc::new(Inner {
             cfg,
-            allowed,
+            listed,
             limits,
             tls: Arc::new(tls),
             hub: Mutex::new(None),
@@ -704,7 +679,14 @@ impl Inner {
         let peers = st
             .by_addr
             .iter()
-            .map(|(a, m)| Peer { key: m.key, psk: m.psk, addr: *a, until: None, source: m.from })
+            .map(|(a, m)| Peer {
+                key: m.key,
+                psk: m.psk,
+                older_psks: Vec::new(),
+                addr: *a,
+                until: None,
+                source: m.from,
+            })
             .collect();
         match self.hub.lock().ok().as_deref() {
             Some(Some(h)) => h.set_peers_at(peers, RELAY_ADDR),
@@ -737,11 +719,8 @@ impl Inner {
             }
         }
         if emptied {
-            // An open relay forgets a group once its last device goes, so
+            // The relay forgets a group once its last device goes, so
             // groups that come and go do not fill its memory.
-            if self.cfg.open && !st.tag_locks.contains_key(&m.tag) {
-                drop_records_locked(st, &m.tag);
-            }
             st.periods.remove(&m.tag);
         }
         if let Some(a) = addr
@@ -791,47 +770,26 @@ impl Inner {
     /// member port.
     fn accept_streams(self: Arc<Self>, ln: TcpListener) {
         let _ = ln.set_nonblocking(true);
-        // The connections whose tunnel address the hub has not noted yet,
-        // since when: the hub notes it as soon as its connection is made,
-        // so a connection waits a moment, without holding up the others.
-        let mut waiting: VecDeque<(TcpStream, u16, Instant)> = VecDeque::new();
         let mut failed = AcceptErrors::default();
         while !self.stopping() {
-            let mut busy = false;
             match ln.accept() {
+                // The tunnel address names the device: the port is on the
+                // loopback, where every local user may connect, and the hub
+                // notes the address of each connection it makes before the
+                // connection is made, so one without an address is not the
+                // hub's and is closed. A connection is served only while its
+                // device is registered and within its share.
                 Ok((c, from)) => {
-                    busy = true;
-                    if waiting.len() >= MAX_WAITING_STREAMS
-                        && let Some((old, _, _)) = waiting.pop_front()
-                    {
-                        let _ = old.shutdown(Shutdown::Both);
+                    let addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(from.port())));
+                    match addr {
+                        Some(a) => self.take_stream(c, a),
+                        None => {
+                            let _ = c.shutdown(Shutdown::Both);
+                        }
                     }
-                    waiting.push_back((c, from.port(), Instant::now()));
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(2)),
                 Err(e) => failed.note(&self.cfg.log, "its tunnel's connections", &e),
-            }
-            // The tunnel address names the device: the port is on the
-            // loopback, where every local user may connect, and a
-            // connection the hub did not make has none, and is closed once
-            // its moment is over. A connection is served only while its
-            // device is registered and within its share.
-            for _ in 0..waiting.len() {
-                let Some((c, port, since)) = waiting.pop_front() else { break };
-                let addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(port)));
-                match addr {
-                    Some(a) => {
-                        busy = true;
-                        self.take_stream(c, a);
-                    }
-                    None if since.elapsed() >= STREAM_ADDR_WAIT => {
-                        let _ = c.shutdown(Shutdown::Both);
-                    }
-                    None => waiting.push_back((c, port, since)),
-                }
-            }
-            if !busy {
-                std::thread::sleep(Duration::from_millis(2));
             }
         }
     }
@@ -868,7 +826,7 @@ impl Inner {
     /// Reads the request of m's connection c, waiting for it at most wait,
     /// and does what it asks.
     fn serve_stream(self: &Arc<Self>, m: &Arc<Member>, sid: u64, c: TcpStream, wait: Duration) {
-        let req = match wire::read_request(&c, wait) {
+        let req = match super::wire3::read_request(&c, wait) {
             Ok(r) => r,
             Err(_) => {
                 self.free_request(m);
@@ -886,7 +844,7 @@ impl Inner {
             self.serve_answer(m, sid, c, &req.answer);
         } else {
             self.free_request(m);
-            let _ = wire::send_note(&c, &Note::error("an unknown request"), NOTE_TIMEOUT);
+            let _ = Self::note_to(&c, &Note::error("an unknown request"));
             self.close_stream(m, sid, &c);
         }
     }
@@ -941,11 +899,16 @@ impl Inner {
         }
     }
 
+    /// Sends a note to m on c, in m's protocol.
+    fn note_to(c: &TcpStream, n: &Note) -> Result<()> {
+        super::wire3::send_note(c, n, NOTE_TIMEOUT)
+    }
+
     fn write_notes(&self, c: &TcpStream, rx: &Receiver<Note>, gone: &AtomicBool) {
         loop {
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(n) => {
-                    if wire::send_note(c, &n, NOTE_TIMEOUT).is_err() {
+                    if Self::note_to(c, &n).is_err() {
                         return;
                     }
                 }
@@ -1006,7 +969,7 @@ impl Inner {
         drop(st);
         self.free_request(m);
         let refuse = |msg: &str| {
-            let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
+            let _ = Self::note_to(&c, &Note::error(msg));
             self.close_stream(m, sid, &c);
             if charged {
                 self.free_stream(m);
@@ -1053,8 +1016,8 @@ impl Inner {
                 return;
             }
         };
-        let joined = wire::send_note(&other, &Note { ok: true, ..Note::default() }, NOTE_TIMEOUT).is_ok()
-            && wire::send_note(&c, &Note { ok: true, ..Note::default() }, NOTE_TIMEOUT).is_ok();
+        let joined = Self::note_to(&other, &Note { ok: true, ..Note::default() }).is_ok()
+            && Self::note_to(&c, &Note { ok: true, ..Note::default() }).is_ok();
         if joined {
             let _ = c.set_write_timeout(None);
             let _ = other.set_write_timeout(None);
@@ -1087,19 +1050,8 @@ impl Inner {
             }
         }
         drop(st);
-        let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
+        let _ = Self::note_to(&c, &Note::error(msg));
         self.close_stream(m, sid, &c);
-    }
-}
-
-/// Forgets the records of the group tag.
-pub(super) fn drop_records_locked(st: &mut State, tag: &str) {
-    if let Some(rs) = st.records.remove(tag) {
-        let paid: Vec<(Option<IpAddr>, usize)> =
-            rs.lock().map(|r| r.paid.iter().map(|(a, n)| (*a, *n)).collect()).unwrap_or_default();
-        for (a, n) in paid {
-            st.record_bytes.remove(a, n);
-        }
     }
 }
 

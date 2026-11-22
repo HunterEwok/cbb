@@ -13,6 +13,8 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
+use zeroize::Zeroizing;
+
 use crate::authority::Record;
 use crate::error::{Error, Result};
 use crate::group::ClaimTime;
@@ -63,10 +65,10 @@ pub struct Attempt {
     session: Session,
     exporter: Arc<Exporter>,
     joiner: Joiner,
-    code: String,
+    code: Zeroizing<String>,
     /// A remote invitation's secret, in place of the code, and the group
     /// it names.
-    secret: Option<(Vec<u8>, String)>,
+    secret: Option<(Zeroizing<Vec<u8>>, String)>,
     plain: Vec<u8>,
     state: State,
 }
@@ -109,8 +111,8 @@ impl Attempt {
             session: Session::client(Arc::new(cfg), tls::server_name(None))?,
             exporter,
             joiner: joiner.clone(),
-            code: String::new(),
-            secret: Some((secret.to_vec(), group.to_string())),
+            code: Zeroizing::new(String::new()),
+            secret: Some((Zeroizing::new(secret.to_vec()), group.to_string())),
             plain: Vec::new(),
             state: State::Handshake,
         })
@@ -154,7 +156,7 @@ impl Attempt {
             if self.session.is_handshaking() {
                 return Ok(Outcome::Pending);
             }
-            if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+            if !crate::alpn::is_pair(self.session.alpn_protocol()) {
                 return Err(Error::msg("the device does not offer pairing"));
             }
             let member_der = self

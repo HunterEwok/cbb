@@ -33,6 +33,11 @@ required-features = ["tunnel"]
 # cbbw.exe, the same program without a console window, which Windows starts
 # at sign-in for the agent (packaging/windows/install.ps1).
 [[bin]]
+name = "cbb-push"
+path = "src/push_main.rs"
+required-features = ["tunnel"]
+
+[[bin]]
 name = "cbbw"
 path = "src/windowless.rs"
 required-features = ["windowless"]
@@ -42,6 +47,25 @@ required-features = ["windowless"]
 [[test]]
 name = "remote_commands"
 required-features = ["testhooks"]
+
+# It points cbb at a fake helper with CBB_HELPER, a hook only a build for
+# tests reads: cargo test --features testhooks.
+[[test]]
+name = "helper_faults"
+required-features = ["testhooks"]
+
+# It shortens a hub's wait before it serves with CBB_TEST_STANDBY_GRACE,
+# which only a build for tests reads: cargo test --features testhooks.
+[[test]]
+name = "away_hubs"
+required-features = ["testhooks", "tunnel"]
+
+# A phone's push with ffi's example phone-on-linux (CBB_PHONE_ON_LINUX)
+# and the push service in process; it points the members at that service
+# with CBB_TEST_PUSH_AT, which only a build for tests reads.
+[[test]]
+name = "phone_push"
+required-features = ["testhooks", "tunnel"]
 
 [features]
 default = ["tunnel"]
@@ -57,7 +81,7 @@ testhooks = []
 fuzzing = []
 # Sync away from home. GotaTun needs 64-bit atomics, which 32-bit MIPS lacks,
 # so the MIPS builds leave it out (docs/roadmap.md, item 37).
-tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305"]
+tunnel = ["cbb-core/web", "dep:rustls", "dep:gotatun", "dep:bytes", "dep:smoltcp", "dep:blake2", "dep:chacha20", "dep:chacha20poly1305", "dep:socket2"]
 
 [dependencies]
 cbb-core = { path = "../core", features = ["std", "tls"] }
@@ -83,7 +107,14 @@ zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
 hkdf = "0.13"
 aes = "0.9"
+# The push service's way to FCM (src/pushd/fcm.rs): a Google service
+# account's key is RSA, and its OAuth assertion RS256. Signing only, in
+# constant time on crypto-bigint, which the core already brings.
+rsa = { version = "0.10.0", default-features = false, features = ["std", "encoding", "pkcs1v15"] }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
+# A YubiKey's management key (src/piv/recovery.rs): Triple DES up to firmware
+# 5.6, AES (the aes above) from 5.7, for the PIV challenge and response only.
+des = "0.9"
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.
 gotatun = { version = "0.10.2", default-features = false, features = ["ring"], optional = true }
@@ -100,6 +131,9 @@ base64 = "0.23.1"
 # its standard library's connections and system time.
 rustls = { version = "0.23.46", default-features = false, features = ["std"], optional = true }
 smoltcp = { version = "0.13.1", default-features = false, features = ["std", "medium-ip", "proto-ipv6", "socket-tcp"], optional = true }
+# The hub's dial to its loopback ports, bound before it connects so that the
+# connection's tunnel address is noted first (src/hub.rs).
+socket2 = { version = "0.6.5", optional = true }
 
 # AF_UNIX sockets, the socket's access list, the process's user and the
 # service's control on Windows (src/sys).
@@ -113,6 +147,9 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials", 
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 # The properties of the service's copies: their order, the clock, the rule.
 proptest = { version = "1", default-features = false, features = ["std"] }
+
+# The push tests build registrations, whose key is kept in Zeroizing.
+zeroize = { version = "1.9", default-features = false, features = ["alloc"] }
 
 # Asks for a TXT record from port 5353 in discovery's tests; mdns-sd already
 # brings it.

@@ -18,16 +18,15 @@ the desktop apps are a window onto the service that already runs on the computer
 
 ### Start a group
 
-1. [Install](install.md) Copy Beyond Borders on a computer and run `sudo cbb pair` there. It
-   shows a QR code.
-2. Open the app and tap **Connect a new device**, then scan the code. The app makes the
-   group's key in the phone's security chip (the Secure Enclave on an iPhone, the Keystore
-   on Android), adds the computer and opens Home.
-3. Add each further computer with **+** on Home. A small device joins the same way
-   (`sudo -u cbb cbb pair` on it shows its code).
-
-When the camera cannot be used: on an iPhone, type the six digits the computer shows; on
-Android, paste the text of the QR code, which `cbb pair` prints too.
+1. Open the app and tap **Create a group**. The app makes the group's key in the phone's
+   security chip (the Secure Enclave on an iPhone, the Keystore on Android), asks how to keep
+   the recovery key (**Write on a sheet** or **Write to YubiKey**) and opens Home.
+2. Tap **+** on Home (Add a device). It shows a QR code and six digits, and waits a few
+   minutes with the screen open.
+3. On a computer, [install](install.md) Copy Beyond Borders and run `sudo cbb pair -code`, or
+   click **Join a group** in its tray or menu bar app, and type the six digits. A small device
+   joins the same way (`sudo -u cbb cbb pair -code` on it). A new phone taps **Join a group**
+   and scans the code, or types the digits.
 
 ### Every day
 
@@ -40,7 +39,7 @@ Android, paste the text of the QR code, which `cbb pair` prints too.
   Control Center control, or the home-screen widget. Share, Copy Beyond Borders sends a text
   or a link at once.
 - **Android**: copies from the computers arrive by themselves. To send the phone's copies
-  by themselves too, turn on **Send my copies by themselves** (an accessibility service;
+  by themselves too, turn on **Clipboard sync** (an accessibility service;
   the app explains what it reads). Without it, one tap: the **Send clipboard** tile in Quick
   Settings, Send in the notification, the home-screen widget, or Share and text selection,
   Copy Beyond Borders.
@@ -63,12 +62,12 @@ Tap a device to see its kind, system, version and role. On an admin phone you ca
 
 ### A second phone, and a lost one
 
-- **A second phone**: on it, tap **I already use Copy Beyond Borders on another phone**; it
-  shows a QR code, which the first phone scans with **+**. The first phone, the root, makes
-  it an admin, so that losing one phone loses nothing.
+- **A second phone**: tap **+** on the first phone; on the second, tap **Join a group** and
+  scan the code. The first phone, the root, makes it an admin, so that losing one phone
+  loses nothing.
 - **A lost phone**: on your other phone, remove it in the devices list. The computers stay
-  in the group; if the lost phone was the root, the other phone takes the group over in the
-  same step. More in [if a device is lost or stolen](lost-device.md).
+  in the group; if the lost phone was the root, open the recovery on the other phone instead and
+  give it the recovery key, which leaves the lost phone out. More in [if a device is lost or stolen](lost-device.md).
 
 ### Settings
 
@@ -90,7 +89,8 @@ latest events, and the switch for sync away from home. They work through the pai
 The Mac app and the tray app for Linux and Windows show the same things as the phone: the
 devices as tiles, a list or orbits, a device's details, **Send the clipboard** and
 **Fetch**, and the switch for sync away from home. Changes to the group (rename, remove,
-make an admin) ask for the administrator's password. Adding a device still runs in the
-terminal (`sudo cbb pair`). The service keeps syncing whether the app is open or not.
+make an admin) ask for the administrator's password. **+** opens a pairing window with a QR
+code and six digits for a new device, and in no group **Join a group** joins a window by its
+six digits. The service keeps syncing whether the app is open or not.
 
 When something does not work, see [Troubleshooting](troubleshooting.md).

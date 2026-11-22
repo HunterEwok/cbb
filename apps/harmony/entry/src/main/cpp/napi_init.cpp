@@ -8,7 +8,7 @@
 // the core a key that signs, runs on a worker thread and answers a Promise:
 // the admin key waits there for the user's face or fingerprint, which the
 // app asks for on its main thread (setAuth), so nothing that signs may run
-// on that thread. The handles (a member, a joiner, an admission, an
+// on that thread. The handles (a member, a join, a window, a joiner, an
 // invitation) are opaque objects the app gives back to free them.
 
 #include "keys.h"
@@ -76,13 +76,6 @@ napi_value num(napi_env env, double n)
 {
     napi_value v = nullptr;
     napi_create_double(env, n, &v);
-    return v;
-}
-
-napi_value boolean(napi_env env, bool b)
-{
-    napi_value v = nullptr;
-    napi_get_boolean(env, b, &v);
     return v;
 }
 
@@ -371,11 +364,16 @@ std::vector<uint8_t> askAuth(const std::vector<uint8_t> &challenge, std::string 
     return askApp(authFn, challenge, "auth", authTimeout, why);
 }
 
-// ---- the YubiKey over NFC ----
+// ---- the YubiKey over NFC or USB ----
 
 // The app's function that sends an APDU to the YubiKey on its IsoDep tag
 // and answers a Promise of the card's answer, its status word last (setCard).
+// On USB (cardBulk) it moves the bytes of the YubiKey's CCID interface for
+// the core's transport ccid_bulk instead: bytes to write answer [0], an
+// empty buffer reads one bulk-in transfer and answers [0] and what came,
+// which may be nothing.
 napi_threadsafe_function cardFn = nullptr;
+bool cardBulk = false;
 
 // How long one APDU may take, a signature with the user's touch included.
 constexpr auto cardTimeout = std::chrono::seconds(30);
@@ -387,6 +385,15 @@ int32_t transmitCard(void *, const uint8_t *apdu, size_t len, uint8_t *out, size
         return 2;
     std::string why;
     const std::vector<uint8_t> a = askApp(cardFn, std::vector<uint8_t>(apdu, apdu + len), "card", cardTimeout, &why);
+    if (cardBulk) {
+        // The leading 0 tells an answer of nothing from a failure.
+        if (a.empty() || a[0] != 0 || a.size() - 1 > cap)
+            return 1;
+        if (a.size() > 1)
+            std::memcpy(out, a.data() + 1, a.size() - 1);
+        *outLen = a.size() - 1;
+        return 0;
+    }
     if (a.size() < 2 || a.size() > cap)
         return 1;
     std::memcpy(out, a.data(), a.size());
@@ -492,22 +499,16 @@ napi_value groupNew(napi_env env, napi_callback_info info)
     });
 }
 
-// restore(request: string): Promise<string>, signed with the member key.
-napi_value restore(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
-        size_t len = 0;
-        return take(cbb_restore(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &len), len);
-    });
-}
-
-// setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>): void, the
-// YubiKey that piv and memberManageCard speak to.
+// setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>, bulk?: boolean):
+// void, the YubiKey that piv speaks to; bulk when fn moves the bytes of its
+// CCID interface on USB.
 napi_value setCard(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
+    bool bulk = false;
+    if (a.n > 1)
+        napi_get_value_bool(env, a.v[1], &bulk);
+    cardBulk = bulk;
     if (cardFn)
         napi_release_threadsafe_function(cardFn, napi_tsfn_release);
     napi_value name = str(env, "cbb-card");
@@ -618,22 +619,6 @@ napi_value memberManage(napi_env env, napi_callback_info info)
     });
 }
 
-// memberManageCard(handle, request: string): Promise<string>, signed with
-// a slot's key on the app's YubiKey (cbb_member_manage_card).
-napi_value memberManageCard(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string req = stringOf(env, a.v[1]);
-    return laterString(env, [member, req]() {
-        if (!member)
-            return errorAnswer({"", "member: no handle"});
-        size_t len = 0;
-        return take(cbb_member_manage_card(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), transmitCard, nullptr, &len),
-                    len);
-    });
-}
-
 // memberManageWatch(handle, request: string): Promise<string>, what the
 // watch asked from the wrist, signed on the watch (cbb_member_manage_watch).
 napi_value memberManageWatch(napi_env env, napi_callback_info info)
@@ -647,23 +632,6 @@ napi_value memberManageWatch(napi_env env, napi_callback_info info)
         size_t len = 0;
         return take(cbb_member_manage_watch(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), signOnWatch, nullptr, &len),
                     len);
-    });
-}
-
-// memberServers(handle, index: string): Promise<string>: the member keeps
-// the group's server credentials and may be a hub or meet the group at a
-// relay, with its keys for the servers in HUKS, listed in the file index.
-napi_value memberServers(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string index = stringOf(env, a.v[1]);
-    return laterString(env, [member, index]() {
-        if (!member)
-            return errorAnswer({"", "member: no handle"});
-        keys::setServerIndex(index);
-        size_t len = 0;
-        return take(cbb_member_servers(member->m, keys::serverKeys, nullptr, &len), len);
     });
 }
 
@@ -682,145 +650,6 @@ napi_value memberStop(napi_env env, napi_callback_info info)
             cbb_member_stop(member->m);
         },
         [](napi_env env) { return undefined(env); });
-}
-
-// ---- joining by the phone's QR code or an invitation ----
-
-// joinNew(request: string): Promise<{handle, answer}>; the phone joins as
-// a member, signing with its member key.
-napi_value joinNew(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    auto joiner = std::make_shared<cbb_join *>(nullptr);
-    auto answer = std::make_shared<std::string>();
-    return later(
-        env,
-        [req, joiner, answer]() {
-            uint8_t *out = nullptr;
-            size_t len = 0;
-            *joiner = cbb_join_new(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &out, &len);
-            *answer = take(out, len);
-        },
-        [joiner, answer](napi_env env) { return made(env, *joiner, *answer); });
-}
-
-// joinAccept(handle): Promise<string>, a new attempt.
-napi_value joinAccept(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return laterString(env, [j]() {
-        size_t len = 0;
-        return take(cbb_join_accept(j, &len), len);
-    });
-}
-
-// joinFeed(handle, data: ArrayBuffer, nowMs: number): Promise<string>
-napi_value joinFeed(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    const std::vector<uint8_t> data = bytesOf(env, a.v[1]);
-    const int64_t now = intOf(env, a.v[2]);
-    return laterString(env, [j, data, now]() {
-        size_t len = 0;
-        return take(cbb_join_feed(j, data.data(), data.size(), now, &len), len);
-    });
-}
-
-// joinFinish(handle, saved: boolean): Promise<string>
-napi_value joinFinish(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    const bool saved = boolOf(env, a.v[1]);
-    return laterString(env, [j, saved]() {
-        size_t len = 0;
-        return take(cbb_join_finish(j, saved ? 1 : 0, &len), len);
-    });
-}
-
-// joinAnnounce(handle, port): boolean
-napi_value joinAnnounce(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return boolean(env, j && cbb_join_announce(j, uint16_t(intOf(env, a.v[1]))) == 1);
-}
-
-// joinAnswered(handle): boolean
-napi_value joinAnswered(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    const cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return boolean(env, j && cbb_join_answered(j) == 1);
-}
-
-// joinFree(handle): Promise<void>; the invitation's tunnel closes on it.
-napi_value joinFree(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_join *j = handleOf<cbb_join>(env, a.v[0]);
-    return later(env, [j]() { cbb_join_free(j); }, [](napi_env env) { return undefined(env); });
-}
-
-// ---- admitting a device as an admin ----
-
-// admitNew(member, request: string, which): Promise<{handle, answer}>
-napi_value admitNew(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string req = stringOf(env, a.v[1]);
-    const cbb_sign_fn sign = signerOf(whichOf(env, a.v[2]));
-    auto admit = std::make_shared<cbb_admit *>(nullptr);
-    auto answer = std::make_shared<std::string>();
-    return later(
-        env,
-        [member, req, sign, admit, answer]() {
-            if (!member) {
-                *answer = errorAnswer({"", "admit: no member"});
-                return;
-            }
-            uint8_t *out = nullptr;
-            size_t len = 0;
-            *admit = cbb_admit_new(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &out, &len);
-            *answer = take(out, len);
-        },
-        [admit, answer](napi_env env) { return made(env, *admit, *answer); });
-}
-
-// admitDial(handle): Promise<string>
-napi_value admitDial(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    return laterString(env, [ad]() {
-        size_t len = 0;
-        return take(cbb_admit_dial(ad, &len), len);
-    });
-}
-
-// admitFeed(handle, data: ArrayBuffer, nowMs): Promise<string>
-napi_value admitFeed(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    const std::vector<uint8_t> data = bytesOf(env, a.v[1]);
-    const int64_t now = intOf(env, a.v[2]);
-    return laterString(env, [ad, data, now]() {
-        size_t len = 0;
-        return take(cbb_admit_feed(ad, data.data(), data.size(), now, &len), len);
-    });
-}
-
-// admitFree(handle): Promise<void>
-napi_value admitFree(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    cbb_admit *ad = handleOf<cbb_admit>(env, a.v[0]);
-    return later(env, [ad]() { cbb_admit_free(ad); }, [](napi_env env) { return undefined(env); });
 }
 
 // ---- remote invitations ----
@@ -880,42 +709,90 @@ napi_value inviteFree(napi_env env, napi_callback_info info)
     return later(env, [i]() { cbb_invite_free(i); }, [](napi_env env) { return undefined(env); });
 }
 
-// ---- away from home ----
+// ---- pairing in a group of 0.6 ----
 
-// tunnel(request: string): Promise<string>
-napi_value tunnel(napi_env env, napi_callback_info info)
+// windowNew(member, request: string, which): Promise<{handle, answer}>
+napi_value windowNew(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
+    Member *member = handleOf<Member>(env, a.v[0]);
+    const std::string req = stringOf(env, a.v[1]);
+    const cbb_sign_fn sign = signerOf(whichOf(env, a.v[2]));
+    auto window = std::make_shared<cbb_window *>(nullptr);
+    auto answer = std::make_shared<std::string>();
+    return later(
+        env,
+        [member, req, sign, window, answer]() {
+            if (!member) {
+                *answer = errorAnswer({"", "window: no member"});
+                return;
+            }
+            uint8_t *out = nullptr;
+            size_t len = 0;
+            *window = cbb_window_new(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &out, &len);
+            *answer = take(out, len);
+        },
+        [window, answer](napi_env env) { return made(env, *window, *answer); });
+}
+
+// windowNext(handle, version, timeoutMs): Promise<string>
+napi_value windowNext(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
+    const auto version = uint64_t(intOf(env, a.v[1]));
+    const auto timeout = uint64_t(intOf(env, a.v[2]));
+    return laterString(env, [w, version, timeout]() {
         size_t len = 0;
-        return take(cbb_tunnel(reinterpret_cast<const uint8_t *>(req.data()), req.size(), &len), len);
+        return take(cbb_window_next(w, version, timeout, &len), len);
     });
 }
 
-// tunnelRegister(request: string): Promise<string>, signed with the member key.
-napi_value tunnelRegister(napi_env env, napi_callback_info info)
+// windowFree(handle): Promise<void>; closes the window.
+napi_value windowFree(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    cbb_window *w = handleOf<cbb_window>(env, a.v[0]);
+    return later(env, [w]() { cbb_window_free(w); }, [](napi_env env) { return undefined(env); });
+}
+
+// joinerNew(request: string): Promise<{handle, answer}>, signing with the member key.
+napi_value joinerNew(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
     const std::string req = stringOf(env, a.v[0]);
-    return laterString(env, [req]() {
+    auto joiner = std::make_shared<cbb_joiner *>(nullptr);
+    auto answer = std::make_shared<std::string>();
+    return later(
+        env,
+        [req, joiner, answer]() {
+            uint8_t *out = nullptr;
+            size_t len = 0;
+            *joiner = cbb_joiner_new(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &out, &len);
+            *answer = take(out, len);
+        },
+        [joiner, answer](napi_env env) { return made(env, *joiner, *answer); });
+}
+
+// joinerNext(handle, version, timeoutMs): Promise<string>
+napi_value joinerNext(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
+    const auto version = uint64_t(intOf(env, a.v[1]));
+    const auto timeout = uint64_t(intOf(env, a.v[2]));
+    return laterString(env, [j, version, timeout]() {
         size_t len = 0;
-        return take(cbb_tunnel_register(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &len), len);
+        return take(cbb_joiner_next(j, version, timeout, &len), len);
     });
 }
 
-// tunnelRelay(request: string, onEvent): Promise<string>, signed with the
-// member key; its events go to onEvent until the link stops.
-napi_value tunnelRelay(napi_env env, napi_callback_info info)
+// joinerFree(handle): Promise<void>
+napi_value joinerFree(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
-    const std::string req = stringOf(env, a.v[0]);
-    Events *events = eventsOf(env, a.v[1]);
-    return laterString(env, [req, events]() {
-        size_t len = 0;
-        return take(cbb_tunnel_relay(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, onEvent, events, &len),
-                    len);
-    });
+    cbb_joiner *j = handleOf<cbb_joiner>(env, a.v[0]);
+    return later(env, [j]() { cbb_joiner_free(j); }, [](napi_env env) { return undefined(env); });
 }
 
 // ---- the module ----
@@ -929,7 +806,6 @@ napi_value init(napi_env env, napi_value exports)
         {"keyEnsure", nullptr, keyEnsure, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"keyForget", nullptr, keyForget, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"groupNew", nullptr, groupNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"restore", nullptr, restore, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setCard", nullptr, setCard, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"setWatch", nullptr, setWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"piv", nullptr, piv, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -937,28 +813,18 @@ napi_value init(napi_env env, napi_value exports)
         {"memberStart", nullptr, memberStart, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberCall", nullptr, memberCall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManage", nullptr, memberManage, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"memberManageCard", nullptr, memberManageCard, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManageWatch", nullptr, memberManageWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinNew", nullptr, joinNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAccept", nullptr, joinAccept, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFeed", nullptr, joinFeed, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFinish", nullptr, joinFinish, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAnnounce", nullptr, joinAnnounce, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinAnswered", nullptr, joinAnswered, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"joinFree", nullptr, joinFree, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitNew", nullptr, admitNew, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitDial", nullptr, admitDial, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitFeed", nullptr, admitFeed, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"admitFree", nullptr, admitFree, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNew", nullptr, inviteNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNext", nullptr, inviteNext, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteAnswer", nullptr, inviteAnswer, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteFree", nullptr, inviteFree, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnel", nullptr, tunnel, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnelRegister", nullptr, tunnelRegister, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"tunnelRelay", nullptr, tunnelRelay, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowNew", nullptr, windowNew, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowNext", nullptr, windowNext, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"windowFree", nullptr, windowFree, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerNew", nullptr, joinerNew, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerNext", nullptr, joinerNext, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"joinerFree", nullptr, joinerFree, nullptr, nullptr, nullptr, napi_default, nullptr},
     };
     napi_define_properties(env, exports, sizeof(fns) / sizeof(fns[0]), fns);
     return exports;

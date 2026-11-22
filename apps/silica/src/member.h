@@ -36,18 +36,26 @@ class Member : public QObject
     // Every device of the group, as the member's devices op lists it: maps with
     // device, name, role, os, admin, root, frozen, online, self and listed.
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
-    // What the group's records stop and what ends it (docs/core-api.md, the
-    // member's alerts): maps with kind, names, devices, records, left_ms, count.
-    Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
     // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does
     // not sync"): maps with code, level, until_ms, device, devices, value and
     // detail, the reason that stops the most first.
     Q_PROPERTY(QVariantList why READ why NOTIFY devicesChanged)
-    // The root's settings as the group's records hold them (the member's
-    // root_view op, cbb_core::root::view): delay_ms, key_level, recovery,
-    // handed_to.
-    Q_PROPERTY(QVariantMap rootView READ rootView NOTIFY devicesChanged)
+    // The group as its records stand (the member's group op,
+    // docs/core-api.md): root_device, key_level, stop, halted and the rest.
+    Q_PROPERTY(QVariantMap groupState READ groupState NOTIFY devicesChanged)
+    // The member's notices about the group (docs/apps.md, "Notices"): maps
+    // with id, kind, args and dismissable.
+    Q_PROPERTY(QVariantList notices READ notices NOTIFY devicesChanged)
+    // The group's main device changed (docs/apps.md, "Changing the main
+    // device"), until the person saw it: from and to, the devices' names,
+    // and seq; empty when none.
+    Q_PROPERTY(QVariantMap rootChanged READ rootChanged NOTIFY devicesChanged)
     Q_PROPERTY(QString last READ last NOTIFY changed)
+    // The last copy that came from another device (D-128): from which
+    // device, and its text, empty for a secret; lastFrom is empty when there
+    // is none to show.
+    Q_PROPERTY(QString lastFrom READ lastFrom NOTIFY changed)
+    Q_PROPERTY(QString lastText READ lastText NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     // Sync turned off (design.md, "Sync on and off"): the clipboard is the
     // phone's own, until pausedUntil or, when it is invalid, until the user
@@ -74,18 +82,21 @@ public:
     ~Member() override;
 
     bool running() const { return m_member != nullptr; }
-    // The core's member, for adding a device (Admit); null when stopped.
+    // The core's member, for a pairing window or an invitation; null when stopped.
     cbb_member *handle() const { return m_member; }
     // The names of the members connected now.
     QStringList peers() const { return m_peers; }
     QVariantList devices() const { return m_devices; }
     // The member's recent log lines, oldest first, for a bug report.
     QStringList recentLog() const { return m_recentLog; }
-    QVariantList alerts() const { return m_alerts; }
     QVariantList why() const { return m_why; }
-    QVariantMap rootView() const { return m_rootView; }
+    QVariantMap groupState() const { return m_groupState; }
+    QVariantList notices() const { return m_notices; }
+    QVariantMap rootChanged() const { return m_rootChanged; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
+    QString lastFrom() const { return m_lastFrom; }
+    QString lastText() const { return m_lastText; }
     QString error() const { return m_error; }
     bool paused() const { return m_paused; }
     QDateTime pausedUntil() const { return m_pausedUntil; }
@@ -102,14 +113,18 @@ public:
                const QString &osVersion);
     void stop();
 
-    // Has the member check the admin CA of the root's admin message
-    // (ffi's take_admin_ca): for the offered admin key, naming this phone,
-    // under the group's current root. The hellos then offer the key no more.
-    bool takeAdminCa(const QByteArray &ca, Failure *failure);
+    // Opens the member port at home, which a pairing window of 0.6 needs
+    // (the member's listen op); a second call keeps it open.
+    bool listen(Failure *failure);
 
-    // Sends the clipboard's text or image when the core's rule says so:
-    // neither the group's copy nor what this phone sent or took last.
-    Q_INVOKABLE void sendClipboard();
+    // The app's opening (docs/design.md, "The one button", D-128), which
+    // swaps nothing: a clipboard changed since the app last saw it goes to
+    // the group, unless it is the group's copy or what this phone sent or
+    // took last; otherwise the phone takes the group's copy.
+    Q_INVOKABLE void opened();
+    // Copy on the main page's last received line: the group's copy into
+    // the clipboard, if it is still the group's latest.
+    Q_INVOKABLE void copyReceived();
     // Sends a text shared to the app, as a copy of this phone.
     Q_INVOKABLE void sendText(const QString &text);
     // Sends images or files shared to the app (absolute paths), up to
@@ -127,26 +142,21 @@ public:
     // Turns sync away from home on, with new tunnel keys that the hellos
     // offer the group's hubs, or off, forgetting them.
     Q_INVOKABLE void setAway(bool on);
-    // After joining by a remote invitation: turns sync away from home on
-    // and offers the tunnel key through the invitation's guest tunnel.
-    void joinedByInvite(const QString &invite);
+    // Hides a notice that may be hidden, until something about it changes.
+    Q_INVOKABLE void dismissNotice(const QString &id);
+    // The person saw that the group's main device changed.
+    Q_INVOKABLE void rootChangeSeen();
 
 signals:
     void changed();
     void devicesChanged();
     void awayChanged();
-    // An admin renewed the member certificate, or a takeover made a new
-    // root: the phone keeps them in member.json.
-    void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
     // The images or files of a copy are in folder, for a notification.
     void saved(const QString &folder, int count);
     // A paste or paste-off command an admin signed for this phone, checked
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
-    // The root made this phone an admin: its admin message brought the
-    // admin CA for the key the hellos offer, not yet checked (takeAdminCa).
-    void adminCaArrived(const QByteArray &ca);
     // Something in the member broke (docs/core-api.md, "Panics"): details
     // say what and where. The app shows it and starts the member again.
     void panicked(const QString &details);
@@ -171,12 +181,16 @@ private:
     // and signed after the member started.
     void command(double token, const QString &from, const QJsonObject &record);
     void pollPeers();
+    // A device's name as the member's devices list it, else its ID.
+    QString deviceName(const QString &id) const;
     void setLast(const QString &text, bool secret);
     // Takes the group's copy (as the core's copy JSON): a text into the
     // clipboard, images or files fetched into Downloads, one image into the
     // clipboard too; then tells the core it took it.
     void take(const QJsonObject &copy);
-    void sendImage(const QImage &image);
+    void sendImage(const QByteArray &png, const QString &key);
+    // Sends a text the clipboard held, as the opening decided.
+    void sendBoardText(const QString &text);
     // Sends images or files as one copy, up to maxSendBytes together, and
     // returns its event ID, or none with failure set.
     QString copyMedia(const QStringList &paths, Failure *failure);
@@ -190,6 +204,7 @@ private:
     void pollAway();
 
     cbb_member *m_member = nullptr;
+    bool m_listening = false; // the member port is open (listen)
     QTimer m_peerTimer;
     QStringList m_peers;
     // The connected devices whose hello says an admin muted them, by ID:
@@ -197,16 +212,20 @@ private:
     QStringList m_mutedPeers;
     QVariantList m_devices;
     QStringList m_recentLog;
-    QVariantList m_alerts;
     QVariantList m_why;
-    QVariantMap m_rootView;
+    QVariantMap m_groupState;
+    QVariantList m_notices;
+    QVariantMap m_rootChanged;
     QString m_last;
     QString m_error;
     // The clipboard's text as the group last set it or the phone last sent it.
     QString m_known;
+    QString m_lastId, m_lastFrom, m_lastText;
     // The key of the image this phone put into the clipboard from the
     // group: read back, it is encoded anew, so the core cannot tell it.
     QString m_tookImage;
+    // The ID of the group's copy that image came from.
+    QString m_tookImageCopy;
     QThread *m_fetch = nullptr;
     bool m_paused = false;
     QDateTime m_pausedUntil;

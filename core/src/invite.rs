@@ -14,6 +14,7 @@ use core::net::SocketAddr;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::{Map, Value};
+use zeroize::Zeroize;
 
 use crate::strict;
 
@@ -110,7 +111,7 @@ impl Range {
 
 /// The hub's AmneziaWG settings (docs/protocol.md, section 11,
 /// "Obfuscation"), checked as Go's tunnel.Obfuscation.Check.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Obfuscation {
     pub jc: u32,
     pub jmin: u32,
@@ -120,8 +121,20 @@ pub struct Obfuscation {
     pub header_protection_key: [u8; 32],
 }
 
-/// An invitation that parse took. Its Debug leaves the keys and the
-/// secret out.
+impl core::fmt::Debug for Obfuscation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Obfuscation")
+            .field("jc", &self.jc)
+            .field("jmin", &self.jmin)
+            .field("jmax", &self.jmax)
+            .field("s", &self.s)
+            .field("h", &self.h)
+            .field("header_protection_key", &crate::secret::Redacted(self.header_protection_key.len()))
+            .finish()
+    }
+}
+
+/// An invitation that parse took.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Invitation {
     pub group: String,
@@ -140,21 +153,39 @@ pub struct Invitation {
     pub vless: Option<Vless>,
 }
 
+impl Drop for Invitation {
+    fn drop(&mut self) {
+        self.guest_key.zeroize();
+        self.guest_psk.zeroize();
+        self.secret.zeroize();
+    }
+}
+
+impl Drop for Obfuscation {
+    fn drop(&mut self) {
+        self.header_protection_key.zeroize();
+    }
+}
+
 impl core::fmt::Debug for Invitation {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Invitation")
             .field("group", &self.group)
             .field("hub", &self.hub)
+            .field("hub_key", &self.hub_key)
             .field("endpoints", &self.endpoints)
+            .field("guest_key", &crate::secret::Redacted(self.guest_key.len()))
+            .field("guest_psk", &crate::secret::Redacted(self.guest_psk.len()))
+            .field("secret", &crate::secret::Redacted(self.secret.len()))
             .field("expires", &self.expires)
-            .field("obfuscation", &self.obfuscation.is_some())
+            .field("obfuscation", &self.obfuscation)
             .field("vless", &self.vless)
-            .finish_non_exhaustive()
+            .finish()
     }
 }
 
 /// The VLESS settings of an invitation: those of the hub's offer, with
-/// XHTTP only. Its Debug leaves the group's user ID out.
+/// XHTTP only.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Vless {
     /// The web server's address, `ip:port`.
@@ -173,7 +204,8 @@ impl core::fmt::Debug for Vless {
             .field("endpoint", &self.endpoint)
             .field("server_name", &self.server_name)
             .field("path", &self.path)
-            .finish_non_exhaustive()
+            .field("id", &crate::secret::Redacted(self.id.len()))
+            .finish()
     }
 }
 

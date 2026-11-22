@@ -11,7 +11,7 @@ import { Errors, Failure } from '../core/Errors';
 import { t } from '../core/Text';
 import { scanQr } from '../common/Scan';
 import { InvitationText, isInvitation, readInvitation } from '../model/Invite';
-import { ErrorText, PageTitle } from '../components/Common';
+import { EMPHASIZED_BUTTON, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -69,7 +69,7 @@ struct Invitation {
             .onSubmit(() => {
               this.take(this.pasted);
             })
-          Button($r('app.string.next'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.next'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .enabled(this.pasted.trim().length > 0)
             .onClick(() => {
@@ -89,13 +89,13 @@ struct Invitation {
             Text(new Date(this.read.expiresMs).toLocaleString()).fontColor($r('app.color.text'))
           }
           Text($r('app.string.invitation_note')).fontSize(14).fontColor($r('app.color.secondary'))
-          Button($r('app.string.invitation_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
+          Button($r('app.string.invitation_join'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED }).attributeModifier(EMPHASIZED_BUTTON)
             .width('100%')
             .onClick(() => {
               const text = this.read?.text ?? '';
               router.replaceUrl({ url: 'pages/Join', params: { 'invite': text } as Record<string, Object> });
             })
-          Button($r('app.string.invitation_decline'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.invitation_decline'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .onClick(() => {
               router.back();

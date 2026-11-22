@@ -58,10 +58,9 @@ public:
     QString error() const { return m_error; }
 
     void setPreparing();
-    // Opens it with the admin key's public point and admin CA (empty on
-    // the root), for seconds; the hub's answer is waited for off the GUI
-    // thread.
-    void open(cbb_member *member, const QByteArray &publicKey, const QByteArray &adminCa, int seconds);
+    // Opens it with the admin key's public point, for seconds; the hub's
+    // answer is waited for off the GUI thread.
+    void open(cbb_member *member, const QByteArray &publicKey, int seconds);
     // The user's answer about the device that used it.
     Q_INVOKABLE void answer(bool yes);
     // Ends it, or forgets how the last one ended.

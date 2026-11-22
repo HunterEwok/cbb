@@ -60,14 +60,14 @@ class ScreensTest {
 
     private fun str(id: Int) = context.getString(id)
 
-    /** A14: what the app does, both ways in and the way back with the recovery key; the language and Settings at the top. */
+    /** A14: what the app does and the ways in (restoring on a phone in no group comes with 0.7, D-125); the language and Settings at the top. */
     @Test
     fun startScreen() {
         show()
         compose.onNodeWithText(str(R.string.tagline)).assertExists()
         compose.onNodeWithText(str(R.string.create_group)).assertExists()
         compose.onNodeWithText(str(R.string.join_group)).assertExists()
-        compose.onNodeWithText(str(R.string.restore_link)).assertExists()
+        compose.onNodeWithText(str(R.string.invitation_join)).assertExists()
         compose.onNodeWithContentDescription(str(R.string.language)).assertExists()
         compose.onNodeWithContentDescription(str(R.string.settings)).assertExists()
     }
@@ -141,7 +141,7 @@ class ScreensTest {
     @Config(qualifiers = "ru")
     fun russian() {
         val english = context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocale(Locale.ENGLISH) })
-        for (id in listOf(R.string.tagline, R.string.create_group, R.string.join_group, R.string.restore_link, R.string.settings)) {
+        for (id in listOf(R.string.tagline, R.string.create_group, R.string.join_group, R.string.invitation_join, R.string.settings)) {
             assertNotEquals("no Russian for ${english.getString(id)}", english.getString(id), str(id))
         }
         show()

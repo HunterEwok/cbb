@@ -40,31 +40,26 @@ import java.util.concurrent.atomic.AtomicBoolean
  * throws [Core.Refusal] when the node refuses it.
  */
 class CoreMember private constructor(internal val handle: Pointer, private val callbacks: Callbacks) : Closeable {
-    /** What the member starts from: the app's data directory and the phone's identity in the group. */
+    /**
+     * What the member starts from: the app's folder, where the member keeps
+     * the group's set (a group made before 0.6 is refused, D-126), and what
+     * the phone says of itself.
+     */
     class Start(
-        /** The node's own files (its records, the clock's mark, the entry points, the cached copies). */
+        /** The member's own files: the group's set, the entry points, the cached copies. */
         val dir: File,
         val name: String,
         val os: String,
         val osVersion: String = "",
         val version: String = "",
-        /** Where the key lives: hardware (the Keystore's TEE or StrongBox) or file. */
-        val keyStore: String = "hardware",
+        /** The device ID the app keeps, which the member key must make. */
         val device: String,
         /** The member key's public key: a SubjectPublicKeyInfo or an uncompressed point. */
         val publicKey: ByteArray,
-        /** The secret for sealed messages, 32 bytes. */
-        val seal: ByteArray,
-        val cert: ByteArray,
-        val issuer: ByteArray? = null,
-        val groupCA: ByteArray,
-        val roots: List<ByteArray> = emptyList(),
         /** Members to dial at these addresses (host:port) from the start. */
         val peers: List<String> = emptyList(),
         /** Whether the node finds the members by mDNS itself; the apps find them and hand them in. */
         val mdns: Boolean = false,
-        /** The phone's admin key (a SubjectPublicKeyInfo), which the hellos offer while it is no admin, for the root to make it one. */
-        val adminKey: ByteArray? = null,
     ) {
         internal fun toJson(): JsonObject = Wire.obj(
             "dir" to Wire.str(dir.path),
@@ -72,17 +67,10 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
             "os" to Wire.str(os),
             "os_version" to Wire.str(osVersion),
             "version" to Wire.str(version),
-            "key_store" to Wire.str(keyStore),
             "device" to Wire.str(device),
             "public" to Wire.bytes(point(publicKey)),
-            "seal" to Wire.bytes(seal),
-            "cert" to Wire.bytes(cert),
-            "issuer" to Wire.bytes(issuer),
-            "group_ca" to Wire.bytes(groupCA),
-            "roots" to JsonArray(roots.map { Wire.bytes(it)!! }),
             "peers" to JsonArray(peers.map { JsonPrimitive(it) }),
             "mdns" to JsonPrimitive(mdns),
-            "admin_key" to Wire.bytes(adminKey),
         )
     }
 
@@ -99,6 +87,8 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         val key: String,
         /** The devices the copy is sealed to. */
         val readers: List<String> = emptyList(),
+        /** How long the copy lives from when it came, in milliseconds, as its sender stamped it (D-129); null when unknown. */
+        val ttlMS: Long? = null,
     ) {
         /** Whether it carries files or folders, which the phone saves rather than putting in its clipboard. */
         val isFiles: Boolean get() = media?.isFiles == true
@@ -115,11 +105,12 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                 o.optBool("unread") ?: false,
                 o.optString("key") ?: "",
                 o.optArray("readers").orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
+                o.optLong("ttl_ms"),
             )
         }
     }
 
-    /** A connected member as its hello and reach messages present it, with its chain as the handshake checked it, leaf first. */
+    /** A connected member as the records and its hello name it, with the members it says it reaches. */
     data class Peer(
         val device: String,
         val name: String,
@@ -128,23 +119,8 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         val keyStore: String,
         val mode: String,
         val muted: Boolean,
-        val mutedForMS: Long,
-        val actions: List<String>,
-        val info: Member.DeviceInfo?,
-        val adminKey: ByteArray?,
-        val tunnelKey: ByteArray?,
-        val tunnelPSK: ByteArray?,
         val reach: List<String>,
-        val recordsOnly: Boolean,
-        val features: List<String>,
-        val chain: List<ByteArray>,
     ) {
-        /** Whether it serves the content of copies with images or files. */
-        val media: Boolean get() = Member.FEATURE_MEDIA in features
-
-        /** Until when an admin muted it, in Unix milliseconds, 0 for until it is lifted; null when it is not muted. */
-        fun mutedUntil(now: Long = System.currentTimeMillis()): Long? = if (!muted) null else if (mutedForMS <= 0) 0 else now + mutedForMS
-
         companion object {
             internal fun fromJson(o: JsonObject): Peer = Peer(
                 o.optString("device") ?: "",
@@ -154,16 +130,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                 o.optString("key_store") ?: "",
                 o.optString("mode") ?: "",
                 o.optBool("muted") ?: false,
-                o.optLong("muted_for_ms") ?: 0,
-                o.strings("actions"),
-                runCatching { Member.DeviceInfo.fromJson(o.opt("info")) }.getOrNull(),
-                o.optBytes("admin_key"),
-                o.optBytes("tunnel_key"),
-                o.optBytes("tunnel_psk"),
                 o.strings("reach"),
-                o.optBool("records_only") ?: false,
-                o.strings("features"),
-                o.optBytesList("chain") ?: emptyList(),
             )
         }
     }
@@ -206,29 +173,26 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         /** A copy that became the group's current one from another member. */
         data class CopyChanged(val copy: Copy) : Event()
 
-        /** An admin, hubs, credentials or evidence message a peer sent, decoded as the member protocol carries it. */
-        class Message(val from: String, val message: Member.Message) : Event()
-
-        /** The phone's certificate an admin renewed, or the roots after a takeover; the app keeps them. */
-        class Identity(val cert: ByteArray, val issuer: ByteArray?, val roots: List<ByteArray>) : Event()
-
-        /** A peer whose hello the node took. */
-        data class PeerConnected(val peer: Peer) : Event()
-
-        /** A tunnel offer of the group's root or an admin. */
-        class Tunnel(val from: String, val offer: Member.TunnelOffer) : Event()
-
-        /** A command for this phone itself, which the app checks, carries out and answers with [answer] and the token within ten seconds. */
-        class Command(val token: Long, val from: String, val command: Member.Record) : Event()
-
-        /**
-         * A call to the relay's port from the loopback port [port], whose certificate names [device]: the app names the caller the
-         * relay announced from there with [caller] and the token within five seconds, or the call is closed.
-         */
-        class Caller(val token: Long, val port: Int, val device: String) : Event()
-
         /** An admin muted this phone for [forMS] milliseconds (0: until an admin lifts it), or ended its mute; the node carried it out and keeps it. */
         class Mute(val muted: Boolean, val forMS: Long, val by: String) : Event()
+
+        /** An admin turned this phone's sync off ([off]) or on again; the member of 0.6 carried it out and keeps it. */
+        class Sync(val off: Boolean, val by: String) : Event()
+
+        /** The group's state changed (a record came, a device joined or left). */
+        class State(val state: GroupState) : Event()
+
+        /** A new notice about the group. */
+        class NoticeAdded(val notice: Notice) : Event()
+
+        /**
+         * The group's root changed by its recovery key: every device shows it and cannot turn it off,
+         * with "This wasn't me". from and to are the old and new root's devices, seq the change's step.
+         */
+        class RootChanged(val from: String, val to: String, val seq: Long) : Event()
+
+        /** The member no longer needs the key public: the app may delete it. */
+        class KeyDone(val public: ByteArray) : Event()
 
         /**
          * Something in the member broke (docs/core-api.md, "Panics"): details say what and
@@ -241,12 +205,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     enum class Listen(val wire: String) {
         /** The home network, while the phone is the hub: every address; the app publishes it with r=phone. */
         HOME("home"),
-
-        /** The hub's tunnel, on the loopback address. */
-        TUNNEL("tunnel"),
-
-        /** A blind relay's calls, on the loopback address, each served only when the app names its caller ([Event.Caller]). */
-        RELAY("relay"),
     }
 
     private val closed = AtomicBoolean(false)
@@ -267,16 +225,26 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     /** The group's current copy, or null. */
     fun current(): Copy? = call("current").optObject("copy")?.let(Copy::fromJson)
 
-    /** The copy from another device that waits for the phone (the button's first case), or null. */
-    fun waiting(): Copy? = call("waiting").optObject("copy")?.let(Copy::fromJson)
+    /**
+     * What a gesture or the app's opening does (D-128): whether the
+     * clipboard goes out (sends), and the group's copy that comes into it,
+     * or null.
+     */
+    class Swap(val sends: Boolean, val copy: Copy?)
 
-    /** The app took the copy id into the clipboard, or saved its files, so that it waits no more. */
+    /** The gesture swaps: board is the clipboard's key (Copy.key's shape), empty for an empty clipboard. */
+    fun swap(board: String): Swap = call("swap", Wire.obj("board" to Wire.str(board))).let(::swapOf)
+
+    /** The app opened: a clipboard that changed since the app last saw it goes out, otherwise the group's copy comes in. */
+    fun opened(board: String, changed: Boolean): Swap =
+        call("opened", Wire.obj("board" to Wire.str(board), "changed" to JsonPrimitive(changed))).let(::swapOf)
+
+    private fun swapOf(o: JsonObject) = Swap(o.optBool("sends") ?: false, o.optObject("copy")?.let(Copy::fromJson))
+
+    /** The app took the copy id into the clipboard, or saved its files: its own write, never a copy of the phone's. */
     fun took(id: String) {
         call("took", Wire.obj("id" to Wire.str(id)))
     }
-
-    /** Whether the button sends what the clipboard holds, by its key (the button's second case). */
-    fun sends(board: String): Boolean = call("sends", Wire.obj("board" to Wire.str(board))).optBool("sends") ?: false
 
     /** Fetches the images or files of the group's copy id, unless its sealed blob is larger than max bytes, and opens them into the new folder out. Blocks. */
     fun fetch(id: String, max: Long, out: File): List<Fetched> =
@@ -286,12 +254,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         }
 
     // Finding the members, listening, the app's life.
-
-    /** How far the peers read the sealed blob of the group's copy [id] this phone made, and its size; zeros for a copy no longer the group's or with no bytes. */
-    fun served(id: String): Pair<Long, Long> {
-        val ok = call("served", Wire.obj("id" to Wire.str(id)))
-        return (ok.optLong("served") ?: 0) to (ok.optLong("size") ?: 0)
-    }
 
     /** Dials the member the app knows as key (an NSD name, the tunnel) at addrs (host:port), again and again until [lost]; device when known. */
     fun found(key: String, addrs: List<String>, device: String? = null) {
@@ -308,14 +270,148 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         call("listen", Wire.obj("port" to Wire.num(port.toLong()), "kind" to Wire.str(what.wire))).optLong("port")?.toInt()
             ?: throw Core.Mismatch("listen answered no port")
 
+    /** A hub's registration with its forwarder, as the member's sync away from home shows it. */
+    data class ForwarderState(val endpoint: String, val registered: Boolean, val seen: String, val entriesStale: Boolean, val error: String, val detail: String)
+
+    /** This phone's link to the group's blind relay. */
+    data class RelayState(val endpoint: String, val connected: Boolean, val online: List<String>, val error: String, val detail: String)
+
+    /**
+     * Sync away from home on a group of 0.6, as the member runs it (`away_status`, docs/core-api.md): a hub (standing
+     * by while a hub above it serves) with its port, clients, endpoints and forwarder; else the hub it reaches and
+     * whether through the tunnel now; the relay link; the last error with its detail.
+     */
+    data class AwayState(
+        val hub: Boolean,
+        val standby: Boolean,
+        val port: Int,
+        val clients: Int,
+        val obfuscated: Boolean,
+        val vless: Boolean,
+        val endpoints: List<String>,
+        val hubDevice: String,
+        val through: Boolean,
+        val keysInFile: Boolean,
+        val forwarder: ForwarderState?,
+        val relay: RelayState?,
+        val error: String,
+        val detail: String,
+    ) {
+        companion object {
+            private fun strings(o: JsonObject, key: String): List<String> = o.optArray(key)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList()
+
+            /** The answer's `away`, null while sync away from home is off and nothing failed. */
+            fun of(answer: JsonObject): AwayState? = answer.optObject("away")?.let { a ->
+                AwayState(
+                    a.optBool("hub") ?: false, a.optBool("standby") ?: false, (a.optLong("port") ?: 0).toInt(), (a.optLong("clients") ?: 0).toInt(),
+                    a.optBool("obfuscated") ?: false, a.optBool("vless") ?: false, strings(a, "endpoints"), a.optString("hub_device") ?: "",
+                    a.optBool("through") ?: false, a.optBool("keys_in_file") ?: false,
+                    a.optObject("forwarder")?.let { f ->
+                        ForwarderState(f.optString("endpoint") ?: "", f.optBool("registered") ?: false, f.optString("seen") ?: "",
+                            f.optBool("entries_stale") ?: false, f.optString("error") ?: "", f.optString("detail") ?: "")
+                    },
+                    a.optObject("relay")?.let { r ->
+                        RelayState(r.optString("endpoint") ?: "", r.optBool("connected") ?: false, strings(r, "online"),
+                            r.optString("error") ?: "", r.optString("detail") ?: "")
+                    },
+                    a.optString("error") ?: "", a.optString("detail") ?: "",
+                )
+            }
+        }
+
+        /** Sync away from home is on: the member keeps its tunnel keys; a failure while it is off shows only error. */
+        val isOn: Boolean get() = keysInFile
+    }
+
+    /** On a group of 0.6: sync away from home as the member runs it, null while it is off. */
+    fun awayStatus(): AwayState? = AwayState.of(call("away_status"))
+
+    /** The forwarder the group's root set for this phone as a hub: its address and its key's pin. */
+    data class RootForwarder(val endpoint: String, val key: String)
+
+    /** On a group of 0.6: the forwarder the group's root set for this phone as a hub, which it serves through; null while the root set none. */
+    fun rootForwarder(): RootForwarder? = call("away_status").optObject("root_forwarder")?.let { f ->
+        RootForwarder(f.optString("endpoint") ?: "", f.optString("key") ?: "")
+    }
+
+    /**
+     * On the root phone of a group of 0.6: whether the group's server credentials need its root key ([renewPeriod]) and
+     * whether they expired already, so that the group's relay and its hubs' forwarders take nobody; both false elsewhere.
+     */
+    fun periods(): Pair<Boolean, Boolean> = call("away_status").let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }
+
+    /**
+     * On a group of 0.6: the group's face toward the push service that the newest keys.json the member
+     * holds names (16 bytes), which every registration names; null until one does.
+     */
+    fun pushFace(): ByteArray? = call("push_face").optBytes("face")?.takeIf { it.size == 16 }
+
+    /**
+     * On a group of 0.6: this phone's registration for push, message `push` as [Push] made it, which the
+     * member sends to every member connected now and to each one that connects later; null stops it.
+     */
+    fun setPush(frame: ByteArray?) {
+        call("push", Wire.obj("frame" to Wire.bytes(frame)))
+    }
+
+    /** On a group of 0.6: the `push-renew` messages members sent since the last call, as slot and ahead, one per slot. */
+    fun pushRenewals(): List<Pair<ByteArray, Boolean>> =
+        call("push_renewals").optArray("renewals")?.mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            o.optBytes("slot")?.let { it to (o.optBool("ahead") ?: false) }
+        } ?: emptyList()
+
+    /** On the root phone of a group of 0.6: renews the group's server credentials with the root key; the periods after. */
+    fun renewPeriod(public: ByteArray, sign: (ByteArray) -> ByteArray): Pair<Boolean, Boolean> =
+        act(Wire.obj("action" to Wire.str("period")), public, sign).let { (it.optBool("period_due") ?: false) to (it.optBool("period_overdue") ?: false) }
+
+    /** On a group of 0.6: turns sync away from home on, with new tunnel keys, or off. */
+    fun setAway(on: Boolean): AwayState? = AwayState.of(call("away", Wire.obj("on" to JsonPrimitive(on))))
+
+    /**
+     * On a group of 0.6, serves as a hub of the group (the records must make this phone one: an admin key), with the
+     * computers' hub: reached away from home through the forwarder at forwarder (`host:port`, its key's pin key or
+     * `default` for the project's; none given: the one the root set, [rootForwarder]), or at addrs ("ip:port") on the
+     * UDP port (0: any free one), hidden as obfuscateOff and vlessOff say. Its clients and the guests of invitations come in through its tunnel.
+     */
+    fun serveAsHub(
+        port: Int = 0,
+        addrs: List<String> = emptyList(),
+        forwarder: String = "",
+        key: String = "",
+        obfuscateOff: Boolean = false,
+        vlessOff: Boolean = false,
+    ): AwayState? = AwayState.of(
+        call(
+            "hub",
+            Wire.obj(
+                "port" to Wire.num(port.toLong()), "addrs" to JsonArray(addrs.map { JsonPrimitive(it) }),
+                "forwarder" to Wire.str(forwarder), "key" to Wire.str(key),
+                "obfuscate_off" to JsonPrimitive(obfuscateOff), "vless_off" to JsonPrimitive(vlessOff),
+            ),
+        ),
+    )
+
+    /** On a group of 0.6: stops serving as a hub; its clients go to the next hub in the group's order. */
+    fun stopHub(): AwayState? = AwayState.of(call("hub_off"))
+
+    /** On the root of a group of 0.6: the group's relays, each "address pin", or "default" alone; none meets at no relay. */
+    fun setRelays(relays: List<String>, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
+        act(Wire.obj("action" to Wire.str("relay"), "relays" to JsonArray(relays.map { JsonPrimitive(it) })), public, sign)
+            .optArray("relays")?.map { (it as JsonPrimitive).content } ?: emptyList()
+
+    /**
+     * On the root of a group of 0.6: names the forwarder of device, an admin phone or a computer that may be a hub, at
+     * forwarder (`host:port`, or `default` for the project's) with its key's pin key, which the device takes as its
+     * forwarder setting and serves through once its hub is on. The device's answer: done, refused or failed, and why.
+     */
+    fun nameForwarder(device: String, forwarder: String, key: String, public: ByteArray, sign: (ByteArray) -> ByteArray): Pair<String, String> =
+        act(Wire.obj("action" to Wire.str("forwarder"), "device" to Wire.str(device), "forwarder" to Wire.str(forwarder), "key" to Wire.str(key)), public, sign)
+            .let { (it.optString("status") ?: "") to (it.optString("reason") ?: "") }
+
     /** Closes the port [listen] opened for [what], or every one with null. */
     fun unlisten(what: Listen? = null) {
         call("unlisten", Wire.obj("kind" to (what?.let { Wire.str(it.wire) } ?: JsonNull)))
-    }
-
-    /** Answers an [Event.Caller]: the device the relay announced from the call's loopback port, null for a call it did not announce. */
-    fun caller(token: Long, device: String?) {
-        call("caller", Wire.obj("token" to JsonPrimitive(token), "device" to (device?.let { Wire.str(it) } ?: JsonNull)))
     }
 
     /** Closes every connection with a goodbye and makes none until [resume]: the app went to the background. */
@@ -347,7 +443,6 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
 
     // What the app shows.
 
-    /** The members connected now, those whose connection carries records only too when all. */
     /**
      * The device tiles in the user's order, with the user's change op applied
      * and kept first (docs/apps.md, "What the member shows"); a change that
@@ -359,6 +454,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         return Arrangement.view(answer.getValue("view").jsonObject)
     }
 
+    /** The members connected now, the offline ones too when all. */
     fun peers(all: Boolean = false): List<Peer> =
         call("peers", Wire.obj("all" to JsonPrimitive(all))).optArray("peers").orEmpty().mapNotNull { (it as? JsonObject)?.let(Peer::fromJson) }
 
@@ -370,163 +466,77 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
     fun why(away: WhyAway? = null): List<WhyReason> =
         call("why", Wire.obj("away" to (away?.toJson() ?: JsonNull))).optArray("why").orEmpty().mapNotNull { (it as? JsonObject)?.let(WhyReason::fromJson) }
 
-    /** The group's records the node keeps. */
-    fun records(): List<Member.Record> =
-        call("records").optArray("records").orEmpty().mapNotNull { e -> (e as? JsonObject)?.let { runCatching { Member.Record.fromJson(it) }.getOrNull() } }
-
-    // What an admin's app signed.
-
-    /** Takes records the app's root or admin key signed, keeps them and sends them to every peer. */
-    fun addRecords(rs: List<Member.Record>) {
-        if (rs.isEmpty()) return
-        call("add_records", Wire.obj("records" to JsonArray(rs.map { it.toJson() })))
-    }
-
-    /** Sends a command an admin key signed, straight to its receiver or through the group's hubs, and waits for its result. Blocks. */
-    fun command(c: Member.Record, timeoutMS: Long = 10_000): Member.CommandResult {
-        val r = call("command", Wire.obj("command" to c.toJson(), "timeout_ms" to Wire.num(timeoutMS))).optObject("result")
-            ?: throw Core.Mismatch("command answered no result")
-        return Member.CommandResult.fromJson(r)
-    }
-
-    /** Sends a renewed member certificate to the member to. */
-    fun sendCert(to: String, cert: ByteArray, issuer: ByteArray?): Boolean =
-        call("send_cert", Wire.obj("to" to Wire.str(to), "cert" to Wire.bytes(cert), "issuer" to Wire.bytes(issuer))).optBool("sent") ?: false
-
-    /** Sends a full member the admin CA for the admin key its hello offered. */
-    fun sendAdminCA(to: String, ca: ByteArray): Boolean =
-        call("send_admin_ca", Wire.obj("to" to Wire.str(to), "ca" to Wire.bytes(ca))).optBool("sent") ?: false
-
-    /** Sends the member to this hub's offer for its tunnel key. */
-    fun sendTunnel(to: String, offer: Member.TunnelOffer): Boolean =
-        call("send_tunnel", Wire.obj("to" to Wire.str(to), "offer" to offer.toJson())).optBool("sent") ?: false
-
-    /** Sends what this hub shares to the group's other hubs connected, or to the member [to] only; those it went to. */
-    fun sendHubs(share: Member.HubShare, to: String? = null): List<String> =
-        call("send_hubs", Wire.obj("share" to share.toJson(), "to" to (to?.let { Wire.str(it) } ?: JsonNull))).strings("to")
-
-    /**
-     * Sends the group's server credentials to the member [to] only (a peer that just connected), or to every member but [except]
-     * (the one that sent them); those they went to.
-     */
-    fun sendCredentials(list: List<ServerCredentials.Credential>, to: String? = null, except: String? = null): List<String> =
-        call(
-            "send_credentials",
-            Wire.obj(
-                "credentials" to JsonArray(list.map { it.toJson() }),
-                "to" to (to?.let { Wire.str(it) } ?: JsonNull),
-                "except" to (except?.let { Wire.str(it) } ?: JsonNull),
-            ),
-        ).strings("to")
-
-    // The phone's own part.
-
-    /** Answers a [Event.Command] with the result its sender gets. */
-    fun answer(token: Long, result: Member.CommandResult) {
-        call("answer", Wire.obj("token" to JsonPrimitive(token), "status" to Wire.str(result.status), "reason" to Wire.str(result.reason ?: "")))
-    }
-
-    /** Sets the tunnel key and preshared key the hellos offer the group's hubs, or none; the phone connects to the full members again. */
-    fun setTunnelKey(keys: Pair<ByteArray, ByteArray>?) {
-        call("tunnel_key", Wire.obj("key" to Wire.bytes(keys?.first), "psk" to Wire.bytes(keys?.second)))
-    }
-
     /** Sets the attestations of the phone's keys, which every peer gets after its hello. */
     fun setEvidence(list: List<Member.Evidence>) {
         call("evidence", Wire.obj("evidence" to JsonArray(list.map { it.toJson() })))
     }
 
-    /** Ends the connection to device with a goodbye; it is dialed again later. */
-    fun disconnect(device: String) {
-        call("disconnect", Wire.obj("device" to Wire.str(device)))
+    // The group in 0.6 (docs/core-api.md, "The member"): the member keeps and evaluates the
+    // records; the app reads what it shows and asks for what the person decides.
+
+    /** The group as the member sees it now. */
+    fun group(): GroupState = GroupState.fromJson(call("group"))
+
+    /** The member's notices about the group, newest first. */
+    fun notices(): List<Notice> = call("notices").objects("notices").map(Notice::fromJson)
+
+    /** Hides the notice id until something about it changes. */
+    fun dismiss(id: String) {
+        call("dismiss", Wire.obj("id" to Wire.str(id)))
     }
+
+    /** The person saw the change of root [Event.RootChanged] told of: the member no longer tells of it, not even when it starts again. */
+    fun rootChangeSeen() {
+        call("root_change_seen")
+    }
+
+    /**
+     * Who stays after a change of root with the recovery key, before anything is signed: the
+     * core writes the list; leaveOut are the devices the person unticked. The recovery keys
+     * are derived inside the call and dropped at its end.
+     */
+    fun changePreview(recovery: RecoveryInput, leaveOut: List<String> = emptyList()): ChangePreview = ChangePreview.fromJson(
+        manage(
+            Wire.obj(
+                "action" to Wire.str("change_preview"),
+                "recovery" to recovery.toJson(),
+                "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            ),
+        ) { throw IllegalStateException("a preview signs nothing") },
+    )
+
+    /**
+     * Changes the group's root to this phone's new root key rootPublic, which sign signs with
+     * (Face ID before each use): the recovery key signs the change, the new root its first
+     * records, and leaveOut are removed in the same act. overWaiting writes over a change
+     * whose records never came; offer it only after a sync failed.
+     */
+    fun changeRoot(
+        recovery: RecoveryInput,
+        leaveOut: List<String>,
+        rootPublic: ByteArray,
+        sign: (ByteArray) -> ByteArray,
+        dropHubs: Boolean = false,
+        overWaiting: Boolean = false,
+    ): Long = manage(
+        Wire.obj(
+            "action" to Wire.str("change_root"),
+            "recovery" to recovery.toJson(),
+            "leave_out" to JsonArray(leaveOut.map { JsonPrimitive(it) }),
+            "drop_hubs" to JsonPrimitive(dropHubs),
+            "over_waiting" to JsonPrimitive(overWaiting),
+            "public" to Wire.bytes(point(rootPublic)),
+        ),
+        sign,
+    ).optLong("seq") ?: 0
 
     /** The callbacks of the manage calls under way. */
     private val signing = mutableListOf<SignFn>()
-
-    /** Where a claim to take the group over stands, as finish_takeover answers. */
-    class Takeover(
-        /** none, pending, cancelled, void, competing, disputed or effective. */
-        val state: String,
-        /** How long the claim still waits, while pending. */
-        val leftMS: Long,
-        /** The phone's member certificate from the new root, once effective. */
-        val cert: ByteArray?,
-    )
-
-    /** Who claims the group (docs/protocol.md, section 10, "Handing the group over"). */
-    enum class Claim(internal val action: String) {
-        /** An admin phone, from the lost root's device. */
-        TAKE_OVER("take_over"),
-
-        /** The admin phone the root handed the group to. */
-        TAKE_HANDED_OVER("take_handed_over"),
-
-        /** The group's recovery key, under its admin CA. */
-        RECOVER("recover"),
-    }
-
-    /**
-     * A root CA for a new key of this phone, before a claim (cbb_member_manage's
-     * root_ca): public is the new key, which sign signs with. The app keeps the
-     * CA and the key until the claim takes effect or ends.
-     */
-    fun rootCA(public: ByteArray, sign: (ByteArray) -> ByteArray): ByteArray =
-        manage(Wire.obj("action" to Wire.str("root_ca"), "public" to Wire.bytes(point(public))), sign).optBytes("root_ca")
-            ?: throw Core.Mismatch("the member's root CA is missing")
-
-    /**
-     * Claims the group for rootCA, signed with the key public under its CA
-     * (the admin key and admin CA, or the recovery key and its CA); the
-     * member adds the claim to its records and sends it. lost is the lost
-     * root's device for [Claim.TAKE_OVER].
-     */
-    fun claim(kind: Claim, rootCA: ByteArray, public: ByteArray, ca: ByteArray, sign: (ByteArray) -> ByteArray, lost: String? = null) {
-        manage(
-            Wire.obj(
-                "action" to Wire.str(kind.action),
-                "device" to Wire.str(lost),
-                "root_ca" to Wire.bytes(rootCA),
-                "public" to Wire.bytes(point(public)),
-                "admin_ca" to Wire.bytes(ca),
-            ),
-            sign,
-        )
-    }
-
-    /**
-     * Finishes this phone's claim for rootCA once it took effect: the member
-     * signs, with the new root key public through sign, the phone's member
-     * certificate from the new root and the records a new root starts with,
-     * adds and sends them. While the claim waits, or after it ended, it signs
-     * nothing and only says where the claim stands, so the app may ask again.
-     */
-    fun finishTakeover(rootCA: ByteArray, public: ByteArray, name: String, os: String, store: String, seal: ByteArray?, sign: (ByteArray) -> ByteArray): Takeover {
-        val a = manage(
-            Wire.obj(
-                "action" to Wire.str("finish_takeover"),
-                "root_ca" to Wire.bytes(rootCA),
-                "public" to Wire.bytes(point(public)),
-                "name" to Wire.str(name),
-                "os" to Wire.str(os),
-                "store" to Wire.str(store),
-                "seal" to Wire.bytes(seal),
-            ),
-            sign,
-        )
-        val state = a.optString("state") ?: throw Core.Mismatch("the member's takeover has no state")
-        return Takeover(state, a.optLong("left_ms") ?: 0, a.optBytes("cert"))
-    }
 
     // The root's own records (cbb_core::root, docs/protocol.md, section 10,
     // "Handing the group over" and "The recovery key"): the core builds and
     // checks them, signs them with the root key public through sign, adds
     // them and sends them to every member.
-
-    /** Sets how long a claim from a lost root waits, from 0 to 7 days; the settings record keeps the key level. */
-    fun setTakeoverDelay(ms: Long, public: ByteArray, sign: (ByteArray) -> ByteArray) {
-        root(Wire.obj("action" to Wire.str("takeover_delay"), "delay_ms" to Wire.num(ms)), public, sign)
-    }
 
     /**
      * Sets the group's key level (proven, hardware or files), keeping the
@@ -535,40 +545,20 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
      * device ID: they stay until the user removes them.
      */
     fun setKeyLevel(level: String, public: ByteArray, sign: (ByteArray) -> ByteArray): List<String> =
-        root(Wire.obj("action" to Wire.str("key_level"), "level" to Wire.str(level)), public, sign)
+        act(Wire.obj("action" to Wire.str("key_level"), "level" to Wire.str(level)), public, sign)
             .optArray("below")?.map { it.jsonPrimitive.content }.orEmpty()
 
-    /** Hands the group to the admin device, whose claim then takes effect at once. */
-    fun handOver(device: String, public: ByteArray, sign: (ByteArray) -> ByteArray) {
-        root(Wire.obj("action" to Wire.str("hand_over"), "device" to Wire.str(device)), public, sign)
-    }
-
-    /** Makes the group's recovery key, which replaces the one before it, and returns its sheet; nothing of the key stays in the core. */
-    fun makeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray): Core.RecoverySheet {
-        val a = root(Wire.obj("action" to Wire.str("make_recovery")), public, sign)
-        return Core.RecoverySheet(
-            a.optString("qr") ?: throw Core.Mismatch("the member's recovery sheet has no qr"),
-            a.optString("text") ?: throw Core.Mismatch("the member's recovery sheet has no text"),
-            a.optBytes("admin") ?: throw Core.Mismatch("the member's recovery sheet has no admin"),
-        )
+    /** Sets how long a copy and a secret live, in milliseconds, either left out to keep it: a copies record, which any admin signs (D-129). */
+    fun setTtl(ttlMS: Long?, secretTtlMS: Long?, public: ByteArray, sign: (ByteArray) -> ByteArray) {
+        act(Wire.obj("action" to Wire.str("ttl"), "ttl_ms" to Wire.num(ttlMS), "secret_ttl_ms" to Wire.num(secretTtlMS)), public, sign)
     }
 
     /**
-     * Makes the group's recovery key from a key a YubiKey made (spki, a
-     * SubjectPublicKeyInfo; [Piv.generate]): it returns the key's admin CA,
-     * which goes into the YubiKey's slot.
+     * The action of an admin or the root (cbb_member_manage): request with
+     * the point of the key public, the phone's admin key or the root's,
+     * signed through sign; the records judge whether the key may.
      */
-    fun recoveryFor(spki: ByteArray, public: ByteArray, sign: (ByteArray) -> ByteArray): ByteArray =
-        root(Wire.obj("action" to Wire.str("recovery_for"), "key" to Wire.bytes(spki)), public, sign).optBytes("admin_ca")
-            ?: throw Core.Mismatch("the member's recovery key has no admin CA")
-
-    /** Removes the group's recovery key: the root revokes it, and a sheet printed for it no longer works. */
-    fun removeRecovery(public: ByteArray, sign: (ByteArray) -> ByteArray) {
-        root(Wire.obj("action" to Wire.str("remove_recovery")), public, sign)
-    }
-
-    /** A root's action: request with the root key's point, which the member checks against the group's root CA. */
-    private fun root(request: JsonObject, public: ByteArray, sign: (ByteArray) -> ByteArray): JsonObject =
+    fun act(request: JsonObject, public: ByteArray, sign: (ByteArray) -> ByteArray): JsonObject =
         manage(JsonObject(request + ("public" to Wire.bytes(point(public))!!)), sign)
 
     /** Asks the member for an admin's change or a step of a takeover (cbb_member_manage), signed through sign during this call. */
@@ -712,20 +702,13 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                 "write" -> Event.Write(o.optString("text") ?: "", Member.Kind.of(o.optString("kind") ?: "") ?: Member.Kind.TEXT, o.optLong("ttl_ms"))
                 "log" -> Event.Log(o.optString("line") ?: "")
                 "copy" -> o.optObject("copy")?.let { Event.CopyChanged(Copy.fromJson(it)) }
-                "message" -> o.optObject("message")?.let { m ->
-                    val msg = runCatching { Member.decode(Wire.encode(m)) }.getOrNull() ?: return null
-                    Event.Message(o.optString("from") ?: "", msg)
-                }
-                "identity" -> Event.Identity(o.optBytes("cert") ?: return null, o.optBytes("issuer"), o.optBytesList("roots") ?: emptyList())
-                "peer" -> o.optObject("peer")?.let { Event.PeerConnected(Peer.fromJson(it)) }
-                "tunnel" -> o.optObject("offer")?.let { Event.Tunnel(o.optString("from") ?: "", Member.TunnelOffer.fromJson(it)) }
-                "command" -> {
-                    val c = o.optObject("command") ?: return null
-                    Event.Command(o.optLong("token") ?: return null, o.optString("from") ?: "", Member.Record.fromJson(c))
-                }
                 "mute" -> Event.Mute(o.optBool("muted") ?: return null, o.optLong("for_ms") ?: 0, o.optString("by") ?: "")
+                "sync" -> Event.Sync(o.optBool("off") ?: return null, o.optString("by") ?: "")
+                "state" -> o.optObject("state")?.let { Event.State(GroupState.fromJson(it)) }
+                "notice" -> o.optObject("notice")?.let { Event.NoticeAdded(Notice.fromJson(it)) }
+                "root_changed" -> Event.RootChanged(o.optString("from") ?: "", o.optString("to") ?: "", o.optLong("seq") ?: 0)
+                "key_done" -> Event.KeyDone(o.optBytes("public") ?: return null)
                 "panic" -> Event.Panic(o.optString("details") ?: "")
-                "caller" -> Event.Caller(o.optLong("token") ?: return null, o.optLong("port")?.toInt() ?: return null, o.optString("device") ?: "")
                 else -> null
             }
         }

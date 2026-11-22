@@ -137,7 +137,7 @@ fn transcript_vectors() {
 #[test]
 fn generator_vectors() {
     let (prs, ci, sid) = (TV_PRS.as_bytes(), TV_CI.as_bytes(), unhex(TV_SID));
-    assert_eq!(generator_string(prs, ci, &sid), unhex(TV_GEN_STRING));
+    assert_eq!(*generator_string(prs, ci, &sid), unhex(TV_GEN_STRING));
     assert_eq!(hex(&generator(prs, ci, &sid)), TV_GEN);
 
     // The hash of the generator string is mapped to the curve by Elligator 2.
@@ -170,7 +170,7 @@ fn protocol_vectors() {
 
         let isk_a = a.finish(&mb, TV_ADB.as_bytes()).unwrap();
         let isk_b = b.finish(&ma, TV_ADA.as_bytes()).unwrap();
-        assert_eq!(isk_a, unhex(isk), "{ra:?}");
+        assert_eq!(*isk_a, unhex(isk), "{ra:?}");
         assert_eq!(isk_a, isk_b);
         assert_eq!(a.session_id().unwrap(), unhex(sid_output));
         assert_eq!(b.session_id().unwrap(), unhex(sid_output));
@@ -326,7 +326,7 @@ fn exchange(roles: [Role; 2], change: impl Fn(&mut Config)) -> (Vec<u8>, Vec<u8>
     change(&mut cb);
     let (mut a, ma) = start(&ca).unwrap();
     let (mut b, mb) = start(&cb).unwrap();
-    (a.finish(&mb, cb.ad).unwrap(), b.finish(&ma, ca.ad).unwrap())
+    (a.finish(&mb, cb.ad).unwrap().to_vec(), b.finish(&ma, ca.ad).unwrap().to_vec())
 }
 
 /// A change to the second party's configuration.

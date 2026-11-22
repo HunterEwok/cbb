@@ -93,6 +93,8 @@ final class WatchLink: NSObject {
         var s = WatchState()
         s.hasGroup = model.phase == .home
         s.group = s.hasGroup ? model.group.groupTag : nil
+        // In a group of 0.6 the watch signs nothing (D-124): no actions.
+        s.signs = s.hasGroup ? false : nil
         // In the user's order, as the phone's own list has it, the phone
         // among them; a collection's devices one after another.
         let arranged: [(AppModel.Computer, String?)] = model.arranged.flatMap { item -> [(AppModel.Computer, String?)] in
@@ -105,7 +107,7 @@ final class WatchLink: NSObject {
             d.isSelf
                 ? WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: true, can: [], collection: c, phone: true)
                 : WatchState.Device(id: d.id, name: d.name, symbol: d.kind.symbol, online: d.online,
-                                    can: model.group.watchActions(for: d.id), actions: d.actions, collection: c)
+                                    can: [], actions: d.actions, collection: c)
         }
         s.away = model.away.map { a in
             guard a.on else { return .off }

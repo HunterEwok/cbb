@@ -73,8 +73,10 @@ pub fn install(dir: &Path) {
     }));
 }
 
-/// Writes panic.json in dir, for the service's user alone: its log lines
-/// are not filtered yet.
+/// Writes panic.json in dir whole or not at all (write_atomic takes no lock,
+/// so a panic hook may call it), for the service's user alone: its log lines
+/// are not filtered yet. A power cut while the service dies leaves the report
+/// before, never half of one.
 fn write_panic(dir: &Path, body: &Value) {
     let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o600);
 }
@@ -300,6 +302,15 @@ fn wait(child: std::process::Child, time: Duration) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
+    /// The tests that keep log lines or set the panic hook run one at a
+    /// time: RECENT and the hook are the process's, and cargo test runs the
+    /// tests of a binary on threads side by side.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// The panic's file, with its unfiltered log, is the service user's
     /// alone.
     #[cfg(unix)]
@@ -314,8 +325,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// panic.json cut at every step: the report before stays whole.
+    #[test]
+    fn a_panic_report_cut_short_leaves_the_one_before() {
+        use crate::files::faults::{self, How};
+        let dir = std::env::temp_dir().join(format!("cbb-panic-cut-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_panic(&dir, &json!({"details": "panic: first", "log": []}));
+        let before = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+        for step in 0..200 {
+            for how in [How::Dies, How::Fails] {
+                faults::at(step, how);
+                write_panic(&dir, &json!({"details": "panic: second", "log": ["a line"]}));
+                let now = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+                assert!(now == before || serde_json::from_slice::<Value>(&now).is_ok(), "step {step}: a torn report");
+                if now != before {
+                    // Renamed: the new report, whole.
+                    assert!(String::from_utf8_lossy(&now).contains("panic: second"));
+                    std::fs::write(dir.join(PANIC_FILE), &before).unwrap();
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_panic_waits_until_the_user_answers() {
+        let _serial = serial();
         let dir = std::env::temp_dir().join(format!("cbb-bugs-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -357,6 +394,7 @@ mod tests {
 
     #[test]
     fn remember_keeps_the_last_lines_cut_at_a_character() {
+        let _serial = serial();
         let long = "\u{e9}".repeat(cbb_core::bug::MAX_LINE);
         remember(&long);
         {
@@ -375,6 +413,7 @@ mod tests {
 
     #[test]
     fn the_hook_writes_what_broke_and_where() {
+        let _serial = serial();
         let dir = fresh("hook");
         remember("before the panic");
         install(&dir);
@@ -446,5 +485,20 @@ mod tests {
     fn the_core_refusal_reads_as_an_error() {
         let e = Bugs::core("no_such_op", json!({})).unwrap_err();
         assert!(!e.to_string().is_empty());
+    }
+
+    /// The recent lines stay within their bounds however many come: a
+    /// service up for months keeps at most LINES lines of MAX_LINE bytes.
+    #[test]
+    fn the_recent_lines_stay_bounded() {
+        let _serial = serial();
+        let long = "\u{2}\u{436}\"".repeat(cbb_core::bug::MAX_LINE);
+        for i in 0..LINES * 4 {
+            remember(&format!("{i} {long}"));
+        }
+        let r = RECENT.lock().unwrap();
+        assert!(r.len() <= LINES, "{} lines", r.len());
+        assert!(r.iter().all(|l| l.len() <= cbb_core::bug::MAX_LINE));
+        assert!(r.iter().map(String::len).sum::<usize>() <= LINES * cbb_core::bug::MAX_LINE);
     }
 }

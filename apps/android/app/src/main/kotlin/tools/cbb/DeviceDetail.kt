@@ -150,7 +150,6 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
     var promoting by remember { mutableStateOf(false) }
     var thawing by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
-    var hubbing by remember { mutableStateOf(false) }
     Box {
         IconText("⋯", stringResource(R.string.more)) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -166,22 +165,11 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             item(R.string.rename) { renaming = true }()
             if (d.frozen) item(R.string.unfreeze) { thawing = true }()
             if (d.canMakeAdmin) item(R.string.make_admin) { promoting = true }()
-            // An admin member that may be a hub, or one the root makes an admin first; this phone is the hub under Settings.
-            // A member that is no admin can be a hub that only passes the copies on.
-            // The hub is chosen by itself: making one is in the advanced settings.
-            if (model.settings.advanced && !d.isSelf && d.online && !d.throughHub && d.can("hub") && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
-                item(R.string.make_hub) { hubbing = true }()
-            }
             if (!d.isSelf) item(R.string.remove, danger = true) { removing = true }()
         }
     }
     if (removing) {
-        Confirm(
-            title = stringResource(R.string.remove_title, d.name),
-            body = stringResource(if (d.isRoot) R.string.remove_root_body else R.string.remove_body),
-            action = stringResource(R.string.remove),
-            dismiss = { removing = false },
-        ) { scope.launch { model.remove(d.id) } }
+        RemoveConfirm(d.name, d.isRoot, dismiss = { removing = false }) { scope.launch { model.remove(d.id) } }
     }
     if (promoting) {
         Confirm(
@@ -197,7 +185,6 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             dismiss = { promoting = false },
         ) { scope.launch { model.makeAdmin(d.id) } }
     }
-    if (hubbing) HubChoice(d, dismiss = { hubbing = false }) { forwardOnly -> scope.launch { model.makeHub(d.id, forwardOnly) } }
     if (renaming) Rename(d, dismiss = { renaming = false }) { name -> scope.launch { model.rename(d.id, name) } }
     if (thawing) {
         Confirm(
@@ -340,41 +327,6 @@ private fun roleTitle(role: String, rootless: Boolean) = when (role) {
     "phone" -> R.string.role_phone
     "watch" -> R.string.kind_watch
     else -> if (rootless) R.string.role_member_rootless else R.string.role_member
-}
-
-/**
- * The kind of hub a computer becomes: one that reads the copies is an admin,
- * whose keys the group's key level checks; one that only passes them on is
- * no admin and needs no such keys.
- */
-@Composable
-private fun HubChoice(d: LiveGroup.Device, dismiss: () -> Unit, choose: (forwardOnly: Boolean) -> Unit) {
-    val palette = LocalPalette.current
-    AlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(stringResource(R.string.make_hub_title, d.name)) },
-        text = { Text(stringResource(R.string.make_hub_body) + " " + stringResource(R.string.make_hub_kinds_body)) },
-        confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                if (d.admin || d.canMakeAdmin) {
-                    TextButton(onClick = {
-                        dismiss()
-                        choose(false)
-                    }) { Text(stringResource(R.string.make_hub_reads), color = palette.accent) }
-                }
-                if (!d.admin && !d.isRoot) {
-                    TextButton(onClick = {
-                        dismiss()
-                        choose(true)
-                    }) { Text(stringResource(R.string.make_hub_forward_only), color = palette.accent) }
-                }
-                TextButton(onClick = dismiss) { Text(stringResource(R.string.cancel)) }
-            }
-        },
-        containerColor = palette.surface,
-        titleContentColor = palette.text,
-        textContentColor = palette.textDim,
-    )
 }
 
 /**
@@ -576,5 +528,21 @@ internal fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
         containerColor = palette.surface,
         titleContentColor = palette.text,
         textContentColor = palette.textDim,
+    )
+}
+
+/**
+ * Asks before a device is removed; removing the root is taking the group
+ * over. Apart from its menu so that the sheet of the dangerous screens
+ * (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun RemoveConfirm(name: String, isRoot: Boolean, dismiss: () -> Unit, confirm: () -> Unit) {
+    Confirm(
+        title = stringResource(R.string.remove_title, name),
+        body = stringResource(if (isRoot) R.string.remove_root_body else R.string.remove_body),
+        action = stringResource(R.string.remove),
+        dismiss = dismiss,
+        confirm = confirm,
     )
 }

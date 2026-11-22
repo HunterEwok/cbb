@@ -7,6 +7,9 @@
 //! connection a real one to an echo server, so a member's bytes go through
 //! the link to the peer and back.
 
+#[path = "common/bin.rs"]
+mod bin;
+
 use std::io::{BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Command, Stdio};
@@ -70,7 +73,7 @@ fn bytes_through_the_esp_and_back() {
     });
     // A free port for the link's own.
     let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_cbb"))
+    let mut child = Command::new(bin::cbb())
         .args(["next", "link", "-to", &format!("127.0.0.1:{echo_port}"), "-port", &port.to_string()])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -31,9 +31,10 @@ enum Admin {
     static let needsAdminExit: Int32 = 77
 
     /// Whether cbb itself must run as root for the arguments: installing an
-    /// update, and joining a group, where cbb writes the service's files.
+    /// update, and joining a group, where cbb writes the service's files
+    /// when the service does not run.
     static func needsRoot(_ arguments: [String]) -> Bool {
-        arguments.first == "update" || (arguments.first == "pair" && arguments.contains("-app"))
+        arguments.first == "update" || (arguments.first == "pair" && arguments.contains("-code"))
     }
 
     /// Runs cbb with the arguments, typing yes when a question follows

@@ -12,8 +12,8 @@ struct WatchState: Codable, Equatable {
         /// An SF Symbol for its kind.
         var symbol: String
         var online: Bool
-        /// What this watch may do to it, as PhoneGroup.WatchAction's raw
-        /// values.
+        /// What this watch may do to it, by the actions' names; none on 0.6
+        /// (D-124).
         var can: [String]?
         /// The quick actions it has on, while it is connected.
         var actions: [String]?
@@ -58,6 +58,10 @@ struct WatchState: Codable, Equatable {
     var sync: Bool?
     /// The latest events, newest first.
     var events: [String] = []
+    /// Whether the watch's emergency actions work in the phone's group:
+    /// false in a group of 0.6, where the watch signs nothing and only
+    /// shows the group (D-124; they come with 0.7); nil without a group.
+    var signs: Bool?
     /// The phone's theme, by its name in Tokens.themes.
     var theme = Tokens.themes[0].name
 
@@ -95,7 +99,7 @@ struct WatchState: Codable, Equatable {
     static let signedKey = "signed", doneKey = "done"
 
     struct Ask: Codable, Equatable {
-        /// A PhoneGroup.WatchAction's raw value.
+        /// The name of the action.
         var action: String
         var device: String
         /// The quick action's name, for action.

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Context, Error, Result};
 use crate::files;
-use cbb_core::clip::Engine;
+use crate::sync::Switches;
 
 /// The file, in the state directory.
 pub const FILE_NAME: &str = "mute.json";
@@ -39,7 +39,7 @@ fn read(dir: &Path) -> Result<State> {
 /// Who muted this device, by its ID, while it is muted: "" when it is not,
 /// or when a mute of an earlier version did not say. An unknown muter
 /// counts as another admin's (Service::own_device_op).
-pub fn by(dir: &Path, engine: &Engine) -> Result<String> {
+pub fn by(dir: &Path, engine: &dyn Switches) -> Result<String> {
     if engine.mute_left().is_none() {
         return Ok(String::new());
     }
@@ -55,7 +55,7 @@ pub fn kept_by(current: &str, me: &str) -> String {
 }
 
 /// Gives the engine the mute saved in dir.
-pub fn load(dir: &Path, engine: &Engine) -> Result<()> {
+pub fn load(dir: &Path, engine: &dyn Switches) -> Result<()> {
     let st = read(dir)?;
     if let Some(until) = st.mute {
         engine.set_mute(until);
@@ -64,7 +64,7 @@ pub fn load(dir: &Path, engine: &Engine) -> Result<()> {
 }
 
 /// Writes the engine's mute to dir, set by the device `by`.
-pub fn save(dir: &Path, engine: &Engine, by: &str) -> Result<()> {
+pub fn save(dir: &Path, engine: &dyn Switches, by: &str) -> Result<()> {
     let now = crate::uptime::wall_ms();
     let mute = engine.mute_left().map(|left| if left == 0 { 0 } else { now + left });
     let st = State { mute, by: if mute.is_some() { by.to_string() } else { String::new() } };
@@ -83,6 +83,7 @@ pub fn until(ms: i64) -> Result<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cbb_core::clip::Engine;
 
     #[test]
     fn lasts_across_a_restart() {

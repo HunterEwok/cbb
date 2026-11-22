@@ -94,13 +94,13 @@ struct InviteSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Text("Done") } }
             }
-            .alert(Text("Admit \(model.invite?.request?.info.name ?? "")?"), isPresented: Binding(
+            .alert(Text("Admit \(model.invite?.request?.name ?? "")?"), isPresented: Binding(
                 get: { model.invite?.request != nil }, set: { if !$0 { model.answer(false) } }
             )) {
                 Button { model.answer(true) } label: { Text("Admit") }
                 Button(role: .cancel) { model.answer(false) } label: { Text("Not this one") }
             } message: {
-                Text("A device (\(model.invite?.request?.info.os ?? "")) used the invitation. Admit it only if the device shows the same fingerprint:\n\n\(model.invite?.request?.fingerprint ?? "")")
+                Text("A device (\(model.invite?.request?.os ?? "")) used the invitation. Admit it only if the device shows the same fingerprint:\n\n\(model.invite?.request?.fingerprint ?? "")")
             }
         }
     }

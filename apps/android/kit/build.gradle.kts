@@ -38,7 +38,7 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-// The Rust core for the tests and InteropMain: the host's libcbb_ffi, built
+// The Rust core for the tests: the host's libcbb_ffi, built
 // in the Rust workspace at the top (needs cargo), which decides itself whether
 // it is up to date.
 val rust = rootDir.resolve("../../..").canonicalFile
@@ -63,20 +63,4 @@ tasks.test {
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports { xml.required.set(true); html.required.set(false) }
-}
-
-// A script that runs InteropMain, the Kotlin twin of cbb-interop,
-// for Go's interop tests: CBB_SWIFT_INTEROP and CBB_SWIFT_INTEROP_TLS name it.
-val interopScript by tasks.registering {
-    val classpath = sourceSets.test.get().runtimeClasspath
-    val script = layout.buildDirectory.file("interop/cbb-interop")
-    dependsOn(tasks.testClasses, buildCore)
-    inputs.files(classpath)
-    outputs.file(script)
-    doLast {
-        val f = script.get().asFile
-        val java = File(System.getProperty("java.home"), "bin/java").path
-        f.writeText("#!/bin/sh\nexec '$java' -Djna.library.path='$coreDir' -cp '${classpath.asPath}' tools.cbb.kit.InteropMainKt \"\$@\"\n")
-        f.setExecutable(true)
-    }
 }

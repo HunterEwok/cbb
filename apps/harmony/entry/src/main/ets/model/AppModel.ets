@@ -2,98 +2,79 @@
 // Copyright (C) 2026 HunterEwok
 
 // What the pages show and do: the phone's group, its member, joining,
-// adding devices, invitations, the admin's changes, restoring from the
-// recovery sheet, taking the group over, the settings. One for the app, as
+// adding devices, invitations, the admin's changes, changing the root with
+// the recovery key, the settings. One for the app, as
 // the Aurora app's App.
 
+import { common } from '@kit.AbilityKit';
 import cbb from 'libcbb_napi.so';
 import { preferences } from '@kit.ArkData';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
-import { call, read, Result } from '../core/Core';
+import { read, Result } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure, forget } from '../core/Keys';
-import { Joined, Membership, sealSecret } from '../core/Membership';
+import { cardFailure, withCard } from '../common/YubiKey';
+import { Membership } from '../core/Membership';
 import { OS, osVersion, phoneName, STORE } from '../core/Phone';
 import { t } from '../core/Text';
-import { Admit } from './Admit';
 import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
 import { Join } from './Join';
+import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
-import { CheckedPaste, Paste, PasteAnswer } from './Paste';
-import { CardRun, cardFailure, withCard } from '../common/YubiKey';
-import { common } from '@kit.AbilityKit';
+import { Paste } from './Paste';
 
-// Renewals are due months ahead, so a look every few hours, and one a
-// minute after the member starts, once it reached its peers, is plenty.
-const RENEW_EVERY_MS: number = 6 * 3600 * 1000;
-const RENEW_FIRST_MS: number = 60 * 1000;
-// The project's forwarder, its key's pin given as 'default' (docs/protocol.md, section 13).
-export const PROJECT_FORWARDER: string = 'cbb.tools:8764';
-export const PROJECT_KEY: string = 'default';
+// The root's duties (the attestations, the next period of the server
+// keys) are due days ahead, so a look every few hours, and one a minute
+// after the member starts, once it reached its peers, is plenty.
+const DUTIES_EVERY_MS: number = 6 * 3600 * 1000;
+const DUTIES_FIRST_MS: number = 60 * 1000;
 // What the core says when the hub to stop is the group's only one.
 const ONLY_HUB: string = 'no other hub';
-// A waiting claim is looked at every minute, and first once the member had
-// time to reach its peers.
-const CLAIM_EVERY_MS: number = 60 * 1000;
-const CLAIM_FIRST_MS: number = 10 * 1000;
 
-interface SealKey {
-  key: string;
+// What sealing the recovery key onto a YubiKey did (cbb_piv seal): the
+// retired slot, and whether the card keeps its factory management key,
+// which cbb never changes (D-127).
+interface Sealed {
+  slot?: number;
+  default_key?: boolean;
 }
 
-export interface CommandResult {
+// How the YubiKey found was reached (findCard).
+interface Reached {
+  transport?: string;
+}
+
+interface Opened {
+  secret?: string;
+}
+
+// A device in the "who stays" list of a change of root.
+export interface ChangeRow {
+  device: string;
+  name: string;
+  os: string;
+  outcome: string;
+  frozen: boolean;
+}
+
+export interface ChangePreview {
+  rows: ChangeRow[];
+  waiting: boolean;
+}
+
+// What manage answers: a command's status and reason, the key level's
+// devices below it, how many attestations were recorded, the watch's.
+export interface ManageAnswer {
   status?: string;
   reason?: string;
-}
-
-export interface ManageAnswer {
-  result?: CommandResult;
-  root_ca?: string;
-  renewed?: number;
   recorded?: number;
   below?: string[];
-  text?: string;
-  modules?: string[];
-  state?: string;
-  left_ms?: number;
-  cert?: string;
-  admin_ca?: string;
   device?: string;
   group?: string;
-  signer?: string;
-}
-
-interface Restored extends Joined {
-  addr?: string;
-}
-
-// A key the YubiKey made (cbb_piv's make).
-interface CardMade {
-  slot: number;
-  key: string;
-}
-
-// A member certificate a recovery key on the YubiKey issued this phone
-// (cbb_piv's issue).
-interface CardKey {
-  slot: number;
-  admin_ca: string;
-  device: string;
-  cert: string;
-  public: string;
-}
-
-interface CardKeys {
-  keys: CardKey[];
-}
-
-// The failure a step with the YubiKey left, set inside withCard's work.
-class CardStep {
-  failure?: Failure;
 }
 
 // An item of the main page: a device, or a collection of devices.
@@ -105,21 +86,17 @@ export class Tile {
   devices: Device[] = [];
 }
 
-// What the user reads when restoring failed: the core's refusals it knows
-// said in the user's language, the core's own words kept in the details.
-function restoreFailure(f: Failure): Failure {
-  const d = `${f.message} ${f.details}`;
-  let shown = t('error_restore');
-  if (d.includes('scan the QR code of the recovery sheet')) {
-    shown = t('error_restore_scan');
-  } else if (d.includes("not the group's recovery key now")) {
-    shown = t('error_restore_not_key');
-  } else if (d.includes('no device of the group was found')) {
-    shown = t('error_restore_no_device');
-  } else if (d.includes('not a cbb recovery sheet')) {
-    shown = t('error_restore_not_sheet');
-  }
-  return new Failure(shown, `${f.details} (${f.message})`);
+// The core's answer of a new group of 0.6 (ffi's found.rs).
+interface Sheet06 {
+  qr?: string;
+  text?: string[];
+  modules?: string[];
+}
+
+interface Made06 {
+  group?: string;
+  device?: string;
+  recovery?: Sheet06;
 }
 
 @ObservedV2
@@ -128,23 +105,11 @@ export class AppModel {
   @Trace busy: boolean = false;
   // The last error as shown (with its details when Errors.showDetails()).
   @Trace error: string = '';
-  // The phone's claim to take the group over: '' without one, else
-  // "pending", "competing", "disputed", "none", "effective", "cancelled" or "void".
-  @Trace claimState: string = '';
-  @Trace claimLeftMs: number = 0;
-  // Restoring from the recovery sheet: '', restoring, claiming, claimed or failed.
-  @Trace restoreState: string = '';
-  // The recovery sheet the root just made, shown once.
+  // The recovery sheet of the group the phone just made, shown once.
   @Trace recoveryText: string = '';
   @Trace recoveryModules: string[] = [];
-  // The YubiKey: '' or what the phone waits for the card to be held for:
-  // put, issue or claim; done once the recovery key is on it.
-  @Trace card: string = '';
-  @Trace cardDone: boolean = false;
-  // The recovery keys on the YubiKey that restored the group, and its PIN,
-  // until the claim is signed.
-  private cardKeys: CardKey[] = [];
-  private cardPin: string = '';
+  // The sheet's QR code text, which sealing it onto a YubiKey takes.
+  recoveryQr: string = '';
   // The admins and hubs the key level set last does not let in.
   @Trace belowLevel: string[] = [];
   // Bumped when the user's arrangement of the tiles changes.
@@ -158,7 +123,9 @@ export class AppModel {
 
   readonly member: Member = new Member();
   readonly join: Join = new Join();
-  readonly admit: Admit = new Admit();
+  // Pairing in a group of 0.6: the admin's window and the new phone's joiner.
+  readonly window: PairWindow = new PairWindow();
+  readonly joiner: Joiner = new Joiner();
   readonly invite: Invite = new Invite();
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
@@ -170,8 +137,7 @@ export class AppModel {
 
   private dir: string = '';
   private prefs: preferences.Preferences | undefined = undefined;
-  private renewTimer: number = -1;
-  private claimTimer: number = -1;
+  private dutiesTimer: number = -1;
 
   init(dir: string, prefs: preferences.Preferences): void {
     this.dir = dir;
@@ -189,12 +155,13 @@ export class AppModel {
     const m = Membership.load(dir);
     if (m instanceof Membership) {
       this.membership = m;
-      Errors.log(`group: ${m.groupTag()} as ${m.member.device}`);
+      Errors.log(m.isBefore06() ? 'group: from before 0.6, which needs a new group' : `group: ${m.groupTag()} as ${m.member.device}`);
     } else if (m !== undefined) {
       this.show(Errors.shown(m));
     }
     this.member.onDevices = (devices: Device[]) => {
       this.events.observe(devices);
+      this.adminFromRecords(devices);
     };
     // A member that broke stops and starts again; the user sees what
     // broke, the details only in debug mode (Errors.shown).
@@ -205,42 +172,71 @@ export class AppModel {
     this.paste.pasted = (name: string) => {
       this.events.post(t('pasted_from', name));
     };
-    this.member.onPaste = (c: CheckedPaste, name: string): PasteAnswer => this.paste.carryOut(c, name);
     this.member.onSaved = (folder: string, count: number) => {
       this.events.post(count === 1 ? t('notify_saved_one') : t('notify_saved', count));
     };
-    this.member.onIdentity = (cert: string, issuer: string, roots: string[]) => {
-      if (this.membership === undefined) {
-        return;
-      }
-      const next = this.membership.copy();
-      next.member.cert = cert;
-      next.member.issuer = issuer.length > 0 ? issuer : undefined;
-      next.member.roots = roots;
-      // On a failure the member runs on with it; the next start loads the
-      // old one, which an admin renews again.
-      if (this.keep(next)) {
-        Errors.log('group: kept a new member certificate or root');
+    // A phone that joined a group of 0.6: the set is in the app's files.
+    this.joiner.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
       }
     };
-    this.member.onAdminCa = (ca: string, from: string) => {
-      this.adminCaArrived(ca, from);
-    };
-    this.join.onJoined = (j: Membership) => {
-      this.membership = j;
-      this.startMember().then(() => {
-        // Joined from afar: sync away from home goes on, and the member
-        // offers its tunnel key to the hub through the invitation's guest
-        // tunnel until the hub answers.
-        if (this.join.byInvite) {
-          this.member.joinedByInvite(this.join.invitation());
-        }
-      });
+    // Joined from afar: the member reaches the hub through the invitation's
+    // guest tunnel, kept with the set, until the hub's offer comes.
+    this.join.onJoined = (group: string, device: string) => {
+      if (this.keep(Membership.of06(device, group, false))) {
+        this.startMember();
+      }
     };
   }
 
   isAdmin(): boolean {
     return this.membership !== undefined && this.membership.isAdmin();
+  }
+
+  // On 0.6 the group's records say who is an admin; the member's devices
+  // list them.
+  private adminFromRecords(devices: Device[]): void {
+    const m = this.membership;
+    if (m === undefined || m.isBefore06()) {
+      return;
+    }
+    const self = devices.find((d: Device) => d.self === true);
+    if (self === undefined) {
+      return;
+    }
+    const admin = self.admin === true;
+    if (admin === (m.member.admin06 === true)) {
+      return;
+    }
+    const next = m.copy();
+    next.member.admin06 = admin;
+    if (this.keep(next)) {
+      Errors.log(`admin: the records ${admin ? 'make' : 'no longer make'} this phone an admin`);
+    }
+  }
+
+  // As an admin of a group of 0.6: opens the member's pairing window.
+  openWindow(): void {
+    if (this.membership === undefined || !this.membership.isAdmin()) {
+      return;
+    }
+    this.window.open(this.member);
+  }
+
+  // Without a group: joins a group of 0.6 by text, the six digits a window
+  // of the group shows (the window announced at home), or a window's QR code
+  // text, scanned or pasted.
+  joinByWindow(text: string): void {
+    if (this.membership !== undefined) {
+      return;
+    }
+    const digits = text.replace(/\s/g, '');
+    if (/^[0-9]{6}$/.test(digits)) {
+      this.joiner.start(this.dir, '', digits, phoneName(), OS);
+    } else {
+      this.joiner.start(this.dir, text, '', phoneName(), OS);
+    }
   }
 
   isRoot(): boolean {
@@ -251,38 +247,36 @@ export class AppModel {
     this.error = error;
   }
 
-  // Starts the member once the phone has a group, with the timers of
-  // renewals and of a waiting claim.
+  // A group from before 0.6, which this version no longer runs (D-126).
+  isBefore06(): boolean {
+    return this.membership !== undefined && this.membership.isBefore06();
+  }
+
+  // Starts the member once the phone has a group of 0.6, with the timer of
+  // the root's duties.
   async startMember(): Promise<void> {
     const m = this.membership;
-    if (m === undefined || this.member.running) {
+    if (m === undefined || m.isBefore06() || this.member.running) {
       return;
     }
     await this.member.start(m, this.dir, phoneName());
     if (!this.member.running) {
       return;
     }
-    if (this.renewTimer < 0) {
-      this.renewTimer = setInterval(() => {
-        this.renew();
-      }, RENEW_EVERY_MS);
+    if (this.dutiesTimer < 0) {
+      this.dutiesTimer = setInterval(() => {
+        this.duties();
+      }, DUTIES_EVERY_MS);
       setTimeout(() => {
-        this.renew();
-      }, RENEW_FIRST_MS);
+        this.duties();
+      }, DUTIES_FIRST_MS);
     }
-    await this.restoreServers();
-    if (m.member.claim !== undefined && m.member.claim.length > 0) {
-      this.startClaimTimer();
-      setTimeout(() => {
-        this.finishTakeover();
-      }, CLAIM_FIRST_MS);
-    }
+    await this.restoreHub();
   }
 
   async stopMember(): Promise<void> {
-    clearInterval(this.renewTimer);
-    this.renewTimer = -1;
-    this.stopClaimTimer();
+    clearInterval(this.dutiesTimer);
+    this.dutiesTimer = -1;
     await this.member.stop();
   }
 
@@ -304,11 +298,10 @@ export class AppModel {
     return true;
   }
 
+  // A group of 0.6: the set is kept in the app's files, where the member
+  // then starts on it (ffi's cbb_group_new with dir), and its recovery
+  // sheet is shown once (pages/Recovery).
   private async newGroup(): Promise<Failure | undefined> {
-    const seal = this.sealKey();
-    if (seal instanceof Failure) {
-      return seal;
-    }
     const member = await ensure('member');
     if (member.ok === undefined) {
       return member.failure;
@@ -318,73 +311,50 @@ export class AppModel {
       return root.failure;
     }
     const request: Record<string, Object> = {
+      'dir': this.dir,
       'name': phoneName(),
       'os': OS,
       'store': STORE,
       'public': member.ok.public,
-      'root_public': root.ok.public,
-      'seal': seal
+      'root_public': root.ok.public
     };
-    const group = read<Joined>(await cbb.groupNew(JSON.stringify(request)), 'group');
+    const group = read<Made06>(await cbb.groupNew(JSON.stringify(request)), 'group');
     if (group.ok === undefined) {
       return group.failure;
     }
-    const m = new Membership(group.ok);
-    m.member.root = true;
+    const m = Membership.of06(group.ok.device ?? '', group.ok.group ?? '', true);
+    if (m.isBefore06() || m.member.device.length === 0) {
+      return new Failure(t('error_broken'), 'group: no device in the answer');
+    }
     const saved = m.save(this.dir);
     if (saved !== undefined) {
       return saved;
     }
     Errors.log(`group: made ${m.groupTag()} as its root`);
     this.membership = m;
+    this.recoveryText = (group.ok.recovery?.text ?? []).join('\n');
+    this.recoveryModules = group.ok.recovery?.modules ?? [];
+    this.recoveryQr = group.ok.recovery?.qr ?? '';
     return undefined;
   }
 
-  private sealKey(): string | Failure {
-    const secret = sealSecret(this.dir);
-    if (secret instanceof Failure) {
-      return secret;
-    }
-    const seal = call<SealKey>('seal_public', { 'secret': secret } as Record<string, Object>);
-    if (seal.ok === undefined) {
-      return seal.failure as Failure;
-    }
-    return seal.ok.key;
-  }
-
-  // Listens for the device that scans this phone's QR code. The phone
-  // joins as a member; the group's root may make it an admin later, with
-  // the admin key its hellos offer.
-  startJoin(): void {
-    this.join.start(this.dir);
-  }
-
   startJoinByInvite(text: string): void {
-    this.join.startInvite(this.dir, text);
-  }
-
-  startAdmit(qr: string): void {
-    if (this.membership !== undefined) {
-      this.admit.admit(qr, this.member, this.membership);
-    }
+    this.join.startInvite(this.dir, text, phoneName(), OS);
   }
 
   startInvite(seconds: number): void {
     if (this.membership !== undefined) {
-      this.invite.open(this.member, this.membership, seconds);
+      this.invite.open(this.member, seconds);
     }
   }
 
   // An admin's change to a device (remove, rename, thaw, make_admin,
-  // sync_on, sync_off, resolve) or command for it (mute, unmute), signed
-  // with the admin key; forMinutes: how long a mute or a sync off lasts, 0
-  // for until undone. True once the change is in the records or the device
-  // took the command.
-  async manage(action: string, device: string, name?: string, forMinutes?: number, records?: string[]): Promise<boolean> {
+  // sync_on, sync_off) or command for it (mute, unmute), signed with the
+  // admin key; forMinutes: how long a mute or a sync off lasts, 0 for until
+  // undone. True once the change is in the records or the device took the
+  // command.
+  async manage(action: string, device: string, name?: string, forMinutes?: number): Promise<boolean> {
     const extra: Record<string, Object> = { 'name': name ?? '', 'for_ms': (forMinutes ?? 0) * 60000 };
-    if (records !== undefined) {
-      extra['records'] = records;
-    }
     const a = await this.runManage(action, device, extra);
     return a !== undefined;
   }
@@ -422,17 +392,6 @@ export class AppModel {
     return a !== undefined;
   }
 
-  // The root's decision on an alert: voids the records it names.
-  resolve(records: string[]): Promise<boolean> {
-    return this.manage('resolve', '', '', 0, records);
-  }
-
-  async setTakeoverDelay(hours: number): Promise<void> {
-    if (this.isRoot()) {
-      await this.runManage('takeover_delay', '', { 'delay_ms': hours * 3600000 } as Record<string, Object>);
-    }
-  }
-
   async setGroupKeyLevel(level: string): Promise<void> {
     if (!this.isRoot()) {
       return;
@@ -443,20 +402,18 @@ export class AppModel {
     }
   }
 
-  async handOver(device: string): Promise<void> {
-    if (this.isRoot()) {
-      await this.runManage('hand_over', device, {} as Record<string, Object>);
+  // Sets how long a copy or a secret lives for the whole group (D-129);
+  // the other is left as it is.
+  async setGroupTtl(ttlMs: number | undefined, secretTtlMs: number | undefined): Promise<void> {
+    const extra: Record<string, Object> = {};
+    if (ttlMs !== undefined) {
+      extra['ttl_ms'] = ttlMs;
     }
-  }
-
-  async makeRecovery(): Promise<void> {
-    if (!this.isRoot()) {
-      return;
+    if (secretTtlMs !== undefined) {
+      extra['secret_ttl_ms'] = secretTtlMs;
     }
-    const a = await this.runManage('make_recovery', '', {} as Record<string, Object>);
-    if (a !== undefined) {
-      this.recoveryText = a.text ?? '';
-      this.recoveryModules = a.modules ?? [];
+    if (await this.runManage('ttl', '', extra) !== undefined) {
+      await this.member.pollDevices();
     }
   }
 
@@ -464,56 +421,143 @@ export class AppModel {
   forgetRecovery(): void {
     this.recoveryText = '';
     this.recoveryModules = [];
+    this.recoveryQr = '';
   }
 
-  async removeRecovery(): Promise<void> {
-    if (this.isRoot()) {
-      await this.runManage('remove_recovery', '', {} as Record<string, Object>);
+  // The group's ID in hex, which names its slot on a YubiKey.
+  private groupId(): string {
+    return this.membership?.member.group06 ?? '';
+  }
+
+  // Waits for a YubiKey plugged in or held to the phone, with nothing done
+  // on it, before its PIN is asked: true when it is on USB, false over NFC,
+  // undefined with the failure shown.
+  async findCard(context: common.UIAbilityContext): Promise<boolean | undefined> {
+    if (this.busy) {
+      return undefined;
     }
-  }
-
-  // Puts the recovery key on a YubiKey held to the phone (common/YubiKey.ets):
-  // the card makes a key in a free slot, the root key certifies it as the
-  // group's recovery key (manage recovery_for), and the card keeps its admin
-  // CA as the slot's certificate.
-  async putOnYubiKey(context: common.UIAbilityContext, pin: string): Promise<void> {
-    if (!this.isRoot() || this.busy || this.card.length > 0) {
-      return;
+    const run = await withCard(context, async (transport: string) => {
+      const reached: Reached = { transport: transport };
+      return JSON.stringify(reached);
+    });
+    if (run.failure !== undefined) {
+      this.show(Errors.shown(run.failure));
+      return undefined;
     }
     this.show('');
-    this.cardDone = false;
-    this.card = 'put';
-    const step = new CardStep();
-    const run: CardRun = await withCard(context, async (): Promise<string> => {
-      const made = read<CardMade>(await cbb.piv(JSON.stringify({ 'op': 'make', 'pin': pin } as Record<string, Object>)),
-        'yubikey: make');
-      if (made.ok === undefined) {
-        step.failure = cardFailure(made.failure as Failure);
-        return '';
-      }
-      const a = await this.runManage('recovery_for', '', { 'key': made.ok.key } as Record<string, Object>);
-      if (a === undefined) {
-        return '';
-      }
-      const put: Record<string, Object> = { 'op': 'put', 'slot': made.ok.slot, 'cert': a.admin_ca ?? '' };
-      return await cbb.piv(JSON.stringify(put));
-    });
-    this.card = '';
-    const failure = run.failure ?? step.failure;
+    return (JSON.parse(run.answer) as Reached).transport === 'ccid_bulk';
+  }
+
+  // Seals the sheet's recovery key onto a YubiKey held to the phone or
+  // plugged in, after its PIN, into its first empty retired slot, named for
+  // this group (cbb_piv seal; docs/protocol.md, "The recovery key on a
+  // YubiKey (0.6)"). Answers what to tell the person, empty with the failure
+  // shown.
+  async sealOnCard(context: common.UIAbilityContext, pin: string,
+    plugged: () => void = () => {}): Promise<string> {
+    if (this.recoveryQr.length === 0 || this.busy) {
+      return '';
+    }
+    this.busy = true;
+    const request: Record<string, Object> = {
+      'op': 'seal', 'pin': pin, 'recovery': { 'qr': this.recoveryQr } as Record<string, Object>,
+      'group': this.groupId()
+    };
+    const run = await withCard(context, (transport: string) => {
+      request['transport'] = transport;
+      return cbb.piv(JSON.stringify(request));
+    }, plugged);
+    this.busy = false;
+    const failure = run.failure ?? read<Sealed>(run.answer, 'yubikey: seal').failure;
     if (failure !== undefined) {
-      this.show(Errors.shown(failure));
-      return;
+      this.show(Errors.shown(run.failure !== undefined ? failure : cardFailure(failure)));
+      return '';
     }
-    if (run.answer.length === 0) {
-      return; // runManage showed why
+    const sealed = read<Sealed>(run.answer, 'yubikey: seal').ok as Sealed;
+    Errors.log(`yubikey: sealed in slot ${(sealed.slot ?? 0).toString(16)}, factory management key ${sealed.default_key === true}`);
+    this.show('');
+    return t('yubikey_sealed');
+  }
+
+  // Opens the recovery key on a YubiKey held to the phone, after its PIN
+  // and a touch, for a change of root: the secret in base64, or undefined
+  // with the failure shown. The caller drops it after that one change.
+  async openCard(context: common.UIAbilityContext, pin: string,
+    plugged: () => void = () => {}): Promise<string | undefined> {
+    if (this.busy) {
+      return undefined;
     }
-    const put = read<Object>(run.answer, 'yubikey: put');
-    if (put.ok === undefined) {
-      this.show(Errors.shown(cardFailure(put.failure as Failure)));
-      return;
+    this.busy = true;
+    const request: Record<string, Object> = { 'op': 'open', 'pin': pin, 'group': this.groupId() };
+    const run = await withCard(context, (transport: string) => {
+      request['transport'] = transport;
+      return cbb.piv(JSON.stringify(request));
+    }, plugged);
+    this.busy = false;
+    if (run.failure !== undefined) {
+      this.show(Errors.shown(run.failure));
+      return undefined;
     }
-    Errors.log('yubikey: the recovery key is on the YubiKey');
-    this.cardDone = true;
+    const r = read<Opened>(run.answer, 'yubikey: open');
+    if (r.ok === undefined) {
+      this.show(Errors.shown(cardFailure(r.failure as Failure)));
+      return undefined;
+    }
+    this.show('');
+    return r.ok.secret;
+  }
+
+  // Who stays after this phone becomes the root with the recovery key
+  // (manage change_preview), leaveOut unticked; undefined with the failure
+  // shown. Nothing is signed.
+  async changePreview(recovery: Record<string, Object>, leaveOut: string[]): Promise<ChangePreview | undefined> {
+    if (!this.member.running) {
+      return undefined;
+    }
+    const r = await this.member.manage<ChangePreview>({
+      'action': 'change_preview', 'device': '', 'public': '', 'recovery': recovery, 'leave_out': leaveOut
+    } as Record<string, Object>);
+    if (r.ok === undefined) {
+      this.show(Errors.shown(r.failure as Failure));
+      return undefined;
+    }
+    this.show('');
+    return r.ok;
+  }
+
+  // Makes this phone the group's root with the recovery key (manage
+  // change_root, rule 33): the admin key in HUKS, behind the fingerprint,
+  // the face or the PIN, becomes the root key and signs the change with
+  // the recovery key; the devices in leaveOut go in the same act.
+  async changeRoot(recovery: Record<string, Object>, leaveOut: string[], overWaiting: boolean): Promise<boolean> {
+    const m = this.membership;
+    if (m === undefined || m.isRoot() || this.busy || !this.member.running) {
+      return false;
+    }
+    this.busy = true;
+    const key = await ensure('admin');
+    if (key.ok === undefined) {
+      this.busy = false;
+      this.show(Errors.shown(key.failure as Failure));
+      return false;
+    }
+    const r = await this.member.manage<ManageAnswer>({
+      'action': 'change_root', 'device': '', 'public': key.ok.public, 'recovery': recovery, 'leave_out': leaveOut,
+      'over_waiting': overWaiting
+    } as Record<string, Object>);
+    this.busy = false;
+    if (r.ok === undefined) {
+      this.show(Errors.shown(r.failure as Failure));
+      return false;
+    }
+    const next = m.copy();
+    next.member.root = true;
+    if (!this.keep(next)) {
+      return false;
+    }
+    Errors.log("change root: this phone is the group's root now, by the recovery key");
+    this.show('');
+    return true;
   }
 
   // Makes the watch an admin as the root (manage add_watch) with the admin
@@ -526,10 +570,9 @@ export class AppModel {
     return this.runManage('add_watch', '', { 'key': key, 'name': name, 'os': 'harmonyos' } as Record<string, Object>);
   }
 
-  // Signs action for device with extra in the request; fallback is tried
-  // when the action is refused, as a claim tries take_over when the root
-  // handed the group to nobody. Shows a failure and answers undefined.
-  private async runManage(action: string, device: string, extra: Record<string, Object>, fallback?: string,
+  // Signs action for device with extra in the request. Shows a failure
+  // (quiet: only logs it) and answers undefined.
+  private async runManage(action: string, device: string, extra: Record<string, Object>,
     quiet?: boolean): Promise<ManageAnswer | undefined> {
     const m = this.membership;
     if (m === undefined || !m.isAdmin() || !this.member.running) {
@@ -550,21 +593,13 @@ export class AppModel {
     request['action'] = action;
     request['device'] = device;
     request['public'] = key.ok.public;
-    if (!m.isRoot() && m.member.admin_ca !== undefined && request['admin_ca'] === undefined) {
-      request['admin_ca'] = m.member.admin_ca;
-    }
-    let a: Result<ManageAnswer> = await this.member.manage<ManageAnswer>(request);
-    if (a.ok === undefined && fallback !== undefined) {
-      Errors.log(`manage: ${action} refused (${(a.failure as Failure).details}); trying ${fallback}`);
-      request['action'] = fallback;
-      a = await this.member.manage<ManageAnswer>(request);
-    }
+    const a: Result<ManageAnswer> = await this.member.manage<ManageAnswer>(request);
     this.busy = false;
     let failure = a.failure;
-    // A command the device refused answers with its reason.
-    const result = a.ok?.result;
-    if (failure === undefined && result !== undefined && result.status !== 'done') {
-      failure = new Failure(t('error_command_refused'), `manage: ${result.status ?? ''}: ${result.reason ?? ''}`);
+    // A command the device refused answers with its status and reason.
+    const status = a.ok?.status;
+    if (failure === undefined && status !== undefined && status !== 'done') {
+      failure = new Failure(t('error_command_refused'), `manage: ${status}: ${a.ok?.reason ?? ''}`);
     }
     if (failure !== undefined) {
       if (quiet === true) {
@@ -581,68 +616,45 @@ export class AppModel {
     return a.ok;
   }
 
-  // As an admin, renews the member certificates that are due, the devices'
-  // connected and the phone's own, quietly: only the log says.
-  private async renew(): Promise<void> {
-    if (this.busy || !this.isAdmin() || !this.member.running) {
+  // The root's duties, quietly: only the log says. It records what the
+  // Android phones' attestations show (docs/protocol.md, section 17), with
+  // the revocation list, and signs the next period of the server keys.
+  private async duties(): Promise<void> {
+    if (this.busy || !this.isRoot() || !this.member.running) {
       return;
     }
-    const a = await this.runManage('renew', '', {} as Record<string, Object>, undefined, true);
-    if (a !== undefined && (a.renewed ?? 0) > 0) {
-      Errors.log(`renew: renewed ${a.renewed} member certificates`);
-    }
-    // The root records what the Android phones' attestations show
-    // (docs/protocol.md, section 17), with the revocation list.
-    if (this.isRoot() && await this.member.attestPending() > 0) {
-      const r = await this.runManage('attest', '', {} as Record<string, Object>, undefined, true);
+    if (await this.member.attestPending() > 0) {
+      const r = await this.runManage('attest', '', {} as Record<string, Object>, true);
       if (r !== undefined && (r.recorded ?? 0) > 0) {
         Errors.log(`attest: recorded what ${r.recorded} attestations show`);
       }
     }
     // The root key signs the next period of the group's server keys
     // (docs/protocol.md, section 18) when it is due.
-    if (this.isRoot() && this.member.periodDue) {
-      if (await this.runManage('period', '', {} as Record<string, Object>, undefined, true) !== undefined) {
+    if (this.member.periodDue) {
+      if (await this.runManage('period', '', {} as Record<string, Object>, true) !== undefined) {
         Errors.log('servers: signed the next period of the server keys');
         this.member.periodDue = false;
       }
     }
   }
 
-  // This phone as the group's hub and its blind relay, as the user set
-  // them; the core keeps neither, so they are set again each time the
-  // member starts.
+  // This phone as one of the group's hubs, as the user set it; the core
+  // does not keep it, so it is set again each time the member starts.
   hubWanted(): boolean {
     return this.prefs !== undefined && this.prefs.getSync('hub_on', false) as boolean;
-  }
-
-  hubForwarder(): string {
-    return this.prefs !== undefined ? this.prefs.getSync('hub_forwarder', '') as string : '';
-  }
-
-  hubKey(): string {
-    return this.prefs !== undefined ? this.prefs.getSync('hub_key', '') as string : '';
   }
 
   hubDisguise(): string {
     return this.prefs !== undefined ? this.prefs.getSync('hub_disguise', 'plain') as string : 'plain';
   }
 
-  relayAddress(): string {
-    return this.prefs !== undefined ? this.prefs.getSync('relay', '') as string : '';
-  }
-
-  relayKey(): string {
-    return this.prefs !== undefined ? this.prefs.getSync('relay_key', '') as string : '';
-  }
-
-  // Makes this phone a hub of the group, through the forwarder at
-  // forwarder with key (both empty for the project's), or stops it being
-  // one (anyway: also when it is the group's only hub). Shows why not,
-  // except that it is the only hub, which it answers for the user to decide.
-  async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
-    const own = forwarder.length > 0;
-    const failure = await this.member.setHub(on, own ? forwarder : PROJECT_FORWARDER, own ? key : PROJECT_KEY, disguise, anyway);
+  // Makes this phone a hub of the group, through the forwarder the group's
+  // root set, or stops it being one (anyway: also when it is the group's
+  // only hub). Shows why not, except that it is the only hub, which it
+  // answers for the user to decide.
+  async setHub(on: boolean, disguise: string, anyway: boolean): Promise<Failure | undefined> {
+    const failure = await this.member.setHub(on, '', '', disguise, anyway);
     if (failure !== undefined) {
       if (on || anyway || !failure.details.includes(ONLY_HUB)) {
         this.show(Errors.shown(failure));
@@ -651,8 +663,6 @@ export class AppModel {
     }
     this.prefs?.putSync('hub_on', on);
     if (on) {
-      this.prefs?.putSync('hub_forwarder', forwarder);
-      this.prefs?.putSync('hub_key', key);
       this.prefs?.putSync('hub_disguise', disguise);
     }
     this.prefs?.flush();
@@ -665,68 +675,36 @@ export class AppModel {
     return failure !== undefined && failure.details.includes(ONLY_HUB);
   }
 
-  // Meets the group at the blind relay at relay with key, or leaves it
-  // with both empty. Shows why not.
+  // The root sets the group's relay (manage relay), where every device
+  // meets the others: the address with its key's pin, the project's with
+  // the key 'default', or none with both empty. Shows why not.
   async setRelay(relay: string, key: string): Promise<boolean> {
-    const failure = await this.member.setRelay(relay, key);
-    if (failure !== undefined) {
-      this.show(Errors.shown(failure));
+    if (!this.isRoot()) {
+      this.show(Errors.shown(new Failure(t('relay_by_root'), 'relay: only the root sets the group\'s relay')));
       return false;
     }
-    this.prefs?.putSync('relay', relay);
-    this.prefs?.putSync('relay_key', key);
-    this.prefs?.flush();
+    const relays: string[] = relay.length === 0 ? [] : key === 'default' ? ['default'] : [`${relay} ${key}`];
+    const a = await this.runManage('relay', '', { 'relays': relays } as Record<string, Object>);
+    if (a === undefined) {
+      return false;
+    }
+    Errors.log(relays.length > 0 ? `relay: the group meets at ${relay}` : 'relay: the group meets at no relay');
     this.show('');
     return true;
   }
 
-  private async restoreServers(): Promise<void> {
+  private async restoreHub(): Promise<void> {
     if (this.hubWanted() && this.isAdmin()) {
-      const forwarder = this.hubForwarder();
-      const own = forwarder.length > 0;
-      const failure = await this.member.setHub(true, own ? forwarder : PROJECT_FORWARDER, own ? this.hubKey() : PROJECT_KEY,
-        this.hubDisguise(), false);
+      const failure = await this.member.setHub(true, '', '', this.hubDisguise(), false);
       if (failure !== undefined) {
         Errors.log(`servers: the hub did not start again: ${failure.message} (${failure.details})`);
       }
     }
-    const relay = this.relayAddress();
-    if (relay.length > 0) {
-      const failure = await this.member.setRelay(relay, this.relayKey());
-      if (failure !== undefined) {
-        Errors.log(`servers: the relay was not met again: ${failure.message} (${failure.details})`);
-      }
-    }
-  }
-
-  // The root made this phone an admin: its admin message brought the admin
-  // CA for the key the hellos offer. The member checks it (take_admin_ca:
-  // for that key, naming this phone, under the group's current root), then
-  // the phone keeps it, and the member starts again as an admin's, its
-  // hellos offering the key no more.
-  private async adminCaArrived(ca: string, from: string): Promise<void> {
-    if (this.membership === undefined || this.membership.isAdmin()) {
-      return;
-    }
-    const taken = await this.member.call<Object>('take_admin_ca', { 'key': ca } as Record<string, Object>);
-    if (taken.ok === undefined) {
-      const f = taken.failure as Failure;
-      Errors.log(`admin: refused the admin CA from ${from}: ${f.message} (${f.details})`);
-      return;
-    }
-    const next = this.membership.copy();
-    next.member.admin_ca = ca;
-    if (!this.keep(next)) {
-      return;
-    }
-    Errors.log(`admin: the root made this phone an admin (${from})`);
-    await this.stopMember();
-    await this.startMember();
   }
 
   // Keeps next as the membership, or shows why it could not.
   private keep(next: Membership): boolean {
-    const failure = next.saveIdentity(this.dir);
+    const failure = next.save(this.dir);
     if (failure !== undefined) {
       this.show(Errors.shown(failure));
       return false;
@@ -735,340 +713,10 @@ export class AppModel {
     return true;
   }
 
-  // Takes the group over from its lost root (cbb_core::takeover): a new
-  // root CA for the admin key, kept first, and the claim, as the root
-  // handed the group to this phone or else after the group's delay.
-  async takeOver(device: string): Promise<void> {
-    const m = this.membership;
-    if (this.busy || m === undefined || !m.isAdmin() || m.isRoot() || (m.member.claim ?? '').length > 0 || !this.member.running) {
-      return;
-    }
-    // The new root is the admin key itself, which stays in HUKS: a root CA
-    // for it first, kept before the claim goes out, so that a claim never
-    // takes effect for a root this phone lost.
-    const rootCa = await this.newRootCa();
-    if (rootCa === undefined) {
-      return;
-    }
-    const claim = await this.runManage('take_handed_over', device,
-      { 'root_ca': rootCa, 'admin_ca': m.member.admin_ca ?? '' } as Record<string, Object>, 'take_over');
-    if (claim === undefined) {
-      this.dropClaim();
-      return;
-    }
-    Errors.log(`takeover: claimed the group from ${device}`);
-    this.claimState = 'pending';
-    this.startClaimTimer();
-    this.finishTakeover();
-  }
-
-  // The root CA of the admin key as a new root, kept as the claim's.
-  private async newRootCa(): Promise<string | undefined> {
-    const key = await ensure('admin');
-    if (key.ok === undefined) {
-      this.show(Errors.shown(key.failure as Failure));
-      return undefined;
-    }
-    const a = read<ManageAnswer>(await this.manageAsRestorer({ 'action': 'root_ca', 'public': key.ok.public }), 'takeover');
-    const rootCa = a.ok?.root_ca ?? '';
-    if (a.ok === undefined || rootCa.length === 0 || this.membership === undefined) {
-      if (a.failure !== undefined) {
-        this.show(Errors.shown(a.failure));
-      }
-      return undefined;
-    }
-    const next = this.membership.copy();
-    next.member.claim = rootCa;
-    return this.keep(next) ? rootCa : undefined;
-  }
-
-  private dropClaim(): void {
-    if (this.membership === undefined) {
-      return;
-    }
-    const next = this.membership.copy();
-    next.member.claim = undefined;
-    this.keep(next);
-  }
-
-  private startClaimTimer(): void {
-    if (this.claimTimer < 0) {
-      this.claimTimer = setInterval(() => {
-        this.finishTakeover();
-      }, CLAIM_EVERY_MS);
-    }
-  }
-
-  private stopClaimTimer(): void {
-    if (this.claimTimer >= 0) {
-      clearInterval(this.claimTimer);
-      this.claimTimer = -1;
-    }
-  }
-
-  // While the phone has a claim: where it stands, and once it took effect,
-  // the phone as the group's root.
-  private async finishTakeover(): Promise<void> {
-    const m = this.membership;
-    if (m === undefined || (m.member.claim ?? '').length === 0) {
-      this.stopClaimTimer();
-      return;
-    }
-    if (this.busy || !this.member.running) {
-      return;
-    }
-    const extra: Record<string, Object> = {
-      'root_ca': m.member.claim ?? '',
-      'name': phoneName(),
-      'os': OS,
-      'store': STORE
-    };
-    const seal = this.sealKey();
-    if (!(seal instanceof Failure)) {
-      extra['seal'] = seal;
-    }
-    // Tried again in a minute; the log says why.
-    const a = await this.runManage('finish_takeover', '', extra, undefined, true);
-    if (a === undefined) {
-      return;
-    }
-    const state = a.state ?? '';
-    this.claimLeftMs = a.left_ms ?? 0;
-    if (state === 'effective') {
-      const next = m.copy();
-      next.member.root = true;
-      next.member.admin_ca = undefined;
-      next.member.claim = undefined;
-      next.member.cert = a.cert ?? next.member.cert;
-      next.member.issuer = undefined;
-      if (!this.keep(next)) {
-        return;
-      }
-      this.stopClaimTimer();
-      Errors.log("takeover: this phone is the group's root now");
-    } else if (state === 'cancelled' || state === 'void') {
-      const next = m.copy();
-      next.member.claim = undefined;
-      if (!this.keep(next)) {
-        return;
-      }
-      this.stopClaimTimer();
-      Errors.log(`takeover: the claim is ${state}`);
-      // A phone that restored the group from its sheet is no admin.
-      const admin = next.isAdmin();
-      const cancelled = state === 'cancelled';
-      const shown = admin ? (cancelled ? t('takeover_cancelled_admin') : t('takeover_void_admin')) :
-        (cancelled ? t('takeover_cancelled_restore') : t('takeover_void_restore'));
-      if (!admin) {
-        this.restoreState = 'failed';
-      }
-      this.show(Errors.shown(new Failure(shown, `takeover: the claim is ${state}`)));
-    }
-    this.claimState = state;
-  }
-
-  // Restores the group of the recovery sheet's QR code on this new phone
-  // (cbb_restore), then claims it with the sheet's key for a new root CA of
-  // the admin key, as takeOver does. A phone that restored the group but
-  // whose claim failed only claims again.
-  async restore(sheet: string): Promise<void> {
-    if (this.busy) {
-      return;
-    }
-    const m = this.membership;
-    if (m !== undefined) {
-      if (!m.isAdmin() && (m.member.claim ?? '').length === 0 && this.member.running) {
-        await this.claimWithSheet(sheet);
-      }
-      return;
-    }
-    this.busy = true;
-    this.restoreState = 'restoring';
-    this.show('');
-    const key = await ensure('member');
-    if (key.ok === undefined) {
-      this.busy = false;
-      this.show(Errors.shown(key.failure as Failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    const request: Record<string, Object> = { 'sheet': sheet.trim(), 'public': key.ok.public, 'name': phoneName(), 'os': OS };
-    const answer = read<Restored>(await cbb.restore(JSON.stringify(request)), 'restore');
-    this.busy = false;
-    if (answer.ok === undefined) {
-      this.show(Errors.shown(restoreFailure(answer.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    if (!(await this.adoptRestored(answer.ok))) {
-      return;
-    }
-    await this.claimWithSheet(sheet);
-  }
-
-  // Restores the group with the recovery keys on a YubiKey (cbb_piv's
-  // issue, then cbb_restore with card), then claims it with the card's key,
-  // held to the phone a second time.
-  async restoreWithYubiKey(context: common.UIAbilityContext, pin: string): Promise<void> {
-    if (this.busy || this.card.length > 0) {
-      return;
-    }
-    const m = this.membership;
-    if (m !== undefined) {
-      if (!m.isAdmin() && (m.member.claim ?? '').length === 0 && this.member.running && this.cardKeys.length > 0) {
-        this.cardPin = pin;
-        await this.claimWithCard(context);
-      }
-      return;
-    }
-    this.show('');
-    const key = await ensure('member');
-    if (key.ok === undefined) {
-      this.show(Errors.shown(key.failure as Failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.card = 'issue';
-    const issue: Record<string, Object> = { 'op': 'issue', 'pin': pin, 'public': key.ok.public };
-    const run = await withCard(context, async (): Promise<string> => await cbb.piv(JSON.stringify(issue)));
-    this.card = '';
-    if (run.failure !== undefined) {
-      this.show(Errors.shown(run.failure));
-      this.restoreState = 'failed';
-      return;
-    }
-    const issued = read<CardKeys>(run.answer, 'yubikey: issue');
-    if (issued.ok === undefined) {
-      this.show(Errors.shown(cardFailure(issued.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.busy = true;
-    this.restoreState = 'restoring';
-    const request: Record<string, Object> = { 'card': issued.ok.keys, 'public': key.ok.public, 'name': phoneName(), 'os': OS };
-    const answer = read<Restored>(await cbb.restore(JSON.stringify(request)), 'restore');
-    this.busy = false;
-    if (answer.ok === undefined) {
-      this.show(Errors.shown(restoreFailure(answer.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    if (!(await this.adoptRestored(answer.ok))) {
-      return;
-    }
-    this.cardKeys = issued.ok.keys.filter((k: CardKey) => k.admin_ca === answer.ok?.issuer);
-    this.cardPin = pin;
-    await this.claimWithCard(context);
-  }
-
-  // Keeps the membership a restore answered and starts its member.
-  private async adoptRestored(ok: Restored): Promise<boolean> {
-    const restored = new Membership(ok);
-    restored.member.root = false;
-    const failure = restored.save(this.dir);
-    if (failure !== undefined) {
-      this.show(Errors.shown(failure));
-      this.restoreState = 'failed';
-      return false;
-    }
-    Errors.log(`restore: restored ${restored.groupTag()} as ${restored.member.device} from ${ok.addr ?? ''}`);
-    this.membership = restored;
-    await this.startMember();
-    return true;
-  }
-
-  private async claimWithCard(context: common.UIAbilityContext): Promise<void> {
-    const k = this.cardKeys.length > 0 ? this.cardKeys[0] : undefined;
-    const h = this.member.core();
-    if (!this.member.running || h === null || k === undefined) {
-      this.show(Errors.shown(new Failure(t('error_not_running'), 'restore: no member or no card key')));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.restoreState = 'claiming';
-    const rootCa = await this.newRootCa();
-    if (rootCa === undefined) {
-      this.restoreState = 'failed';
-      return;
-    }
-    this.card = 'claim';
-    const claim: Record<string, Object> = {
-      'action': 'recover', 'root_ca': rootCa, 'admin_ca': k.admin_ca, 'slot': k.slot, 'pin': this.cardPin, 'public': k.public
-    };
-    const run = await withCard(context, async (): Promise<string> => await cbb.memberManageCard(h, JSON.stringify(claim)));
-    this.card = '';
-    const answer = run.failure === undefined ? read<ManageAnswer>(run.answer, 'restore') : undefined;
-    if (answer === undefined || answer.ok === undefined) {
-      this.dropClaim();
-      const raw = answer?.failure as Failure;
-      const f = run.failure ?? (`${raw.message} ${raw.details}`.includes('YubiKey') ? cardFailure(raw) : restoreFailure(raw));
-      this.show(Errors.shown(f));
-      this.restoreState = 'failed';
-      return;
-    }
-    Errors.log('restore: claimed the group with the recovery key on the YubiKey');
-    this.cardKeys = [];
-    this.cardPin = '';
-    this.claimState = 'pending';
-    this.show('');
-    this.restoreState = 'claimed';
-    this.startClaimTimer();
-    this.finishTakeover();
-  }
-
-  private async claimWithSheet(sheet: string): Promise<void> {
-    if (!this.member.running) {
-      this.show(Errors.shown(new Failure(t('error_not_running'), 'restore: no member')));
-      this.restoreState = 'failed';
-      return;
-    }
-    this.restoreState = 'claiming';
-    // The membership of a restored phone is no admin's: the core signs the
-    // root CA and the claim with the admin key as the claim's new root.
-    const rootCa = await this.newRootCa();
-    if (rootCa === undefined) {
-      this.restoreState = 'failed';
-      return;
-    }
-    const key = await ensure('admin');
-    const claim = read<ManageAnswer>(await this.manageAsRestorer(
-      { 'action': 'recover_with_sheet', 'sheet': sheet.trim(), 'root_ca': rootCa, 'public': key.ok?.public ?? '' }), 'restore');
-    if (claim.ok === undefined) {
-      this.dropClaim();
-      this.show(Errors.shown(restoreFailure(claim.failure as Failure)));
-      this.restoreState = 'failed';
-      return;
-    }
-    Errors.log('restore: claimed the group with the recovery key');
-    this.claimState = 'pending';
-    this.show('');
-    this.restoreState = 'claimed';
-    this.startClaimTimer();
-    this.finishTakeover();
-  }
-
-  // A restoring phone is no admin yet, so its root CA and claim skip
-  // runManage's check.
-  private async manageAsRestorer(request: Record<string, Object>): Promise<string> {
-    const h = this.member.core();
-    if (h === null) {
-      return '';
-    }
-    this.busy = true;
-    const answer = await cbb.memberManage(h, JSON.stringify(request), 'admin');
-    this.busy = false;
-    return answer;
-  }
-
-  resetRestore(): void {
-    if (this.restoreState !== 'restoring' && this.restoreState !== 'claiming') {
-      this.restoreState = '';
-    }
-  }
-
   // Leaves the group on this phone: stops the member and deletes the
-  // membership and the keys (D-83). The group still lists the phone until
-  // an admin removes it.
+  // membership and the keys (D-83); for a group from before 0.6, its old
+  // files too, which only this choice deletes (D-126). The group still
+  // lists the phone until an admin removes it.
   async leave(): Promise<boolean> {
     if (this.busy) {
       return false;
@@ -1081,7 +729,6 @@ export class AppModel {
     }
     Errors.log(`group: left ${this.membership?.groupTag() ?? ''}`);
     this.membership = undefined;
-    this.claimState = '';
     this.events.forget();
     this.paste.forgetLog();
     this.show('');

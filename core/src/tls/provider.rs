@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! A rustls crypto provider of RustCrypto code, with only what the members
-//! use: TLS 1.3 with AES-128-GCM or ChaCha20-Poly1305 and SHA-256, X25519
-//! key exchange, ECDSA P-256 with SHA-256 keys and signatures. It needs no
+//! use: TLS 1.3 with AES-128-GCM or ChaCha20-Poly1305 and SHA-256, the
+//! hybrid key exchange X25519MLKEM768 with X25519 as the fall back, ECDSA P-256 with SHA-256 keys and signatures. It needs no
 //! operating system, so the same TLS runs on Linux and on a microcontroller.
 
 use alloc::boxed::Box;
@@ -37,12 +37,13 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 /// The provider: the cipher suites in order of preference (ChaCha20 first,
-/// as it is the faster one without AES instructions), X25519, and ECDSA
+/// as it is the faster one without AES instructions), X25519MLKEM768 then
+/// X25519 (a peer without the hybrid falls back without a retry), and ECDSA
 /// P-256 with SHA-256.
 pub fn provider() -> CryptoProvider {
     CryptoProvider {
         cipher_suites: Vec::from([TLS13_CHACHA20_POLY1305_SHA256, TLS13_AES_128_GCM_SHA256]),
-        kx_groups: Vec::from([&X25519 as &dyn SupportedKxGroup]),
+        kx_groups: Vec::from([&super::hybrid::HYBRID as &dyn SupportedKxGroup, &X25519]),
         signature_verification_algorithms: ALGORITHMS,
         secure_random: &Random,
         key_provider: &Keys,

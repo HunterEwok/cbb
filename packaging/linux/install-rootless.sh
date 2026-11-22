@@ -243,8 +243,8 @@ if [ "$helper" = no ]; then
 	# shellcheck source=packaging/pair.sh
 	. "$here/../pair.sh"
 	if ! pair_now "$cbb" ""; then
-		say "Next: see member/README.md; in short, %s pair here, and scan its QR code with the phone app." "$run"
+		say "Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows." "$run"
 	fi
 else
-	say "Next: run %s pair and scan its QR code with the CBB app on your phone." "$run"
+	say "Next: open a pairing window on a device of the group, then run %s pair -code here and type the six digits it shows." "$run"
 fi

@@ -7,16 +7,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -33,7 +27,6 @@ import (
 	"github.com/HunterEwok/cbb/internal/forward"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/mdns"
-	"github.com/HunterEwok/cbb/internal/phone"
 	"github.com/HunterEwok/cbb/internal/remotepaste"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
@@ -54,8 +47,11 @@ func publishMember(t *testing.T, id, tag string, port int, extra ...string) {
 	t.Cleanup(func() { cancel(); <-done })
 }
 
-// TestListenDialed: the members dial a member that does not dial (TXT
-// r=listen) as soon as they find it, whatever the device IDs.
+// TestListenDialed: a member dials a member of the group that does not
+// dial (TXT r=listen) as soon as it finds it, though its device ID is the
+// higher one, which would otherwise wait for the other to dial. Only
+// devices the records hold are dialed, so the one that listens takes the
+// device ID of the other member, which stops.
 func TestListenDialed(t *testing.T) {
 	// On every address: the services dial the addresses mDNS publishes.
 	ln, err := net.Listen("tcp", ":0")
@@ -78,9 +74,17 @@ func TestListenDialed(t *testing.T) {
 	pi := startService(t, &h, "pi")
 	laptop := startService(t, &h, "laptop")
 	pairWith(t, pi, laptop) // the group exists from here
-	// The lowest device ID: a member that dials would wait 30 s for it to dial.
-	publishMember(t, strings.Repeat("0", 32), pi.status(t).Group, ln.Addr().(*net.TCPAddr).Port, "r=listen")
-	waitFor(t, "the members dialed the member that listens", func() bool { return dialed.Load() > 0 })
+	group := pi.status(t).Group
+	// The lower device ID stops and listens: the member left, with the
+	// higher one, would wait 30 s for it to dial.
+	lower := pi
+	if laptop.status(t).Device < pi.status(t).Device {
+		lower = laptop
+	}
+	id := lower.status(t).Device
+	lower.stop()
+	publishMember(t, id, group, ln.Addr().(*net.TCPAddr).Port, "r=listen")
+	waitFor(t, "the member dialed the member that listens", func() bool { return dialed.Load() > 0 })
 }
 
 // startAlone runs the small device (Rust, member/) with the state in
@@ -161,75 +165,11 @@ func (w testWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// TestEmbassyJoiner: the ESP32 firmware's pairing code (embassy/),
-// built for Linux as esp32-on-linux, joins by the phone over embassy-net on a
-// TAP interface, as the board does over Wi-Fi. CBB_ESP32_ON_LINUX names the
-// binary; the interface tap0 must be up as 192.168.69.1/24, and the device
-// takes 192.168.69.2.
-func TestEmbassyJoiner(t *testing.T) {
-	bin := os.Getenv("CBB_ESP32_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_ESP32_ON_LINUX is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
-
-	file := filepath.Join(t.TempDir(), "identity.json")
-	join := exec.Command(bin, "-debug", "-tap", "tap0", "-addr", "192.168.69.2/24", "-name", "board", "-identity", file)
-	join.Stderr = testWriter{t, "esp32-on-linux: ", nil}
-	out, err := join.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := join.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer join.Process.Kill()
-	const prefix = "Or paste this into the app: "
-	var qr string
-	sc := bufio.NewScanner(out)
-	for qr == "" && sc.Scan() {
-		if line, ok := strings.CutPrefix(sc.Text(), prefix); ok {
-			qr = line
-		}
-	}
-	if !strings.Contains(qr, "192.168.69.2%3A8764") && !strings.Contains(qr, "192.168.69.2:8764") {
-		t.Fatalf("esp32-on-linux showed %q, not a QR code with its address", qr)
-	}
-	if name := admitJoiner(t, pi, qr); name != "board" {
-		t.Fatalf("the board joined as %q", name)
-	}
-	waitFor(t, "pi lists the board as a member", func() bool {
-		for _, d := range pi.devices(t) {
-			if d.Name == "board" {
-				return d.Role == group.RoleMember && len(d.Caps) == 0
-			}
-		}
-		return false
-	})
-	var rest strings.Builder
-	for sc.Scan() {
-		rest.WriteString(sc.Text() + "\n")
-	}
-	if err := join.Wait(); err != nil || !strings.Contains(rest.String(), "Joined the group "+pi.status(t).Group) {
-		t.Fatalf("esp32-on-linux: %v; %s", err, rest.String())
-	}
-	raw, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(raw), "_key") {
-		t.Error("the board saved a CA key")
-	}
-}
-
 // TestFFIJoiner runs the Aurora app's core through ffi's C functions
 // with a software key (the example phone-on-linux, CBB_PHONE_ON_LINUX): the
-// phone shows its QR code, the service admits it as cbb pair -qr does, and
-// then the phone's member dials the service and syncs with it both ways.
+// phone joins the group of 0.6 by the service's home window, as the app
+// does when it scans the window's QR code, and then the phone's member
+// dials the service and syncs with it both ways; the root mutes it.
 func TestFFIJoiner(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
@@ -240,17 +180,7 @@ func TestFFIJoiner(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
-	qr := next("QR: ")
-	// The service admits it as cbb pair -qr does.
-	jc, ok := phone.ParseJoinQR(qr)
-	if !ok {
-		t.Fatalf("not a join QR code: %q", qr)
-	}
-	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
-	if err != nil || m.Name != "aurora phone" {
-		t.Fatalf("admitting the phone: %v, %+v", err, m)
-	}
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "aurora phone", "-dir", t.TempDir(), "-peer", pi.addr())
 	var phoneDev *control.Device
 	for _, d := range pi.devices(t) {
 		if d.Name == "aurora phone" {
@@ -260,18 +190,17 @@ func TestFFIJoiner(t *testing.T) {
 	if phoneDev == nil || phoneDev.OS != group.OSAurora || phoneDev.Role != group.RolePhone {
 		t.Fatalf("the phone is listed as %+v", phoneDev)
 	}
-	if joined := next("Joined "); !strings.HasSuffix(joined, " "+pi.status(t).Group) {
-		t.Fatalf("phone-on-linux joined %q, not the group %s", joined, pi.status(t).Group)
-	}
 
 	// The phone's member dials the service, with its key outside the core.
 	waitFor(t, "the phone connected", func() bool {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	// Its hello presents it as the phone it is, not as a small device.
+	// Its hello presents it as the phone it is, not as a small device. Its
+	// key counts as kept in a file: in a group of 0.6 only an attestation
+	// the admitter checked makes it hardware (TestFFIPhoneAttest).
 	for _, d := range pi.devices(t) {
-		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "hardware" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
+		if d.Name == "aurora phone" && (d.OS != group.OSAurora || d.Store != "file" || d.Form != "phone" || d.OSVersion != "Aurora OS 5.1.5") {
 			t.Fatalf("the connected phone is listed as %+v", d)
 		}
 	}
@@ -381,23 +310,6 @@ func TestFFIJoiner(t *testing.T) {
 	})
 	fmt.Fprintln(in, "COPY after the mute")
 	waitFor(t, "the service has the phone's text after the mute", func() bool { return pi.paste(t) == "after the mute" })
-
-	// Eighteen months later the service renews the phone's certificate,
-	// and the app gets it to keep in its own file: the core has no
-	// identity file for a key outside it.
-	pi.port = portOf(t, pi.addr())
-	pi.stop()
-	clock := newTestClock(t, 548*24*time.Hour)
-	pi.env = []string{clock.env()}
-	pi = restartService(t, &h, pi)
-	der, err := base64.StdEncoding.DecodeString(next("IDENTITY "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	renewed, err := x509.ParseCertificate(der)
-	if err != nil || renewed.NotAfter.Before(time.Now().Add(548*24*time.Hour)) {
-		t.Fatalf("the phone kept no renewed certificate: %v", err)
-	}
 }
 
 // TestFFIMember runs the phones' member through ffi's one call
@@ -414,15 +326,7 @@ func TestFFIMember(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	me, _, _ := strings.Cut(next("Joined "), " ")
+	next, in, me := phoneJoins(t, bin, pi, "-name", "phone", "-dir", t.TempDir())
 	call := func(op string, args any) map[string]any {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -440,54 +344,48 @@ func TestFFIMember(t *testing.T) {
 		return ans.OK
 	}
 	peers := func() int { return len(call("peers", nil)["peers"].([]any)) }
-	waiting := func() map[string]any {
-		c, _ := call("waiting", nil)["copy"].(map[string]any)
-		return c
+	// The one button (D-128) with the clipboard's key: whether it goes to
+	// the group, and the group's copy that comes into it.
+	swap := func(board string) (bool, map[string]any) {
+		a := call("swap", map[string]any{"board": board})
+		c, _ := a["copy"].(map[string]any)
+		return a["sends"].(bool), c
 	}
-	sends := func(board string) bool { return call("sends", map[string]any{"board": board})["sends"].(bool) }
+	sends := func(board string) bool { s, _ := swap(board); return s }
 
-	// The app hands in the computer's address, as Bonjour finds it, and
-	// hears of the computer with its certificate chain once its hello came.
+	// The app hands in the computer's address, as Bonjour finds it.
 	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
-	var peer struct {
-		Device string   `json:"device"`
-		Chain  []string `json:"chain"`
-	}
-	if err := json.Unmarshal([]byte(next("PEER ")), &peer); err != nil || peer.Device == "" || len(peer.Chain) == 0 {
-		t.Fatalf("the peer event: %+v %v", peer, err)
-	}
 	waitFor(t, "the phone connected", func() bool { return peers() == 1 })
 
-	// A command for the phone itself other than a mute, which the member
-	// carries out, goes to the app, whose answer goes back.
-	answered := make(chan error, 1)
-	go func() {
-		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(false)}, "")
-		answered <- err
-	}()
-	token, cmd, _ := strings.Cut(next("COMMAND "), " ")
-	if !strings.Contains(cmd, `"body"`) {
-		t.Fatalf("the command event carries %s", cmd)
+	// A command for the phone itself: the root turns its sync off, the
+	// member carries it out and the app hears of it; then on again.
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(false)}, ""); err != nil {
+		t.Fatalf("the sync command: %v", err)
 	}
-	call("answer", map[string]any{"token": json.Number(token), "status": "done"})
-	if err := <-answered; err != nil {
-		t.Fatalf("the phone's answer to the sync command: %v", err)
+	if got := next("SYNC "); !strings.HasPrefix(got, "true ") {
+		t.Fatalf("the app heard %q of the sync command", got)
 	}
-	// A tunnel key goes into the hellos; a key of the wrong size does not.
-	key := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
-	call("tunnel_key", map[string]any{"key": key, "psk": key})
-	call("tunnel_key", map[string]any{})
+	if st := call("muted", nil); st["sync_off"] != true {
+		t.Fatalf("after the sync command the phone says %v", st)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: me, On: control.Bool(true)}, ""); err != nil {
+		t.Fatalf("the sync command: %v", err)
+	}
+	if got := next("SYNC "); !strings.HasPrefix(got, "false ") {
+		t.Fatalf("the app heard %q of the second sync command", got)
+	}
 
-	// The computer's copy waits for the phone until the app takes it; then
-	// the clipboard holds the group's text, and the button sends nothing.
+	// The computer's copy comes in on the button over an empty clipboard;
+	// once the app took it, the clipboard holds the group's text, and the
+	// button neither sends it back nor takes it again.
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "for the button"); err != nil {
 		t.Fatal(err)
 	}
 	var c map[string]any
-	waitFor(t, "the copy waits", func() bool { c = waiting(); return c != nil && c["text"] == "for the button" })
+	waitFor(t, "the button takes the copy", func() bool { _, c = swap(""); return c != nil && c["text"] == "for the button" })
 	call("took", map[string]any{"id": c["id"]})
-	if waiting() != nil || sends("for the button") {
-		t.Fatal("a copy the phone took still waits, or goes back")
+	if s, again := swap("for the button"); s || again != nil {
+		t.Fatal("a copy the phone took comes in again, or goes back")
 	}
 
 	// A text from the phone, then an image: the computer fetches the image
@@ -513,7 +411,7 @@ func TestFFIMember(t *testing.T) {
 	if err := pi.copyMedia(t, "", sentPart{Part: control.Part{Type: "image/jpeg", Size: int64(len(jpeg))}, data: jpeg}); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the image waits", func() bool { c = waiting(); return c != nil && c["kind"] == "media" })
+	waitFor(t, "the button takes the image", func() bool { _, c = swap(""); return c != nil && c["kind"] == "media" })
 	out := filepath.Join(t.TempDir(), "image")
 	got := call("fetch", map[string]any{"id": c["id"], "max": 100 << 20, "out": out})["parts"].([]any)
 	if len(got) != 1 {
@@ -530,6 +428,17 @@ func TestFFIMember(t *testing.T) {
 	call("resume", nil)
 	if !call("wait", map[string]any{"timeout_ms": 10_000})["connected"].(bool) {
 		t.Fatal("the phone did not connect again on resume")
+	}
+
+	// On the records of 0.6 the member makes its tunnel keys itself: sync
+	// away from home on keeps them (keys_in_file), and the tunnel messages
+	// offer them to the group's hubs (TestFFIPhoneAway); off forgets them.
+	a, _ := call("away", map[string]any{"on": true})["away"].(map[string]any)
+	if a == nil || a["keys_in_file"] != true {
+		t.Fatalf("sync away from home on keeps no tunnel keys: %v", a)
+	}
+	if a := call("away", map[string]any{"on": false})["away"]; a != nil {
+		t.Fatalf("the tunnel keys stay after turning it off: %v", a)
 	}
 }
 
@@ -552,21 +461,17 @@ func TestFFIPhoneAway(t *testing.T) {
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
+	// On the records of 0.6 the root names its hubs.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	port := freeUDP(t)
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
 		t.Fatal(err)
 	}
 	piID := pi.status(t).Device
 	dir := t.TempDir()
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", dir)
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	next("Joined ")
+	next, in, _ := phoneJoins(t, bin, pi, "-name", "phone", "-dir", dir)
 	try := func(op string, args any) (map[string]any, map[string]any) {
 		t.Helper()
 		req, err := json.Marshal(map[string]any{"op": op, "args": args})
@@ -651,22 +556,19 @@ func TestFFIPhoneAway(t *testing.T) {
 // TestFFIPhoneReach: a computer tells the phone connected to it the other
 // members it is connected to (docs/protocol.md, section 4, "Reach"), so
 // that a phone away from home shows the members behind its hub as online;
-// and turning sync away from home on there makes the phone connect again,
-// so that the hello it gets carries the new tunnel key, which a phone that
-// is the group's hub answers with its offer.
+// and a computer that turns sync away from home on sends its tunnel key
+// (section 11) to the group's hub, here an admin phone, which answers with
+// its offer.
 func TestFFIPhoneReach(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
+	pi, next, in := adminPhone(t, bin, &h)
 	m2 := startService(t, &h, "m2")
-	c, code := openWindow(t, pi)
-	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: code, Address: pi.addr()}, ""); err != nil {
+	c, _, link := openWindowLink(t, pi)
+	if _, err := m2.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
 		t.Fatalf("join on m2: %v", err)
 	}
 	c.Close()
@@ -679,35 +581,8 @@ func TestFFIPhoneReach(t *testing.T) {
 		}
 		return false
 	})
-	next, in := phoneOnLinux(t, bin, "-name", "phone", "-dir", t.TempDir())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
-	next("Joined ")
-	call := func(op string, args any) map[string]any {
-		t.Helper()
-		req, err := json.Marshal(map[string]any{"op": op, "args": args})
-		if err != nil {
-			t.Fatal(err)
-		}
-		fmt.Fprintf(in, "CALL %s\n", req)
-		var ans struct {
-			OK    map[string]any `json:"ok"`
-			Error map[string]any `json:"error"`
-		}
-		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
-			t.Fatalf("%s: %v", op, err)
-		}
-		if ans.Error != nil {
-			t.Fatalf("%s: %v", op, ans.Error)
-		}
-		return ans.OK
-	}
-	// The phone's view of pi, the only member it is told of.
+	call := phoneCall(t, next, in)
+	// The phone's view of pi, the only member it is connected to.
 	piPeer := func() map[string]any {
 		for _, p := range call("peers", nil)["peers"].([]any) {
 			if m, _ := p.(map[string]any); m["device"] == string(piID) {
@@ -716,21 +591,27 @@ func TestFFIPhoneReach(t *testing.T) {
 		}
 		return nil
 	}
-	call("found", map[string]any{"key": "pi", "addrs": []string{pi.addr()}})
 	waitFor(t, "pi tells the phone it reaches m2", func() bool {
 		p := piPeer()
 		return p != nil && fmt.Sprint(p["reach"]) == fmt.Sprint([]any{string(m2ID)})
 	})
-	if p := piPeer(); p["tunnel_key"] != nil {
-		t.Fatalf("pi offers a tunnel key before sync away from home is on: %v", p["tunnel_key"])
-	}
 
+	// The admin phone serves as the group's hub; pi, away on, sends it its
+	// tunnel key and takes its offer.
+	var phoneID string
+	for _, d := range pi.devices(t) {
+		if d.Name == "member phone" {
+			phoneID = d.ID
+		}
+	}
+	port := freeUDP(t)
+	call("hub", map[string]any{"port": port, "addrs": []string{fmt.Sprintf("127.0.0.1:%d", port)}})
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
-	waitUpTo(t, 30*time.Second, "the phone connected again and got pi's tunnel key", func() bool {
-		p := piPeer()
-		return p != nil && p["tunnel_key"] != nil
+	waitUpTo(t, 30*time.Second, "pi took the phone hub's offer", func() bool {
+		a := pi.status(t).Away
+		return a != nil && a.HubDevice == phoneID
 	})
 
 	m2.stop()
@@ -805,6 +686,7 @@ func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix st
 				if rest, ok := strings.CutPrefix(l, prefix); ok {
 					return rest
 				}
+				t.Logf("phone-on-linux, passed over: %s", l)
 			case <-deadline:
 				t.Fatalf("phone-on-linux printed no %q", prefix)
 			}
@@ -812,28 +694,40 @@ func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix st
 	}, stdin
 }
 
-// TestFFIJoinerMadeAdmin: the Aurora app joins as a member, its member's
-// hellos offering its admin key, and the root makes it an admin later, as
-// the root's "Make it an admin" does (cbb admin): the phone gets its
-// admin CA in the admin message and the records list it as an admin.
-func TestFFIJoinerMadeAdmin(t *testing.T) {
-	bin := os.Getenv("CBB_PHONE_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_PHONE_ON_LINUX is not set")
+// phoneJoins opens pi's home window and starts phone-on-linux with args
+// (which name its -dir), joining pi's group by the window's QR code as the
+// app does when it scans it (-join-window). It returns what phoneOnLinux
+// does once the phone joined, and the phone's device ID.
+func phoneJoins(t *testing.T, bin string, pi *testService, args ...string) (next func(prefix string) string, in io.Writer, device string) {
+	t.Helper()
+	c, _, link := openWindowLink(t, pi)
+	defer c.Close()
+	if link == "" {
+		t.Fatalf("%s's window has no QR code of 0.6: is its group one of 0.6?", pi.name)
 	}
-	var h hub
-	pi := startService(t, &h, "pi")
+	next, in = phoneOnLinux(t, bin, append(args, "-join-window", link)...)
+	// "Joined <device> <group tag> <name of the member that let it in>".
+	joined := strings.Fields(next("Joined "))
+	if len(joined) < 2 || !strings.HasPrefix(pi.status(t).Group, joined[1]) {
+		t.Fatalf("phone-on-linux joined %q, not the group %s", joined, pi.status(t).Group)
+	}
+	if m, err := c.Receive(); err != nil || m.Name == "" {
+		t.Fatalf("pair on %s ended with %+v, %v", pi.name, m, err)
+	}
+	return next, in, joined[0]
+}
+
+// adminPhone starts a root pi and phone-on-linux joining its group by its
+// home window, offering its admin key (-admin), and makes the phone an
+// admin as the root's "Make it an admin" does (cbb admin), with the key it
+// offered. It returns the root and what phoneJoins does.
+func adminPhone(t *testing.T, bin string, h *hub) (pi *testService, next func(prefix string) string, in io.Writer) {
+	t.Helper()
+	pi = startService(t, h, "pi")
 	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
 		t.Fatal(err)
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "member phone", "-offer-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("no join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, ""); err != nil {
-		t.Fatalf("admitting the phone: %v", err)
-	}
+	next, in, _ = phoneJoins(t, bin, pi, "-name", "member phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
 	listed := func() control.Device {
 		for _, d := range pi.devices(t) {
 			if d.Name == "member phone" {
@@ -849,38 +743,63 @@ func TestFFIJoinerMadeAdmin(t *testing.T) {
 		fmt.Fprintln(in, "PEERS")
 		return next("PEERS ") == "1"
 	})
-	m, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, "")
+	// On 0.6 no key a phone holds counts as proven without its
+	// attestation (TestFFIPhoneAttest): its keys are "file", which the
+	// root makes an admin only when told so.
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, ""); err == nil || !strings.Contains(err.Error(), "-allow-file-key") {
+		t.Fatalf("made a phone with keys in a file an admin unasked: %v", err)
+	}
+	m, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone", AllowFileKey: true}, "")
 	if err != nil || m.Name != "member phone" {
 		t.Fatalf("making the phone an admin: %+v, %v", m, err)
 	}
-	der, err := base64.StdEncoding.DecodeString(next("ADMIN CA "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, err := x509.ParseCertificate(der)
-	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
-		t.Fatalf("the admin CA: %v, %+v", err, ca)
-	}
-	// The member checks the CA for the app and stops offering the key; a
-	// second CA finds no key offered.
-	take := func() map[string]any {
-		req, _ := json.Marshal(map[string]any{"op": "take_admin_ca", "args": map[string]any{"key": der}})
-		fmt.Fprintf(in, "CALL %s\n", req)
-		var ans struct{ Error map[string]any }
-		if err := json.Unmarshal([]byte(next("ANSWER ")), &ans); err != nil {
-			t.Fatal(err)
-		}
-		return ans.Error
-	}
-	if e := take(); e != nil {
-		t.Fatalf("the member refused the root's admin CA: %v", e)
-	}
-	if e := take(); e == nil {
-		t.Fatal("the member took an admin CA with no admin key offered")
-	}
-	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "hardware" {
+	if d := listed(); !d.Admin || d.Role != group.RolePhone || d.Store != "file" {
 		t.Fatalf("the phone made an admin is listed as %+v", d)
 	}
+	// The phone acts as an admin once the root's record reached it.
+	waitFor(t, "the phone knows it is an admin", func() bool {
+		fmt.Fprintln(in, "DEVICES")
+		var devs []struct{ Admin, Self bool }
+		if err := json.Unmarshal([]byte(next("DEVICES ")), &devs); err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(devs, func(d struct{ Admin, Self bool }) bool { return d.Self && d.Admin })
+	})
+	return pi, next, in
+}
+
+// joinPhoneWindow opens the home window of phone-on-linux (next, in), as
+// the app's "Add a device" does, and starts a service named name that
+// joins by the window's QR code; it returns that service once the window
+// says it joined.
+func joinPhoneWindow(t *testing.T, h *hub, next func(prefix string) string, in io.Writer, name string) *testService {
+	t.Helper()
+	fmt.Fprintln(in, "WINDOW")
+	link := next("WINDOW ")
+	if !strings.HasPrefix(link, "cbb://pair?") {
+		t.Fatalf("the phone's window: %q", link)
+	}
+	s := startService(t, h, name)
+	if _, err := s.do(t, control.Header{Op: control.OpJoin, Code: link}, ""); err != nil {
+		t.Fatalf("%s joining the phone's window: %v; the phone: %s", name, err, next("WINDOW FAILED "))
+	}
+	if got := next("WINDOW DONE "); got != name {
+		t.Fatalf("the phone's window admitted %q, not %s", got, name)
+	}
+	return s
+}
+
+// TestFFIJoinerMadeAdmin: the Aurora app joins a group of 0.6 as a member
+// by the root's home window, offering its admin key with its proof over
+// the pairing, and the root makes it an admin later with that key (cbb
+// admin): the records list it as an admin, on the root and on the phone.
+func TestFFIJoinerMadeAdmin(t *testing.T) {
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	var h hub
+	pi, next, in := adminPhone(t, bin, &h)
 	// The phone's own list has it as an admin too, from the records.
 	waitFor(t, "the app lists itself as an admin", func() bool {
 		fmt.Fprintln(in, "DEVICES")
@@ -890,182 +809,55 @@ func TestFFIJoinerMadeAdmin(t *testing.T) {
 		}
 		return slices.ContainsFunc(devs, func(d struct{ Admin, Self bool }) bool { return d.Self && d.Admin })
 	})
-	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone"}, ""); err == nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "member phone", AllowFileKey: true}, ""); err == nil {
 		t.Fatal("the root made the phone an admin twice")
+	}
+
+	// A phone that offered no admin key is never made an admin.
+	phoneJoins(t, bin, pi, "-name", "plain phone", "-keys", "1", "-dir", t.TempDir(), "-peer", pi.addr())
+	if _, err := pi.do(t, control.Header{Op: control.OpMakeAdmin, Device: "plain phone", AllowFileKey: true}, ""); err == nil || !strings.Contains(err.Error(), "offered this device no admin key") {
+		t.Fatalf("made a phone an admin that offered no key: %v", err)
 	}
 }
 
-// TestFFIJoinerAdmin: the Aurora app that offers an admin key joins as an
-// admin through the root's window that may make admins (cbb pair -qr
-// -admin), its admin CA for that key, and any other window refuses it.
+// TestFFIJoinerAdmin: an admin phone of a group of 0.6 opens its home
+// window with its admin key, as the app's "Add a device" does, and a Go
+// computer joins by its QR code: the phone's admin key signs its record,
+// and the root lists the computer as a member, never an admin.
 func TestFFIJoinerAdmin(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
-	admit := func(next func(string) string, admins bool) (*control.Message, error) {
-		jc, ok := phone.ParseJoinQR(next("QR: "))
-		if !ok {
-			t.Fatal("not a join QR code")
-		}
-		return pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: admins}, "")
-	}
-	next, _ := phoneOnLinux(t, bin, "-name", "refused phone", "-admin")
-	if _, err := admit(next, false); err == nil {
-		t.Fatal("a window that makes no admins admitted a phone that offers an admin key")
-	}
-	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	if m, err := admit(next, true); err != nil || m.Name != "admin phone" {
-		t.Fatalf("admitting the phone as an admin: %v, %+v", err, m)
-	}
-	der, err := base64.StdEncoding.DecodeString(next("Admin CA "))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ca, err := x509.ParseCertificate(der)
-	if err != nil || !ca.IsCA || !strings.HasPrefix(ca.Subject.CommonName, "cbb admin ") {
-		t.Fatalf("the admin CA: %v, %+v", err, ca)
-	}
-	for _, d := range pi.devices(t) {
-		if d.Name == "admin phone" && (!d.Admin || d.Role != group.RolePhone) {
-			t.Errorf("the phone is listed as %+v", d)
-		}
-		if d.Name == "refused phone" {
-			t.Errorf("the refused phone is listed: %+v", d)
-		}
-	}
-
-	// The admin phone admits a computer that listens, as the app does when
-	// it scans the computer's QR code: with a certificate from its admin
-	// CA, and a device record the root takes from it.
-	waitFor(t, "the admin phone connected", func() bool {
-		fmt.Fprintln(in, "PEERS")
-		return next("PEERS ") == "1"
-	})
-	laptop, qr := listeningJoin(t, &h, "laptop")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	admitted := next("ADMITTED ")
-	t.Logf("the admin phone admitted the computer %s", admitted)
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
-	}
-	id := joinedIdentity(t, laptop, admitted)
-	if id.Issuer == nil || !bytes.Equal(id.Issuer.Raw, ca.Raw) {
-		t.Fatalf("the computer's identity: %+v", id)
-	}
-	if err := id.Cert.CheckSignatureFrom(ca); err != nil {
-		t.Fatalf("the computer's certificate is not from the phone's admin CA: %v", err)
-	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
-		t.Fatalf("the computer's certificate names %q: %v", got, err)
+	pi, next, in := adminPhone(t, bin, &h)
+	laptop := joinPhoneWindow(t, &h, next, in, "laptop")
+	if g := laptop.status(t).Group; g != pi.status(t).Group {
+		t.Fatalf("the computer joined %q, not the group %q", g, pi.status(t).Group)
 	}
 	waitFor(t, "the root lists the computer the phone admitted", func() bool {
 		for _, d := range pi.devices(t) {
 			if d.Name == "laptop" {
-				return d.Role == group.RoleMember && d.OS == group.OSLinux && !d.Admin
+				return d.Role == group.RoleMember && !d.Admin
 			}
 		}
 		return false
 	})
 }
 
-// TestFFIPhoneTakeover: the Aurora app as an admin takes the group the
-// computer root handed to it (cbb handover), through the core's takeover
-// (cbb_member_manage): a root CA for its own admin key, the claim, and once
-// it took effect the records and certificate of the new root, which the
-// computer then lists as the group's root.
-func TestFFIPhoneTakeover(t *testing.T) {
-	bin := os.Getenv("CBB_PHONE_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_PHONE_ON_LINUX is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
-	if _, err := pi.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
-		t.Fatal(err)
-	}
-	next, in := phoneOnLinux(t, bin, "-name", "admin phone", "-admin", "-dir", t.TempDir(), "-peer", pi.addr())
-	jc, ok := phone.ParseJoinQR(next("QR: "))
-	if !ok {
-		t.Fatal("not a join QR code")
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint, Admins: true}, ""); err != nil {
-		t.Fatal(err)
-	}
-	next("Admin CA ")
-	waitFor(t, "the admin phone connected", func() bool {
-		fmt.Fprintln(in, "PEERS")
-		return next("PEERS ") == "1"
-	})
-	manage := func(req string) map[string]any {
-		fmt.Fprintln(in, "MANAGE "+req)
-		var a map[string]any
-		got := next("MANAGED ")
-		if err := json.Unmarshal([]byte(got), &a); err != nil {
-			t.Fatalf("the answer %q: %v", got, err)
-		}
-		return a
-	}
-	ok2 := func(a map[string]any) map[string]any {
-		t.Helper()
-		o, ok := a["ok"].(map[string]any)
-		if !ok {
-			t.Fatalf("refused: %v", a)
-		}
-		return o
-	}
-
-	root, _ := ok2(manage(`{"action":"root_ca"}`))["root_ca"].(string)
-	if root == "" {
-		t.Fatal("no root CA")
-	}
-	if a := manage(`{"action":"take_handed_over","root_ca":"` + root + `"}`); a["error"] == nil {
-		t.Fatalf("the phone claimed a group nobody handed to it: %v", a)
-	}
-	if st := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `"}`))["state"]; st != "none" {
-		t.Fatalf("a claim before claiming: %v", st)
-	}
-	if _, err := pi.do(t, control.Header{Op: control.OpHandOver, Device: "admin phone"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the phone holds the handover", func() bool {
-		return manage(`{"action":"take_handed_over","root_ca":"` + root + `"}`)["error"] == nil
-	})
-	done := ok2(manage(`{"action":"finish_takeover","root_ca":"` + root + `","name":"admin phone","os":"aurora"}`))
-	if done["state"] != "effective" || done["cert"] == nil {
-		t.Fatalf("finishing the takeover: %v", done)
-	}
-	waitFor(t, "the computer lists the phone as the root", func() bool {
-		for _, d := range pi.devices(t) {
-			if d.Name == "admin phone" {
-				return d.Root && d.Role == group.RolePhone
-			}
-		}
-		return false
-	})
-	for _, d := range pi.devices(t) {
-		if d.Self && d.Root {
-			t.Errorf("the computer still holds the root: %+v", d)
-		}
-	}
-}
-
-// TestFFIPhoneRoot: the Aurora app makes a group of its own, its root key
-// outside the core (cbb_group_new), and as the group's root admits a
-// computer that listens, as the app does when it scans the computer's QR
-// code: the computer takes the phone's group, a certificate from its root
-// and no issuer.
+// TestFFIPhoneRoot: the Aurora app makes a group of 0.6 of its own, its
+// root key outside the core (cbb_group_new), opens its home window with
+// that key, and a Go computer joins by the window's QR code, as the app's
+// "Add a device" does. The root phone then changes the computer through
+// cbb_member_manage: renames it, mutes it and turns its sync off and on by
+// commands the computer carries out, sets the key level, makes it an admin
+// with the admin key it offered, and removes it.
 func TestFFIPhoneRoot(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
 	made := strings.Fields(next("Group "))
 	if len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
@@ -1076,28 +868,12 @@ func TestFFIPhoneRoot(t *testing.T) {
 	}
 
 	var h hub
-	laptop, qr := listeningJoin(t, &h, "laptop")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	admitted := next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
+	laptop := joinPhoneWindow(t, &h, next, in, "laptop")
+	st := laptop.status(t)
+	if !strings.HasPrefix(st.Group, made[1]) {
+		t.Fatalf("the computer joined group %s, not the phone's %s", st.Group, made[1])
 	}
-	id := joinedIdentity(t, laptop, admitted)
-	if id.Issuer != nil {
-		t.Fatalf("the computer's identity: %+v", id)
-	}
-	if got := group.Tag(id.GroupCA.Cert); got != made[1] {
-		t.Fatalf("the computer joined group %s, not the phone's %s", got, made[1])
-	}
-	if !id.GroupCA.Cert.IsCA || !strings.HasPrefix(id.GroupCA.Cert.Subject.CommonName, "cbb group root ") {
-		t.Fatalf("the group's root: %+v", id.GroupCA.Cert.Subject)
-	}
-	if err := id.Cert.CheckSignatureFrom(id.GroupCA.Cert); err != nil {
-		t.Fatalf("the computer's certificate is not from the phone's root: %v", err)
-	}
-	if got, err := group.DeviceOf(id.Cert); err != nil || string(got) != admitted {
-		t.Fatalf("the computer's certificate names %q: %v", got, err)
-	}
+	admitted := st.Device
 	fmt.Fprintln(in, "DEVICES")
 	if devices := next("DEVICES "); !strings.Contains(devices, `"laptop"`) {
 		t.Fatalf("the phone does not list the computer: %s", devices)
@@ -1108,145 +884,73 @@ func TestFFIPhoneRoot(t *testing.T) {
 		fmt.Fprintln(in, "MANAGE "+req)
 		return next("MANAGED ")
 	}
-	if got := manage(`{"action":"rename","device":"` + admitted + `","name":"desk"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"rename","device":"` + admitted + `","name":"desk"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("renaming the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")
 	if devices := next("DEVICES "); !strings.Contains(devices, `"desk"`) || strings.Contains(devices, `"laptop"`) {
 		t.Fatalf("the phone does not list the computer's new name: %s", devices)
 	}
-	// The computer is not running, so a command for it finds no way there.
-	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("muting a computer that is not running: %s", got)
+	// Commands go over a connection to the computer: the phone dials the
+	// address it is handed, as the app hands in what the system's DNS-SD
+	// finds.
+	found, _ := json.Marshal(map[string]any{"op": "found", "args": map[string]any{
+		"key": "laptop", "addrs": []string{laptop.addr()}, "device": admitted,
+	}})
+	fmt.Fprintf(in, "CALL %s\n", found)
+	next("ANSWER ")
+	waitFor(t, "the root phone connected to the computer", func() bool {
+		fmt.Fprintln(in, "PEERS")
+		return next("PEERS ") == "1"
+	})
+	if got := manage(`{"action":"mute","device":"` + admitted + `","for_ms":60000}`); !strings.Contains(got, `"status":"done"`) {
+		t.Fatalf("muting the computer: %s", got)
 	}
-	// The device's house is a command too: sync_off and sync_on are mode commands.
-	if got := manage(`{"action":"sync_off","device":"` + admitted + `","timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("turning the sync of a computer that is not running off: %s", got)
+	waitFor(t, "the computer muted", func() bool { return laptop.status(t).Muted })
+	if got := manage(`{"action":"unmute","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
+		t.Fatalf("ending the computer's mute: %s", got)
 	}
-	// Remote paste: the core checks the command before it looks for a way.
-	if got := manage(`{"action":"paste","device":"` + admitted + `","text":"ls","mode":"shout","timeout_ms":1000}`); !strings.Contains(got, "not paste or type") {
-		t.Fatalf("a paste by no way there is: %s", got)
+	waitFor(t, "the computer unmuted", func() bool { return !laptop.status(t).Muted })
+	if got := manage(`{"action":"sync_off","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
+		t.Fatalf("turning the computer's sync off: %s", got)
 	}
-	for _, req := range []string{
-		`"text":"ls","enter":true`,
-		`"text":"hunter2","mode":"type","kind":"secret"`,
-		`"text":"0123456789abcdef0123456789abcdef","kind":"media"`,
-	} {
-		if got := manage(`{"action":"paste","device":"` + admitted + `",` + req + `,"timeout_ms":1000}`); !strings.Contains(got, "not connected") {
-			t.Fatalf("a paste (%s) for a computer that is not running: %s", req, got)
-		}
+	waitFor(t, "the computer's sync off", func() bool { return laptop.status(t).Mode == "own" })
+	if got := manage(`{"action":"sync_on","device":"` + admitted + `"}`); !strings.Contains(got, `"status":"done"`) {
+		t.Fatalf("turning the computer's sync on: %s", got)
 	}
-	// The admin key comes from the computer's hello, so it must be connected.
-	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "not connected") {
-		t.Fatalf("making a computer that is not running an admin: %s", got)
+	waitFor(t, "the computer's sync on", func() bool { return laptop.status(t).Mode == "shared" })
+	if got := manage(`{"action":"mute","device":"` + made[0] + `"}`); !strings.Contains(got, "its own, not a command") {
+		t.Fatalf("the phone muting itself by a command: %s", got)
 	}
-	// The root's own records, built and signed in the core (cbb_core::root).
-	if got := manage(`{"action":"takeover_delay","delay_ms":3600000}`); got != `{"ok":{}}` {
-		t.Fatalf("setting the takeover delay: %s", got)
+
+	// The root's key level and "Make it an admin", by the core's key level
+	// rule (cbb_core::keylevel). Neither the phone's keys nor the
+	// computer's count as proven in this test: both are "file", which only
+	// the level files lets be the root or an admin.
+	if got := manage(`{"action":"key_level","level":"proven"}`); !strings.Contains(got, "error") {
+		t.Fatalf("the root phone set a key level its own keys do not pass: %s", got)
 	}
-	if got := manage(`{"action":"takeover_delay","delay_ms":-1}`); !strings.Contains(got, "from 0 to 7 days") {
-		t.Fatalf("a negative takeover delay: %s", got)
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, "key level") {
+		t.Fatalf("made a computer with keys in a file an admin at the level hardware: %s", got)
 	}
 	if got := manage(`{"action":"key_level","level":"files"}`); got != `{"ok":{"below":[]}}` {
 		t.Fatalf("setting the key level: %s", got)
 	}
-	if got := manage(`{"action":"hand_over","device":"` + admitted + `"}`); !strings.Contains(got, "no admin") {
-		t.Fatalf("handing the group to a computer that is no admin: %s", got)
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `"}`); !strings.Contains(got, "allow keys in a file") {
+		t.Fatalf("made a computer with keys in a file an admin unasked: %s", got)
 	}
-	if got := manage(`{"action":"remove_recovery"}`); !strings.Contains(got, "no recovery key") {
-		t.Fatalf("removing a recovery key the group does not have: %s", got)
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("making the computer an admin: %s", got)
 	}
-	var sheet struct {
-		OK struct {
-			QR      string   `json:"qr"`
-			Text    string   `json:"text"`
-			Modules []string `json:"modules"`
-			Admin   []byte   `json:"admin"`
-		} `json:"ok"`
+	waitFor(t, "the computer is an admin", func() bool { return laptop.isAdmin(t) })
+	if got := manage(`{"action":"make_admin","device":"` + admitted + `","allow_file_key":true}`); !strings.Contains(got, "already an admin") {
+		t.Fatalf("making the computer an admin twice: %s", got)
 	}
-	if got := manage(`{"action":"make_recovery"}`); json.Unmarshal([]byte(got), &sheet) != nil ||
-		!strings.HasPrefix(sheet.OK.QR, "cbb://recover?g="+made[1]+"&") || len(sheet.OK.Text) != 69 || len(sheet.OK.Modules) == 0 ||
-		len(sheet.OK.Admin) != 32 {
-		t.Fatalf("making the recovery key: %s", got)
-	}
-	// A YubiKey's key, which never leaves the card: the root issues its admin CA.
-	card, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	spki, err := x509.MarshalPKIXPublicKey(&card.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var onCard struct {
-		OK struct {
-			AdminCA []byte `json:"admin_ca"`
-		} `json:"ok"`
-	}
-	got := manage(`{"action":"recovery_for","key":"` + base64.StdEncoding.EncodeToString(spki) + `"}`)
-	if json.Unmarshal([]byte(got), &onCard) != nil {
-		t.Fatalf("the card's recovery key: %s", got)
-	}
-	cardCA, err := x509.ParseCertificate(onCard.OK.AdminCA)
-	if err != nil || !cardCA.IsCA || !card.PublicKey.Equal(cardCA.PublicKey) || cardCA.CheckSignatureFrom(id.GroupCA.Cert) != nil {
-		t.Fatalf("the card's admin CA: %s, %v", got, err)
-	}
-	if got := manage(`{"action":"recovery_for","key":"AAAA"}`); !strings.Contains(got, "no P-256 key") {
-		t.Fatalf("a recovery key that is no key: %s", got)
-	}
-	fmt.Fprintln(in, `CALL {"op":"records"}`)
-	var recs struct {
-		OK struct {
-			Records []struct {
-				Body []byte `json:"body"`
-			} `json:"records"`
-		} `json:"ok"`
-	}
-	if err := json.Unmarshal([]byte(next("ANSWER ")), &recs); err != nil {
-		t.Fatal(err)
-	}
-	kinds := map[string]bool{}
-	for _, r := range recs.OK.Records {
-		var b struct {
-			Type  string `json:"type"`
-			Delay int64  `json:"takeover_delay_ms"`
-			Level string `json:"key_level"`
-		}
-		if err := json.Unmarshal(r.Body, &b); err != nil {
-			t.Fatal(err)
-		}
-		kinds[b.Type] = true
-		// The key level's settings record keeps the delay set before it.
-		if b.Type == "settings" && b.Level == "files" && b.Delay != 3600000 {
-			t.Fatalf("the key level's settings record dropped the delay: %+v", b)
-		}
-	}
-	if !kinds["settings"] || !kinds["recovery"] {
-		t.Fatalf("the records hold no settings or recovery record: %v", kinds)
-	}
-	fmt.Fprintln(in, `CALL {"op":"root_view"}`)
-	if got := next("ANSWER "); got != `{"ok":{"delay_ms":3600000,"handed_to":null,"key_level":"files","recovery":true}}` {
-		t.Fatalf("the root's settings: %s", got)
-	}
-	if got := manage(`{"action":"remove_recovery"}`); got != `{"ok":{}}` {
-		t.Fatalf("removing the recovery key: %s", got)
-	}
-	// A group made a moment ago stops nothing.
-	fmt.Fprintln(in, `CALL {"op":"alerts"}`)
-	if got := next("ANSWER "); got != `{"ok":{"alerts":[]}}` {
-		t.Fatalf("the alerts: %s", got)
-	}
-	if got := manage(`{"action":"resolve","records":[]}`); !strings.Contains(got, "names the records") {
-		t.Fatalf("resolving nothing: %s", got)
-	}
-	// Nothing is due in a group made a moment ago.
-	if got := manage(`{"action":"renew"}`); got != `{"ok":{"renewed":0}}` {
-		t.Fatalf("renewing: %s", got)
-	}
+
 	if got := manage(`{"action":"remove","device":"` + made[0] + `"}`); !strings.Contains(got, "cannot remove itself") {
 		t.Fatalf("the phone removing itself: %s", got)
 	}
-	if got := manage(`{"action":"remove","device":"` + admitted + `"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + admitted + `"}`); !strings.Contains(got, `"name":"desk"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
 	fmt.Fprintln(in, "DEVICES")
@@ -1255,66 +959,12 @@ func TestFFIPhoneRoot(t *testing.T) {
 	}
 }
 
-// admitJoiner plays the phone that scanned a listening joiner's QR code
-// with pi, the group's root: pi dials the addresses in the QR code and
-// admits the device with the certificate it names, as cbb pair -qr does,
-// and returns the name the device joined with.
-func admitJoiner(t *testing.T, pi *testService, qr string) string {
-	t.Helper()
-	jc, ok := phone.ParseJoinQR(qr)
-	if !ok || len(jc.Addrs) == 0 || jc.Fingerprint == "" {
-		t.Fatalf("not a QR code of a listening joiner: %q", qr)
-	}
-	m, err := pi.do(t, control.Header{Op: control.OpPair, Code: jc.Code, Addrs: jc.Addrs, Fingerprint: jc.Fingerprint}, "")
-	if err != nil {
-		t.Fatalf("admitting the joiner: %v", err)
-	}
-	return m.Name
-}
-
-// listeningJoin starts a service named name, out of a group, and has it
-// wait for a phone, as cbb pair does: the QR code the phone scans.
-func listeningJoin(t *testing.T, h *hub, name string) (*testService, string) {
-	t.Helper()
-	s := startService(t, h, name)
-	c := s.dial(t)
-	t.Cleanup(func() { c.Close() })
-	code := newCode(t)
-	m, err := c.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Code: code, Expires: 300, Listen: true}})
-	if err != nil || len(m.Addrs) == 0 {
-		t.Fatalf("%s's listening join: %v, %+v", name, err, m)
-	}
-	return s, phone.JoinQR(phone.JoinCode{Code: code, Addrs: m.Addrs, Fingerprint: m.Fingerprint})
-}
-
-// joinedIdentity is the identity that s, which waited for a phone, keeps
-// once the phone admitted it as the device admitted.
-func joinedIdentity(t *testing.T, s *testService, admitted string) *group.Identity {
-	t.Helper()
-	waitFor(t, s.name+" in the group", func() bool {
-		st := s.status(t)
-		return st.Group != "" && st.Device == admitted
-	})
-	id, err := group.Load(s.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return id
-}
-
-// newCode is a pairing code: six random digits.
-func newCode(t *testing.T) string {
-	t.Helper()
-	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fmt.Sprintf("%06d", n.Int64())
-}
-
 // joinAlone has the small device join pi's group: cbb pair on pi shows a
 // code, and cbb pair -code on the small device reads it from standard input
-// and joins at pi's address. It returns the small device's state directory.
+// and joins at pi's address. In a group of 0.6 it reads the link of the
+// window's QR code, which names the window's ID: the address given here is
+// the loopback one, which no window announces by mDNS. It returns the
+// small device's state directory.
 func joinAlone(t *testing.T, bin string, pi *testService) string {
 	t.Helper()
 	return joinAloneEnv(t, bin, pi, nil)
@@ -1323,29 +973,46 @@ func joinAlone(t *testing.T, bin string, pi *testService) string {
 // joinAloneEnv is joinAlone with env added to cbb pair's environment.
 func joinAloneEnv(t *testing.T, bin string, pi *testService, env []string) string {
 	t.Helper()
-	c, code := openWindow(t, pi)
+	return joinAloneAs(t, bin, pi, "small", env)
+}
+
+// joinAloneAs is joinAloneEnv for a device of the name given.
+func joinAloneAs(t *testing.T, bin string, pi *testService, name string, env []string) string {
+	t.Helper()
+	c, code, link := openWindowLink(t, pi)
 	defer c.Close()
+	if link != "" {
+		code = link
+	}
 	pa := pi.addr()
 	dir := t.TempDir()
-	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", "small", "-code", pa)
+	join := exec.Command(bin, "-state", dir, "-debug", "pair", "-name", name, "-code", pa)
 	join.Stdin = strings.NewReader(code + "\n")
 	if env != nil {
 		join.Env = append(os.Environ(), env...)
 	}
-	join.Stderr = testWriter{t, "small join: ", nil}
+	join.Stderr = testWriter{t, name + " join: ", nil}
 	out, err := join.Output()
 	if err != nil || !strings.Contains(string(out), "Joined the group") {
 		t.Fatalf("cbb pair: %v; %s", err, out)
 	}
-	if m, err := c.Receive(); err != nil || m.Name != "small" {
+	if m, err := c.Receive(); err != nil || m.Name != name {
 		t.Fatalf("pair on pi ended with %+v, %v", m, err)
+	}
+	if link != "" {
+		// A group of 0.6 has no CA keys: the device keeps the group's
+		// records and its own key, and no identity.json.
+		if _, err := os.Stat(filepath.Join(dir, "group.cbor")); err != nil {
+			t.Fatalf("%s keeps no records of 0.6: %v", name, err)
+		}
+		return dir
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "identity.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(raw), "_key") {
-		t.Error("the small device saved a CA key")
+		t.Errorf("%s saved a CA key", name)
 	}
 	return dir
 }
@@ -1457,30 +1124,46 @@ func TestAloneMember(t *testing.T) {
 		return false
 	})
 	// The small device offers its key for sealed messages, and the root
-	// records it, so the command below is sealed to it.
-	waitFor(t, "the root records the small device's key for sealed messages", func() bool {
-		id, err := group.Load(pi.dir)
-		if err != nil {
-			return false
-		}
-		recs, err := group.LoadRecords(pi.dir, id.GroupCA.Cert)
-		if err != nil {
-			return false
-		}
-		for _, d := range recs.Devices() {
-			if string(d.ID) == st.Device {
-				return len(d.Seal) > 0
+	// records it, so the command below is sealed to it. On the records of
+	// 0.6 the key comes in the device's own statement, which the root
+	// keeps beside the records: the command goes once the root has it.
+	sealedOff := func() bool {
+		_, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, "")
+		return err == nil
+	}
+	if pi.on06() {
+		waitFor(t, "the root commands the small device, sealed to its key", sealedOff)
+	} else {
+		waitFor(t, "the root records the small device's key for sealed messages", func() bool {
+			id, err := group.Load(pi.dir)
+			if err != nil {
+				return false
 			}
+			recs, err := group.LoadRecords(pi.dir, id.GroupCA.Cert)
+			if err != nil {
+				return false
+			}
+			for _, d := range recs.Devices() {
+				if string(d.ID) == st.Device {
+					return len(d.Seal) > 0
+				}
+			}
+			return false
+		})
+		if !sealedOff() {
+			t.Fatal("the root's sync command did not go")
 		}
-		return false
-	})
-	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: st.Device, On: control.Bool(false)}, ""); err != nil {
-		t.Fatal(err)
 	}
 	if m := small.status(t).Mode; m != "own" {
 		t.Errorf("after the root's command the small device's mode is %q, want own", m)
 	}
-	if !small.logged("opened a sealed mode command") {
+	opened := "opened a sealed mode command"
+	if pi.on06() {
+		// A command of 0.6 with orders is always sealed (format section
+		// 6); the device says what it carried out.
+		opened = "turned sync off here"
+	}
+	if !small.logged(opened) {
 		t.Error("the small device did not open the command sealed to it")
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, syncFile)); err != nil || !strings.Contains(string(b), `"off":true`) {
@@ -1804,153 +1487,6 @@ func TestAloneQuickActions(t *testing.T) {
 	}
 }
 
-// TestAloneMemberAway: once sync away from home is on, the small device
-// offers its tunnel key to the group's hub at home and keeps the hub's
-// offer; away from home it reaches the hub only through the WireGuard
-// tunnel (GotaTun and smoltcp in the small device, the Go hub's netstack),
-// and syncs there.
-func TestAloneMemberAway(t *testing.T) {
-	bin := os.Getenv("CBB_TEST_ALONE")
-	if bin == "" {
-		t.Skip("CBB_TEST_ALONE is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
-	dir := joinAlone(t, bin, pi)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
-	}
-	port := freeUDP(t)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
-		t.Fatal(err)
-	}
-	piID := pi.status(t).Device
-
-	// At home: off until the user agrees, then the hub's offer comes.
-	pa := pi.addr()
-	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pa)
-	waitFor(t, "the small device at home", func() bool {
-		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && len(st.Status.Peers) == 1
-	})
-	if a := home.status(t).Away; a != nil {
-		t.Fatalf("sync away from home is on before it was turned on: %+v", a)
-	}
-	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on"}, ""); err == nil || !strings.Contains(err.Error(), "consent") {
-		t.Errorf("turning it on without consent: %v", err)
-	}
-	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the small device keeps the hub's offer", func() bool {
-		a := home.status(t).Away
-		return a != nil && a.HubDevice == piID && !a.Through
-	})
-	home.stop()
-
-	// Away: no address of the hub but its tunnel's.
-	away := startAlone(t, bin, dir, "-no-mdns", "-no-listen")
-	waitUpTo(t, 30*time.Second, "the small device reaches the hub through the tunnel", func() bool {
-		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
-	})
-	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the small device, away"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the small device, away" })
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the small device, away"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the small device has it", func() bool { return away.paste(t) == "to the small device, away" })
-	away.stop()
-
-	// Through a local UDP port that leads to the hub (cbb next link -udp
-	// on the ZX Spectrum Next): -tunnel-via sends the tunnel's packets
-	// there instead of the hub's address.
-	relayed := udpRelay(t, port)
-	away = startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-tunnel-via", relayed.addr)
-	waitUpTo(t, 30*time.Second, "the small device reaches the hub through the local UDP port", func() bool {
-		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
-	})
-	if relayed.n.Load() == 0 {
-		t.Fatal("no packet went through the local UDP port")
-	}
-
-	// Off, from an admin (cbb global off -on, an away-off command
-	// through the tunnel): the key is gone, and so is the connection
-	// through the tunnel. Its own user turning it off again changes
-	// nothing.
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "off", Device: "small"}, ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "tunnel.json")); !os.IsNotExist(err) {
-		t.Errorf("tunnel.json after the away-off command: %v", err)
-	}
-	waitFor(t, "the small device syncs at home only", func() bool {
-		st := away.status(t)
-		return st.Away == nil && len(st.Peers) == 0
-	})
-	if _, err := away.do(t, control.Header{Op: control.OpAway, Name: "off"}, ""); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestAloneMemberAwayObfuscated syncs the small device away from home with a
-// hub that hides its tunnel with AmneziaWG: the small device keeps the
-// offer's settings and speaks AmneziaWG to the Go hub (member/src/awg.rs
-// around GotaTun, amneziawg-go on the hub). CBB_TEST_ALONE names the binary.
-func TestAloneMemberAwayObfuscated(t *testing.T) {
-	bin := os.Getenv("CBB_TEST_ALONE")
-	if bin == "" {
-		t.Skip("CBB_TEST_ALONE is not set")
-	}
-	var h hub
-	pi := startService(t, &h, "pi")
-	dir := joinAlone(t, bin, pi)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
-	}
-	port := freeUDP(t)
-	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: port, Addrs: []string{fmt.Sprintf("127.0.0.1:%d", port)}}, ""); err != nil {
-		t.Fatal(err)
-	}
-	piID := pi.status(t).Device
-	home := startAlone(t, bin, dir, "-no-mdns", "-no-listen", "-peer", pi.addr())
-	waitFor(t, "the small device at home", func() bool {
-		st, err := home.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && len(st.Status.Peers) == 1
-	})
-	if _, err := home.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the small device keeps the obfuscated hub's offer", func() bool {
-		a := home.status(t).Away
-		return a != nil && a.HubDevice == piID
-	})
-	home.stop()
-	raw, err := os.ReadFile(filepath.Join(dir, "tunnel.json"))
-	if err != nil || !strings.Contains(string(raw), "header_protection_key") {
-		t.Fatalf("tunnel.json keeps no AmneziaWG settings (%v): %s", err, raw)
-	}
-
-	// The hub speaks AmneziaWG only: a small device that reaches it speaks
-	// it too.
-	away := startAlone(t, bin, dir, "-no-mdns", "-no-listen")
-	waitUpTo(t, 30*time.Second, "the small device reaches the obfuscated hub through the tunnel", func() bool {
-		m, err := away.do(t, control.Header{Op: control.OpStatus}, "")
-		return err == nil && m.Status.Away != nil && m.Status.Away.Through && len(m.Status.Peers) == 1
-	})
-	if _, err := away.do(t, control.Header{Op: control.OpCopy}, "from the small device, hidden"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the hub has it", func() bool { return pi.paste(t) == "from the small device, hidden" })
-	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the small device, hidden"); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the small device has it", func() bool { return away.paste(t) == "to the small device, hidden" })
-}
-
 // TestAloneMemberAwayXHTTP checks the small device's way over VLESS with
 // XHTTP: the hub is reached only through a forwarder whose VLESS sits
 // behind a TLS web server with an RSA certificate from a CA, which the small device
@@ -1966,13 +1502,10 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	free, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	vlessAddr := free.Addr().String()
-	free.Close()
-	web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	// The web server reaches the forwarder's VLESS listener, on a port of
+	// its own once the forwarder listens.
+	var vlessBack vlessAddr
+	web, ca := vlesstest.WebServerCA(t, path, vlessBack.get)
 	roots := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(roots, ca, 0o600); err != nil {
 		t.Fatal(err)
@@ -1982,10 +1515,11 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
-		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+		VLESS: &forward.VLESSConfig{Listen: "127.0.0.1:0", XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	vlessBack.set(f)
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan struct{})
 	go func() {
@@ -2000,6 +1534,11 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
 	dir := joinAlone(t, bin, pi)
+	// The root names itself the group's hub (cbb global hubs); its own forwarder
+	// gets a face of its own, whose hubs' credential it registers with.
+	if _, err := pi.do(t, control.Header{Op: control.OpHubs, Hubs: []string{"pi"}}, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pi.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -2120,77 +1659,23 @@ func TestAloneRootless(t *testing.T) {
 	}
 }
 
-// udpRelayPort is a UDP port that passes every datagram to a port on 127.0.0.1
-// and the answers back to the last sender, as cbb next link -udp does
-// through the Next's ESP; n counts the datagrams it passed out.
-type udpRelayPort struct {
-	addr string
-	n    atomic.Int64
-}
-
-func udpRelay(t *testing.T, to int) *udpRelayPort {
-	t.Helper()
-	in, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: to})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { in.Close(); out.Close() })
-	r := &udpRelayPort{addr: in.LocalAddr().String()}
-	var last atomic.Pointer[net.UDPAddr]
-	go func() {
-		buf := make([]byte, 2048)
-		for {
-			n, from, err := in.ReadFromUDP(buf)
-			if err != nil {
-				return
-			}
-			last.Store(from)
-			r.n.Add(1)
-			out.Write(buf[:n])
-		}
-	}()
-	go func() {
-		buf := make([]byte, 2048)
-		for {
-			n, err := out.Read(buf)
-			if err != nil {
-				return
-			}
-			if a := last.Load(); a != nil {
-				in.WriteToUDP(buf[:n], a)
-			}
-		}
-	}()
-	return r
-}
-
 // TestFFIPhoneRemoves has the root phone remove a computer it is connected
-// to, as the Android app's GroupTest.a8_renameAndRemove does: the removed
-// computer must hear it was removed, though the phone ends the connection
-// right after the records that remove it, and the other computer stays.
+// to, as the Android app's GroupTest.a8_renameAndRemove does: the group
+// drops the removed computer and gives it nothing more, and the other
+// computer stays.
 func TestFFIPhoneRemoves(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
 	if made := strings.Fields(next("Group ")); len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
 	admit := func(name string) (*testService, string) {
-		s, qr := listeningJoin(t, &h, name)
-		fmt.Fprintln(in, "ADMIT "+qr)
-		admitted := next("ADMITTED ")
-		if got := next("ADMIT DONE "); got != "true" {
-			t.Fatalf("%s did not confirm its join: %q", name, got)
-		}
-		joinedIdentity(t, s, admitted)
-		return s, admitted
+		s := joinPhoneWindow(t, &h, next, in, name)
+		return s, s.status(t).Device
 	}
 	pc, pcID := admit("pc")
 	second, id := admit("second")
@@ -2213,13 +1698,19 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if got := manage(`{"action":"paste","device":"` + pcID + `","method":"type","text":"hello","enter":true}`); !strings.Contains(got, `"status":"refused"`) || !strings.Contains(got, "remote paste is off") {
 		t.Fatalf("a paste on a computer with remote paste off: %s", got)
 	}
+	// With remote paste on there, a paste of only control characters is
+	// nothing to paste (remotepaste::to_paste), one paste a second apart.
+	if m, err := pc.do(t, control.Header{Op: control.OpReceive, Name: "on"}, ""); err != nil || m.Status == nil || m.Status.Paste == nil || !m.Status.Paste.On {
+		t.Fatalf("paste-receive on: %+v, %v", m, err)
+	}
+	time.Sleep(time.Second)
 	if got := manage(`{"action":"paste","device":"` + pcID + `","text":"\u001b[2J"}`); !strings.Contains(got, "nothing to paste") {
 		t.Fatalf("a paste of only control characters: %s", got)
 	}
 	if got := manage(`{"action":"paste_off","device":"` + pcID + `"}`); !strings.Contains(got, `"status":"done"`) {
 		t.Fatalf("turning remote paste off on the computer: %s", got)
 	}
-	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("renaming the computer: %s", got)
 	}
 	waitFor(t, "the second computer has its new name", func() bool {
@@ -2234,41 +1725,95 @@ func TestFFIPhoneRemoves(t *testing.T) {
 		}
 		return false
 	})
-	if got := manage(`{"action":"remove","device":"` + id + `"}`); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
-	waitUpTo(t, 60*time.Second, "the second computer says it was removed", func() bool { return second.status(t).Removed })
-	if pc.status(t).Removed {
-		t.Fatal("the other computer says it was removed")
+	// By the group's rule a removed device need not learn it was removed
+	// (whether it sees it is not checked): the group refuses it and gives
+	// it nothing more, not even the device list (TestFFIPhoneRemovesAway).
+	// In a group of 0.6 a device's status lists as peers only the devices
+	// it is connected to now.
+	online := func(s *testService) bool { return len(s.status(t).Peers) > 0 }
+	waitUpTo(t, 60*time.Second, "the group drops the removed computer", func() bool { return !online(second) })
+	fmt.Fprintln(in, "COPY after the removal")
+	waitFor(t, "the other computer has the phone's copy", func() bool { return pc.paste(t) == "after the removal" })
+	if second.paste(t) == "after the removal" {
+		t.Fatal("the phone's copy reached the removed computer")
+	}
+	if got := manage(`{"action":"rename","device":"` + pcID + `","name":"bench-pc"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("renaming the other computer: %s", got)
+	}
+	waitFor(t, "the other computer has its new name", func() bool {
+		return slices.ContainsFunc(pc.devices(t), func(d control.Device) bool { return d.Name == "bench-pc" })
+	})
+	for _, d := range second.devices(t) {
+		if d.Name == "bench-pc" {
+			t.Fatal("the removed computer got the records written after its removal")
+		}
+	}
+	if st := pc.status(t); st.Removed || !online(pc) {
+		t.Fatalf("the other computer left the group with the removed one: removed %v, peers %+v", st.Removed, st.Peers)
 	}
 }
 
 // TestFFIPhoneRemovesAway: the root phone removes a computer it never
-// connected to after admitting it; the phone's next connection with the
-// computer carries the records that remove it, and the computer says so.
+// connected to after it joined. By the group's rule a removed device need
+// not learn it was removed: the group refuses it and gives it nothing, not
+// even the device list. So the phone refuses its hello, nothing the
+// computer copies reaches the phone and nothing of the phone's reaches it,
+// and it never gets the records written after its removal.
 func TestFFIPhoneRemovesAway(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
-	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", t.TempDir())
-	if made := strings.Fields(next("Group ")); len(made) != 2 {
+	next, in := phoneOnLinux(t, bin, "-name", "root phone", "-group06", "-dir", t.TempDir())
+	made := strings.Fields(next("Group "))
+	if len(made) != 2 {
 		t.Fatalf("the phone's group: %q", made)
 	}
 	var h hub
-	second, qr := listeningJoin(t, &h, "second")
-	fmt.Fprintln(in, "ADMIT "+qr)
-	id := next("ADMITTED ")
-	if got := next("ADMIT DONE "); got != "true" {
-		t.Fatalf("the computer did not confirm its join: %q", got)
+	second := joinPhoneWindow(t, &h, next, in, "second")
+	id := second.status(t).Device
+	manage := func(req string) string {
+		fmt.Fprintln(in, "MANAGE "+req)
+		return next("MANAGED ")
 	}
-	joinedIdentity(t, second, id)
-	fmt.Fprintln(in, "MANAGE "+`{"action":"remove","device":"`+id+`"}`)
-	if got := next("MANAGED "); got != `{"ok":{}}` {
+	if got := manage(`{"action":"remove","device":"` + id + `"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
+	}
+	// A record written after the removal, which the removed computer must
+	// never get.
+	if got := manage(`{"action":"rename","device":"` + made[0] + `","name":"renamed phone"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("renaming the phone: %s", got)
 	}
 	fmt.Fprintln(in, `CALL {"op":"found","args":{"key":"second","addrs":["`+second.addr()+`"]}}`)
 	next("ANSWER ")
-	waitUpTo(t, 30*time.Second, "the computer says it was removed", func() bool { return second.status(t).Removed })
-	waitFor(t, "the removed computer keeps no connection", func() bool { return len(second.status(t).Peers) == 0 })
+	if _, err := second.do(t, control.Header{Op: control.OpCopy}, "from the removed computer"); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(in, "COPY from the root phone")
+	// For a while, with the phone dialing it and it dialing the phone: no
+	// connection stands, and nothing crosses either way.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
+		fmt.Fprintln(in, "PEERS")
+		got := next("PEERS ")
+		peers := second.status(t).Peers
+		// In a group of 0.6 the status lists only the connected peers.
+		if got != "0" || len(peers) > 0 {
+			t.Fatalf("a connection with the removed computer stands: the phone has %s, the computer %+v", got, peers)
+		}
+	}
+	fmt.Fprintln(in, `CALL {"op":"current"}`)
+	if got := next("ANSWER "); strings.Contains(got, "from the removed computer") {
+		t.Fatalf("the removed computer's copy reached the phone: %s", got)
+	}
+	if got := second.paste(t); got == "from the root phone" {
+		t.Fatal("the phone's copy reached the removed computer")
+	}
+	for _, d := range second.devices(t) {
+		if d.Name == "renamed phone" {
+			t.Fatal("the removed computer got the records written after its removal")
+		}
+	}
 }

@@ -5,21 +5,12 @@ import CCbbCore
 import Crypto
 import Foundation
 
-/// A connection that a pairing runs on: the bytes the core sends go out
-/// with send, and receive gives what arrived, empty once the peer closed.
-public protocol CorePairingStream: AnyObject {
-    func send(_ data: Data) async throws
-    func receive() async throws -> Data
-}
-
 /// Pairing in the Rust core (docs/core-api.md, "Joining and admitting"): a
-/// phone that makes a group (`newGroup`), joins one by its QR code as the
-/// joiner that listens (`Joining`), or admits a device by the device's QR
-/// code as an admin (`Admitting`). The core runs the exchange inside its own
-/// TLS and asks for each signature through a callback, so the keys stay in
-/// the keychain and the Secure Enclave; the app does the sockets and hands
-/// each connection to these classes, which pass its bytes to the core until
-/// the exchange ends.
+/// phone that makes a group (`newGroup`, `newGroup06`), opens a pairing
+/// window for a device at home (`Window`), joins a group by a window's QR
+/// code (`Joiner`), or makes a remote invitation (`Inviting`). The core runs
+/// the exchange inside its own TLS and asks for each signature through a
+/// callback, so the keys stay in the keychain and the Secure Enclave.
 public enum CorePairing {
     /// Why a pairing failed: the core's message and details, and whether
     /// the code was wrong.
@@ -38,51 +29,32 @@ public enum CorePairing {
         }
     }
 
-    /// The connection closed before the exchange ended.
-    public struct Closed: Error, CustomStringConvertible {
-        public var description: String { "the connection closed during pairing" }
-    }
+    /// A group of 0.6 this phone made: its ID, this phone's device ID and
+    /// the recovery sheet, which the person keeps and the app keeps nowhere.
+    public struct Made: Decodable, Sendable {
+        public struct Sheet: Decodable, Sendable {
+            public var qr: String
+            public var text: [String]
+        }
 
-    /// A group this phone is in, as the core made or joined it: its device
-    /// ID, member certificate and the admin CA that issued it, the group
-    /// CA, the later roots, the records file and, for a phone made an
-    /// admin, its admin CA.
-    public struct Group: Decodable, Equatable, Sendable {
+        public var group: String
         public var device: String
-        public var cert: Data
-        public var issuer: Data?
-        public var groupCA: Data
-        public var roots: [Data]
-        public var records: Data
-        public var adminCA: Data?
-
-        enum CodingKeys: String, CodingKey { case device, cert, issuer, groupCA = "group_ca", roots, records, adminCA = "admin_ca" }
-
-        public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            device = try c.decode(String.self, forKey: .device)
-            cert = try c.decode(Data.self, forKey: .cert)
-            issuer = try c.decodeIfPresent(Data.self, forKey: .issuer)
-            groupCA = try c.decode(Data.self, forKey: .groupCA)
-            roots = try c.decodeIfPresent([Data].self, forKey: .roots) ?? []
-            records = try c.decodeIfPresent(Data.self, forKey: .records) ?? Data()
-            adminCA = try c.decodeIfPresent(Data.self, forKey: .adminCA)
-        }
+        public var recovery: Sheet
     }
 
-    /// Makes a group with this phone's root key (cbb_group_new): its root
-    /// CA, this phone's member certificate and its device record. rootPublic
-    /// and publicKey are the root and member keys (SubjectPublicKeyInfo or
+    /// Makes a group of 0.6 with this phone's root key (cbb_group_new): the core writes this phone's record under the root and keeps
+    /// the set in dir, where the member then reads it. rootPublic and
+    /// publicKey are the root and member keys (SubjectPublicKeyInfo or
     /// point), store where the member key lives (Records.hardware or
-    /// Records.file), seal the phone's public key for sealed messages;
-    /// signRoot signs a digest with the root key, during this call only.
-    public static func newGroup(name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data, seal: Data?,
-                                signRoot: @escaping (Data) throws -> Data) throws -> Group {
+    /// Records.file); signRoot signs a digest with the root key, during
+    /// this call only.
+    public static func newGroup(dir: URL, name: String, os: String = "ios", store: String, rootPublic: Data, publicKey: Data,
+                                signRoot: @escaping (Data) throws -> Data) throws -> Made {
         struct Request: Encodable {
-            var name: String, os: String, store: String, root_public: Data, `public`: Data, seal: Data?
+            var dir: String, name: String, os: String, store: String, root_public: Data, `public`: Data
         }
-        let request = try JSONEncoder().encode(Request(name: name, os: os, store: store, root_public: try point(rootPublic),
-                                                       public: try point(publicKey), seal: seal))
+        let request = try JSONEncoder().encode(Request(dir: dir.path, name: name, os: os, store: store, root_public: try point(rootPublic),
+                                                       public: try point(publicKey)))
         let signer = Signer(signRoot)
         let raw = Unmanaged.passRetained(signer).toOpaque()
         defer { Unmanaged<Signer>.fromOpaque(raw).release() }
@@ -90,284 +62,14 @@ public enum CorePairing {
         let answer: UnsafeMutablePointer<UInt8>? = request.withUnsafeBytes { r in
             cbb_group_new(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, raw, &count)
         }
-        return try ok("new group", take(answer, count), as: Group.self)
-    }
-
-    /// Runs one connection's exchange: sends what the core gives, reads
-    /// what comes and hands it in, until feed says the exchange ended. A
-    /// connection that closes before then throws Closed.
-    private static func exchange(_ stream: CorePairingStream, first: Data, feed: (Data) throws -> (send: Data, done: Bool)) async throws {
-        if !first.isEmpty { try await stream.send(first) }
-        while true {
-            let data = try await stream.receive()
-            if data.isEmpty { throw Closed() }
-            let (send, done) = try feed(data)
-            if !send.isEmpty { try await stream.send(send) }
-            if done { return }
-        }
-    }
-
-    /// One step of an exchange as the core answers it.
-    private struct Step: Decodable {
-        var send: Data?
-        var state: String?
-        var wrongCode: Bool?
-        var joined: Group?
-        var device: Device?
-        var confirmed: Bool?
-        var error: Refused?
-
-        enum CodingKeys: String, CodingKey { case send, state, wrongCode = "wrong_code", joined, device, confirmed, error }
-
-        struct Device: Decodable {
-            var device: String?, name: String?, os: String?, role: String?, admin: Bool?
-        }
-
-        /// The failure a failed step names.
-        var failure: Failure {
-            Failure(error?.message ?? "the pairing failed", details: error?.details, wrongCode: wrongCode ?? false)
-        }
-    }
-
-    /// Joining a group as the joiner that listens (docs/protocol.md,
-    /// section 6): makes the device ID, the code and the QR code for addrs,
-    /// the addresses the app listens on, and takes each connection the app
-    /// accepts with `attempt` until an admin admits this phone. With
-    /// adminPublic and signAdmin the phone offers an admin key, whose proof
-    /// the core signs on the connection.
-    public final class Joining: @unchecked Sendable {
-        private let handle: OpaquePointer
-        private let signer: UnsafeMutableRawPointer
-        private let adminSigner: UnsafeMutableRawPointer?
-        private let lock = NSLock()
-        private var closed = false
-
-        /// This phone's device ID, the six-digit code, the certificate's
-        /// fingerprint and the QR code's text.
-        public let device: String
-        public let code: String
-        public let fingerprint: String
-        public let qr: String
-
-        /// With an invitation: the loopback port of its guest tunnel, which
-        /// the app dials for each attempt (Connection(host: "127.0.0.1")).
-        public let port: UInt16
-
-        /// With invite, a remote invitation's text (docs/protocol.md,
-        /// section 12), the phone joins by it in place of showing a QR code:
-        /// the core starts the invitation's guest tunnel, the app dials
-        /// `port` and runs `attempt` there, and the hub's admin admits the
-        /// phone by the fingerprint it shows.
-        public init(name: String, os: String = "ios", publicKey: Data, seal: Data?, addrs: [String], sign: @escaping (Data) throws -> Data,
-                    adminPublic: Data? = nil, signAdmin: ((Data) throws -> Data)? = nil, code: String = "", invite: String? = nil) throws {
-            precondition((adminPublic == nil) == (signAdmin == nil), "the admin key needs both its public key and its signer")
-            struct Request: Encodable {
-                var name: String, os: String, `public`: Data, admin_public: Data?, seal: Data?, addrs: [String], code: String, invite: String?
-            }
-            struct Answer: Decodable { var device: String?, code: String?, fingerprint: String?, qr: String?, port: UInt16? }
-            let request = try JSONEncoder().encode(Request(name: name, os: os, public: try point(publicKey),
-                                                           admin_public: try adminPublic.map(point), seal: seal, addrs: addrs, code: code,
-                                                           invite: invite))
-            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
-            let a = signAdmin.map { Unmanaged.passRetained(Signer($0)).toOpaque() }
-            var answer: UnsafeMutablePointer<UInt8>?
-            var count = 0
-            let h: OpaquePointer? = request.withUnsafeBytes { r in
-                let p = r.bindMemory(to: UInt8.self).baseAddress
-                if let a { return cbb_join_new_admin(p, r.count, corePairingSign, s, corePairingSign, a, &answer, &count) }
-                return cbb_join_new(p, r.count, corePairingSign, s, &answer, &count)
-            }
-            let o: Answer
-            do {
-                guard let h else {
-                    _ = try ok("join", take(answer, count), as: Answer.self)
-                    throw Core.Mismatch(reason: "the core made no joiner")
-                }
-                handle = h
-                o = try ok("join", take(answer, count), as: Answer.self)
-            } catch {
-                if let h { cbb_join_free(h) }
-                Unmanaged<Signer>.fromOpaque(s).release()
-                if let a { Unmanaged<Signer>.fromOpaque(a).release() }
-                throw error
-            }
-            (signer, adminSigner) = (s, a)
-            (device, self.code, fingerprint, qr) = (o.device ?? "", o.code ?? "", o.fingerprint ?? "", o.qr ?? "")
-            port = o.port ?? 0
-        }
-
-        /// Whether the invitation's hub has answered through the guest
-        /// tunnel: an attempt that failed before it did says the hub is off
-        /// or cannot be reached.
-        public var answered: Bool {
-            lock.withLock { closed ? false : cbb_join_answered(handle) == 1 }
-        }
-
-        deinit { close() }
-
-        /// Runs the exchange on a connection the app accepted. Returns the
-        /// group when an admin admitted this phone, after save stored it
-        /// (true when it did, which the core tells the admin); a failure
-        /// throws Failure, with wrongCode for a wrong code, and a dropped
-        /// connection Closed or the stream's error.
-        public func attempt(_ stream: CorePairingStream, save: (Group) -> Bool) async throws -> Group {
-            guard !lock.withLock({ closed }) else { throw Failure("the joiner is closed") }
-            // With an invitation, the phone speaks first: the TLS client hello.
-            let started = try ok("join", call { cbb_join_accept(handle, &$0) }, as: Step.self)
-            var joined: Group?
-            var failed: Failure?
-            try await exchange(stream, first: started.send ?? Data()) { data in
-                let step = try data.withUnsafeBytes { r in
-                    try ok("join", call { cbb_join_feed(handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, 0, &$0) }, as: Step.self)
-                }
-                let send = step.send ?? Data()
-                switch step.state {
-                case "joined":
-                    guard let g = step.joined else { throw Core.Mismatch(reason: "the join has no group") }
-                    let saved = save(g)
-                    let last = try ok("join", call { cbb_join_finish(handle, saved ? 1 : 0, &$0) }, as: Step.self)
-                    joined = saved ? g : nil
-                    return (send + (last.send ?? Data()), true)
-                case "failed":
-                    // The refusal goes out first, so the admin hears why.
-                    failed = step.failure
-                    return (send, true)
-                default:
-                    return (send, false)
-                }
-            }
-            if let failed { throw failed }
-            guard let joined else { throw Failure("the group could not be saved") }
-            return joined
-        }
-
-        public func close() {
-            let first: Bool = lock.withLock {
-                defer { closed = true }
-                return !closed
-            }
-            guard first else { return }
-            cbb_join_free(handle)
-            Unmanaged<Signer>.fromOpaque(signer).release()
-            if let adminSigner { Unmanaged<Signer>.fromOpaque(adminSigner).release() }
-        }
-    }
-
-    /// A device the core admitted: its ID, name, system, role ("member" or
-    /// "phone"), whether it became an admin, and whether it said it stored
-    /// its identity.
-    public struct Admitted: Equatable, Sendable {
-        public var device: String
-        public var name: String
-        public var os: String
-        public var role: String
-        public var admin: Bool
-        public var confirmed: Bool
-    }
-
-    /// Admitting a device by its QR code as an admin (docs/protocol.md,
-    /// section 6, "The joiner listens"), through member, the phone's running
-    /// member, whose records the device's record joins. publicKey is the key
-    /// sign holds: the admin key with adminCA, or the root's key without;
-    /// makeAdmin, for the root only, makes a phone that offers an admin key
-    /// an admin. `addrs` are the QR code's addresses, which the app dials
-    /// and hands to `admit` one at a time.
-    public final class Admitting: @unchecked Sendable {
-        private let handle: OpaquePointer
-        private let signer: UnsafeMutableRawPointer
-        /// The member stays running until the admission is freed.
-        private let member: CoreMember
-        private let lock = NSLock()
-        private var closed = false
-
-        /// The addresses of the QR code, host:port, in its order.
-        public let addrs: [String]
-
-        public init(member: CoreMember, qr: String, publicKey: Data, adminCA: Data?, makeAdmin: Bool, sign: @escaping (Data) throws -> Data) throws {
-            struct Request: Encodable { var qr: String, `public`: Data, admin_ca: Data?, make_admin: Bool }
-            struct Answer: Decodable { var addrs: [String]? }
-            let request = try JSONEncoder().encode(Request(qr: qr, public: try point(publicKey), admin_ca: adminCA, make_admin: makeAdmin))
-            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
-            var answer: UnsafeMutablePointer<UInt8>?
-            var count = 0
-            let h: OpaquePointer? = request.withUnsafeBytes { r in
-                cbb_admit_new(member.handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
-            }
-            let o: Answer
-            do {
-                guard let h else {
-                    _ = try ok("admit", take(answer, count), as: Answer.self)
-                    throw Core.Mismatch(reason: "the core made no admission")
-                }
-                handle = h
-                o = try ok("admit", take(answer, count), as: Answer.self)
-            } catch {
-                if let h { cbb_admit_free(h) }
-                Unmanaged<Signer>.fromOpaque(s).release()
-                throw error
-            }
-            (signer, self.member, addrs) = (s, member, o.addrs ?? [])
-        }
-
-        deinit { close() }
-
-        /// Runs the exchange on a connection the app dialed to one of
-        /// addrs. Returns the admitted device; a refusal throws Failure,
-        /// with wrongCode for a wrong code, and a dropped connection Closed
-        /// or the stream's error. Once the device is admitted its record is
-        /// in the group, whatever the rest of the exchange does.
-        public func admit(_ stream: CorePairingStream) async throws -> Admitted {
-            guard !lock.withLock({ closed }) else { throw Failure("the admission is closed") }
-            var device: Step.Device?
-            var confirmed = false
-            var failed: Failure?
-            func step(_ o: Step) -> (send: Data, done: Bool) {
-                let send = o.send ?? Data()
-                switch o.state {
-                case "admitted":
-                    device = o.device
-                    return (send, false)
-                case "done":
-                    confirmed = o.confirmed ?? false
-                    return (send, true)
-                case "failed":
-                    // The device is in the group once admitted; only its answer is missing.
-                    if device == nil { failed = o.failure }
-                    return (send, true)
-                default:
-                    return (send, false)
-                }
-            }
-            let (hello, ended) = step(try ok("admit", call { cbb_admit_dial(handle, &$0) }, as: Step.self))
-            if !ended {
-                try await exchange(stream, first: hello) { data in
-                    step(try data.withUnsafeBytes { r in
-                        try ok("admit", call { cbb_admit_feed(handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, 0, &$0) }, as: Step.self)
-                    })
-                }
-            }
-            if let failed { throw failed }
-            guard let d = device else { throw Failure("the device was not admitted") }
-            return Admitted(device: d.device ?? "", name: d.name ?? "", os: d.os ?? "", role: d.role ?? "member", admin: d.admin ?? false,
-                            confirmed: confirmed)
-        }
-
-        public func close() {
-            let first: Bool = lock.withLock {
-                defer { closed = true }
-                return !closed
-            }
-            guard first else { return }
-            cbb_admit_free(handle)
-            Unmanaged<Signer>.fromOpaque(signer).release()
-        }
+        return try ok("new group", take(answer, count), as: Made.self)
     }
 
     /// A remote invitation an admin phone makes (docs/protocol.md, section
     /// 12) through member: its guest tunnel opens on this phone when it is
     /// the group's hub, else through a connected hub of the group (hub
-    /// names one, empty for any). publicKey is the key sign holds, as for
-    /// Admitting; sign is called when a device the user confirmed is
+    /// names one, empty for any). publicKey is the key sign holds (the admin
+    /// key or the root's key); sign is called when a device the user confirmed is
     /// admitted. expires is in seconds: an hour when 0, a day at most. It
     /// waits for the hub, so the app makes it off its main thread.
     public final class Inviting: @unchecked Sendable {
@@ -405,11 +107,14 @@ public enum CorePairing {
             public var failure: Failure?
         }
 
-        public init(member: CoreMember, publicKey: Data, adminCA: Data?, expires: Int, hub: String = "",
+        /// kind is the device invited on a group of 0.6: "computer" (or
+        /// empty) or "phone".
+        public init(member: CoreMember, publicKey: Data, expires: Int, hub: String = "", kind: String = "",
                     sign: @escaping (Data) throws -> Data) throws {
-            struct Args: Encodable { var `public`: Data, admin_ca: Data?, expires: Int, hub: String }
+            struct Args: Encodable { var `public`: Data, expires: Int, hub: String, kind: String }
             struct Answer: Decodable { var invite: String?, expires: Int? }
-            let request = try JSONEncoder().encode(Args(public: try point(publicKey), admin_ca: adminCA, expires: expires, hub: hub))
+            let request = try JSONEncoder().encode(Args(public: try point(publicKey), expires: expires, hub: hub,
+                                                        kind: kind))
             let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
             var answer: UnsafeMutablePointer<UInt8>?
             var count = 0
@@ -482,6 +187,236 @@ public enum CorePairing {
         }
     }
 
+    /// A home window of a phone of 0.6 (docs/protocol.md, "Pairing in 0.6"):
+    /// the member port listens, the app shows the QR code and the six
+    /// digits, the new device dials and proves the digits; nobody is asked.
+    /// publicKey is the admitting key sign holds (the admin key, or the
+    /// root's); addrs the phone's home addresses without a port; expires in
+    /// seconds (five minutes when 0, an hour at most). The app announces the
+    /// window with Bonjour (p=1, f=fingerprint, i=id), never the digits.
+    public final class Window: @unchecked Sendable {
+        private let handle: OpaquePointer
+        private let signer: UnsafeMutableRawPointer
+        private let member: CoreMember
+        private let lock = NSCondition()
+        private var closed = false
+        private var calls = 0
+
+        /// The QR code's text, cbb://pair?addr=…&fp=…&i=…&c=….
+        public let qr: String
+        /// The six digits to show, for a device that types them.
+        public let digits: String
+        /// The window's ID in hex, as the QR code's i and the mDNS i.
+        public let id: String
+        /// The hash of the phone's member key in hex, as the QR code's fp
+        /// and the mDNS f.
+        public let fingerprint: String
+        public let expires: Int
+
+        /// open, joining (a device pairs), done (name joined; the window is
+        /// closed), failed (that attempt; the window stays open) or closed
+        /// (its time is up, or three wrong codes: failure).
+        public struct State: Sendable {
+            public var version: UInt64
+            public var state: String
+            public var name: String
+            public var device: String
+            public var failure: Failure?
+        }
+
+        public init(member: CoreMember, publicKey: Data, addrs: [String], expires: Int = 0,
+                    sign: @escaping (Data) throws -> Data) throws {
+            struct Args: Encodable { var `public`: Data, addrs: [String], expires: Int, mdns: Bool }
+            struct Answer: Decodable { var qr: String?, digits: String?, id: String?, fingerprint: String?, expires: Int? }
+            let request = try JSONEncoder().encode(Args(public: try point(publicKey), addrs: addrs, expires: expires, mdns: false))
+            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
+            var answer: UnsafeMutablePointer<UInt8>?
+            var count = 0
+            let h: OpaquePointer? = request.withUnsafeBytes { r in
+                cbb_window_new(member.handle, r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
+            }
+            let o: Answer
+            do {
+                guard let h else {
+                    _ = try ok("window", take(answer, count), as: Answer.self)
+                    throw Core.Mismatch(reason: "the core opened no window")
+                }
+                handle = h
+                o = try ok("window", take(answer, count), as: Answer.self)
+            } catch {
+                if let h { cbb_window_free(h) }
+                Unmanaged<Signer>.fromOpaque(s).release()
+                throw error
+            }
+            (signer, self.member) = (s, member)
+            (qr, digits, id) = (o.qr ?? "", o.digits ?? "", o.id ?? "")
+            (fingerprint, self.expires) = (o.fingerprint ?? "", o.expires ?? 0)
+        }
+
+        deinit { close() }
+
+        /// Waits up to timeout for a state past version; it blocks, so the
+        /// app calls it off its main thread.
+        public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
+            struct Answer: Decodable {
+                var version: UInt64?, state: String?, name: String?, device: String?, error: Refused?
+            }
+            try enter()
+            defer { leave() }
+            let a = try ok("window", call { cbb_window_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
+            return State(version: a.version ?? version, state: a.state ?? "open", name: a.name ?? "", device: a.device ?? "",
+                         failure: a.error.map { Failure($0.message, details: $0.details) })
+        }
+
+        private func enter() throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { throw Failure("the window is closed") }
+            calls += 1
+        }
+
+        private func leave() {
+            lock.lock()
+            calls -= 1
+            lock.broadcast()
+            lock.unlock()
+        }
+
+        /// Closes the window.
+        public func close() {
+            lock.lock()
+            let first = !closed
+            closed = true
+            while calls > 0 { lock.wait() }
+            lock.unlock()
+            guard first else { return }
+            cbb_window_free(handle)
+            Unmanaged<Signer>.fromOpaque(signer).release()
+        }
+    }
+
+    /// A new phone that joins a group of 0.6 by a home window's QR code, or
+    /// by the six digits the person typed (qr empty: the one window the
+    /// core finds by mDNS; the iPhone app builds the code from its own
+    /// Bonjour browse instead, `Discovery.windowLink`): it dials, proves the
+    /// digits, and the group is kept in dir, where the app then starts its
+    /// member. publicKey is the member key sign holds. With invite, a remote
+    /// invitation's text, it joins from afar through the invitation's guest
+    /// tunnel instead, and `fingerprint` is what the phone shows for the
+    /// inviting admin to compare. With admin, the phone offers its admin
+    /// key (its public key and its signer): the root keeps it and makes the
+    /// phone an admin with it later.
+    public final class Joiner: @unchecked Sendable {
+        private let handle: OpaquePointer
+        private let signer: UnsafeMutableRawPointer
+        private let adminSigner: UnsafeMutableRawPointer?
+        private let lock = NSCondition()
+        private var closed = false
+        private var calls = 0
+        /// By an invitation: the fingerprint of the phone's key.
+        public let fingerprint: String
+
+        /// dialing, done (group, device, and name, the member that let the
+        /// phone in) or failed; by an invitation, answered once the hub
+        /// answered through the guest tunnel.
+        public struct State: Sendable {
+            public var version: UInt64
+            public var state: String
+            public var group: String
+            public var device: String
+            public var name: String
+            public var failure: Failure?
+            public var answered: Bool = false
+        }
+
+        public init(dir: URL, qr: String, digits: String = "", invite: String = "", name: String, os: String, publicKey: Data,
+                    admin: (publicKey: Data, sign: (Data) throws -> Data)? = nil,
+                    sign: @escaping (Data) throws -> Data) throws {
+            struct Args: Encodable {
+                var dir: String, qr: String, digits: String, invite: String, name: String, os: String, `public`: Data
+                var admin_public: Data?
+            }
+            let request = try JSONEncoder().encode(Args(dir: dir.path, qr: qr, digits: digits, invite: invite, name: name, os: os,
+                                                        public: try point(publicKey),
+                                                        admin_public: try admin.map { try point($0.publicKey) }))
+            let s = Unmanaged.passRetained(Signer(sign)).toOpaque()
+            let a = admin.map { Unmanaged.passRetained(Signer($0.sign)).toOpaque() }
+            var answer: UnsafeMutablePointer<UInt8>?
+            var count = 0
+            let h: OpaquePointer? = request.withUnsafeBytes { r in
+                if let a {
+                    return cbb_joiner_new_admin(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s,
+                                                corePairingSign, a, &answer, &count)
+                }
+                return cbb_joiner_new(r.bindMemory(to: UInt8.self).baseAddress, r.count, corePairingSign, s, &answer, &count)
+            }
+            struct Answer: Decodable { var state: String?, fingerprint: String? }
+            do {
+                guard let h else {
+                    _ = try ok("join", take(answer, count), as: Answer.self)
+                    throw Core.Mismatch(reason: "the core started no joining")
+                }
+                handle = h
+                fingerprint = try ok("join", take(answer, count), as: Answer.self).fingerprint ?? ""
+            } catch {
+                if let h { cbb_joiner_free(h) }
+                Unmanaged<Signer>.fromOpaque(s).release()
+                if let a { Unmanaged<Signer>.fromOpaque(a).release() }
+                throw error
+            }
+            (signer, adminSigner) = (s, a)
+        }
+
+        deinit { close() }
+
+        /// Waits up to timeout for a state past version; it blocks, so the
+        /// app calls it off its main thread.
+        public func next(after version: UInt64, timeout: Duration = .seconds(1)) throws -> State {
+            struct Answer: Decodable {
+                var version: UInt64?, state: String?, group: String?, device: String?, name: String?, error: Refused?
+                var answered: Bool?
+            }
+            try enter()
+            defer { leave() }
+            let a = try ok("join", call { cbb_joiner_next(handle, version, millis(timeout), &$0) }, as: Answer.self)
+            return State(version: a.version ?? version, state: a.state ?? "dialing", group: a.group ?? "",
+                         device: a.device ?? "", name: a.name ?? "",
+                         failure: a.error.map { Failure($0.message, details: $0.details) }, answered: a.answered ?? false)
+        }
+
+        private func enter() throws {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { throw Failure("joining ended") }
+            calls += 1
+        }
+
+        private func leave() {
+            lock.lock()
+            calls -= 1
+            lock.broadcast()
+            lock.unlock()
+        }
+
+        /// Ends joining.
+        public func close() {
+            lock.lock()
+            let first = !closed
+            closed = true
+            while calls > 0 { lock.wait() }
+            lock.unlock()
+            guard first else { return }
+            cbb_joiner_free(handle)
+            Unmanaged<Signer>.fromOpaque(signer).release()
+            if let adminSigner { Unmanaged<Signer>.fromOpaque(adminSigner).release() }
+        }
+    }
+
+    /// A duration in whole milliseconds, for the core's waits.
+    static func millis(_ d: Duration) -> UInt64 {
+        UInt64(max(0, d.components.seconds)) * 1000 + UInt64(max(0, d.components.attoseconds) / 1_000_000_000_000_000)
+    }
+
     // MARK: The core's answers
 
     /// The uncompressed point of a P-256 public key given as a
@@ -546,139 +481,3 @@ private func corePairingSign(_ ctx: UnsafeMutableRawPointer?, _ digest: UnsafePo
     sigLen.pointee = s.count
     return 0
 }
-
-#if canImport(Network)
-import Network
-
-extension CorePairing {
-    /// A plain TCP connection for a pairing, whose TLS the core runs: one
-    /// the phone dials to a device's address, or one a Listener accepted.
-    public final class Connection: CorePairingStream, @unchecked Sendable {
-        let connection: NWConnection
-        private let queue = DispatchQueue(label: "cbb.pairing")
-
-        /// Dials host:port; start connects, failing after timeout seconds.
-        public init(host: String, port: UInt16, timeout: Int = 5) {
-            let tcp = NWProtocolTCP.Options()
-            tcp.connectionTimeout = timeout
-            connection = NWConnection(to: .hostPort(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!),
-                                      using: NWParameters(tls: nil, tcp: tcp))
-        }
-
-        init(accepted: NWConnection) { connection = accepted }
-
-        /// Connects, or throws why it could not.
-        public func start() async throws {
-            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                let once = TLSTransport.Once()
-                connection.stateUpdateHandler = { [weak self] state in
-                    switch state {
-                    case .ready:
-                        if once.claim() { c.resume() }
-                    case .failed(let e), .waiting(let e):
-                        guard once.claim() else { return }
-                        self?.connection.cancel()
-                        c.resume(throwing: TLSTransport.failure(e))
-                    case .cancelled:
-                        if once.claim() { c.resume(throwing: TLSTransport.Failure.closed) }
-                    default:
-                        break
-                    }
-                }
-                connection.start(queue: queue)
-            }
-        }
-
-        public func send(_ data: Data) async throws {
-            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                connection.send(content: data, completion: .contentProcessed { e in
-                    if let e { c.resume(throwing: e) } else { c.resume() }
-                })
-            }
-        }
-
-        public func receive() async throws -> Data {
-            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Data, Error>) in
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { data, _, _, e in
-                    if let data, !data.isEmpty {
-                        c.resume(returning: data)
-                    } else if let e {
-                        c.resume(throwing: e)
-                    } else {
-                        // Closed: complete with nothing more to read.
-                        c.resume(returning: Data())
-                    }
-                }
-            }
-        }
-
-        public func close() { connection.cancel() }
-    }
-
-    /// Listens for the plain TCP connections of a pairing, as a phone does
-    /// while it shows its join QR code; the core runs their TLS.
-    public final class Listener: @unchecked Sendable {
-        let listener: NWListener
-        private let queue = DispatchQueue(label: "cbb.pairing.listener")
-        private let connections: AsyncStream<Connection>
-        private let yield: AsyncStream<Connection>.Continuation
-
-        /// Listens on a port the system picks; only on the loopback address
-        /// when loopback is true.
-        public init(loopback: Bool = false) throws {
-            let params = NWParameters.tcp
-            params.includePeerToPeer = false
-            if loopback { params.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any) }
-            listener = try NWListener(using: params)
-            (connections, yield) = AsyncStream.makeStream(of: Connection.self)
-        }
-
-        /// Starts listening and returns the port once it is ready.
-        public func start() async throws -> UInt16 {
-            let yield = yield
-            let queue = queue
-            listener.newConnectionHandler = { c in
-                c.start(queue: queue)
-                yield.yield(Connection(accepted: c))
-            }
-            return try await withCheckedThrowingContinuation { (c: CheckedContinuation<UInt16, Error>) in
-                let once = TLSTransport.Once()
-                listener.stateUpdateHandler = { [weak self] state in
-                    switch state {
-                    case .ready:
-                        guard once.claim() else { return }
-                        c.resume(returning: self?.listener.port?.rawValue ?? 0)
-                    case .failed(let e), .waiting(let e):
-                        guard once.claim() else { return }
-                        self?.listener.cancel()
-                        c.resume(throwing: TLSTransport.Failure.notReady("\(e)"))
-                    case .cancelled:
-                        yield.finish()
-                        guard once.claim() else { return }
-                        c.resume(throwing: TLSTransport.Failure.closed)
-                    default:
-                        break
-                    }
-                }
-                listener.start(queue: queue)
-            }
-        }
-
-        /// The next connection a device made; nil once the listener stopped.
-        public func next() async -> Connection? {
-            var it = connections.makeAsyncIterator()
-            return await it.next()
-        }
-
-        /// Publishes the listener by Bonjour under name with that TXT record,
-        /// in the type of the members (docs/protocol.md, section 3), as a
-        /// phone does while it waits to join, once it knows its device ID.
-        public func advertise(name: String, txt: [String: String]) {
-            listener.service = NWListener.Service(name: name, type: Discovery.serviceType, domain: nil,
-                                                  txtRecord: NWTXTRecord(txt))
-        }
-
-        public func stop() { listener.cancel() }
-    }
-}
-#endif

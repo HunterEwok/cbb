@@ -6,20 +6,17 @@ package forward
 import (
 	"bytes"
 	"context"
-	"crypto"
 	"crypto/ecdh"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -29,38 +26,11 @@ import (
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/chacha20"
 
-	"github.com/HunterEwok/cbb/internal/frame"
 	"github.com/HunterEwok/cbb/internal/group"
-	"github.com/HunterEwok/cbb/internal/group/grouptest"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 	"github.com/HunterEwok/cbb/internal/vless/vlesstest"
 )
-
-// member returns a member certificate of a new group with its chain, as a
-// hub presents it, the group's tag, and its root.
-func member(t *testing.T) (tls.Certificate, string, *group.CA) {
-	t.Helper()
-	now := time.Now()
-	ca, err := group.NewRootCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	leaf, err := ca.IssueMember(group.NewDeviceID(), &key.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return tls.Certificate{Certificate: [][]byte{leaf.Raw, ca.Cert.Raw}, PrivateKey: key, Leaf: leaf}, group.Tag(ca.Cert), ca
-}
-
-// rootAuthority is a hub's Authority on the group's root.
-func rootAuthority(ca *group.CA) func() (crypto.Signer, *x509.Certificate, []group.Record) {
-	return func() (crypto.Signer, *x509.Certificate, []group.Record) { return ca.Key, nil, nil }
-}
 
 func startForwarder(t *testing.T, limits Limits) (*Forwarder, string) {
 	return startForwarderWith(t, Config{Limits: limits})
@@ -117,7 +87,7 @@ func startHub(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer, obf
 func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer, hc HubConfig) *hubSide {
 	obf := hc.Obfuscation
 	t.Helper()
-	cert, _, ca := member(t)
+	_, _, g := member(t)
 	key, err := tunnel.NewPrivateKey()
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +111,7 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 			link.Endpoint = hc.Link.Endpoint
 		}
 		Register(ctx, HubConfig{Link: link, Key: key, Obfuscation: obf, VLESSID: hc.VLESSID, VLESS: hc.VLESS,
-			Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: h.Send, Report: func(r Report) {
+			Credentials: g.credentials(t), HubCert: g.hubCert(), Send: h.Send, Report: func(r Report) {
 				select {
 				case hs.reports <- r:
 				default:
@@ -508,80 +478,10 @@ func TestHello(t *testing.T) {
 	}
 }
 
-// hubAuth is what a hand-made registration shows: the key that signs it,
-// the admin CA of that key (nil for a root), and records, or credentials.
-type hubAuth struct {
-	key     crypto.Signer
-	admin   *x509.Certificate
-	records []group.Record
-	creds   []group.Credential
-}
-
-// sign fills c's admin fields for the session cs.
-func (a hubAuth) sign(t *testing.T, c *claim, cs tls.ConnectionState) {
-	t.Helper()
-	c.Records, c.Credentials = a.records, a.creds
-	if a.key == nil {
-		return
-	}
-	sig, err := SignAdmin(a.key, cs, c.Key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.AdminSig = sig
-	if a.admin != nil {
-		c.Admin = a.admin.Raw
-	}
-}
-
-// rawRegister registers by hand, claiming key with the proof made by
-// holder: a hub that holds key passes holder == key.
-func rawRegister(t *testing.T, f *Forwarder, pin string, cert tls.Certificate, claimKey []byte, holder *ecdh.PrivateKey, auth hubAuth) answer {
-	t.Helper()
-	tc, a := rawOpen(t, f, pin, cert, claimKey, holder, auth)
-	if tc != nil {
-		tc.Close()
-	}
-	return a
-}
-
-// rawOpen is rawRegister that keeps the registration open.
-func rawOpen(t *testing.T, f *Forwarder, pin string, cert tls.Certificate, claimKey []byte, holder *ecdh.PrivateKey, auth hubAuth) (*tls.Conn, answer) {
-	t.Helper()
-	tc, err := tls.Dial("tcp", f.Addr().String(), &tls.Config{
-		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}, NextProtos: []string{Protocol},
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		return nil, answer{Error: err.Error()}
-	}
-	if Pin(tc.ConnectionState().PeerCertificates[0]) != pin {
-		t.Fatal("the forwarder's pin changed")
-	}
-	dec := frame.NewDecoder(tc, 1<<20)
-	var ch challenge
-	if err := dec.Decode(&ch); err != nil {
-		tc.Close()
-		return nil, answer{Error: err.Error()}
-	}
-	e, _ := ecdh.X25519().NewPublicKey(ch.E)
-	shared, _ := holder.ECDH(e)
-	p, _ := proof(shared, tc.ConnectionState())
-	c := claim{Key: claimKey, Proof: p}
-	auth.sign(t, &c, tc.ConnectionState())
-	frame.NewEncoder(tc, 1<<20).Encode(c)
-	var a answer
-	if err := dec.Decode(&a); err != nil {
-		tc.Close()
-		return nil, answer{Error: err.Error()}
-	}
-	return tc, a
-}
-
 func TestRegistration(t *testing.T) {
 	f, pin := startForwarder(t, Limits{})
-	cert, tag, root := member(t)
-	auth := hubAuth{key: root.Key}
+	cert, tag, g := member(t)
+	auth := g.auth(t)
 	mine, _ := ecdh.X25519().GenerateKey(rand.Reader)
 	theirs, _ := ecdh.X25519().GenerateKey(rand.Reader)
 
@@ -589,7 +489,7 @@ func TestRegistration(t *testing.T) {
 		t.Errorf("a hub that claims another's WireGuard key: %+v", a)
 	}
 	a := rawRegister(t, f, pin, cert, mine.PublicKey().Bytes(), mine, auth)
-	if a.Error != "" || a.ID == 0 {
+	if a.Error != "" || a.ID == 0 || len(a.Mask) != 32 {
 		t.Fatalf("a hub with its own key: %+v", a)
 	}
 	for i := 0; ; i++ {
@@ -606,57 +506,37 @@ func TestRegistration(t *testing.T) {
 	}
 
 	// Another group cannot register that key.
-	other, _, otherRoot := member(t)
-	done := make(chan answer, 1)
-	tc, err := tls.Dial("tcp", f.Addr().String(), &tls.Config{
-		MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}, NextProtos: []string{Protocol}, InsecureSkipVerify: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tc.Close()
-	go func() {
-		dec := frame.NewDecoder(tc, 1<<20)
-		var ch challenge
-		dec.Decode(&ch)
-		e, _ := ecdh.X25519().NewPublicKey(ch.E)
-		shared, _ := mine.ECDH(e)
-		p, _ := proof(shared, tc.ConnectionState())
-		c := claim{Key: mine.PublicKey().Bytes(), Proof: p}
-		auth.sign(t, &c, tc.ConnectionState())
-		frame.NewEncoder(tc, 1<<20).Encode(c)
-		var a answer
-		dec.Decode(&a)
-		done <- a
-	}()
-	if a := <-done; a.Error != "" {
+	other, _, otherGroup := member(t)
+	tc, a := rawOpen(t, f, pin, cert, mine.PublicKey().Bytes(), mine, auth)
+	if a.Error != "" {
 		t.Fatalf("registering: %+v", a)
 	}
-	if a := rawRegister(t, f, pin, other, mine.PublicKey().Bytes(), mine, hubAuth{key: otherRoot.Key}); !strings.Contains(a.Error, "another group") {
+	defer tc.Close()
+	if a := rawRegister(t, f, pin, other, mine.PublicKey().Bytes(), mine, otherGroup.auth(t)); !strings.Contains(a.Error, "another group") {
 		t.Errorf("another group with the same WireGuard key: %+v", a)
 	}
 
-	// A certificate without a group's chain gets no registration.
+	// A certificate that is not of a server key gets no registration.
 	self, _ := NewCert()
 	if a := rawRegister(t, f, pin, self, mine.PublicKey().Bytes(), mine, auth); a.ID != 0 {
-		t.Errorf("a certificate of no group registered: %+v", a)
+		t.Errorf("a certificate of no server key registered: %+v", a)
 	}
-	leafOnly := cert
-	leafOnly.Certificate = cert.Certificate[:1]
-	if a := rawRegister(t, f, pin, leafOnly, mine.PublicKey().Bytes(), mine, auth); a.ID != 0 {
-		t.Errorf("a member certificate without its root registered: %+v", a)
+	withCA := cert
+	withCA.Certificate = [][]byte{cert.Certificate[0], self.Certificate[0]}
+	if a := rawRegister(t, f, pin, withCA, mine.PublicKey().Bytes(), mine, auth); a.ID != 0 {
+		t.Errorf("a server key's certificate with another behind it registered: %+v", a)
 	}
 }
 
 func TestWrongPin(t *testing.T) {
 	f, _ := startForwarder(t, Limits{})
-	cert, _, _ := member(t)
+	_, _, g := member(t)
 	key, _ := tunnel.NewPrivateKey()
 	other, _ := NewCert()
 	reports := make(chan Report, 4)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: Pin(other.Leaf)}, Key: key, Cert: func() tls.Certificate { return cert },
+	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: Pin(other.Leaf)}, Key: key, Credentials: g.credentials(t), HubCert: g.hubCert(),
 		Send: func(netip.AddrPort, []byte) error { return nil }, Report: func(r Report) { reports <- r }})
 	select {
 	case r := <-reports:
@@ -904,13 +784,13 @@ func TestRegistrationIDIsNoGroups(t *testing.T) {
 	}
 	f, pin := startForwarderWith(t, Config{VLESS: &VLESSConfig{Listen: "127.0.0.1:0",
 		XHTTP: &XHTTPConfig{Host: vlesstest.WebName, Port: 443, Path: path}}})
-	cert, _, ca := member(t)
+	_, _, g := member(t)
 	key, _ := tunnel.NewPrivateKey()
 	reports := make(chan Report, 4)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, VLESSID: vless.RegistrationID,
-		Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: func(netip.AddrPort, []byte) error { return nil },
+		Credentials: g.credentials(t), HubCert: g.hubCert(), Send: func(netip.AddrPort, []byte) error { return nil },
 		Report: func(r Report) { reports <- r }})
 	select {
 	case r := <-reports:
@@ -927,14 +807,14 @@ func TestRegistrationIDIsNoGroups(t *testing.T) {
 
 func TestVLESSRefused(t *testing.T) {
 	f, pin := startForwarder(t, Limits{})
-	cert, _, ca := member(t)
+	_, _, g := member(t)
 	key, _ := tunnel.NewPrivateKey()
 	id, _ := tunnel.NewVLESSID()
 	reports := make(chan Report, 4)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go Register(ctx, HubConfig{Link: Link{Endpoint: f.Addr(), Pin: pin}, Key: key, VLESSID: id,
-		Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: func(netip.AddrPort, []byte) error { return nil },
+		Credentials: g.credentials(t), HubCert: g.hubCert(), Send: func(netip.AddrPort, []byte) error { return nil },
 		Report: func(r Report) { reports <- r }})
 	select {
 	case r := <-reports:
@@ -946,209 +826,121 @@ func TestVLESSRefused(t *testing.T) {
 	}
 }
 
-// TestRegistrationNeedsAnAdmin checks that only the group's root or an
-// admin registers it, and that the records one hub sends keep a removed
-// admin out afterwards.
-func TestRegistrationNeedsAnAdmin(t *testing.T) {
+// TestRegistrationNeedsTheHubsCredential checks that a hub registers only
+// with its group's hubs' credential alone, signed by the period key and
+// listing the server key of its certificate: not without it, not with
+// the period credential, which names the group and its root, and not
+// with one that lists another key.
+func TestRegistrationNeedsTheHubsCredential(t *testing.T) {
 	f, pin := startForwarder(t, Limits{})
-	cert, tag, root := member(t)
-	now := time.Now()
-	wg := func() *ecdh.PrivateKey {
-		k, _ := ecdh.X25519().GenerateKey(rand.Reader)
-		return k
+	cert, tag, g := member(t)
+	k, _ := ecdh.X25519().GenerateKey(rand.Reader)
+	other, _ := newServerKey(t)
+	for _, c := range []struct {
+		name  string
+		creds [][]byte
+		why   string
+	}{
+		{"no credential", nil, "forward/register/credentials"},
+		{"the period credential alone", [][]byte{g.periodCredential(t)}, "does not verify"},
+		{"the period credential beside the hubs'", [][]byte{g.periodCredential(t), g.hubs(t, 1)}, "alone"},
+		{"one that lists another hub", [][]byte{g.hubs(t, 1, other)}, "does not list"},
+	} {
+		if a := rawRegister(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{creds: c.creds}); !strings.Contains(a.Error, c.why) {
+			t.Errorf("%s: %+v, want a refusal for %q", c.name, a, c.why)
+		}
+		if f.registered(tag) {
+			t.Fatalf("%s: the group is registered", c.name)
+		}
 	}
-
-	// A plain member signs with its own key, or not at all.
-	memberKey := cert.PrivateKey.(*ecdsa.PrivateKey)
-	k := wg()
-	if a := rawRegister(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{key: memberKey}); !strings.Contains(a.Error, "neither") {
-		t.Errorf("a member that is no admin: %+v", a)
-	}
-	if a := rawRegister(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{}); !strings.Contains(a.Error, "neither") {
-		t.Errorf("a registration without the admin's signature: %+v", a)
-	}
-
-	// An admin computer, with its member certificate from its admin CA.
-	adminKey, _ := group.NewKey()
-	dev := group.NewDeviceID()
-	adminCA, err := root.IssueAdmin(dev, &adminKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	leafKey, _ := group.NewKey()
-	leaf, err := (&group.CA{Cert: adminCA, Key: adminKey}).IssueMember(dev, &leafKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	adminCert := tls.Certificate{Certificate: [][]byte{leaf.Raw, adminCA.Raw, root.Cert.Raw}, PrivateKey: leafKey, Leaf: leaf}
-	ak := wg()
-	tc, a := rawOpen(t, f, pin, adminCert, ak.PublicKey().Bytes(), ak, hubAuth{key: adminKey, admin: adminCA})
+	tc, a := rawOpen(t, f, pin, cert, k.PublicKey().Bytes(), k, g.auth(t))
 	if a.Error != "" || a.ID == 0 {
-		t.Fatalf("an admin: %+v", a)
+		t.Fatalf("the listed hub: %+v", a)
 	}
 	defer tc.Close()
-
-	// An admin CA of another group signs for nothing here.
-	_, _, otherRoot := member(t)
-	otherKey, _ := group.NewKey()
-	otherCA, _ := otherRoot.IssueAdmin(dev, &otherKey.PublicKey, now)
-	if a := rawRegister(t, f, pin, adminCert, ak.PublicKey().Bytes(), ak, hubAuth{key: otherKey, admin: otherCA}); !strings.Contains(a.Error, "neither") {
-		t.Errorf("another group's admin CA: %+v", a)
+	if !f.registered(tag) {
+		t.Fatal("the listed hub is not registered")
 	}
+}
 
-	// The root removes the admin and registers with that record.
-	revoke := grouptest.Sign(t, group.RecordBody{Type: group.RecordRevoke, Group: tag, TimeMS: now.UnixMilli(),
-		Keys: []group.KeyHash{group.KeyHashOf(adminCA), group.KeyHashOf(leaf)}}, root.Key)
-	rk := wg()
-	rc, a := rawOpen(t, f, pin, cert, rk.PublicKey().Bytes(), rk, hubAuth{key: root.Key, records: []group.Record{revoke}})
+// TestRegistrationByListedServerKey checks that every hub a hubs'
+// credential lists registers the group, the last one taking over, and
+// that a newer credential which no longer lists a hub keeps it out.
+func TestRegistrationByListedServerKey(t *testing.T) {
+	f, pin := startForwarder(t, Limits{})
+	_, tag, g := member(t)
+	second, secondCert := newServerKey(t)
+	both := g.hubs(t, 1, g.hub, second)
+	k1, _ := ecdh.X25519().GenerateKey(rand.Reader)
+	k2, _ := ecdh.X25519().GenerateKey(rand.Reader)
+	c1, a := rawOpen(t, f, pin, g.cert, k1.PublicKey().Bytes(), k1, hubAuth{creds: [][]byte{both}})
 	if a.Error != "" {
-		t.Fatalf("the root: %+v", a)
+		t.Fatalf("the first hub: %+v", a)
 	}
-	defer rc.Close()
-	if a := rawRegister(t, f, pin, adminCert, ak.PublicKey().Bytes(), ak, hubAuth{key: adminKey, admin: adminCA}); !strings.Contains(a.Error, "removed") {
-		t.Errorf("the removed admin again: %+v", a)
+	defer c1.Close()
+	c2, a := rawOpen(t, f, pin, secondCert, k2.PublicKey().Bytes(), k2, hubAuth{creds: [][]byte{both}})
+	if a.Error != "" {
+		t.Fatalf("the second hub: %+v", a)
 	}
+	defer c2.Close()
 	f.mu.Lock()
 	r := f.regs[tag]
 	f.mu.Unlock()
-	if r == nil || r.key != [32]byte(rk.PublicKey().Bytes()) {
-		t.Error("the root's registration did not stay")
+	if r == nil || r.key != [32]byte(k2.PublicKey().Bytes()) {
+		t.Fatal("the second hub did not take over")
 	}
-}
-
-// TestRegistrationByMemberKey checks that a phone hub registers with its
-// member key alone when the records make that key the root's or an
-// admin's, and that no other member does.
-func TestRegistrationByMemberKey(t *testing.T) {
-	f, pin := startForwarder(t, Limits{})
-	cert, tag, root := member(t)
-	now := time.Now()
-	dev, err := group.DeviceOf(cert.Leaf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wg := func() *ecdh.PrivateKey {
-		k, _ := ecdh.X25519().GenerateKey(rand.Reader)
-		return k
-	}
-	device := func(d group.DeviceID, leaf *x509.Certificate, by group.DeviceID, admin *group.KeyHash) group.Record {
-		t.Helper()
-		k := group.KeyHashOf(leaf)
-		r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: tag, TimeMS: now.UnixMilli(), Device: string(d), Name: "phone", Role: group.RolePhone, Key: &k, Admin: admin, HoldsRoot: d == dev}, root.Key)
-		return r
-	}
-	own := device(dev, cert.Leaf, dev, nil)
-
-	// Without its own device record the root phone is a plain member.
-	k := wg()
-	if a := rawRegister(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{}); !strings.Contains(a.Error, "neither") {
-		t.Errorf("without records: %+v", a)
-	}
-
-	// Another member, which the root admitted as no admin.
-	otherKey, _ := group.NewKey()
-	otherDev := group.NewDeviceID()
-	otherLeaf, err := root.IssueMember(otherDev, &otherKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	other := tls.Certificate{Certificate: [][]byte{otherLeaf.Raw, root.Cert.Raw}, PrivateKey: otherKey, Leaf: otherLeaf}
-	ok := wg()
-	plain := []group.Record{own, device(otherDev, otherLeaf, dev, nil)}
-	if a := rawRegister(t, f, pin, other, ok.PublicKey().Bytes(), ok, hubAuth{records: plain}); !strings.Contains(a.Error, "neither") {
-		t.Errorf("a member that is no admin: %+v", a)
-	}
-
-	// The root phone, by the device record its root key signed.
-	rc, a := rawOpen(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{records: []group.Record{own}})
-	if a.Error != "" || a.ID == 0 {
-		t.Fatalf("the root phone: %+v", a)
-	}
-	rc.Close()
-
-	// An admin phone, by the record that names its admin CA.
-	adminKey, _ := group.NewKey()
-	adminCA, err := root.IssueAdmin(otherDev, &adminKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ak := group.KeyHashOf(adminCA)
-	// The root signs its records as one chain, so the admin record follows
-	// the plain one.
-	admins := append(slices.Clip(plain), device(otherDev, otherLeaf, dev, &ak))
-	ac, a := rawOpen(t, f, pin, other, ok.PublicKey().Bytes(), ok, hubAuth{records: admins})
-	if a.Error != "" || a.ID == 0 {
-		t.Fatalf("an admin phone: %+v", a)
-	}
-	ac.Close()
-
-	// Once removed, the admin phone no longer registers.
-	revoke := grouptest.Sign(t, group.RecordBody{Type: group.RecordRevoke, Group: tag, TimeMS: now.UnixMilli() + 1,
-		Keys: []group.KeyHash{ak, group.KeyHashOf(otherLeaf)}}, root.Key)
-	if a := rawRegister(t, f, pin, other, ok.PublicKey().Bytes(), ok, hubAuth{records: append(admins, revoke)}); a.Error == "" {
-		t.Errorf("a removed admin phone: %+v", a)
-	}
-}
-
-// TestRegistrationRemembersRemovals checks that the forwarder keeps a
-// group's authority records after its registration ends, in memory only,
-// so that an admin phone the group removed cannot register again with the
-// records from before.
-func TestRegistrationRemembersRemovals(t *testing.T) {
-	dir := t.TempDir()
-	f, pin := startForwarderWith(t, Config{StateFile: filepath.Join(dir, "state.json")})
-	cert, tag, root := member(t)
-	now := time.Now()
-	dev, _ := group.DeviceOf(cert.Leaf)
-	device := func(d group.DeviceID, leaf *x509.Certificate, admin *group.KeyHash) group.Record {
-		t.Helper()
-		k := group.KeyHashOf(leaf)
-		r := grouptest.Sign(t, group.RecordBody{Type: group.RecordDevice, Group: tag, TimeMS: now.UnixMilli(), Device: string(d), Name: "phone", Role: group.RolePhone, Key: &k, Admin: admin, HoldsRoot: d == dev}, root.Key)
-		return r
-	}
-	adminDev := group.NewDeviceID()
-	memberKey, _ := group.NewKey()
-	leaf, err := root.IssueMember(adminDev, &memberKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	phone := tls.Certificate{Certificate: [][]byte{leaf.Raw, root.Cert.Raw}, PrivateKey: memberKey, Leaf: leaf}
-	adminKey, _ := group.NewKey()
-	adminCA, err := root.IssueAdmin(adminDev, &adminKey.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ak := group.KeyHashOf(adminCA)
-	before := []group.Record{device(dev, cert.Leaf, nil), device(adminDev, leaf, &ak)}
-	revoke := grouptest.Sign(t, group.RecordBody{Type: group.RecordRevoke, Group: tag, TimeMS: now.UnixMilli() + 1,
-		Keys: []group.KeyHash{ak, group.KeyHashOf(leaf)}}, root.Key)
-	k, _ := ecdh.X25519().GenerateKey(rand.Reader)
-	pk, _ := ecdh.X25519().GenerateKey(rand.Reader)
-
-	// The root phone registers with the removal, then goes away.
-	rc, a := rawOpen(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{records: append(before, revoke)})
+	// The group drops the second hub from version 2 on.
+	c1b, a := rawOpen(t, f, pin, g.cert, k1.PublicKey().Bytes(), k1, hubAuth{creds: [][]byte{g.hubs(t, 2)}})
 	if a.Error != "" {
-		t.Fatalf("the root phone: %+v", a)
+		t.Fatalf("the first hub with version 2: %+v", a)
+	}
+	defer c1b.Close()
+	if a := rawRegister(t, f, pin, secondCert, k2.PublicKey().Bytes(), k2, hubAuth{creds: [][]byte{both}}); !strings.Contains(a.Error, "older") {
+		t.Errorf("the dropped hub with the older credential: %+v", a)
+	}
+	if a := rawRegister(t, f, pin, secondCert, k2.PublicKey().Bytes(), k2, hubAuth{creds: [][]byte{g.hubs(t, 2)}}); !strings.Contains(a.Error, "does not list") {
+		t.Errorf("the dropped hub with the newer credential: %+v", a)
+	}
+}
+
+// TestRegistrationRemembersVersions checks that the forwarder keeps the
+// newest version of a group's hubs' credential after its registration
+// ends, so that a hub the group dropped cannot register again with the
+// credential from before while the group is away; what it writes names
+// neither the period's tag nor the period key.
+func TestRegistrationRemembersVersions(t *testing.T) {
+	dir := t.TempDir()
+	state := filepath.Join(dir, "state.json")
+	f, pin := startForwarderWith(t, Config{StateFile: state})
+	_, tag, g := member(t)
+	dropped, droppedCert := newServerKey(t)
+	before := g.hubs(t, 1, g.hub, dropped)
+	k, _ := ecdh.X25519().GenerateKey(rand.Reader)
+	dk, _ := ecdh.X25519().GenerateKey(rand.Reader)
+
+	// The group's hub registers with the credential that drops the other
+	// hub, then goes away.
+	rc, a := rawOpen(t, f, pin, g.cert, k.PublicKey().Bytes(), k, hubAuth{creds: [][]byte{g.hubs(t, 2)}})
+	if a.Error != "" {
+		t.Fatalf("the group's hub: %+v", a)
 	}
 	rc.Close()
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
-		f.mu.Lock()
-		gone := f.regs[tag] == nil
-		f.mu.Unlock()
-		if gone {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the registration stayed after its connection closed")
-		}
-	}
-	if a := rawRegister(t, f, pin, phone, pk.PublicKey().Bytes(), pk, hubAuth{records: before}); a.Error == "" {
-		t.Errorf("the removed admin phone while the group is away: %+v", a)
+	waitUntil(t, "the registration to end with its connection", func() bool { return !f.registered(tag) })
+	if a := rawRegister(t, f, pin, droppedCert, dk.PublicKey().Bytes(), dk, hubAuth{creds: [][]byte{before}}); !strings.Contains(a.Error, "older") {
+		t.Errorf("the dropped hub while the group is away: %+v", a)
 	}
 
-	// Nothing of them goes to disk.
-	if es, err := os.ReadDir(dir); err != nil || len(es) != 0 {
-		t.Errorf("the forwarder wrote records: %v, %v", es, err)
+	// What goes to disk names neither the tag nor the period key.
+	f.Close()
+	b, err := os.ReadFile(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk := serverKeyHash(g.period)
+	for _, c := range []string{hex.EncodeToString(g.tag[:]), hex.EncodeToString(pk[:])} {
+		if strings.Contains(string(b), c) {
+			t.Errorf("the state file holds %q: %s", c, b)
+		}
 	}
 }
 
@@ -1193,9 +985,9 @@ func TestRegistrationsPerAddress(t *testing.T) {
 		}
 	}()
 	for i := range 3 {
-		cert, _, root := member(t)
+		cert, _, g := member(t)
 		k, _ := ecdh.X25519().GenerateKey(rand.Reader)
-		tc, a := rawOpen(t, f, pin, cert, k.PublicKey().Bytes(), k, hubAuth{key: root.Key})
+		tc, a := rawOpen(t, f, pin, cert, k.PublicKey().Bytes(), k, g.auth(t))
 		if tc != nil {
 			open = append(open, tc)
 		}
@@ -1205,44 +997,44 @@ func TestRegistrationsPerAddress(t *testing.T) {
 	}
 }
 
-// A member that puts a CA of its own in front of its group's root in the
-// chain is checked under the root its certificate verified to, so the
-// group's records still remove it and the hub's registration stays.
-func TestRegistrationUnderVerifiedRoot(t *testing.T) {
+// A hub that puts a certificate of its own beside its server key's, or a
+// credential another key signed for the period's tag, is checked under the
+// period key the forwarder saw first for that tag, so it does not register
+// and the hub's registration stays.
+func TestRegistrationUnderFirstPeriodKey(t *testing.T) {
 	f, pin := startForwarder(t, Limits{})
-	hubCert, tag, root := member(t)
-	now := time.Now()
-	mk, err := group.NewKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mleaf, err := root.IssueMember(group.NewDeviceID(), &mk.PublicKey, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	revoke := grouptest.Sign(t, group.RecordBody{Type: group.RecordRevoke, Group: tag, TimeMS: now.UnixMilli(),
-		Keys: []group.KeyHash{group.KeyHashOf(mleaf)}}, root.Key)
+	hubCert, tag, g := member(t)
 	hk, _ := ecdh.X25519().GenerateKey(rand.Reader)
-	hc, a := rawOpen(t, f, pin, hubCert, hk.PublicKey().Bytes(), hk, hubAuth{key: root.Key, records: []group.Record{revoke}})
+	hc, a := rawOpen(t, f, pin, hubCert, hk.PublicKey().Bytes(), hk, g.auth(t))
 	if a.Error != "" {
 		t.Fatal(a.Error)
 	}
 	defer hc.Close()
 
-	own, err := group.NewRootCA(now)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rogue, rogueCert := newServerKey(t)
+	rogueKey, _ := group.NewKey()
+	own, _ := NewCert()
 	ak, _ := ecdh.X25519().GenerateKey(rand.Reader)
-	for name, chain := range map[string][][]byte{
-		"own CA first":  {mleaf.Raw, own.Cert.Raw, root.Cert.Raw},
-		"own CA last":   {mleaf.Raw, root.Cert.Raw, own.Cert.Raw},
-		"own CA only":   {mleaf.Raw, own.Cert.Raw},
-		"group CA only": {mleaf.Raw, root.Cert.Raw},
+	forged := g.signHubs(t, rogueKey, 9, time.Now().Add(time.Hour), rogue)
+	for name, c := range map[string]struct {
+		chain [][]byte
+		creds [][]byte
+	}{
+		"own certificate first":       {[][]byte{own.Certificate[0], rogueCert.Certificate[0]}, [][]byte{forged}},
+		"own certificate last":        {[][]byte{rogueCert.Certificate[0], own.Certificate[0]}, [][]byte{forged}},
+		"own certificate only":        {[][]byte{own.Certificate[0]}, [][]byte{forged}},
+		"another key for the tag":     {[][]byte{rogueCert.Certificate[0]}, [][]byte{forged}},
+		"the group's hub's, unlisted": {[][]byte{hubCert.Certificate[0]}, [][]byte{forged}},
 	} {
-		cert := tls.Certificate{Certificate: chain, PrivateKey: mk, Leaf: mleaf}
-		if a := rawRegister(t, f, pin, cert, ak.PublicKey().Bytes(), ak, hubAuth{key: own.Key}); a.Error == "" {
-			t.Errorf("%s: the removed member registered", name)
+		cert := tls.Certificate{Certificate: c.chain, PrivateKey: rogue}
+		if name == "own certificate only" {
+			cert.PrivateKey = own.PrivateKey
+		}
+		if name == "the group's hub's, unlisted" {
+			cert.PrivateKey = g.hub
+		}
+		if a := rawRegister(t, f, pin, cert, ak.PublicKey().Bytes(), ak, hubAuth{creds: c.creds}); a.Error == "" {
+			t.Errorf("%s: the rogue hub registered", name)
 		}
 	}
 	f.mu.Lock()
@@ -1333,7 +1125,7 @@ func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { h.Close() })
-	cert, _, ca := member(t)
+	_, _, g := member(t)
 	// The first registration's hellos are lost on the way.
 	var lose atomic.Bool
 	lose.Store(true)
@@ -1349,8 +1141,8 @@ func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
 	go func() {
 		defer close(done)
 		Register(ctx, HubConfig{Link: Link{Endpoint: dead, Pin: pin}, Key: key, VLESSID: id,
-			VLESS: func() []tunnel.VLESS { return []tunnel.VLESS{given} },
-			Cert:  func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: send,
+			VLESS:       func() []tunnel.VLESS { return []tunnel.VLESS{given} },
+			Credentials: g.credentials(t), HubCert: g.hubCert(), Send: send,
 			Report: func(r Report) {
 				select {
 				case reports <- r:

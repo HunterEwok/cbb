@@ -9,11 +9,19 @@ import Foundation
 public enum Media {
     /// The largest copy, all its parts together, that the group carries.
     public static let maxMedia: Int64 = 1 << 30
+    /// A blob's segment before sealing, and after (the core's
+    /// `copies::blob::SEGMENT` and `SEALED_SEGMENT`).
+    public static let segment = 64 << 10
+    public static let sealedSegment: Int64 = Int64(segment) + 16
+
+    /// The size of the sealed blob of n bytes of parts, as a fetch's limit
+    /// counts it (the core's `copies::blob::sealed_size`).
+    public static func blobSize(_ n: Int64) -> Int64 { (n + Int64(segment) - 1) / Int64(segment) * sealedSegment }
     public static let maxParts = 10_000
     public static let maxTypes = 8
-    public static let maxPaths = 512 << 10
-    public static let maxPath = 4096
-    public static let maxName = 255
+    public static let maxPaths = 2 << 20
+    public static let maxPath = 16 << 10
+    public static let maxName = 765
     /// The largest plain-text alternative of a media event, in bytes of UTF-8.
     public static let maxAltText = 256 << 10
     public static let types: Set<String> = ["image/png", "image/jpeg", "image/gif", "text/html"]
@@ -29,17 +37,6 @@ public enum Media {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             size = try c.decodeIfPresent(Int64.self, forKey: .size) ?? 0
             parts = try c.decodeIfPresent([Part].self, forKey: .parts) ?? []
-        }
-
-        /// Reads a manifest received from another member (docs/protocol.md,
-        /// section 4, "Media"): the Rust core decides whether it is taken,
-        /// in the strict form of signed bodies and in its canonical form,
-        /// with no member its table does not name; nil when it is not.
-        public static func parse(_ data: Data) -> Manifest? {
-            guard Core.bodyRefusal("manifest", data) == nil, let m = try? JSONDecoder().decode(Manifest.self, from: data), m.isValid else {
-                return nil
-            }
-            return m
         }
 
         /// Whether it is a copy of files, not clipboard data.
@@ -137,7 +134,7 @@ public enum Media {
     }
 
     /// Whether a name of a path is one every system can hold, as Go's
-    /// clip.CheckName decides: 1 to 255 bytes, as a receiver writes it too
+    /// clip.CheckName decides: 1 to 765 bytes, as a receiver writes it too
     /// (saveName), not "." or "..", no control
     /// characters, separators or characters Windows does not allow, no dot
     /// or space at the end, no name Windows reserves.

@@ -55,6 +55,8 @@ pub const KEEP_DAYS: i64 = 30;
 const CONNECTIONS: usize = 64;
 /// How long a connection may take.
 const TIMEOUT: Duration = Duration::from_secs(20);
+/// How long a closing connection reads what its client still sends.
+const LINGER: Duration = Duration::from_secs(2);
 /// The most bytes of the request line and headers.
 const MAX_HEAD: usize = 8 * 1024;
 
@@ -264,7 +266,15 @@ impl Receiver {
                 Answer::error(status, "the request does not read")
             }
         };
-        write_answer(stream, &answer)
+        write_answer(&stream, &answer)?;
+        // A lingering close: what the client still sends is read and
+        // dropped for a moment, since closing with unread bytes resets the
+        // connection, and some systems (macOS) then drop the answer the
+        // client has not read yet.
+        let _ = stream.shutdown(std::net::Shutdown::Write);
+        let _ = stream.set_read_timeout(Some(LINGER));
+        let _ = std::io::copy(&mut r.take((MAX_HEAD + MAX_BODY) as u64), &mut std::io::sink());
+        Ok(())
     }
 }
 
