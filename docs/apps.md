@@ -861,6 +861,12 @@ the sender.
   system it syncs at once; opened by another app (a back-tap app, or any app at all) it
   asks first, with "Always for this app", because a sync may put the computers' latest copy
   on the clipboard, where that app could read it;
+- **the accessibility button or gesture**, on every Android whoever made it, once "Send my
+  copies by themselves" is on: the floating accessibility button, the swipe with two (or
+  three) fingers from the bottom, or both volume keys held, whichever the person chose in the
+  system's accessibility settings for Copy Beyond Borders. The service registers for the
+  button (`flagRequestAccessibilityButton`), and a press opens the same transparent activity
+  as the widget, which swaps the clipboard with the group's copy (D-128);
 - **opening the app**, by the Home button's rule.
 
 Each of these opens a transparent activity for a moment: it has the focus, reads the

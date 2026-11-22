@@ -2174,6 +2174,10 @@ made with 0.5 is set up again once. The details follow.
   background none is. Home shows the last copy that came, from which device and its text (a
   secret without it), with Copy. The core's `cbb_member::button` and ffi's ops `swap` and
   `opened` replace `waiting` and `sends`; `took` stays.
+- On Android the accessibility button or gesture (the floating button, the swipe with two
+  fingers, or both volume keys held) is the one button on every phone, whoever made it, once
+  "Send my copies by themselves" is on: it swaps the clipboard with the group's copy, as the
+  tile and the widget do.
 - A computer or small device writes whatever becomes the group's current copy, however old: its
   clipboard always equals the group's buffer, and the live window no longer limits it; a copy
   made before the current one changes nothing (D-128, [design](docs/design.md), "Sync model").
