@@ -402,10 +402,14 @@ Under the table are the hard gates, which have no floor and fail the job at once
 
 - every closed finding of the security audits keeps its tests: `testdata/audit/closed.json`
   lists each by an opaque id with the tests that hold it closed, and `-audit` fails when one
-  of them is gone; a fix that closes a finding adds its row;
+  of them is gone; a fix that closes a finding adds its row, and a test removed with the
+  code it held names, in the finding, the replacement `tools/repocheck/removed-tests.txt`
+  gives it;
 - every rule a format reader refuses by name (`Rule::field("grants/replaces")` in `core/src`)
   is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
-  `-vectors`); until the 0.6 core's readers are in the tree it is not measured;
+  `-vectors`): a vector with that `rule` and the verdict `refuse`, or one whose `verdict`
+  is the rule itself (`"verdict": "content/type"`, as wave 4's and push's vectors write
+  it); the rules of a test's own tables (`tests.rs`) are not counted;
 - no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
   `tools/mutants/check.sh` in the nightly jobs).
 

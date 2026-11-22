@@ -119,6 +119,11 @@ func formatGate(src, vectors string) (gate, error) {
 		if d.IsDir() || !strings.HasSuffix(p, ".rs") {
 			return nil
 		}
+		// A test's own rules (a made-up table in core/src/msg/tests.rs)
+		// are no reader's.
+		if filepath.Base(p) == "tests.rs" {
+			return nil
+		}
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
@@ -177,6 +182,11 @@ func refusals(v any, into map[string]bool) {
 			if verdict, has := x["verdict"]; !has || verdict == "refuse" {
 				into[r] = true
 			}
+		} else if v, ok := x["verdict"].(string); ok && strings.Contains(v, "/") {
+			// The vectors of wave 4 and of push name the rule that
+			// refuses in the verdict itself ("content/type"), beside
+			// verdicts such as take, keep and hold.
+			into[v] = true
 		}
 		for _, e := range x {
 			refusals(e, into)

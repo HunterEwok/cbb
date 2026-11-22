@@ -110,6 +110,21 @@ func TestFormatGate(t *testing.T) {
 		t.Fatalf("all refused: %+v, %v", g, err)
 	}
 
+	// A verdict that names the refusing rule counts; a test's own rules
+	// do not.
+	writeIn(t, dir, "src/content.rs", `Err(Rule::field("content/type"))`)
+	writeIn(t, dir, "src/msg/tests.rs", `Err(Rule::field("t/made-up"))`)
+	g, err = formatGate(src, vectors)
+	if err != nil || !g.failed() || g.of != 4 || strings.Join(g.missing, ",") != "content/type" {
+		t.Fatalf("a rule refused by no verdict: %+v, %v", g, err)
+	}
+	writeIn(t, dir, "vectors/d.json", `{"contents": [{"name": "type 0", "verdict": "content/type"},
+		{"name": "text", "verdict": "take"}]}`)
+	g, err = formatGate(src, vectors)
+	if err != nil || g.failed() || g.met != 4 {
+		t.Fatalf("refused by a verdict: %+v, %v", g, err)
+	}
+
 	writeIn(t, dir, "vectors/c.json", `{`)
 	if _, err := formatGate(src, vectors); err == nil {
 		t.Error("bad vectors: taken")
