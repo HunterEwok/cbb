@@ -1,8 +1,8 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 # Differential fuzzing
 
-For engineers and security reviewers: how CI checks that the four implementations (Go, the
-Rust core of `cbb`, the Swift kit and the Kotlin kit) read what comes from the network
+For engineers and security reviewers: how CI checks that the three implementations (Go, the
+Rust core of `cbb` and the Kotlin kit) read what comes from the network
 alike, and how a case they read differently becomes a test vector.
 
 The interop vectors ([testing](testing.md#interop-vectors)) fix the verdict on bodies chosen
@@ -27,8 +27,9 @@ the same record set of the same signed records in any order and subset.
   another order, some twice, one with its chain dropped or its signature or body changed.
 - Each implementation has a **verdict test** that reads a corpus and writes one line per
   case: Go's `TestVerdicts` in `internal/group` (and in `internal/release` for the release
-  files), the Rust core's `command::verdicts`, the Kotlin kit's `VerdictTest` and the Swift
-  kit's `VerdictTests`. Without a corpus each runs on a small one of its own, so the normal
+  files), the Rust core's `command::verdicts` and the Kotlin kit's `VerdictTest`. The
+  iPhone kit has no verdict test: it reads what comes from the network only through the
+  Rust core (D-126). Without a corpus each runs on a small one of its own, so the normal
   test runs keep it working.
 - `tools/difffuzz compare` reads the corpus and the verdicts and fails on any case the
   implementations read differently. It prints each such case (its body, also in base64,
@@ -58,8 +59,7 @@ kits), so a reader that fails in another way also shows as a difference.
 
 - The `differential` job of `ci.yml` runs `.github/differential.sh` with seed 1, 20 000
   changed bodies and 500 record sets on every pull request that changes Go, `cbb`,
-  the kits or the tools. The Swift kit runs in the Swift container, as the phone kit job runs
-  it on Linux.
+  the kits or the tools.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
   (`internal/group`), `FuzzForwardWire` and `FuzzRegister` (`internal/forward`: a hub's
@@ -95,7 +95,7 @@ A failed run uploads the cases it found (`failures.jsonl`, or the fuzzer's input
 
 ## Running it yourself
 
-From the repository root, with Go, Rust, JDK 17 and Docker (for the Swift container):
+From the repository root, with Go, Rust and JDK 17:
 
 ```sh
 sh .github/differential.sh 1 20000 500 /tmp/differential

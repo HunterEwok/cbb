@@ -3380,11 +3380,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # The four implementations read the same changed bodies and record sets
+  # The three implementations read the same changed bodies and record sets
   # alike (docs/differential.md); the nightly workflow runs it with a fresh
   # seed and more cases.
   differential:
-    name: differential (Go, Rust, Kotlin, Swift)
+    name: differential (Go, Rust, Kotlin)
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.ios == 'true' || needs.changes.outputs.android == 'true' || needs.changes.outputs.tools == 'true'
     runs-on: ubuntu-latest
@@ -3409,7 +3409,7 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
-      - name: a corpus of the fixed seed, read by all four
+      - name: a corpus of the fixed seed, read by all three
         run: sh .github/differential.sh 1 20000 500 "$RUNNER_TEMP/differential"
       - name: the cases read differently
         if: failure()

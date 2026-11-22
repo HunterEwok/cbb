@@ -17,7 +17,7 @@ import { clipboardText } from '../common/Clipboard';
 import { copyIn, Shared } from '../common/Share';
 import { app } from '../model/AppModel';
 import { Device } from '../model/Member';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -128,7 +128,7 @@ struct Paste {
           .onClick(() => {
             this.send();
           })
-        Button($r('app.string.paste_pick'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+        Button($r('app.string.paste_pick'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
           .width('100%')
           .enabled(!app.busy)
           .onClick(() => {

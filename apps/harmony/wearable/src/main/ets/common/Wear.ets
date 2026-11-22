@@ -28,8 +28,11 @@ export class Wear {
     try {
       this.client = this.client ?? wearEngine.getP2pClient(context);
       this.devices = this.devices ?? wearEngine.getDeviceClient(context);
-      const want = watch ? wearEngine.DeviceCategory.WATCH : wearEngine.DeviceCategory.PHONE;
-      const found = (await this.devices.getConnectedDevices()).find((d: wearEngine.Device) => d.category === want);
+      // The phone looks for a watch among the wearables connected to it;
+      // the watch, whose own list holds the phone it is paired with, takes
+      // the first device.
+      const found = (await this.devices.getConnectedDevices()).find((d: wearEngine.Device) =>
+        !watch || d.category === wearEngine.DeviceCategory.WATCH || d.isSmartWatch === true);
       if (found === undefined) {
         await this.close();
         return false;
@@ -47,7 +50,7 @@ export class Wear {
       this.receiver = receiver;
       this.peer = found.randomId;
       this.reachable = true;
-      Errors.log(`wear: linked with ${found.model}`);
+      Errors.log(`wear: linked with ${found.model ?? found.name ?? found.randomId}`);
       return true;
     } catch (e) {
       Errors.log(`wear: ${Errors.unexpected('', e as Object).details}`);
@@ -62,7 +65,7 @@ export class Wear {
     }
     try {
       const r = await this.client.sendMessage(this.peer, this.param, { content: data });
-      return r.code === wearEngine.P2pResultCode.SUCCESS;
+      return r.code === wearEngine.P2pResultCode.COMMUNICATION_SUCCESS;
     } catch (e) {
       Errors.log(`wear: sending: ${Errors.unexpected('', e as Object).details}`);
       this.reachable = false;
@@ -73,7 +76,7 @@ export class Wear {
   async close(): Promise<void> {
     if (this.client !== undefined && this.receiver !== undefined) {
       try {
-        await this.client.unregisterMessageReceiver(this.receiver);
+        await this.client.unregisterMessageReceiver(this.peer, this.param, this.receiver);
       } catch (e) {
         Errors.log(`wear: closing: ${Errors.unexpected('', e as Object).details}`);
       }

@@ -9,7 +9,7 @@ import { t } from '../core/Text';
 import { line, mark, nameOf, glyph } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
 import { Device, Member } from '../model/Member';
-import { PageTitle } from '../components/Common';
+import { NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -65,7 +65,7 @@ struct Collection {
           }, (d: Device) => JSON.stringify(d))
         }
         .layoutWeight(1)
-        Button(t('arrange_ungroup'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+        Button(t('arrange_ungroup'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
           .width('100%')
           .onClick(() => {
             app.arrange({ 'op': 'ungroup', 'collection': this.collectionId } as Record<string, Object>);

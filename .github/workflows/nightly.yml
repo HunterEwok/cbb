@@ -1,4 +1,4 @@
-# Nightly: the differential comparison of the four implementations with a
+# Nightly: the differential comparison of the three implementations with a
 # fresh seed and more cases than a pull request's run, the native fuzz
 # targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation

@@ -17,7 +17,7 @@ import { scanQr } from '../common/Scan';
 import { Errors } from '../core/Errors';
 import { app, ChangePreview, ChangeRow } from '../model/AppModel';
 import { Device } from '../model/Member';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, EMPHASIZED_BUTTON, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -150,7 +150,7 @@ struct ChangeRoot {
             .onChange((v: string) => {
               this.typed = v;
             })
-          Button(t('change_root_next'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button(t('change_root_next'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .enabled(!app.busy && this.typed.trim().length > 0)
             .onClick(() => {
@@ -159,7 +159,7 @@ struct ChangeRoot {
           Text(t('change_root_key_hint')).fontSize(14).fontColor($r('app.color.secondary'))
           if (this.hasCard()) {
             if (!this.askingPin) {
-              Button(t('yubikey_open'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+              Button(t('yubikey_open'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
                 .width('100%')
                 .enabled(!app.busy)
                 .onClick(() => {
@@ -206,7 +206,7 @@ struct ChangeRoot {
               })
             }.width('100%')
           }
-          Button(t('change_root_confirm'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
+          Button(t('change_root_confirm'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED }).attributeModifier(EMPHASIZED_BUTTON)
             .width('100%')
             .enabled(!app.busy && (!this.preview.waiting || this.overWaiting))
             .onClick(() => {

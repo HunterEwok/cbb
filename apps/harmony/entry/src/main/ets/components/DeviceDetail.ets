@@ -14,7 +14,7 @@ import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
 import { Device as DeviceInfo } from '../model/Member';
 
-import { BusyLine, ErrorText, PageTitle } from './Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from './Common';
 
 // Members take remote pastes, and the phones that type them on a keyboard
 // or into their own focus; an iPhone cannot.
@@ -60,7 +60,7 @@ export struct DeviceDetail {
 
   @Builder
   action(label: string, danger: boolean, act: () => void) {
-    Button(label, { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+    Button(label, { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
       .width('100%')
       .fontColor(danger ? $r('app.color.error') : $r('app.color.text'))
       .enabled(!app.busy)
@@ -125,7 +125,7 @@ export struct DeviceDetail {
                 this.name = v;
               })
             Row({ space: 8 }) {
-              Button(t('cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).onClick(() => {
+              Button(t('cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON).onClick(() => {
                 this.renaming = false;
               })
               Button(t('device_rename'), { type: ButtonType.Capsule }).enabled(this.name.trim().length > 0).onClick(() => {

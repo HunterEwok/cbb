@@ -3,7 +3,7 @@
 #
 # libcbb_napi.so, the app's Node-API module over the Rust core. The core's
 # static library comes from ffi/bind.sh harmony (apps/harmony/build.sh puts
-# it in apps/harmony/build/ffi); CBB_FFI_DIR points elsewhere.
+# it in apps/harmony/core/ffi); CBB_FFI_DIR points elsewhere.
 cmake_minimum_required(VERSION 3.16)
 project(cbb_napi CXX)
 
@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(REPO ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../..)
-set(CBB_FFI_DIR ${REPO}/apps/harmony/build/ffi CACHE PATH "the directory ffi/bind.sh harmony wrote")
+set(CBB_FFI_DIR ${REPO}/apps/harmony/core/ffi CACHE PATH "the directory ffi/bind.sh harmony wrote")
 
 add_library(cbb_napi SHARED napi_init.cpp keys.cpp der.cpp)
 target_include_directories(cbb_napi PRIVATE ${REPO}/ffi/include)

@@ -461,56 +461,20 @@ class GroupTest {
     }
 
     /**
-     * W16 and G14: the phone is the group's hub while its app is open, at a
-     * forwarder: a wrong key is refused with the reason, the right one
-     * registers, a computer away reaches the phone through it, an
-     * invitation the phone serves admits a computer, and the network the
-     * phone is on becomes a home network.
+     * G14: the phone is the group's hub while its app is open. In a group
+     * of 0.6 its forwarder is the root's setting, and this phone, the root,
+     * names none, so the hub serves at home only; an invitation the phone
+     * serves admits a computer, and the network the phone is on becomes a
+     * home network.
      */
     @Test
-    fun c1_phoneHub() {
+    fun c1_phoneHubAtHome() {
         val hubNow = { runBlocking { model.refresh() }; model.hub ?: throw AssertionError("the phone cannot be the hub") }
-        val (fwd, key) = Bench.forwarder()
         runBlocking { model.setHub(true) }
+        assertEquals("turning the hub on says ${model.hubNote}", null, model.hubNote)
         try {
-            // Turned on, the hub takes the project's forwarder, or none, for
-            // home only, when the emulator cannot look its name up.
-            hubNow().let {
-                if (it.forwarder == null) {
-                    assertEquals("the hub without a forwarder: ${model.hubNote}", HubOnPhone.Status.HOME_ONLY, it.status)
-                } else {
-                    assertTrue("the hub's first forwarder is not the project's: ${it.forwarder}", it.forwarder?.isProject == true)
-                }
-            }
-            runBlocking { model.setForwarder(fwd, java.util.Base64.getEncoder().encodeToString(ByteArray(32))) }
-            until(60, "a wrong key refused with the reason; the app says ${model.hub}") {
-                hubNow().let { it.status == HubOnPhone.Status.FAILED && it.error != null }
-            }
-            runBlocking { model.setForwarder(fwd, key) }
-            assertEquals("setting the forwarder says ${model.hubNote}", null, model.hubNote)
-            until(60, "the phone registered at $fwd; the app says ${model.hub}") { hubNow().status == HubOnPhone.Status.REGISTERED }
-
-            // At home the computer learns the phone hub's offer over its connection to the phone.
-            Bench.run(Bench.PC, "cbb global on", stdin = "yes\n")
-            var global = ""
-            try {
-                until(120, "${Bench.PC} learns the phone hub's offer") {
-                    // The computer connects again for its hello to carry its tunnel key; the phone dials it.
-                    runBlocking { model.sync() }
-                    global = runCatching { Bench.run(Bench.PC, "cbb global") }.getOrElse { it.toString() }
-                    global.contains("the hub is")
-                }
-                // Away: the phone no longer reaches the computer's member port, whose connection ends,
-                // so the computer reaches the phone through the forwarder.
-                Bench.run(Bench.PC, CUT_HOME)
-                until(180, "${Bench.PC} connected to the phone hub") {
-                    // What the phone sends on its old connection meets the reset.
-                    runBlocking { model.sync() }
-                    global = runCatching { Bench.run(Bench.PC, "cbb global") }.getOrElse { it.toString() }
-                    global.contains("connected to the hub")
-                }
-            } catch (e: AssertionError) {
-                throw AssertionError("${e.message}:\n$global\nthe app says ${model.hub}\n${Bench.PC}'s log:\n${Bench.logs(Bench.PC)}")
+            until(60, "the hub at home only, with no forwarder the root named; the app says ${model.hub}") {
+                hubNow().let { it.status == HubOnPhone.Status.HOME_ONLY && it.forwarder == null }
             }
 
             // G14: an invitation the phone makes and serves, used by a new computer.
@@ -535,8 +499,6 @@ class GroupTest {
             assertEquals("adding the home network says (${networks()})", null, model.hubNote)
             assertTrue("the hub does not count this network as home: ${model.hub}", hubNow().home)
         } finally {
-            runCatching { Bench.run(Bench.PC, CUT_HOME.replace(" -A ", " -D ")) }
-            runCatching { Bench.run(Bench.PC, "cbb global off", stdin = "yes\n") }
             runBlocking { model.setHub(false) }
         }
         assertEquals("the hub turned off", HubOnPhone.Status.OFF, hubNow().status)
@@ -612,15 +574,5 @@ class GroupTest {
         until(120, "the phone through the tunnel again; the app says ${model.away}") { status()?.status == AwayFromHome.Status.CONNECTED }
         runBlocking { model.setAway(false) }
         assertEquals("off again", AwayFromHome.Status.OFF, status()?.status ?: AwayFromHome.Status.OFF)
-    }
-
-    private companion object {
-        /**
-         * Cuts the phone off from a member's port: both ends of a connection
-         * there are reset, so neither keeps a stale one. With -D in place of
-         * -A it undoes it.
-         */
-        const val CUT_HOME = "iptables -A INPUT -p tcp --dport 8764 -j REJECT --reject-with tcp-reset && " +
-            "iptables -A OUTPUT -p tcp --sport 8764 -j REJECT --reject-with tcp-reset"
     }
 }

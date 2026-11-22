@@ -10,7 +10,7 @@
 import { router } from '@kit.ArkUI';
 import { t } from '../core/Text';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, EMPHASIZED_BUTTON, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 
 // A server's key: the pin of its public key, 44 characters of base64.
 const KEY_LENGTH: number = 44;
@@ -198,7 +198,7 @@ struct Hub {
               this.strictVpn = true;
             }
           })
-          Button($r('app.string.hub_forwarder_save'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button($r('app.string.hub_forwarder_save'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .enabled(!this.busy && !app.busy && app.member.running)
             .onClick(() => {
@@ -231,14 +231,14 @@ struct Hub {
           Text(this.relayLine()).fontSize(13).fontColor($r('app.color.secondary'))
           ErrorText({ text: app.member.relayError })
           Row({ space: 8 }) {
-            Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED })
+            Button($r('app.string.relay_meet'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.EMPHASIZED }).attributeModifier(EMPHASIZED_BUTTON)
               .layoutWeight(1)
               .enabled(!this.busy && !app.busy && app.member.running)
               .onClick(() => {
                 this.meet();
               })
             if (app.member.relayAt.length > 0) {
-              Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+              Button($r('app.string.relay_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
                 .layoutWeight(1)
                 .enabled(!this.busy && !app.busy)
                 .onClick(() => {

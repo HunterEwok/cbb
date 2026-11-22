@@ -90,3 +90,28 @@ export struct KeyGuardNote {
     })
   }
 }
+
+// The app's own colours on its buttons: the system's blue emphasized and
+// pale normal buttons look washed out on the beige (and dark teal) pages.
+// An emphasized button is filled with the accent, a normal one is a light
+// surface with the accent's text; both follow the dark theme by resource.
+export class AccentButton implements AttributeModifier<ButtonAttribute> {
+  emphasized: boolean;
+
+  constructor(emphasized: boolean) {
+    this.emphasized = emphasized;
+  }
+
+  applyNormalAttribute(button: ButtonAttribute): void {
+    if (this.emphasized) {
+      button.backgroundColor($r('app.color.accent'));
+      button.fontColor($r('app.color.on_accent'));
+    } else {
+      button.backgroundColor($r('app.color.surface'));
+      button.fontColor($r('app.color.accent'));
+    }
+  }
+}
+
+export const EMPHASIZED_BUTTON: AccentButton = new AccentButton(true);
+export const NORMAL_BUTTON: AccentButton = new AccentButton(false);

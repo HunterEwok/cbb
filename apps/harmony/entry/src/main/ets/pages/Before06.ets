@@ -8,7 +8,7 @@
 import { router } from '@kit.ArkUI';
 import { t } from '../core/Text';
 import { app } from '../model/AppModel';
-import { ErrorText } from '../components/Common';
+import { ErrorText, NORMAL_BUTTON } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -26,7 +26,7 @@ struct Before06 {
         Text($r('app.string.before06_title')).fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.text'))
         Text($r('app.string.before06_body')).fontSize(15).fontColor($r('app.color.text'))
         ErrorText({ text: app.error })
-        Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+        Button($r('app.string.settings_leave'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
           .fontColor($r('app.color.error'))
           .enabled(!app.busy)
           .onClick(() => {

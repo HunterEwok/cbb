@@ -20,7 +20,7 @@ import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
 import { canReachCard } from '../common/YubiKey';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from '../components/Common';
 import { QrView } from '../components/QrView';
 
 // The sheet's component, which the picture is taken of.
@@ -204,7 +204,7 @@ struct Recovery {
           Button(t('recovery_print'), { type: ButtonType.Capsule }).width('100%').onClick(() => {
             this.printSheet();
           })
-          Button(t('recovery_save_file'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          Button(t('recovery_save_file'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON)
             .width('100%')
             .onClick(() => {
               this.saveSheet();
@@ -252,7 +252,7 @@ struct Recovery {
                 this.findKey();
               })
           }
-          Button(t('done'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).width('100%').onClick(() => {
+          Button(t('done'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL }).attributeModifier(NORMAL_BUTTON).width('100%').onClick(() => {
             this.leave();
           })
         }

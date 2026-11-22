@@ -271,18 +271,21 @@ signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter 
 OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
 before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
 runs its host test and `check.sh`, which checks both modules, the phone's `entry` and the
-watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+watch's `wearable`. DevEco Studio's Previewer loads no native module and takes the stand-in in
+`entry/src/mock/` instead, which answers every request with an error, so the pages show as on a
+phone in no group; outside mainland China DevEco offers only a watch emulator, which runs the
+`wearable` module. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator.
 
 ```sh
-apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/core/ffi
 apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
 sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
 apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
 ```
 
-The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
-container; [docs/differential.md](docs/differential.md)):
+The differential run of all three implementations (Go, Rust and JDK 17;
+[docs/differential.md](docs/differential.md)):
 
 ```sh
 sh .github/differential.sh 1 20000 500 /tmp/differential
