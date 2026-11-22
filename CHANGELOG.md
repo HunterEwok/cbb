@@ -2178,6 +2178,9 @@ made with 0.5 is set up again once. The details follow.
   fingers, or both volume keys held) is the one button on every phone, whoever made it, once
   "Clipboard sync" is on: it swaps the clipboard with the group's copy, as the
   tile and the widget do.
+- The bench's phone suite runs on a Mac or Windows with Docker Desktop too: the relay to the
+  phone's pairing window listens on the loopback there, which the members reach as
+  host.docker.internal, since the fleet network's gateway is inside Docker Desktop's VM.
 - A computer or small device writes whatever becomes the group's current copy, however old: its
   clipboard always equals the group's buffer, and the live window no longer limits it; a copy
   made before the current one changes nothing (D-128, [design](docs/design.md), "Sync model").

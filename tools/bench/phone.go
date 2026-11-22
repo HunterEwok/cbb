@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -464,21 +465,16 @@ func (h *phoneHelper) phonePort(ctx context.Context, addr string) (*phoneRelay, 
 		return nil, fmt.Errorf("adb forward to the phone's port %s: %w", port, err)
 	}
 	local := net.JoinHostPort("127.0.0.1", strings.TrimSpace(string(out)))
-	at := fmt.Sprintf("{{with index .NetworkSettings.Networks %q}}{{.Gateway}}{{end}}", h.f.net)
-	gw, err := docker(ctx, "inspect", "-f", at, first.Container)
+	ln, relay, err := h.relayListener(ctx, first)
 	if err != nil {
 		return nil, err
-	}
-	ln, err := net.Listen("tcp", net.JoinHostPort(strings.TrimSpace(gw), "0"))
-	if err != nil {
-		return nil, fmt.Errorf("a relay to the phone on the fleet's gateway %q: %w", gw, err)
 	}
 	go func() {
 		<-ctx.Done()
 		ln.Close()
 	}()
 	go relayTo(ln, local)
-	p := &phoneRelay{addr: addr, relay: ln.Addr().String()}
+	p := &phoneRelay{addr: addr, relay: relay}
 	h.mu.Lock()
 	members := append([]*Device(nil), h.members...)
 	h.phone = append(h.phone, p)
@@ -489,6 +485,39 @@ func (h *phoneHelper) phonePort(ctx context.Context, addr string) (*phoneRelay, 
 		}
 	}
 	return p, nil
+}
+
+// relayListener opens the relay to the phone where the members reach this
+// computer, and gives the address they dial. On Linux that is the fleet
+// network's gateway, which is this computer's. Docker Desktop (macOS,
+// Windows) runs the network inside its own VM, whose gateway this computer
+// cannot bind: there the relay listens on the loopback, which Docker
+// Desktop passes host.docker.internal to, and the members dial that name's
+// address.
+func (h *phoneHelper) relayListener(ctx context.Context, first *Device) (net.Listener, string, error) {
+	if runtime.GOOS == "linux" {
+		at := fmt.Sprintf("{{with index .NetworkSettings.Networks %q}}{{.Gateway}}{{end}}", h.f.net)
+		gw, err := docker(ctx, "inspect", "-f", at, first.Container)
+		if err != nil {
+			return nil, "", err
+		}
+		ln, err := net.Listen("tcp", net.JoinHostPort(strings.TrimSpace(gw), "0"))
+		if err != nil {
+			return nil, "", fmt.Errorf("a relay to the phone on the fleet's gateway %q: %w", gw, err)
+		}
+		return ln, ln.Addr().String(), nil
+	}
+	out, err := Run(ctx, first, "getent ahostsv4 host.docker.internal | awk 'NR==1 {print $1}'", "")
+	host := strings.TrimSpace(out)
+	if err != nil || net.ParseIP(host).To4() == nil {
+		return nil, "", fmt.Errorf("the members find no IPv4 address for host.docker.internal (%q): %v", host, err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, "", fmt.Errorf("a relay to the phone on the loopback: %w", err)
+	}
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	return ln, net.JoinHostPort(host, port), nil
 }
 
 // relayTo passes each connection ln takes to the address to, both ways.
