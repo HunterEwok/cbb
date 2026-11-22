@@ -2062,6 +2062,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the protocol core's tests
         working-directory: apps/android
         run: ./gradlew --no-daemon -p kit test jacocoTestReport
@@ -2097,6 +2107,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2155,6 +2175,28 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Gradle from the cache
+        id: gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-dist-${{ runner.os }}-${{ hashFiles('apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - name: Gradle, its download tried three times when it is not in the cache
+        if: steps.gradle.outputs.cache-hit != 'true'
+        working-directory: apps/android
+        run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2308,6 +2350,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: one/apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('one/apps/android/**/*.gradle.kts', 'one/apps/android/gradle.properties', 'one/apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: build twice and compare
         run: sh one/packaging/fdroid/reproduce.sh "$PWD/one" "$RUNNER_TEMP/elsewhere/cbb"
 
@@ -3292,6 +3344,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: the versions Gradle resolves
         working-directory: apps/android
         # The init script locks every configuration, so --write-locks writes each
@@ -3447,6 +3509,16 @@ jobs:
         if: steps.gradle.outputs.cache-hit != 'true'
         working-directory: apps/android
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
+      - name: Gradle's dependencies from the cache
+        # Maven Central refuses a runner that asks it too often (status
+        # 429); what a build of this job fetched before comes from here.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2/files-2.1
+            ~/.gradle/caches/modules-2/metadata-*
+          key: gradle-deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('apps/android/**/*.gradle.kts', 'apps/android/gradle.properties', 'apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-deps-${{ runner.os }}-${{ github.job }}-
       - name: a corpus of the fixed seed, read by all three
         run: sh .github/differential.sh 1 20000 500 "$RUNNER_TEMP/differential"
       - name: the cases read differently
