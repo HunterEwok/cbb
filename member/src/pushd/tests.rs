@@ -514,8 +514,11 @@ fn the_bindings_outlive_a_restart() {
         assert!(b.confirmed() && b.slots[0].seq == t0 + 20, "{b:?}");
         w.service.stop();
     }
-    use std::os::unix::fs::PermissionsExt;
-    assert_eq!(std::fs::metadata(&state).unwrap().permissions().mode() & 0o777, 0o600);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&state).unwrap().permissions().mode() & 0o777, 0o600);
+    }
     let w = world_at(Budgets::default(), Some(state.clone()));
     assert_eq!(w.service.bindings(), 1);
     let (key, creds) = member([6; 16], 1, "period", 1, true);

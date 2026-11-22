@@ -381,7 +381,7 @@ fn invite_app(g: &Global, h: Header, app: &str, answers: &str) -> Result<()> {
 /// The app's next answer in its answers file, the line after the used
 /// ones: waits for it as long as the service waits for the user.
 fn next_answer(f: &mut std::fs::File, used: &mut usize) -> Result<bool> {
-    let until = std::time::Instant::now() + crate::window::CONFIRM_WAIT + std::time::Duration::from_secs(10);
+    let until = std::time::Instant::now() + crate::pair::CONFIRM_WAIT + std::time::Duration::from_secs(10);
     loop {
         let mut all = String::new();
         std::io::Seek::rewind(f).context("cannot read the answers")?;

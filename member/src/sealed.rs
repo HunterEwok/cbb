@@ -230,7 +230,7 @@ pub enum Taken {
     New { id: [u8; 16], content: Box<Content>, origin: DeviceId, signed: Timestamp, age_ms: u64, blob: Option<Blob> },
     /// Opened, but not newer than what was written here, a secret seen
     /// before, or signed ahead of this clock.
-    Old(fresh::Fresh),
+    Old(#[allow(dead_code, reason = "why it is old, for its Debug and the tests")] fresh::Fresh),
     /// Not sealed to this device, a mark, or nothing to open here: passed
     /// on only.
     PassedOn,

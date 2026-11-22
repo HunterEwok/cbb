@@ -119,6 +119,7 @@ impl FileStore {
 
     /// The statements of the epochs held, newest last: the device's own,
     /// which it passes on in message `keys`.
+    #[cfg(test)]
     pub fn statements(&self) -> Vec<Vec<u8>> {
         self.epochs.values().map(|(e, _)| e.statement.clone()).collect()
     }

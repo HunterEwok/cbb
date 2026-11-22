@@ -32,25 +32,15 @@ pub fn new_key() -> Arc<FileKey> {
     Arc::new(FileKey::new(&identity::new_key().unwrap()).unwrap())
 }
 
-/// A device of a test group: its ID, member key (its PKCS #8) and member
-/// certificate.
+/// A device of a test group: its ID.
 pub struct Dev {
     pub id: DeviceId,
-    pub pkcs8: Vec<u8>,
-    pub cert: Vec<u8>,
-}
-
-/// A new key and its PKCS #8.
-fn new_key_der() -> (Arc<FileKey>, Vec<u8>) {
-    let der = identity::new_key().unwrap();
-    (Arc::new(FileKey::new(&der).unwrap()), der)
 }
 
 /// A group made in memory: its root, the devices with member
 /// certificates, the first one the root's own, and their records.
 pub struct Group {
     pub root_key: Arc<FileKey>,
-    pub root_pkcs8: Vec<u8>,
     pub root: Cert,
     pub records: Records,
     pub devs: Vec<Dev>,
@@ -59,8 +49,7 @@ pub struct Group {
 impl Group {
     /// A group of n devices.
     pub fn new(n: usize) -> Group {
-        let (root_key, root_pkcs8) = new_key_der();
-        let (key, pkcs8) = new_key_der();
+        let (root_key, key) = (new_key(), new_key());
         let now = now_ms();
         let point = key.public();
         let own = OwnDevice {
@@ -73,13 +62,7 @@ impl Group {
             seal: Vec::new(),
         };
         let g = new_group(&*root_key, &own, now).unwrap();
-        let group = Group {
-            root_key,
-            root_pkcs8,
-            root: g.root,
-            records: g.records,
-            devs: vec![Dev { id: g.device, pkcs8, cert: g.cert.der }],
-        };
+        let group = Group { root_key, root: g.root, records: g.records, devs: vec![Dev { id: g.device }] };
         let mut group = group;
         for _ in 1..n {
             group.add();
@@ -92,18 +75,10 @@ impl Group {
         self.add_with(|_| {})
     }
 
-    /// Adds a device that only passes copies on, which may be a hub.
-    pub fn add_forwarder(&mut self) -> usize {
-        self.add_with(|b| {
-            b.forward_only = true;
-            b.caps = vec![authority::CAP_HUB.into()];
-        })
-    }
-
     /// Adds a device whose record f changes first, such as a device that
     /// only passes copies on and may be a hub.
     pub fn add_with(&mut self, f: impl FnOnce(&mut Body)) -> usize {
-        let (key, pkcs8) = new_key_der();
+        let key = new_key();
         let id = DeviceId::random();
         let now = now_ms();
         let rk = self.root_key.clone();
@@ -126,7 +101,7 @@ impl Group {
         let mut b = b;
         f(&mut b);
         self.sign(b);
-        self.devs.push(Dev { id, pkcs8, cert });
+        self.devs.push(Dev { id });
         self.devs.len() - 1
     }
 
@@ -137,25 +112,6 @@ impl Group {
         let r = Record::new(body, sig, None);
         assert!(self.records.add(&r).unwrap(), "a record of the test group");
         r
-    }
-
-    /// Removes device i by a revocation record.
-    pub fn revoke(&mut self, i: usize) -> Record {
-        let b = Body {
-            v: 2,
-            alg: authority::ALG_ES256.into(),
-            kind: authority::TYPE_REVOKE.into(),
-            signer: Hash(self.root.key_hash()),
-            time_ms: now_ms(),
-            keys: vec![Hash(Cert::parse(&self.devs[i].cert).unwrap().key_hash())],
-            ..Default::default()
-        };
-        self.sign(b)
-    }
-
-    /// Device i's chain as TLS presents it: its certificate and the root.
-    pub fn chain(&self, i: usize) -> Vec<Vec<u8>> {
-        vec![self.devs[i].cert.clone(), self.root.der.clone()]
     }
 
     pub fn id(&self, i: usize) -> String {
@@ -177,91 +133,4 @@ pub fn wait_for(d: Duration, mut f: impl FnMut() -> bool) -> bool {
     }
 }
 
-/// A folder of its own for a test, removed when dropped.
-pub struct TempDir(pub std::path::PathBuf);
-
-impl TempDir {
-    pub fn new(what: &str) -> TempDir {
-        let p = std::env::temp_dir().join(format!("cbb-{what}-{}", crate::vless::random_uuid()));
-        std::fs::create_dir_all(&p).unwrap();
-        TempDir(p)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-/// Device i of the group as a node in a folder of its own, with the
-/// group's records as they are now; its log goes to logs.
-pub struct NodeAt {
-    pub dir: TempDir,
-    pub node: Arc<crate::node::Node>,
-    pub logs: Arc<std::sync::Mutex<Vec<String>>>,
-}
-
-impl NodeAt {
-    pub fn logged(&self, s: &str) -> bool {
-        self.logs.lock().unwrap().iter().any(|l| l.contains(s))
-    }
-
-    pub fn log(&self) -> Arc<dyn Fn(&str) + Send + Sync> {
-        let l = self.logs.clone();
-        Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()))
-    }
-}
-
-impl Group {
-    pub fn identity(&self, i: usize) -> crate::identity::Identity {
-        crate::identity::Identity {
-            id: self.devs[i].id.clone(),
-            key: self.devs[i].pkcs8.clone(),
-            external: None,
-            cert: Cert::parse(&self.devs[i].cert).unwrap(),
-            issuer: None,
-            group_ca: self.root.clone(),
-            roots: Vec::new(),
-        }
-    }
-
-    pub fn node(&self, i: usize) -> NodeAt {
-        let dir = TempDir::new("node");
-        let mut rs = crate::records::new(&self.root);
-        let (_, errs) = rs.add_all(&self.records.all());
-        assert!(errs.is_empty(), "{errs:?}");
-        let ident = self.identity(i);
-        // The root's device keeps the root's key, as admin::new_group
-        // leaves it, so that it signs records and commands.
-        let mut fields = serde_json::Map::new();
-        if i == 0 {
-            use base64::Engine;
-            fields.insert(
-                "group_ca_key".into(),
-                base64::engine::general_purpose::STANDARD.encode(&self.root_pkcs8).into(),
-            );
-        }
-        crate::identity::save_with(&ident, &dir.0, fields).unwrap();
-        crate::records::Stored::save(&rs, &dir.0).unwrap();
-        let engine = Arc::new(crate::clip::Engine::new(
-            ident.id.as_str(),
-            crate::service::clock(&dir.0),
-            Box::new(crate::uptime::wall_ms),
-            Box::new(crate::uptime::now),
-        ));
-        let logs = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let l = logs.clone();
-        let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |s: &str| l.lock().unwrap().push(s.to_string()));
-        let node = Arc::new(crate::node::Node::new(
-            ident,
-            &format!("device {i}"),
-            engine,
-            rs,
-            dir.0.clone(),
-            Box::new(|_| {}),
-            log,
-        ));
-        NodeAt { dir, node, logs }
-    }
-}
+impl Group {}

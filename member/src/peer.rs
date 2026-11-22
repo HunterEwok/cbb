@@ -19,6 +19,7 @@ use crate::sys::UnixStream;
 pub enum Verdict {
     Refused,
     /// Nothing tells who is at the screen (no logind).
+    #[cfg_attr(windows, allow(dead_code, reason = "Windows always knows the session at the screen"))]
     Unchecked,
     Allowed,
 }

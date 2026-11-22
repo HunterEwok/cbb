@@ -8,7 +8,7 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::identity::Stored as _;
-use crate::{actions, identity, records, remotepaste, sealkey};
+use crate::{actions, identity, records, remotepaste};
 
 /// The answer to a leave in no group.
 pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is nothing to leave; cbb pair joins one";
@@ -22,19 +22,22 @@ pub const NOTHING_TO_LEAVE: &str = "this device is in no group, so there is noth
 /// still.
 pub const GROUP_FILES: &[&str] = &[
     identity::FILE_NAME,
-    sealkey::FILE_NAME,
+    // The secret for sealed commands of a group made before 0.6.
+    "seal.json",
     "tunnel.json",
     crate::entries::FILE,
     crate::evidence::STATUS_FILE,
     crate::content::DIR,
     crate::networks::FILE,
-    crate::credentials::FILE,
-    crate::credentials::KEYS_FILE,
+    // The hub credentials and server keys of a group made before 0.6.
+    "credentials.json",
+    "server-keys.json",
     remotepaste::LOG_FILE,
     actions::LOG_FILE,
     crate::mute::FILE_NAME,
-    crate::signed::FILE_NAME,
-    records::OLD_GROUP_DIR,
+    // The log of the records signed in a group made before 0.6.
+    "signed.json",
+    crate::set::OLD_GROUP_DIR,
     crate::set::LOCAL_FILE,
     crate::offered::FILE_NAME,
     crate::own::FILE_NAME,
@@ -98,8 +101,8 @@ mod tests {
     #[test]
     fn deletes_the_group_and_keeps_the_settings() {
         let dir = std::env::temp_dir().join(format!("cbb-leave-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join(records::OLD_GROUP_DIR)).unwrap();
-        for name in GROUP_FILES.iter().filter(|n| **n != records::OLD_GROUP_DIR) {
+        std::fs::create_dir_all(dir.join(crate::set::OLD_GROUP_DIR)).unwrap();
+        for name in GROUP_FILES.iter().filter(|n| **n != crate::set::OLD_GROUP_DIR) {
             std::fs::write(dir.join(name), b"{}").unwrap();
         }
         std::fs::write(dir.join("sync.json"), br#"{"off":true}"#).unwrap();

@@ -6,6 +6,8 @@
 //! serves when it is gone, and gives way when it is back; a member away from
 //! home follows the hub that serves and syncs through it.
 
+#![cfg(unix)]
+
 mod common;
 
 use std::net::UdpSocket;

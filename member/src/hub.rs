@@ -331,12 +331,6 @@ impl Hub {
         })
     }
 
-    /// Replaces the hub's clients; a client left out is cut off at once.
-    pub fn set_peers(&self, peers: Vec<Peer>, device: &str) -> Result<()> {
-        let own = crate::tunnel::addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
-        self.set_peers_at(peers, own)
-    }
-
     /// Replaces the hub's clients as set_peers does, for a hub at the
     /// tunnel address own.
     pub fn set_peers_at(&self, peers: Vec<Peer>, own: Ipv6Addr) -> Result<()> {

@@ -740,7 +740,7 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
         unsafe { libc::clock_settime(libc::CLOCK_REALTIME, &ts) == 0 }
     };
     if set {
-        log(&format!("set the clock from the Next's: {}", crate::node::date(secs)));
+        log(&format!("set the clock from the Next's: {}", crate::global_cli::utc_date(secs.saturating_mul(1000))));
     } else {
         log(&format!("cannot set the clock: {}", std::io::Error::last_os_error()));
     }
@@ -783,11 +783,10 @@ impl crate::pastehelper::Target for NextKeys {
 
 /// Runs the link on standard input and output until the driver quits or
 /// the UART closes; it takes remote pastes through the service at socket.
-/// Joins, over sock, which the Next's ESP carries to the computer at -to:
+/// Joins, over sock, which the Next's ESP carries to the computer at -to,
 /// a group of 0.6 by its home window, whose ID (and member key) the Next
-/// found by mDNS and the six digits the person typed (`.cbb pair CODE`);
-/// without the ID, an old group's window by its code. Gives what the log
-/// says.
+/// found by mDNS and the six digits the person typed (`.cbb pair CODE`).
+/// Gives what the log says.
 fn join_window(
     g: &crate::Global,
     sock: TcpStream,
@@ -796,8 +795,10 @@ fn join_window(
     fp: Option<cbb_core::format::KeyHash>,
 ) -> Result<String> {
     let Some(id) = window else {
-        let id = crate::join_with_code(g, sock, code)?;
-        return Ok(format!("joined the group {} as {}", id.tag(), id.id));
+        drop(sock);
+        return Err(Error::msg(
+            "no pairing window of a group of 0.6 was found on the network: open one with cbb pair on a device of the group, then type its six digits (.cbb pair 123456)",
+        ));
     };
     // The Next shows a code as 123-456 and takes it so.
     let digits: String = code.chars().filter(|c| *c != '-' && !c.is_whitespace()).collect();

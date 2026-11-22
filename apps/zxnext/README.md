@@ -7,8 +7,8 @@ certificates as every other device). The Next talks to it only over the UART bet
 two, which never leaves the case (docs/roadmap.md, item 14). The frames on that UART are
 described in [member/README.md](../../member/README.md#zx-spectrum-next).
 
-Not yet run on a real Next: the UART speed taken from NR 0x7F, waking NextPi's shell, the
-QR code on the screen, and the timeouts are written from the manual and NextPi's own
+Not yet run on a real Next: the UART speed taken from NR 0x7F, waking NextPi's shell,
+and the timeouts are written from the manual and NextPi's own
 tools. Test them on the machine before relying on them.
 
 ## Use
@@ -19,15 +19,14 @@ tools. Test them on the machine before relying on them.
 .cbb copy notes.txt   send a file (up to 8 KB)
 .cbb text Hello Next  send the words
 .cbb text -s hunter2  send a secret, such as a password (copy -s FILE too)
-.cbb pair             join the group through the ESP: scan the code on the screen with
-                      the phone app
-.cbb pair 123-456     or join with the code of sudo cbb pair on a computer of the group
+.cbb pair 123-456     join the group through the ESP with the code of sudo cbb pair on a
+                      computer of the group (.cbb pair alone says so)
 .cbb net on           the Pi's network through the ESP, in the background, to a
                       computer of the group it finds (.cbb net on 192.168.0.10 names one)
 .cbb net off          stop it
 .cbb net              how it stands: on or off, the settings, the driver's counters
 .cbb install          fetch the other files from cbb.tools, and the Pi's cbb (below),
-                      then pair the Pi (its QR code) when it is in no group, else start
+                      then say how to pair the Pi when it is in no group, and start
                       the network (a running one stops for it)
 .cbb update           the same, for the files the site has newer
 .cbb paste-receive on [-enter] | off
@@ -69,7 +68,7 @@ sends 80K and the Next checks their CRC-32, then the Next sends them back and th
 many came and their CRC-32. It prints each speed it tried, whole, damaged or lost, and how
 fast. Not yet run on a real Next.
 
-SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
+SPACE stops a command that waits, such as a download of `.cbb install`.
 
 Texts use the Spectrum character set: printable ASCII, the pound sign and the copyright
 sign. `cbb` on the Pi converts them; every other character arrives as `?`. Cyrillic
@@ -120,8 +119,8 @@ first, a few hundred bytes, comes at the ESP's own 115200.
 A line shows each download: the percentage, the kilobytes, the average speed since the file
 began (in frames, 50 or 60 a second as the Next is set) and the time left, and
 the border blinks while it runs. SPACE stops it, and `.cbb install` goes on from where a
-download stopped or broke off. After the install's key, a Pi in no group goes on to pair: the
-QR code shows at once, as `.cbb pair` shows it.
+download stopped or broke off. After the install's key, a Pi in no group is told how to pair, as
+`.cbb pair` without a code tells it.
 
 **At power-on.** NextZXOS runs `C:/NEXTZXOS/AUTOEXEC.BAS` when it starts: `.cbb install`
 adds `.cbb net on` to it as its last line, after the user's own lines (or writes one with
@@ -306,23 +305,17 @@ through the driver (calls 7 and 8), and the link on the Pi runs their `cbb next 
 such calls, they stop the network for the Pi's shell and start it again after (some 10 to
 15 seconds). `.cbb pair` stops it in any case.
 
-NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the network's settings or their defaults. It asks the ESP
-for its address (`AT+CIFSR`), starts `cbb next pair` on the Pi in the background with that
-address and the ports of `-serve` (so the settings need `-serve`), draws the QR code, and
-starts the network under it, so the phone that scans the code reaches the Pi through the
-ESP. The phone app says when the Pi has joined; then `cbb service` starts on the Pi with the
-group. With `cbb next link -udp` and `cbb service -tunnel-via`, the Pi syncs away from home
-through the ESP as well (member/README.md).
-
-Without the phone app, `sudo cbb pair` on a computer of the group shows a code, and
-`.cbb pair 123-456` on the Next joins with it: it finds the computer whose pairing window is
-open (TXT `p=1`), starts the network to it with `cbb next link -join 123-456`, and the
-computer's `cbb pair` says when the Pi has joined. A home window of a group of 0.6 also
-announces its ID (TXT `i`) and the hash of its member's key (TXT `f`); the Next passes them
-on (`-window ID -fp HASH`), and the Pi's cbb joins with the six digits and that ID, and only
-the member with that key (docs/protocol.md, "Pairing in 0.6"). Both ways, `.cbb pair` first asks the
-Pi whether its state holds an identity: a Pi in a group already does not join another, so
-the Next says so instead of waiting: `.cbb leave` first.
+NextPi has no network of its own, so `.cbb pair` joins the group through the ESP, with the
+network's settings or their defaults. `sudo cbb pair` on a computer of the group opens a
+pairing window and shows its six digits, and `.cbb pair 123-456` on the Next joins with them:
+it finds the computer whose window is open (TXT `p=1`), with the window's ID (TXT `i`) and the
+hash of its member's key (TXT `f`), and starts the network to it with
+`cbb next link -join 123-456 -window ID -fp HASH`; the Pi's cbb joins with the six digits and
+that ID, and only the member with that key (docs/protocol.md, "Pairing in 0.6"), and the
+computer's `cbb pair` says when the Pi has joined. A group of 0.6 admits a device only through
+such a window (D-119), so `.cbb pair` without a code only says where the code comes from.
+`.cbb pair` first asks the Pi whether its state holds a group: a Pi in a group already does
+not join another, so the Next says so instead of waiting: `.cbb leave` first.
 
 ## Build
 

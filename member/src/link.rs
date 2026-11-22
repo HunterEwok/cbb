@@ -77,6 +77,7 @@ fn write(t: u64, mut fields: Vec<(u16, Value<'_>)>) -> Vec<u8> {
 
 /// The hello's fields this exchange fills: the set digest and the count of
 /// records. The caller adds the rest of section 9.3 with [`hello_with`].
+#[cfg(test)]
 pub fn hello(set: &RecordSet) -> Vec<u8> {
     hello_with(set, Vec::new())
 }
@@ -254,6 +255,7 @@ fn want(ids: &[RecordId], list: Option<[u8; 32]>, out: &mut Out) {
 
 /// Reads one frame's message from a connection: its length, checked
 /// against the grid and the member connection's limit, then the message.
+#[cfg(test)]
 pub fn read_frame(r: &mut impl std::io::Read) -> Result<Vec<u8>> {
     let mut head = [0u8; 4];
     r.read_exact(&mut head).map_err(|e| Error::with("cannot read a frame", e))?;
@@ -270,6 +272,7 @@ pub fn read_frame(r: &mut impl std::io::Read) -> Result<Vec<u8>> {
 /// hello goes after it. A message the exchange does not read goes to
 /// other; log takes a line for the log. It returns the error that ended
 /// the connection.
+#[cfg(test)]
 pub fn run(
     conn: &mut (impl std::io::Read + std::io::Write),
     x: &mut Exchange,
@@ -319,6 +322,7 @@ pub fn run(
     }
 }
 
+#[cfg(test)]
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }

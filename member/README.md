@@ -287,7 +287,6 @@ do. These commands answer in frames a Z80 reads without a parser:
 | `cbb next image [-mode auto\|lo\|hi] [-tape]` | For `.cbb show`: the latest image `cbb` received (PNG or JPEG), fitted to Layer 2's 320×256 in 256 colours (`L`) or 640×256 in 16 (`H`), whichever shows it closer (`auto`), with colours from the Next's 512 and Floyd–Steinberg dithering. `CBBI <L\|H> <len> <crc32>`; the Next answers one byte once it has room, and then come len bytes: the 81920 bytes of pixels in Layer 2's order (a column of 256 after another; in `H` two pixels a byte, the left one in the high nibble), then the palette, two bytes an entry as Next register 0x44 takes them (256 entries for `L`, 16 for `H`), then CR and the status line. With `-tape` the bytes go as sound instead (`aplay`, through the Pi's I2S, which the Next hands to EAR): half a second of silence, then eleven blocks as the Spectrum's ROM saves them (3223 pilot halves of 2168 T-states at 3.5 MHz, a sync of 667 and 735, the flag, the data and their XOR, each bit two halves of 855 or 1710), the flag the index of the block: the ten 8K pieces of the pixels, then the palette, half a second apart; then CR and the status line. A byte 3 from the Next stops it, and the status line is `CBBOK`. |
 | `cbb next speed <baud> <bytes>` | For `.cbb speed`: `CBBS <baud> <bytes> <crc32>` at the line's own speed; half a second later the line goes to baud (115200 to 2000000) and the bytes follow, the low byte of each step of xorshift32 from 1; half a second after the last one the line's own speed again, and the status line. The Next checks the CRC-32 to see what that speed keeps whole. |
 | `cbb next speed-in <baud> <bytes>` | `.cbb speed`'s other way: the line goes to baud and, half a second later, `CBBGO` at it; then up to bytes from the Next, until a second passes without one; then the line's own speed, half a second, and `CBBR <bytes got> <crc32>` before the status line. |
-| `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266
 
@@ -306,8 +305,7 @@ cbb service -peer 127.0.0.1:8769
   the ESP to it. The member protocol and its TLS run on the Pi, so the ESP and the Z80
   see only ciphertext.
 - `-serve esp-port:local-port`: the ESP takes connections on its own port and leads each
-  to the local one, where `cbb` listens: phones that sync with it, and the phone
-  that admits it (`cbb next pair -addr <the ESP's address>:<esp-port>`).
+  to the local one, where `cbb` listens: phones that sync with it.
 - `-udp local-port:host:port`: a local UDP port that leads, through one UDP connection
   of the ESP, to host:port: the hub, or a forwarder that leads to it. With
   `cbb service -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
@@ -319,8 +317,8 @@ cbb service -peer 127.0.0.1:8769
 - `-window id -fp hash`, with `-join`: the home window of a group of 0.6 that the Next
   found by mDNS, its ID (TXT `i`, 32 hex digits) and the hash of its member's key (TXT
   `f`); the code is then the window's six digits (dashes and spaces are dropped), and the
-  link joins only the member with that key. Without them, `-join` joins an old group's
-  window.
+  link joins only the member with that key. `-join` needs them: a group of 0.6 has no
+  other window.
 - `-paste on|on-enter|off`: tells the service, once it answers, whether the group's admins
   may paste on the Next (`cbb paste-receive`), as `.cbb paste-receive` on the Next set it:
   the Next's user is the Pi's. The Next passes it once after each change of its user's and

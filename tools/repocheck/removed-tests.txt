@@ -554,3 +554,46 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/PivTest.kt tlv D-125: the app no 
 apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeOffersTheTunnelKeyAndKeepsTheOffer D-123: a phone of a group of 0.5 runs no tunnel, so the kits and ffi no longer set its tunnel key or send a hub's offer; member's nettest a_member_reaches_its_hub_through_the_tunnel keeps the hello's tunnel key and the hub's offer
 apps/ios/CBBKit/Tests/CBBKitTests/TunnelTests.swift testNodeOffersTheTunnelKeyAndKeepsTheOffer D-123: a phone of a group of 0.5 runs no tunnel, so the kits and ffi no longer set its tunnel key or send a hub's offer; member's nettest a_member_reaches_its_hub_through_the_tunnel keeps the hello's tunnel key and the hub's offer
 ffi/src/member.rs paste_orders D-126: the member of 0.5 and its paste_order are gone; member::live::tests::a_phone_on_a_group_of_0_6_runs_the_member_of_0_6 checks the same cleaning and refusals of the member of 0.6's order
+member/src/admin.rs a_group_made_here_keeps_its_root_key D-126: it made a group of 0.5 with an identity.json; cbb new founds groups of 0.6 (founding.rs), which service::on_live::tests::a_computer_pairs_with_the_window_of_a_new_group starts from
+member/src/admin.rs durations_as_go_prints_them D-126: the takeover delay it printed is gone; the root changes only with the recovery key on 0.6 (D-125)
+member/src/admin.rs records_the_system_from_a_hello D-126: the member of 0.5's device records from its JSON hellos are gone; the records of 0.6 carry the system from the joiner's own record
+member/src/admin.rs recovery_cert_under_a_root D-126: the recovery certificate of 0.5 is gone; the recovery key of 0.6 is part of the group ID and its sheet is checked in core/src/sheet
+member/src/away.rs a_phone_hub_is_tried_often D-126: it timed the old member's run loop, which is gone; the member of 0.6 dials the hubs from live/away.rs
+member/src/evidence.rs one_opening_at_a_time D-126: the old member's TPM credential opening is gone; live/evidence.rs keeps one challenge per peer
+member/src/nettest/away.rs a_group_of_0_5_waits_at_a_relay D-126: a group of 0.5 runs no more; live::tests::members_of_0_6_meet_at_the_groups_relay meets at the relay on 0.6
+member/src/nettest/away.rs a_member_reaches_its_hub_through_the_tunnel D-126: the old member's tunnel is gone; live::tests::a_device_reaches_its_hub_of_0_6_through_the_tunnel
+member/src/nettest/away.rs a_relay_of_another_group D-126: the old member's relay link is gone; live::tests::members_of_0_6_meet_at_the_groups_relay and internal/service TestAloneRelay check the relay of 0.6
+member/src/nettest/away.rs hub_requests_refused D-126: the old member's hub requests are gone; internal/service TestMakeHub and TestForwardOnlyHub take the hub orders of 0.6
+member/src/nettest/away.rs several_hubs_share_and_prune D-126: the old member's shared hub list is gone; the hubs message of 0.6 (t 16) replaces it: live::tests::a_hub_stands_by_while_the_hub_above_serves, internal/service TestSeveralHubs
+member/src/nettest/away.rs shares_ignored D-126: the old member's shared hub list is gone; live::tests::a_hub_stands_by_while_the_hub_above_serves reads the hubs message of 0.6
+member/src/nettest/away.rs the_state_it_starts_with D-126: it started the old member's Away on a Node; live::tests::a_device_sends_its_hub_the_tunnels_key_and_keeps_its_offer starts the Away of 0.6
+member/src/nettest/props.rs the_saved_clock_never_goes_back D-126: the hybrid clock's mark file was the old member's engine's, which no member of 0.6 starts
+member/src/next.rs qr_frame_rows D-126: a Next in no group no longer shows a QR code for a phone to dial it (D-119); it types a window's six digits through nextlink
+member/src/node.rs a_refused_command_keeps_its_id D-126: the member of 0.5 (node.rs) is gone; commands of 0.6 are records (service::on_live::orders and mesh tests)
+member/src/node.rs a_tunnel_replaces_a_connection_at_home D-126: the member of 0.5 is gone; mesh::tests::two_members_that_dial_each_other_at_once_keep_one_connection keeps one connection on 0.6
+member/src/node.rs commands_are_bounded D-126: the member of 0.5's command queue is gone; the commands of 0.6 are bounded by the set's limits in core
+member/src/node.rs dates D-126: the date helper moved to global_cli::utc_date, which global_cli's tests check
+member/src/node.rs found_is_bounded D-126: the member of 0.5 is gone; discovery::tests::dials_at_most_max_found bounds what discovery keeps
+member/src/node.rs frames_are_bounded D-126: the member of 0.5's JSON frames are gone; link::tests::the_rounds_are_bounded and core's frame limits bound the member connection of 0.6
+member/src/node.rs gets_are_bounded D-126: the member of 0.5's fetches are gone; internal/service TestMediaAway fetches on 0.6 within the set's limits
+member/src/node.rs loopback_replaces_only_a_connection_at_home D-126: the member of 0.5 is gone; mesh::tests::two_members_that_dial_each_other_at_once_keep_one_connection keeps one connection on 0.6
+member/src/node.rs near_only_for_a_while D-126: the member of 0.5's home presence is gone; discovery::tests::goodbyes_and_places_of_found_members keeps the found devices of 0.6
+member/src/phone.rs a_member_alone D-126: phone::Member on the Node is gone; ffi member::live::tests run the phones' member of 0.6
+member/src/phone.rs house_from_mode D-126: phone::Member on the Node is gone; ffi member::live::tests run the phones' member of 0.6
+member/src/records.rs a_group_before_0_4 D-126: every group of before 0.6 moves aside now, so the age of one before 0.4 no longer matters; set::tests::a_group_before_0_6_moves_aside checks the move
+member/src/records.rs leaves_a_group_of_0_5 D-126: the service uses set::leave_group_before_0_6, as the phones do; set::tests::a_group_before_0_6_moves_aside checks it
+member/src/sealkey.rs made_once_and_kept D-126: seal.json was the secret for sealed commands of 0.5; the member of 0.6 seals with its keys of 0.6 (sealed.rs, epochs.rs)
+member/src/service.rs a_command_is_carried_out_once D-126: the replay cache of commands of 0.5 is gone; an order of 0.6 is a record, carried out once (service::on_live::orders, mesh)
+member/src/window.rs a_refused_joiner_cannot_send_a_large_frame D-126: the window of 0.5 is gone; the home window of 0.6 is core's (core::join::tests::session)
+member/src/window.rs a_silent_attempt_gives_way D-126: the window of 0.5 is gone; core::join::tests::session::a_window_takes_one_attempt_at_a_time
+member/src/window.rs a_window_ends_when_its_time_is_up D-126: the window of 0.5 is gone; the home window of 0.6 ends at admitting::WINDOW_LIFETIME (core::join::tests)
+member/src/window.rs close_stops_an_attempt_unless_it_committed D-126: the window of 0.5 is gone; core::join::tests::an_attempt_counts_until_its_welcome
+member/src/window.rs failures_close_it D-126: the window of 0.5 is gone; core::join::tests::session::wrong_digits_count_and_the_third_closes_the_window
+member/src/window.rs idle_attempts_count_by_source D-126: the window of 0.5 is gone; core::join::tests::session::a_window_takes_one_attempt_at_a_time
+member/src/window.rs one_attempt_at_a_time_and_few_from_one_address D-126: the window of 0.5 is gone; core::join::tests::session::a_window_takes_one_attempt_at_a_time
+member/src/window.rs one_source_does_not_close_it D-126: the window of 0.5 is gone; core::join::tests::session::wrong_digits_count_and_the_third_closes_the_window
+member/src/window.rs opens_for_its_lifetime D-126: the window of 0.5 is gone; core::join::tests::a_home_window_has_six_digits
+member/src/window.rs wait_closes_it_when_asked D-126: the window of 0.5 is gone; service::on_live::tests::a_computer_pairs_with_the_window_of_a_new_group closes the window of 0.6
+member/tests/cli_commands.rs pair_shows_the_phone_a_code D-126: the QR code a device in no group showed a phone is gone (D-119); cli_commands pair_with_a_code cases "pair in no group", "pair -app" and "pair -port -addr" check the refusal
+member/tests/cli_commands.rs pair_for_an_app D-126: cbb pair -app wrote that QR code for the desktop apps; cli_commands pair_with_a_code cases "pair in no group", "pair -app" and "pair -port -addr" check the refusal
+member/tests/cli_commands.rs pair_waits_on_the_service_port D-126: the device in no group no longer listens for a phone; cli_commands pair_with_a_code cases "pair in no group", "pair -app" and "pair -port -addr" check the refusal

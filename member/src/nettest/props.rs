@@ -18,10 +18,7 @@ use cbb_core::clip::{Engine, Event, Kind, Via};
 use cbb_core::hlc::{self, Clock, Timestamp};
 use cbb_core::rule::{self, Incoming, Verdict};
 
-use crate::nettest::{TempDir, now_ms};
-
-/// The file the service keeps its clock's mark in (service.rs).
-const MARK_FILE: &str = "hlc.mark";
+use crate::nettest::now_ms;
 
 /// A member with a wall clock and an uptime the test moves.
 struct Member {
@@ -268,45 +265,4 @@ proptest! {
             prop_assert_eq!(v, Verdict::Mode);
         }
     }
-}
-
-/// The service's clock, kept in the state directory, never goes back
-/// across restarts, whatever mark a run saved within the limit ahead; a
-/// mark beyond it is the trace of a wrong clock, and the clock starts from
-/// the wall time again.
-#[test]
-fn the_saved_clock_never_goes_back() {
-    let mut runner = proptest::test_runner::TestRunner::new(ProptestConfig {
-        cases: 64,
-        failure_persistence: None,
-        ..ProptestConfig::default()
-    });
-    runner
-        .run(&(prop::collection::vec((0usize..30, -60_000i64..3_600_000), 1..6)), |restarts| {
-            let dir = TempDir::new("clock");
-            let mut last = Timestamp::default();
-            for (n, ahead) in restarts {
-                // A mark another run saved, ahead of the wall clock: a run
-                // saves only marks above the ones before.
-                let mark = Timestamp { wall: now_ms() + ahead, logical: 3 };
-                if ahead >= 0 && mark > last {
-                    std::fs::write(dir.0.join(MARK_FILE), format!("{mark}\n")).unwrap();
-                    last = mark;
-                }
-                let c = crate::service::clock(&dir.0);
-                for _ in 0..n {
-                    let t = c.now();
-                    prop_assert!(t > last, "{t} after {last}");
-                    last = t;
-                }
-            }
-            Ok(())
-        })
-        .unwrap();
-
-    let dir = TempDir::new("clock");
-    let far = Timestamp { wall: now_ms() + hlc::MAX_AHEAD + 60_000, logical: 0 };
-    std::fs::write(dir.0.join(MARK_FILE), format!("{far}\n")).unwrap();
-    let t = crate::service::clock(&dir.0).now();
-    assert!(t < far && t.wall >= now_ms() - 1000, "{t}");
 }

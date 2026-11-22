@@ -88,6 +88,20 @@ impl UnixStream {
         Ok(UnixStream(unsafe { TcpStream::from_raw_socket(s as RawSocket) }))
     }
 
+    /// Two connected ends, as Unix's socketpair, which Windows lacks: a
+    /// listener on a path of its own in the temporary folder takes the
+    /// connection, and the path goes at once.
+    pub fn pair() -> io::Result<(UnixStream, UnixStream)> {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("cbb-pair-{}-{n}.sock", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let ln = UnixListener::bind(&path)?;
+        let ends = UnixStream::connect(&path).and_then(|a| ln.accept().map(|(b, ())| (a, b)));
+        let _ = std::fs::remove_file(&path);
+        ends
+    }
+
     pub fn try_clone(&self) -> io::Result<UnixStream> {
         self.0.try_clone().map(UnixStream)
     }

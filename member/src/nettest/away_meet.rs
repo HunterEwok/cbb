@@ -19,9 +19,10 @@ fn problems_in_short() {
 
 #[test]
 fn pins() {
-    assert!(pin_of(PROJECT_PINS[0]).is_ok());
-    assert!(pin_of("AAAA").is_err());
-    assert!(pin_of(&("A".repeat(43) + "B")).is_err(), "not canonical");
+    use crate::away::serve::{PROJECT_PINS, pin_bytes};
+    assert!(pin_bytes(PROJECT_PINS[0]).is_ok());
+    assert!(pin_bytes("AAAA").is_err());
+    assert!(pin_bytes(&("A".repeat(43) + "B")).is_err(), "not canonical");
     assert!(test_resolve("cbb.tools").is_none(), "no port");
 }
 

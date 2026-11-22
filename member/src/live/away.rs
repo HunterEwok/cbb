@@ -670,7 +670,11 @@ fn move_linger() -> Duration {
 /// a minute, or CBB_TEST_STANDBY_GRACE seconds in a build for tests.
 #[cfg(not(test))]
 fn again_after() -> Duration {
-    crate::away::standby_grace()
+    static GRACE: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *GRACE.get_or_init(|| {
+        let s = crate::testbuild::env("CBB_TEST_STANDBY_GRACE").and_then(|v| v.parse().ok()).unwrap_or(60);
+        Duration::from_secs(s)
+    })
 }
 #[cfg(test)]
 fn again_after() -> Duration {

@@ -2891,6 +2891,17 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- `cbb`'s member of a group made before 0.6 (D-126): the service runs only the member of 0.6,
+  and a state folder with a group made before 0.6 (its `identity.json` or `records.json`, and
+  no `group.cbor`) moves aside into `before-0.6` at the start, as on the phones. Gone with it:
+  the node of 0.5 and its JSON wire, the pairing window of 0.5, the server credentials, the
+  signed-records log and the secret for sealed commands of 0.5 (`credentials.json`,
+  `server-keys.json`, `signed.json`, `seal.json`, which `cbb leave` still deletes), the old
+  member's tunnel, hub, shared hub list, guest tunnels and relay meeting, and its takeover.
+  `cbb pair` in no group no longer shows a QR code and waits for the group to dial it
+  (`-app`, `-port` and `-addr` say to join a pairing window by its six digits instead, D-119),
+  nor does `cbb next pair`; the Next joins through `cbb next link` and a window's six digits.
+  A panic before the start is reported again from the member of 0.6.
 - The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
   member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
   and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,
