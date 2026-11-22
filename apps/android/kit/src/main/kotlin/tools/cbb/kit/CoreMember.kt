@@ -87,6 +87,8 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         val key: String,
         /** The devices the copy is sealed to. */
         val readers: List<String> = emptyList(),
+        /** How long the copy lives from when it came, in milliseconds, as its sender stamped it (D-129); null when unknown. */
+        val ttlMS: Long? = null,
     ) {
         /** Whether it carries files or folders, which the phone saves rather than putting in its clipboard. */
         val isFiles: Boolean get() = media?.isFiles == true
@@ -103,6 +105,7 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
                 o.optBool("unread") ?: false,
                 o.optString("key") ?: "",
                 o.optArray("readers").orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
+                o.optLong("ttl_ms"),
             )
         }
     }
@@ -545,9 +548,9 @@ class CoreMember private constructor(internal val handle: Pointer, private val c
         act(Wire.obj("action" to Wire.str("key_level"), "level" to Wire.str(level)), public, sign)
             .optArray("below")?.map { it.jsonPrimitive.content }.orEmpty()
 
-    /** Sets how long a copy from another device stays live on each member, in milliseconds: a copies record, which any admin signs. */
-    fun setIncoming(ms: Long, public: ByteArray, sign: (ByteArray) -> ByteArray) {
-        act(Wire.obj("action" to Wire.str("incoming"), "incoming_ms" to Wire.num(ms)), public, sign)
+    /** Sets how long a copy and a secret live, in milliseconds, either left out to keep it: a copies record, which any admin signs (D-129). */
+    fun setTtl(ttlMS: Long?, secretTtlMS: Long?, public: ByteArray, sign: (ByteArray) -> ByteArray) {
+        act(Wire.obj("action" to Wire.str("ttl"), "ttl_ms" to Wire.num(ttlMS), "secret_ttl_ms" to Wire.num(secretTtlMS)), public, sign)
     }
 
     /**

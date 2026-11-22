@@ -132,7 +132,7 @@ class CoreMemberTest {
         assertFailsWith<IllegalStateException> { m.current() }
     }
 
-    /** The root's own settings, which the member writes and signs with the root key outside it: the key level and the window for incoming copies. */
+    /** The root's own settings, which the member writes and signs with the root key outside it: the key level and the copies' lifetimes. */
     @Test
     fun theRootSignsItsOwnRecordsInTheCore() {
         val g = group(1)
@@ -143,7 +143,9 @@ class CoreMemberTest {
         assertFailsWith<Core.Refusal> { m.setKeyLevel("any", pub, g.rootKey::signDigest) }
         assertEquals(emptyList(), m.setKeyLevel(Records.LEVEL_FILES, pub, g.rootKey::signDigest))
         assertEquals(Records.LEVEL_FILES, m.group().keyLevel)
-        m.setIncoming(120_000, pub, g.rootKey::signDigest)
-        assertEquals(120_000L, m.group().incomingMS)
+        m.setTtl(120_000, null, pub, g.rootKey::signDigest)
+        assertEquals(120_000L, m.group().ttlMS)
+        m.setTtl(null, 30_000, pub, g.rootKey::signDigest)
+        assertEquals(120_000L to 30_000L, m.group().let { it.ttlMS to it.secretTtlMS }, "a left-out lifetime keeps its value")
     }
 }

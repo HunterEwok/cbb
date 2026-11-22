@@ -130,9 +130,11 @@ object Records {
     const val FILE = "file"
     const val HARDWARE = "hardware"
 
-    /** How long a copy from another device stays live after it arrives without a copies record, and the bounds of one, in milliseconds. */
-    const val DEFAULT_INCOMING_MS = 60_000L
-    val INCOMING_BOUNDS = 5_000L..3_600_000L
+    /** How long a copy and a secret live without a copies record, and the bounds a copies record keeps, in milliseconds (D-129). */
+    const val DEFAULT_TTL_MS = 300_000L
+    const val DEFAULT_SECRET_TTL_MS = 60_000L
+    val TTL_BOUNDS = 60_000L..3_600_000L
+    val SECRET_TTL_BOUNDS = 5_000L..60_000L
 
     /** A key in hardware whose attestation a signer checked. */
     const val PROVEN = "proven"

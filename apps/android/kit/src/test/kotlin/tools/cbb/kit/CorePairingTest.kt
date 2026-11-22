@@ -42,6 +42,7 @@ class CorePairingTest {
         assertEquals(made.device, me.device)
         assertEquals("phone", me.role)
         assertEquals(Records.HARDWARE, g.keyLevel)
-        assertNull(g.incomingMS, "no copies record yet")
+        assertNull(g.ttlMS, "no copies record yet")
+        assertNull(g.secretTtlMS, "no copies record yet")
     }
 }

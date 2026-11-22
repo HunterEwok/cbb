@@ -645,6 +645,16 @@ void App::setGroupKeyLevel(const QString &level)
               });
 }
 
+void App::setGroupTtl(double ttlMs, double secretTtlMs)
+{
+    QJsonObject extra;
+    if (ttlMs > 0)
+        extra.insert(QStringLiteral("ttl_ms"), ttlMs);
+    if (secretTtlMs > 0)
+        extra.insert(QStringLiteral("secret_ttl_ms"), secretTtlMs);
+    runManage(QStringLiteral("ttl"), QString(), extra, [](const QJsonObject &) {});
+}
+
 void App::openCard(const QString &pin)
 {
     if (m_busy)

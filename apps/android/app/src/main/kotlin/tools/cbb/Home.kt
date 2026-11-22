@@ -554,6 +554,11 @@ internal fun FallbackSend(model: AppModel) {
 internal fun LastReceived(model: AppModel) {
     val r = model.received ?: return
     val scope = rememberCoroutineScope()
+    // The line goes when the copy's own lifetime ends (D-129).
+    LaunchedEffect(r.id, r.untilMS) {
+        kotlinx.coroutines.delay(maxOf(0L, r.untilMS - System.currentTimeMillis()))
+        model.receivedExpired(r.id)
+    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.last_received, r.from), style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim)

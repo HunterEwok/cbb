@@ -243,8 +243,11 @@ final class CoreMemberTests: XCTestCase {
         refused { _ = try m.setKeyLevel("any", public: pub, sign: root) }
         XCTAssertEqual(try m.setKeyLevel(Records.levelFiles, public: pub, sign: root), [])
         XCTAssertEqual(try m.group().keyLevel, Records.levelFiles)
-        try m.setIncoming(ms: 120_000, public: pub, sign: root)
-        XCTAssertEqual(try m.group().incomingMS, 120_000)
+        try m.setTtl(ms: 120_000, secretMS: nil, public: pub, sign: root)
+        XCTAssertEqual(try m.group().ttlMS, 120_000)
+        try m.setTtl(ms: nil, secretMS: 30_000, public: pub, sign: root)
+        XCTAssertEqual(try m.group().ttlMS, 120_000, "a left-out lifetime keeps its value")
+        XCTAssertEqual(try m.group().secretTtlMS, 30_000)
     }
 
     func testRefusesWhatItDoesNotKnowAndStops() throws {

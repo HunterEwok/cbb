@@ -1135,18 +1135,23 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
     val keyLevel: String? get() = if (!isRoot) null else currentNode?.let { n -> runCatching { n.group().keyLevel }.getOrNull() }
 
-    /** How long a copy from another device stays live after it arrives, in milliseconds, as the group's records set it. */
-    val incomingMS: Long get() = currentNode?.let { n -> runCatching { n.group().incomingMS }.getOrNull() } ?: KitRecords.DEFAULT_INCOMING_MS
+    /** How long a copy and a secret live, in milliseconds, as the group's records set them (D-129). */
+    val ttlMS: Pair<Long, Long>
+        get() {
+            val g = currentNode?.let { n -> runCatching { n.group() }.getOrNull() }
+            return (g?.ttlMS ?: KitRecords.DEFAULT_TTL_MS) to (g?.secretTtlMS ?: KitRecords.DEFAULT_SECRET_TTL_MS)
+        }
 
     /**
-     * Sets how long a copy from another device stays live after it arrives:
-     * a copies record, signed by the root or an admin after the fingerprint,
-     * the face or the screen lock and sent to every member (docs/protocol.md,
-     * section 10, "The copies setting").
+     * Sets how long a copy (ttlMS) or a secret (secretTtlMS) lives, the other
+     * left as it is: a copies record, signed by the root or an admin after the
+     * fingerprint, the face or the screen lock and sent to every member
+     * (docs/protocol.md, section 10, "The copies setting").
      */
-    suspend fun setIncoming(ms: Long) {
+    suspend fun setTtl(ttlMS: Long?, secretTtlMS: Long?) {
         if (!isAdmin) throw Failure(Failure.Kind.NOT_ADMIN)
-        act(R.string.reason_incoming, "incoming", "incoming_ms" to JsonPrimitive(ms))
+        val args = listOfNotNull(ttlMS?.let { "ttl_ms" to JsonPrimitive(it) }, secretTtlMS?.let { "secret_ttl_ms" to JsonPrimitive(it) })
+        act(R.string.reason_ttl, "ttl", *args.toTypedArray())
     }
 
     /**
@@ -1411,7 +1416,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         if (c.unread || c.origin == me || c.isFiles) return
         val image = Images.part(c.media)
         if (image == null && (c.text.isEmpty() || c.kind == Member.Kind.MEDIA)) return
-        lastReceived = Received(c.id, nameOf(c.origin), if (c.kind == Member.Kind.SECRET) "" else c.text, c.kind, image != null)
+        val ttl = c.ttlMS ?: if (c.kind == Member.Kind.SECRET) KitRecords.DEFAULT_SECRET_TTL_MS else KitRecords.DEFAULT_TTL_MS
+        lastReceived = Received(c.id, nameOf(c.origin), if (c.kind == Member.Kind.SECRET) "" else c.text, c.kind, image != null, System.currentTimeMillis() + ttl)
         onReceived?.invoke()
         if (!foreground || !Member.receives(syncMode)) return
         if (image != null) {
@@ -1432,8 +1438,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** The last copy that came from another device, for Home's line (D-128); text is empty for a secret, which Home does not show. */
-    data class Received(val id: String, val from: String, val text: String, val kind: Member.Kind, val image: Boolean)
+    /**
+     * The last copy that came from another device, for Home's line (D-128);
+     * text is empty for a secret, which Home does not show. The line goes at
+     * untilMS, when the copy's own lifetime ends (D-129).
+     */
+    data class Received(val id: String, val from: String, val text: String, val kind: Member.Kind, val image: Boolean, val untilMS: Long)
 
     @Volatile var lastReceived: Received? = null
         private set

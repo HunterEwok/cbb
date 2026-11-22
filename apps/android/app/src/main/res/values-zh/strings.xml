@@ -219,11 +219,6 @@
     <string name="hub_strict_web">只允许网页通行的网络 (VLESS)</string>
     <string name="hub_switch">这部手机是群组的中心节点</string>
     <string name="hub_title">这部手机作为中心节点</string>
-    <string name="incoming_body">来自其他设备的副本从复制时算起，等待多长时间写入本设备的剪贴板。超时后它就消失，按钮会发送本设备复制的内容。整个群组都遵循此设置。</string>
-    <string name="incoming_minutes">%d 分钟</string>
-    <string name="incoming_saved">已保存。群组的每台设备都会遵循它。</string>
-    <string name="incoming_seconds">%d 秒</string>
-    <string name="incoming_title">来自其他设备的副本</string>
     <string name="invitation_accept">加入</string>
     <string name="invitation_answer_hint">仅在你自己请求了此邀请时才加入。创建邀请的人看到这部手机显示的词后会接纳它。</string>
     <string name="invitation_connecting">正在连接群组的中心节点…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">把电脑添加到你的群组</string>
     <string name="reason_add_watch">让手表成为管理员</string>
     <string name="reason_change_root">把这部手机设为群组的主设备</string>
-    <string name="reason_incoming">更改来自其他设备的副本保留多久</string>
     <string name="reason_join">以管理员身份加入群组</string>
     <string name="reason_key_level">更改哪些密钥可以成为管理员</string>
     <string name="reason_make_admin">让设备成为管理员</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">更改电脑的同步模式</string>
     <string name="reason_take_handed">接管电脑交给这部手机的群组</string>
     <string name="reason_take_over">从丢失的手机接管群组</string>
+    <string name="reason_ttl">更改副本和秘密的有效期</string>
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_unmute">取消设备静音</string>
     <string name="recovery_06">随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">开</string>
     <string name="tile_sync_off">同步已关闭</string>
     <string name="tile_sync_on">同步已开启</string>
+    <string name="ttl_body">最新副本显示为已收到的时长，对整个群组生效。秘密到期后还会从剪贴板中移除。</string>
+    <string name="ttl_copies">副本保留时长</string>
+    <string name="ttl_minutes">%d 分钟</string>
+    <string name="ttl_saved">已保存。群组的每台设备都会遵循它。</string>
+    <string name="ttl_seconds">%d 秒</string>
+    <string name="ttl_secrets">秘密的有效期</string>
     <string name="turn_on">开启</string>
     <string name="type">类型</string>
     <string name="unfreeze">解冻</string>

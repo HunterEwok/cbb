@@ -1525,6 +1525,14 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>%1 min</source>
+        <translation>%1 د</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 ث</translation>
+    </message>
+    <message>
         <source>A device becomes an admin</source>
         <translation>يصبح جهاز مشرفًا</translation>
     </message>
@@ -1567,6 +1575,10 @@
     <message>
         <source>Connected</source>
         <translation>متصل</translation>
+    </message>
+    <message>
+        <source>Copy lifetime</source>
+        <translation>مدة بقاء النسخة</translation>
     </message>
     <message>
         <source>Core</source>
@@ -1671,6 +1683,10 @@
     <message>
         <source>Recovery key</source>
         <translation>مفتاح الاسترداد</translation>
+    </message>
+    <message>
+        <source>Secret lifetime</source>
+        <translation>مدة بقاء السر</translation>
     </message>
     <message>
         <source>Settings</source>

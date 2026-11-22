@@ -34,8 +34,10 @@ data class GroupState(
     val devices: List<Device>,
     /** The group's key level: proven, hardware or files (Records.KEY_LEVELS). */
     val keyLevel: String = Records.HARDWARE,
-    /** How long a copy from another device stays live, as the newest copies record sets it; null for the default. */
-    val incomingMS: Long? = null,
+    /** How long a copy lives, in milliseconds, as the newest copies record sets it; null for the default (D-129). */
+    val ttlMS: Long? = null,
+    /** How long a secret lives, in milliseconds; null for the default. */
+    val secretTtlMS: Long? = null,
 ) {
     /** This device's place in the group. */
     data class Me(
@@ -85,7 +87,8 @@ data class GroupState(
                 tooOld = o.optBool("too_old") ?: false,
                 changeArriving = o.optBool("change_arriving") ?: false,
                 keyLevel = o.optString("key_level") ?: Records.HARDWARE,
-                incomingMS = o.optLong("incoming_ms"),
+                ttlMS = o.optLong("ttl_ms"),
+                secretTtlMS = o.optLong("secret_ttl_ms"),
                 devices = o.objects("devices").map {
                     Device(
                         device = it.optString("device") ?: "",

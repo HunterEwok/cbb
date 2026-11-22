@@ -59,13 +59,16 @@ public final class CoreMember: @unchecked Sendable {
         public var media: Media.Manifest?
         public var unread: Bool
         public var key: String
+        /// How long the copy lives, in milliseconds, as its sender set it
+        /// (D-129); nil when the event does not say.
+        public var ttlMS: Int64?
 
-        enum CodingKeys: String, CodingKey { case id, origin, ageMS = "age_ms", kind, via, text, media, unread, key }
+        enum CodingKeys: String, CodingKey { case id, origin, ageMS = "age_ms", kind, via, text, media, unread, key, ttlMS = "ttl_ms" }
 
         public init(id: String, origin: String, ageMS: Int64 = 0, kind: Member.Kind = .text, via: Member.Via = .copy, text: String,
-                    media: Media.Manifest? = nil, unread: Bool = false, key: String = "") {
+                    media: Media.Manifest? = nil, unread: Bool = false, key: String = "", ttlMS: Int64? = nil) {
             (self.id, self.origin, self.ageMS, self.kind, self.via, self.text) = (id, origin, ageMS, kind, via, text)
-            (self.media, self.unread, self.key) = (media, unread, key)
+            (self.media, self.unread, self.key, self.ttlMS) = (media, unread, key, ttlMS)
         }
 
         public init(from decoder: Decoder) throws {
@@ -79,6 +82,7 @@ public final class CoreMember: @unchecked Sendable {
             media = try? c.decodeIfPresent(Media.Manifest.self, forKey: .media)
             unread = try c.decodeIfPresent(Bool.self, forKey: .unread) ?? false
             key = try c.decodeIfPresent(String.self, forKey: .key) ?? ""
+            ttlMS = try c.decodeIfPresent(Int64.self, forKey: .ttlMS)
         }
     }
 
@@ -850,11 +854,13 @@ public final class CoreMember: @unchecked Sendable {
         return (r.status ?? "", r.reason ?? "")
     }
 
-    /// Sets how long a copy from another device stays live on each member,
-    /// in milliseconds: a copies record, which any admin signs.
-    public func setIncoming(ms: Int64, public: Data, sign: @escaping (Data) throws -> Data) throws {
-        struct A: Encodable { var action = "incoming", incoming_ms: Int64, `public`: Data }
-        _ = try manage(A(incoming_ms: ms, public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    /// Sets how long a copy and a secret live, in milliseconds, either nil
+    /// to keep it: a copies record, which any admin signs (D-129).
+    public func setTtl(ms: Int64?, secretMS: Int64?, public: Data, sign: @escaping (Data) throws -> Data) throws {
+        struct A: Encodable {
+            var action = "ttl", ttl_ms: Int64?, secret_ttl_ms: Int64?, `public`: Data
+        }
+        _ = try manage(A(ttl_ms: ms, secret_ttl_ms: secretMS, public: try Self.point(`public`)), sign: sign, as: Empty.self)
     }
 
     /// The action of an admin or the root (cbb_member_manage, docs/core-api.md):

@@ -219,11 +219,6 @@
     <string name="hub_strict_web">Redes que solo dejan pasar la web (VLESS)</string>
     <string name="hub_switch">Este teléfono es el hub del grupo</string>
     <string name="hub_title">Este teléfono como hub</string>
-    <string name="incoming_body">Cuánto tiempo espera una copia de otro dispositivo para entrar en el portapapeles de este, contando desde que se copió. Después desaparece, y el botón envía lo que copió este dispositivo. Todo el grupo lo sigue.</string>
-    <string name="incoming_minutes">%d min</string>
-    <string name="incoming_saved">Guardado. Todos los dispositivos del grupo lo siguen.</string>
-    <string name="incoming_seconds">%d s</string>
-    <string name="incoming_title">Copias de otros dispositivos</string>
     <string name="invitation_accept">Unirse</string>
     <string name="invitation_answer_hint">Únete solo si pediste esta invitación. Quien la creó admite este teléfono cuando ve las palabras que muestra.</string>
     <string name="invitation_connecting">Conectando con el hub del grupo…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">Añadir un ordenador a tu grupo</string>
     <string name="reason_add_watch">Hacer administrador al reloj</string>
     <string name="reason_change_root">Hacer de este teléfono el dispositivo principal del grupo</string>
-    <string name="reason_incoming">Cambiar cuánto dura una copia de otro dispositivo</string>
     <string name="reason_join">Unirse al grupo como administrador</string>
     <string name="reason_key_level">Cambiar qué claves pueden ser administradoras</string>
     <string name="reason_make_admin">Hacer administrador a un dispositivo</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">Cambiar el modo de sincronización de un ordenador</string>
     <string name="reason_take_handed">Tomar el grupo que el ordenador entregó a este teléfono</string>
     <string name="reason_take_over">Tomar el grupo del teléfono perdido</string>
+    <string name="reason_ttl">Cambiar cuánto duran las copias y los secretos</string>
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_unmute">Quitar el silencio a un dispositivo</string>
     <string name="recovery_06">Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">Activada</string>
     <string name="tile_sync_off">La sincronización está desactivada</string>
     <string name="tile_sync_on">La sincronización está activada</string>
+    <string name="ttl_body">Cuánto tiempo se muestra la última copia como recibida, para todo el grupo. Un secreto además sale del portapapeles al acabarse su tiempo.</string>
+    <string name="ttl_copies">Duración de una copia</string>
+    <string name="ttl_minutes">%d min</string>
+    <string name="ttl_saved">Guardado. Todos los dispositivos del grupo lo siguen.</string>
+    <string name="ttl_seconds">%d s</string>
+    <string name="ttl_secrets">Duración de un secreto</string>
     <string name="turn_on">Activar</string>
     <string name="type">Tipo</string>
     <string name="unfreeze">Descongelar</string>

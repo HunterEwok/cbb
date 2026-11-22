@@ -511,6 +511,20 @@ void Member::event(const QByteArray &json)
         m_lastFrom = deviceName(copy.value(QStringLiteral("origin")).toString());
         m_lastText = kind == QStringLiteral("text") ? copy.value(QStringLiteral("text")).toString() : QString();
         emit changed();
+        // The line goes when the copy's lifetime runs out (D-129): its own
+        // ttl, else the group's default, five minutes or a minute for a secret.
+        const qint64 ttl = copy.contains(QStringLiteral("ttl_ms")) && !copy.value(QStringLiteral("ttl_ms")).isNull()
+            ? qint64(copy.value(QStringLiteral("ttl_ms")).toDouble())
+            : (kind == QStringLiteral("secret") ? 60000 : 300000);
+        const QString shown = m_lastId;
+        QTimer::singleShot(int(qMin<qint64>(ttl, 24 * 3600 * 1000)), this, [this, shown]() {
+            if (m_lastId != shown)
+                return;
+            m_lastId.clear();
+            m_lastFrom.clear();
+            m_lastText.clear();
+            emit changed();
+        });
         if (kind == QStringLiteral("media") && !m_paused && active) {
             take(copy);
         } else if (active && !copy.value(QStringLiteral("text")).toString().isEmpty()) {

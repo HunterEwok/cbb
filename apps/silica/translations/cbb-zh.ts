@@ -1525,6 +1525,14 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>%1 min</source>
+        <translation>%1 分钟</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 秒</translation>
+    </message>
+    <message>
         <source>A device becomes an admin</source>
         <translation>设备成为管理员</translation>
     </message>
@@ -1567,6 +1575,10 @@
     <message>
         <source>Connected</source>
         <translation>已连接</translation>
+    </message>
+    <message>
+        <source>Copy lifetime</source>
+        <translation>副本保留时长</translation>
     </message>
     <message>
         <source>Core</source>
@@ -1671,6 +1683,10 @@
     <message>
         <source>Recovery key</source>
         <translation>恢复密钥</translation>
+    </message>
+    <message>
+        <source>Secret lifetime</source>
+        <translation>秘密的有效期</translation>
     </message>
     <message>
         <source>Settings</source>

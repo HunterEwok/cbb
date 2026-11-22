@@ -547,7 +547,7 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
             RemotePasteSection(model.group.pastes, model.isTv)
         }
         if (more(SettingsPart.GROUP)) {
-            model.incomingMS?.let { IncomingSection(model, it) }
+            model.ttlMS?.let { LifetimeSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
         }
         // The lab: what works but is no promise of 1.0 (docs/apps.md,

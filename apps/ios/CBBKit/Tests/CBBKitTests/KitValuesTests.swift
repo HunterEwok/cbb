@@ -29,7 +29,8 @@ final class KitValuesTests: XCTestCase {
         XCTAssertEqual(Records.keyLevels, [Records.proven, Records.hardware, Records.levelFiles])
         XCTAssertEqual(Records.keyHash(spki: Data([1])).count, 32)
         XCTAssertEqual(Records.ms(Date(timeIntervalSince1970: 1.5)), 1500)
-        XCTAssertTrue(Records.incomingBounds.contains(Records.defaultIncomingMS))
+        XCTAssertTrue(Records.ttlBounds.contains(Records.defaultTtlMS))
+        XCTAssertTrue(Records.secretTtlBounds.contains(Records.defaultSecretTtlMS))
     }
 
     func testAHellosDeviceAndAKeysEvidence() throws {

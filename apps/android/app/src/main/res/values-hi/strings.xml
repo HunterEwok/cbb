@@ -219,11 +219,6 @@
     <string name="hub_strict_web">केवल वेब चलने देने वाले नेटवर्क (VLESS)</string>
     <string name="hub_switch">यह फ़ोन समूह का हब है</string>
     <string name="hub_title">यह फ़ोन हब के रूप में</string>
-    <string name="incoming_body">दूसरे डिवाइस की कॉपी, कॉपी होने के समय से गिनकर, इस डिवाइस के क्लिपबोर्ड में जाने के लिए कितनी देर प्रतीक्षा करती है। उसके बाद वह चली जाती है, और बटन वह भेजता है जो इस डिवाइस ने कॉपी किया। पूरा समूह इसका पालन करता है।</string>
-    <string name="incoming_minutes">%d मिनट</string>
-    <string name="incoming_saved">सहेजा गया। समूह का हर डिवाइस इसका पालन करता है।</string>
-    <string name="incoming_seconds">%d से</string>
-    <string name="incoming_title">दूसरे डिवाइसों से कॉपी</string>
     <string name="invitation_accept">जुड़ें</string>
     <string name="invitation_answer_hint">तभी जुड़ें जब आपने यह निमंत्रण माँगा हो। इसे बनाने वाला इस फ़ोन के दिखाए शब्द देखकर इसे शामिल करता है।</string>
     <string name="invitation_connecting">समूह के हब से जुड़ रहा है…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">अपने समूह में कंप्यूटर जोड़ें</string>
     <string name="reason_add_watch">घड़ी को एडमिन बनाएँ</string>
     <string name="reason_change_root">इस फ़ोन को समूह का मुख्य डिवाइस बनाएँ</string>
-    <string name="reason_incoming">बदलें कि दूसरे डिवाइस की कॉपी कितनी देर रहे</string>
     <string name="reason_join">एडमिन के रूप में समूह से जुड़ें</string>
     <string name="reason_key_level">बदलें कि कौन-सी कुंजियाँ एडमिन हो सकती हैं</string>
     <string name="reason_make_admin">किसी डिवाइस को एडमिन बनाएँ</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">किसी कंप्यूटर का सिंक मोड बदलें</string>
     <string name="reason_take_handed">वह समूह लें जो कंप्यूटर ने इस फ़ोन को सौंपा</string>
     <string name="reason_take_over">खोए फ़ोन से समूह अपने हाथ में लें</string>
+    <string name="reason_ttl">बदलें कि कॉपी और सीक्रेट कितनी देर रहते हैं</string>
     <string name="reason_unfreeze">किसी एडमिन कंप्यूटर को अनफ़्रीज़ करें</string>
     <string name="reason_unmute">किसी डिवाइस को अनम्यूट करें</string>
     <string name="recovery_06">समूह के साथ ही बनी, और इसकी शीट सिर्फ़ एक बार दिखाई गई। शीट के बिना समूह का मुख्य डिवाइस नहीं बदला जा सकता: अगर शीट खो जाए, तो नया समूह बनाएँ।</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">चालू</string>
     <string name="tile_sync_off">सिंक बंद है</string>
     <string name="tile_sync_on">सिंक चालू है</string>
+    <string name="ttl_body">नवीनतम कॉपी कितनी देर तक मिली हुई दिखती है, पूरे समूह के लिए। सीक्रेट का समय पूरा होने पर वह क्लिपबोर्ड से भी हट जाता है।</string>
+    <string name="ttl_copies">कॉपी की अवधि</string>
+    <string name="ttl_minutes">%d मिनट</string>
+    <string name="ttl_saved">सहेजा गया। समूह का हर डिवाइस इसका पालन करता है।</string>
+    <string name="ttl_seconds">%d से</string>
+    <string name="ttl_secrets">सीक्रेट की अवधि</string>
     <string name="turn_on">चालू करें</string>
     <string name="type">प्रकार</string>
     <string name="unfreeze">अनफ़्रीज़ करें</string>

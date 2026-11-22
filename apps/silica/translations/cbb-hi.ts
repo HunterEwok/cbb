@@ -1525,6 +1525,14 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>%1 min</source>
+        <translation>%1 मिनट</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 से</translation>
+    </message>
+    <message>
         <source>A device becomes an admin</source>
         <translation>कोई डिवाइस एडमिन बनता है</translation>
     </message>
@@ -1567,6 +1575,10 @@
     <message>
         <source>Connected</source>
         <translation>कनेक्ट है</translation>
+    </message>
+    <message>
+        <source>Copy lifetime</source>
+        <translation>कॉपी की अवधि</translation>
     </message>
     <message>
         <source>Core</source>
@@ -1671,6 +1683,10 @@
     <message>
         <source>Recovery key</source>
         <translation>पुनर्प्राप्ति कुंजी</translation>
+    </message>
+    <message>
+        <source>Secret lifetime</source>
+        <translation>सीक्रेट की अवधि</translation>
     </message>
     <message>
         <source>Settings</source>

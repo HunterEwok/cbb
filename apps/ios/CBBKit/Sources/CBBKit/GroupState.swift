@@ -29,9 +29,10 @@ public struct GroupState: Decodable, Equatable, Sendable {
     public var changeArriving: Bool
     /// The group's key level (Records.keyLevels).
     public var keyLevel: String
-    /// How long a copy from another device stays live, in milliseconds;
-    /// nil while no copies record sets it.
-    public var incomingMS: Int64?
+    /// How long a copy and a secret live, in milliseconds; nil while no
+    /// copies record sets it (D-129).
+    public var ttlMS: Int64?
+    public var secretTtlMS: Int64?
     public var devices: [Device]
 
     /// This device's place in the group.
@@ -94,7 +95,8 @@ public struct GroupState: Decodable, Equatable, Sendable {
         case tooOld = "too_old"
         case changeArriving = "change_arriving"
         case keyLevel = "key_level"
-        case incomingMS = "incoming_ms"
+        case ttlMS = "ttl_ms"
+        case secretTtlMS = "secret_ttl_ms"
     }
 
     public init(from decoder: Decoder) throws {
@@ -109,7 +111,8 @@ public struct GroupState: Decodable, Equatable, Sendable {
         tooOld = try c.decodeIfPresent(Bool.self, forKey: .tooOld) ?? false
         changeArriving = try c.decodeIfPresent(Bool.self, forKey: .changeArriving) ?? false
         keyLevel = try c.decodeIfPresent(String.self, forKey: .keyLevel) ?? Records.hardware
-        incomingMS = try c.decodeIfPresent(Int64.self, forKey: .incomingMS)
+        ttlMS = try c.decodeIfPresent(Int64.self, forKey: .ttlMS)
+        secretTtlMS = try c.decodeIfPresent(Int64.self, forKey: .secretTtlMS)
         devices = try c.decodeIfPresent([Device].self, forKey: .devices) ?? []
     }
 

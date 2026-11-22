@@ -18,10 +18,12 @@ public enum Records {
     /// SubjectPublicKeyInfo.
     public static func keyHash(spki: Data) -> Data { Data(SHA256.hash(data: spki)) }
 
-    /// How long a copy from another device stays live after it arrives
-    /// without a copies record, and the bounds of one, in milliseconds.
-    public static let defaultIncomingMS: Int64 = 60_000
-    public static let incomingBounds: ClosedRange<Int64> = 5_000...3_600_000
+    /// How long a copy and a secret live without a copies record, and the
+    /// bounds a copies record keeps, in milliseconds (D-129).
+    public static let defaultTtlMS: Int64 = 300_000
+    public static let defaultSecretTtlMS: Int64 = 60_000
+    public static let ttlBounds: ClosedRange<Int64> = 60_000...3_600_000
+    public static let secretTtlBounds: ClosedRange<Int64> = 5_000...60_000
 
     public static let file = "file"
     public static let hardware = "hardware"

@@ -204,7 +204,7 @@ they look, so both apps are built to the same plan.
    extra in debug builds only, since any app can start the activity with one).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
    computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
-   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
+   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime" and "Secret lifetime", D-129; "Security level": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from

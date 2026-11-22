@@ -1525,6 +1525,14 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>%1 min</source>
+        <translation>%1 דק׳</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 שנ׳</translation>
+    </message>
+    <message>
         <source>A device becomes an admin</source>
         <translation>מכשיר הופך למנהל</translation>
     </message>
@@ -1567,6 +1575,10 @@
     <message>
         <source>Connected</source>
         <translation>מחובר</translation>
+    </message>
+    <message>
+        <source>Copy lifetime</source>
+        <translation>משך חיי העתקה</translation>
     </message>
     <message>
         <source>Core</source>
@@ -1671,6 +1683,10 @@
     <message>
         <source>Recovery key</source>
         <translation>מפתח שחזור</translation>
+    </message>
+    <message>
+        <source>Secret lifetime</source>
+        <translation>משך החיים של סוד</translation>
     </message>
     <message>
         <source>Settings</source>

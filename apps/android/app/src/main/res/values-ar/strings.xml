@@ -219,11 +219,6 @@
     <string name="hub_strict_web">الشبكات التي لا تسمح إلا بالويب (VLESS)</string>
     <string name="hub_switch">هذا الهاتف هو محور المجموعة</string>
     <string name="hub_title">هذا الهاتف كمحور</string>
-    <string name="incoming_body">المدة التي تنتظرها نسخة من جهاز آخر لتدخل حافظة هذا الجهاز، محسوبة من وقت نسخها. بعدها تختفي، ويرسل الزر ما نسخه هذا الجهاز. تتبع المجموعة كلها هذا الإعداد.</string>
-    <string name="incoming_minutes">%d د</string>
-    <string name="incoming_saved">تم الحفظ. تتبعه كل أجهزة المجموعة.</string>
-    <string name="incoming_seconds">%d ث</string>
-    <string name="incoming_title">النسخ من الأجهزة الأخرى</string>
     <string name="invitation_accept">انضمام</string>
     <string name="invitation_answer_hint">انضم فقط إن كنت طلبت هذه الدعوة. من أنشأها يقبل هذا الهاتف حين يرى الكلمات التي يعرضها.</string>
     <string name="invitation_connecting">جارٍ الاتصال بمحور المجموعة…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">إضافة حاسوب إلى مجموعتك</string>
     <string name="reason_add_watch">جعل الساعة مشرفًا</string>
     <string name="reason_change_root">اجعل هذا الهاتف الجهاز الرئيسي للمجموعة</string>
-    <string name="reason_incoming">تغيير مدة بقاء النسخة من جهاز آخر</string>
     <string name="reason_join">الانضمام إلى المجموعة كمشرف</string>
     <string name="reason_key_level">تغيير المفاتيح التي يمكن أن تكون مشرفة</string>
     <string name="reason_make_admin">جعل جهاز مشرفًا</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">تغيير وضع مزامنة حاسوب</string>
     <string name="reason_take_handed">تولّي المجموعة التي سلّمها الحاسوب إلى هذا الهاتف</string>
     <string name="reason_take_over">تولّي المجموعة من الهاتف المفقود</string>
+    <string name="reason_ttl">تغيير مدة بقاء النسخ والأسرار</string>
     <string name="reason_unfreeze">إلغاء تجميد حاسوب مشرف</string>
     <string name="reason_unmute">إلغاء كتم جهاز</string>
     <string name="recovery_06">أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">مفعّلة</string>
     <string name="tile_sync_off">المزامنة متوقفة</string>
     <string name="tile_sync_on">المزامنة مفعّلة</string>
+    <string name="ttl_body">المدة التي تظهر فيها آخر نسخة على أنها وصلت، للمجموعة كلها. ويُزال السر أيضًا من الحافظة عند انتهاء مدته.</string>
+    <string name="ttl_copies">مدة بقاء النسخة</string>
+    <string name="ttl_minutes">%d د</string>
+    <string name="ttl_saved">تم الحفظ. تتبعه كل أجهزة المجموعة.</string>
+    <string name="ttl_seconds">%d ث</string>
+    <string name="ttl_secrets">مدة بقاء السر</string>
     <string name="turn_on">تشغيل</string>
     <string name="type">النوع</string>
     <string name="unfreeze">إلغاء التجميد</string>

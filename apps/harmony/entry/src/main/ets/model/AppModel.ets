@@ -402,6 +402,21 @@ export class AppModel {
     }
   }
 
+  // Sets how long a copy or a secret lives for the whole group (D-129);
+  // the other is left as it is.
+  async setGroupTtl(ttlMs: number | undefined, secretTtlMs: number | undefined): Promise<void> {
+    const extra: Record<string, Object> = {};
+    if (ttlMs !== undefined) {
+      extra['ttl_ms'] = ttlMs;
+    }
+    if (secretTtlMs !== undefined) {
+      extra['secret_ttl_ms'] = secretTtlMs;
+    }
+    if (await this.runManage('ttl', '', extra) !== undefined) {
+      await this.member.pollDevices();
+    }
+  }
+
   // The sheet is shown once; nothing of the key stays in the app.
   forgetRecovery(): void {
     this.recoveryText = '';

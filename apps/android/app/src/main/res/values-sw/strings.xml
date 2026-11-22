@@ -219,11 +219,6 @@
     <string name="hub_strict_web">Mitandao inayoruhusu wavuti pekee (VLESS)</string>
     <string name="hub_switch">Simu hii ndiyo kitovu cha kikundi</string>
     <string name="hub_title">Simu hii kama kitovu</string>
-    <string name="incoming_body">Muda ambao nakala kutoka kifaa kingine husubiri kuingia kwenye ubao wa kunakili wa kifaa hiki, ukihesabiwa tangu ilipo nakiliwa. Baada ya hapo hupotea, na kitufe hutuma kile ambacho kifaa hiki kilinakili. Kikundi kizima hufuata hili.</string>
-    <string name="incoming_minutes">dak %d</string>
-    <string name="incoming_saved">Imehifadhiwa. Kila kifaa cha kikundi kinafuata hili.</string>
-    <string name="incoming_seconds">sek %d</string>
-    <string name="incoming_title">Nakala kutoka vifaa vingine</string>
     <string name="invitation_accept">Jiunge</string>
     <string name="invitation_answer_hint">Jiunge tu ikiwa uliomba mwaliko huu. Aliyeuunda ataikubali simu hii akiona maneno inayoonyesha.</string>
     <string name="invitation_connecting">Inaunganisha na kitovu cha kikundi…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">Ongeza kompyuta kwenye kikundi chako</string>
     <string name="reason_add_watch">Fanya saa kuwa msimamizi</string>
     <string name="reason_change_root">Fanya simu hii kuwa kifaa kikuu cha kikundi</string>
-    <string name="reason_incoming">Badilisha muda ambao nakala kutoka kifaa kingine hudumu</string>
     <string name="reason_join">Jiunge na kikundi kama msimamizi</string>
     <string name="reason_key_level">Badilisha funguo zinazoweza kuwa wasimamizi</string>
     <string name="reason_make_admin">Fanya kifaa kuwa msimamizi</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">Badilisha hali ya usawazishaji ya kompyuta</string>
     <string name="reason_take_handed">Chukua kikundi ambacho kompyuta iliikabidhi simu hii</string>
     <string name="reason_take_over">Chukua kikundi kutoka kwa simu iliyopotea</string>
+    <string name="reason_ttl">Badilisha muda wa nakala na siri</string>
     <string name="reason_unfreeze">Fungua ugandishaji wa kompyuta ya msimamizi</string>
     <string name="reason_unmute">Ondoa unyamazishaji wa kifaa</string>
     <string name="recovery_06">Ulitengenezwa pamoja na kikundi, na karatasi yake ilionyeshwa mara moja tu. Bila karatasi hiyo kifaa kikuu cha kikundi hakiwezi kubadilishwa: karatasi ikipotea, unda kikundi kipya.</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">Umewashwa</string>
     <string name="tile_sync_off">Usawazishaji umezimwa</string>
     <string name="tile_sync_on">Usawazishaji umewashwa</string>
+    <string name="ttl_body">Muda ambao nakala ya mwisho inaonekana kama iliyopokelewa, kwa kikundi chote. Siri pia huondoka kwenye ubao wa kunakili muda wake ukiisha.</string>
+    <string name="ttl_copies">Muda wa nakala</string>
+    <string name="ttl_minutes">dak %d</string>
+    <string name="ttl_saved">Imehifadhiwa. Kila kifaa cha kikundi kinafuata hili.</string>
+    <string name="ttl_seconds">sek %d</string>
+    <string name="ttl_secrets">Muda wa siri</string>
     <string name="turn_on">Washa</string>
     <string name="type">Aina</string>
     <string name="unfreeze">Fungua ugandishaji</string>

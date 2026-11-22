@@ -41,11 +41,10 @@ protocol GroupController: AnyObject {
     var keyLevel: String? { get }
     /// Sets the group's key level; only the root phone does.
     func setKeyLevel(_ level: String) async throws
-    /// How long a copy from another device stays live after it arrives, in
-    /// milliseconds.
-    var incomingMS: Int64 { get }
-    /// Sets it; the root and the admin phones do.
-    func setIncoming(ms: Int64) async throws
+    /// How long a copy and a secret live, in milliseconds (D-129).
+    var ttlMS: (copy: Int64, secret: Int64) { get }
+    /// Sets either, nil keeping it; the root and the admin phones do.
+    func setTtl(ms: Int64?, secretMS: Int64?) async throws
     /// Unfreezes an admin computer that another admin froze.
     func unfreeze(_ id: String) async throws
     /// Whether this phone holds the group's root.
@@ -177,8 +176,8 @@ extension GroupController {
     var before06: Bool { false }
     var keyLevel: String? { nil }
     func setKeyLevel(_ level: String) async throws { throw PhoneGroup.Failure.notRoot }
-    var incomingMS: Int64 { Records.defaultIncomingMS }
-    func setIncoming(ms: Int64) async throws { throw PhoneGroup.Failure.notAdmin }
+    var ttlMS: (copy: Int64, secret: Int64) { (Records.defaultTtlMS, Records.defaultSecretTtlMS) }
+    func setTtl(ms: Int64?, secretMS: Int64?) async throws { throw PhoneGroup.Failure.notAdmin }
     func opened(mayRead: Bool) async throws -> AppModel.SyncResult? { nil }
     func copyReceived(_ id: String) async throws -> AppModel.SyncResult? { nil }
     func addWatch(_ request: WatchState.KeyRequest) async throws -> WatchState.Admission { throw PhoneGroup.Failure.notRoot }
@@ -915,15 +914,22 @@ final class AppModel: ObservableObject {
     }
 
     /// The last copy that came from another device (D-128): from which
-    /// device, and its text, empty for a secret, which Home does not show.
+    /// device, its text, empty for a secret, which Home does not show, and
+    /// when its lifetime runs out (D-129), after which Home hides it.
     struct Received: Equatable, Sendable {
         var id: String
         var from: String
         var text: String
+        var until: Date
     }
 
     /// The last received copy, which Home shows with Copy.
     @Published var received: Received?
+
+    /// Takes the last received line away when its lifetime ran out.
+    func receivedExpired(_ id: String) {
+        if received?.id == id { received = nil }
+    }
 
     /// Copy on Home's last received line.
     func copyReceived() async {
@@ -1012,7 +1018,7 @@ final class AppModel: ObservableObject {
         notices = group.notices
         rootChanged = group.rootChanged
         keyLevel = group.keyLevel
-        incomingMS = group.incomingMS
+        (ttlMS, secretTtlMS) = group.ttlMS
         await refreshAway()
         await refreshHub()
         await refreshRelay()
@@ -1449,19 +1455,20 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// How long a copy from another device stays live after it arrives, in
-    /// milliseconds.
-    @Published private(set) var incomingMS = Records.defaultIncomingMS
+    /// How long a copy and a secret live, in milliseconds (D-129).
+    @Published private(set) var ttlMS = Records.defaultTtlMS
+    @Published private(set) var secretTtlMS = Records.defaultSecretTtlMS
 
-    /// Sets how long a copy from another device stays live after it arrives.
-    func setIncoming(ms: Int64) async {
+    /// Sets how long a copy (ms) or a secret (secretMS) lives, the other
+    /// nil to keep it.
+    func setTtl(ms: Int64?, secretMS: Int64?) async {
         do {
-            try await group.setIncoming(ms: ms)
+            try await group.setTtl(ms: ms, secretMS: secretMS)
             message = String(localized: "Saved. Every device of the group follows it.", bundle: .app)
         } catch {
             message = Self.describe(error)
         }
-        incomingMS = group.incomingMS
+        (ttlMS, secretTtlMS) = group.ttlMS
     }
 
     /// Sets which keys may be the group's admins and hubs.

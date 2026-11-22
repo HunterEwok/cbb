@@ -202,6 +202,9 @@ public:
     // files). forgetRecovery drops the sheet the new group showed
     // (recoveryText, recoveryModules).
     Q_INVOKABLE void setGroupKeyLevel(const QString &level);
+    // How long a copy (ttlMs) or a secret (secretTtlMs) lives for the whole
+    // group (D-129), in milliseconds; 0 leaves it as it is.
+    Q_INVOKABLE void setGroupTtl(double ttlMs, double secretTtlMs);
     Q_INVOKABLE void forgetRecovery();
     QString recoveryText() const { return m_recoveryText; }
     QStringList recoveryModules() const { return m_recoveryModules; }

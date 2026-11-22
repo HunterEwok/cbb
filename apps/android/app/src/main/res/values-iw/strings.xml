@@ -219,11 +219,6 @@
     <string name="hub_strict_web">רשתות שמעבירות רק תעבורת אינטרנט (VLESS)</string>
     <string name="hub_switch">הטלפון הזה הוא הרכזת של הקבוצה</string>
     <string name="hub_title">הטלפון הזה כרכזת</string>
-    <string name="incoming_body">כמה זמן העתקה ממכשיר אחר ממתינה להיכנס ללוח של המכשיר הזה, מרגע שהועתקה. אחרי זה היא נעלמת, והכפתור שולח את מה שהמכשיר הזה העתיק. כל הקבוצה פועלת לפי זה.</string>
-    <string name="incoming_minutes">%d דק׳</string>
-    <string name="incoming_saved">נשמר. כל מכשירי הקבוצה פועלים לפיו.</string>
-    <string name="incoming_seconds">%d שנ׳</string>
-    <string name="incoming_title">העתקות ממכשירים אחרים</string>
     <string name="invitation_accept">הצטרפות</string>
     <string name="invitation_answer_hint">הצטרפו רק אם ביקשתם את ההזמנה הזו. מי שיצר אותה מאשר את הטלפון כשהוא רואה את המילים שהוא מציג.</string>
     <string name="invitation_connecting">מתחבר לרכזת של הקבוצה…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">הוספת מחשב לקבוצה שלכם</string>
     <string name="reason_add_watch">הפיכת השעון למנהל</string>
     <string name="reason_change_root">להפוך את הטלפון הזה למכשיר הראשי של הקבוצה</string>
-    <string name="reason_incoming">שינוי משך החיים של העתקה ממכשיר אחר</string>
     <string name="reason_join">הצטרפות לקבוצה כמנהל</string>
     <string name="reason_key_level">שינוי המפתחות שיכולים להיות מנהלים</string>
     <string name="reason_make_admin">הפיכת מכשיר למנהל</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">שינוי מצב הסנכרון של מחשב</string>
     <string name="reason_take_handed">קבלת הקבוצה שהמחשב העביר לטלפון הזה</string>
     <string name="reason_take_over">השתלטות על הקבוצה מהטלפון שאבד</string>
+    <string name="reason_ttl">לשנות כמה זמן נשמרים עותקים וסודות</string>
     <string name="reason_unfreeze">הפשרת מחשב מנהל</string>
     <string name="reason_unmute">ביטול השתקה של מכשיר</string>
     <string name="recovery_06">נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">מופעל</string>
     <string name="tile_sync_off">הסנכרון כבוי</string>
     <string name="tile_sync_on">הסנכרון מופעל</string>
+    <string name="ttl_body">כמה זמן העותק האחרון מוצג כהתקבל, לכל הקבוצה. סוד גם יוצא מהלוח כשנגמר הזמן שלו.</string>
+    <string name="ttl_copies">משך חיי העתקה</string>
+    <string name="ttl_minutes">%d דק׳</string>
+    <string name="ttl_saved">נשמר. כל מכשירי הקבוצה פועלים לפיו.</string>
+    <string name="ttl_seconds">%d שנ׳</string>
+    <string name="ttl_secrets">משך החיים של סוד</string>
     <string name="turn_on">הפעלה</string>
     <string name="type">סוג</string>
     <string name="unfreeze">הפשרה</string>

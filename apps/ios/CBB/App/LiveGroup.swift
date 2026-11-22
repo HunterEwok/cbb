@@ -215,17 +215,22 @@ final class LiveGroup: GroupController {
 
     var keyLevel: String? { state?.isRoot == true ? group06?.keyLevel : nil }
 
-    /// How long a copy from another device stays live after it arrives, in
-    /// milliseconds, as the group's records set it.
-    var incomingMS: Int64 { group06?.incomingMS ?? Records.defaultIncomingMS }
+    /// How long a copy and a secret live, in milliseconds, as the group's
+    /// records set them (D-129).
+    var ttlMS: (copy: Int64, secret: Int64) {
+        (group06?.ttlMS ?? Records.defaultTtlMS, group06?.secretTtlMS ?? Records.defaultSecretTtlMS)
+    }
 
-    /// Sets how long a copy from another device stays live after it
-    /// arrives: a copies record, signed after Face ID by the root or an
-    /// admin and sent to every member (docs/protocol.md, section 10, "The
-    /// copies setting").
-    func setIncoming(ms: Int64) async throws {
+    /// Sets how long a copy (ms) or a secret (secretMS) lives, the other
+    /// nil to keep it: a copies record, signed after Face ID by the root or
+    /// an admin and sent to every member (docs/protocol.md, section 10,
+    /// "The copies setting").
+    func setTtl(ms: Int64?, secretMS: Int64?) async throws {
         guard state?.isAdmin == true else { throw PhoneGroup.Failure.notAdmin }
-        try await act(String(localized: "Change how long a copy from another device lasts", bundle: .app), "incoming", ["incoming_ms": .int(ms)])
+        var fields: [String: CoreMember.ManageValue] = [:]
+        if let ms { fields["ttl_ms"] = .int(ms) }
+        if let secretMS { fields["secret_ttl_ms"] = .int(secretMS) }
+        try await act(String(localized: "Change how long copies and secrets last", bundle: .app), "ttl", fields)
     }
 
     /// Sets the group's key level (docs/guide/keys.md, "The three levels"):
@@ -903,7 +908,9 @@ final class LiveGroup: GroupController {
             guard let g = state, c.origin != g.device, !c.unread, c.media?.isFiles != true else { return }
             let image = Images.part(of: c.media) != nil
             guard image || (!c.text.isEmpty && c.kind != .media) else { return }
-            lastReceived = AppModel.Received(id: c.id, from: name(of: c.origin), text: c.kind == .secret ? "" : c.text)
+            let ttl = c.ttlMS ?? (c.kind == .secret ? Records.defaultSecretTtlMS : Records.defaultTtlMS)
+            let until = Date().addingTimeInterval(Double(max(ttl - c.ageMS, 0)) / 1000)
+            lastReceived = AppModel.Received(id: c.id, from: name(of: c.origin), text: c.kind == .secret ? "" : c.text, until: until)
             onReceived?(lastReceived)
             guard foreground, !background, Member.receives(modeBox.mode) else { return }
             Task {

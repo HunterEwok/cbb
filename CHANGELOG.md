@@ -17,7 +17,9 @@ made with 0.5 is set up again once. The details follow.
 
 ### Added
 - ffi's group of 0.6 names its key level and how long a copy and a secret live (`key_level`,
-  `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone.
+  `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone. All four
+  phone apps show both to admins in Settings, "Copy lifetime" and "Secret lifetime", and Home's
+  last received line goes when the copy's own lifetime runs out (D-129).
 - Right after a group is made the root phone offers where to save its recovery key: "Write on
   a sheet", which shows the sheet and prints it or saves it with the system's own tools, with
   the warning that a saved file is the group's key, and "Write to YubiKey", which waits for the
@@ -3072,6 +3074,11 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The bench's phone suite runs under Docker Desktop on macOS and Windows (its relay to the
+  phone listens on the loopback, which the members reach as host.docker.internal), and the
+  members reach the UDP ports the app holds open, such as the tunnel of a hub on the phone,
+  through the emulator console's `redir` and a UDP relay. Its quick actions test checks the
+  core's answer that this build does not run them on the records of 0.6.
 - A hub's message that reached a member before the records naming its sender a hub waits for
   those records instead of being dropped, so a member that met a hub early still uses it.
 - A member seals its current copy again to a device that became a reader after the copy was

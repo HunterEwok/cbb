@@ -228,18 +228,24 @@ class GroupTest {
         }
     }
 
-    /** Q8: a quick action the computer allows runs from the phone; turned all off, the next is refused. */
+    /**
+     * Q8: quick actions from the phone. On the records of 0.6 the core does
+     * not carry them yet (0.7, plans): the phone asks, and the core answers
+     * that this build does not do it, which the note shows in a debug build,
+     * and the computer's service keeps running.
+     */
     @Test
     fun a7_quickActions() {
         val pc = idOf(Bench.PC)
         Bench.run(Bench.PC, "cbb action enable restart -any-key -yes")
         val pid = { Bench.run(Bench.PC, "pgrep -o -f '^cbb service'").trim() }
         val before = pid()
-        assertTrue("restart refused: ${model.message}", runBlocking { model.runAction(pc, "restart") })
-        until(30, "the service on ${Bench.PC} restarted") { runCatching { pid() }.getOrDefault(before).let { it.isNotEmpty() && it != before } }
-        until(60, "the phone connected to ${Bench.PC} again") { model.group.devices.any { it.name == Bench.PC && it.online } }
-        assertTrue("turning all off refused: ${model.message}", runBlocking { model.actionsOff(pc) })
-        assertFalse("restart ran after all were turned off", runBlocking { model.runAction(pc, "restart") })
+        val notYet = "does not work in this build yet"
+        assertFalse("restart ran on the records of 0.6", runBlocking { model.runAction(pc, "restart") })
+        assertTrue("the note names the core's answer: ${model.message}", model.message?.detail.orEmpty().contains(notYet))
+        assertFalse("turning all off ran on the records of 0.6", runBlocking { model.actionsOff(pc) })
+        assertTrue("the note names the core's answer: ${model.message}", model.message?.detail.orEmpty().contains(notYet))
+        assertEquals("the service on ${Bench.PC} restarted", before, pid())
     }
 
     /** A1: a second computer admitted, renamed and removed; the removed one says so. */

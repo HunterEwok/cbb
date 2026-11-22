@@ -222,11 +222,6 @@
     <string name="hub_strict_web">Networks that let only the web through (VLESS)</string>
     <string name="hub_switch">This phone is the group\'s hub</string>
     <string name="hub_title">This phone as the hub</string>
-    <string name="incoming_body">How long a copy from another device waits to go into this device\'s clipboard, counted from when it was copied. After that it is gone, and the button sends what this device copied. The whole group follows it.</string>
-    <string name="incoming_minutes">%d min</string>
-    <string name="incoming_saved">Saved. Every device of the group follows it.</string>
-    <string name="incoming_seconds">%d s</string>
-    <string name="incoming_title">Copies from other devices</string>
     <string name="invitation_accept">Join</string>
     <string name="invitation_answer_hint">Join only if you asked for this invitation. Whoever made it admits this phone once they see the words it shows.</string>
     <string name="invitation_connecting">Connecting to the group\'s hub…</string>
@@ -432,7 +427,6 @@
     <string name="reason_add">Add a computer to your group</string>
     <string name="reason_add_watch">Make the watch an admin</string>
     <string name="reason_change_root">Make this phone the group\'s main device</string>
-    <string name="reason_incoming">Change how long a copy from another device lasts</string>
     <string name="reason_join">Join the group as an admin</string>
     <string name="reason_key_level">Change which keys may be admins</string>
     <string name="reason_make_admin">Make a device an admin</string>
@@ -451,6 +445,7 @@
     <string name="reason_set_mode">Change a computer\'s sync mode</string>
     <string name="reason_take_handed">Take the group the computer handed to this phone</string>
     <string name="reason_take_over">Take the group over from the lost phone</string>
+    <string name="reason_ttl">Change how long copies and secrets last</string>
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_unmute">Unmute a device</string>
     <string name="recovery_06">Made with the group, and its sheet was shown once. Without the sheet the group\'s main device cannot change: if the sheet is lost, make a new group.</string>
@@ -592,6 +587,12 @@
     <string name="tile_on">On</string>
     <string name="tile_sync_off">Sync is off</string>
     <string name="tile_sync_on">Sync is on</string>
+    <string name="ttl_body">How long the latest copy shows as received, for the whole group. A secret also leaves the clipboard when its time is up.</string>
+    <string name="ttl_copies">Copy lifetime</string>
+    <string name="ttl_minutes">%d min</string>
+    <string name="ttl_saved">Saved. Every device of the group follows it.</string>
+    <string name="ttl_seconds">%d s</string>
+    <string name="ttl_secrets">Secret lifetime</string>
     <string name="turn_on">Turn on</string>
     <string name="type">Type</string>
     <string name="unfreeze">Unfreeze</string>

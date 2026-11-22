@@ -92,7 +92,7 @@ struct SettingsView: View {
             }
             if part == nil ? advanced : part == .group {
                 if model.isAdmin, model.phase == .home {
-                    incomingSection
+                    lifetimeSection
                 }
                 if let level = model.keyLevel {
                     keyLevelSection(level)
@@ -196,16 +196,23 @@ struct SettingsView: View {
         .listRowBackground(palette.surface)
     }
 
-    /// How long a copy from another device stays live after it arrives, on
-    /// the root and the admin phones (docs/design.md, "The one button").
-    private var incomingSection: some View {
+    /// How long a copy and a secret live for the whole group (D-129), on
+    /// the root and the admin phones.
+    private var lifetimeSection: some View {
         Section {
-            Picker(selection: Binding(get: { model.incomingMS }, set: { new in Task { await model.setIncoming(ms: new) } })) {
-                ForEach(Self.incomingChoices(model.incomingMS), id: \.self) { ms in
-                    Text(Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))).tag(ms)
+            Picker(selection: Binding(get: { model.ttlMS }, set: { new in Task { await model.setTtl(ms: new, secretMS: nil) } })) {
+                ForEach(Self.choices(Self.ttlChoices, model.ttlMS), id: \.self) { ms in
+                    Text(Self.lifetime(ms)).tag(ms)
                 }
             } label: {
                 Text("Copy lifetime")
+            }
+            Picker(selection: Binding(get: { model.secretTtlMS }, set: { new in Task { await model.setTtl(ms: nil, secretMS: new) } })) {
+                ForEach(Self.choices(Self.secretTtlChoices, model.secretTtlMS), id: \.self) { ms in
+                    Text(Self.lifetime(ms)).tag(ms)
+                }
+            } label: {
+                Text("Secret lifetime")
             }
             TipView(SettingTip.copyLifetime)
         } header: {
@@ -214,10 +221,18 @@ struct SettingsView: View {
         .listRowBackground(palette.surface)
     }
 
-    /// The choices of the picker, with the group's own when it is none of them.
-    static func incomingChoices(_ current: Int64) -> [Int64] {
-        let choices: [Int64] = [15_000, 30_000, 60_000, 120_000, 300_000, 600_000]
-        return choices.contains(current) ? choices : (choices + [current]).sorted()
+    /// The lifetimes the pickers offer, inside Records.ttlBounds and
+    /// Records.secretTtlBounds.
+    static let ttlChoices: [Int64] = [60_000, 300_000, 900_000, 1_800_000, 3_600_000]
+    static let secretTtlChoices: [Int64] = [5_000, 15_000, 30_000, 60_000]
+
+    /// The choices of a picker, with the group's own when it is none of them.
+    static func choices(_ choices: [Int64], _ current: Int64) -> [Int64] {
+        choices.contains(current) ? choices : (choices + [current]).sorted()
+    }
+
+    private static func lifetime(_ ms: Int64) -> String {
+        Duration.milliseconds(ms).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide))
     }
 
     /// The phone as the group's hub: the switch, where it stands, the
@@ -628,7 +643,7 @@ struct SettingTip: Tip {
     static let relay = SettingTip(id: "relay", title: Text("Blind relay"),
         message: Text("For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other."))
     static let copyLifetime = SettingTip(id: "copyLifetime", title: Text("Copy lifetime"),
-        message: Text("How long a copy from another device goes into the clipboard after it arrives."))
+        message: Text("How long the latest copy shows as received, for the whole group. A secret also leaves the clipboard when its time is up."))
     static let securityLevel = SettingTip(id: "securityLevel", title: Text("Security level"),
         message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
 }

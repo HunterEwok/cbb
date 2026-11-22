@@ -25,6 +25,20 @@ import { WhySection } from './WhySection';
 // The languages of the apps (docs/apps.md, Languages), '' for the phone's.
 const LANGUAGES: string[] = ['', 'en', 'zh-Hans', 'es', 'ru', 'ar', 'sw', 'he', 'hi'];
 const KEY_LEVELS: string[] = ['proven', 'hardware', 'files'];
+// The lifetimes a copy and a secret may have (D-129), in milliseconds,
+// inside the core's bounds: 1 min to 1 h, and 5 s to 1 min.
+const TTL_CHOICES: number[] = [60000, 300000, 900000, 1800000, 3600000];
+const SECRET_TTL_CHOICES: number[] = [5000, 15000, 30000, 60000];
+
+// The choices with the group's own when it is none of them.
+function withCurrent(choices: number[], current: number): number[] {
+  return choices.indexOf(current) >= 0 ? choices : choices.concat([current]).sort((a: number, b: number) => a - b);
+}
+
+function lifetime(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s >= 60 && s % 60 === 0 ? t('ttl_minutes', s / 60) : t('ttl_seconds', s);
+}
 
 
 @ComponentV2
@@ -220,6 +234,36 @@ export struct SettingsBody {
                 })
             }
             .width('100%')
+          }
+          if (app.isAdmin() && app.member.running) {
+            Row() {
+              Text($r('app.string.settings_ttl_copies')).fontColor($r('app.color.text')).layoutWeight(1)
+              Select(withCurrent(TTL_CHOICES, app.member.ttlMs).map((ms: number) => ({ value: lifetime(ms) } as SelectOption)))
+                .selected(withCurrent(TTL_CHOICES, app.member.ttlMs).indexOf(app.member.ttlMs))
+                .value(lifetime(app.member.ttlMs))
+                .onSelect((index: number) => {
+                  const ms = withCurrent(TTL_CHOICES, app.member.ttlMs)[index];
+                  if (ms !== app.member.ttlMs) {
+                    app.setGroupTtl(ms, undefined);
+                  }
+                })
+            }
+            .width('100%')
+            Row() {
+              Text($r('app.string.settings_ttl_secrets')).fontColor($r('app.color.text')).layoutWeight(1)
+              Select(withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs).map((ms: number) => ({ value: lifetime(ms) } as SelectOption)))
+                .selected(withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs).indexOf(app.member.secretTtlMs))
+                .value(lifetime(app.member.secretTtlMs))
+                .onSelect((index: number) => {
+                  const ms = withCurrent(SECRET_TTL_CHOICES, app.member.secretTtlMs)[index];
+                  if (ms !== app.member.secretTtlMs) {
+                    app.setGroupTtl(undefined, ms);
+                  }
+                })
+            }
+            .width('100%')
+          }
+          if (app.isRoot() && app.member.running) {
             if (this.part.length === 0) {
               Row() {
                 Text($r('app.string.recovery_title')).fontColor($r('app.color.text')).layoutWeight(1)

@@ -1584,6 +1584,7 @@ fn deliver(ev: &Events, w: &Write) {
             "text": w.text,
             "media": w.media,
             "key": id,
+            "ttl_ms": ttl_ms,
         }),
     });
 }

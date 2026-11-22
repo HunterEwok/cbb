@@ -78,9 +78,12 @@ export interface Why {
   detail?: string;
 }
 
-// The member's group of 0.6, the part the app reads: its key level.
+// The member's group of 0.6, the part the app reads: its key level and
+// how long copies and secrets live (D-129), null for the default.
 interface GroupView {
   key_level?: string;
+  ttl_ms?: number | null;
+  secret_ttl_ms?: number | null;
 }
 
 interface Whys {
@@ -181,7 +184,12 @@ interface Copy {
   origin?: string;
   kind?: string;
   text?: string;
+  ttl_ms?: number;
 }
+
+// How long a copy and a secret live when the copy does not say (D-129).
+const DEFAULT_TTL_MS = 300000;
+const DEFAULT_SECRET_TTL_MS = 60000;
 
 interface Part {
   type?: string;
@@ -225,6 +233,9 @@ export class Member {
   @Trace why: Why[] = [];
   // The group's key level (proven, hardware or files), as its records set it.
   @Trace keyLevel: string = 'hardware';
+  // How long a copy and a secret live, in milliseconds (D-129).
+  @Trace ttlMs: number = DEFAULT_TTL_MS;
+  @Trace secretTtlMs: number = DEFAULT_SECRET_TTL_MS;
   // The tiles; viewed is false until the member gave them.
   @Trace view: View = { tiles: [] };
   @Trace viewed: boolean = false;
@@ -578,6 +589,14 @@ export class Member {
     this.lastId = copy.id;
     this.lastFrom = from !== undefined ? from.name : copy.origin;
     this.lastText = copy.kind === 'secret' || copy.kind === 'media' ? '' : copy.text ?? '';
+    // The line goes when the copy's lifetime runs out (D-129).
+    const id = copy.id;
+    const ttl = copy.ttl_ms ?? (copy.kind === 'secret' ? DEFAULT_SECRET_TTL_MS : DEFAULT_TTL_MS);
+    setTimeout(() => {
+      if (this.lastId === id) {
+        this.dismissReceived();
+      }
+    }, Math.min(ttl, 24 * 3600 * 1000));
   }
 
   // Copy on the last received line: the group's copy into the pasteboard,
@@ -725,6 +744,16 @@ export class Member {
     const level = g.ok?.key_level;
     if (level !== undefined && level !== this.keyLevel) {
       this.keyLevel = level;
+    }
+    if (g.ok !== undefined) {
+      const ttl = g.ok.ttl_ms ?? DEFAULT_TTL_MS;
+      const secretTtl = g.ok.secret_ttl_ms ?? DEFAULT_SECRET_TTL_MS;
+      if (ttl !== this.ttlMs) {
+        this.ttlMs = ttl;
+      }
+      if (secretTtl !== this.secretTtlMs) {
+        this.secretTtlMs = secretTtl;
+      }
     }
     await this.readView(await this.call<Viewed>('view'));
     if (JSON.stringify(why) !== JSON.stringify(this.why)) {

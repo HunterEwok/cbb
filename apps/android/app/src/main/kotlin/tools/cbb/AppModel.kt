@@ -153,12 +153,12 @@ class AppModel(private val app: Context) {
     var keyLevelNote by mutableStateOf<Note?>(null)
         private set
 
-    /** How long a copy from another device stays live, in milliseconds, on an admin phone; null elsewhere. */
-    var incomingMS by mutableStateOf<Long?>(null)
+    /** How long a copy and a secret live, in milliseconds, on an admin phone; null elsewhere (D-129). */
+    var ttlMS by mutableStateOf<Pair<Long, Long>?>(null)
         private set
 
-    /** What the last change to how long a copy stays live said. */
-    var incomingNote by mutableStateOf<Note?>(null)
+    /** What the last change to the lifetimes said. */
+    var ttlNote by mutableStateOf<Note?>(null)
         private set
 
     /** What the last change to the recovery key said. */
@@ -477,6 +477,11 @@ class AppModel(private val app: Context) {
     var received by mutableStateOf<LiveGroup.Received?>(null)
         private set
 
+    /** The last received line's time ran out (D-129). */
+    fun receivedExpired(id: String) {
+        if (received?.id == id) group.dismissReceived()
+    }
+
     /** Copy on Home's last received line: the copy goes into the clipboard and the line goes. */
     suspend fun copyReceived() {
         val r = received ?: return
@@ -615,7 +620,7 @@ class AppModel(private val app: Context) {
         rootChanged = group.rootChanged
         removed = withContext(Dispatchers.IO) { group.removed }
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
-        incomingMS = if (admin) withContext(Dispatchers.IO) { group.incomingMS } else null
+        ttlMS = if (admin) withContext(Dispatchers.IO) { group.ttlMS } else null
         notifier.observe(d)
         // Push learns the devices as applied: a device gone or a new root draws a new push key.
         val tag = withContext(Dispatchers.IO) { group.groupTag }
@@ -1138,11 +1143,11 @@ class AppModel(private val app: Context) {
         update()
     }
 
-    /** Sets how long a copy from another device stays live after it arrives. */
-    suspend fun setIncoming(ms: Long) {
-        incomingNote = try {
-            group.setIncoming(ms)
-            Note(R.string.incoming_saved)
+    /** Sets how long a copy (ttlMS) or a secret (secretTtlMS) lives, the other left as it is. */
+    suspend fun setTtl(ttlMS: Long?, secretTtlMS: Long?) {
+        ttlNote = try {
+            group.setTtl(ttlMS, secretTtlMS)
+            Note(R.string.ttl_saved)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

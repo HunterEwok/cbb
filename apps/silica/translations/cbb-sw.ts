@@ -1525,6 +1525,14 @@
 <context>
     <name>SettingsPage</name>
     <message>
+        <source>%1 min</source>
+        <translation>dak %1</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>sek %1</translation>
+    </message>
+    <message>
         <source>A device becomes an admin</source>
         <translation>Kifaa kinakuwa msimamizi</translation>
     </message>
@@ -1567,6 +1575,10 @@
     <message>
         <source>Connected</source>
         <translation>Imeunganishwa</translation>
+    </message>
+    <message>
+        <source>Copy lifetime</source>
+        <translation>Muda wa nakala</translation>
     </message>
     <message>
         <source>Core</source>
@@ -1671,6 +1683,10 @@
     <message>
         <source>Recovery key</source>
         <translation>Ufunguo wa kurejesha</translation>
+    </message>
+    <message>
+        <source>Secret lifetime</source>
+        <translation>Muda wa siri</translation>
     </message>
     <message>
         <source>Settings</source>

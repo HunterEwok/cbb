@@ -706,7 +706,8 @@ struct DeviceFilters: View {
 
 /// The last copy that came from another device (D-128): from which device
 /// and its text, a secret without it, with Copy, which puts it in the
-/// clipboard. Copy, or a newer copy, takes the line away.
+/// clipboard. Copy, a newer copy, or the end of the copy's lifetime
+/// (D-129) takes the line away.
 struct LastReceived: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
@@ -722,6 +723,11 @@ struct LastReceived: View {
                 Button { Task { await model.copyReceived() } } label: { Text("Copy") }
                     .buttonStyle(.bordered)
                     .disabled(model.busy)
+            }
+            .task(id: r.id) {
+                let left = r.until.timeIntervalSinceNow
+                if left > 0 { try? await Task.sleep(for: .seconds(left)) }
+                if !Task.isCancelled { model.receivedExpired(r.id) }
             }
         }
     }

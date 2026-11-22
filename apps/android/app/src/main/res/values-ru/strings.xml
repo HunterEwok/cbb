@@ -219,11 +219,6 @@
     <string name="hub_strict_web">Сети, где открыт только веб (VLESS)</string>
     <string name="hub_switch">Этот телефон — хаб группы</string>
     <string name="hub_title">Этот телефон как хаб</string>
-    <string name="incoming_body">Сколько копия с другого устройства ждёт, чтобы попасть в буфер обмена этого устройства, считая от момента копирования. Потом она пропадает, и кнопка отправляет то, что скопировали здесь. Вся группа следует этой настройке.</string>
-    <string name="incoming_minutes">%d мин</string>
-    <string name="incoming_saved">Сохранено. Все устройства группы следуют этой настройке.</string>
-    <string name="incoming_seconds">%d с</string>
-    <string name="incoming_title">Копии с других устройств</string>
     <string name="invitation_accept">Вступить</string>
     <string name="invitation_answer_hint">Вступайте, только если вы сами просили это приглашение. Тот, кто его сделал, впустит телефон, когда увидит показанные им слова.</string>
     <string name="invitation_connecting">Подключение к хабу группы…</string>
@@ -429,7 +424,6 @@
     <string name="reason_add">Добавить компьютер в вашу группу</string>
     <string name="reason_add_watch">Сделать часы админом</string>
     <string name="reason_change_root">Сделать этот телефон главным устройством группы</string>
-    <string name="reason_incoming">Изменить, сколько живёт копия с другого устройства</string>
     <string name="reason_join">Войти в группу как администратор</string>
     <string name="reason_key_level">Изменить, какие ключи могут быть у админов</string>
     <string name="reason_make_admin">Сделать устройство админом</string>
@@ -448,6 +442,7 @@
     <string name="reason_set_mode">Изменить режим синхронизации компьютера</string>
     <string name="reason_take_handed">Взять группу, которую компьютер передал этому телефону</string>
     <string name="reason_take_over">Забрать группу у потерянного телефона</string>
+    <string name="reason_ttl">Изменить, сколько живут копии и секреты</string>
     <string name="reason_unfreeze">Разморозить компьютер-админа</string>
     <string name="reason_unmute">Включить устройство</string>
     <string name="recovery_06">Сделан вместе с группой, его лист был показан один раз. Без листа главное устройство группы не сменить: если лист потерян, создайте новую группу.</string>
@@ -588,6 +583,12 @@
     <string name="tile_on">Вкл.</string>
     <string name="tile_sync_off">Синхронизация выключена</string>
     <string name="tile_sync_on">Синхронизация включена</string>
+    <string name="ttl_body">Сколько последняя копия видна как пришедшая, для всей группы. Секрет ещё и исчезает из буфера, когда время выходит.</string>
+    <string name="ttl_copies">Время жизни копии</string>
+    <string name="ttl_minutes">%d мин</string>
+    <string name="ttl_saved">Сохранено. Все устройства группы следуют этой настройке.</string>
+    <string name="ttl_seconds">%d с</string>
+    <string name="ttl_secrets">Время жизни секрета</string>
     <string name="turn_on">Включить</string>
     <string name="type">Тип</string>
     <string name="unfreeze">Разморозить</string>

@@ -3822,48 +3822,48 @@
         }
       }
     },
-    "Change how long a copy from another device lasts": {
+    "Change how long copies and secrets last": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيير مدة بقاء النسخة من جهاز آخر"
+            "value": "تغيير مدة بقاء النسخ والأسرار"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiar cuánto dura una copia de otro dispositivo"
+            "value": "Cambiar cuánto duran las copias y los secretos"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "שינוי משך החיים של העתקה ממכשיר אחר"
+            "value": "לשנות כמה זמן נשמרים עותקים וסודות"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "बदलें कि दूसरे डिवाइस की कॉपी कितनी देर रहे"
+            "value": "बदलें कि कॉपी और सीक्रेट कितनी देर रहते हैं"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Изменить, сколько живёт копия с другого устройства"
+            "value": "Изменить, сколько живут копии и секреты"
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badilisha muda ambao nakala kutoka kifaa kingine hudumu"
+            "value": "Badilisha muda wa nakala na siri"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "更改来自其他设备的副本保留多久"
+            "value": "更改副本和秘密的有效期"
           }
         }
       }
@@ -7226,52 +7226,6 @@
         }
       }
     },
-    "How long a copy from another device goes into the clipboard after it arrives.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المدة التي تدخل فيها نسخة من جهاز آخر إلى الحافظة بعد وصولها."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cuánto tiempo una copia de otro dispositivo entra en el portapapeles después de llegar."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "כמה זמן העתקה ממכשיר אחר נכנסת ללוח אחרי שהיא מגיעה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दूसरे डिवाइस की कॉपी पहुँचने के बाद कितनी देर तक क्लिपबोर्ड में जाती है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сколько времени копия с другого устройства попадает в буфер после прихода."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muda ambao nakala kutoka kifaa kingine huingia kwenye ubao wa kunakili baada ya kufika."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "来自其他设备的副本到达后，在多长时间内写入剪贴板。"
-          }
-        }
-      }
-    },
     "How long a copy from another device goes into the clipboard after it arrives. After that each device keeps what it copied itself, however old.": {
       "localizations": {
         "ar": {
@@ -7314,6 +7268,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "来自其他设备的副本到达后，在多长时间内写入剪贴板。之后每台设备保留它自己复制的内容，无论多旧。"
+          }
+        }
+      }
+    },
+    "How long the latest copy shows as received, for the whole group. A secret also leaves the clipboard when its time is up.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المدة التي تظهر فيها آخر نسخة على أنها وصلت، للمجموعة كلها. ويُزال السر أيضًا من الحافظة عند انتهاء مدته."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuánto tiempo se muestra la última copia como recibida, para todo el grupo. Un secreto además sale del portapapeles al acabarse su tiempo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כמה זמן העותק האחרון מוצג כהתקבל, לכל הקבוצה. סוד גם יוצא מהלוח כשנגמר הזמן שלו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नवीनतम कॉपी कितनी देर तक मिली हुई दिखती है, पूरे समूह के लिए। सीक्रेट का समय पूरा होने पर वह क्लिपबोर्ड से भी हट जाता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сколько последняя копия видна как пришедшая, для всей группы. Секрет ещё и исчезает из буфера, когда время выходит."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muda ambao nakala ya mwisho inaonekana kama iliyopokelewa, kwa kikundi chote. Siri pia huondoka kwenye ubao wa kunakili muda wake ukiisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新副本显示为已收到的时长，对整个群组生效。秘密到期后还会从剪贴板中移除。"
           }
         }
       }
@@ -16882,6 +16882,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "搜索设备"
+          }
+        }
+      }
+    },
+    "Secret lifetime": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدة بقاء السر"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración de un secreto"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "משך החיים של סוד"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सीक्रेट की अवधि"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Время жизни секрета"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muda wa siri"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密的有效期"
           }
         }
       }

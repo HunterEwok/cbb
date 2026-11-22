@@ -16,6 +16,12 @@ Page {
     // How the last change of the admin PIN went.
     property string pinNote: ""
 
+    // A lifetime as the settings show it: whole minutes, else seconds.
+    function lifetime(ms) {
+        var s = Math.round(ms / 1000)
+        return s >= 60 && s % 60 === 0 ? qsTr("%1 min").arg(s / 60) : qsTr("%1 s").arg(s)
+    }
+
     RemorsePopup { id: remorse }
 
     SilicaFlickable {
@@ -122,6 +128,43 @@ Page {
                             text: modelData
                             onClicked: if (level.levels[index] !== app.member.groupState.key_level)
                                            app.setGroupKeyLevel(level.levels[index])
+                        }
+                    }
+                }
+            }
+            // How long a copy and a secret live for the whole group (D-129),
+            // inside the core's bounds: 1 min to 1 h, and 5 s to 1 min.
+            ComboBox {
+                id: copyTtl
+                visible: app.admin && app.member.running
+                label: qsTr("Copy lifetime")
+                property var choices: withCurrent([60000, 300000, 900000, 1800000, 3600000], current)
+                property double current: app.member.groupState.ttl_ms || 300000
+                currentIndex: choices.indexOf(current)
+                menu: ContextMenu {
+                    Repeater {
+                        model: copyTtl.choices
+                        MenuItem {
+                            text: page.lifetime(modelData)
+                            onClicked: if (modelData !== copyTtl.current) app.setGroupTtl(modelData, 0)
+                        }
+                    }
+                }
+                function withCurrent(list, ms) { return list.indexOf(ms) >= 0 ? list : list.concat([ms]).sort(function (a, b) { return a - b }) }
+            }
+            ComboBox {
+                id: secretTtl
+                visible: app.admin && app.member.running
+                label: qsTr("Secret lifetime")
+                property var choices: copyTtl.withCurrent([5000, 15000, 30000, 60000], current)
+                property double current: app.member.groupState.secret_ttl_ms || 60000
+                currentIndex: choices.indexOf(current)
+                menu: ContextMenu {
+                    Repeater {
+                        model: secretTtl.choices
+                        MenuItem {
+                            text: page.lifetime(modelData)
+                            onClicked: if (modelData !== secretTtl.current) app.setGroupTtl(0, modelData)
                         }
                     }
                 }
