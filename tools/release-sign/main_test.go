@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,15 +185,28 @@ func TestDrillEnvelopes(t *testing.T) {
 
 // Each fault of drill -fault gives files that verify refuses, as the
 // installers' tests expect of get.sh and get.ps1.
+//
+// Each drill signs with SLH-DSA-SHA2-128s, a third of a second a signature
+// here and many times that in an emulated machine, so the faults run side
+// by side.
 func TestDrillFaults(t *testing.T) {
+	// What the drills print is not read; stdout stays one writer while
+	// they run (call swaps it per command).
+	stdout = io.Discard
+	t.Cleanup(func() { stdout = os.Stdout })
 	for _, fault := range drillFaults {
-		dist, roots := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem")
-		archives(t, dist)
-		call(t, drill, "-version", "0.6.0", "-fault", fault, dist, roots)
-		// Under all the drill's roots, so that only the fault refuses it.
-		if verify([]string{"-roots", roots, dist}) == nil {
-			t.Errorf("%s: verify took it", fault)
-		}
+		t.Run(fault, func(t *testing.T) {
+			t.Parallel()
+			dist, roots := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem")
+			archives(t, dist)
+			if err := drill([]string{"-version", "0.6.0", "-fault", fault, dist, roots}); err != nil {
+				t.Fatal(err)
+			}
+			// Under all the drill's roots, so that only the fault refuses it.
+			if verify([]string{"-roots", roots, dist}) == nil {
+				t.Error("verify took it")
+			}
+		})
 	}
 }
 

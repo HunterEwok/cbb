@@ -638,7 +638,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -670,7 +670,11 @@ jobs:
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
             go version
-            go test ./... </dev/null
+            # The release tools sign with SLH-DSA-SHA2-128s, a third of a
+            # second a signature natively and far slower in this machine:
+            # release-sign alone takes about ten minutes here, Go's default
+            # limit for a package.
+            go test -timeout 25m ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
             Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
