@@ -3618,7 +3618,7 @@ fn saved(set: &RecordSet, local: &[u8; 32]) -> Vec<(Record, Option<Mark>)> {
 /// without verifying a signature, into the same set.
 #[test]
 fn marked_records_load_without_their_signatures() {
-    let local = [7u8; 32];
+    let local = crate::certs::sha256(b"a local key");
     let (_, set) = set_at_a_ceiling();
     let store = saved(&set, &local);
     let mut loaded = set_of(set.root());
@@ -3638,7 +3638,7 @@ fn marked_records_load_without_their_signatures() {
 /// verified.
 #[test]
 fn a_wrong_mark_falls_back_to_the_signature() {
-    let local = [7u8; 32];
+    let local = crate::certs::sha256(b"a local key");
     let (_, set) = set_at_a_ceiling();
     let store = saved(&set, &local);
     let last = store.len() - 1;
@@ -3663,7 +3663,7 @@ fn a_wrong_mark_falls_back_to_the_signature() {
     assert!(matches!(refused.as_slice(), [(_, Refused::Broken(_))]));
     // Another local key: no mark holds.
     let mut other = set_of(set.root());
-    let ((stored, _), n) = verified_by(|| other.load_marked(&[8u8; 32], store));
+    let ((stored, _), n) = verified_by(|| other.load_marked(&crate::certs::sha256(b"another local key"), store));
     assert_eq!((stored, n), (set.len(), set.len()));
     assert_eq!(other.digest(), set.digest());
 }
@@ -5444,7 +5444,7 @@ fn a_set_whose_root_is_its_recovery_key_takes_nothing() {
     let mut set = RecordSet::new(root.key.clone(), own.clone());
     assert_eq!(set.insert(r), Err(Refused::Group));
     assert!(set.is_empty());
-    let local = [7u8; 32];
+    let local = crate::certs::sha256(b"a local key");
     let mark = pin_mark(&local, &root.key, &own);
     assert!(RecordSet::pinned(root.key.clone(), own, &local, &mark).is_none());
 }

@@ -98,10 +98,11 @@ pub fn header_hash(hdr: &[u8]) -> [u8; 32] {
 }
 
 fn hkdf(k: &[u8; 32], salt: &[u8], info: &str) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    // 32 bytes are well within HKDF-SHA256's limit of 255 · 32.
+    // HKDF writes the whole output into the buffer it is given; 32 bytes
+    // are well within HKDF-SHA256's limit of 255 · 32.
+    let mut out = sha2::digest::Output::<Sha256>::default();
     let _ = Hkdf::<Sha256>::new(Some(salt), k).expand(info.as_bytes(), &mut out);
-    out
+    out.into()
 }
 
 /// The commitment to the copy key: HKDF(K, salt empty, info

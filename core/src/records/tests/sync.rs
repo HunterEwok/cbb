@@ -82,7 +82,10 @@ fn the_widest_set_syncs_in_parts_that_each_fit_a_frame() {
     }
     let sender = set_with(&g.root.key, &g.recs, &g.lists);
     let st = sender.state();
-    let laptop = k("laptop").hash;
+    // A device of the last root (L: the earlier roots' devices are not
+    // devices any more, as no re-issue carried them here; their records
+    // still ride in the lists).
+    let laptop = k("d0").hash;
     assert!(st.device_by_key(&laptop).is_some());
     let parts = sender.parts_for_peer(&st, &laptop);
     assert_fits(&parts, PART_RECORDS, PART_BYTES);
@@ -94,7 +97,7 @@ fn the_widest_set_syncs_in_parts_that_each_fit_a_frame() {
         sender.bytes(),
         parts.len()
     );
-    // Split by count here (5953 records); by bytes, the same records twice
+    // Split by count here (5697 records); by bytes, the same records twice
     // over with every list pass the frame, and each part still fits.
     assert!(parts.len() >= 2);
     let records = sender.for_peer(&st, &laptop);

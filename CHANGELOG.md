@@ -79,6 +79,9 @@ made with 0.5 is set up again once. The details follow.
   writes, and show on every device that the main device changed, with "This wasn't me"
   ([phone apps](docs/apps.md), "Changing the main device"); the Aurora app shows the notices
   and the change too.
+- A change of the main device in a group that already has 256 devices asks to leave one device
+  out, since the new main device's own phone would be the 257th; before, it failed with a
+  message about the writer's own records.
 - A phone of 0.6 opens a home window (`cbb_window_new`, docs/core-api.md): it shows six digits
   and a QR code with its addresses, key hash, window ID and the digits; a device that proves the
   digits is admitted by its root or admin key under the core's admission rules and gets the

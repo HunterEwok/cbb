@@ -301,8 +301,7 @@ impl Mesh {
     /// Opens a copy's blob, held whole, into the new folder `out`: each
     /// part where the manifest puts it, checked against its hash.
     pub fn open_media(&self, blob: Option<&Blob>, manifest: &Manifest, out: &Path) -> Result<Vec<(Part, PathBuf)>> {
-        let key = blob.map_or([0; 32], |b| b.key);
-        self.content.open_into(blob.map(|b| b.sha256.as_slice()), manifest, BlobKey::Blob(&key), out)
+        self.content.open_into(blob.map(|b| (b.sha256.as_slice(), BlobKey::Blob(&b.key))), manifest, out)
     }
 
     /// A chunk of a blob from a peer: to the fetch that waits for it.

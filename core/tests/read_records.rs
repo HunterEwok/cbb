@@ -163,7 +163,8 @@ fn what_the_honest_checkpoint_names() {
 /// What a restarted member has: its records saved by `marked()` and its
 /// lists, restored.
 fn restarted(set: &RecordSet) -> RecordSet {
-    let records: Vec<Record> = set.marked(&[7; 32]).into_iter().map(|(r, _)| r.clone()).collect();
+    let records: Vec<Record> =
+        set.marked(&cbb_core::certs::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
     let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
     RecordSet::restore(set.root().clone(), set.recovery().clone(), &records, &lists)
 }

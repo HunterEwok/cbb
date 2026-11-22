@@ -33,9 +33,15 @@ fn try_rec(g: &mut G, set: &mut RecordSet, by: &K, kind: Kind) -> bool {
 /// The recovery key's change from everything g holds, the set taking it.
 /// Its list names no removal one of its re-issued removals covers.
 fn change(g: &mut G, new_root: &K, member: &K) -> crate::error::Result<Written> {
+    change_leaving(g, new_root, member, &[])
+}
+
+/// The same, leaving out the devices of `leave_out`.
+fn change_leaving(g: &mut G, new_root: &K, member: &K, leave_out: &[KeyHash]) -> crate::error::Result<Written> {
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    let w = set.write_change(&st, &k("recovery"), crate::testkit::rk2(), new_root, phone(member), &[], false, 0)?;
+    let w =
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), new_root, phone(member), leave_out, false, 0)?;
     let zs: Vec<&Removal> = w
         .first
         .iter()
@@ -203,7 +209,19 @@ fn a_later_root_adds_removals_before_it_is_lost() {
     let mut g = G::new();
     let (admitted, n) = carried_room(&mut g, MAX_ADMIN_RECORDS);
     let mut removed: Vec<KeyHash> = admitted[..n].to_vec();
-    change(&mut g, &k("n1"), &k("p1")).unwrap();
+    // The group holds MAX_DEVICES devices: the new root's phone comes in
+    // only with one of them left out (a change past the cap is refused).
+    let full = g.state().devices.len() >= crate::records::MAX_DEVICES;
+    assert_eq!(
+        change(&mut g, &k("n1"), &k("p1")).err().map(|e| e.to_string()).as_deref(),
+        full.then_some(crate::records::set::CHANGE_TOO_BIG),
+        "only a full group refuses"
+    );
+    if full {
+        let st = g.state();
+        let one = admitted.iter().find(|x| st.device_by_key(x).is_some()).copied().unwrap();
+        change_leaving(&mut g, &k("n1"), &k("p1"), &[one]).unwrap();
+    }
     let n1 = k("n1");
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     for x in &admitted[removed.len()..] {

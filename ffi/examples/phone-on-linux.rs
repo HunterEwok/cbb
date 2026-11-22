@@ -592,7 +592,7 @@ mod card {
     use base64::engine::general_purpose::STANDARD;
 
     use cbb_core::sheet::yubikey as yk;
-    use cbb_member::piv::DEFAULT_MANAGEMENT_KEY;
+    use cbb_member::piv::factory_management_key;
     use p256::elliptic_curve::sec1::ToSec1Point as _;
 
     /// The card's lasting state.
@@ -612,7 +612,7 @@ mod card {
             Held {
                 objects: BTreeMap::new(),
                 slots: BTreeMap::new(),
-                mgmt: (STANDARD.encode(DEFAULT_MANAGEMENT_KEY), true),
+                mgmt: (STANDARD.encode(factory_management_key()), true),
             }
         }
     }

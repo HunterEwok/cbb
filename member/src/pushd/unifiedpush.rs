@@ -117,15 +117,15 @@ pub fn encrypt(
     let mut ikm = [0u8; 32];
     Hkdf::<Sha256>::new(Some(auth), shared.raw_secret_bytes()).expand(&key_info, &mut ikm).ok()?;
     let prk = Hkdf::<Sha256>::new(Some(salt), &ikm);
-    let mut cek = [0u8; 16];
-    let mut nonce = [0u8; 12];
+    // HKDF writes the whole key and nonce into the buffers it is given.
+    let mut cek = aes_gcm::Key::<Aes128Gcm>::default();
+    let mut nonce = Nonce::default();
     prk.expand(b"Content-Encoding: aes128gcm\0", &mut cek).ok()?;
     prk.expand(b"Content-Encoding: nonce\0", &mut nonce).ok()?;
     let mut record = plain.to_vec();
     // The last record's delimiter, no padding.
     record.push(2);
-    let sealed =
-        Aes128Gcm::new_from_slice(&cek).ok()?.encrypt(&Nonce::from(nonce), Payload { msg: &record, aad: &[] }).ok()?;
+    let sealed = Aes128Gcm::new(&cek).encrypt(&nonce, Payload { msg: &record, aad: &[] }).ok()?;
     let mut out = Vec::with_capacity(21 + as_public.len() + sealed.len());
     out.extend_from_slice(salt);
     out.extend_from_slice(&RS.to_be_bytes());

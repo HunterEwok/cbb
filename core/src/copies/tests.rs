@@ -832,7 +832,7 @@ fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
     assert!(blob::open_segment(&key, 1, false, &sealed[..blob::SEALED_SEGMENT]).is_err());
     let cut = &sealed[..2 * blob::SEALED_SEGMENT];
     assert!(blob::open(&key, (cut.len() as u64, sha256(&[cut])), 2 * blob::SEGMENT as u64, cut).is_err());
-    assert!(blob::open(&[9; 32], header, n as u64, &sealed).is_err());
+    assert!(blob::open(&crate::certs::sha256(b"another blob key"), header, n as u64, &sealed).is_err());
     assert!(blob::open(&key, header, n as u64 - 1 - blob::SEGMENT as u64 * 2, &sealed).is_err());
     // Sealed again, it keeps its copy key: the same blob opens.
     let ask = Ask { asker: w.id("laptop"), epoch: 1, leaves: &[], now_ms: Some(T0), group_ttl_ms: DAY };
@@ -856,7 +856,7 @@ fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
 
 #[test]
 fn a_blob_holds_at_most_max_segments() {
-    let key = [3; 32];
+    let key = crate::certs::sha256(b"a blob key");
     let last = blob::MAX_SEGMENTS - 1;
     assert!(blob::seal_segment(&key, last, true, b"end").is_ok());
     assert!(blob::seal_segment(&key, blob::MAX_SEGMENTS, true, b"past").is_err());

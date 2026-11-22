@@ -65,8 +65,11 @@ pub struct Forwarder {
     thread: Option<JoinHandle<()>>,
 }
 
-/// The mask key the test forwarder gives.
-pub const MASK: [u8; 32] = [9; 32];
+/// The mask key the test forwarder gives, made from a name rather than
+/// written out.
+pub fn mask() -> [u8; 32] {
+    cbb_core::certs::sha256(b"the test forwarder's mask key")
+}
 
 /// A plain answer: the registration 7, the mask, and the way over VLESS
 /// when the hub asked for one.
@@ -74,7 +77,7 @@ pub fn welcome() -> AnswerFn {
     Arc::new(|r: &Register| {
         Answer::Registered(Registered {
             id: 7,
-            mask: MASK,
+            mask: mask(),
             vless: r.vless.map(|user| Way {
                 user,
                 port: Some(8443),

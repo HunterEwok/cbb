@@ -124,7 +124,10 @@ pub fn welcome_message(data: &[u8]) {
         return;
     }
     let body = data.get(4..).unwrap_or_default();
-    assert!(crate::join::welcome::open(body, &[7; 64]).is_err(), "a Welcome passed a tag nobody made");
+    assert!(
+        crate::join::welcome::open(body, &[crate::certs::sha256(b"a tag nobody made"); 2].concat()).is_err(),
+        "a Welcome passed a tag nobody made"
+    );
 }
 
 /// The recovery sheet's text or QR code, as typed or scanned: no input
