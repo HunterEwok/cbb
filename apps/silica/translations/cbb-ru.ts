@@ -1558,10 +1558,6 @@
         <translation>Сделан вместе с группой, его лист был показан один раз. Без листа главное устройство группы не сменить: если лист потерян, создайте новую группу.</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>Записать на YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>Ключ восстановления</translation>
     </message>

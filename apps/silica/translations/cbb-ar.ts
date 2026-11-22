@@ -1558,10 +1558,6 @@
         <translation>أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>وضعه على YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>مفتاح الاسترداد</translation>
     </message>

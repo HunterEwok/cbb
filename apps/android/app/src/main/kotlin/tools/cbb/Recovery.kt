@@ -87,11 +87,14 @@ internal fun RecoverySection(model: AppModel) {
 }
 
 /**
- * The recovery sheet, shown once and kept out of screenshots and the recent
- * apps: its QR code and text, printing it or saving it as a PDF through
- * Android's printing, putting the same key on a YubiKey (with model; the
- * core seals it, docs/protocol.md, "The recovery key on a YubiKey (0.6)"),
- * and closing it, after which the phone has no copy. Internal for the
+ * The new group's recovery key, shown once and kept out of screenshots and
+ * the recent apps. It first offers where to save it: "Write on a sheet"
+ * shows the sheet (its QR code and text) with printing it or saving it as a
+ * PDF through Android's printing; "Write to YubiKey" (with model) waits for
+ * a YubiKey plugged in or held to the phone, then asks its PIN, and the core
+ * seals the key into the card's first empty retired slot (docs/protocol.md,
+ * "The recovery key on a YubiKey (0.6)"). Both are allowed. Leaving without
+ * either asks first; afterwards the phone has no copy. Internal for the
  * sheet of the dangerous screens (DangerousScreensTest).
  */
 @Composable
@@ -99,24 +102,49 @@ internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var onSheet by remember { mutableStateOf(false) }
+    var sheetSeen by remember { mutableStateOf(false) }
+    var printed by remember { mutableStateOf(false) }
     var askingDone by remember { mutableStateOf(false) }
+    var askingUnsaved by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<AppModel.Note?>(null) }
-    var askingPin by remember { mutableStateOf(false) }
+    // The YubiKey found, waiting for its PIN: true on USB, false over NFC.
+    var foundUsb by remember { mutableStateOf<Boolean?>(null) }
     var onCard by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var sealed by remember { mutableStateOf<AppModel.Note?>(null) }
-    fun seal(pin: String, replaceDefault: Boolean) {
+    var sealedNote by remember { mutableStateOf<AppModel.Note?>(null) }
+    var sealed by remember { mutableStateOf(false) }
+    fun findKey() {
         val m = model ?: return
         if (onCard != null) return
+        sealedNote = null
         onCard = scope.launch {
             try {
-                sealed = m.sealOnCard(sheet.qr, pin, replaceDefault)
+                foundUsb = m.findKey { sealedNote = it }
             } finally {
                 onCard = null
             }
         }
     }
+    fun seal(pin: String, usb: Boolean) {
+        val m = model ?: return
+        if (onCard != null) return
+        onCard = scope.launch {
+            try {
+                val (note, ok) = m.sealOnCard(sheet.qr, pin, usb)
+                sealedNote = note
+                if (ok) sealed = true
+            } finally {
+                onCard = null
+            }
+        }
+    }
+    fun leave() = when {
+        sealed || printed -> done()
+        sheetSeen -> askingDone = true
+        else -> askingUnsaved = true
+    }
     Dialog(
-        onDismissRequest = { askingDone = true },
+        onDismissRequest = { if (onSheet) onSheet = false else leave() },
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
@@ -124,47 +152,55 @@ internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model
             usePlatformDefaultWidth = false,
         ),
     ) {
-        BackHandler { askingDone = true }
+        BackHandler { if (onSheet) onSheet = false else leave() }
         Column(
             Modifier.fillMaxSize().background(palette.background).safeDrawingPadding().verticalScroll(rememberScrollState())
                 .padding(Tokens.spacingLarge),
             verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
-            Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
-            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
-            AccentButton(stringResource(R.string.recovery_print), onClick = {
-                failure = try {
-                    printSheet(context, sheet, made)
-                    null
-                } catch (e: Exception) {
-                    Log.e(TAG, "printing the recovery sheet", e)
-                    AppModel.Note(R.string.recovery_print_failed, e.toString(), error = true)
+            Text(stringResource(R.string.recovery_save_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
+            if (onSheet) {
+                Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
+                RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
+                AccentButton(stringResource(R.string.recovery_print), onClick = {
+                    failure = try {
+                        printSheet(context, sheet, made)
+                        printed = true
+                        null
+                    } catch (e: Exception) {
+                        Log.e(TAG, "printing the recovery sheet", e)
+                        AppModel.Note(R.string.recovery_print_failed, e.toString(), error = true)
+                    }
+                }, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.recovery_file_warning), textAlign = TextAlign.Center, color = palette.textDim)
+                failure?.let { NoteText(it) }
+                QuietButton(stringResource(R.string.back), onClick = { onSheet = false }, modifier = Modifier.fillMaxWidth())
+            } else {
+                Text(stringResource(R.string.recovery_save_body), textAlign = TextAlign.Center, color = palette.textDim)
+                AccentButton(stringResource(R.string.recovery_write_sheet), onClick = {
+                    onSheet = true
+                    sheetSeen = true
+                }, modifier = Modifier.fillMaxWidth())
+                if (model != null) {
+                    AccentButton(
+                        stringResource(R.string.yubikey_write),
+                        onClick = { findKey() },
+                        enabled = onCard == null && !sealed,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    sealedNote?.let { NoteText(it) }
                 }
-            }, modifier = Modifier.fillMaxWidth())
-            failure?.let { NoteText(it) }
-            if (model != null) {
-                QuietButton(
-                    stringResource(R.string.yubikey_put),
-                    onClick = { askingPin = true },
-                    enabled = onCard == null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                sealed?.let { NoteText(it) }
+                QuietButton(stringResource(R.string.recovery_done), onClick = { leave() }, modifier = Modifier.fillMaxWidth())
             }
-            QuietButton(stringResource(R.string.recovery_done), onClick = { askingDone = true }, modifier = Modifier.fillMaxWidth())
         }
         if (model != null) {
-            if (askingPin) {
-                // The person chooses here whether a factory management key is replaced.
+            foundUsb?.let { usb ->
                 YubiKeyPinDialog(
-                    stringResource(R.string.yubikey_put_title),
-                    stringResource(R.string.yubikey_put_body),
-                    dismiss = { askingPin = false },
-                    goLabel = stringResource(R.string.yubikey_seal_replace),
-                    other = stringResource(R.string.yubikey_seal_keep) to { pin -> seal(pin, false) },
-                ) { pin -> seal(pin, true) }
+                    stringResource(R.string.yubikey_write),
+                    stringResource(if (usb) R.string.yubikey_pin_then_touch else R.string.yubikey_pin_then_hold),
+                    dismiss = { foundUsb = null },
+                ) { pin -> seal(pin, usb) }
             }
             YubiKeyPrompt(model) { onCard?.cancel() }
         }
@@ -175,6 +211,18 @@ internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model
                 text = { Text(stringResource(R.string.recovery_done_body)) },
                 confirmButton = { TextButton(onClick = done) { Text(stringResource(R.string.recovery_kept), color = palette.accent) } },
                 dismissButton = { TextButton(onClick = { askingDone = false }) { Text(stringResource(R.string.back)) } },
+                containerColor = palette.surface,
+                titleContentColor = palette.text,
+                textContentColor = palette.textDim,
+            )
+        }
+        if (askingUnsaved) {
+            AlertDialog(
+                onDismissRequest = { askingUnsaved = false },
+                title = { Text(stringResource(R.string.recovery_unsaved_title)) },
+                text = { Text(stringResource(R.string.recovery_unsaved_body)) },
+                confirmButton = { TextButton(onClick = done) { Text(stringResource(R.string.recovery_leave_unsaved), color = palette.danger) } },
+                dismissButton = { TextButton(onClick = { askingUnsaved = false }) { Text(stringResource(R.string.back)) } },
                 containerColor = palette.surface,
                 titleContentColor = palette.text,
                 textContentColor = palette.textDim,

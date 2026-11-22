@@ -22,9 +22,9 @@ class RecoveryCardTest {
             "the YubiKey's PIN is blocked: unblock it with its PUK (ykman piv access unblock-pin)" to RecoveryCard.Kind.BLOCKED,
             "cbb keeps the recovery key on a YubiKey 5 with firmware 5.3 or later" to RecoveryCard.Kind.OLD_FIRMWARE,
             "this YubiKey holds no recovery key of cbb" to RecoveryCard.Kind.NO_KEY,
-            "this YubiKey already holds a recovery key: cbb opens it and never seals it again; to start over, use another YubiKey" to
-                RecoveryCard.Kind.HOLDS_ONE,
-            "this YubiKey already holds something in the place cbb uses" to RecoveryCard.Kind.TAKEN,
+            "this YubiKey already holds this group's recovery key: cbb opens it and never seals it again" to RecoveryCard.Kind.HOLDS_ONE,
+            "every retired PIV slot of this YubiKey is in use" to RecoveryCard.Kind.NO_FREE_SLOT,
+            "this YubiKey holds two recovery keys for this group: cbb does not choose between them" to RecoveryCard.Kind.TWO_SLOTS,
             "set a PIN-protected management key in YubiKey Manager first" to RecoveryCard.Kind.MANAGEMENT_KEY,
             "the YubiKey left the phone: hold it still until it is done (code 1)" to RecoveryCard.Kind.CARD,
         )
@@ -44,7 +44,7 @@ class RecoveryCardTest {
             sent++
             throw java.io.IOException("gone")
         }
-        val f = assertFailsWith<RecoveryCard.Failure> { RecoveryCard.open(gone, "123456") }
+        val f = assertFailsWith<RecoveryCard.Failure> { RecoveryCard.open(gone, "123456", GROUP) }
         assertEquals(RecoveryCard.Kind.CARD, f.kind)
         assertTrue("left the phone" in f.reason, f.reason)
         assertEquals(1, sent, "the core stops at the first APDU the card does not answer")
@@ -53,7 +53,12 @@ class RecoveryCardTest {
     @Test
     fun aCardWithoutPIVIsRefused() {
         val noPIV = SmartCard { byteArrayOf(0x6a, 0x82.toByte()) }
-        assertFailsWith<RecoveryCard.Failure> { RecoveryCard.inspect(noPIV, "123456") }
-        assertFailsWith<RecoveryCard.Failure> { RecoveryCard.seal(noPIV, "123456", "a typo", replaceDefault = false) }
+        assertFailsWith<RecoveryCard.Failure> { RecoveryCard.open(noPIV, "123456", GROUP) }
+        assertFailsWith<RecoveryCard.Failure> { RecoveryCard.seal(noPIV, "123456", "a typo", GROUP) }
+    }
+
+    private companion object {
+        /** A group's tag, as the app names the group's slot. */
+        const val GROUP = "0123456789abcdef"
     }
 }

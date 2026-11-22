@@ -1558,10 +1558,6 @@
         <translation>נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>לשים ב-YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>מפתח שחזור</translation>
     </message>

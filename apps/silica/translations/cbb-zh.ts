@@ -1558,10 +1558,6 @@
         <translation>随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>存入 YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>恢复密钥</translation>
     </message>

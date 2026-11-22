@@ -26,6 +26,7 @@ import tools.cbb.kit.Media
 import tools.cbb.kit.Member
 import tools.cbb.kit.PhoneGroup
 import tools.cbb.kit.Records as KitRecords
+import tools.cbb.kit.CardLink
 import tools.cbb.kit.RecoveryCard
 import tools.cbb.kit.WhyReason
 import kotlinx.coroutines.CancellationException
@@ -1154,24 +1155,36 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Seals the recovery key's secret, from sheet (the sheet's QR code or
-     * its text), onto a YubiKey held to the phone or plugged in (NFC or USB-C; docs/protocol.md,
-     * "The recovery key on a YubiKey (0.6)"): the core speaks PIV, behind the
-     * card's PIN and a touch. replaceDefault is the person's consent to
-     * replace a factory management key by a random one the PIN protects.
+     * Waits for a YubiKey plugged in or held to the phone, with nothing done
+     * on it: true when it is on USB, false over NFC.
      */
-    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean, plugged: () -> Unit = {}): RecoveryCard.Sealed {
+    suspend fun findCard(): Boolean {
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.seal(card, pin, sheet, replaceDefault) }
+        return YubiKeys.withCard(ui, {}) { card -> card is CardLink.Ccid }
     }
 
     /**
-     * Opens the recovery key's secret on a YubiKey held to the phone, after
-     * its PIN and a touch, for [changeRoot]; the caller drops it after that.
+     * Seals the recovery key's secret, from sheet (the sheet's QR code or
+     * its text), onto a YubiKey held to the phone or plugged in (NFC or
+     * USB-C; docs/protocol.md, "The recovery key on a YubiKey (0.6)"): the
+     * core speaks PIV, behind the card's PIN and a touch, and puts it in the
+     * card's first empty retired slot, named for this group.
+     */
+    suspend fun sealOnCard(sheet: String, pin: String, plugged: () -> Unit = {}): RecoveryCard.Sealed {
+        val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
+        val tag = groupTag ?: throw Failure(Failure.Kind.NO_GROUP)
+        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.seal(card, pin, sheet, tag) }
+    }
+
+    /**
+     * Opens this group's recovery key secret on a YubiKey held to the phone,
+     * after its PIN and a touch, for [changeRoot]; the caller drops it after
+     * that.
      */
     suspend fun openCard(pin: String, plugged: () -> Unit = {}): ByteArray {
         val ui = activity as? android.app.Activity ?: throw Failure(Failure.Kind.NO_SCREEN)
-        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.open(card, pin) }
+        val tag = groupTag ?: throw Failure(Failure.Kind.NO_GROUP)
+        return YubiKeys.withCard(ui, plugged) { card -> RecoveryCard.open(card, pin, tag) }
     }
 
     /**

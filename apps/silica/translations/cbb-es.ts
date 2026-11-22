@@ -1558,10 +1558,6 @@
         <translation>Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>Guardarla en una YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>Clave de recuperación</translation>
     </message>

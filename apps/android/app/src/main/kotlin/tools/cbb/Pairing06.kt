@@ -83,7 +83,7 @@ internal fun WindowScreen(model: AppModel, close: () -> Unit) {
         }
         model.message?.let { NoteText(it) }
     }
-    model.newSheet?.let { s -> RecoverySheetDialog(s, Instant.now()) { model.newSheet = null } }
+    model.newSheet?.let { s -> RecoverySheetDialog(s, Instant.now(), model) { model.newSheet = null } }
 }
 
 /**

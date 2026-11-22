@@ -1558,10 +1558,6 @@
         <translation>Ulitengenezwa pamoja na kikundi, na karatasi yake ilionyeshwa mara moja tu. Bila karatasi hiyo kifaa kikuu cha kikundi hakiwezi kubadilishwa: karatasi ikipotea, unda kikundi kipya.</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>Uweke kwenye YubiKey</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>Ufunguo wa kurejesha</translation>
     </message>

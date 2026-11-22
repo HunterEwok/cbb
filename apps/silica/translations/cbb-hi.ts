@@ -1558,10 +1558,6 @@
         <translation>समूह के साथ ही बनी, और इसकी शीट सिर्फ़ एक बार दिखाई गई। शीट के बिना समूह का मुख्य डिवाइस नहीं बदला जा सकता: अगर शीट खो जाए, तो नया समूह बनाएँ।</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>इसे YubiKey पर रखें</translation>
-    </message>
-    <message>
         <source>Recovery key</source>
         <translation>पुनर्प्राप्ति कुंजी</translation>
     </message>

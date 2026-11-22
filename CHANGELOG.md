@@ -18,6 +18,11 @@ made with 0.5 is set up again once. The details follow.
 ### Added
 - ffi's group of 0.6 names its key level and the window for incoming copies (`key_level`,
   `incoming_ms`), and the manage action `incoming` sets that window from a phone.
+- Right after a group is made the root phone offers where to save its recovery key: "Write on
+  a sheet", which shows the sheet and prints it or saves it with the system's own tools, with
+  the warning that a saved file is the group's key, and "Write to YubiKey", which waits for the
+  key plugged in or held to the phone, then asks its PIN and a touch. Both are allowed, and
+  leaving without either asks first.
 - A phone in a group of 0.6 changes the group's root to itself with the recovery key, from
   the sheet's QR code or text or from the secret a YubiKey opens, after showing who stays
   (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);

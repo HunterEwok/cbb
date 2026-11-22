@@ -1520,10 +1520,20 @@ the app on real devices.
   new root's window, and restoring on a phone in no group comes with 0.7 (D-125).
 - The recovery key on a YubiKey, over NFC or USB-C (docs/protocol.md, section 9, "The
   recovery key on a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the
-  app only carries the card's bytes (the kits' `RecoveryCard`). The root phone's sheet page has
-  "Put it on a YubiKey": after the PIN, the card held to the phone or plugged in seals the
-  sheet's secret behind the PIN and a touch in its first empty retired slot (`seal`, naming the
-  group), with its management key as the card keeps it, never asked about (D-127). A YubiKey older than firmware 5.3, or one whose
+  app only carries the card's bytes (the kits' `RecoveryCard`). Right after a group is made the
+  root phone does not show the sheet at once: it offers "Write on a sheet" and "Write to
+  YubiKey", both allowed, and leaving without either asks first ("Leave without saving the
+  recovery key?"), since without the key a lost phone means a new group. The sheet, once
+  chosen, prints or saves with the system's own tools (Android's printing and its "Save as
+  PDF", the iPhone's printing and Save to Files, HarmonyOS's printing and its save picker,
+  a PDF in Documents on Aurora OS), with the warning that a saved file is the group's key, to
+  be copied off the phone. "Write to YubiKey" first waits for the key ("Insert your YubiKey or
+  hold it to the phone": USB-C and NFC at once on Android and HarmonyOS, the first found
+  taking the step; USB-C only on Aurora OS; on the iPhone a key plugged in is found by itself
+  and "Scan with NFC" opens the system's NFC sheet after the PIN), then asks its PIN, then the
+  touch (over NFC, holding it to the phone again), and the core seals the sheet's secret into
+  the card's first empty retired slot (`seal`, naming the group), with its management key as
+  the card keeps it, never asked about (D-127). A YubiKey older than firmware 5.3, or one whose
   management key the app cannot use, takes the sheet only. The change-root screen's "Use a
   YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
   `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap

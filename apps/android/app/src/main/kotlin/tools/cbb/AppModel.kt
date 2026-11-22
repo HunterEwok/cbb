@@ -1035,19 +1035,37 @@ class AppModel(private val app: Context) {
     }
 
     /**
-     * Seals the recovery key of sheet (its QR code) onto a YubiKey held to
-     * the phone, after its PIN; replaceDefault is the person's consent to
-     * replace a factory management key. It returns what to tell the person.
+     * Waits for a YubiKey plugged in or held to the phone, before its PIN is
+     * asked: true when it is on USB, false over NFC, null after a failure,
+     * which failed gets.
      */
-    suspend fun sealOnCard(sheet: String, pin: String, replaceDefault: Boolean): Note = try {
-        cardPrompt = R.string.yubikey_hold
-        val sealed = group.sealOnCard(sheet, pin, replaceDefault) { cardPrompt = R.string.yubikey_touch_usb }
-        Log.i(TAG, "yubikey: sealed, factory key ${sealed.defaultKey}, replaced ${sealed.replaced}")
-        Note(if (sealed.defaultKey) R.string.yubikey_sealed_default_key else R.string.yubikey_sealed)
+    suspend fun findKey(failed: (Note) -> Unit): Boolean? = try {
+        cardPrompt = R.string.yubikey_insert_or_hold
+        group.findCard()
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        describe(e)
+        failed(describe(e))
+        null
+    } finally {
+        cardPrompt = null
+    }
+
+    /**
+     * Seals the recovery key of sheet (its QR code) onto the YubiKey found,
+     * after its PIN, into its first empty retired slot: on USB it asks for
+     * the touch, over NFC to hold it to the phone again. It returns what to
+     * tell the person, and whether the key is on the card.
+     */
+    suspend fun sealOnCard(sheet: String, pin: String, usb: Boolean): Pair<Note, Boolean> = try {
+        cardPrompt = if (usb) R.string.yubikey_touch_usb else R.string.yubikey_hold
+        val sealed = group.sealOnCard(sheet, pin) { cardPrompt = R.string.yubikey_touch_usb }
+        Log.i(TAG, "yubikey: sealed in slot ${sealed.slot.toString(16)}, factory management key ${sealed.defaultKey}")
+        Note(R.string.yubikey_sealed) to true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        describe(e) to false
     } finally {
         cardPrompt = null
     }
@@ -1224,7 +1242,8 @@ class AppModel(private val app: Context) {
                 RecoveryCard.Kind.OLD_FIRMWARE -> R.string.error_yubikey_old
                 RecoveryCard.Kind.NO_KEY -> R.string.error_yubikey_no_key
                 RecoveryCard.Kind.HOLDS_ONE -> R.string.error_yubikey_holds_one
-                RecoveryCard.Kind.TAKEN -> R.string.error_yubikey_taken
+                RecoveryCard.Kind.NO_FREE_SLOT -> R.string.error_yubikey_no_free_slot
+                RecoveryCard.Kind.TWO_SLOTS -> R.string.error_yubikey_two_slots
                 RecoveryCard.Kind.MANAGEMENT_KEY -> R.string.error_yubikey_management_key
                 RecoveryCard.Kind.CARD -> R.string.error_yubikey
             }
