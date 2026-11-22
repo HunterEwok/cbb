@@ -281,7 +281,7 @@ conventions describe; wave 5 moves them to the CBOR above.
 | Group tag | on the records of 0.6, the first 8 bytes of the group ID (section 1), as 16 lowercase hex characters; in a group of 0.5, the first 8 bytes of SHA-256 over the group CA certificate (DER) | `member::live::tag` |
 | Member host name | `cb-<device ID>.local` (mDNS host name and the only DNS name in the member certificate) | `DeviceID.HostName` |
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
-| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
+| Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves the pairing windows | `member/src/lib.rs`, `member/src/discovery.rs` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
 | Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
 | Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
@@ -405,8 +405,7 @@ know, MUST match keys without regard to case, and MUST take as the value what fo
 A member MUST NOT dial a peer whose `g` is not its group's tag.
 
 Note: browsers check only `g` (when dialing), `r` (when dialing, on members)
-and `p` (when joining); nothing checks `v` (`internal/service/members.go`,
-`internal/service/socket.go`, `member/src/discovery.rs`).
+and `p` (when joining); nothing checks `v` (`member/src/discovery.rs`).
 
 NSEC (RFC 6762 section 6.1): owner the host name; RDATA is the host name itself in
 uncompressed wire format, then window 0 with a bitmap that has bit A (type 1, byte 0 mask
