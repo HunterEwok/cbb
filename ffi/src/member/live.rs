@@ -563,7 +563,7 @@ impl Phone {
                 Ok(self.away_answer())
             }
             // The phone as a hub of the group (the records must make it
-            // one: an admin key), as cbb global hub does on a computer and
+            // one: the root's own device or an admin key), as cbb global hub does on a computer and
             // with the arguments of the phone of 0.5: reached away from
             // home through the forwarder (`forwarder`, its key's pin `key`,
             // or `default` for the project's) or at `addrs` ("ip:port") on
@@ -573,7 +573,7 @@ impl Phone {
             "hub" => {
                 if !l.mesh.may_be_hub(&l.mesh.device()) {
                     return Err(Error::msg(
-                        "the group's records do not make this phone a hub; only an admin phone can be one",
+                        "the group's records do not make this phone a hub; only the root's phone or an admin phone can be one",
                     ));
                 }
                 let away = l.away().ok_or_else(|| Error::msg("sync away from home did not start on this phone"))?;
@@ -941,7 +941,7 @@ impl Phone {
         }
         let d = writers::find(&st, &a.device)?.clone();
         if d.id == mesh.device() {
-            return Err(Error::msg("this phone, the group's root, is no hub"));
+            return Err(Error::msg("this phone sets its own forwarder when it turns its hub on"));
         }
         if !st.may_be_hub(&d.id) {
             return Err(Error::msg(format!(
@@ -1750,8 +1750,9 @@ mod tests {
         for op in ["records", "answer"] {
             assert!(error(&call(op, Value::Null)).contains("does not work in this build yet"), "{op}");
         }
-        // A root phone is no hub until the root names it.
-        assert!(error(&call("hub", Value::Null)).contains("do not make this phone a hub"));
+        // The root's phone may be a hub without an admin key: the records
+        // let it through to the hub's own checks.
+        assert!(!error(&call("hub", Value::Null)).contains("do not make this phone a hub"));
         let manage = |action: &str, device: &str, name: &str| {
             let r = json!({ "action": action, "device": device, "name": name, "public": b64(&root.0.public()) });
             m.manage(r.to_string().as_bytes(), sign, ctx(root))
@@ -1800,8 +1801,9 @@ mod tests {
         assert!(error(&m.manage(bad.to_string().as_bytes(), sign, ctx(root))).contains("is not a relay's key"));
         let none = json!({ "action": "relay", "relays": [], "public": b64(&root.0.public()) });
         assert_eq!(ok(&m.manage(none.to_string().as_bytes(), sign, ctx(root)))["relays"], json!([]));
-        // The root names its hubs, which the records judge: a phone is a hub
-        // only with an admin key, never by the hubs record.
+        // The root names its hubs, which the records judge: the hubs record
+        // names only a device whose record gives it the hub's right, which a
+        // phone's does not; the root's phone is a hub without it.
         let hubs = json!({ "action": "hubs", "hubs": ["tablet"], "public": b64(&root.0.public()) });
         assert!(error(&m.manage(hubs.to_string().as_bytes(), sign, ctx(root))).contains("may not be a hub"));
         let none = json!({ "action": "hubs", "hubs": [], "public": b64(&root.0.public()) });

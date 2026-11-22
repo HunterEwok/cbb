@@ -1160,22 +1160,17 @@ frames like any other event.
 ### Writing the member's own clipboard (local policy)
 
 When an event becomes current (or a mark gets its text) it is written to the local clipboard
-when all of these hold: the member's sync is on (mode `shared`); this member opened the current event (section 4, "Opening") and it is live (it has
-a text, and a secret is younger than the secret TTL); the local clipboard does not already
-hold the text; and it was copied less than the group's live window ago. The live window is
-the `incoming_ms` of the group's copies setting (section 10, "The copies setting"), 60 s
-when the records set none. A write increments the write sequence number (section 8).
+when all of these hold: the member's sync is on (mode `shared`); this member opened the current
+event (section 4, "Opening") and it is live (it has a text, and a secret is younger than the
+secret TTL); and the local clipboard does not already hold the text. A device that always
+listens keeps its own clipboard equal to the group's buffer (D-128): there is no age limit, so
+a member that comes back with a copy made after the group's current one makes it current and
+every member writes it, while a copy made before the current one never becomes current and
+changes nothing (`cbb_core::copies::fresh`, `Behind`). A write increments the write sequence
+number (section 8). A phone, which listens only sometimes, swaps its own clipboard and the
+group's buffer on a gesture and listens so only while its app is on screen (design.md, "The
+one button").
 
-- The age is the event's `age_ms` plus the time since it arrived, measured on the clocks that
-  count durations, never by comparing the sender's clock with this one; so a member that
-  wakes from sleep, starts, or reconnects after the window has passed keeps what it copied
-  itself and never takes an old copy of the group.
-- A member that started with a saved clock mark (section 5) also never writes an event whose
-  `time` is not after that mark: it was made before the member last stopped, whatever its
-  age. The event still becomes current for ordering.
-- Once the window has passed the copy is gone for this member: its own clipboard stays as it
-  is, and what it copies next, however old, goes to the group (a phone's button sends it,
-  unless it is the group's text already or what the phone itself sent or took last).
 - When the records stop accepting the current event's origin (its device is removed, or a
   takeover took effect and the root that admitted it is no longer on the path), the member
   drops the event, written or not, and does not write it.
@@ -2529,7 +2524,7 @@ and `a`-`f`.
 | `cert` | string | `recovery` | the recovery key's admin CA certificate, DER, base64, whose key hash is `admin` |
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
 | `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a trusted hub, which is an admin ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
-| `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): how long a copy from another device stays live on each member (section 5, "Writing the member's own clipboard"); without a `copies` record that counts, 60 000 |
+| `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): the lifetime the readers' freshness check gives a copy without its own (`cbb_core::copies::fresh`, the allowance); since D-128 it no longer limits what a member writes; without a `copies` record that counts, 60 000 |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}`; above seq 1 its own key's head is its `prev`, at seq 1 it names no head of its own key |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
@@ -3216,10 +3211,12 @@ loses the hub until it meets the new hub, at home or at a relay, and takes its o
 
 The hubs of 0.6 serve in the order `State::hub_order` derives from the records alone
 (`core/src/records/eval.rs`): the devices of the root's hubs record first, in the record's
-order (the user's, not sorted; `cbb global hubs`, the control operation `hubs`), then the other
-devices with an admin key, the computers before the phones, in each part the root's own device
-first, then by device ID; frozen devices are left out. The root is a hub only when its hubs
-record names it or the user makes it one there.
+order (the user's, not sorted; `cbb global hubs`, the control operation `hubs`), then the root's
+own device and the other devices with an admin key, the computers before the phones, in each
+part the root's own device first, then by device ID; frozen devices are left out. A phone that
+made the group is its root and holds no admin key; it may be a hub all the same
+(`State::may_be_hub`). The root is a hub only when its hubs record names it or the user makes
+it one there.
 
 - A device tries the hubs whose offers it keeps in that order, and none outside it. It learns
   a hub's offer only from its own `tunnel` to that hub.

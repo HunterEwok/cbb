@@ -52,6 +52,9 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const QUEUE_LEN: usize = 256;
+/// At most this many peers' hubs messages wait for the records (a group has
+/// at most 256 devices).
+const MAX_HELD_HUBS: usize = 256;
 /// The copies' IDs remembered, so each is passed on once.
 const SEEN_COPIES: usize = 4096;
 /// The marks file's name in the state directory.
@@ -187,6 +190,11 @@ pub struct Mesh {
     /// The intros taken from the connections members made, by address and
     /// network (`cbb_core::join::intro::Limiter`).
     intros: Mutex<cbb_core::join::intro::Limiter>,
+    /// The last hubs message (t 16) of each peer that the records did not
+    /// yet make a hub: a connection can come up before the records that
+    /// name the peer a hub, so the message waits for them and is taken
+    /// once they arrive, while that peer is still connected.
+    held_hubs: Mutex<HashMap<DeviceId, Vec<u8>>>,
 }
 
 /// The copies' IDs seen, and their order, to forget the oldest.
@@ -353,6 +361,7 @@ impl Mesh {
                 fetches: Mutex::new(HashMap::new()),
                 conns: Mutex::new(HashMap::new()),
                 intros: Mutex::new(cbb_core::join::intro::Limiter::default()),
+                held_hubs: Mutex::new(HashMap::new()),
                 hellos: Mutex::new(HashMap::new()),
                 reach_in: Mutex::new(HashMap::new()),
                 reach_out: Mutex::new(HashMap::new()),
@@ -810,6 +819,7 @@ impl Mesh {
         self.push_events(&set);
         let hello = self.hello_frame(&set);
         drop(set);
+        self.take_held_hubs();
         // The peers the records refuse now go first: they get nothing more,
         // not even the hello that would draw the new records.
         self.drop_refused();
@@ -1427,7 +1437,31 @@ impl Mesh {
         };
         self.logf(&format!("took the intro of {}", hex(&conn.peer.0[..4])));
         self.broadcast(&hello, None);
+        self.take_held_hubs();
         Ok(())
+    }
+
+    /// Takes each held hubs message whose sender the records now make a
+    /// hub, while it is still connected; a message of a peer that left is
+    /// dropped, and one whose sender may still not be a hub waits on.
+    fn take_held_hubs(&self) {
+        if self.held_hubs.lock().unwrap().is_empty() {
+            return;
+        }
+        let state = self.state();
+        let connected: HashSet<DeviceId> = self.conns.lock().unwrap().keys().copied().collect();
+        let ready: Vec<(DeviceId, Vec<u8>)> = {
+            let mut held = self.held_hubs.lock().unwrap();
+            held.retain(|peer, _| connected.contains(peer));
+            let ids: Vec<DeviceId> = held.keys().filter(|p| state.may_be_hub(p)).copied().collect();
+            ids.into_iter().filter_map(|p| held.remove(&p).map(|m| (p, m))).collect()
+        };
+        for (peer, msg) in ready {
+            self.logf(&format!("took the held message 16 from {}", hex(&peer.0[..4])));
+            if let Some(f) = &*self.on_other.read().unwrap() {
+                f(&peer, cbb_core::msg::tables::T_HUBS, &msg);
+            }
+        }
     }
 
     fn take(&self, conn: &Conn, x: &mut Exchange, msg: &[u8]) -> Result<()> {
@@ -1445,6 +1479,9 @@ impl Mesh {
             }
             out
         };
+        if out.changed {
+            self.take_held_hubs();
+        }
         if let Some((theirs, ours)) = out.stuck {
             self.logf(&format!(
                 "the records' exchange passed its rounds: the peer's digest {}, ours {}",
@@ -1514,9 +1551,13 @@ impl Mesh {
             }
             Some(t @ cbb_core::msg::tables::T_HUBS) if !self.may_be_hub(&conn.peer) => {
                 self.logf(&format!(
-                    "ignored message {t} from {}: it may not be a hub of the group",
+                    "held message {t} from {}: the records do not make it a hub of the group yet",
                     hex(&conn.peer.0[..4])
                 ));
+                let mut held = self.held_hubs.lock().unwrap();
+                if held.contains_key(&conn.peer) || held.len() < MAX_HELD_HUBS {
+                    held.insert(conn.peer, msg.to_vec());
+                }
                 Ok(())
             }
             Some(m::T_REACH) => self.take_reach(&conn.peer, msg),

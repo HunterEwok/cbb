@@ -637,23 +637,38 @@ starting the Android app's listener for the Wear OS switch, and the delay of not
 
 ### The one button
 
-A phone app sends and fetches with one button (a tap, the Action button or Back Tap on the
-iPhone, a double tap where the phone offers one), and follows the rule of every device
-(`LiveGroup.sync` on the iPhone, `SyncRule` on Android):
+Devices that always listen (computers and small devices, whose watcher reports every copy)
+work with the group's buffer as their own: their clipboard always equals it, so what they
+copy goes to the group, and each copy that becomes the group's current one comes into their
+clipboard, however old (the sync model below). A phone listens only
+sometimes, since Android and iOS let an app read the clipboard only while it is on screen, so
+it follows two rules of its own (the owner, 2026-11-22; D-128):
 
-1. A copy from another device waits for the phone (it is live and the phone has not taken
-   it yet) → it comes to the phone. The button does this with sync on or off; by
-   themselves, while sync is on, Android and Aurora take such a copy at once and the iPhone
-   when the app comes to the front.
-2. Otherwise what the phone copied goes to the group, however old, unless it is the group's
-   text already or what this phone itself sent or took last: a text the phone sent before
-   it shared an image or files stays out, rather than go over that newer copy. A copy whose
-   live window passed is gone, and there is no separate button to fetch it.
+1. **The gesture swaps.** One button (a tap, the Action button or Back Tap on the iPhone, a
+   double tap, the quick tile or the share action where the phone offers one) always swaps
+   the phone's own clipboard and the group's buffer: the phone's text goes to the group as a
+   copy, and the group's text comes into the phone's clipboard. There is no time rule and no
+   guess at which is newer; what the phone's own clipboard holds is the person's business. A
+   phone whose clipboard is empty, or holds the group's text already, only takes the
+   group's text, so a gesture never empties the group's buffer. A password or other secret
+   swaps like any text and keeps its secret mark.
+2. **Opening the app makes the phone listen like the others.** When the app starts or comes
+   back from the background (both alike), the phone works as a device that always listens
+   while it is on screen; closing it and sending it to the background are alike too, and the
+   phone then works with its own clipboard again. Opening swaps nothing (the owner,
+   2026-11-22): a phone whose clipboard changed since the app last saw it (the system's
+   change count, read without the text) sends that copy, as a watcher reports a copy, and
+   otherwise it takes the group's buffer, so a phone that copied nothing never sends back an
+   old text. Coming back from the system's own windows (the notification shade, a
+   fingerprint or Face ID prompt, a permission dialog, a rotation) is not an opening.
 
-The button reads the phone's clipboard only in the second case. On the iPhone the button
-is the system's Paste button, which iOS lets read the clipboard without asking, and the
-"CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard", so neither asks for
-permission to paste.
+What the app itself wrote into the phone's clipboard is never a new copy (no echo). On the
+iPhone the button is the system's Paste button, which iOS lets read the clipboard without
+asking, and the "CBB: sync" shortcut takes its text from Shortcuts' "Get Clipboard"; reading
+the clipboard when the app opens and while it is on screen asks the person to allow pasting
+unless they allowed CBB to paste from other apps in Settings, so the app explains that
+setting. How convenient the swap is in daily use is tried on real phones before the rule is
+final.
 
 ### Build
 
@@ -882,20 +897,18 @@ sync away from home, the admins, and remote paste.
 - **Group state and each member's own clipboard are separate.** The group's current text is
   always the latest event, so all members converge whatever happens to the connections. What
   goes into a member's own clipboard is a local decision:
-  - a live event that becomes the group's current event is written while sync is on. An event is live for the group's live window after it was
-    copied: one minute unless the root or an admin sets another, from 5 seconds to an hour
-    (`cbb incoming`, the phones' Settings; a signed `copies` record, docs/protocol.md
-    section 10). The age is counted in durations (the event's age plus the time since it
-    arrived), never by comparing clocks;
-  - nothing else is written: a group text the member already knew is not written again, a
-    copy whose window passed is gone for this member, and a member that wakes up, starts or
-    lost its peers keeps its clipboard. Every device follows this one rule, computers and
-    phones alike;
+  - on a device that always listens, an event that becomes the group's current event is
+    written while sync is on, however old it is (the owner, 2026-11-22; D-128): its own
+    clipboard always equals the group's buffer. A copy made before the current one never
+    becomes current, so it changes nothing; a member back from offline whose copy was made
+    after the current one makes it current, and every member writes it;
+  - a phone, which listens only sometimes, follows "The one button" above: a gesture swaps
+    its own clipboard and the group's buffer, and while its app is on screen it works as a
+    device that always listens;
   - a copy from a device the group removed, or one a taken-over root admitted, is dropped,
     also when it has not been written yet.
 
-  So a member that returns with an old copy does not overwrite the clipboards of the others,
-  and a copy made while away is replaced only by a live copy made after it. Writes carry a sequence number, so they are applied in order. On a member
+  Writes carry a sequence number, so they are applied in order. On a member
   without a desktop, the service keeps this own clipboard text itself, and `cbb paste`,
   tmux and the console helper use it.
 - **No echo.** A member does not report a text it wrote into its clipboard as a new copy,

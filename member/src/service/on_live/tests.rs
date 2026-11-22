@@ -568,7 +568,9 @@ fn a_computer_joins_from_afar_through_the_hub() {
     // b, paired at home, is the group's hub.
     let (_b, lb) = pair_at_home(&a, &la, &db, "box", &["hub"]);
     ask(&a, "hubs", |h| h.hubs = vec!["box".into()]).unwrap();
-    until("b knows it may be the hub", || lb.mesh.hub_order() == vec![lb.mesh.device()]);
+    // The hubs record's b first, then the root's own device (protocol
+    // section 11, "Several hubs").
+    until("b knows it may be the hub", || lb.mesh.hub_order() == vec![lb.mesh.device(), la.mesh.device()]);
     let udp = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
     let hub_port = udp.local_addr().unwrap().port();
     drop(udp);

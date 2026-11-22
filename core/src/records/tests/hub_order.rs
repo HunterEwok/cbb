@@ -2,9 +2,10 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The hub order (docs/protocol.md, section 11, "Several hubs"): the
-//! root's hubs record first, in its order, then the computers with an admin
-//! key, then the phones, the root's own device first in each part, then by
-//! device ID; frozen devices and devices that may not be hubs left out.
+//! root's hubs record first, in its order, then the root's own device and
+//! the computers with an admin key, then the phones, the root's own device
+//! first in each part, then by device ID; frozen devices and devices that
+//! may not be hubs left out.
 
 use crate::format::{DeviceId, KeyHash};
 use crate::records::body::{ROLE_MEMBER, ROLE_PHONE};
@@ -65,4 +66,27 @@ fn the_hub_order() {
     st.devices[3].frozen = true;
     assert_eq!(st.hub_order(), vec![id(7), id(2), id(5), id(1)]);
     assert!(!st.may_be_hub(&id(6)));
+}
+
+// A phone that made the group is its root and holds no admin key: it may
+// be a hub all the same, first among the phones; another phone without an
+// admin key may not.
+#[test]
+fn a_root_phone_without_an_admin_key_may_be_a_hub() {
+    let id = |n: u8| DeviceId([n; 16]);
+    let st = State {
+        devices: vec![
+            device(1, ROLE_PHONE, true),
+            device(2, ROLE_MEMBER, true),
+            device(3, ROLE_PHONE, false),
+            device(4, ROLE_PHONE, false),
+        ],
+        root_device: Some(id(4)),
+        ..State::default()
+    };
+    assert!(st.may_be_hub(&id(4)) && !st.may_be_hub(&id(3)));
+    assert_eq!(st.hub_order(), vec![id(2), id(4), id(1)]);
+    let mut frozen = st.clone();
+    frozen.devices[3].frozen = true;
+    assert!(!frozen.may_be_hub(&id(4)));
 }

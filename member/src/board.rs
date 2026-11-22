@@ -335,7 +335,11 @@ impl Board {
             held,
             age_ms: i64::try_from(age_ms).unwrap_or(i64::MAX),
             before_start: false,
-            window_ms: i64::try_from(st.window_ms).unwrap_or(i64::MAX),
+            // A device that always listens keeps its clipboard equal to the
+            // group's buffer (D-128): whatever becomes the group's current
+            // copy is written, however old; an older copy than the current
+            // one never gets here (`cbb_core::copies::fresh`, Behind).
+            window_ms: i64::MAX,
             secret_ttl_ms: i64::try_from(st.secret_ms).unwrap_or(i64::MAX),
         };
         let v = rule::incoming(&i);
@@ -436,10 +440,11 @@ mod tests {
     }
 
     #[test]
-    fn an_old_copy_or_a_state_is_not_written() {
+    fn an_old_copy_is_written_and_a_state_is_not() {
         let (b, _) = board();
         let peer = DeviceId([1; 16]);
-        assert_eq!(b.received(&arrived(Content::text("old", false), peer, LIVE_WINDOW_MS + 1)), Verdict::Old);
+        // The group's current copy, however old, is the clipboard's (D-128).
+        assert_eq!(b.received(&arrived(Content::text("old", false), peer, 24 * 3_600_000)), Verdict::Write);
         assert_eq!(b.received(&arrived(Content::state(&[0xa0]), peer, 0)), Verdict::Unread);
         let mut secret = Content::text("pin", true);
         secret.ttl = 0;

@@ -2163,6 +2163,11 @@ made with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- A computer or small device writes whatever becomes the group's current copy, however old: its
+  clipboard always equals the group's buffer, and the live window no longer limits it; a copy
+  made before the current one changes nothing (D-128, [design](docs/design.md), "Sync model").
+- The root's own device may be a hub, a phone root without an admin key too, first among the
+  phones in the hub order ([protocol](docs/protocol.md), section 11, "Several hubs").
 - The coverage check's format gate counts a Rust test marked `// refuses: <rule>` for a rule
   whose refusal depends on what the reader holds; every format rule now has a refused
   vector or such a test, new tests among them for a copy dated past the last wall time, a
@@ -3044,6 +3049,8 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub's message that reached a member before the records naming its sender a hub waits for
+  those records instead of being dropped, so a member that met a hub early still uses it.
 - A device added after another one now reaches it: each device sends its intro, its own
   record and the records that prove it up to the root, as its first message to a member, and a
   device whose key the peer does not know yet gets through once its intro checks. Before, a
