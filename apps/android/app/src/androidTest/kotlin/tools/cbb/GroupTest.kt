@@ -281,18 +281,18 @@ class GroupTest {
 
     /**
      * Joins dev, a member in no group, through the window the phone opened:
-     * the recovery sheet of a new group is kept, and dev types the digits
-     * the window shows. Fails with what cbb pair printed and the app's state.
+     * the recovery sheet of a new group is kept, and dev is given the text
+     * of the window's QR code (Bench.joinWindow). Fails with what cbb pair printed and the app's state.
      */
     private fun joinWindow(dev: String) {
         try {
-            until(60, "the phone's pairing window open") { model.windowQr != null && model.windowDigits != null }
+            until(60, "the phone's pairing window open") { model.windowQr != null }
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}")
         }
         InstrumentationRegistry.getInstrumentation().runOnMainSync { model.newSheet = null }
         val out = try {
-            Bench.joinWindow(dev, model.windowQr!!, model.windowDigits!!)
+            Bench.joinWindow(dev, model.windowQr!!)
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
         }

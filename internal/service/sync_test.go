@@ -130,7 +130,14 @@ func TestAdminTurnsSync(t *testing.T) {
 	pairWith(t, a, b) // alpha is the root
 	waitFor(t, "a connected to b", func() bool { return len(a.status(t).Peers) == 1 })
 
-	if _, err := a.do(t, control.Header{Op: control.OpSync, Device: "beta", On: control.Bool(false)}, ""); err != nil {
+	// The connection can come up before beta's keys statement reaches
+	// alpha; until it does, alpha cannot seal a command to beta.
+	var err error
+	waitFor(t, "alpha turns beta's sync off", func() bool {
+		_, err = a.do(t, control.Header{Op: control.OpSync, Device: "beta", On: control.Bool(false)}, "")
+		return err == nil || !strings.Contains(err.Error(), "no keys statement here yet")
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if m := b.status(t).Mode; m != "own" {

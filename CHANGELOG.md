@@ -3044,6 +3044,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The service test of an admin turning another device's sync waits for that device's keys
+  statement, not only its connection: a command sealed before the statement arrived was
+  refused, and the test failed now and then.
 - A hub reached only through its forwarder no longer asks to open its UDP port to the internet
   or lets its service take that port from any address: the forwarder's endpoint, which the
   status lists among the hub's, no longer counts as an address of the hub's own.
@@ -3061,9 +3064,11 @@ made with 0.5 is set up again once. The details follow.
   went (its DER writer and reader, the blob's sealing and opening, a result's reason
   cleaner), and tests cover the member's values, manifests, names, keys and the group file.
 - The Android emulator tests admit a computer as a group of 0.6 does: the phone opens its
-  pairing window and the computer joins with its six digits (`cbb pair -code`, D-119), which
-  the bench's helper lets the members reach (`adb forward` and a relay on the fleet's
-  gateway); they waited for the QR code of 0.5 that a computer no longer shows. Their waits
+  pairing window and the computer joins with the text of its QR code (`cbb pair -code`,
+  D-119), which the bench's helper lets the members reach (`adb forward` and a relay on the
+  fleet's gateway); they waited for the QR code of 0.5 that a computer no longer shows. The six
+  digits alone need the window's mDNS announcement, which the emulator's network does not
+  pass to the members. Their waits
   let Compose run each round: the screens' effects run on the test rule's dispatcher, and a
   bare sleep held the window that "Create a group" opens until the wait had failed. They
   take Espresso 3.7, whose touches work on Android 17 too.

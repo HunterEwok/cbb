@@ -146,13 +146,15 @@ object Bench {
      * Joins the member, which is in no group, to the phone's group through
      * the pairing window the phone shows (D-119): the members reach the
      * window's address, and the member runs cbb pair -code there with the
-     * six digits, as its person types them. What cbb pair printed.
+     * text of the window's QR code. The six digits alone would need the
+     * window's mDNS announcement, for its ID, and the emulator's network
+     * passes none to the members. What cbb pair printed.
      */
-    fun joinWindow(dev: String, qr: String, digits: String): String {
+    fun joinWindow(dev: String, qr: String): String {
         val addrs = qr.substringAfter('?').split('&').filter { it.startsWith("addr=") }
             .map { URLDecoder.decode(it.removePrefix("addr="), "UTF-8") }
         val at = addrs.firstOrNull { !it.startsWith("[") } ?: throw AssertionError("no IPv4 address in the window's QR code $qr")
         phone(at)
-        return run(dev, "cbb pair -code $at", stdin = "$digits\n", seconds = 120)
+        return run(dev, "cbb pair -code $at", stdin = "$qr\n", seconds = 120)
     }
 }
