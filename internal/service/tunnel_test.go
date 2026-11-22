@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -543,6 +544,7 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	}
 	state := filepath.Join(t.TempDir(), "state.json")
 	cfg := forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: state}
+	var vlessBack vlessAddr
 	if way.vless != "" {
 		// VLESS over XHTTP behind a TLS web server whose CA the deck
 		// trusts through SSL_CERT_FILE.
@@ -550,24 +552,21 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		free, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		vlessAddr := free.Addr().String()
-		free.Close()
-		web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+		// The web server reaches the forwarder's VLESS listener, on a port of
+		// its own once the forwarder listens.
+		web, ca := vlesstest.WebServerCA(t, path, vlessBack.get)
 		roots := filepath.Join(t.TempDir(), "roots.pem")
 		if err := os.WriteFile(roots, ca, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		deckEnv = append(deckEnv, "SSL_CERT_FILE="+roots)
-		cfg.VLESS = &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}
+		cfg.VLESS = &forward.VLESSConfig{Listen: "127.0.0.1:0", XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}
 	}
 	f, err := forward.Listen(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+	vlessBack.set(f)
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan struct{})
 	go func() {
@@ -700,18 +699,16 @@ func TestHubVLESSIDTaken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	free, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	vlessAddr := free.Addr().String()
-	free.Close()
-	web, _ := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	// The web server reaches the forwarder's VLESS listener, on a port of
+	// its own once the forwarder listens.
+	var vlessBack vlessAddr
+	web, _ := vlesstest.WebServerCA(t, path, vlessBack.get)
 	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
-		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+		VLESS: &forward.VLESSConfig{Listen: "127.0.0.1:0", XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	vlessBack.set(f)
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan struct{})
 	go func() {
@@ -1420,4 +1417,19 @@ func TestStopHub(t *testing.T) {
 	if st := tunnelState(t, pi); !st.IsHub || st.Retired {
 		t.Errorf("the pi as a hub again: hub %v, retired %v", st.IsHub, st.Retired)
 	}
+}
+
+// vlessAddr is the forwarder's VLESS listener for a test's web server in
+// front of it: the forwarder takes a port of its own, which the web server
+// learns once the forwarder listens, so that no other test takes a port
+// picked and freed before.
+type vlessAddr struct{ addr atomic.Value }
+
+func (v *vlessAddr) set(f *forward.Forwarder) {
+	v.addr.Store(fmt.Sprintf("127.0.0.1:%d", f.VLESSPort()))
+}
+
+func (v *vlessAddr) get() string {
+	s, _ := v.addr.Load().(string)
+	return s
 }

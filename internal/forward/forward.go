@@ -392,6 +392,15 @@ func (f *Forwarder) Addr() netip.AddrPort {
 	return f.udp.LocalAddr().(*net.UDPAddr).AddrPort()
 }
 
+// VLESSPort returns the port of the forwarder's VLESS listener, 0 without
+// VLESS.
+func (f *Forwarder) VLESSPort() uint16 {
+	if f.vless == nil {
+		return 0
+	}
+	return f.vless.Port()
+}
+
 // Serve forwards packets and takes registrations until ctx is done or the
 // forwarder is closed.
 func (f *Forwarder) Serve(ctx context.Context) error {

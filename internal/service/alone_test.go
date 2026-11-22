@@ -1487,13 +1487,10 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	free, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	vlessAddr := free.Addr().String()
-	free.Close()
-	web, ca := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	// The web server reaches the forwarder's VLESS listener, on a port of
+	// its own once the forwarder listens.
+	var vlessBack vlessAddr
+	web, ca := vlesstest.WebServerCA(t, path, vlessBack.get)
 	roots := filepath.Join(t.TempDir(), "roots.pem")
 	if err := os.WriteFile(roots, ca, 0o600); err != nil {
 		t.Fatal(err)
@@ -1503,10 +1500,11 @@ func TestAloneMemberAwayXHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
-		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+		VLESS: &forward.VLESSConfig{Listen: "127.0.0.1:0", XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	vlessBack.set(f)
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan struct{})
 	go func() {
