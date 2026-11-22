@@ -10,6 +10,9 @@
 #![cfg(unix)]
 #![allow(dead_code, reason = "each test file uses its own part of the harness")]
 
+mod bin;
+pub use bin::cbb;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -148,7 +151,7 @@ impl Svc {
 
     fn spawn(&mut self, extra: &[&str], env: &[(&str, &str)]) {
         let log = std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("log")).unwrap();
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_cbb"));
+        let mut cmd = Command::new(cbb());
         cmd.arg("-state")
             .arg(self.dir.join("s"))
             .arg("-socket")

@@ -504,7 +504,7 @@ fn keeps_its_group_across_a_restart() {
     assert_eq!(st["paste"]["on"], true);
     // A second service at the same socket refuses to start.
     let dir = svc.dir.clone();
-    let mut second = std::process::Command::new(env!("CARGO_BIN_EXE_cbb"))
+    let mut second = std::process::Command::new(common::cbb())
         .arg("-state")
         .arg(dir.join("s2"))
         .arg("-socket")

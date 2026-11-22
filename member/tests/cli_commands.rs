@@ -8,6 +8,9 @@
 
 #![cfg(unix)]
 
+#[path = "common/bin.rs"]
+mod bin;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixListener;
 use std::path::{Path, PathBuf};
@@ -183,7 +186,7 @@ fn run_with(dir: &Path, args: &[&str], stdin: &str, handle: Handler, env: &[(&st
     let got = Arc::new(Mutex::new(Vec::new()));
     serve(UnixListener::bind(&sock).unwrap(), handle.clone(), got.clone());
     serve(UnixListener::bind(&admin).unwrap(), handle, got.clone());
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cbb"));
+    let mut cmd = Command::new(bin::cbb());
     cmd.args(args)
         .current_dir(dir)
         .env("CBB_SOCKET", &sock)
@@ -1245,7 +1248,7 @@ fn paste_write_error() {
     let dir = tempdir("paste-full");
     let sock = dir.join("control.sock");
     serve(UnixListener::bind(&sock).unwrap(), always(json!({}), b"text"), Arc::new(Mutex::new(Vec::new())));
-    let out = Command::new(env!("CARGO_BIN_EXE_cbb"))
+    let out = Command::new(bin::cbb())
         .arg("paste")
         .env("CBB_SOCKET", &sock)
         .env("LC_ALL", "C")
@@ -1289,7 +1292,7 @@ fn paste_terminal() {
 fn fail_details() {
     let dir = tempdir("fail");
     for (debug, detail) in [("0", false), ("1", true)] {
-        let out = Command::new(env!("CARGO_BIN_EXE_cbb"))
+        let out = Command::new(bin::cbb())
             .arg("status")
             .env("CBB_SOCKET", dir.join("none.sock"))
             .env("CBB_DEBUG", debug)
