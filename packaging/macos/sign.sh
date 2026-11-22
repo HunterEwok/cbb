@@ -79,8 +79,15 @@ if [ "$(lipo -archs "$bin")" != "$(uname -m)" ] && ! arch -x86_64 /usr/bin/true 
 	exit 0
 fi
 case $identifier in
-tools.cbb.forward | tools.cbb.relay)
-	# A server takes only flags and has no version; that it refuses an
+tools.cbb.forward)
+	# The forwarder says its version, as the helper does.
+	out=$("$bin" version)
+	echo "$out"
+	echo "$out" | grep -q '^cbb '
+	exit 0
+	;;
+tools.cbb.relay)
+	# The relay takes only flags and has no version; that it refuses an
 	# argument shows it loads under the hardened runtime.
 	out=$("$bin" version 2>&1) || true
 	echo "$out"
