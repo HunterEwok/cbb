@@ -1029,21 +1029,17 @@ for Face ID (D-94, docs/protocol.md section 3):
   did is the token's to say, not the app's settings, which can be cleared while the token
   stays: an SO PIN that no longer matches the user PIN counts as random. Another app
   sees neither token.
-- **When it asks.** Before the admin key is made or signs: making a group, or joining a
-  group, which makes the admin key the member's hellos offer the root for its "Make an
-  admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
-  twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
+- **When it asks.** Before the admin key is made or signs: making a group, whose root key it
+  is; the first time it sets the PIN (typed twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
   short patterns such as 111111, 123456, 121212 or 112233, no five equal digits, two simple
   pieces (111222, 123400), palindromes, counting pairs (131415), dates (DDMMYY, MMDDYY,
   YYMMDD and their eight-digit forms) nor common keypad PINs: about one six-digit PIN in ten;
   `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key, and a
   token stopped halfway through its first PIN is finished with that PIN; a new or changed one
-  must pass it. A user who cancels it joins as a member whose hellos offer
-  no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
-  page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
+  must pass it. Then adding a device, an action on a device's page, the root's settings and
+  moving the group's main device to this phone with the recovery key. The app hands the PIN
   to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
-  last use and is logged out when the app leaves the screen; renewals of the members'
-  certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
+  last use and is logged out when the app leaves the screen. The dialog asks not to reuse the phone's unlock
   code. Settings change it ("Change the
   admin PIN"), after the current one.
 - **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left,
@@ -1051,14 +1047,9 @@ for Face ID (D-94, docs/protocol.md section 3):
   when the app's count was lost, it says that some tries are used up, never a full seven.
   The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
   member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
-  new device. A lost root is taken over by an admin phone or with the recovery key.
+  new device. A lost root is replaced with the recovery key.
 - **Leaving the group** deletes the admin key while its token is logged in; otherwise the key stays,
   useless without the PIN, and the next admin key replaces it.
-- **An admin phone from before the PIN** keeps its admin key in the QCA token, and the group's
-  root certified that key; the app makes no new key beside it but asks to leave the group and
-  join again, which sets the PIN, for the root to make the phone an admin again.
-- **The root's admin CA** comes in its `admin` message once the root made the phone an admin;
-  the member checks it (ffi's `take_admin_ca`) before the app keeps it in `member.json`.
 - Sailfish OS and Aurora 4 keep their keys in files (level `file`) and ask for no PIN.
 
 ## Collections and the order of the tiles

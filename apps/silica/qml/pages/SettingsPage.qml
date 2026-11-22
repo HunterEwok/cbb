@@ -105,26 +105,8 @@ Page {
                 visible: app.group !== ""
                 text: qsTr("Group")
             }
-            // The root's settings (cbb_core::root), each signed with the root
-            // key: how long a claim from a lost root waits, which keys may be
-            // admins, and the recovery key.
-            ComboBox {
-                id: delay
-                visible: app.root && app.member.running
-                label: qsTr("A claim to take the group over waits")
-                property var hours: [0, 1, 24, 72, 168]
-                currentIndex: Math.max(hours.indexOf(Math.round((app.member.rootView.delay_ms || 0) / 3600000)), 0)
-                menu: ContextMenu {
-                    Repeater {
-                        model: [qsTr("No time"), qsTr("1 hour"), qsTr("1 day"), qsTr("3 days"), qsTr("7 days")]
-                        MenuItem {
-                            text: modelData
-                            onClicked: if (delay.hours[index] * 3600000 !== app.member.rootView.delay_ms)
-                                           app.setTakeoverDelay(delay.hours[index])
-                        }
-                    }
-                }
-            }
+            // The root's settings, each signed with the root key: which keys
+            // may be admins, and the recovery key.
             ComboBox {
                 id: level
                 visible: app.root && app.member.running
@@ -132,13 +114,13 @@ Page {
                 description: app.belowLevel.length > 0
                              ? qsTr("Some admins keep weaker keys; they stay until removed") : ""
                 property var levels: ["proven", "hardware", "files"]
-                currentIndex: Math.max(levels.indexOf(app.member.rootView.key_level || "hardware"), 0)
+                currentIndex: Math.max(levels.indexOf(app.member.groupState.key_level || "hardware"), 0)
                 menu: ContextMenu {
                     Repeater {
                         model: [qsTr("Proven hardware only"), qsTr("Hardware"), qsTr("Hardware or a file")]
                         MenuItem {
                             text: modelData
-                            onClicked: if (level.levels[index] !== app.member.rootView.key_level)
+                            onClicked: if (level.levels[index] !== app.member.groupState.key_level)
                                            app.setGroupKeyLevel(level.levels[index])
                         }
                     }
@@ -151,29 +133,11 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
             }
             Button {
-                visible: !app.root && app.group06 && app.member.running
+                visible: !app.root && app.member.running
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Move the group to this phone")
                 enabled: !app.busy
                 onClicked: pageStack.push(Qt.resolvedUrl("ChangeRootPage.qml"))
-            }
-            // A member phone that joined without an admin key makes it now,
-            // for the root's "Make an admin".
-            Button {
-                visible: app.group !== "" && !app.admin && !app.adminOffered && app.adminPin !== "locked"
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Get ready to be an admin")
-                enabled: !app.busy
-                onClicked: app.prepareAdmin()
-            }
-            Label {
-                visible: app.group !== "" && app.adminOffered
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                font.pixelSize: Theme.fontSizeSmall
-                color: Theme.secondaryHighlightColor
-                text: qsTr("The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.")
             }
             // The admin PIN, which the TEE checks before the admin key signs.
             Button {
@@ -208,7 +172,7 @@ Page {
                 height: Theme.paddingLarge * 2
             }
             // The root's key goes with it: the group then has no root until
-            // an admin phone takes it over.
+            // its recovery key moves it to another device.
             Button {
                 visible: app.group !== ""
                 anchors.horizontalCenter: parent.horizontalCenter

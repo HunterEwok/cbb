@@ -36,17 +36,13 @@ class Member : public QObject
     // Every device of the group, as the member's devices op lists it: maps with
     // device, name, role, os, admin, root, frozen, online, self and listed.
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
-    // What the group's records stop and what ends it (docs/core-api.md, the
-    // member's alerts): maps with kind, names, devices, records, left_ms, count.
-    Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
     // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does
     // not sync"): maps with code, level, until_ms, device, devices, value and
     // detail, the reason that stops the most first.
     Q_PROPERTY(QVariantList why READ why NOTIFY devicesChanged)
-    // The root's settings as the group's records hold them (the member's
-    // root_view op, cbb_core::root::view): delay_ms, key_level, recovery,
-    // handed_to.
-    Q_PROPERTY(QVariantMap rootView READ rootView NOTIFY devicesChanged)
+    // The group as its records stand (the member's group op,
+    // docs/core-api.md): root_device, key_level, stop, halted and the rest.
+    Q_PROPERTY(QVariantMap groupState READ groupState NOTIFY devicesChanged)
     // The member's notices about the group (docs/apps.md, "Notices"): maps
     // with id, kind, args and dismissable.
     Q_PROPERTY(QVariantList notices READ notices NOTIFY devicesChanged)
@@ -88,9 +84,8 @@ public:
     QVariantList devices() const { return m_devices; }
     // The member's recent log lines, oldest first, for a bug report.
     QStringList recentLog() const { return m_recentLog; }
-    QVariantList alerts() const { return m_alerts; }
     QVariantList why() const { return m_why; }
-    QVariantMap rootView() const { return m_rootView; }
+    QVariantMap groupState() const { return m_groupState; }
     QVariantList notices() const { return m_notices; }
     QVariantMap rootChanged() const { return m_rootChanged; }
     // What the clipboard got or sent last, shortened, for the main page.
@@ -111,10 +106,6 @@ public:
                const QString &osVersion);
     void stop();
 
-    // Has the member check the admin CA of the root's admin message
-    // (ffi's take_admin_ca): for the offered admin key, naming this phone,
-    // under the group's current root. The hellos then offer the key no more.
-    bool takeAdminCa(const QByteArray &ca, Failure *failure);
     // Opens the member port at home, which a pairing window of 0.6 needs
     // (the member's listen op); a second call keeps it open.
     bool listen(Failure *failure);
@@ -148,18 +139,12 @@ signals:
     void changed();
     void devicesChanged();
     void awayChanged();
-    // An admin renewed the member certificate, or a takeover made a new
-    // root: the phone keeps them in member.json.
-    void identityChanged(const QByteArray &cert, const QByteArray &issuer, const QList<QByteArray> &roots);
     // The images or files of a copy are in folder, for a notification.
     void saved(const QString &folder, int count);
     // A paste or paste-off command an admin signed for this phone, checked
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
-    // The root made this phone an admin: its admin message brought the
-    // admin CA for the key the hellos offer, not yet checked (takeAdminCa).
-    void adminCaArrived(const QByteArray &ca);
     // Something in the member broke (docs/core-api.md, "Panics"): details
     // say what and where. The app shows it and starts the member again.
     void panicked(const QString &details);
@@ -213,9 +198,8 @@ private:
     QStringList m_mutedPeers;
     QVariantList m_devices;
     QStringList m_recentLog;
-    QVariantList m_alerts;
     QVariantList m_why;
-    QVariantMap m_rootView;
+    QVariantMap m_groupState;
     QVariantList m_notices;
     QVariantMap m_rootChanged;
     QString m_last;

@@ -64,14 +64,6 @@ Item {
                 onClicked: page.closed()
             }
             MenuItem {
-                // An admin takes a lost root's group over (cbb_core::takeover);
-                // on 0.6 the root changes only with the recovery key (ChangeRootPage).
-                visible: page.acts && page.device.root && !app.root && app.claimState === "" && !app.group06
-                text: qsTr("Take the group over")
-                onClicked: remorse.execute(qsTr("Taking the group over from %1").arg(Devices.name(page.device)),
-                                           function() { app.takeOver(page.device.id) })
-            }
-            MenuItem {
                 visible: page.acts && !page.device.root
                 text: qsTr("Remove")
                 onClicked: remorse.execute(qsTr("Removing %1").arg(Devices.name(page.device)),
@@ -86,14 +78,6 @@ Item {
                 text: qsTr("Make an admin")
                 onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),
                                            function() { app.manage("make_admin", page.device.id) })
-            }
-            MenuItem {
-                // The root lets an admin's claim take effect at once (cbb_core::root).
-                visible: page.acts && app.root && page.device.admin && !page.device.frozen
-                         && app.member.rootView.handed_to !== page.device.id
-                text: qsTr("Hand the group over")
-                onClicked: remorse.execute(qsTr("Handing the group over to %1").arg(Devices.name(page.device)),
-                                           function() { app.handOver(page.device.id) })
             }
             MenuItem {
                 visible: page.acts && page.device.frozen
@@ -172,21 +156,6 @@ Item {
                     else
                         app.manage(checked ? "sync_off" : "sync_on", page.device.id)
                 }
-            }
-
-            DetailItem {
-                visible: app.root && app.member.rootView.handed_to === page.device.id
-                label: qsTr("The group is handed over")
-                value: qsTr("Its claim takes the group at once")
-            }
-
-            DetailItem {
-                visible: page.device.root && app.claimState !== ""
-                label: qsTr("Taking the group over")
-                value: app.claimState === "pending"
-                       ? qsTr("Waiting, %1 h left").arg(Math.ceil(app.claimLeftMs / 3600000))
-                       : app.claimState === "none" ? qsTr("Waiting for the group to get the claim")
-                       : qsTr("In dispute: the group's root answered the claim")
             }
 
             // The rest under More.

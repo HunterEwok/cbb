@@ -40,16 +40,9 @@ class App : public QObject
     Q_PROPERTY(QString device READ device NOTIFY groupChanged)
     Q_PROPERTY(bool admin READ admin NOTIFY groupChanged)
     Q_PROPERTY(bool root READ root NOTIFY groupChanged)
-    // The group is one of 0.6, whose root changes only with the recovery key.
-    Q_PROPERTY(bool group06 READ group06 NOTIFY groupChanged)
-    // Whether the member's hellos offer the root this phone's admin key,
-    // for the root's "Make an admin".
-    Q_PROPERTY(bool adminOffered READ adminOffered NOTIFY groupChanged)
-    // The phone's claim to take the group over: "" without one, else
-    // "pending", "competing", "disputed" or "none" (not in the records yet).
-    Q_PROPERTY(QString claimState READ claimState NOTIFY claimChanged)
-    // How long a pending claim still waits, in milliseconds.
-    Q_PROPERTY(double claimLeftMs READ claimLeftMs NOTIFY claimChanged)
+    // The saved group was made before 0.6, which this version no longer
+    // runs (D-126): Home says a new group is needed and offers Leave.
+    Q_PROPERTY(bool before06 READ before06 NOTIFY groupChanged)
     Q_PROPERTY(Join *join READ join CONSTANT)
     // Pairing in a group of 0.6: the admin's window and the new phone's
     // joiner.
@@ -111,10 +104,7 @@ public:
     // Whether the group's root made this phone an admin.
     bool admin() const { return m_member.isAdmin(); }
     bool root() const { return m_member.root; }
-    bool group06() const { return m_member.isV06(); }
-    bool adminOffered() const { return !m_member.isAdmin() && !m_member.adminOffer.isEmpty(); }
-    QString claimState() const { return m_member.claim.isEmpty() ? QString() : m_claimState; }
-    double claimLeftMs() const { return double(m_claimLeftMs); }
+    bool before06() const { return m_member.before06; }
     Join *join() { return &m_join; }
     PairWindow *window() { return &m_window; }
     Joiner *joiner() { return &m_joiner; }
@@ -145,10 +135,6 @@ public:
     Q_INVOKABLE void setUpKey();
     // Stops a join by an invitation.
     Q_INVOKABLE void stopJoin();
-    // For a member phone whose hellos offer no admin key (it joined
-    // without one): makes the key behind the admin PIN and restarts the
-    // member, whose hellos then offer it.
-    Q_INVOKABLE void prepareAdmin();
     // Makes a remote invitation for a device far away, valid for seconds,
     // as an admin (docs/protocol.md, section 12).
     Q_INVOKABLE void startInvite(int seconds = 3600);
@@ -191,12 +177,6 @@ public:
     // ({op: "move", item: {device: id}, before: …}, "into", "out", "new",
     // "rename", "ungroup", "reset"), and tells arrangementChanged.
     Q_INVOKABLE bool arrange(const QVariantMap &op);
-    // Takes the group over from its lost root, the device with the ID
-    // device, as an admin (cbb_core::takeover): a new root CA for the admin
-    // key, kept first, and the claim, as the root handed the group to this
-    // phone or else after the group's delay; the claim is then checked
-    // every minute until it makes this phone the root, off the GUI thread.
-    Q_INVOKABLE void takeOver(const QString &device);
     // On 0.6, moving the group's main device to this phone with the
     // recovery key, the sheet's {qr} or {text} (docs/apps.md, "Changing the
     // main device"): changePreview asks who stays with leaveOut unticked,
@@ -217,17 +197,11 @@ public:
     // Saves the sheet just made as a PDF in Documents and returns its path,
     // empty when it could not (the error is shown).
     Q_INVOKABLE QString saveSheet();
-    // The root's decision on an alert: voids the records it names.
-    Q_INVOKABLE void resolve(const QStringList &records);
-    // The root's own records, built and signed in the core (cbb_core::root)
-    // with the root key, off the GUI thread: how long a claim from a lost
-    // root waits, in hours; which keys may be admins (proven, hardware or
-    // files); handing the group to the admin device, whose claim then takes
-    // effect at once. forgetRecovery drops the sheet the new group showed
+    // The root's own record, built and signed in the core with the root
+    // key, off the GUI thread: which keys may be admins (proven, hardware or
+    // files). forgetRecovery drops the sheet the new group showed
     // (recoveryText, recoveryModules).
-    Q_INVOKABLE void setTakeoverDelay(int hours);
     Q_INVOKABLE void setGroupKeyLevel(const QString &level);
-    Q_INVOKABLE void handOver(const QString &device);
     Q_INVOKABLE void forgetRecovery();
     QString recoveryText() const { return m_recoveryText; }
     QStringList recoveryModules() const { return m_recoveryModules; }
@@ -259,7 +233,6 @@ signals:
     void rootChangedHere(bool ok);
     void cardOpened(bool ok, const QString &secret);
     void cardSealed(bool ok);
-    void claimChanged();
     void arrangementChanged();
     void adminPinChanged();
     // fresh: no PIN yet, so the user chooses one and types it twice;
@@ -289,13 +262,7 @@ private:
     // Starts the member once the phone has both its key and a group.
     void startMember();
     QString phoneName() const;
-    // As an admin, renews the member certificates that are due, the
-    // devices' connected and the phone's own, quietly: only the log says.
-    void renew();
     QString phoneOs() const;
-    // While the phone has a claim: where it stands, and once it took
-    // effect, the phone as the group's root.
-    void finishTakeover();
     int arrangement() const { return m_arrangement; }
     bool hasArrangement() const;
     // Keeps next as the membership, or shows why it could not.
@@ -317,10 +284,6 @@ private:
     BleKeyboard m_keyboard;
     PasteReceiver m_paste{&m_node, &m_keyboard};
     bool m_busy = false;
-    QTimer m_renewTimer;
-    QTimer m_claimTimer;
-    QString m_claimState;
-    qint64 m_claimLeftMs = 0;
     QString m_error;
     QString m_startLanguage;
     int m_arrangement = 0;

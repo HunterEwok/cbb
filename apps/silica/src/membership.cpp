@@ -4,11 +4,9 @@
 #include "membership.h"
 
 #include <QCoreApplication>
-#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -22,16 +20,6 @@ QString dataDir()
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(dir);
     return dir;
-}
-
-QByteArray b64(const QJsonValue &v)
-{
-    return QByteArray::fromBase64(v.toString().toLatin1());
-}
-
-QString b64(const QByteArray &b)
-{
-    return QString::fromLatin1(b.toBase64());
 }
 
 // Writes data to the file name in the app's data folder, whole or not at all,
@@ -50,34 +38,6 @@ bool writeFile(const QString &name, const QByteArray &data, Failure *failure)
 
 } // namespace
 
-QString Membership::groupTag() const
-{
-    if (isV06())
-        return group06.left(16);
-    if (groupCa.isEmpty())
-        return QString();
-    return QString::fromLatin1(QCryptographicHash::hash(groupCa, QCryptographicHash::Sha256).left(8).toHex());
-}
-
-Membership Membership::fromJoined(const QJsonObject &j)
-{
-    Membership m;
-    m.device = j.value(QStringLiteral("device")).toString();
-    m.cert = b64(j.value(QStringLiteral("cert")));
-    m.issuer = b64(j.value(QStringLiteral("issuer")));
-    m.adminCa = b64(j.value(QStringLiteral("admin_ca")));
-    m.groupCa = b64(j.value(QStringLiteral("group_ca")));
-    for (const QJsonValue &r : j.value(QStringLiteral("roots")).toArray())
-        m.roots.append(b64(r));
-    m.records = b64(j.value(QStringLiteral("records")));
-    m.root = j.value(QStringLiteral("root")).toBool();
-    m.claim = b64(j.value(QStringLiteral("claim")));
-    m.adminOffer = b64(j.value(QStringLiteral("admin_offer")));
-    m.group06 = j.value(QStringLiteral("group06")).toString();
-    m.admin06 = j.value(QStringLiteral("admin06")).toBool();
-    return m;
-}
-
 Membership Membership::load(Failure *failure)
 {
     QFile f(dataDir() + QStringLiteral("/member.json"));
@@ -94,45 +54,28 @@ Membership Membership::load(Failure *failure)
                     QStringLiteral("membership: member.json is not of version %1 (%2)").arg(fileVersion).arg(parse.errorString())};
         return Membership();
     }
-    Membership m = fromJoined(o);
-    QFile r(dataDir() + QStringLiteral("/records.json"));
-    if (r.open(QIODevice::ReadOnly))
-        m.records = r.readAll();
+    Membership m;
+    m.device = o.value(QStringLiteral("device")).toString();
+    m.group = o.value(QStringLiteral("group06")).toString();
+    m.root = o.value(QStringLiteral("root")).toBool();
+    m.admin = o.value(QStringLiteral("admin06")).toBool();
+    // A group made before 0.6 names no group ID.
+    m.before06 = m.group.isEmpty();
     return m;
 }
 
 bool Membership::save(Failure *failure) const
 {
-    return (isV06() || writeFile(QStringLiteral("records.json"), records, failure)) && saveIdentity(failure);
-}
-
-bool Membership::saveIdentity(Failure *failure) const
-{
-    QJsonArray rs;
-    for (const QByteArray &r : roots)
-        rs.append(b64(r));
+    // The names stay those of the files the phones of 0.6 wrote first.
     QJsonObject o{
         {QStringLiteral("v"), fileVersion},
         {QStringLiteral("device"), device},
-        {QStringLiteral("cert"), b64(cert)},
-        {QStringLiteral("group_ca"), b64(groupCa)},
-        {QStringLiteral("roots"), rs},
+        {QStringLiteral("group06"), group},
     };
-    if (!issuer.isEmpty())
-        o.insert(QStringLiteral("issuer"), b64(issuer));
-    if (!adminCa.isEmpty())
-        o.insert(QStringLiteral("admin_ca"), b64(adminCa));
     if (root)
         o.insert(QStringLiteral("root"), true);
-    if (!claim.isEmpty())
-        o.insert(QStringLiteral("claim"), b64(claim));
-    if (!adminOffer.isEmpty() && !isAdmin())
-        o.insert(QStringLiteral("admin_offer"), b64(adminOffer));
-    if (isV06()) {
-        o.insert(QStringLiteral("group06"), group06);
-        if (admin06)
-            o.insert(QStringLiteral("admin06"), true);
-    }
+    if (admin)
+        o.insert(QStringLiteral("admin06"), true);
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 
@@ -147,8 +90,8 @@ static const char *const groupFiles[] = {
 };
 
 // Leaves the group on this phone: every file the member keeps of the group
-// (a directory with what it holds), then the key for its sealed messages
-// and member.json last, so that a leave cut short still shows the group and
+// (a directory with what it holds), then the key for sealed messages a
+// group made before 0.6 kept and member.json last, so that a leave cut short still shows the group and
 // can be done again.
 bool Membership::remove(Failure *failure)
 {
@@ -173,26 +116,4 @@ bool Membership::remove(Failure *failure)
 QString Membership::directory()
 {
     return dataDir();
-}
-
-QByteArray sealSecret(Failure *failure)
-{
-    const QString path = dataDir() + QStringLiteral("/seal.key");
-    QFile f(path);
-    if (f.open(QIODevice::ReadOnly)) {
-        const QByteArray s = f.readAll();
-        if (s.size() == 32)
-            return s;
-    }
-    QFile random(QStringLiteral("/dev/urandom"));
-    QByteArray s;
-    if (random.open(QIODevice::ReadOnly))
-        s = random.read(32);
-    if (s.size() != 32) {
-        *failure = {QCoreApplication::translate("Errors", "The phone could not make its keys."), QStringLiteral("membership: /dev/urandom: %1").arg(random.errorString())};
-        return QByteArray();
-    }
-    if (!writeFile(QStringLiteral("seal.key"), s, failure))
-        return QByteArray();
-    return s;
 }

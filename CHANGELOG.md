@@ -2924,6 +2924,12 @@ made with 0.5 is set up again once. The details follow.
   key for sealed messages and the servers' keys in HUKS, with `cbb_member_servers` and its
   keys callback in ffi. A group from before 0.6 opens a page that says a new group is needed
   and offers Leave, which alone deletes its files, now with `epochs.json` among them.
+- The Aurora app's code of 0.5 (D-126): the member certificate, admin CA, group CA and roots it
+  kept in `member.json` with the records beside it, the member's renewals, the admin CA's
+  check, the admin key offered in hellos ("Get ready to be an admin"), alerts and their
+  decisions, the takeover, handing the group over and the takeover delay, and the key for
+  sealed messages. A group from before 0.6 opens Home on a card that says a new group is
+  needed and offers Leave, which alone deletes its files.
 - `cbb`'s member of a group made before 0.6 (D-126): the service runs only the member of 0.6,
   and a state folder with a group made before 0.6 (its `identity.json` or `records.json`, and
   no `group.cbor`) moves aside into `before-0.6` at the start, as on the phones. Gone with it:
