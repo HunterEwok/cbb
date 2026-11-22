@@ -4,77 +4,120 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-// The group's recovery key, on the root phone (docs/protocol.md, section 10,
-// "The recovery key"): the core makes the key, the root key signs its admin
-// CA and the recovery record, and the sheet, a QR code and the key in groups
-// of four, is shown here once; then the app forgets it. A new key replaces
-// the old one. While the sheet is shown, the root can seal it onto a YubiKey
-// plugged into the USB-C port (app.sealCard, through the system's pcscd).
+// The group's recovery key, on the root phone (docs/protocol.md, section 9,
+// "The recovery sheet (0.6)"): made with the group and fixed in its ID. Right
+// after the group is made the page offers to save it on a sheet (shown here,
+// saved as a PDF in Documents), on a YubiKey plugged into the USB-C port
+// (app.sealCard, through the system's pcscd), or both; leaving without
+// either asks first. Then the app forgets the sheet. Later the page only
+// says that the key was made with the group (D-126).
 Page {
     id: page
     readonly property bool shown: app.recoveryModules.length > 0
-    property bool askingPin: false
-    property string sealed: ""
+    // What the person looks at: the choice, the sheet, or the YubiKey.
+    property string step: "choice"
+    property bool sheetSeen: false
+    property string savedAt: ""
+    property bool sealed: false
+    readonly property bool saved: page.sealed || page.savedAt !== ""
+
+    // The sheet leaves only through Done, which asks when nothing was saved.
+    backNavigation: !page.shown
+    showNavigationIndicator: !page.shown
 
     Connections {
         target: app
-        onCardSealed: {
-            if (ok)
-                page.sealed = defaultKey
-                    ? qsTr("The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.")
-                    : qsTr("The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.")
-        }
+        onCardSealed: if (ok) page.sealed = true
     }
-
-    RemorsePopup { id: remorse }
 
     // Leaving the page forgets the sheet.
     Component.onDestruction: app.forgetRecovery()
 
-    SilicaFlickable {
-        anchors.fill: parent
-        contentHeight: column.height + Theme.paddingLarge
+    function leave() {
+        app.forgetRecovery()
+        pageStack.pop()
+    }
 
-        PullDownMenu {
-            visible: !page.shown && app.root && app.member.running
-            busy: app.busy
-            MenuItem {
-                visible: app.member.rootView.recovery
-                text: qsTr("Remove the recovery key")
-                onClicked: remorse.execute(qsTr("Removing the recovery key"), function() { app.removeRecovery() })
-            }
-            MenuItem {
-                text: app.member.rootView.recovery ? qsTr("Make a new recovery key") : qsTr("Make a recovery key")
-                onClicked: {
-                    if (app.member.rootView.recovery)
-                        remorse.execute(qsTr("Replacing the recovery key"), function() { app.makeRecovery() })
-                    else
-                        app.makeRecovery()
+    Component {
+        id: unsaved
+        Dialog {
+            onAccepted: page.leave()
+            Column {
+                width: parent.width
+                spacing: Theme.paddingLarge
+                DialogHeader { acceptText: qsTr("Leave without saving") }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    wrapMode: Text.Wrap
+                    color: Theme.highlightColor
+                    font.pixelSize: Theme.fontSizeLarge
+                    text: qsTr("Leave without saving the recovery key?")
+                }
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    wrapMode: Text.Wrap
+                    color: Theme.secondaryHighlightColor
+                    text: qsTr("Without it, losing this phone means making a new group and joining every device to it again.")
                 }
             }
         }
+    }
+
+    SilicaFlickable {
+        anchors.fill: parent
+        contentHeight: column.height + Theme.paddingLarge
 
         Column {
             id: column
             width: parent.width
             spacing: Theme.paddingMedium
 
-            PageHeader { title: qsTr("Recovery key") }
+            PageHeader { title: page.shown ? qsTr("Save the group's recovery key") : qsTr("Recovery key") }
 
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
-                text: page.shown
-                      ? qsTr("Write the key down or print this page, and keep it safe. It is shown only once.")
-                      : app.member.rootView.recovery
-                        ? qsTr("The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.")
-                        : qsTr("A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.")
+                text: !page.shown
+                      ? qsTr("Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.")
+                      : page.step === "choice"
+                        ? qsTr("Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.")
+                        : page.step === "sheet"
+                          ? qsTr("Write the key down or save this page, and keep it safe.")
+                          : qsTr("Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.")
             }
 
+            // The choice: both are allowed, one after the other.
+            Button {
+                visible: page.shown && page.step === "choice"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Write on a sheet")
+                onClicked: { page.step = "sheet"; page.sheetSeen = true }
+            }
+            Button {
+                visible: page.shown && page.step === "choice"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Write to YubiKey")
+                enabled: !app.busy && !page.sealed
+                onClicked: page.step = "yubikey"
+            }
+            Label {
+                visible: page.shown && page.step === "choice" && (page.saved || page.sheetSeen)
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                text: [page.savedAt !== "" ? qsTr("The sheet is saved in Documents.") : "",
+                       page.sealed ? qsTr("The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.") : ""]
+                      .filter(function(s) { return s !== "" }).join("\n")
+            }
+
+            // The sheet.
             Rectangle {
-                visible: page.shown
+                visible: page.shown && page.step === "sheet"
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: "white"
                 property int count: app.recoveryModules.length
@@ -98,9 +141,8 @@ Page {
                     }
                 }
             }
-
             Label {
-                visible: page.shown
+                visible: page.shown && page.step === "sheet"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 horizontalAlignment: Text.AlignHCenter
@@ -109,65 +151,58 @@ Page {
                 font.pixelSize: Theme.fontSizeLarge
                 text: app.recoveryText
             }
-
             Button {
-                visible: page.shown && !page.askingPin
+                visible: page.shown && page.step === "sheet"
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Put it on a YubiKey")
-                enabled: !app.busy
-                onClicked: { page.sealed = ""; page.askingPin = true }
+                text: qsTr("Save as PDF")
+                onClicked: { var at = app.saveSheet(); if (at !== "") page.savedAt = at }
             }
-
             Label {
-                visible: page.shown && page.askingPin
-                x: Theme.horizontalPageMargin
-                width: parent.width - 2 * Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.highlightColor
-                text: qsTr("The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.")
-            }
-
-            Label {
-                visible: page.shown && page.askingPin
+                visible: page.shown && page.step === "sheet"
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.secondaryHighlightColor
-                text: qsTr("Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.")
+                text: page.savedAt !== ""
+                      ? qsTr("Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.").arg(page.savedAt)
+                      : qsTr("A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.")
             }
 
+            // The YubiKey: plugged in, its PIN, then a touch.
             PasswordField {
                 id: pin
-                visible: page.shown && page.askingPin
+                visible: page.shown && page.step === "yubikey" && !page.sealed
                 width: parent.width
                 label: qsTr("The YubiKey's PIN")
                 placeholderText: label
                 maximumLength: 8
+                inputMethodHints: Qt.ImhDigitsOnly
+                EnterKey.enabled: text.length >= 6 && !app.busy
+                EnterKey.onClicked: go.clicked(null)
             }
-
             Button {
-                visible: page.shown && page.askingPin
+                id: go
+                visible: page.shown && page.step === "yubikey" && !page.sealed
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Replace its factory key")
+                text: qsTr("Continue")
                 enabled: !app.busy && pin.text.length >= 6
-                onClicked: { var p = pin.text; pin.text = ""; page.askingPin = false; app.sealCard(p, true) }
+                onClicked: { var p = pin.text; pin.text = ""; app.sealCard(p) }
             }
-
-            Button {
-                visible: page.shown && page.askingPin
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Keep its factory key")
-                enabled: !app.busy && pin.text.length >= 6
-                onClicked: { var p = pin.text; pin.text = ""; page.askingPin = false; app.sealCard(p, false) }
-            }
-
             Label {
-                visible: page.shown && page.sealed !== ""
+                visible: page.shown && page.step === "yubikey" && app.busy
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.highlightColor
+                text: qsTr("Touch the YubiKey when it blinks.")
+            }
+            Label {
+                visible: page.shown && page.step === "yubikey" && page.sealed
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.secondaryHighlightColor
-                text: page.sealed
+                text: qsTr("The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.")
             }
 
             Label {
@@ -179,18 +214,33 @@ Page {
                 text: app.error
             }
 
-            Button {
-                visible: page.shown
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("I wrote it down")
-                onClicked: { app.forgetRecovery(); pageStack.pop() }
-            }
-
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
                 running: app.busy
                 visible: running
                 size: BusyIndicatorSize.Medium
+            }
+
+            Button {
+                visible: page.shown && page.step !== "choice"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Back")
+                enabled: !app.busy
+                onClicked: page.step = "choice"
+            }
+            // Done: straight out once something is saved; after only looking
+            // at the sheet it means it was written down; else it asks.
+            Button {
+                visible: page.shown && page.step === "choice"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: page.saved ? qsTr("Done") : page.sheetSeen ? qsTr("I wrote it down") : qsTr("Done")
+                enabled: !app.busy
+                onClicked: {
+                    if (page.saved || page.sheetSeen)
+                        page.leave()
+                    else
+                        pageStack.push(unsaved)
+                }
             }
         }
         VerticalScrollDecorator {}

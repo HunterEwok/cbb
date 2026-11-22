@@ -608,6 +608,10 @@
         <translation>Unganisha simu kwenye Wi-Fi ya nyumbani ili kuongeza kifaa.</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>Nafasi zote za funguo kwenye YubiKey hii zinatumika. Tumia YubiKey nyingine au karatasi.</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>Hakuna YubiKey iliyochomekwa. Ichomeke kwenye mlango wa USB-C na ujaribu tena.</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>Simu imeshindwa kuhifadhi kikundi.</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>Simu haikuweza kuhifadhi karatasi.</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>Simu bado haina ufunguo.</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>Kipengele salama cha simu kina ufunguo ulioharibika.</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>YubiKey hii tayari ina ufunguo wa urejeshaji. Tumia YubiKey nyingine.</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>YubiKey hii haina ufunguo wa urejeshaji.</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>YubiKey hii ina kitu kingine mahali ufunguo wa urejeshaji unapokaa. Tumia YubiKey nyingine.</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>YubiKey hii tayari ina ufunguo wa urejeshaji wa kikundi hiki.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>YubiKey hii ina funguo mbili za urejeshaji za kikundi hiki. Tumia karatasi badala yake.</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,28 +1514,48 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Ufunguo wa kurejesha huruhusu kompyuta ya kikundi au simu mpya kuchukua kikundi simu hii ikipotea. Vuta chini kuunda mmoja.</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Faili iliyohifadhiwa ndiyo ufunguo wa kikundi: ihamishe kutoka kwenye simu hadi karatasi au hifadhi iliyotunzwa salama, kisha uifute hapa.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Rudi</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>Ufunguo wa urejeshaji wa CBB</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Endelea</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Imekamilika</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>Nimeuandika</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>Acha ufunguo wa kiwandani</translation>
+        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Chomeka YubiKey kwenye mlango wa USB-C, andika PIN yake, kisha iguse inapomweka.</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>Unda ufunguo mpya wa kurejesha</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuchukua kikundi chako.</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>Unda ufunguo wa kurejesha</translation>
+        <source>Leave without saving</source>
+        <translation>Toka bila kuhifadhi</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Chomeka YubiKey kwenye mlango wa USB-C, andika PIN yake, kisha uiguse inapomweka.</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>Utoke bila kuhifadhi ufunguo wa urejeshaji?</translation>
+    </message>
+    <message>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>Ulitengenezwa pamoja na kikundi, na karatasi yake ilionyeshwa mara moja tu. Bila karatasi hiyo kifaa kikuu cha kikundi hakiwezi kubadilishwa: karatasi ikipotea, unda kikundi kipya.</translation>
     </message>
     <message>
         <source>Put it on a YubiKey</source>
@@ -1538,44 +1566,52 @@
         <translation>Ufunguo wa kurejesha</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>Ondoa ufunguo wa kurejesha</translation>
+        <source>Save as PDF</source>
+        <translation>Hifadhi kama PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>Inaondoa ufunguo wa kurejesha</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>Uhifadhi kwenye karatasi, kwenye YubiKey, au vyote viwili. Ni kwa huo tu kikundi kinaweza kuhamia kifaa kingine kikuu simu hii ikipotea. Unaonyeshwa sasa tu.</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>Badilisha ufunguo wa kiwandani</translation>
+        <source>Save the group's recovery key</source>
+        <translation>Hifadhi ufunguo wa urejeshaji wa kikundi</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>Inabadilisha ufunguo wa kurejesha</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>YubiKey inahifadhi ufunguo uleule wa karatasi hii, nyuma ya PIN yake na mguso. Ikiwa bado ina ufunguo wa usimamizi wa kiwandani, yeyote angeweza kuutafuta ufunguo huo na kufuta ufunguo wa urejeshaji bila PIN; programu inaweza kuubadilisha kwa ufunguo unaolindwa na PIN.</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Imehifadhiwa kama %1. Faili hii ndiyo ufunguo wa kikundi: ihamishe kutoka kwenye simu hadi karatasi au hifadhi iliyotunzwa salama, kisha uifute hapa.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>PIN ya YubiKey</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>Kikundi kina ufunguo wa kurejesha. Kwa huo kompyuta ya kikundi au simu mpya huchukua kikundi simu hii ikipotea.</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>Ufunguo wa urejeshaji uko kwenye YubiKey, ambayo bado ina ufunguo wake wa usimamizi wa kiwandani: yeyote aliye nayo angeweza kufuta ufunguo bila PIN. Hifadhi karatasi pia.</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti.</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Andika ufunguo au chapisha ukurasa huu, na uuhifadhi salama. Unaonyeshwa mara moja tu.</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>Karatasi imehifadhiwa kwenye Nyaraka.</translation>
+    </message>
+    <message>
+        <source>Touch the YubiKey when it blinks.</source>
+        <translation>Gusa YubiKey inapomweka.</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>Bila huo, kupoteza simu hii kunamaanisha kuunda kikundi kipya na kuunganisha kila kifaa tena.</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>Andika kwenye karatasi</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>Andika ufunguo au uhifadhi ukurasa huu, na uutunze mahali salama.</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>Andika kwenye YubiKey</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1793,6 @@
     <message>
         <source>No time</source>
         <translation>Bila kusubiri</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>Hakuna</translation>
     </message>
     <message>
         <source>None yet</source>

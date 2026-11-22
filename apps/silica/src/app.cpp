@@ -13,14 +13,20 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QPageSize>
+#include <QPainter>
+#include <QPdfWriter>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QSysInfo>
 #include <QThread>
 #include <QUrl>
@@ -191,10 +197,12 @@ private:
             return QCoreApplication::translate("Errors", "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.");
         if (d.contains(QStringLiteral("holds no recovery key")))
             return QCoreApplication::translate("Errors", "This YubiKey holds no recovery key.");
-        if (d.contains(QStringLiteral("already holds a recovery key")))
-            return QCoreApplication::translate("Errors", "This YubiKey holds a recovery key already. Use another YubiKey.");
-        if (d.contains(QStringLiteral("already holds something")))
-            return QCoreApplication::translate("Errors", "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.");
+        if (d.contains(QStringLiteral("already holds this group's recovery key")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds this group's recovery key already.");
+        if (d.contains(QStringLiteral("retired PIV slot")))
+            return QCoreApplication::translate("Errors", "Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.");
+        if (d.contains(QStringLiteral("two recovery keys for this group")) || d.contains(QStringLiteral("more than one group")))
+            return QCoreApplication::translate("Errors", "This YubiKey holds two recovery keys for this group. Use the sheet instead.");
         if (d.contains(QStringLiteral("management key")))
             return QCoreApplication::translate("Errors", "The app cannot use this YubiKey's management key. Use the printed sheet instead.");
         if (d.contains(QStringLiteral("two YubiKeys")))
@@ -783,7 +791,11 @@ void App::openCard(const QString &pin)
     m_busy = true;
     emit keyChanged();
     auto *thread = new PivThread;
-    thread->request = QJsonObject{{QStringLiteral("op"), QStringLiteral("open")}, {QStringLiteral("pin"), pin}};
+    // The group's slot on the card is named by its tag (docs/protocol.md,
+    // "The recovery key on a YubiKey (0.6)").
+    thread->request = QJsonObject{{QStringLiteral("op"), QStringLiteral("open")},
+                                  {QStringLiteral("pin"), pin},
+                                  {QStringLiteral("group"), m_member.group06}};
     connect(thread, &QThread::finished, this, [this, thread]() {
         const Failure failure = thread->failure;
         const QString secret = thread->answer.value(QStringLiteral("secret")).toString();
@@ -802,7 +814,7 @@ void App::openCard(const QString &pin)
     thread->start();
 }
 
-void App::sealCard(const QString &pin, bool replaceDefault)
+void App::sealCard(const QString &pin)
 {
     if (!m_member.root || m_recoveryText.isEmpty() || m_busy)
         return;
@@ -813,38 +825,75 @@ void App::sealCard(const QString &pin, bool replaceDefault)
         {QStringLiteral("op"), QStringLiteral("seal")},
         {QStringLiteral("pin"), pin},
         {QStringLiteral("recovery"), QJsonObject{{QStringLiteral("text"), m_recoveryText}}},
-        {QStringLiteral("replace_default"), replaceDefault},
+        {QStringLiteral("group"), m_member.group06},
     };
     connect(thread, &QThread::finished, this, [this, thread]() {
         const Failure failure = thread->failure;
+        const int slot = thread->answer.value(QStringLiteral("slot")).toInt();
         const bool defaultKey = thread->answer.value(QStringLiteral("default_key")).toBool();
-        const bool replaced = thread->answer.value(QStringLiteral("replaced")).toBool();
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
         if (!failure.isNull()) {
             show(Errors::shown(failure));
-            emit cardSealed(false, false);
+            emit cardSealed(false);
             return;
         }
-        Errors::log(QStringLiteral("yubikey: sealed, factory key %1, replaced %2").arg(defaultKey).arg(replaced));
+        Errors::log(QStringLiteral("yubikey: sealed in slot %1, factory management key %2").arg(slot, 0, 16).arg(defaultKey));
         show(QString());
-        emit cardSealed(true, defaultKey);
+        emit cardSealed(true);
     });
     thread->start();
 }
 
-void App::makeRecovery()
+QString App::saveSheet()
 {
-    if (!m_member.root)
-        return;
-    runManage(QStringLiteral("make_recovery"), QString(), QJsonObject(), [this](const QJsonObject &a) {
-        m_recoveryText = a.value(QStringLiteral("text")).toString();
-        m_recoveryModules.clear();
-        for (const QJsonValue &row : a.value(QStringLiteral("modules")).toArray())
-            m_recoveryModules.append(row.toString());
-        emit recoveryChanged();
-    });
+    if (m_recoveryText.isEmpty() || m_recoveryModules.isEmpty())
+        return QString();
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    const QString name = QCoreApplication::translate("RecoveryPage", "CBB recovery key");
+    QString path = dir + QLatin1Char('/') + name + QStringLiteral(".pdf");
+    for (int n = 2; QFile::exists(path); ++n)
+        path = dir + QLatin1Char('/') + name + QStringLiteral(" (%1).pdf").arg(n);
+    QPdfWriter pdf(path);
+    pdf.setPageSize(QPageSize(QPageSize::A4));
+    pdf.setResolution(300);
+    pdf.setTitle(name);
+    QPainter p;
+    if (!QDir().mkpath(dir) || !p.begin(&pdf)) {
+        show(Errors::shown(Failure{QCoreApplication::translate("Errors", "The phone could not save the sheet."), QStringLiteral("recovery: cannot write %1").arg(path)}));
+        return QString();
+    }
+    const int width = pdf.width();
+    const int margin = 150;
+    int y = margin;
+    auto text = [&](const QString &s, int pt, bool bold, bool mono) {
+        QFont f(mono ? QStringLiteral("monospace") : QString(), pt);
+        f.setBold(bold);
+        if (mono)
+            f.setStyleHint(QFont::Monospace);
+        p.setFont(f);
+        const QRect r = p.boundingRect(QRect(margin, y, width - 2 * margin, 100000), Qt::TextWordWrap, s);
+        p.drawText(r, Qt::TextWordWrap, s);
+        y = r.bottom() + 60;
+    };
+    p.setPen(Qt::black);
+    text(name, 20, true, false);
+    // The QR code, from the core's modules, on white with its quiet zone.
+    const int count = m_recoveryModules.size();
+    const int side = qMin(width - 2 * margin, 1100);
+    const int cell = side / (count + 8);
+    const int left = (width - cell * (count + 8)) / 2;
+    for (int row = 0; row < count; ++row)
+        for (int col = 0; col < m_recoveryModules.at(row).size(); ++col)
+            if (m_recoveryModules.at(row).at(col) == QLatin1Char('1'))
+                p.fillRect(left + (col + 4) * cell, y + (row + 4) * cell, cell, cell, Qt::black);
+    y += cell * (count + 8) + 60;
+    text(m_recoveryText, 14, true, true);
+    text(QCoreApplication::translate("RecoveryPage", "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over."), 11, false, false);
+    p.end();
+    Errors::log(QStringLiteral("recovery: the sheet saved as a PDF in Documents"));
+    return path;
 }
 
 void App::forgetRecovery()
@@ -856,13 +905,6 @@ void App::forgetRecovery()
         row.fill(QLatin1Char('0'));
     m_recoveryModules.clear();
     emit recoveryChanged();
-}
-
-void App::removeRecovery()
-{
-    if (!m_member.root)
-        return;
-    runManage(QStringLiteral("remove_recovery"), QString(), QJsonObject(), nullptr);
 }
 
 void App::renew()

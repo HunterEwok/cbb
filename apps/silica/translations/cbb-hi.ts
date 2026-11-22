@@ -608,6 +608,10 @@
         <translation>डिवाइस जोड़ने के लिए फ़ोन को घर के Wi-Fi से जोड़ें।</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>इस YubiKey पर कुंजियों की सभी जगहें भरी हैं। दूसरी YubiKey या शीट इस्तेमाल करें।</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>कोई YubiKey लगी नहीं है। उसे USB-C पोर्ट में लगाएँ और फिर से कोशिश करें।</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>फ़ोन समूह सहेज नहीं सका।</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>फ़ोन शीट नहीं सहेज सका।</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>फ़ोन के पास अभी कोई कुंजी नहीं है।</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>फ़ोन के सुरक्षित तत्व में एक खराब कुंजी है।</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>इस YubiKey में पहले से एक रिकवरी कुंजी है। कोई दूसरा YubiKey उपयोग करें।</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>इस YubiKey में कोई रिकवरी कुंजी नहीं है।</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>इस YubiKey में रिकवरी कुंजी की जगह कुछ और रखा है। कोई दूसरा YubiKey उपयोग करें।</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>इस YubiKey पर इस समूह की रिकवरी कुंजी पहले से है।</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>इस YubiKey पर इस समूह की दो रिकवरी कुंजियाँ हैं। इसके बजाय शीट इस्तेमाल करें।</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,28 +1514,48 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>पुनर्प्राप्ति कुंजी से इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन समूह संभाल सकता है। बनाने के लिए नीचे खींचें।</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>सहेजी गई फ़ाइल ही समूह की कुंजी है: इसे फ़ोन से काग़ज़ या सुरक्षित रखी ड्राइव पर ले जाएँ, फिर यहाँ से हटा दें।</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>वापस</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>CBB रिकवरी कुंजी</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>जारी रखें</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>हो गया</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>मैंने लिख लिया</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>फ़ैक्टरी कुंजी रहने दें</translation>
+        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>YubiKey को USB-C पोर्ट में लगाएँ, उसका PIN लिखें, फिर उसके टिमटिमाने पर उसे छुएँ।</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>नई पुनर्प्राप्ति कुंजी बनाएँ</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपका समूह ले सकता है।</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी बनाएँ</translation>
+        <source>Leave without saving</source>
+        <translation>सहेजे बिना निकलें</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>YubiKey को USB-C पोर्ट में लगाएँ, उसका PIN लिखें, फिर चमकने पर उसे छुएँ।</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>रिकवरी कुंजी सहेजे बिना निकलें?</translation>
+    </message>
+    <message>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>समूह के साथ ही बनी, और इसकी शीट सिर्फ़ एक बार दिखाई गई। शीट के बिना समूह का मुख्य डिवाइस नहीं बदला जा सकता: अगर शीट खो जाए, तो नया समूह बनाएँ।</translation>
     </message>
     <message>
         <source>Put it on a YubiKey</source>
@@ -1538,44 +1566,52 @@
         <translation>पुनर्प्राप्ति कुंजी</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी हटाएँ</translation>
+        <source>Save as PDF</source>
+        <translation>PDF के रूप में सहेजें</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी हटाई जा रही है</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>इसे काग़ज़ पर, YubiKey पर, या दोनों पर सहेजें। यह फ़ोन खो जाने पर समूह इसी से किसी दूसरे मुख्य डिवाइस पर जा सकता है। यह केवल अभी दिखाई जाती है।</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>फ़ैक्टरी कुंजी बदलें</translation>
+        <source>Save the group's recovery key</source>
+        <translation>समूह की रिकवरी कुंजी सहेजें</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>पुनर्प्राप्ति कुंजी बदली जा रही है</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>YubiKey इस शीट वाली ही कुंजी अपने PIN और एक स्पर्श के पीछे रखता है। अगर इसमें अब भी फ़ैक्टरी प्रबंधन कुंजी है, तो कोई भी वह कुंजी ढूँढकर बिना PIN के रिकवरी कुंजी मिटा सकता है; ऐप उसे PIN से सुरक्षित कुंजी से बदल सकता है।</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>%1 के रूप में सहेजा गया। यह फ़ाइल ही समूह की कुंजी है: इसे फ़ोन से काग़ज़ या सुरक्षित रखी ड्राइव पर ले जाएँ, फिर यहाँ से हटा दें।</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>YubiKey का PIN</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>समूह के पास पुनर्प्राप्ति कुंजी है। इस फ़ोन के खो जाने पर समूह का कोई कंप्यूटर या नया फ़ोन इससे समूह संभाल लेता है।</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>रिकवरी कुंजी YubiKey पर है, जिसमें फ़ैक्टरी प्रबंधन कुंजी बनी हुई है: जिसके पास यह हो, वह बिना PIN के कुंजी मिटा सकता है। शीट भी रखें।</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>कुंजी लिख लें या यह पृष्ठ प्रिंट करें और सुरक्षित रखें। यह केवल एक बार दिखाई जाती है।</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>शीट Documents में सहेजी गई है।</translation>
+    </message>
+    <message>
+        <source>Touch the YubiKey when it blinks.</source>
+        <translation>YubiKey टिमटिमाए तो उसे छुएँ।</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>इसके बिना, यह फ़ोन खोने का मतलब है नया समूह बनाना और हर डिवाइस को फिर से उससे जोड़ना।</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>काग़ज़ पर लिखें</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>कुंजी लिख लें या यह पेज सहेजें, और इसे सुरक्षित रखें।</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>YubiKey पर लिखें</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1793,6 @@
     <message>
         <source>No time</source>
         <translation>बिल्कुल नहीं</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>कोई नहीं</translation>
     </message>
     <message>
         <source>None yet</source>

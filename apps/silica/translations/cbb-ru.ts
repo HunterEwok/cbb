@@ -608,6 +608,10 @@
         <translation>Подключите телефон к домашней сети Wi-Fi, чтобы добавить устройство.</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>Все места для ключей на этом YubiKey заняты. Используйте другой YubiKey или лист.</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>YubiKey не вставлен. Вставьте его в порт USB-C и попробуйте снова.</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>Телефону не удалось сохранить группу.</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>Телефону не удалось сохранить лист.</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>У телефона ещё нет ключа.</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>В защищённом элементе телефона повреждённый ключ.</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>На этом YubiKey уже есть ключ восстановления. Используйте другой YubiKey.</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>На этом YubiKey нет ключа восстановления.</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>На этом YubiKey в месте для ключа восстановления хранится что-то другое. Используйте другой YubiKey.</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>На этом YubiKey уже есть ключ восстановления этой группы.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>На этом YubiKey два ключа восстановления этой группы. Используйте лист.</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,28 +1514,48 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Ключ восстановления позволит компьютеру группы или новому телефону забрать группу, если этот телефон потеряется. Потяните вниз, чтобы создать его.</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Сохранённый файл и есть ключ группы: перенесите его с телефона на бумагу или накопитель в надёжном месте, а здесь удалите.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>Ключ восстановления CBB</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Продолжить</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Готово</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>Я записал ключ</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>Оставить заводской ключ</translation>
+        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
+        <translation>Вставьте YubiKey в порт USB-C, введите его PIN и коснитесь ключа, когда он замигает.</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>Создать новый ключ восстановления</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может забрать вашу группу.</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>Создать ключ восстановления</translation>
+        <source>Leave without saving</source>
+        <translation>Выйти без сохранения</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Вставьте YubiKey в порт USB-C, введите его PIN-код и коснитесь ключа, когда он замигает.</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>Выйти, не сохранив ключ восстановления?</translation>
+    </message>
+    <message>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>Сделан вместе с группой, его лист был показан один раз. Без листа главное устройство группы не сменить: если лист потерян, создайте новую группу.</translation>
     </message>
     <message>
         <source>Put it on a YubiKey</source>
@@ -1538,44 +1566,52 @@
         <translation>Ключ восстановления</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>Удалить ключ восстановления</translation>
+        <source>Save as PDF</source>
+        <translation>Сохранить в PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>Удаляем ключ восстановления</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>Сохраните его на листе, на YubiKey или и там, и там. Только с ним группа сможет перейти на другое главное устройство, если этот телефон потеряется. Он показывается только сейчас.</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>Заменить заводской ключ</translation>
+        <source>Save the group's recovery key</source>
+        <translation>Сохраните ключ восстановления группы</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>Заменяем ключ восстановления</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>YubiKey хранит тот же ключ, что и этот лист, под своим PIN-кодом и касанием. Если у него ещё заводской ключ управления, любой может найти этот ключ и стереть ключ восстановления без PIN-кода; приложение может заменить его ключом, который защищает PIN-код.</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Сохранено как %1. Этот файл и есть ключ группы: перенесите его с телефона на бумагу или накопитель в надёжном месте, а здесь удалите.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>PIN YubiKey</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>У группы есть ключ восстановления. С ним компьютер группы или новый телефон заберёт группу, если этот телефон потеряется.</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>Ключ восстановления на YubiKey, но у него остался заводской ключ управления: тот, кто его держит, может стереть ключ без PIN-кода. Сохраните и лист.</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>Ключ восстановления на YubiKey. YubiKey и лист хранят один и тот же ключ: храните оба, в разных местах.</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Запишите ключ или распечатайте эту страницу и храните в надёжном месте. Он показывается только один раз.</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>Лист сохранён в «Документы».</translation>
+    </message>
+    <message>
+        <source>Touch the YubiKey when it blinks.</source>
+        <translation>Коснитесь YubiKey, когда он замигает.</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>Без него потеря этого телефона означает, что придётся создать новую группу и заново подключить к ней все устройства.</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>Записать на лист</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>Перепишите ключ или сохраните эту страницу и храните в надёжном месте.</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>Записать на YubiKey</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1793,6 @@
     <message>
         <source>No time</source>
         <translation>Нисколько</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>Нет</translation>
     </message>
     <message>
         <source>None yet</source>

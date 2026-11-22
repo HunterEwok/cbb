@@ -27,8 +27,9 @@ interface Stored {
   member: Joined;
 }
 
-// The app's own files of the group.
-const APP_FILES: string[] = ['member.json', 'seal.key', 'server-keys.txt'];
+// The app's own files of the group, member.json last: a leave cut short
+// still shows the group and can be done again.
+const APP_FILES: string[] = ['seal.key', 'server-keys.txt', 'member.json'];
 
 // The member's files of the group, as member/src/leave.rs lists them
 // (GROUP_FILES): keep the two lists alike.
@@ -112,13 +113,13 @@ export class Membership {
     }
   }
 
-  // Leaves the group on this phone: deletes member.json and every file the
-  // member keeps of its group, the list of member/src/leave.rs
-  // (GROUP_FILES), with what a group from before 0.6 kept beside them (the
-  // key for its sealed messages, its servers' keys).
+  // Leaves the group on this phone: deletes every file the member keeps of
+  // its group, the list of member/src/leave.rs (GROUP_FILES), then what a
+  // group from before 0.6 kept beside them (the key for its sealed
+  // messages, its servers' keys) and member.json last.
   static remove(dir: string): Failure | undefined {
     try {
-      for (const name of APP_FILES.concat(GROUP_FILES)) {
+      for (const name of GROUP_FILES.concat(APP_FILES)) {
         const path = `${dir}/${name}`;
         if (!fileIo.accessSync(path)) {
           continue;
