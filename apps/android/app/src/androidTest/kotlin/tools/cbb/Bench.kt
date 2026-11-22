@@ -14,7 +14,6 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.Socket
 import java.net.URLDecoder
-import java.net.URLEncoder
 
 /**
  * The bench's helper on the computer that runs the emulator (tools/bench,
@@ -135,22 +134,25 @@ object Bench {
     fun start(dev: String, cmd: String): Job = Job(call("op" to "start", "dev" to dev, "cmd" to cmd).str("id")!!)
 
     /**
-     * Runs cbb pair on the member, which is in no group, and returns its QR
-     * code's text with the member's port as this emulator dials it in place
-     * of the addresses inside the fleet's network, and the job, which ends
-     * once the phone admitted the member.
+     * Lets every member reach the phone's TCP port at addr, the phone's own
+     * address and port as its pairing window's QR code names them
+     * ("10.0.2.15:8764"): the members' connections there go to it.
      */
-    fun pairCode(dev: String): Pair<String, Job> {
-        val job = start(dev, "cbb pair </dev/null")
-        val text = job.line("Or paste this into the app:")
-        val query = text.substringAfter('?').split('&').associate { p ->
-            p.substringBefore('=') to URLDecoder.decode(p.substringAfter('=', ""), "UTF-8")
-        }
-        val code = query["code"] ?: throw AssertionError("no code in $text")
-        val fp = query["fp"] ?: throw AssertionError("no fingerprint in $text")
-        val port = query["addr"]?.substringAfterLast(':')
-        if (port != "8764") throw AssertionError("$dev waits for the phone on port $port, not the member port the suite publishes: $text")
-        val enc = { s: String -> URLEncoder.encode(s, "UTF-8") }
-        return "cbb://join?code=${enc(code)}&addr=${enc(addr(dev))}&fp=${enc(fp)}" to job
+    fun phone(addr: String) {
+        call("op" to "phone", "addr" to addr)
+    }
+
+    /**
+     * Joins the member, which is in no group, to the phone's group through
+     * the pairing window the phone shows (D-119): the members reach the
+     * window's address, and the member runs cbb pair -code there with the
+     * six digits, as its person types them. What cbb pair printed.
+     */
+    fun joinWindow(dev: String, qr: String, digits: String): String {
+        val addrs = qr.substringAfter('?').split('&').filter { it.startsWith("addr=") }
+            .map { URLDecoder.decode(it.removePrefix("addr="), "UTF-8") }
+        val at = addrs.firstOrNull { !it.startsWith("[") } ?: throw AssertionError("no IPv4 address in the window's QR code $qr")
+        phone(at)
+        return run(dev, "cbb pair -code $at", stdin = "$digits\n", seconds = 120)
     }
 }

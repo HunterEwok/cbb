@@ -15,8 +15,6 @@ import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -110,16 +108,17 @@ class GroupTest {
         return text
     }
 
-    /** A1: Start, "Create a group", the QR code's text, Add: the phone's own group with the computer in it. */
+    /**
+     * A1: Start, "Create a group": the phone makes its group and opens its
+     * pairing window, and the computer joins with the six digits it shows
+     * (D-119): the phone's own group with the computer in it.
+     */
     @Test
     fun a1_admitComputer() {
         assertEquals(AppModel.Phase.START, model.phase)
         compose.onNodeWithText(str(R.string.create_group)).performClick()
-        val (code, pairing) = Bench.pairCode(Bench.PC)
-        typeAndAdd(code)
-        until(90, "the phone admits ${Bench.PC}; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
-        val out = pairing.finish(60)
-        assertTrue("cbb pair on ${Bench.PC} did not join:\n$out", out.contains("Joined the group"))
+        joinWindow(Bench.PC)
+        until(30, "the phone at Home; the app says ${model.message}") { model.phase == AppModel.Phase.HOME }
         until(30, "${Bench.PC} in the phone's devices: ${model.group.devices.map { it.name }}") {
             model.group.devices.any { it.name == Bench.PC }
         }
@@ -273,44 +272,27 @@ class GroupTest {
     }
 
     /**
-     * Types the QR code's text on the add page and taps Add once the button
-     * takes it, scrolled into view: below a working camera's preview the
-     * page scrolls, and a tap outside the screen reaches nothing.
+     * Joins dev, a member in no group, through the window the phone opened:
+     * the recovery sheet of a new group is kept, and dev types the digits
+     * the window shows. Fails with what cbb pair printed and the app's state.
      */
-    private fun typeAndAdd(code: String) {
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextInput(code)
-        val add = compose.onNodeWithText(str(R.string.add))
-        until(10, "Add takes the code") { runCatching { add.assertIsEnabled() }.isSuccess }
-        // The keyboard that the text brought up shrinks the page as it
-        // slides in, and a tap below the page's new bottom reaches nothing:
-        // scroll to Add once the page settled, and again if a tap was lost
-        // (a second tap while the app admits does nothing).
-        // Pairing takes seconds: the app is busy, or it says why it is not.
-        val started = { model.busy || model.message != null }
-        for (i in 1..3) {
-            // Admitted already, the page closed.
-            if (i > 1 && runCatching { add.assertExists() }.isFailure) return
-            compose.waitForIdle()
-            add.performScrollTo()
-            compose.waitForIdle()
-            add.performClick()
-            if (runCatching { until(5, "the app starts admitting") { started() } }.isSuccess) return
-        }
-        throw AssertionError("not within 15s: the app starts admitting\n${appState()}")
-    }
-
-    /** Admits a member in no group from Home's + menu, by its QR code's text. */
-    private fun admit(dev: String) {
-        compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
-        compose.onNodeWithText(str(R.string.scan_code)).performClick()
-        val (code, pairing) = Bench.pairCode(dev)
-        typeAndAdd(code)
+    private fun joinWindow(dev: String) {
+        until(60, "the phone's pairing window open; the app says ${model.message}") { model.windowQr != null && model.windowDigits != null }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync { model.newSheet = null }
         val out = try {
-            pairing.finish(90)
+            Bench.joinWindow(dev, model.windowQr!!, model.windowDigits!!)
         } catch (e: AssertionError) {
             throw AssertionError("${e.message}\n${appState()}\n$dev's log:\n${Bench.logs(dev)}")
         }
-        assertTrue("cbb pair on $dev did not join:\n$out", out.contains("Joined the group"))
+        assertTrue("cbb pair -code on $dev did not join:\n$out\n${appState()}", out.contains("Joined the group"))
+        until(30, "the window says $dev joined: ${model.message}") { model.message?.text == R.string.window_joined }
+    }
+
+    /** Admits a member in no group from Home's + menu, through the phone's pairing window. */
+    private fun admit(dev: String) {
+        compose.onNodeWithContentDescription(str(R.string.add_device)).performClick()
+        compose.onNodeWithText(str(R.string.scan_code)).performClick()
+        joinWindow(dev)
         until(30, "$dev in the phone's devices") { model.group.devices.any { it.name == dev } }
     }
 
