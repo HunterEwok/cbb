@@ -14,7 +14,7 @@ pub enum Standing {
     /// A device of the group that may talk.
     Member(DeviceId),
     /// A key the records do not name yet: the peer must send its intro
-    /// (format 11.3) as its first message, or the connection closes.
+    /// (format 11.4) as its first message, or the connection closes.
     Unknown,
     /// A key that may not talk, and why.
     Refused(&'static str),

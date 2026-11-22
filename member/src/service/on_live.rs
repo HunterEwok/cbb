@@ -705,7 +705,7 @@ impl Service {
         };
         crate::admin::level_allows(value, root_store, "this device, the group's root,", "", true)?;
         let now = uptime::wall_ms().max(0) as u64;
-        // The default, hardware, is written as no level at all (format 4.5).
+        // The default, hardware, is written as no level at all (format 4.4).
         let kept = if level == LEVEL_HARDWARE { 0 } else { level };
         live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         (self.log)(&format!("cbb: the group's key level is {value} now"));
@@ -723,7 +723,7 @@ impl Service {
     }
 
     /// cbb global relay: the group's own relay, which the root signs in the
-    /// group's settings (format 4.5, field 15; D-121), so that every device
+    /// group's settings (format 4.4, field 15; D-121), so that every device
     /// takes it from there and shows it a face (`faces::group_servers`).
     /// The relays given (`relay` and `relays`) take the place of those the
     /// settings named; `default`, the project's relay, leaves the group

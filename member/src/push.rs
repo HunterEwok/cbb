@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A member's side of the project's push service (format section 20.4,
+//! A member's side of the project's push service (format section 9.6,
 //! src/pushd): the connection that asks the service to wake a phone. It
 //! dials the service's pinned key with the certificate of its server key
 //! for the service's face, says hello with the face's hubs' and members'

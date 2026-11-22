@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A token's binding to the phone's send key (format section 20.4).
+//! A token's binding to the phone's send key (format section 9.6).
 //!
 //! - While no key is confirmed, a send under any key passes, and the
 //!   service hands the key a challenge, which goes to the token with the

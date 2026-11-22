@@ -43,7 +43,7 @@ pub const MAX_RELEASE_FILE: usize = 512 << 10;
 /// chain of certificates or a TPM's quote with its certificates.
 pub const MAX_EVIDENCE: usize = 64 << 10;
 
-/// A name, as the other tables give it (format 20.6).
+/// A name, as the other tables give it (format 13).
 const NAME: Ty = Ty::Text(128);
 const B32: Ty = Ty::Bytes(32);
 const MS: Ty = Ty::Uint { min: 1, max: (1 << 63) - 1 };

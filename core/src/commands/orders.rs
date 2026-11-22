@@ -17,7 +17,7 @@ pub const RULE_ACTION: Rule = Rule::field("orders/action");
 pub const RULE_MUTE: Rule = Rule::field("orders/mute");
 pub const RULE_DEVICE: Rule = Rule::field("orders/device");
 
-/// The longest text of a paste, and of one typed out (format 20.6: 16 KiB
+/// The longest text of a paste, and of one typed out (format 13: 16 KiB
 /// for a member; a leaf takes what its 16 KiB frame holds beside the
 /// command's envelope).
 pub const MAX_PASTE_TEXT: usize = 1 << 20;
@@ -43,7 +43,7 @@ fn flag(v: Option<&Value<'_>>, rule: Rule) -> Result<bool, Rule> {
     }
 }
 
-/// A hidden character (format 20.1): C0, DEL, C1, U+2028 to U+202E and
+/// A hidden character (format 1): C0, DEL, C1, U+2028 to U+202E and
 /// U+2066 to U+2069.
 fn hidden(c: char) -> bool {
     matches!(c, '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}' | '\u{2028}'..='\u{202e}' | '\u{2066}'..='\u{2069}')

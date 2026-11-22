@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The phones' push calls (format section 20.4): a new push key, the
+//! The phones' push calls (format section 9.6): a new push key, the
 //! limits of a platform, the frame of message `push` and opening a body
 //! that arrived. The apps hold no number of the format: they ask these.
 //!

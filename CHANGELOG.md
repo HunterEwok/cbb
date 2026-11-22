@@ -16,6 +16,10 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
+  profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
+  pairing, the key container, the ceilings and the registries. The code's "format section N"
+  citations name its sections.
 - ffi's group of 0.6 names its key level and how long a copy and a secret live (`key_level`,
   `ttl_ms`, `secret_ttl_ms`), and the manage action `ttl` sets them from a phone. All four
   phone apps show both to admins in Settings, "Copy lifetime" and "Secret lifetime", and Home's

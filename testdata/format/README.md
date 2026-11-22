@@ -22,7 +22,7 @@ Three readers check them:
 
 Field-level refusals (`records/…`, `form/default`) are for the readers of each kind.
 
-`push.json` (push to a phone whose app is closed, format section 20.4: message `push`, the push
+`push.json` (push to a phone whose app is closed, format section 9.6: message `push`, the push
 service's messages, the sealed body with its derived nonce, the send key's signatures and the
 UnifiedPush token) is written apart by
 `push_gen.py` (`python3 -I testdata/format/push_gen.py`), which borrows `gen.py`'s encoder and

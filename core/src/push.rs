@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! Push to a phone whose app is closed (format section 20.4, roadmap item
+//! Push to a phone whose app is closed (format section 9.6, roadmap item
 //! 57): the phone's registration (member message `push`, t 28), the body a
 //! member seals to that phone, and the messages between a member and the
 //! project's push service (t 100–104, ALPN `cbb-push/1`).

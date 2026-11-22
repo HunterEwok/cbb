@@ -131,7 +131,7 @@ impl Entries {
     }
 
     /// The keys keys.json names for the project's push service `name`
-    /// (use `push`, format section 20.4), as [`Entries::relay_keys`].
+    /// (use `push`, format section 9.6), as [`Entries::relay_keys`].
     pub fn push_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
         self.keys_of("push", name, now_ms)
     }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The relay's messages of 0.6 (format section 9.4, `cbb-relay/3`): the
+//! The relay's messages of 0.6 (format section 9.5, `cbb-relay/3`): the
 //! registration's (`relay/challenge`, `register`, `registered`, `error`,
 //! t 90 to 93) and those inside the tunnel (`watch`, `dial`, `answer`,
 //! `online`, `call`, `ok`, t 94 to 99), each one frame of the format. A

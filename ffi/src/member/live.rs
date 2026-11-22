@@ -1071,7 +1071,7 @@ impl Phone {
         let devices = self.devices();
         let own = devices.iter().find(|d| d.id == me).map(|d| d.store.clone()).unwrap_or_default();
         cbb_core::keylevel::allows(&a.level, &own, "this phone, the group's root,", "", true)?;
-        // The default, hardware, is written as no level at all (format 4.5).
+        // The default, hardware, is written as no level at all (format 4.4).
         let kept = if level == LEVEL_HARDWARE { 0 } else { level };
         mesh.write_by(key, |set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         let st = mesh.state();

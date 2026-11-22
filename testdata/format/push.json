@@ -1,5 +1,5 @@
 {
- "draft": "format-0.6-bytes.md section 20.4, 2026-11-13",
+ "draft": "docs/format.md, section 9.6",
  "labels": {
   "body": "cbb push body v1",
   "nonce": "cbb push nonce v1",

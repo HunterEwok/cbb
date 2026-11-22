@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The forwarder's messages of 0.6 (`cbb-forward/3`, format section 9.4):
+//! The forwarder's messages of 0.6 (`cbb-forward/3`, format section 9.5):
 //! the registration's (`forward/challenge`, `register`, `registered`,
 //! `error`, t 80 to 83) and, on the registration's connection after it,
 //! `forward/seen` (t 84), each one frame of the format. Both ends are

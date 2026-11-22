@@ -1,5 +1,5 @@
 {
- "draft": "format-0.6-bytes.md, draft of 2026-11-11",
+ "draft": "docs/format.md",
  "grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
  "limits": {
   "member": 7340032,

@@ -12,7 +12,7 @@ import (
 )
 
 // future.json: a reader of this version, by each optional field's row
-// (format 20.5). This file's own reader: a wrong shape refuses; a value out
+// (format 9.1). This file's own reader: a wrong shape refuses; a value out
 // of range refuses, reads as absent, keeps its known bits, or makes a
 // transport's table unusable (the empty map), as its row says; a needed
 // field always refuses. The Rust core checks that its rows equal the file's.

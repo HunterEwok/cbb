@@ -16,7 +16,7 @@ const ID16: Ty = Ty::Bytes(16);
 /// "no invitation" is the field left out.
 const INVITE_ID: Ty = Ty::Id(16);
 const B32: Ty = Ty::Bytes(32);
-/// A name: 1 to 128 bytes of UTF-8 (format 20.6).
+/// A name: 1 to 128 bytes of UTF-8 (format 13).
 const NAME: Ty = Ty::Text(128);
 const REASON: Ty = Ty::Text(256);
 const WG_KEY: Ty = Ty::Key(Alg::X25519);

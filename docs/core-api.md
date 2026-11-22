@@ -427,7 +427,7 @@ The numbers and names never change meaning; new codes are added at the end of th
 ## Push
 
 A phone whose app is closed hears of a copy or an event through its platform's push service
-(format section 20.4, `cbb_core::push`). The phone draws a push key per group (`push_key`),
+([format](format.md), section 9.6, `cbb_core::push`). The phone draws a push key per group (`push_key`),
 sends the group its token, platform and key in message `push` (`push_registration`), and opens
 each body that arrives with `push_open`. Its notification extension calls only `push_open`. It
 holds, in a keychain group of its own (this device only, after the first unlock), what opens a

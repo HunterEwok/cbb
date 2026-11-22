@@ -476,7 +476,7 @@ made anew.
 
 **TLS.** TLS 1.3 only, with the key exchange X25519MLKEM768 (group 0x11EC) and an X25519 share
 beside it, so that a server with X25519 alone answers at once. Each side presents the key
-container of its member key (format section 12): a fixed template that holds the key alone, so
+container of its member key ([format](format.md), section 12): a fixed template that holds the key alone, so
 nothing in the handshake names a device or the group, and no server name is sent. The peer's key
 is its identity. CertificateVerify proves that the peer holds the key, the client checks the
 key's hash against the device it dialed, and each side asks its records where the key stands
@@ -554,7 +554,7 @@ fields and their rules are in the core's tables (`msg::tables`, `msg::wave4`, `m
 vectors of `testdata/format`.
 
 **The hello** (`t` 1) is the first message of each side on a member connection. The core reads
-no hello yet: its fields are those of the format (section 9.3) and are listed here for the
+no hello yet: its fields are those of the [format](format.md) (section 9.3) and are listed here for the
 switch. 2 `caps` (bits, as the device record's); 3 `os`; 4 `name` (1 to 64 bytes); 5 `wall_ms`
 (for skew reports only); 6 `current` (the sender's current copy with its age, a mark for a
 secret); 7 `records` (the set digest, 32 bytes); 8 `count` (how many records the sender holds);
@@ -1200,7 +1200,7 @@ Source: `core/src/join` (`mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `in
 ### Pairing in 0.6
 
 Pairing runs over TLS 1.3 with ALPN `cbb-pair/3` (section 19), each side presenting its key
-container (format section 12) for the key it keeps. Its messages are CBOR maps in frames
+container ([format](format.md), section 12) for the key it keeps. Its messages are CBOR maps in frames
 (section 4, "The member protocol in 0.6"), the type in field 0 (section 19, "Member protocol messages"). Before
 CPace is confirmed every frame takes the pairing limit, `format::frame::LIMIT_PAIRING` (1048576);
 after it, message 67 alone may take the member limit, `format::frame::LIMIT_MEMBER` (7340032),
@@ -1400,7 +1400,7 @@ cbb://pair?addr=192.168.1.20%3A8764&addr=%5Bfd00%3A%3A20%5D%3A8764&fp=<64 hex di
 | Field | Count | Meaning |
 |-------|-------|---------|
 | `addr` | one to four | the member's addresses with its member port, `host:port`, best first; an IPv6 host in brackets |
-| `fp` | one | the key hash of the member's TLS key (format section 12), 64 lowercase hex digits |
+| `fp` | one | the key hash of the member's TLS key ([format](format.md), section 12), 64 lowercase hex digits |
 
 The values are percent-encoded (Conventions, "Bytes"). A reader matches the scheme and the host
 `pair` without regard to case, decodes only percent escapes, ignores fields it does not know,
@@ -3300,8 +3300,8 @@ and joins only once the user accepts; declining sends nothing.
 
 ### On the records of 0.6
 
-A group of 0.6 makes the invitation of the format's table `invite` (`cbb://join#...`,
-W.3 of the format), on a hub that serves (`member/src/live/invite.rs`, the control operation
+A group of 0.6 makes the invitation of the [format](format.md), section 11.3 (`cbb://join#...`),
+on a hub that serves (`member/src/live/invite.rs`, the control operation
 `invite` in `member/src/service/on_live.rs`), or through a hub (below). It
 carries no group and no hub, only one-time values and one guest path: the hub's addresses
 away from home (its forwarder's after its own, at most eight), the key it serves under, the
@@ -3855,7 +3855,7 @@ receiver's copies from the group for a while or until `unmute` ends it (design.m
 device").
 
 On the records of 0.6 a computer sends and carries out `mode`, `paste`, `paste-off`, `action`,
-`actions-off`, `away-off`, `mute` and `unmute` as commands of format section 6
+`actions-off`, `away-off`, `mute` and `unmute` as commands of [format](format.md) section 6
 (`member/src/service/on_live/orders.rs`), signed by its root or admin key; the receiver's
 checks of its user's switches are the same as above. Its `result` says `refused` (2) when the
 receiver's user or settings say no, such as remote paste being off, and `failed` (3) when

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! What a reader of this version does with an optional field whose value
-//! lies outside what this version knows (format 20.5, "one rule for a value
-//! from a later version"). Shape always refuses: the CBOR type, the length
+//! lies outside what this version knows (format 9.1, "Messages": one rule
+//! for a value from a later version). Shape always refuses: the CBOR type, the length
 //! of a fixed-size key or ID, a key off its curve, an envelope that does not
 //! parse, a list out of its order. A needed field out of range refuses too.
 //!
