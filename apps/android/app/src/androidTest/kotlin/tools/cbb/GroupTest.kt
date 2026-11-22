@@ -85,10 +85,18 @@ class GroupTest {
         compose.waitUntil(10_000) { compose.runOnUiThread { compose.activity.hasWindowFocus() } }
     }
 
-    /** Waits on the test's thread until ok holds, up to seconds. */
+    /**
+     * Waits on the test's thread until ok holds, up to seconds. Each round
+     * lets Compose run first: the rule runs the screens' effects (Add a
+     * device's window, the sync as the window takes the focus) on its own
+     * dispatcher, which moves only while the test waits for Compose, so a
+     * bare sleep would hold them until the next interaction.
+     */
     private fun until(seconds: Int, what: String, ok: () -> Boolean) {
         val deadline = System.currentTimeMillis() + seconds * 1000L
-        while (!ok()) {
+        while (true) {
+            compose.waitForIdle()
+            if (ok()) return
             if (System.currentTimeMillis() > deadline) throw AssertionError("not within ${seconds}s: $what")
             Thread.sleep(250)
         }
