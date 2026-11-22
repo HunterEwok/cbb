@@ -230,9 +230,10 @@ class GroupTest {
 
     /**
      * Q8: quick actions from the phone. On the records of 0.6 the core does
-     * not carry them yet (0.7, plans): the phone asks, and the core answers
+     * not run them yet (0.7, plans): the phone asks, and the core answers
      * that this build does not do it, which the note shows in a debug build,
-     * and the computer's service keeps running.
+     * and the computer's service keeps running. Turning a computer's actions
+     * off is a command of 0.6 and works.
      */
     @Test
     fun a7_quickActions() {
@@ -243,8 +244,7 @@ class GroupTest {
         val notYet = "does not work in this build yet"
         assertFalse("restart ran on the records of 0.6", runBlocking { model.runAction(pc, "restart") })
         assertTrue("the note names the core's answer: ${model.message}", model.message?.detail.orEmpty().contains(notYet))
-        assertFalse("turning all off ran on the records of 0.6", runBlocking { model.actionsOff(pc) })
-        assertTrue("the note names the core's answer: ${model.message}", model.message?.detail.orEmpty().contains(notYet))
+        assertTrue("turning all off was refused: ${model.message}", runBlocking { model.actionsOff(pc) })
         assertEquals("the service on ${Bench.PC} restarted", before, pid())
     }
 
@@ -545,7 +545,8 @@ class GroupTest {
         val guest = Bench.add()
         val window = Bench.start(hub, "cbb pair </dev/null")
         val code = window.line("Pairing code:").replace(" ", "")
-        val at = window.line("If it cannot find this one: cbb pair -code")
+        // "cbb pair -code ADDRESS, and type this line instead of the code:"
+        val at = window.line("If it cannot find this one: cbb pair -code").substringBefore(",").trim()
         val joined = Bench.run(guest, "cbb pair -code $at", stdin = "$code\n", seconds = 90)
         assertTrue("cbb pair -code on $guest did not join:\n$joined", joined.contains("Joined the group"))
         val admitted = window.finish(60)
