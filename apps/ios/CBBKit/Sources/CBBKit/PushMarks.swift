@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
+// The push marks stand on PushVault, the Keychain's: Apple only.
+#if canImport(Security)
 import Foundation
 
 /// The hints-only marks (docs/core-api.md, "Push"): when the notification
@@ -157,3 +159,4 @@ public enum PushMarks {
         save(marks, defaults)
     }
 }
+#endif
