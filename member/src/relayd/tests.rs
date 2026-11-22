@@ -647,7 +647,7 @@ fn stream_port_knows_only_the_hub_s_connections() {
         assert!(start.elapsed() < Duration::from_secs(5), "a stranger's connection was held");
     }
     assert!(r.inner().lock().members.is_empty());
-    // Many at once wait their moment side by side: none holds up the port.
+    // Many at once are closed one after another: none holds up the port.
     let start = Instant::now();
     let many: Vec<TcpStream> =
         (0..200).map(|_| TcpStream::connect((Ipv4Addr::LOCALHOST, r.streams_port())).unwrap()).collect();

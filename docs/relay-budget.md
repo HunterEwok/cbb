@@ -103,8 +103,9 @@ What the relay guarantees:
   (`LimitNOFILE=65536` in its unit, `ulimits` in the compose file), logs what it got, and with
   fewer holds fewer tunnel connections and registers fewer devices to match
   (`limits_fit_the_open_files`). A connection to the
-  tunnel's loopback port that the hub did not make waits 100 ms beside the others, at most
-  256 at once, and is closed (`stream_port_knows_only_the_hub_s_connections`).
+  tunnel's loopback port that the hub did not make is closed at once: the hub notes the
+  tunnel address of each connection it makes before making it
+  (`stream_port_knows_only_the_hub_s_connections`).
 - **Handshakes**: a WireGuard initiation costs the relay a Diffie-Hellman only once its mac1,
   under the relay's key, holds, so packets without one cost a hash and never put it under
   load; past 512 Diffie-Hellmans a second, an initiation from an address no client last spoke

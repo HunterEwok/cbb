@@ -165,6 +165,33 @@ pub const MAX_PSKS: usize = cbb_core::hubkey::KEEP + cbb_core::hubkey::KEEP_HAND
 /// from, by the port it came from there, while it lasts.
 type Dialed = Arc<Mutex<HashMap<u16, Ipv6Addr>>>;
 
+/// Dials the app's loopback port for a connection from the tunnel address
+/// from, noting from by the port it dials from before it connects: the app
+/// looks the address up as soon as it accepts, which may be before the dial
+/// returns here.
+fn dial_noted(port: u16, from: Ipv6Addr, dialed: &Dialed) -> std::io::Result<TcpStream> {
+    use socket2::{Domain, Protocol, SockAddr, Socket, Type};
+    let s = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
+    s.bind(&SockAddr::from(SocketAddr::from(([127, 0, 0, 1], 0))))?;
+    let own = s
+        .local_addr()?
+        .as_socket()
+        .map(|a| a.port())
+        .ok_or_else(|| std::io::Error::other("the dial's own address is no IP address"))?;
+    if let Ok(mut d) = dialed.lock() {
+        d.insert(own, from);
+    }
+    match s.connect_timeout(&SockAddr::from(SocketAddr::from(([127, 0, 0, 1], port))), DIAL_TIMEOUT) {
+        Ok(()) => Ok(s.into()),
+        Err(e) => {
+            if let Ok(mut d) = dialed.lock() {
+                d.remove(&own);
+            }
+            Err(e)
+        }
+    }
+}
+
 /// The loopback port a connection through the tunnel from a client's address
 /// goes to, or None to close it.
 pub type Target = Arc<dyn Fn(Ipv6Addr) -> Option<u16> + Send + Sync>;
@@ -1042,7 +1069,7 @@ impl Pump {
                 self.drop_listening(l.handle);
                 continue;
             };
-            let local = match TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), DIAL_TIMEOUT) {
+            let local = match dial_noted(port, from, &self.dialed) {
                 Ok(c) if c.set_nonblocking(true).is_ok() => c,
                 Ok(_) | Err(_) => {
                     (self.log)(&format!("cbb: the hub: a connection from {from} cannot reach the app on port {port}"));
@@ -1051,9 +1078,6 @@ impl Pump {
                 }
             };
             let _ = local.set_nodelay(true);
-            if let (Ok(a), Ok(mut d)) = (local.local_addr(), self.dialed.lock()) {
-                d.insert(a.port(), from);
-            }
             self.bridges.push(Bridge {
                 local,
                 handle: l.handle,

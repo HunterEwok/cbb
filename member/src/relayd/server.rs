@@ -10,7 +10,7 @@
 //! protocol's TLS then runs between two members, and the relay passes only
 //! its ciphertext.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -103,10 +103,6 @@ impl AcceptErrors {
 /// again.
 pub(super) const ACCEPT_BACKOFF: Duration = Duration::from_millis(50);
 
-/// How long a connection to the relay's loopback port waits for the hub
-/// to note its tunnel address, and how many wait at once.
-const STREAM_ADDR_WAIT: Duration = Duration::from_millis(100);
-const MAX_WAITING_STREAMS: usize = 256;
 pub const MAX_REQUESTS_GROUP: usize = 32;
 
 /// How often the list of refused groups is read again.
@@ -774,47 +770,26 @@ impl Inner {
     /// member port.
     fn accept_streams(self: Arc<Self>, ln: TcpListener) {
         let _ = ln.set_nonblocking(true);
-        // The connections whose tunnel address the hub has not noted yet,
-        // since when: the hub notes it as soon as its connection is made,
-        // so a connection waits a moment, without holding up the others.
-        let mut waiting: VecDeque<(TcpStream, u16, Instant)> = VecDeque::new();
         let mut failed = AcceptErrors::default();
         while !self.stopping() {
-            let mut busy = false;
             match ln.accept() {
+                // The tunnel address names the device: the port is on the
+                // loopback, where every local user may connect, and the hub
+                // notes the address of each connection it makes before the
+                // connection is made, so one without an address is not the
+                // hub's and is closed. A connection is served only while its
+                // device is registered and within its share.
                 Ok((c, from)) => {
-                    busy = true;
-                    if waiting.len() >= MAX_WAITING_STREAMS
-                        && let Some((old, _, _)) = waiting.pop_front()
-                    {
-                        let _ = old.shutdown(Shutdown::Both);
+                    let addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(from.port())));
+                    match addr {
+                        Some(a) => self.take_stream(c, a),
+                        None => {
+                            let _ = c.shutdown(Shutdown::Both);
+                        }
                     }
-                    waiting.push_back((c, from.port(), Instant::now()));
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(2)),
                 Err(e) => failed.note(&self.cfg.log, "its tunnel's connections", &e),
-            }
-            // The tunnel address names the device: the port is on the
-            // loopback, where every local user may connect, and a
-            // connection the hub did not make has none, and is closed once
-            // its moment is over. A connection is served only while its
-            // device is registered and within its share.
-            for _ in 0..waiting.len() {
-                let Some((c, port, since)) = waiting.pop_front() else { break };
-                let addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(port)));
-                match addr {
-                    Some(a) => {
-                        busy = true;
-                        self.take_stream(c, a);
-                    }
-                    None if since.elapsed() >= STREAM_ADDR_WAIT => {
-                        let _ = c.shutdown(Shutdown::Both);
-                    }
-                    None => waiting.push_back((c, port, since)),
-                }
-            }
-            if !busy {
-                std::thread::sleep(Duration::from_millis(2));
             }
         }
     }

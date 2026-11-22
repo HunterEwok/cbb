@@ -913,10 +913,11 @@ made with 0.5 is set up again once. The details follow.
 - A starting hub keeps the requests for its offer that come before it serves and answers
   them once it does, so its first clients take the offer with the keys for the forwarder's
   period (`TestHubKeyRotation`).
-- A hub takes a guest's connection through an invitation's tunnel also when the connection
-  reaches it before the hub has noted where it came from; such a connection was closed at
-  once, so joining by an invitation through a slow hub, such as a phone, could fail with
-  "the handshake with the member failed".
+- A hub notes where in its tunnel a connection to its own ports comes from before it makes
+  the connection, not after: a guest's connection through an invitation's tunnel could be
+  taken first and was then closed, so joining by an invitation through a slow hub, such as a
+  phone, could fail with "the handshake with the member failed". The relay closes a
+  connection to its tunnel port that the hub did not make at once, with no wait.
 - Sync away from home no longer keeps showing that the hub does not answer through the
   tunnel once the hub is connected by another way.
 - The Rust member no longer can deadlock when a renewed certificate and new records come at
