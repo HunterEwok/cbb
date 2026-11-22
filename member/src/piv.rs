@@ -104,14 +104,8 @@ fn command(c: &mut dyn Card, ins: u8, p1: u8, p2: u8, mut data: &[u8]) -> Result
 /// documentation, and no secret; cbb uses it only to find out whether a
 /// card still has it (`piv::recovery`). Computed here, once for all of
 /// cbb's Rust, rather than written out.
-pub const fn factory_management_key() -> [u8; 24] {
-    let mut k = [0u8; 24];
-    let mut i = 0;
-    while i < 24 {
-        k[i] = (i % 8) as u8 + 1;
-        i += 1;
-    }
-    k
+pub fn factory_management_key() -> [u8; 24] {
+    core::array::from_fn(|i| (i % 8) as u8 + 1)
 }
 
 /// Selects the PIV application.
@@ -197,11 +191,6 @@ pub fn sign(c: &mut dyn Card, slot: u8, public: &[u8], digest: &[u8; 32]) -> Res
 
 /// The management key's slot.
 const MANAGEMENT_SLOT: u8 = 0x9b;
-/// The management key a YubiKey has from the factory (3DES before firmware
-/// 5.7, AES-192 from it): the bytes 1 to 8 three times, as Yubico publishes
-/// it. It is no secret; it is made from that rule rather than written out,
-/// as the kits' Piv makes it.
-pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = factory_management_key();
 
 /// The recovery key's policies: the PIN and a touch before each signature.
 const PIN_ALWAYS: u8 = 0x03;
@@ -966,7 +955,7 @@ pub(crate) mod tests {
     /// A card whose slot 84 holds a key and its certificate; 82 holds a key
     /// of something else.
     pub fn new_card(n: u8) -> Shared {
-        let mut f = Fake { tries: 3, management: (0x0b, DEFAULT_MANAGEMENT_KEY.to_vec()), ..Fake::default() };
+        let mut f = Fake { tries: 3, management: (0x0b, factory_management_key().to_vec()), ..Fake::default() };
         let k = key(n);
         let c = cert(&k);
         f.slots.insert(0x84, (k, Some(c)));
@@ -1073,7 +1062,7 @@ pub(crate) mod tests {
     /// The factory key is Yubico's published one.
     #[test]
     fn factory_management_key_is_yubicos() {
-        let hex: String = DEFAULT_MANAGEMENT_KEY.iter().map(|b| format!("{b:02x}")).collect();
+        let hex: String = factory_management_key().iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(hex, "010203040506070801020304050607080102030405060708");
     }
 
@@ -1087,10 +1076,10 @@ pub(crate) mod tests {
         verify(&mut card, "123456").unwrap();
         assert_eq!(generate(&mut card, 0x83).unwrap_err().message(), "the YubiKey wants its management key first");
         // The factory key with its last byte changed is refused.
-        let mut wrong = DEFAULT_MANAGEMENT_KEY;
+        let mut wrong = factory_management_key();
         wrong[23] ^= 1;
         assert_eq!(authenticate(&mut card, &wrong).unwrap_err().message(), MANAGEMENT_KEY);
-        authenticate(&mut card, &DEFAULT_MANAGEMENT_KEY).unwrap();
+        authenticate(&mut card, &factory_management_key()).unwrap();
         let slot = free_slot(&mut card).unwrap();
         assert_eq!(slot, 0x83, "82 and 84 are taken");
         let point = generate(&mut card, slot).unwrap();
@@ -1126,7 +1115,7 @@ pub(crate) mod tests {
             let mut old = new_card(15);
             old.0.lock().unwrap().management.0 = alg;
             select(&mut old).unwrap();
-            assert_eq!(authenticate(&mut old, &DEFAULT_MANAGEMENT_KEY).unwrap_err().message(), OLD_FIRMWARE);
+            assert_eq!(authenticate(&mut old, &factory_management_key()).unwrap_err().message(), OLD_FIRMWARE);
         }
         // Every slot taken.
         let mut full = new_card(16);

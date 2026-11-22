@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(back.digest(), set.digest());
         assert_eq!(back.root(), set.root());
         // Under another local key the pin does not hold: refused whole.
-        assert!(load(&dir, &[7; 32]).is_err());
+        assert!(load(&dir, &cbb_core::certs::sha256(b"another local key")).is_err());
         std::fs::write(dir.join(FILE_NAME), b"not cbor").unwrap();
         assert!(load(&dir, &local).is_err());
         std::fs::remove_dir_all(&dir).unwrap();

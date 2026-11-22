@@ -103,7 +103,7 @@ fn measure(spec: groupgen::Spec) -> Size {
     let g = groupgen::build(spec);
     let build = cost(|| g.set());
     let (set, _) = g.set();
-    let local = [7u8; 32];
+    let local = cbb_core::certs::sha256(b"a local key");
     let marked: Vec<_> = set.marked(&local).into_iter().map(|(r, m)| (r.clone(), Some(m))).collect();
     // A start as a member makes it: the store's records, its lists, and
     // the rounds a change of root takes to settle.

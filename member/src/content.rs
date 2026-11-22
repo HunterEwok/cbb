@@ -255,9 +255,8 @@ impl Store {
     /// with where it is.
     pub fn open_into(
         &self,
-        sum: Option<&[u8]>,
+        blob: Option<(&[u8], BlobKey<'_>)>,
         manifest: &Manifest,
-        key: BlobKey<'_>,
         out: &Path,
     ) -> Result<Vec<(Part, PathBuf)>> {
         // The folder it goes in, such as a phone's Downloads/CBB, may not
@@ -266,7 +265,7 @@ impl Store {
             fs::create_dir_all(parent).context(format!("make {}", parent.display()))?;
         }
         fs::create_dir(out).context(format!("make {}", out.display()))?;
-        let res = self.open_parts(sum, manifest, key, out);
+        let res = self.open_parts(blob, manifest, out);
         if res.is_err() {
             let _ = fs::remove_dir_all(out);
         }
@@ -275,15 +274,14 @@ impl Store {
 
     fn open_parts(
         &self,
-        sum: Option<&[u8]>,
+        blob: Option<(&[u8], BlobKey<'_>)>,
         manifest: &Manifest,
-        key: BlobKey<'_>,
         out: &Path,
     ) -> Result<Vec<(Part, PathBuf)>> {
         let total = manifest.size.max(0) as u64;
-        let mut plain = match (sum, total) {
+        let mut plain = match (blob, total) {
             (_, 0) => None,
-            (Some(sum), _) => {
+            (Some((sum, key)), _) => {
                 let f = File::open(self.path(sum)).context("the copy's blob is not here")?;
                 Some(Opened { f, key, i: 0, segments: total.div_ceil(SEGMENT as u64), buf: Vec::new(), at: 0 })
             }
@@ -535,12 +533,12 @@ mod tests {
         assert_eq!(store.held(&blob.sha256), Some(blob.size as u64));
         // The folder it goes in is made too, as a phone's Downloads/CBB.
         let out = dir.join("Downloads/CBB/out");
-        let placed = store.open_into(Some(&blob.sha256), &m, BlobKey::Copy(&key), &out).unwrap();
+        let placed = store.open_into(Some((&blob.sha256, BlobKey::Copy(&key))), &m, &out).unwrap();
         assert_eq!(placed.len(), 3);
         assert_eq!(std::fs::read(out.join("trip/big.bin")).unwrap(), big);
         assert_eq!(std::fs::read(out.join("trip/note.txt")).unwrap(), b"hello");
         // Under another key nothing opens, and the folder is gone.
-        assert!(store.open_into(Some(&blob.sha256), &m, BlobKey::Copy(&new_key()), &dir.join("bad")).is_err());
+        assert!(store.open_into(Some((&blob.sha256, BlobKey::Copy(&new_key()))), &m, &dir.join("bad")).is_err());
         assert!(!dir.join("bad").exists());
         // A range of it reads as served.
         let all = std::fs::read(dir.join("content").join(super::hex(&blob.sha256))).unwrap();
@@ -567,7 +565,7 @@ mod tests {
             )
             .unwrap();
         let placed = store
-            .open_into(blob.as_ref().map(|b| b.sha256.as_slice()), &m, BlobKey::Copy(&key), &dir.join("o"))
+            .open_into(blob.as_ref().map(|b| (b.sha256.as_slice(), BlobKey::Copy(&key))), &m, &dir.join("o"))
             .unwrap();
         assert_eq!(std::fs::read(&placed[0].1).unwrap(), png);
         let _ = std::fs::remove_dir_all(&dir);

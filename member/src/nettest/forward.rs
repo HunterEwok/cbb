@@ -11,7 +11,7 @@ use std::net::{Ipv4Addr, TcpListener};
 
 use super::*;
 use crate::nettest::blind::Blind;
-use crate::nettest::forwarder::{self as fake, Answer, Forwarder, MASK};
+use crate::nettest::forwarder::{self as fake, Answer, Forwarder, mask};
 use crate::nettest::wait_for;
 use v3::Register;
 
@@ -55,7 +55,7 @@ fn logger() -> (Logs, Log) {
 fn open_hello(p: &[u8], key: &[u8; 32]) -> (u64, u64) {
     let mut h = p[NONCE..NONCE + HELLO].to_vec();
     let nonce: &[u8; NONCE] = p[..NONCE].try_into().unwrap();
-    ChaCha20::new((&MASK).into(), nonce.into()).apply_keystream(&mut h);
+    ChaCha20::new((&mask()).into(), nonce.into()).apply_keystream(&mut h);
     assert_eq!(h[..4], [MSG_HELLO, 0, 0, 0]);
     let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(key).unwrap();
     m.update(&h[..20]);
@@ -170,7 +170,7 @@ fn refusals() {
 }
 
 fn fake_registered(vless: Option<v3::Way>) -> v3::Registered {
-    v3::Registered { id: 1, mask: MASK, vless }
+    v3::Registered { id: 1, mask: mask(), vless }
 }
 
 /// A hub with a VLESS user ID claims it and learns the forwarder's VLESS

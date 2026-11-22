@@ -603,7 +603,8 @@ fn a_removal_of_an_admin_key_stays_when_its_signer_is_taken_back() {
             check(&set, &format!("mode {mode}, checkpoint {i}"));
         }
         // A member restored from what the root saves.
-        let saved: Vec<Record> = set.marked(&[7; 32]).into_iter().map(|(r, _)| r.clone()).collect();
+        let saved: Vec<Record> =
+            set.marked(&cbb_core::certs::sha256(b"a local key")).into_iter().map(|(r, _)| r.clone()).collect();
         let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
         let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
         check(&back, &format!("mode {mode}, restored"));

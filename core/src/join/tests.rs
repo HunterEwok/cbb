@@ -1616,7 +1616,7 @@ fn redigest(w: &mut Welcome, root: &Key, recovery: &crate::records::Recovery) {
 /// message 67 sealed with the session's ISK and opened, each part as a
 /// `records` message into the assembly, the whole Welcome back.
 fn carried(w: &Welcome, parts: &[crate::records::sync::Part<'_>]) -> Welcome {
-    let isk = [0x15u8; 64];
+    let isk: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"isk")[i % 32]);
     let frame = welcome::frame(&[0x7b; 64], &w.encode(), &isk).unwrap();
     let opened = welcome::open(&frame[4..], &isk).unwrap();
     let mut a = welcome::Assembly::new(Welcome::decode(opened).unwrap(), 1_000).unwrap();
@@ -1700,7 +1700,8 @@ fn the_welcome_tag_binds_every_byte() {
     // A small budget, so that the set comes in parts and field 13 is there.
     let (w, parts) = Welcome::build_within(&set, &st, &k("phone c").hash, &slate.hash, 1, 1024).unwrap();
     assert!(w.parts >= 1);
-    let (isk, other) = ([0x15u8; 64], [0x16u8; 64]);
+    let isk: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"isk")[i % 32]);
+    let other: [u8; 64] = core::array::from_fn(|i| crate::certs::sha256(b"another isk")[i % 32]);
     let bytes = w.encode();
     let good = welcome::frame(&[0x7b; 64], &bytes, &isk).unwrap();
     assert_eq!(welcome::open(&good[4..], &isk), Ok(&bytes[..]));
