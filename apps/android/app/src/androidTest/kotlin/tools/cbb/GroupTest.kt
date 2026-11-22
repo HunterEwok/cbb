@@ -271,7 +271,17 @@ class GroupTest {
         try {
             runBlocking { model.remove(id) }
             assertEquals("removing says ${model.message}", R.string.removed, model.message?.text)
-            until(60, "$second says it was removed") { Bench.run(second, "cbb status").contains("removed from the group") }
+            // A removed device need not learn of it (the owner, 2026-11-20): the group refuses it.
+            until(60, "$second gone from the phone's devices: ${model.group.devices.map { it.name }}") {
+                runBlocking { model.refresh() }
+                model.group.devices.none { it.id == id }
+            }
+            val late = "cbb-bench phone A6 from the removed computer ${System.currentTimeMillis()}"
+            runCatching { Bench.copy(second, late) }
+            Thread.sleep(10_000)
+            val pasted = runCatching { Bench.run(Bench.PC, "cbb paste -terminal 2>&1") }.getOrElse { it.toString() }
+            assertFalse("${Bench.PC} took a copy from the removed $second: $pasted", pasted.contains(late))
+            assertFalse("the phone took a copy from the removed $second: ${model.group.latestCopy}", model.group.latestCopy?.text == late)
             runBlocking { model.refresh() }
             Thread.sleep(2_000)
             val removed = context.getString(R.string.event_removed, "bench-second")
