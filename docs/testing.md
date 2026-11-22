@@ -150,6 +150,16 @@ on macOS, the Android phone core and the service tests' build) keep their build 
 they compile only the crates it changed; another pull request never reads it, and the release
 and F-Droid builds build from nothing.
 
+## Before and beside CI
+
+A change is tested where it can be before it is pushed: the cloud sessions run everything that
+runs on Linux (the Rust and Go tests, the service tests on the Rust `cbb`, the e2e, the
+format's vectors). Right after the push, while CI runs, a maintainer's macOS machine runs what
+only it can (the Apple builds and their unit tests, the Android app and its emulator suite, Go
+with `-race` on macOS) and a Windows machine runs Go and Rust on Windows and the installer. They
+answer in minutes what CI answers in most of an hour, so a red result is fixed before CI ends;
+CI stays the gate before the merge.
+
 ## Time
 
 Rules that live for days are walked with a moved clock, never waited for.
