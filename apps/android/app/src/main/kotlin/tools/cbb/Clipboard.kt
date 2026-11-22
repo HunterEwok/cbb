@@ -12,7 +12,6 @@ import android.os.Looper
 import android.os.PersistableBundle
 import androidx.core.content.FileProvider
 import tools.cbb.kit.Member
-import tools.cbb.kit.SyncEngine
 import java.io.File
 
 /**
@@ -21,6 +20,9 @@ import java.io.File
  * clipboard without taps").
  */
 object Clipboard {
+    /** How long a secret is usable after its copy. */
+    const val SECRET_TTL_MS = 60_000L
+
     /** Counts the changes of the clipboard that the app learns of; a secret's timer compares it. */
     @Volatile
     private var changes = 0L
@@ -164,7 +166,7 @@ object Clipboard {
                 // text it wrote), so that it does not stay for good.
                 val now = read(context)
                 if (if (now != null) now == text else changes == written) cm.clearPrimaryClip()
-            }, SyncEngine.SECRET_TTL_MS)
+            }, SECRET_TTL_MS)
         }
     }
 }

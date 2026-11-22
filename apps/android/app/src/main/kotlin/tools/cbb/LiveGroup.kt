@@ -11,12 +11,8 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.provider.Settings as SystemSettings
 import android.util.Log
-import tools.cbb.kit.alerts
-import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.AndroidAttestation
-import tools.cbb.kit.CertificateInfo
 import tools.cbb.kit.CertificateSigner
-import tools.cbb.kit.EntriesFile
 import tools.cbb.kit.Core
 import tools.cbb.kit.CoreMember
 import tools.cbb.kit.CorePairing
@@ -25,23 +21,12 @@ import tools.cbb.kit.Notice
 import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Discovery
 import tools.cbb.kit.FoundMember
-import tools.cbb.kit.CredentialRefresh
-import tools.cbb.kit.CredentialStore
-import tools.cbb.kit.Commands
-import tools.cbb.kit.GroupCertificates
-import tools.cbb.kit.JoinCode
 import tools.cbb.kit.LocalAddresses
 import tools.cbb.kit.Media
 import tools.cbb.kit.Member
-import tools.cbb.kit.Pairing
-import tools.cbb.kit.PairingJoiner
-import tools.cbb.kit.PairingMember
 import tools.cbb.kit.PhoneGroup
 import tools.cbb.kit.Records as KitRecords
 import tools.cbb.kit.RecoveryCard
-import tools.cbb.kit.ServerCredentials
-import tools.cbb.kit.SyncEngine
-import tools.cbb.kit.TLSTransport
 import tools.cbb.kit.WhyReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +41,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -203,6 +190,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     private val lock = Any()
     private var state: PhoneGroup? = runCatching { PhoneGroup.load(file) }.getOrNull()
+
+    /**
+     * The app's folder holds a group made before 0.6, which this version
+     * no longer runs (D-126): the app says so and offers to leave it; its
+     * files stay until the person leaves.
+     */
+    @Volatile var before06: Boolean = runCatching { PhoneGroup.load(file) }.exceptionOrNull() is PhoneGroup.Before06
+        private set
     private var node: CoreMember? = null
 
     /** How many nodes this process made, and what made the current one, for the tests' messages; guarded by lock. */
@@ -235,22 +230,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** The hub's mDNS service while it runs on a home network. */
     private var publisher: NsdPublisher? = null
 
-    /** On a group of 0.6, what the user chose for the hub; the Live member runs away, the hub and the relay (AwayOn06). */
+    /** What the user chose for the hub; the Live member runs away, the hub and the relay (AwayOn06). */
     private val away06 = AwayOn06(SealedFile(File(file.parentFile, "hub06.bin"), "cbb.hub")) { what, e -> Log.w(TAG, what, e) }
-
-    /** The group's server credentials (docs/protocol.md, section 18), beside the group; read when first needed, under the lock. */
-    private val credentialsFile = File(file.parentFile, "credentials.json")
-    private var credentialStore: CredentialStore? = null
-
-    /**
-     * The newest signed entry points the computers sent (docs/protocol.md,
-     * section 16, "Entry points"), which the node keeps in its folder; read
-     * afresh each time, as the node writes them.
-     */
-    private val entries: EntriesFile get() = EntriesFile(File(nodeDir, "entries.json"), log = { Log.w(TAG, it) })
-
-    /** Brings the credentials up to date, one refresh at a time, off the node's threads. */
-    private val credentialWork = Executors.newSingleThreadExecutor { r -> Thread(r, "credentials").apply { isDaemon = true } }
 
     /** Waits out the hub's grace in the background before it stops (updateHub06). */
     private val hubGrace = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "hub grace").apply { isDaemon = true } }
@@ -320,29 +301,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     val syncOffUntilMS: Long?
         get() = if (syncMode != "own") null else (synchronized(muteLock) { readMute("sync") } ?: 0L)
 
-    /** The IDs of the commands carried out, until they expire: the replay cache (docs/protocol.md, section 15). */
-    private val commands = mutableMapOf<String, Long>()
-
-    /** When the app started: the replay cache starts empty, so a command signed before then may have been carried out already. */
-    private val startedMS = System.currentTimeMillis()
-
     /** The node, read under the lock; its methods are called outside it. */
     private val currentNode: CoreMember? get() = synchronized(lock) { node }
 
     /** Asks for the fingerprint, the face or the screen lock before each signature of the root or admin key. */
     private val authenticator = Authenticator()
-
-    /**
-     * What came due for the root or admin key while it could not ask: the
-     * peers' chains whose certificates need renewing, by their leaf, and on
-     * the root the attestations peers sent, by device. [signDue] signs them
-     * when the app is open.
-     */
-    private val dueRenewals = ConcurrentHashMap<String, Pair<String, List<ByteArray>>>()
-    private val dueProofs = ConcurrentHashMap<String, Pair<List<ByteArray>, Member.Evidence>>()
-
-    /** Whether the root's credential refresh found the period due (docs/protocol.md, section 18). */
-    @Volatile private var periodDue = false
 
     /** The activity that shows the authentication prompt; null while the app is in the background. */
     @Volatile var activity: Context? = null
@@ -366,54 +329,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     val isAdmin: Boolean get() = synchronized(lock) { state?.isAdmin ?: true }
 
-    /** Whether the group is on the records of 0.6. */
-    val isV06: Boolean get() = synchronized(lock) { state?.isV06 ?: false }
-
     /** Whether this phone holds the group's root, which ends conflicts. */
     val isRoot: Boolean get() = synchronized(lock) { state?.isRoot ?: false }
-
-    /** Whether the group's root handed the group to this phone (cbb handover), which has not taken it yet. */
-    val handedOver: Boolean get() = synchronized(lock) { state?.handedToMe == true }
-
-    /** What the group's records stop and what ends it (GroupAlert). */
-    val alerts: List<GroupAlert> get() = synchronized(lock) { state?.records?.alerts.orEmpty() }
 
     /** Every device of the group, this phone included. */
     val devices: List<Device>
         get() {
             // The node is asked outside the lock.
             val (g, n) = synchronized(lock) { (state ?: return emptyList()) to node }
-            if (g.isV06) return devices06(g, n)
-            val peers = n?.let { runCatching { it.peers() }.getOrNull() }.orEmpty()
-            val online = peers.map { it.device }.toSet()
-            val reached = peers.flatMap { it.reach }.toSet() - online
-            val offers = peers.mapNotNull { p -> p.adminKey?.let { p.device to it } }.toMap()
-            val stores = peers.filter { it.keyStore.isNotEmpty() }.associate { it.device to it.keyStore }
-            val infos = peers.mapNotNull { p -> p.info?.let { p.device to it } }.toMap()
-            val modes = peers.filter { it.mode.isNotEmpty() }.associate { it.device to it.mode }
-            val acts = peers.associate { it.device to it.actions }
-            val now = System.currentTimeMillis()
-            val mutes = peers.mapNotNull { p -> p.mutedUntil(now)?.let { p.device to it } }.toMap()
-            val root = g.records.rootDevice
-            return g.devices.map {
-                Device(
-                    id = it.id, name = it.name, online = it.id == g.device || it.id in online || it.id in reached, role = it.role, caps = it.caps, os = it.os, isSelf = it.id == g.device,
-                    admin = it.admin || it.id == root, isRoot = it.id == root,
-                    canMakeAdmin = g.isRoot && it.id != root && !it.admin && !it.frozen && (it.role == "phone" || it.can("admin")) &&
-                        offers[it.id] != null,
-                    keysInFile = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.FILE,
-                    rootless = KitRecords.storeOf(stores[it.id] ?: it.store, it.role) == KitRecords.ROOTLESS,
-                    frozen = it.frozen,
-                    device = if (it.id == g.device) ownDevice.cleaned else infos[it.id],
-                    mode = if (it.id == g.device) syncMode else modes[it.id],
-                    actions = acts[it.id].orEmpty(),
-                    mayHub = g.records.mayHost(it.id),
-                    forwardOnly = it.forwardOnly,
-                    throughHub = it.id != g.device && it.id !in online && it.id in reached,
-                    muted = Hold.of(if (it.id == g.device) mutedUntilMS else mutes[it.id]),
-                    syncOff = if (it.id == g.device) syncOffUntilMS?.let(Hold::of) else null,
-                )
-            }
+            return devices06(g, n)
         }
 
     val computers: List<Device> get() = devices.filter { !it.isSelf }
@@ -427,9 +351,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     private fun devices06(g: PhoneGroup, n: CoreMember?): List<Device> {
         val gs = n?.let { runCatching { it.group() }.onFailure { e -> Log.w(TAG, "the member's group", e) }.getOrNull() } ?: return emptyList()
-        g.admin06 = gs.me.admin
+        g.admin = gs.me.admin
         val peers = runCatching { n.peers() }.getOrNull().orEmpty().associateBy { it.device }
-        val now = System.currentTimeMillis()
         return gs.devices.map {
             val p = peers[it.device]
             val self = it.device == g.device
@@ -437,9 +360,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 id = it.device, name = it.name, online = self || p != null, role = if (it.role == "computer") "member" else it.role,
                 os = it.os.ifEmpty { null }, isSelf = self, admin = it.admin, isRoot = it.device == gs.rootDevice,
                 keysInFile = p?.keyStore == KitRecords.FILE, frozen = it.frozen,
-                device = if (self) ownDevice.cleaned else p?.info, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
-                actions = p?.actions.orEmpty(), hub = if (it.hub) HubMark.HUB else null,
-                muted = Hold.of(if (self) mutedUntilMS else p?.mutedUntil(now)),
+                device = if (self) ownDevice.cleaned else null, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
+                hub = if (it.hub) HubMark.HUB else null,
+                muted = if (self) Hold.of(mutedUntilMS) else if (p?.muted == true) Hold(null) else null,
                 syncOff = if (self) syncOffUntilMS?.let(Hold::of) else null,
             )
         }
@@ -458,10 +381,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             val root = newRootKey("", R.string.reason_add, Prompts(1))
             val member = memberSigner()
             nodeDir.mkdirs()
-            val made = CorePairing.newGroup06(
+            val made = CorePairing.newGroup(
                 nodeDir, PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, root.publicKeyDER, member.publicKeyDER, root::signDigest,
             )
-            adopt(PhoneGroup.of06(made.device, made.group, root = true))
+            adopt(PhoneGroup.of(made.device, made.group, root = true))
             Core.RecoverySheet(made.recoveryQR, made.recoveryText.flatMap { it.split(" ") }.joinToString("-"), ByteArray(0))
         }
     }
@@ -476,7 +399,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun openWindow(shown: (qr: String, digits: String) -> Unit): String {
         val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
-        if (!g.isV06 || !g.isAdmin) throw Failure(Failure.Kind.NO_GROUP)
+        if (!g.isAdmin) throw Failure(Failure.Kind.NO_GROUP)
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         val signer = caSigner(R.string.reason_add, prompts = Prompts(1))
         val (w, port) = withContext(Dispatchers.IO) {
@@ -537,7 +460,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                         withContext(Dispatchers.IO) {
                             synchronized(lock) {
                                 newDeviceMode()
-                                state = PhoneGroup.of06(st.device, st.group, root = false).also { it.save(file) }
+                                state = PhoneGroup.of(st.device, st.group, root = false).also { it.save(file) }
                             }
                             startSync()
                         }
@@ -552,25 +475,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * On a group of 0.6, sync away from home as the Live member runs it:
-     * a hub, a client and its hub, the link to the group's relay; null on
-     * a group of 0.5, while the phone does not sync or away was never on.
+     * Sync away from home as the Live member runs it: a hub, a client and
+     * its hub, the link to the group's relay; null while the phone does not
+     * sync or away was never on.
      */
     val awayState06: CoreMember.AwayState?
-        get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.awayStatus() }.onFailure { Log.w(TAG, "reading where sync away from home stands", it) }.getOrNull() }
+        get() = currentNode?.let { n -> runCatching { n.awayStatus() }.onFailure { Log.w(TAG, "reading where sync away from home stands", it) }.getOrNull() }
 
-    /** On a group of 0.6, the forwarder the group's root set for this phone as a hub; null while it set none. */
+    /** The forwarder the group's root set for this phone as a hub; null while it set none. */
     val rootForwarder06: CoreMember.RootForwarder?
-        get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.rootForwarder() }.onFailure { Log.w(TAG, "reading the root's forwarder", it) }.getOrNull() }
+        get() = currentNode?.let { n -> runCatching { n.rootForwarder() }.onFailure { Log.w(TAG, "reading the root's forwarder", it) }.getOrNull() }
 
-    /** On a group of 0.6, what the user chose for the hub; null on a phone that is no admin, which cannot be a hub. */
-    val hub06: AwayOn06.Prefs? get() = if (isV06 && isAdmin) away06.hub else null
+    /** What the user chose for the hub; null on a phone that is no admin, which cannot be a hub. */
+    val hub06: AwayOn06.Prefs? get() = if (isAdmin) away06.hub else null
 
     /** Whether the member reaches device now, at home or by any way. */
     fun reaches(device: String): Boolean = currentNode?.let { n -> runCatching { n.peers() }.getOrNull() }.orEmpty().any { it.device == device }
-
-    /** Whether this phone holds no signed entry points that have not expired (docs/protocol.md, section 16). */
-    val entriesStale: Boolean get() = entries.current == null
 
     /** Whether the app is in front now, so the hub's status says it waits for it. */
     val inForeground: Boolean get() = foreground
@@ -588,26 +508,23 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         refreshHub()
     }
 
-    /**
-     * On a group of 0.6, makes this phone a hub of the group, or stops it
-     * being one; a phone of a group of 0.5 is never a hub (D-123).
-     */
+    /** Makes this phone a hub of the group, or stops it being one. */
     fun setPhoneHub(on: Boolean) {
-        if (!isV06 || !isAdmin) return
+        if (!isAdmin) return
         away06.setOn(on, currentNetwork())
         if (!on) unhub06() else updateHub06(throwing = true)
     }
 
     /** Sets how the hub's tunnel hides, for the member of 0.6 to serve with; on the caller's IO thread. */
     fun setHubDisguise(d: HubOnPhone.Disguise) {
-        if (!isV06 || !isAdmin) return
+        if (!isAdmin) return
         away06.setDisguise(d)
         updateHub06(throwing = true)
     }
 
     /** Lets the hub run in the foreground service while the app is in the background. */
     fun setHubInBackground(on: Boolean) {
-        if (isV06 && isAdmin) away06.setBackground(on)
+        if (isAdmin) away06.setBackground(on)
         refreshHub()
     }
 
@@ -618,13 +535,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     fun addHomeNetwork(): Boolean {
         val n = currentNetwork() ?: return false
-        if (isV06 && isAdmin) away06.addHome(n)
+        if (isAdmin) away06.addHome(n)
         refreshHub()
         return true
     }
 
     /** Whether the phone is on one of the hub's home networks now. */
-    val onHomeNetwork: Boolean get() = isV06 && away06.isHome(currentNetwork())
+    val onHomeNetwork: Boolean get() = away06.isHome(currentNetwork())
 
     /**
      * The network the phone is on, as the hub remembers home networks
@@ -644,11 +561,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     private fun refreshHub() = hubWork.execute {
-        if (isV06) runCatching { updateHub06(throwing = false) }
+        runCatching { updateHub06(throwing = false) }
     }
 
     /**
-     * On a group of 0.6, has the Live member serve as a hub while the user
+     * Has the Live member serve as a hub while the user
      * turned it on and the app is in front, or in the background when the
      * user lets it; otherwise the hub stops, and its clients move to the
      * group's next hub. On a home network of the hub it publishes itself
@@ -707,7 +624,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         synchronized(lock) { unhubLater.also { unhubLater = null } }?.cancel(false)
     }
 
-    /** On a group of 0.6, stops the Live member serving as a hub, when it does. */
+    /** Stops the Live member serving as a hub, when it does. */
     private fun unhub06() {
         stopHome()
         val n = currentNode ?: return
@@ -729,8 +646,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     fun why(): List<WhyReason> {
         val n = synchronized(lock) { node } ?: return listOf(WhyReason("not_in_group", "stop"))
-        // The member of 0.6 runs the tunnel itself and says where it stands;
-        // a phone of a group of 0.5 syncs at home only (D-123).
+        // The member runs the tunnel itself and says where it stands.
         return runCatching { n.why(null) }.getOrDefault(emptyList())
     }
 
@@ -756,9 +672,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         unlisten(CoreMember.Listen.HOME)
     }
 
-    /** On a group of 0.6, turns sync away from home on or off in the member; a group of 0.5 has none (D-123). */
+    /** Turns sync away from home on or off in the member. */
     fun setAwayFromHome(on: Boolean) {
-        if (!isV06) return
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         n.setAway(on)
     }
@@ -862,12 +777,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * unlocks the group's key. ended gets the admitted device's name, or why
      * the invitation ended without one.
      */
-    fun invite(lifetimeS: Int, ask: suspend (PairingMember.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
+    fun invite(lifetimeS: Int, ask: suspend (CorePairing.Inviting.Request) -> Boolean, ended: (Result<String>) -> Unit): Invitation {
         val g = synchronized(lock) { state }?.takeIf { it.isAdmin } ?: throw Failure(Failure.Kind.NOT_ADMIN)
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         // Each signature asks the user, after they confirmed the device in ask.
         val ca = authorized(signingAlias(g), R.string.reason_add)
-        val inviting = CorePairing.Inviting(n, ca.publicKeyDER, g.adminCA, lifetimeS, sign = ca::signDigest)
+        val inviting = CorePairing.Inviting(n, ca.publicKeyDER, lifetimeS, sign = ca::signDigest)
         Thread({
             var version = 0L
             while (true) {
@@ -877,9 +792,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 when (st.state) {
                     "joining" -> {
                         val r = st.request ?: continue
-                        val req = PairingMember.Request(r.device, Pairing.Info(r.name, r.os), r.fingerprint)
                         // The window waits for the user, up to the 5 minutes the device waits.
-                        inviting.answer(runBlocking { ask(req) && activity != null })
+                        inviting.answer(runBlocking { ask(r) && activity != null })
                     }
                     "done" -> {
                         inviting.close()
@@ -897,27 +811,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         return Invitation(inviting.text, Instant.now().plusSeconds(inviting.expires.toLong())) { Thread { inviting.close() }.start() }
     }
 
-    /** A deep copy of the group, to change it outside the lock and keep it only when the change works. */
-    private fun copyOfState(): PhoneGroup? = synchronized(lock) { state?.let { PhoneGroup.fromJson(it.toJson()) } }
-
     /**
-     * Saves a changed copy of the group and makes it the group, keeping the
-     * records the node took in meanwhile; starts syncing when this is the
-     * first group, and passes the change to the parts that run with it.
+     * Saves the group and makes it the group; starts syncing when this is
+     * the first group, and passes the change to the parts that run with it.
      */
     private fun adopt(g: PhoneGroup) {
         synchronized(lock) {
             if (state == null) newDeviceMode()
-            state?.let {
-                g.add(it.records.records)
-                g.records.takeClaimTimes(it.records.claimTimes)
-            }
             g.save(file)
             state = g
         }
         startSync()
-        relay()
-        refreshCredentials()
     }
 
     // Joining
@@ -939,61 +843,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         shown(j.fingerprint)
         follow(j, invite = true)
-    }
-
-    /**
-     * The description with the admin key's proof for the session sid
-     * (docs/protocol.md, section 6), signed in a prompt of its own; as is
-     * without an admin key, as on a TV.
-     */
-    private fun proveAdmin(info: Pairing.Info, sid: ByteArray, admin: KeystoreSigner?): Pairing.Info {
-        if (admin == null || info.adminKey == null) return info
-        if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
-        return info.proving(sid, authorized(Keys.ADMIN, R.string.reason_join))
-    }
-
-    /**
-     * Joins a computer's group (docs/protocol.md, section 6, "A phone joins
-     * a computer's group"): finds the pairing window that `cbb pair` opened
-     * on the group's root by mDNS (`p=1`), dials it and takes code, which
-     * the user typed from the computer's screen. Browsing waits up to 10 s
-     * for a window, then 2 s more for a second one, as the computers'
-     * joiner does: two windows at once and it refuses, rather than try the
-     * code on the wrong one. The root makes this phone an admin with the
-     * admin key it offers; a TV offers none and joins as a member.
-     */
-    suspend fun joinComputer(code: String) {
-        if (hasGroup) return
-        if (withContext(Dispatchers.IO) { LocalAddresses.current() }.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
-        val window = findWindow()
-        val joined = withContext(Dispatchers.IO) {
-            val member = memberSigner()
-            val admin = if (Tv.isTv(context)) null else Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN)
-            val cert = GroupCertificates.selfSigned(SyncEngine.newID(), member)
-            val info = Pairing.Info(PhoneGroup.validName(deviceName), "android", admin?.publicKeyDER, seal = sealKey())
-            // The window's certificate is checked by the code's exchange, not here.
-            val t = TLSTransport.dial(window.hostString, window.port, Pairing.ALPN, member.privateKey, listOf(cert)) { it.isNotEmpty() }
-            closingOnCancel({ t.close() }) {
-                try {
-                    val leaf = t.peerCertificate ?: throw PairingJoiner.Failure("the computer sent no certificate")
-                    val sid = t.exportKeyingMaterial(Pairing.EXPORTER_LABEL, 32)
-                    PairingJoiner.join(t, code, proveAdmin(info, sid, admin), leaf, cert, sid, Instant.now()) { PhoneGroup.joined(it).save(file) }
-                } catch (e: PairingJoiner.Failure) {
-                    // An admin computer that is not the root refuses a phone.
-                    if (e.code == Pairing.ErrorCode.REFUSED) throw Failure(Failure.Kind.NEEDS_ROOT).apply { initCause(e) }
-                    throw e
-                } finally {
-                    t.close()
-                }
-            }
-        }
-        withContext(Dispatchers.IO) {
-            synchronized(lock) {
-                newDeviceMode()
-                state = PhoneGroup.joined(joined)
-            }
-            startSync()
-        }
     }
 
     /**
@@ -1021,24 +870,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /** The address of the one computer announcing a pairing window; see joinComputer. */
-    private suspend fun findWindow(): InetSocketAddress {
-        val windows = java.util.concurrent.atomic.AtomicReference<Set<String>>(emptySet())
-        val b = NsdBrowser(context) { members -> windows.set(members.filter { it.pairing }.map { it.device }.toSet()) }
-        try {
-            b.start()
-            withTimeoutOrNull(BROWSE_MS) {
-                while (windows.get().isEmpty()) delay(100)
-            } ?: throw Failure(Failure.Kind.NO_WINDOW)
-            delay(PAIRING_SETTLE_MS)
-            val found = windows.get()
-            if (found.size > 1) throw Failure(Failure.Kind.TWO_WINDOWS)
-            return found.firstNotNullOfOrNull { b.address(it) } ?: throw Failure(Failure.Kind.NO_WINDOW)
-        } finally {
-            b.stop()
-        }
-    }
-
     // Removing
 
     /**
@@ -1048,24 +879,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * the phone that holds the root hands the group to this one.
      */
     suspend fun remove(id: String) {
-        val current = synchronized(lock) { state } ?: return
-        if (!current.isRoot && id == current.records.rootDevice) {
-            takeOver(id)
-            return
-        }
-        val ca = caSigner(R.string.reason_remove)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { g.revoke(id, ca, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
-        currentNode?.let { n -> runCatching { n.disconnect(id) } }
+        act(R.string.reason_remove, "remove", "device" to JsonPrimitive(id))
     }
 
     /** Whether the group removed this phone: its records, once it has some, no longer list it. The app then offers to leave. */
     val removed: Boolean
-        get() = synchronized(lock) {
-            val g = state ?: return false
-            g.records.records.isNotEmpty() && g.devices.none { it.id == g.device }
+        get() {
+            val (g, n) = synchronized(lock) { (state ?: return false) to node }
+            val gs = n?.let { runCatching { it.group() }.getOrNull() } ?: return false
+            return gs.devices.isNotEmpty() && gs.devices.none { it.device == g.device }
         }
 
     /**
@@ -1079,9 +901,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * group keeps listing the phone until an admin removes it.
      */
     fun leave() {
-        val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
-        val others = if (g.isV06) devices.filter { !it.isSelf }.map { it.role } else g.devices.filter { it.id != g.device }.map { it.role }
-        if (g.isRoot && others.any { it != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
+        val g = synchronized(lock) { state }
+        if (g == null && !before06) throw Failure(Failure.Kind.NO_GROUP)
+        val others = devices.filter { !it.isSelf }.map { it.role }
+        if (g?.isRoot == true && others.any { it != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
         hubWork.submit { stopHome() }.get()
         val (b, n) = synchronized(lock) {
             (browser to node).also {
@@ -1092,152 +915,60 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
         b?.stop()
         n?.close()
-        synchronized(lock) {
-            state = null
-            credentialStore = null
-        }
+        synchronized(lock) { state = null }
         file.delete()
-        credentialsFile.delete()
-        entries.remove()
+        before06 = false
+        // What a phone of a group from before 0.6 kept beside it goes too (D-126).
+        File(file.parentFile, "credentials.json").delete()
         File(file.parentFile, "entries.json").delete()
+        SealedFile(File(file.parentFile, "seal-secret"), "cbb.seal").delete()
         nodeDir.deleteRecursively()
-        synchronized(sealFile) { sealFile.delete() }
         File(context.filesDir, "attest-status").deleteRecursively()
         pastes.turnOff()
         pastes.forgetLog()
         for (alias in listOf(Keys.ROOT, Keys.ADMIN, Keys.MEMBER)) runCatching { Keys.remove(alias) }
-        runCatching { Keys.PhoneKeys.clear() }
+        runCatching { Keys.clearPeriodKeys() }
         Log.i(TAG, "this phone left its group: its keys and the group's files are deleted")
     }
 
     /**
-     * Gives a device another name (docs/protocol.md, section 10): a device
-     * record like its newest one with that name, signed with this phone's
-     * root or admin key, sent to every connected computer.
+     * Gives a device another name (docs/protocol.md, section 10): its
+     * device record again with that name, signed with this phone's root or
+     * admin key, which the member sends to every connected device.
      */
     suspend fun rename(id: String, name: String) {
-        val ca = caSigner(R.string.reason_rename)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { g.rename(id, name, ca, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
-    }
-
-    /**
-     * Ends a conflict or cancels a claim (docs/protocol.md, section 10,
-     * "Stopping the exchange"): a resolve of the records ids, signed with the
-     * root key after the fingerprint or the screen lock, sent to every
-     * connected member.
-     */
-    suspend fun resolve(ids: List<ByteArray>) {
-        if (!isRoot) throw Failure(Failure.Kind.NOT_ADMIN)
-        val root = caSigner(R.string.reason_resolve)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { g.resolve(ids, root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        act(R.string.reason_rename, "rename", "device" to JsonPrimitive(id), "name" to JsonPrimitive(name))
     }
 
     /**
      * Unfreezes an admin computer that another admin froze
      * (docs/protocol.md, section 10, "Removals and freezes keep what the author saw"): a thaw record signed with this
-     * phone's root or admin key, sent to every connected computer.
+     * phone's root or admin key.
      */
     suspend fun unfreeze(id: String) {
-        val ca = caSigner(R.string.reason_unfreeze)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { g.thaw(id, ca, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        act(R.string.reason_unfreeze, "thaw", "device" to JsonPrimitive(id))
     }
 
     /** Gives a phone that just made or joined a group the sync mode of a new device, shared (receive on a TV), unless it has one from an earlier group. */
     private fun newDeviceMode() {
         // A TV receives the group's copies and sends none of its own (docs/roadmap.md, item 25).
         if (!modeFile.exists()) setOwnMode(if (Tv.isTv(context)) "receive" else "shared")
-        // The credentials and the keys for the servers of an earlier group are of no use.
-        credentialStore = null
-        credentialsFile.delete()
-        runCatching { Keys.PhoneKeys.clear() }
-    }
-
-    /** The current root's key and whether a key hash is a member of the group, for the credentials. lock is held. */
-    private fun credentialRootLocked(g: PhoneGroup): Pair<ByteArray, (ByteArray) -> Boolean> {
-        val records = g.records
-        return CertificateInfo(g.currentRoot).publicKey to { k: ByteArray -> CredentialRefresh.isMember(records, k) }
-    }
-
-    /** The credentials kept for the group g, read from their file the first time. lock is held. */
-    private fun credentialsLocked(g: PhoneGroup): CredentialStore = credentialStore ?: run {
-        val (root, isMember) = credentialRootLocked(g)
-        val saved = runCatching { Json.parseToJsonElement(credentialsFile.readText()).jsonArray }.getOrNull()
-        (saved?.let { CredentialStore.fromJson(it, g.groupCA, root, isMember) } ?: CredentialStore(g.groupCA)).also { credentialStore = it }
-    }
-
-    private fun saveCredentialsLocked(s: CredentialStore) {
-        runCatching {
-            val tmp = File(credentialsFile.path + ".tmp")
-            tmp.writeText(s.toJson().toString())
-            tmp.renameTo(credentialsFile)
-        }.onFailure { Log.w(TAG, "saving the server credentials", it) }
     }
 
     /**
-     * Takes the server credentials a peer sent and returns those that were
-     * new and valid, which then go to every member (docs/protocol.md,
-     * section 18).
+     * An action of this phone as an admin or the root (CoreMember.act):
+     * the member writes the record or sends the command, signed with this
+     * phone's root or admin key after the fingerprint, the face or the
+     * screen lock with reason; the records judge whether the key may. A
+     * command the device refused or could not carry out is CommandRefused.
      */
-    private fun addCredentials(credentials: List<ServerCredentials.Credential>): List<ServerCredentials.Credential> {
-        if (credentials.isEmpty() || credentials.size > ServerCredentials.MAX_CREDENTIALS) return emptyList()
-        val fresh = synchronized(lock) {
-            val g = state ?: return emptyList()
-            val s = credentialsLocked(g)
-            val (root, isMember) = credentialRootLocked(g)
-            val (fresh, errs) = s.add(root, isMember, credentials)
-            for (e in errs) Log.w(TAG, "dropped a server credential: $e")
-            if (fresh.isNotEmpty()) saveCredentialsLocked(s)
-            fresh
-        }
-        if (fresh.isNotEmpty()) refreshCredentials()
-        return fresh
-    }
-
-    /** The group's server credentials this phone keeps, which every peer gets after its hello. */
-    private val allCredentials: List<ServerCredentials.Credential>
-        get() = synchronized(lock) { state?.let { credentialsLocked(it).all }.orEmpty() }
-
-    /**
-     * Brings the group's server credentials up to date as far as this phone
-     * can (docs/protocol.md, section 18) and sends what it signed to the
-     * computers: its server key for the period; on the root, the hubs' and
-     * members' credentials, and the period when one is due and period, the
-     * root key's signer for it, is given ([signDue]); on a listed admin, the
-     * members'.
-     */
-    private fun refreshCredentials(period: CertificateSigner? = null) {
-        credentialWork.execute {
-            val signed = runCatching {
-                synchronized(lock) {
-                    val g = state ?: return@execute
-                    val s = credentialsLocked(g)
-                    // The root key signs a due period only in signDue, which asks the user.
-                    val root: (() -> CertificateSigner?)? = when {
-                        !g.isRoot -> null
-                        period != null -> { { period } }
-                        else -> { { periodDue = true; null } }
-                    }
-                    CredentialRefresh.refresh(s, g.records, g.groupCA, g.currentRoot, memberSigner(), Keys.PhoneKeys, System.currentTimeMillis(), root)
-                        .also { if (it.isNotEmpty()) saveCredentialsLocked(s) }
-                }
-            }.onFailure { Log.w(TAG, "signing the server credentials", it) }.getOrNull().orEmpty()
-            if (signed.isNotEmpty()) currentNode?.let { n -> runCatching { n.sendCredentials(signed) } }
-        }
-    }
-
-    /** Sends records made on this phone to the computers, and brings the credentials up to date with them. */
-    private fun published(rs: List<Member.Record>) {
-        currentNode?.let { n -> runCatching { n.addRecords(rs) }.onFailure { Log.w(TAG, "handing the records to the node", it) } }
-        refreshCredentials()
+    private suspend fun act(reason: Int, action: String, vararg fields: Pair<String, JsonElement>, prompts: Prompts = Prompts()): JsonObject {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        val ca = caSigner(reason, prompts = prompts)
+        val a = withContext(Dispatchers.IO) { n.act(JsonObject(mapOf("action" to JsonPrimitive(action)) + fields), ca.publicKeyDER, ca::signDigest) }
+        val status = (a["status"] as? JsonPrimitive)?.content
+        if (status != null && status != "done") throw CommandRefused((a["reason"] as? JsonPrimitive)?.content?.ifEmpty { null } ?: status)
+        return a
     }
 
     /** Sets this phone's own sync mode and keeps it; with tell, the hellos say it at once. */
@@ -1255,113 +986,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Carries out a command a member sent this phone (docs/protocol.md,
-     * section 15): a mode, paste, paste-off or away-off command an admin of
-     * the group signed for it, not expired and not carried out before. A
-     * phone takes no hub command.
-     */
-    private fun command(peer: String?, c: Member.Record): Member.CommandResult {
-        val id = Commands.idOf(c) ?: ""
-        fun refused(reason: String): Member.CommandResult {
-            Log.w(TAG, "refused a command from $peer: $reason")
-            return Member.CommandResult(id, "refused", reason)
-        }
-        val g = synchronized(lock) { state } ?: return refused("this device is in no group")
-        val now = System.currentTimeMillis()
-        val body = try {
-            val secret = sealSecret()
-            synchronized(lock) { Commands.verify(c, g.records, g.device, now, secret) }
-        } catch (e: Commands.Refused) {
-            return refused(e.message ?: "the command is not valid")
-        }
-        if (body.timeMS < startedMS) {
-            return refused("this device started after the command was signed, so it may have carried it out already; send it again")
-        }
-        synchronized(lock) {
-            commands.entries.removeAll { it.value <= now }
-            if (body.id in commands) return refused("this command was carried out already")
-            if (commands.size >= MAX_COMMANDS) return refused("too many commands; try again in a minute")
-            commands[body.id] = body.expiresMS
-        }
-        when (body.type) {
-            "paste" -> {
-                val (sender, verified) = synchronized(lock) { g.records.commandSender(c, g.device) }
-                val name = if (verified) g.devices.firstOrNull { it.id == body.by }?.name else null
-                return pastes.paste(body, sender, verified, name) { pasteImage(body) }
-            }
-            "paste-off" -> {
-                Log.i(TAG, "${body.by} turned remote paste off")
-                return pastes.turnOff()?.copy(id = body.id) ?: Member.CommandResult(body.id, "done")
-            }
-            // A phone of a group of 0.5 has no sync away from home (D-123), so it stays off.
-            "away-off" -> return Member.CommandResult(body.id, "done")
-            // A phone has no quick actions, so none of them stays on.
-            "actions-off" -> return Member.CommandResult(body.id, "done")
-            "action" -> return refused("a phone has no quick actions")
-            "hub" -> return refused("a phone does not become the hub by a command")
-            "mute", "unmute" -> {
-                val on = body.type == "mute"
-                try {
-                    writeMute("mute", if (!on) null else if (body.forMS > 0) now + body.forMS else 0)
-                } catch (e: IOException) {
-                    Log.e(TAG, "cannot save the mute", e)
-                    return Member.CommandResult(body.id, "failed", e.message)
-                }
-                Log.i(TAG, "${body.by} ${if (on) "muted" else "unmuted"} this phone")
-                onModeChanged?.invoke()
-                // Connects again once the result has gone back, so that the
-                // hellos say whether it is muted.
-                later { n -> n.setMute(mutedUntilMS) }
-                return Member.CommandResult(body.id, "done")
-            }
-            "mode" -> {}
-            else -> return refused("this phone does not know the command ${body.type}")
-        }
-        val mode = body.mode?.takeIf { it in Member.MODES } ?: return refused("unknown sync mode ${body.mode}")
-        return try {
-            setOwnMode(mode, tell = false)
-            Log.i(TAG, "${body.by} set the sync mode to $mode")
-            onModeChanged?.invoke()
-            // The hellos say it once the result has gone back on the connection that brought the command.
-            later { n -> n.setSync(mode != "own") }
-            Member.CommandResult(body.id, "done")
-        } catch (e: IOException) {
-            Log.e(TAG, "cannot save the sync mode", e)
-            Member.CommandResult(body.id, "failed", e.message)
-        }
-    }
-
-    /** Runs f on the node once a command's result has gone back, as the node then connects again. */
-    private fun later(f: (CoreMember) -> Unit) {
-        Thread {
-            Thread.sleep(AWAY_OFF_RESTART_MS)
-            currentNode?.let { n -> runCatching { f(n) }.onFailure { Log.w(TAG, "telling the node", it) } }
-        }.apply { isDaemon = true }.start()
-    }
-
-    /**
-     * Sends a command through the node and waits for its result; a device
-     * that is not connected, nor a hub that passes it on, is [NotConnected].
-     */
-    private fun command(c: Member.Record, timeoutMS: Long = 10_000): Member.CommandResult {
-        val n = currentNode ?: throw NotConnected("the device is not connected")
-        return try {
-            n.command(c, timeoutMS)
-        } catch (e: Core.Refusal) {
-            throw NotConnected(e.message, e)
-        }
-    }
-
-    /**
-     * Sets a connected computer's sync mode (docs/protocol.md, section 15):
-     * a command signed with this phone's root or admin key, which the
-     * computer answers.
+     * Turns a connected computer's sync off (mode own) or on (any other
+     * mode, shared on 0.6) (docs/protocol.md, section 15): a command signed
+     * with this phone's root or admin key, which the computer answers.
      */
     suspend fun setMode(id: String, mode: String) {
-        val ca = caSigner(R.string.reason_set_mode)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { command(g.modeCommand(id, mode, ca, Instant.now())) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        act(R.string.reason_set_mode, if (mode == "own") "sync_off" else "sync_on", "device" to JsonPrimitive(id))
     }
 
     /**
@@ -1385,7 +1015,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * once.
      */
     suspend fun setMuted(id: String, on: Boolean, forMS: Long = 0) {
-        val g = copyOfState() ?: return
+        val g = synchronized(lock) { state } ?: return
         if (!g.isAdmin) throw Failure(Failure.Kind.NOT_ADMIN)
         if (id == g.device) {
             withContext(Dispatchers.IO) {
@@ -1394,10 +1024,11 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             return
         }
-        val ca = caSigner(if (on) R.string.reason_mute else R.string.reason_unmute)
-        val c = if (on) g.muteCommand(id, forMS, ca, Instant.now()) else g.unmuteCommand(id, ca, Instant.now())
-        val r = withContext(Dispatchers.IO) { command(c) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        if (on) {
+            act(R.string.reason_mute, "mute", "device" to JsonPrimitive(id), "for_ms" to JsonPrimitive(forMS))
+        } else {
+            act(R.string.reason_unmute, "unmute", "device" to JsonPrimitive(id))
+        }
     }
 
     /**
@@ -1407,13 +1038,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * answers once the text is in, or why not.
      */
     suspend fun paste(id: String, text: String, method: String, enter: Boolean, secret: Boolean) {
-        val ca = caSigner(R.string.reason_paste)
-        val g = copyOfState() ?: return
-        val c = g.pasteCommand(id, text, method, enter, secret, ca, Instant.now())
-        // The computer waits 5 s for its target, and 5 ms more for each typed byte.
-        val wait = 10_000L + if (method == "type") text.toByteArray().size * 5L else 0L
-        val r = withContext(Dispatchers.IO) { command(c, wait) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        act(
+            R.string.reason_paste, "paste", "device" to JsonPrimitive(id), "text" to JsonPrimitive(text), "method" to JsonPrimitive(method),
+            "enter" to JsonPrimitive(enter), "kind" to JsonPrimitive(if (secret) "secret" else "text"),
+        )
     }
 
     /**
@@ -1423,20 +1051,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * clipboard and presses the paste keys.
      */
     suspend fun pasteShared(id: String, shared: Files.Shared, enter: Boolean) {
-        val ca = caSigner(R.string.reason_paste)
-        val g = copyOfState() ?: return
         val n = currentNode ?: throw Failure(Failure.Kind.NO_COMPUTERS)
         notMuted()
-        val copy = withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             when (shared) {
                 is Files.Shared.Image -> n.copyMedia("", listOf(CoreMember.Part.data(shared.image.type, shared.image.bytes)))
                 is Files.Shared.Many -> n.copyMedia("", shared.files.map { (path, bytes) -> CoreMember.Part.file(path, bytes) })
             }
         }
-        val c = g.pasteCopyCommand(id, copy.id, enter, ca, Instant.now())
-        // The computer waits up to 20 s for the copy, then 8 s for its desktop.
-        val r = withContext(Dispatchers.IO) { command(c, 35_000) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        // The paste names the group's copy, which is the one just made.
+        act(R.string.reason_paste, "paste", "device" to JsonPrimitive(id), "kind" to JsonPrimitive("media"), "enter" to JsonPrimitive(enter))
     }
 
     /**
@@ -1446,19 +1070,12 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * turned it on there.
      */
     suspend fun runAction(id: String, name: String) {
-        val ca = caSigner(R.string.reason_action)
-        val g = copyOfState() ?: return
-        // The computer waits up to 20 s for the action to start.
-        val r = withContext(Dispatchers.IO) { command(g.actionCommand(id, name, ca, Instant.now()), ACTION_TIMEOUT_MS) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        act(R.string.reason_action, "action", "device" to JsonPrimitive(id), "name" to JsonPrimitive(name))
     }
 
     /** Turns every quick action off on a computer; only its user turns them on again. */
     suspend fun actionsOff(id: String) {
-        val ca = caSigner(R.string.reason_action)
-        val g = copyOfState() ?: return
-        val r = withContext(Dispatchers.IO) { command(g.actionsOffCommand(id, ca, Instant.now())) }
-        if (!r.done) throw CommandRefused(r.reason ?: r.status)
+        act(R.string.reason_action, "actions_off", "device" to JsonPrimitive(id))
     }
 
     /**
@@ -1471,92 +1088,41 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * phone keeps the store its record names.
      */
     suspend fun makeAdmin(id: String, allowFileKey: Boolean = false) {
-        val (n, phone) = synchronized(lock) {
-            (if (state?.isRoot == true) node else null) to (state?.devices?.firstOrNull { it.id == id }?.role == "phone")
-        }
-        val peer = n?.let { runCatching { it.peers() }.getOrNull() }?.firstOrNull { it.device == id }
-        val key = peer?.adminKey ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val store = if (phone) null else peer.keyStore.ifEmpty { null }
+        val n = synchronized(lock) { if (state?.isRoot == true) node else null } ?: throw Failure(Failure.Kind.NOT_ADMIN)
+        val peer = withContext(Dispatchers.IO) { runCatching { n.peers(all = true) }.getOrNull() }?.firstOrNull { it.device == id }
+        val phone = peer?.role == "phone"
+        val store = if (phone) null else peer?.keyStore?.ifEmpty { null }
         if (!phone && KitRecords.storeOf(store, "member") == KitRecords.ROOTLESS) throw PhoneGroup.Rootless()
-        if (!phone && KitRecords.storeOf(store, "member") == KitRecords.FILE && !allowFileKey) throw PhoneGroup.FileKey()
-        val root = caSigner(R.string.reason_make_admin)
+        val inFile = !phone && KitRecords.storeOf(store, "member") == KitRecords.FILE
+        if (inFile && !allowFileKey) throw PhoneGroup.FileKey()
+        val prompts = Prompts()
         // The user's consent to a key in a file, after the dialog's
         // warning, lets the group take keys in files too.
-        if (!phone && KitRecords.storeOf(store, "member") == KitRecords.FILE && allowFileKey && keyLevel != KitRecords.LEVEL_FILES) {
-            rootRecord(root) { m, public, sign -> m.setKeyLevel(KitRecords.LEVEL_FILES, public, sign) }
+        if (inFile && keyLevel != KitRecords.LEVEL_FILES) {
+            act(R.string.reason_make_admin, "key_level", "level" to JsonPrimitive(KitRecords.LEVEL_FILES), prompts = prompts)
         }
-        val g = copyOfState() ?: return
-        val (ca, r) = withContext(Dispatchers.IO) { g.makeAdmin(id, key, root, Instant.now(), store, allowFileKey) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
-        currentNode?.let { m -> runCatching { m.sendAdminCA(id, ca) } }
+        act(R.string.reason_make_admin, "make_admin", "device" to JsonPrimitive(id), "allow_file_key" to JsonPrimitive(allowFileKey), prompts = prompts)
     }
 
     /**
-     * The admin key a member phone's hellos offer, for the root's "Make it
-     * an admin" (docs/protocol.md, section 10, "Admins"),
-     * made now behind the screen lock if it has none: making it asks
-     * nothing, only a signature does. None on the root, on an admin, and on
-     * a TV, which has no fingerprint or face to guard it.
-     */
-    private fun offeredAdminKey(g: PhoneGroup): ByteArray? {
-        if (g.isAdmin || Tv.isTv(context)) return null
-        return try {
-            (Keys.loadCurrent(Keys.ADMIN) ?: Keys.create(context, Keys.ADMIN, g.tag)).publicKeyDER
-        } catch (e: Exception) {
-            Log.w(TAG, "making the admin key to offer", e)
-            null
-        }
-    }
-
-    /**
-     * Takes the admin CA the root sent when it made this member phone an
-     * admin: PhoneGroup.takeAdminCA checks it is for this phone's admin key
-     * and from the current root. The hellos offer the key no more, and sync
-     * starts again as an admin's.
-     */
-    private fun adminCAReceived(ca: ByteArray, from: String) {
-        val g = copyOfState() ?: return
-        if (g.isAdmin) return
-        val key = Keys.loadCurrent(Keys.ADMIN)?.publicKeyDER ?: return
-        try {
-            g.takeAdminCA(ca, key)
-        } catch (e: Exception) {
-            Log.w(TAG, "the admin CA from $from", e)
-            return
-        }
-        Log.i(TAG, "the root made this phone an admin")
-        adopt(g)
-        Thread({ restartSync() }, "restart").start()
-    }
-
-    /**
-     * Makes the watch's key an admin key with the role watch (docs/protocol.md,
-     * section 10, "Watches"): the root key, after the fingerprint, the face or
-     * the screen lock, issues its admin CA and signs its device record, which
-     * every member gets. Returns what the watch keeps.
+     * Adds the group's watch with its key (docs/protocol.md, section 10,
+     * "Watches"): the root key, after the fingerprint, the face or the
+     * screen lock, signs its device record with the role watch, which the
+     * member sends to every member. On 0.6 the watch shows the group and
+     * signs nothing (D-124). Returns what the watch keeps.
      */
     suspend fun addWatch(request: WatchState.KeyRequest): WatchState.Admission {
-        if (synchronized(lock) { state?.isRoot } != true) throw PhoneGroup.Failure("only the root makes admins")
-        val root = caSigner(R.string.reason_add_watch)
-        val g = copyOfState() ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val (ca, r) = withContext(Dispatchers.IO) { g.addWatch(request.device, request.name, "wearos", request.key, root, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
-        return WatchState.Admission(request.device, ca, g.tag)
+        if (!isRoot) throw PhoneGroup.Failure("only the root adds a watch")
+        val a = act(
+            R.string.reason_add_watch, "add_watch", "key" to JsonPrimitive(java.util.Base64.getEncoder().encodeToString(request.key)),
+            "name" to JsonPrimitive(request.name), "os" to JsonPrimitive("wearos"),
+        )
+        val device = (a["device"] as? JsonPrimitive)?.content ?: request.device
+        return WatchState.Admission(device, ByteArray(0), groupTag ?: "")
     }
 
-    /** When the group's recovery key was made, while it has one (docs/protocol.md, section 10, "The recovery key"). */
-    val recoveryMade: Instant?
-        get() = synchronized(lock) {
-            val g = state ?: return null
-            val key = g.records.recovery ?: return null
-            recoveryTime?.takeIf { it.first.contentEquals(key) }?.let { return it.second }
-            recoveryMade(key, g.records.records).also { recoveryTime = key to it }
-        }
-
-    /** The recovery key's hash and when its record says it was made, so the records are read once per key. lock is held. */
-    private var recoveryTime: Pair<ByteArray, Instant?>? = null
+    /** When the group's recovery key was made; the records of 0.6 do not say. */
+    val recoveryMade: Instant? get() = null
 
     /**
      * Makes the group's recovery key: the root key, after the fingerprint,
@@ -1571,10 +1137,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /** The group's key level (KitRecords.KEY_LEVELS) on the root phone; null elsewhere. */
-    val keyLevel: String? get() = synchronized(lock) { state?.takeIf { it.isRoot }?.keyLevel }
+    val keyLevel: String? get() = if (!isRoot) null else currentNode?.let { n -> runCatching { n.group().keyLevel }.getOrNull() }
 
     /** How long a copy from another device stays live after it arrives, in milliseconds, as the group's records set it. */
-    val incomingMS: Long get() = synchronized(lock) { state?.incomingMS } ?: KitRecords.DEFAULT_INCOMING_MS
+    val incomingMS: Long get() = currentNode?.let { n -> runCatching { n.group().incomingMS }.getOrNull() } ?: KitRecords.DEFAULT_INCOMING_MS
 
     /**
      * Sets how long a copy from another device stays live after it arrives:
@@ -1583,11 +1149,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * section 10, "The copies setting").
      */
     suspend fun setIncoming(ms: Long) {
-        val ca = caSigner(R.string.reason_incoming)
-        val g = copyOfState()?.takeIf { it.isAdmin } ?: throw Failure(Failure.Kind.NOT_ADMIN)
-        val r = withContext(Dispatchers.IO) { g.setIncoming(ms, ca, Instant.now()) }
-        withContext(Dispatchers.IO) { adopt(g) }
-        published(listOf(r))
+        if (!isAdmin) throw Failure(Failure.Kind.NOT_ADMIN)
+        act(R.string.reason_incoming, "incoming", "incoming_ms" to JsonPrimitive(ms))
     }
 
     /**
@@ -1598,9 +1161,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun setKeyLevel(level: String) {
         if (!isRoot) throw PhoneGroup.Failure("only the root sets the key level")
-        // The core refuses it too; asked here first, the screen says why before the fingerprint.
-        val own = synchronized(lock) { state?.let { g -> g.devices.firstOrNull { it.id == g.device }?.store } } ?: KitRecords.HARDWARE
-        if (!KitRecords.levelAllows(level, own, true)) throw PhoneGroup.BelowKeyLevel()
+        // The core refuses it too; asked here first, the screen says why
+        // before the fingerprint. A phone's keys are in its hardware.
+        if (!KitRecords.levelAllows(level, KitRecords.HARDWARE, true)) throw PhoneGroup.BelowKeyLevel()
         val root = caSigner(R.string.reason_key_level)
         rootRecord(root) { m, public, sign -> m.setKeyLevel(level, public, sign) }
     }
@@ -1659,75 +1222,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     private suspend fun <T> rootRecord(root: KeystoreSigner, act: (CoreMember, ByteArray, (ByteArray) -> ByteArray) -> T): T {
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-        return withContext(Dispatchers.IO) { act(n, root.publicKeyDER, root::signDigest).also { takeRecords(n) } }
+        return withContext(Dispatchers.IO) { act(n, root.publicKeyDER, root::signDigest) }
     }
 
-    /** What the group's watch may do to a device (PhoneGroup.WatchAction keys). */
-    fun watchActions(id: String): List<String> = synchronized(lock) { state?.watchActions(id).orEmpty().map { it.key } }
+    /** What the group's watch may do to a device: nothing on 0.6, where a watch signs nothing from the wrist (D-124). */
+    fun watchActions(@Suppress("UNUSED_PARAMETER") id: String): List<String> = emptyList()
 
-    /**
-     * The body the watch signs (docs/protocol.md, section 10, "Watches"): any
-     * phone of the group builds it, since what counts is the watch's
-     * signature.
-     */
-    fun watchBody(ask: WatchState.Ask): ByteArray {
-        val g = copyOfState() ?: throw PhoneGroup.Failure(PhoneGroup.NOT_A_WATCH)
-        val a = PhoneGroup.WatchAction.of(ask.action) ?: throw PhoneGroup.Failure(PhoneGroup.NOT_FOR_WATCH)
-        return g.watchBody(a, ask.device, ask.watch, Instant.now(), ask.name)
-    }
+    /** The body the watch signs: none on 0.6 (D-124). */
+    fun watchBody(@Suppress("UNUSED_PARAMETER") ask: WatchState.Ask): ByteArray = throw PhoneGroup.Failure(NO_WRIST)
 
-    /**
-     * Brings what the watch signed into the group: a freeze or a removal
-     * joins the records and goes to every member now or at the next sync, a
-     * command goes to its device, which must be connected.
-     */
-    suspend fun deliverFromWatch(signed: WatchState.Signed) {
-        val r = PhoneGroup.watchRecord(signed.body, signed.signature, signed.adminCA)
-        val o = org.json.JSONObject(String(signed.body))
-        val type = o.optString("type")
-        if (type == "freeze" || type == "revoke") {
-            val g = copyOfState() ?: throw PhoneGroup.Failure(PhoneGroup.NOT_A_WATCH)
-            if (g.add(listOf(r)).size != 1) throw CommandRefused("the group did not take the watch's record")
-            withContext(Dispatchers.IO) { adopt(g) }
-            published(listOf(r))
-            return
-        }
-        val to = o.optString("to").takeIf { it.isNotEmpty() } ?: throw PhoneGroup.Failure(PhoneGroup.NOT_FOR_WATCH)
-        val res = withContext(Dispatchers.IO) { command(r, 25_000) }
-        if (!res.done) throw CommandRefused(res.reason ?: res.status)
-    }
+    /** Brings what the watch signed into the group: nothing on 0.6 (D-124). */
+    suspend fun deliverFromWatch(@Suppress("UNUSED_PARAMETER") signed: WatchState.Signed): Unit = throw PhoneGroup.Failure(NO_WRIST)
 
-    /**
-     * Removes the phone that holds the group's root, when it is lost: this
-     * admin phone makes a new root key and claims the group for it
-     * (docs/protocol.md, section 10, "Handing the group over"). The claim waits the
-     * group's delay, in which the root, if it is still in use, cancels it;
-     * [finishTakeOverIfDue] then makes this phone the root.
-     */
-    private suspend fun takeOver(id: String) {
-        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-        withContext(Dispatchers.IO) { copyOfState() }?.checkTakeOver(id) ?: return
-        val prompts = Prompts()
-        val admin = signer(Keys.ADMIN, R.string.reason_take_over, prompts = prompts)
-        withContext(Dispatchers.IO) {
-            val g = copyOfState() ?: return@withContext
-            // A root key left from a group this phone made before goes.
-            val root = newRootKey(g.tag, R.string.reason_take_over, prompts)
-            val newRoot = n.rootCA(root.publicKeyDER, root::signDigest)
-            n.claim(CoreMember.Claim.TAKE_OVER, newRoot, admin.publicKeyDER, g.adminCA ?: return@withContext, admin::signDigest, id)
-            g.claimed(newRoot, id)
-            adopt(g)
-        }
-        takeRecords(n)
-    }
-
-    /**
-     * Takes the group the root handed to this phone (`cbb handover`,
-     * docs/protocol.md, section 10, "Handing the group over"): makes a new
-     * root key and claims the group with this phone's admin key; the claim
-     * takes effect at once, so this phone becomes the root right after. The
-     * computer that was the root stays in the group.
-     */
     // The group in 0.6 (docs/apps.md, "Notices" and "Changing the main device").
 
     /** A change of the group's root the member told of: the devices' names, from and to. */
@@ -1767,76 +1273,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     suspend fun changeRoot(recovery: RecoveryInput, leaveOut: List<String>, overWaiting: Boolean) {
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-        val g = withContext(Dispatchers.IO) { copyOfState() } ?: throw Failure(Failure.Kind.UNREACHABLE)
+        val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.UNREACHABLE)
         withContext(Dispatchers.IO) {
             val root = newRootKey(g.tag, R.string.reason_change_root)
             n.changeRoot(recovery, leaveOut, root.publicKeyDER, root::signDigest, overWaiting = overWaiting)
-        }
-    }
-
-    suspend fun takeHandedGroup() {
-        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
-        withContext(Dispatchers.IO) { copyOfState() }?.checkHandedOver() ?: return
-        val prompts = Prompts()
-        val admin = signer(Keys.ADMIN, R.string.reason_take_handed, prompts = prompts)
-        withContext(Dispatchers.IO) {
-            val g = copyOfState() ?: return@withContext
-            val root = newRootKey(g.tag, R.string.reason_take_handed, prompts)
-            val newRoot = n.rootCA(root.publicKeyDER, root::signDigest)
-            n.claim(CoreMember.Claim.TAKE_HANDED_OVER, newRoot, admin.publicKeyDER, g.adminCA ?: return@withContext, admin::signDigest)
-            g.claimed(newRoot, null)
-            adopt(g)
-        }
-        takeRecords(n)
-        finishTakeOverIfDue()
-    }
-
-    /**
-     * Makes this phone the group's root once its claim took effect: the
-     * core's member signs, with the new root key, this phone's certificate
-     * from the new root and what a new root starts with (docs/design.md,
-     * "Losing the phone"). A claim that was cancelled or became void is dropped; one
-     * that still waits stays.
-     */
-    suspend fun finishTakeOverIfDue() {
-        val n = currentNode ?: return
-        val g = withContext(Dispatchers.IO) { copyOfState() } ?: return
-        val claim = g.claim ?: return
-        val lost = g.claimedFrom
-        try {
-            // The member answers where the claim stands without signing while it waits; only then is the key asked.
-            val root = Keys.load(Keys.ROOT)?.publicKeyDER ?: throw IllegalStateException("the new root key is gone")
-            val ask = { sign: (ByteArray) -> ByteArray ->
-                n.finishTakeover(claim, root, PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, sealKey(), sign)
-            }
-            var t = withContext(Dispatchers.IO) { ask { throw IllegalStateException("nothing to sign while the claim waits") } }
-            when (t.state) {
-                "cancelled", "void" -> {
-                    Log.i(TAG, "the claim to take the group over ended (${t.state}); this phone stays an admin")
-                    withContext(Dispatchers.IO) {
-                        g.add(n.records())
-                        g.dropClaim()
-                        adopt(g)
-                    }
-                    return
-                }
-                "effective" -> {}
-                else -> {
-                    Log.i(TAG, "the claim to take the group over is ${t.state}, ${t.leftMS} ms left")
-                    return
-                }
-            }
-            val signer = signer(Keys.ROOT, R.string.reason_take_over)
-            t = withContext(Dispatchers.IO) { ask(signer::signDigest) }
-            val cert = t.cert ?: return
-            withContext(Dispatchers.IO) {
-                g.becameRoot(cert, n.records())
-                adopt(g)
-            }
-            if (lost != null) runCatching { n.disconnect(lost) }
-            withContext(Dispatchers.IO) { restartSync() }
-        } catch (e: Exception) {
-            Log.e(TAG, "finishing the takeover: $e")
         }
     }
 
@@ -1846,7 +1286,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun startSync() {
         val b = startBrowsing() ?: return
         b.start()
-        refreshCredentials()
         relay()
         refreshHub()
     }
@@ -1855,29 +1294,14 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         val g = state ?: return null
         if (node != null) return null
         val member = runCatching { memberSigner() }.getOrNull() ?: return null
-        // On a group of 0.6 the Live member runs sync away from home, the
-        // hub and the relay itself (AwayOn06); a phone of a group of 0.5
-        // syncs at home only (D-123).
-        val v06 = g.isV06
+        // The Live member runs sync away from home, the hub and the relay
+        // itself (AwayOn06).
         val number = nodeCount + 1
-        // The entry points the computers sent before the node kept them.
-        val oldEntries = File(file.parentFile, "entries.json")
-        if (oldEntries.exists() && !File(nodeDir, "entries.json").exists()) {
-            nodeDir.mkdirs()
-            runCatching { oldEntries.copyTo(File(nodeDir, "entries.json")) }
-        }
         nodeDir.mkdirs()
         synchronized(nodeLog) { nodeLog.clear() }
         val n = try {
             CoreMember.start(
-                CoreMember.Start(
-                    nodeDir, deviceName, "android", Build.VERSION.RELEASE, ownDevice.version ?: "", KitRecords.HARDWARE,
-                    g.device, member.publicKeyDER,
-                    // Without its secret the phone still seals, and the copies sealed to it stay unread.
-                    sealSecret() ?: ByteArray(32).also { SecureRandom().nextBytes(it) },
-                    g.memberCert, g.memberIssuer, g.groupCA, g.trusted,
-                    adminKey = offeredAdminKey(g),
-                ),
+                CoreMember.Start(nodeDir, deviceName, "android", Build.VERSION.RELEASE, ownDevice.version ?: "", g.device, member.publicKeyDER),
                 member::signDigest,
                 post = nodeEvents::execute,
             ) { e -> nodeEvent(e, g.device) }
@@ -1885,8 +1309,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Log.e(TAG, "the node did not start", e)
             return null
         }
-        // The member of 0.6 keeps the group's records itself; each step on its own, so that one refused leaves the others done.
-        if (!v06) runCatching { n.addRecords(g.records.records) }.onFailure { Log.w(TAG, "handing the node the records", it) }
+        // Each step on its own, so that one refused leaves the others done.
         runCatching {
             n.setSync(syncMode != "own", syncOffUntilMS?.takeIf { it > 0 }?.let { it - System.currentTimeMillis() }?.coerceAtLeast(1) ?: 0)
             n.setMute(mutedUntilMS)
@@ -1908,19 +1331,16 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         nodeMadeBy = Throwable().stackTrace.drop(1).take(6).joinToString(" < ") { "${it.methodName}:${it.lineNumber}" }
         Log.i(TAG, "node #$nodeCount started by $nodeMadeBy")
         browser = b
-        // The member of 0.6 serves as the hub again if the user left it on.
-        if (v06) refreshHub()
-        if (v06) {
-            // Push: the member sends the group's registration to every member it connects to.
-            PushSetup.sink = { f -> currentNode?.takeIf { isV06 }?.setPush(f) }
-            runCatching { n.setPush(PushSetup.frame(context)) }.onFailure { Log.w(TAG, "handing the member the push registration", it) }
-        }
+        // The member serves as the hub again if the user left it on.
+        refreshHub()
+        // Push: the member sends the group's registration to every member it connects to.
+        PushSetup.sink = { f -> currentNode?.setPush(f) }
+        runCatching { n.setPush(PushSetup.frame(context)) }.onFailure { Log.w(TAG, "handing the member the push registration", it) }
         val current = n
         recordsPoll.schedule(object : Runnable {
             override fun run() {
                 if (currentNode !== current) return
-                takeRecords(current)
-                if (v06) takeRenewals(current)
+                takeRenewals(current)
                 recordsPoll.schedule(this, RECORDS_POLL_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
             }
         }, RECORDS_POLL_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -1940,23 +1360,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             // The phone writes the copies itself, by its own sync mode and pause (CopyChanged).
             is CoreMember.Event.Write -> {}
-            is CoreMember.Event.CopyChanged -> {
-                takeRecords(n)
-                copyArrived(n, e.copy, me)
-            }
-            is CoreMember.Event.PeerConnected -> {
-                takeRecords(n)
-                peerConnected(n, e.peer)
-                syncedSoon(n, e.peer.device)
-                // A member sends the entry points and any push-renew for this phone right after the connection.
-                if (isV06) recordsPoll.schedule({ if (currentNode === n) takeRenewals(n) }, RENEWALS_AFTER_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-            }
-            // No sync away from home on a group of 0.5 (D-123): a hub's offer is kept nowhere.
-            is CoreMember.Event.Tunnel -> {}
-            is CoreMember.Event.Command -> Thread({
-                val r = command(e.from, e.command)
-                runCatching { n.answer(e.token, r) }.onFailure { Log.w(TAG, "answering a command", it) }
-            }, "command").start()
+            is CoreMember.Event.CopyChanged -> copyArrived(n, e.copy, me)
             // The node carried out an admin's mute or unmute; the phone shows it.
             is CoreMember.Event.Mute -> {
                 writeMute("mute", if (!e.muted) null else if (e.forMS > 0) System.currentTimeMillis() + e.forMS else 0)
@@ -1968,8 +1372,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Log.i(TAG, "${e.by} turned sync ${if (e.off) "off" else "on"} on this phone")
                 onModeChanged?.invoke()
             }
-            // No relay link runs here (D-123): no device calls through one.
-            is CoreMember.Event.Caller -> runCatching { n.caller(e.token, null) }
             // A member that broke stops and starts again, off its own events' thread.
             is CoreMember.Event.Panic -> {
                 Log.e(TAG, "the node broke, starting it again: ${e.details}")
@@ -1977,7 +1379,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 onPanic?.invoke(e.details, lines)
                 Thread({ restartSync() }, "restart").start()
             }
-            is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
             is CoreMember.Event.State -> {
                 Log.i(TAG, "the group's state changed: stop ${e.state.stop}, ${e.state.devices.size} devices")
                 onRecords?.invoke()
@@ -1994,19 +1395,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             is CoreMember.Event.NeedKey -> Log.i(TAG, "the node asks for a ${e.kind} key")
             is CoreMember.Event.KeyDone -> Log.i(TAG, "the node no longer needs a key")
-            is CoreMember.Event.Message -> when (val m = e.message) {
-                is Member.Message.Credentials -> {
-                    val fresh = addCredentials(m.credentials)
-                    // New ones go on to the others, not back to the sender.
-                    if (fresh.isNotEmpty()) runCatching { n.sendCredentials(fresh, except = e.from) }
-                }
-                is Member.Message.Admin -> adminCAReceived(m.adminCA, e.from)
-                is Member.Message.Evidence -> {
-                    val chain = runCatching { n.peers(all = true) }.getOrDefault(emptyList()).firstOrNull { it.device == e.from }?.chain.orEmpty()
-                    if (chain.isNotEmpty()) evidenceReceived(e.from, chain, m.evidence)
-                }
-                else -> {}
-            }
         }
     }
 
@@ -2035,39 +1423,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
     }
 
-    /**
-     * The group's records are synced with a member once it has stayed
-     * connected for 30 s (its records came in at the connection's start):
-     * that spends the push hints-only marks from before it connected which
-     * its records contradict.
-     */
-    private fun syncedSoon(n: CoreMember, device: String) {
-        val since = System.currentTimeMillis()
-        Thread({
-            Thread.sleep(SYNCED_AFTER_MS)
-            if (runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device == device }) {
-                val tag = groupTag ?: return@Thread
-                PushSetup.synced(context, tag, since, device, recordsTakenAtMs)
-            }
-        }, "push synced").start()
-    }
-
-    /**
-     * Answers a peer whose hello the node took: an admin phone notes its
-     * certificate for renewal when due, the root sends a computer it made an
-     * admin its admin CA again while it still offers the key; every peer
-     * gets the group's server credentials.
-     */
-    private fun peerConnected(n: CoreMember, p: CoreMember.Peer) {
-        if (p.recordsOnly) return
-        renew(p.device, p.chain)
-        val g = synchronized(lock) { state } ?: return
-        if (g.isRoot) p.adminKey?.let { key -> synchronized(lock) { state?.computerAdminCA(key) }?.let { runCatching { n.sendAdminCA(p.device, it) } } }
-        // The credentials kept go to this peer, after its hello.
-        val credentials = allCredentials
-        if (credentials.isNotEmpty()) runCatching { n.sendCredentials(credentials, to = p.device) }
-    }
-
     /** Keeps a stopped node's last log lines, for the tests' messages. */
     private fun retire() {
         val d = synchronized(nodeLog) { nodeLog.takeLast(4).joinToString(" | ") }
@@ -2088,7 +1443,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         get() {
             val (n, made, retired) = synchronized(lock) { Triple(node, "node #$nodeCount, made by $nodeMadeBy", retiredNodes.toList()) }
             val now = n?.let {
-                val peers = runCatching { it.peers(all = true) }.getOrDefault(emptyList()).joinToString { p -> "${p.device.take(8)} ${p.role}${if (p.recordsOnly) " records only" else ""}" }
+                val peers = runCatching { it.peers(all = true) }.getOrDefault(emptyList()).joinToString { p -> "${p.device.take(8)} ${p.role}" }
                 "$made: peers [$peers], dialing ${synchronized(lock) { dialing.keys.map { k -> k.take(8) } }}; log: ${synchronized(nodeLog) { nodeLog.takeLast(TRACE_LINES).joinToString(" | ") }}"
             } ?: "no node; the last was $made"
             return now + retired.joinToString("") { "\nearlier $it" }
@@ -2116,25 +1471,18 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Hands the node what the browser finds, with the computers it does not
-     * find at the addresses they had when admitted, only the devices that
-     * are in the group's list: a removed computer is not dialed. A phone
-     * that joined has no records until a computer sends them, so it dials
-     * every member of the group until then; TLS still checks each against
-     * the group's roots.
+     * Hands the node the members of the group the browser finds, never this
+     * phone itself: as a hub it announces itself, and its browser finds
+     * that announcement too. The member checks each against the group's
+     * records when it connects.
      */
     private fun relay() {
         val (n, want, before) = synchronized(lock) {
             val g = state ?: return
             val n = node ?: return
-            // Never this phone itself: as a hub it announces itself, and its
-            // browser finds that announcement too.
-            val all = Discovery.withKnown(found, g.addresses.keys, g.tag).filter { (it.group == null || it.group == g.tag) && it.device != g.device }
-            val allowed = if (g.records.records.isEmpty()) null else g.devices.map { it.id }.toSet()
             val b = browser
-            val want = all.filter { allowed == null || it.device in allowed }.associate { m ->
-                m.device to (b?.address(m.device)?.let { listOf(JoinCode.address(it.hostString, it.port)) }
-                    ?: SyncRule.ordered(g.addresses[m.device].orEmpty()))
+            val want = found.filter { (it.group == null || it.group == g.tag) && it.device != g.device && !it.pairing }.associate { m ->
+                m.device to listOfNotNull(b?.address(m.device)?.let { hostPort(it.hostString, it.port) })
             }.filterValues { it.isNotEmpty() }
             Triple(n, want, dialing).also { dialing = want }
         }
@@ -2142,57 +1490,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         for (d in before.keys - want.keys) runCatching { n.lost(d) }
     }
 
-    /**
-     * Takes in the records the node holds that the group's file does not,
-     * and the roots they lead to: a new root, after another admin phone took
-     * the group over, means connecting again with it trusted.
-     */
-    /** The group's face toward the push service, from the member of 0.6; null on a group of 0.5 or until the entry points name the service. */
+    /** The group's face toward the push service, from the member; null until the entry points name the service. */
     val pushFace: ByteArray?
-        get() = if (!isV06) null else currentNode?.let { n -> runCatching { n.pushFace() }.onFailure { Log.w(TAG, "reading the push face", it) }.getOrNull() }
+        get() = currentNode?.let { n -> runCatching { n.pushFace() }.onFailure { Log.w(TAG, "reading the push face", it) }.getOrNull() }
 
     /** The group's face toward the push service and each `push-renew` members sent: the group registers with the face, and again for each renewal. */
     private fun takeRenewals(n: CoreMember) {
         runCatching { n.pushFace() }.getOrNull()?.let { PushSetup.face(context, it) }
         val renewals = runCatching { n.pushRenewals() }.onFailure { Log.w(TAG, "reading the push renewals", it) }.getOrNull() ?: return
         for ((slot, ahead) in renewals) PushSetup.renew(context, slot, ahead)
-    }
-
-    /** When records the group's file did not have were last taken in: a push hints-only mark is spent by a sync only after it. */
-    @Volatile
-    private var recordsTakenAtMs: Long? = null
-
-    private fun takeRecords(n: CoreMember) {
-        val rs = runCatching { n.records() }.getOrNull() ?: return
-        val (fresh, rooted) = synchronized(lock) {
-            val g = state ?: return
-            val roots = g.roots.size
-            val fresh = g.add(rs)
-            if (fresh.isNotEmpty()) runCatching { g.save(file) }
-            fresh to (g.roots.size != roots)
-        }
-        if (fresh.isNotEmpty()) recordsTakenAtMs = System.currentTimeMillis()
-        if (fresh.isNotEmpty()) {
-            relay()
-            refreshCredentials()
-            onRecords?.invoke()
-        }
-        if (rooted) Thread({ restartSync() }, "restart sync").start()
-    }
-
-    /**
-     * Notes a peer whose member certificate is due for renewal on an admin
-     * phone (docs/protocol.md, section 2). The root and admin keys sign
-     * only after the user's authentication, so the renewal waits for
-     * [signDue], which sends it to the peer; one that is gone by then gets
-     * it on a later connection.
-     */
-    private fun renew(device: String, chain: List<ByteArray>) {
-        val g = synchronized(lock) { state } ?: return
-        val cert = chain.firstOrNull() ?: return
-        if (g.isAdmin && GroupCertificates.isDue(cert, g.adminCA ?: g.currentRoot, Instant.now())) {
-            dueRenewals[java.util.Base64.getEncoder().encodeToString(cert)] = device to chain
-        }
     }
 
     /** The attestation of this phone's member key, which every peer gets (docs/protocol.md, section 17, "Evidence"); none for a key made without one. */
@@ -2204,94 +1510,22 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     private fun ownEvidence(): List<Member.Evidence> = runCatching { memberEvidence }.getOrDefault(emptyList())
 
-    /** The revocation list the root checks evidence against. */
-    private val attestStatus by lazy { AttestStatus(File(context.filesDir, "attest-status")) }
-
-    /** On the root, notes the attestation a peer sent, which [signDue] records. */
-    private fun evidenceReceived(peer: String?, chain: List<ByteArray>, e: Member.Evidence) {
-        val g = synchronized(lock) { state } ?: return
-        if (g.isRoot) attestStatus.refreshIfDue()
-        if (peer != null && g.isRoot) dueProofs[peer] = chain to e
-    }
-
     /**
-     * Signs, with the root or admin key, what came due while it could not
-     * ask the user: the renewals of the peers' certificates, on the root
-     * what the peers' attestations and this phone's own show, and the next
-     * period of the group's server credentials. Each signature asks; a
-     * cancelled one ends the run, and what is left waits for the next time
-     * the app opens. Only what needs a signature asks: an attestation that
-     * shows what the records say already signs nothing.
+     * Signs, with the root key, what came due while it could not ask the
+     * user: the next period of the group's server credentials (renewPeriod).
      */
     suspend fun signDue() {
         if (activity == null) return
-        if (isV06) return renewPeriod06()
-        try {
-            renewDue()
-            if (synchronized(lock) { state }?.isRoot == true) {
-                proveDue()
-                if (periodDue) signPeriod()
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "signing what came due; the next start asks again", e)
-        }
-    }
-
-    private suspend fun renewDue() {
-        for ((leaf, due) in dueRenewals.entries.toList()) {
-            val (device, chain) = due
-            val g = copyOfState() ?: return
-            if (!g.isAdmin) return
-            val cert = chain.first()
-            val name = g.devices.firstOrNull { it.key.contentEquals(KitRecords.keyHashOfCert(cert)) }?.name
-            val ca = caSigner(R.string.reason_renew_peer, name)
-            // The kit takes a failed renewal for none; a cancelled prompt ends the run.
-            var refused: Exception? = null
-            val watched = object : CertificateSigner {
-                override val publicKeyDER = ca.publicKeyDER
-
-                override fun signature(data: ByteArray): ByteArray = try {
-                    ca.signature(data)
-                } catch (e: Exception) {
-                    refused = e
-                    throw e
-                }
-            }
-            val renewal = withContext(Dispatchers.IO) { g.renewal(chain, watched, Instant.now()) }
-            refused?.let { throw it }
-            dueRenewals.remove(leaf)
-            if (renewal != null) currentNode?.let { n -> runCatching { n.sendCert(device, renewal.cert, renewal.issuer) } }
-        }
-    }
-
-    private suspend fun proveDue() {
-        val own = ownEvidence().firstOrNull()
-        val g = copyOfState() ?: return
-        val due: MutableList<Pair<String, Pair<List<ByteArray>, Member.Evidence>>> = dueProofs.entries.map { it.key to it.value }.toMutableList()
-        if (own != null && g.devices.none { it.id == g.device && it.proof != null }) due += g.device to (g.memberChain.take(1) to own)
-        for ((dev, p) in due) {
-            val copy = copyOfState() ?: return
-            if (!copy.isRoot) return
-            val name = copy.devices.firstOrNull { it.id == dev }?.name
-            val root = signer(Keys.ROOT, R.string.reason_record_proof, name)
-            val r = withContext(Dispatchers.IO) { prove(copy, dev, p.first, p.second, root, Instant.now()) }
-            // A newer attestation the peer sent meanwhile stays for the next run.
-            dueProofs.remove(dev, p)
-            if (r == null) continue
-            withContext(Dispatchers.IO) { adopt(copy) }
-            published(listOf(r))
-        }
+        renewPeriod()
     }
 
     /**
-     * On the root phone of a group of 0.6, renews the group's server
+     * On the root phone, renews the group's server
      * credentials with the root key when they are due, asking first: only
      * when the app opens, and with the next root action (the member renews
      * them with its key then), never at another moment.
      */
-    private suspend fun renewPeriod06() {
+    private suspend fun renewPeriod() {
         val n = currentNode ?: return
         if (!isRoot || !withContext(Dispatchers.IO) { runCatching { n.periods().first }.getOrDefault(false) }) return
         try {
@@ -2306,38 +1540,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** On the root phone of a group of 0.6, whether the group's server credentials expired; false elsewhere. */
     val periodOverdue06: Boolean
-        get() = if (!isV06) false else currentNode?.let { n -> runCatching { n.periods().second }.getOrNull() } ?: false
-
-    /** Signs the next period of the server credentials, asking first, since the refresh signs it under the lock. */
-    private suspend fun signPeriod() {
-        val root = signer(Keys.ROOT, R.string.reason_period)
-        val once = withContext(Dispatchers.IO) { root.once() }
-        periodDue = false
-        refreshCredentials(period = once)
-    }
-
-    private fun prove(g: PhoneGroup, device: String, chain: List<ByteArray>, e: Member.Evidence, signer: KeystoreSigner, now: Instant) = try {
-        g.evidence(device, chain, e, signer, now, revoked = attestStatus.revoked)?.also { Log.i(TAG, "recorded what the attestation of $device shows") }
-    } catch (x: AndroidAttestation.Invalid) {
-        Log.w(TAG, "the attestation of $device proves nothing: ${x.message}")
-        null
-    }
-
-    /**
-     * Renews this phone's own member certificate when it is due, which asks
-     * for the screen lock, and then connects again with it.
-     */
-    suspend fun renewOwnCertificate() {
-        val g = copyOfState() ?: return
-        if (!GroupCertificates.isDue(g.memberCert, g.adminCA ?: g.currentRoot, Instant.now())) return
-        val ca = runCatching { caSigner(R.string.reason_renew) }.getOrNull() ?: return
-        val renewed = withContext(Dispatchers.IO) { runCatching { g.renewOwnCertificate(ca, Instant.now()) }.getOrDefault(false) }
-        if (!renewed) return
-        withContext(Dispatchers.IO) {
-            adopt(g)
-            restartSync()
-        }
-    }
+        get() = currentNode?.let { n -> runCatching { n.periods().second }.getOrNull() } ?: false
 
     /**
      * The one button, by the node's rule (docs/design.md, "The one button"):
@@ -2466,39 +1669,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             if (quiet) null else throw x
         }
 
-    /**
-     * The image of the group's copy that a remote paste of kind media names
-     * (docs/protocol.md, section 15), fetched into the app's cache: it waits
-     * up to 20 s for the copy, which must be sealed to this phone and to the
-     * paste's sender. It throws [PasteReceiver.NotPasted] with the reason.
-     */
-    private fun pasteImage(body: Commands.Body): Pair<File, String> {
-        val until = System.currentTimeMillis() + 20_000
-        var c: CoreMember.Copy?
-        while (true) {
-            val n = currentNode ?: throw PasteReceiver.NotPasted("this device is in no group")
-            c = runCatching { n.current() }.getOrNull()?.takeIf { it.id == body.text }
-            if (c != null) break
-            if (System.currentTimeMillis() >= until) throw PasteReceiver.NotPasted("the copy to paste did not arrive here, or a newer copy replaced it")
-            Thread.sleep(50)
-        }
-        val copy = c!!
-        when {
-            copy.unread -> throw PasteReceiver.NotPasted("this device cannot read the copy to paste")
-            copy.media == null -> throw PasteReceiver.NotPasted("the copy to paste holds no images or files")
-            body.by !in copy.readers -> throw PasteReceiver.NotPasted("the copy to paste was not sealed to the device that sent the paste")
-            copy.isFiles -> throw PasteReceiver.NotPasted("this phone pastes images into a text field, not files")
-        }
-        val part = Images.part(copy.media) ?: throw PasteReceiver.NotPasted("the copy to paste holds no image this phone pastes")
-        val n = currentNode ?: throw PasteReceiver.NotPasted("this device is in no group")
-        val f = try {
-            Images.fetch(context, n, copy, part)
-        } catch (x: Exception) {
-            throw PasteReceiver.NotPasted("the copy's image did not arrive here: ${x.message}", refused = false)
-        }
-        return f to copy.text
-    }
-
     /** Sends a text the phone's clipboard holds, unless it is the group's current text already. */
     fun send(text: String): SyncResult {
         val n = currentNode ?: throw Failure(Failure.Kind.NO_COMPUTERS)
@@ -2529,75 +1699,17 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     @Volatile var onPanic: ((details: String, log: List<String>) -> Unit)? = null
 
     /** This phone's secret for sealed messages (docs/protocol.md, section 15), 32 random bytes under a Keystore key. */
-    private val sealFile = SealedFile(File(file.parentFile, "seal-secret"), "cbb.seal")
-
-    /** The secret, made and kept on its first use; null, with the reason in the log, when the Keystore refuses it. */
-    private fun sealSecret(): ByteArray? =
-        try {
-            synchronized(sealFile) {
-                sealFile.read()?.takeIf { it.size == 32 } ?: ByteArray(32).also {
-                    SecureRandom().nextBytes(it)
-                    sealFile.write(it)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "no key for sealed messages", e)
-            null
-        }
-
-    /**
-     * This phone's public key for sealed messages, which its pairing and device record carry so that commands for it
-     * come sealed; null when there is none, and the commands for it then come in the open.
-     */
-    private fun sealKey(): ByteArray? =
-        sealSecret()?.let {
-            try {
-                Core.sealPublic(it)
-            } catch (e: Exception) {
-                Log.e(TAG, "no public key for sealed messages", e)
-                null
-            }
-        }
-
     companion object {
-        /** How long a member stays connected before the records count as synced with it. */
-        private const val SYNCED_AFTER_MS = 30_000L
-
-        /** The time of the newest `recovery` record that names key. */
-        internal fun recoveryMade(key: ByteArray, records: List<Member.Record>): Instant? {
-            for (r in records.asReversed()) {
-                val o = runCatching { Json.parseToJsonElement(String(r.body)).jsonObject }.getOrNull() ?: continue
-                fun field(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
-                if (field("type") != "recovery") continue
-                val admin = field("admin")?.let { runCatching { java.util.Base64.getDecoder().decode(it) }.getOrNull() } ?: continue
-                val ms = (o["time_ms"] as? JsonPrimitive)?.longOrNull ?: continue
-                if (admin.contentEquals(key)) return Instant.ofEpochMilli(ms)
-            }
-            return null
-        }
-
         private const val TAG = "cbb"
 
-        /** The most command IDs the replay cache keeps; a command lives at most 30 s, as Go's maxCommandIDs. */
-        private const val MAX_COMMANDS = 4096
-
-        /** How long after an away-off command the phone connects again, as Go's restartAfter. */
-        private const val AWAY_OFF_RESTART_MS = 500L
-
-        /** How long a quick action may take: an own action runs for up to 15 s before the computer answers. */
-        private const val ACTION_TIMEOUT_MS = 25_000L
-
-        /** How often the phone takes the records the node holds, besides at each peer and copy. */
+        /** How often the phone reads the push face and renewals the member keeps. */
         private const val RECORDS_POLL_MS = 15_000L
-
-        /** How long after a connection the phone looks for the push-renew a member sends on it. */
-        private const val RENEWALS_AFTER_MS = 3_000L
 
         /** How many of the node's log lines the tests' messages keep. */
         private const val NODE_LOG_LINES = 200
         private const val TRACE_LINES = 60
 
-        /** How long joinComputer browses for a pairing window, and then for a second one. */
+        /** How long joining browses for a home window, and then for a second one. */
         const val BROWSE_MS = 10_000L
         const val PAIRING_SETTLE_MS = 2_000L
 
@@ -2611,6 +1723,21 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         const val HUB_GRACE_MS = 60_000L
 
         fun defaultFile(context: Context) = File(context.filesDir, "cbb/group.json")
+
+        /**
+         * Whether the root phone adds a Wear OS watch: not on 0.6, whose
+         * watch app does not run on the records of 0.6 yet (D-124).
+         */
+        const val WEAR_JOINS = false
+
+        /** Why a watch does nothing to a device on 0.6. */
+        const val NO_WRIST = "on 0.6 a watch shows the group and signs nothing from the wrist"
+
+        /** host:port, with an IPv6 host in brackets. */
+        fun hostPort(host: String, port: Int): String {
+            val h = host.substringBefore('%')
+            return if (h.contains(':')) "[$h]:$port" else "$h:$port"
+        }
 
 
         /**

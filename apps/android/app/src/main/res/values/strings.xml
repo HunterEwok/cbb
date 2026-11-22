@@ -63,6 +63,8 @@
     <string name="away_waits">Everywhere waits while sync is off</string>
     <string name="back">Back</string>
     <string name="badge_hub">hub</string>
+    <string name="before06_body">This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</string>
+    <string name="before06_title">A group from before 0.6</string>
     <string name="bug_allow">Allow</string>
     <string name="bug_always">Always allow</string>
     <string name="bug_broke_restarted">Something in CBB broke. It started again.</string>

@@ -554,7 +554,7 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   the member asks (renewals, admin CAs, the hub's offers, commands for the phone, the caller
   of a relay's call). One implementation of the member protocol, the clipboard rule and the
   button then serves every phone, and the cross tests drive it through the kits
-  (`cbb-interop`, `InteropMain`).
+  (`cbb-interop` and the Kotlin kit's tests).
 
 ### Watches
 

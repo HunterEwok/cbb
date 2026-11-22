@@ -33,7 +33,6 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
 import tools.cbb.kit.Core
-import tools.cbb.kit.GroupAlert
 
 /**
  * The phone's part of the sheet of the dangerous screens (docs/testing.md,
@@ -106,19 +105,6 @@ class DangerousScreensTest(private val lang: String) {
     fun invitation() {
         show { InviteAsk("Anna's laptop", "Windows", "3F9A 1C2E 88B0 D45E 7A19") {} }
         shoot("invite-fingerprint")
-    }
-
-    @Test
-    fun alerts() {
-        val alerts = listOf(
-            GroupAlert(GroupAlert.Kind.SECRETS_STOPPED),
-            GroupAlert(GroupAlert.Kind.CLAIM_PENDING, names = listOf("Pixel"), devices = listOf("pixel"), leftMS = 70L * 3_600_000),
-            GroupAlert(GroupAlert.Kind.ADMINS, names = listOf("MacBook", "Windows PC"), devices = listOf("mac", "win")),
-            GroupAlert(GroupAlert.Kind.CLAIMS, names = listOf("Pixel", "iPad"), devices = listOf("pixel", "ipad")),
-            GroupAlert(GroupAlert.Kind.TWO_HISTORIES, names = listOf("Home server"), devices = listOf("srv")),
-        )
-        show { AlertList(alerts, isRoot = true, resolve = {}, remove = {}) }
-        shoot("alerts")
     }
 
     @Test

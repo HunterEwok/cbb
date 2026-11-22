@@ -16,6 +16,8 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- ffi's group of 0.6 names its key level and the window for incoming copies (`key_level`,
+  `incoming_ms`), and the manage action `incoming` sets that window from a phone.
 - A phone in a group of 0.6 changes the group's root to itself with the recovery key, from
   the sheet's QR code or text or from the secret a YubiKey opens, after showing who stays
   (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);
@@ -2891,6 +2893,11 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
+  renewals, proofs, sealing and joining of a computer, with their tests and the kit's
+  interop player (`InteropMain`, `interopScript`). A phone with a group from before 0.6
+  shows a screen that says so and offers Leave, which alone deletes the old files; it never
+  deletes them by itself.
 - The phones' member of a group made before 0.6 (D-126): `cbb_member_start` runs only the
   member of 0.6 and answers a folder without `group.cbor` that its group was made before 0.6
   and a new one is needed; the node of 0.5 behind it, its events `identity`, `message`,

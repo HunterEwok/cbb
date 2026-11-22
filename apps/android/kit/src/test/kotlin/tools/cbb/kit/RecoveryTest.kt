@@ -43,31 +43,4 @@ class RecoveryTest {
         assertEquals("request", bad.name)
     }
 
-    @Test
-    fun makeAndRemove() {
-        val root = SoftwareSigner()
-        val g = PhoneGroup.create(root, SoftwareSigner().publicKeyDER, now)
-        assertFailsWith<PhoneGroup.Failure> { g.removeRecovery(root, now) }
-        val r = g.makeRecovery(root, now.plusSeconds(1))
-        assertTrue(g.records.records.any { it.body.contentEquals(r.record.body) })
-        assertContentEquals(r.sheet.admin, g.records.recovery)
-        assertContentEquals(r.sheet.admin, Records.keyHashOfCert(r.adminCA))
-        assertEquals(32, r.key.size)
-
-        val fromQR = assertIs<Core.SheetReading.Key>(Core.readRecoverySheet(r.sheet.qr)).key
-        assertContentEquals(r.key, fromQR.key)
-        assertContentEquals(r.adminCA, fromQR.cert)
-        assertEquals(g.tag, fromQR.group)
-        val fromText = assertIs<Core.SheetReading.Key>(Core.readRecoverySheet(r.sheet.text.lowercase())).key
-        assertContentEquals(r.key, fromText.key)
-        assertNull(fromText.cert)
-
-        // A new key replaces the old one.
-        val r2 = g.makeRecovery(root, now.plusSeconds(2))
-        assertFalse(r2.key.contentEquals(r.key))
-        assertContentEquals(r2.sheet.admin, g.records.recovery)
-
-        g.removeRecovery(root, now.plusSeconds(3))
-        assertNull(g.records.recovery)
-    }
 }

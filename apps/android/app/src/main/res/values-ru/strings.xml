@@ -62,6 +62,8 @@
     <string name="away_waits">«Везде» ждёт, пока синхронизация выключена</string>
     <string name="back">Назад</string>
     <string name="badge_hub">хаб</string>
+    <string name="before06_body">Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или войдите в другую. Пока вы не выйдете, ничего не удаляется.</string>
+    <string name="before06_title">Группа до версии 0.6</string>
     <string name="bug_allow">Разрешить</string>
     <string name="bug_always">Разрешать всегда</string>
     <string name="bug_broke_restarted">В CBB что-то сломалось. Он запустился заново.</string>

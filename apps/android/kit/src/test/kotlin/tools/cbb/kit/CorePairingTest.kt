@@ -23,34 +23,25 @@ class CorePairingTest {
         top.deleteRecursively()
     }
 
-    /** A root phone: the group the core made with its root key, and its member running. */
-    private class Root(val root: SoftwareSigner, val group: PhoneGroup, val member: CoreMember)
-
-    private fun root(): Root {
+    @Test
+    fun newGroupHasTheRootAndItsPhone() {
         val root = SoftwareSigner()
         val key = SoftwareSigner()
-        val made = CorePairing.newGroup("Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, Core.sealPublic(CoreGroup.SEAL), root::signDigest)
-        val g = PhoneGroup.of(made, root = true)
+        val dir = File(top, "root")
+        val made = CorePairing.newGroup(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
         val m = CoreMember.start(
-            CoreMember.Start(File(top, "root").apply { mkdirs() }, "Root phone", "android", "17", "0.6.0", device = g.device, publicKey = key.publicKeyDER,
-                seal = CoreGroup.SEAL, cert = g.memberCert, groupCA = g.groupCA, roots = g.trusted),
+            CoreMember.Start(dir, "Root phone", "android", "17", "0.6.0", device = made.device, publicKey = key.publicKeyDER),
             key::signDigest,
             events = { },
         )
         members += m
-        m.addRecords(g.records.records)
-        return Root(root, g, m)
-    }
-
-    @Test
-    fun newGroupHasTheRootAndItsPhone() {
-        val r = root()
-        assertTrue(r.group.isRoot)
-        assertNull(r.group.adminCA)
-        val me = r.group.devices.single()
-        assertEquals(r.group.device, me.id)
+        val g = m.group()
+        assertTrue(g.isRoot, "the phone that made the group holds its root")
+        assertEquals(made.device, g.rootDevice)
+        val me = g.devices.single()
+        assertEquals(made.device, me.device)
         assertEquals("phone", me.role)
-        // The member certificate comes from the group's root, whose key signed it.
-        assertContentEquals(r.root.publicKeyDER, CertificateInfo(r.group.groupCA).publicKey)
+        assertEquals(Records.HARDWARE, g.keyLevel)
+        assertNull(g.incomingMS, "no copies record yet")
     }
 }

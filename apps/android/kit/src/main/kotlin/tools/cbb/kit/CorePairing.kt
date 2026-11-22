@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Pairing in the Rust core (docs/core-api.md, "Joining and admitting"):
- * a phone that makes a group ([newGroup], [newGroup06]), opens a pairing
+ * a phone that makes a group ([newGroup]), opens a pairing
  * window for a device at home ([Window]), joins a group by a window's QR
  * code ([Joiner]), or makes a remote invitation ([Inviting]). The core runs
  * the exchange inside its own TLS and asks for each signature through a
@@ -28,72 +28,17 @@ object CorePairing {
         override fun toString(): String = "CorePairing.Failure: $message" + (details?.takeIf { it.isNotEmpty() }?.let { "\n$it" } ?: "")
     }
 
-    /**
-     * A group this phone is in, as the core made or joined it: its device
-     * ID, member certificate and the admin CA that issued it, the group CA,
-     * the later roots, the records file and, for a phone made an admin, its
-     * admin CA.
-     */
-    class Group(
-        val device: String,
-        val cert: ByteArray,
-        val issuer: ByteArray?,
-        val groupCA: ByteArray,
-        val roots: List<ByteArray>,
-        val records: ByteArray,
-        val adminCA: ByteArray?,
-    ) {
-        internal companion object {
-            fun of(o: JsonObject): Group = Group(
-                o.optString("device") ?: throw Core.Mismatch("the group has no device"),
-                o.optBytes("cert") ?: throw Core.Mismatch("the group has no certificate"),
-                o.optBytes("issuer"),
-                o.optBytes("group_ca") ?: throw Core.Mismatch("the group has no group CA"),
-                o.optBytesList("roots").orEmpty(),
-                o.optBytes("records") ?: ByteArray(0),
-                o.optBytes("admin_ca"),
-            )
-        }
-    }
-
-    /**
-     * Makes a group with this phone's root key (cbb_group_new): its root CA,
-     * this phone's member certificate and its device record. rootPublic and
-     * public are the root and member keys (SubjectPublicKeyInfo or point),
-     * store where the member key lives (Records.HARDWARE or Records.FILE),
-     * seal the phone's public key for sealed messages; signRoot signs a
-     * digest with the root key, during this call only.
-     */
-    fun newGroup(name: String, os: String, store: String, rootPublic: ByteArray, public: ByteArray, seal: ByteArray?, signRoot: (ByteArray) -> ByteArray): Group {
-        val request = Wire.encode(
-            Wire.obj(
-                "name" to Wire.str(name),
-                "os" to Wire.str(os),
-                "store" to Wire.str(store),
-                "root_public" to Wire.bytes(CoreMember.point(rootPublic)),
-                "public" to Wire.bytes(CoreMember.point(public)),
-                "seal" to Wire.bytes(seal),
-            ),
-        )
-        val sign = CoreMember.signFn(signRoot)
-        val count = count()
-        val answer = lib.cbb_group_new(request, Core.SizeT(request.size.toLong()), sign, null, count)
-            ?: throw Core.Mismatch("the core gave no answer to the new group")
-        return Group.of(ok("new group", CoreMember.take(answer, count)))
-    }
-
-    /** A group of 0.6 this phone made: its ID, this phone's device ID and the recovery sheet, which the person keeps and the app keeps nowhere. */
+    /** A group this phone made: its ID, this phone's device ID and the recovery sheet, which the person keeps and the app keeps nowhere. */
     class Made(val group: String, val device: String, val recoveryQR: String, val recoveryText: List<String>)
 
     /**
-     * Makes a group of 0.6 with this phone's root key (cbb_group_new with
-     * dir): the core writes this phone's record under the root and keeps
+     * Makes a group with this phone's root key (cbb_group_new): the core writes this phone's record under the root and keeps
      * the set in dir, where [CoreMember.start] then reads it. rootPublic and
      * public are the root and member keys (SubjectPublicKeyInfo or point),
      * store where the member key lives (Records.HARDWARE or Records.FILE);
      * signRoot signs a digest with the root key, during this call only.
      */
-    fun newGroup06(dir: java.io.File, name: String, os: String, store: String, rootPublic: ByteArray, public: ByteArray, signRoot: (ByteArray) -> ByteArray): Made {
+    fun newGroup(dir: java.io.File, name: String, os: String, store: String, rootPublic: ByteArray, public: ByteArray, signRoot: (ByteArray) -> ByteArray): Made {
         val request = Wire.encode(
             Wire.obj(
                 "dir" to Wire.str(dir.path),
@@ -123,11 +68,11 @@ object CorePairing {
      * 12) through member: its guest tunnel opens on this phone when it is
      * the group's hub, else through a connected hub of the group (hub
      * names one, "" for any). public is the key sign holds (the admin
-     * key with adminCA, or the root's key without); sign is called when a device the user confirmed is
+     * key, or the root's key); sign is called when a device the user confirmed is
      * admitted. expiresS is in seconds: an hour when 0, a day at most. It
      * waits for the hub, so the app makes it off its main thread.
      */
-    class Inviting(member: CoreMember, public: ByteArray, adminCA: ByteArray?, expiresS: Int, hub: String = "", kind: String = "", sign: (ByteArray) -> ByteArray) : Closeable {
+    class Inviting(member: CoreMember, public: ByteArray, expiresS: Int, hub: String = "", kind: String = "", sign: (ByteArray) -> ByteArray) : Closeable {
         private val signFn = CoreMember.signFn(sign)
         private val handle: Pointer
         private val closed = AtomicBoolean(false)
@@ -140,7 +85,7 @@ object CorePairing {
         /** Where the invitation is: open, joining (answer about request), done (name joined) or failed. */
         data class State(val version: Long, val state: String, val request: Request?, val name: String, val failure: Failure?)
 
-        /** The invitation's text, cbb://invite#..., for its QR code, and how long it is valid, in seconds. */
+        /** The invitation's text, cbb://join#..., for its QR code, and how long it is valid, in seconds. */
         val text: String
         val expires: Int
 
@@ -148,7 +93,6 @@ object CorePairing {
             val request = Wire.encode(
                 Wire.obj(
                     "public" to Wire.bytes(CoreMember.point(public)),
-                    "admin_ca" to Wire.bytes(adminCA),
                     "expires" to JsonPrimitive(expiresS),
                     "hub" to Wire.str(hub),
                     "kind" to Wire.str(kind),

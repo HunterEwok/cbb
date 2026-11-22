@@ -98,7 +98,7 @@ void cbb_member_stop(cbb_member *m);
  * the key public names (the phone's admin key, or the root's key) through
  * sign, called during this call only (src/member/live.rs, manage): request
  * is {"action","public",...} (docs/core-api.md, "The member"). action
- * remove, rename, freeze, thaw (records the records judge); mute, unmute,
+ * remove, rename, freeze, thaw, incoming (records the records judge); mute, unmute,
  * sync_off, sync_on, paste, paste_off, actions_off, away_off (commands for
  * another device, answered {"status","reason"}); on the root relay, period,
  * forwarder, hubs, make_admin, key_level, add_watch and attest;

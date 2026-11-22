@@ -62,6 +62,8 @@
     <string name="away_waits">सिंक बंद रहने तक हर जगह रुका रहता है</string>
     <string name="back">वापस</string>
     <string name="badge_hub">हब</string>
+    <string name="before06_body">यह फ़ोन 0.6 से पहले बने समूह में है, जिसे यह संस्करण अब नहीं चलाता। इस फ़ोन पर उससे बाहर निकलें, फिर नया समूह बनाएँ या किसी में शामिल हों। जब तक आप बाहर नहीं निकलते, कुछ भी नहीं हटता।</string>
+    <string name="before06_title">0.6 से पहले का समूह</string>
     <string name="bug_allow">अनुमति दें</string>
     <string name="bug_always">हमेशा अनुमति दें</string>
     <string name="bug_broke_restarted">CBB में कुछ टूट गया। यह फिर से शुरू हो गया।</string>

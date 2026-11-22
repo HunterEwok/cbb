@@ -102,7 +102,7 @@ they look, so both apps are built to the same plan.
    until a computer fetched them from the phone, at most a minute.
 
    When the group's records show a likely thief, a card above the button says so
-   (`GroupAlerts` in the kits, from the core's state; docs/protocol.md, section 10,
+   (`GroupAlerts` in the iPhone kit, from the core's state; the Android app of 0.6 shows none (D-126); docs/protocol.md, section 10,
    "Stopping the exchange"): what is stopped (all but the records, or the secrets), why (two
    admins acting against each other, two claims or a disputed one, a key that signed two
    histories), a claim to take the group over with the time left, and a newer version of

@@ -14,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.ChangePreview
 import tools.cbb.kit.Notice
 import tools.cbb.kit.RecoveryCard
@@ -23,13 +22,8 @@ import tools.cbb.kit.Arrangement
 import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
-import tools.cbb.kit.CopyKeys
 import tools.cbb.kit.CorePairing
-import tools.cbb.kit.PairingJoiner
-import tools.cbb.kit.PairingMember
-import tools.cbb.kit.Pairing
 import tools.cbb.kit.PhoneGroup
-import tools.cbb.kit.TLSTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +38,8 @@ import java.time.Instant
  * state is Compose state, changed on the main thread.
  */
 class AppModel(private val app: Context) {
-    enum class Phase { START, JOINING, HOME }
+    /** BEFORE_06: the app's folder holds a group made before 0.6, which the person leaves first (D-126). */
+    enum class Phase { START, JOINING, HOME, BEFORE_06 }
 
     /** One line about the last action, in plain words, and the error underneath when details are on. */
     data class Note(@StringRes val text: Int, val detail: String? = null, val error: Boolean = false)
@@ -77,7 +72,7 @@ class AppModel(private val app: Context) {
     var bug by mutableStateOf<BugReports.Offer?>(null)
         private set
 
-    var phase by mutableStateOf(if (group.hasGroup) Phase.HOME else Phase.START)
+    var phase by mutableStateOf(if (group.hasGroup) Phase.HOME else if (group.before06) Phase.BEFORE_06 else Phase.START)
         private set
     private var listed by mutableStateOf(group.devices)
 
@@ -122,16 +117,8 @@ class AppModel(private val app: Context) {
     var isRoot by mutableStateOf(false)
         private set
 
-    /** Whether the group's root handed the group to this phone, which may take it now. */
-    var handedOver by mutableStateOf(false)
-        private set
-
     /** The group removed this phone; the app offers to leave. */
     var removed by mutableStateOf(false)
-        private set
-
-    /** What the group's records stop and what ends it. */
-    var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
         private set
 
     /** The member's notices about the group (docs/apps.md, "Notices"), on Home. */
@@ -249,7 +236,7 @@ class AppModel(private val app: Context) {
      * when it expires, the file to share as the fallback, and the device
      * waiting for the user's answer.
      */
-    data class Invite(val text: String, val expires: Instant, val file: File, val request: PairingMember.Request? = null)
+    data class Invite(val text: String, val expires: Instant, val file: File, val request: CorePairing.Inviting.Request? = null)
 
     var invite by mutableStateOf<Invite?>(null)
         private set
@@ -405,9 +392,6 @@ class AppModel(private val app: Context) {
         private set
     var windowDigits by mutableStateOf<String?>(null)
         private set
-
-    /** Whether the phone pairs on 0.6: without a group (a new one is of 0.6) or in a group of 0.6. */
-    val pairsOn06: Boolean get() = !group.hasGroup || group.isV06
 
     /**
      * "Add a device" on 0.6: makes the group first on a phone without one
@@ -593,12 +577,10 @@ class AppModel(private val app: Context) {
         val (d, admin) = withContext(Dispatchers.IO) { group.devices to group.isAdmin }
         devices = d
         isAdmin = admin
-        val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
+        val root = withContext(Dispatchers.IO) { group.isRoot }
         isRoot = root
-        alerts = a
         notices = withContext(Dispatchers.IO) { group.notices }
         rootChanged = group.rootChanged
-        handedOver = withContext(Dispatchers.IO) { group.handedOver }
         removed = withContext(Dispatchers.IO) { group.removed }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
@@ -607,15 +589,7 @@ class AppModel(private val app: Context) {
         // Push learns the devices as applied: a device gone or a new root draws a new push key.
         val tag = withContext(Dispatchers.IO) { group.groupTag }
         withContext(Dispatchers.IO) { PushSetup.group(app, tag, d, group.pushFace) }
-        if (withContext(Dispatchers.IO) { group.isV06 }) {
-            update06(root)
-            WatchLink.update(app, this)
-            return
-        }
-        // A phone of a group of 0.5 syncs at home only (D-123).
-        away = null
-        hub = null
-        blindRelay = null
+        update06(root)
         WatchLink.update(app, this)
     }
 
@@ -736,7 +710,7 @@ class AppModel(private val app: Context) {
     }
 
     /** Asks the user about a device that used the invitation, for up to 5 minutes. */
-    private suspend fun ask(req: PairingMember.Request): Boolean = withContext(Dispatchers.Main) {
+    private suspend fun ask(req: CorePairing.Inviting.Request): Boolean = withContext(Dispatchers.Main) {
         val d = CompletableDeferred<Boolean>()
         answer = d
         invite = invite?.copy(request = req)
@@ -910,22 +884,6 @@ class AppModel(private val app: Context) {
         return done
     }
 
-    /** Ends a conflict or cancels a claim as the group's root: voids the alert's records. */
-    suspend fun resolve(alert: GroupAlert) {
-        message = try {
-            group.resolve(alert.records)
-            when (alert.kind) {
-                GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED -> Note(R.string.claim_cancelled)
-                else -> Note(R.string.histories_voided)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
-    }
-
     /** Hides a notice that may be hidden. */
     suspend fun dismiss(notice: Notice) {
         try {
@@ -968,19 +926,6 @@ class AppModel(private val app: Context) {
         }
         update()
         return done
-    }
-
-    /** Takes the group the root handed to this phone (cbb handover), after the fingerprint or the screen lock. */
-    suspend fun takeHandedGroup() {
-        message = try {
-            group.takeHandedGroup()
-            Note(R.string.handed_taken)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            describe(e)
-        }
-        update()
     }
 
     /** Unfreezes an admin computer that another admin froze. */
@@ -1326,23 +1271,19 @@ class AppModel(private val app: Context) {
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
             is Content.Unread -> R.string.error_copy_unread
-            is CopyKeys.NoRecords -> R.string.error_copy_no_records
             is LiveGroup.Muted -> R.string.error_muted
             is LiveGroup.Unavailable, is LiveGroup.NotConnected, is Content.Mismatch -> R.string.error_image_unavailable
             is CorePairing.Failure -> if (e.wrongCode) R.string.error_wrong_code else R.string.error_refused
-            is PairingMember.Failure ->
-                if (e.code == Pairing.ErrorCode.WRONG_CODE) R.string.error_wrong_code else R.string.error_refused
             is PhoneGroup.Failure -> R.string.error_generic
             is PhoneGroup.FileKey -> R.string.error_file_key
             is PhoneGroup.BelowKeyLevel -> R.string.error_below_key_level
             is PhoneGroup.Rootless -> R.string.error_rootless
-            is PhoneGroup.ReadsCopies -> R.string.error_reads_copies
-            is PairingJoiner.Failure -> R.string.error_join
+            is PhoneGroup.Before06 -> R.string.before06_body
             is Keys.NoScreenLock -> R.string.error_no_screen_lock
             is Keys.NoBiometric -> R.string.error_no_biometric
             is Keys.OldKey -> R.string.error_old_key
             is Authenticator.Cancelled -> R.string.error_not_authenticated
-            is TLSTransport.Failure, is java.io.IOException -> R.string.error_unreachable
+            is java.io.IOException -> R.string.error_unreachable
             else -> R.string.error_generic
         }
     }

@@ -62,6 +62,8 @@
     <string name="away_waits">«في كل مكان» ينتظر ما دامت المزامنة متوقفة</string>
     <string name="back">رجوع</string>
     <string name="badge_hub">محور</string>
+    <string name="before06_body">هذا الهاتف في مجموعة أُنشئت قبل الإصدار 0.6، وهذا الإصدار لم يعد يشغّلها. غادرها على هذا الهاتف، ثم أنشئ مجموعة جديدة أو انضم إلى واحدة. لا يُحذف شيء حتى تغادر.</string>
+    <string name="before06_title">مجموعة من قبل الإصدار 0.6</string>
     <string name="bug_allow">السماح</string>
     <string name="bug_always">السماح دائمًا</string>
     <string name="bug_broke_restarted">حدث عطل في CBB، وأُعيد تشغيله.</string>

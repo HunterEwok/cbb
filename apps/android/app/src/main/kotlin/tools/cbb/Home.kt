@@ -8,9 +8,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import android.Manifest
-import android.icu.text.MeasureFormat
-import android.icu.util.Measure
-import android.icu.util.MeasureUnit
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -76,8 +73,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import tools.cbb.kit.Arrangement as Tiles
-import tools.cbb.kit.GroupAlert
-import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -117,8 +112,6 @@ internal fun HomeScreen(model: AppModel) {
         }
     }
     LaunchedEffect(Unit) {
-        model.group.renewOwnCertificate()
-        model.group.finishTakeOverIfDue()
         model.group.signDue()
     }
     BackgroundSync()
@@ -505,133 +498,14 @@ private fun SwitchFace(
 }
 
 /**
- * What the group's records stop and what ends it: the stop, each conflict and
- * each claim (GroupAlert). On the root phone each comes with what ends it,
- * after the fingerprint or the screen lock: voiding both histories of a key,
- * cancelling a claim, or removing one of two admins that removed each other.
+ * What the person should know about the group: that the group removed
+ * this phone, a change of its root, and the member's notices.
  */
 @Composable
 internal fun Alerts(model: AppModel) {
     RemovedCard(model)
-    Handed(model)
     RootChangedCard(model)
     NoticesCard(model)
-    val scope = rememberCoroutineScope()
-    AlertList(
-        model.alerts,
-        model.isRoot,
-        resolve = { alert -> scope.launch { model.resolve(alert) } },
-        remove = { id -> scope.launch { model.remove(id) } },
-    )
-}
-
-/**
- * The alerts' card: each alert in a sentence and, on the root phone, what
- * ends it. Apart from Alerts so that the sheet of the dangerous screens
- * (DangerousScreensTest) draws it without a group.
- */
-@Composable
-internal fun AlertList(alerts: List<GroupAlert>, isRoot: Boolean, resolve: (GroupAlert) -> Unit, remove: (String) -> Unit) {
-    if (alerts.isEmpty()) return
-    val palette = LocalPalette.current
-    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        for (alert in alerts) {
-            Text(
-                alertText(alert),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (alert.kind == GroupAlert.Kind.NEWER) palette.text else palette.danger,
-            )
-            when (alert.kind) {
-                GroupAlert.Kind.TWO_HISTORIES ->
-                    if (isRoot) {
-                        QuietButton(stringResource(R.string.void_both_histories), onClick = { resolve(alert) })
-                    } else {
-                        RootDecides()
-                    }
-                GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED ->
-                    if (isRoot) {
-                        QuietButton(stringResource(R.string.cancel_claim), onClick = { resolve(alert) })
-                    } else {
-                        RootDecides()
-                    }
-                GroupAlert.Kind.ADMINS ->
-                    if (isRoot) {
-                        for ((id, name) in alert.devices.zip(alert.names)) {
-                            QuietButton(stringResource(R.string.remove_device, name), onClick = { remove(id) })
-                        }
-                    } else {
-                        RootDecides()
-                    }
-                else -> {}
-            }
-        }
-    }
-}
-
-/** The root handed the group to this phone (cbb handover): the button that takes it. */
-@Composable
-private fun Handed(model: AppModel) {
-    if (!model.handedOver) return
-    val palette = LocalPalette.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        Text(stringResource(R.string.handed_title), style = MaterialTheme.typography.titleMedium, color = palette.text)
-        Text(stringResource(R.string.handed_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
-        // Taking the group makes this device its main one: a device that guards its keys less well than a phone says so first.
-        LaunchedEffect(Unit) { model.checkKeys() }
-        if (model.guardsLikeAPhone == false) Text(stringResource(R.string.key_guard_weak), style = MaterialTheme.typography.bodySmall, color = palette.danger)
-        AccentButton(stringResource(R.string.handed_take), enabled = !busy, onClick = {
-            busy = true
-            scope.launch {
-                try {
-                    model.takeHandedGroup()
-                } finally {
-                    busy = false
-                }
-            }
-        })
-    }
-}
-
-@Composable
-private fun RootDecides() {
-    Text(stringResource(R.string.alert_root_decides), style = MaterialTheme.typography.bodySmall, color = LocalPalette.current.textDim)
-}
-
-/** A wait in days, hours or minutes, in the user's language. */
-private fun roughly(ms: Long): String {
-    val h = ms / 3_600_000
-    val m = when {
-        h >= 48 -> Measure(h / 24, MeasureUnit.DAY)
-        h >= 2 -> Measure(h, MeasureUnit.HOUR)
-        else -> Measure(maxOf(1, ms / 60_000), MeasureUnit.MINUTE)
-    }
-    return MeasureFormat.getInstance(Locale.getDefault(), MeasureFormat.FormatWidth.WIDE).format(m)
-}
-
-/** The alert in a sentence. */
-@Composable
-private fun alertText(alert: GroupAlert): String {
-    val who = if (alert.names.isEmpty()) stringResource(R.string.alert_unknown_devices) else alert.names.joinToString(", ")
-    return when (alert.kind) {
-        GroupAlert.Kind.STOPPED -> stringResource(R.string.alert_stopped)
-        GroupAlert.Kind.SECRETS_STOPPED -> stringResource(R.string.alert_secrets_stopped)
-        GroupAlert.Kind.TWO_HISTORIES -> stringResource(R.string.alert_two_histories, who)
-        GroupAlert.Kind.ADMINS -> stringResource(R.string.alert_admins, who)
-        GroupAlert.Kind.CLAIMS -> stringResource(R.string.alert_claims, who)
-        GroupAlert.Kind.CLAIM_PENDING -> {
-            val ms = alert.leftMS
-            if (ms == null || ms <= 0) {
-                stringResource(R.string.alert_claim_pending, who)
-            } else {
-                val left = roughly(ms)
-                stringResource(R.string.alert_claim_pending_left, who, left)
-            }
-        }
-        GroupAlert.Kind.CLAIM_STOPPED -> stringResource(R.string.alert_claim_stopped, who)
-        GroupAlert.Kind.NEWER -> stringResource(R.string.alert_newer, alert.count)
-    }
 }
 
 /**

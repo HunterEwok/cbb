@@ -67,7 +67,7 @@ class InviteKitTest {
     /** A member of 0.6 started on the set in dir. */
     private fun member06(dir: File, name: String, device: String, key: SoftwareSigner, peers: List<String> = emptyList()): CoreMember =
         CoreMember.start(
-            CoreMember.Start(dir, name, "android", device = device, publicKey = key.publicKeyDER, seal = CoreGroup.SEAL, cert = ByteArray(0), groupCA = ByteArray(0), peers = peers),
+            CoreMember.Start(dir, name, "android", device = device, publicKey = key.publicKeyDER, peers = peers),
             key::signDigest,
             events = { },
         ).also { members += it }
@@ -83,7 +83,7 @@ class InviteKitTest {
         // The root phone, and an admin phone that joined its home window offering its admin key.
         val rootKey = SoftwareSigner()
         val rKey = SoftwareSigner()
-        val made = CorePairing.newGroup06(File(top, "root"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, rKey.publicKeyDER, rootKey::signDigest)
+        val made = CorePairing.newGroup(File(top, "root"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, rKey.publicKeyDER, rootKey::signDigest)
         val r = member06(File(top, "root"), "Root phone", made.device, rKey)
         val rPort = r.listen(CoreMember.Listen.HOME)
         val aKey = SoftwareSigner()
@@ -113,7 +113,7 @@ class InviteKitTest {
         }
         var inviting: CorePairing.Inviting? = null
         while (inviting == null) {
-            val got = runCatching { CorePairing.Inviting(a, aAdmin.publicKeyDER, null, 600, kind = "phone", sign = aAdmin::signDigest) }
+            val got = runCatching { CorePairing.Inviting(a, aAdmin.publicKeyDER, 600, kind = "phone", sign = aAdmin::signDigest) }
             inviting = got.getOrNull()
             if (inviting == null) {
                 assertTrue(System.nanoTime() < deadline, "the hub never opened the invitation: ${got.exceptionOrNull()}")
@@ -155,23 +155,21 @@ class InviteKitTest {
     fun anAdminWithoutAHubCannotInvite() {
         val root = SoftwareSigner()
         val key = SoftwareSigner()
-        val made = CorePairing.newGroup("Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, Core.sealPublic(CoreGroup.SEAL), root::signDigest)
-        val g = PhoneGroup.of(made, root = true)
+        val dir = File(top, "root")
+        val made = CorePairing.newGroup(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
         val m = CoreMember.start(
-            CoreMember.Start(File(top, "root").apply { mkdirs() }, "Root phone", "android", "17", "0.6.0", device = g.device, publicKey = key.publicKeyDER,
-                seal = CoreGroup.SEAL, cert = g.memberCert, groupCA = g.groupCA, roots = g.trusted),
+            CoreMember.Start(dir, "Root phone", "android", "17", "0.6.0", device = made.device, publicKey = key.publicKeyDER),
             key::signDigest,
             events = { },
         )
         members += m
-        m.addRecords(g.records.records)
 
-        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, null, 600, sign = root::signDigest) }
+        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, 600, sign = root::signDigest) }
         // Its own device ID as the hub, while it is none.
-        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, null, 600, hub = g.device, sign = root::signDigest) }
-        // A key that is not the CA's.
+        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, 600, hub = made.device, sign = root::signDigest) }
+        // A key that is not the group's root or an admin.
         val other = SoftwareSigner()
-        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, other.publicKeyDER, null, 600, sign = other::signDigest) }
-        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, null, 600, hub = "not a device", sign = root::signDigest) }
+        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, other.publicKeyDER, 600, sign = other::signDigest) }
+        assertFailsWith<CorePairing.Failure> { CorePairing.Inviting(m, root.publicKeyDER, 600, hub = "not a device", sign = root::signDigest) }
     }
 }

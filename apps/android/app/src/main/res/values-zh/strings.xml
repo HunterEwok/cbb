@@ -62,6 +62,8 @@
     <string name="away_waits">同步关闭时，“随处”暂停</string>
     <string name="back">返回</string>
     <string name="badge_hub">中心节点</string>
+    <string name="before06_body">此手机所在的群组创建于 0.6 之前，此版本已不再运行它。请在此手机上退出该群组，然后新建群组或加入一个群组。在你退出之前，不会删除任何内容。</string>
+    <string name="before06_title">0.6 之前的群组</string>
     <string name="bug_allow">允许</string>
     <string name="bug_always">始终允许</string>
     <string name="bug_broke_restarted">CBB 出了点问题，已重新启动。</string>

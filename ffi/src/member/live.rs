@@ -42,9 +42,8 @@ pub(super) fn on_06(request: &[u8]) -> bool {
         .is_ok_and(|d| !d.dir.is_empty() && Path::new(&d.dir).join(cbb_member::set::FILE_NAME).is_file())
 }
 
-/// What `cbb_member_start` takes for a group of 0.6: the fields of 0.5's
-/// request that still mean something; the certificates are not needed, as
-/// the records name the group's devices and keys.
+/// What `cbb_member_start` takes: the records name the group's devices
+/// and keys, so the app hands in no certificates.
 #[derive(Deserialize)]
 struct StartArgs {
     dir: String,
@@ -138,6 +137,10 @@ struct ManageArgs {
     /// With key_level: proven, hardware or files.
     #[serde(default)]
     level: String,
+    /// With incoming: how long a copy from another device stays live, in
+    /// milliseconds.
+    #[serde(default)]
+    incoming_ms: u64,
     /// With forwarder, on the root: the hub's forwarder, `host:port` or
     /// `default` for the project's, and its key's pin in base64 (`key`).
     #[serde(default)]
@@ -852,6 +855,12 @@ impl Phone {
                     self.renew_by(&key);
                     return Ok(r);
                 }
+                // How long a copy from another device stays live on each
+                // member, which any admin sets (format, "copies").
+                "incoming" => {
+                    mesh.write_by(&key, |set, k| writers::set_incoming(set, k, a.incoming_ms, now))?;
+                    return Ok(json!({ "incoming_ms": a.incoming_ms }));
+                }
                 "hubs" => {
                     mesh.write_by(&key, |set, k| writers::set_hubs(set, k, &a.hubs, now))?;
                     self.renew_by(&key);
@@ -938,12 +947,7 @@ impl Phone {
 
     /// The group's key level as the records set it.
     fn level(&self) -> &'static str {
-        use cbb_core::records::body::{LEVEL_FILES, LEVEL_PROVEN};
-        match self.live.mesh.state().settings.level() {
-            LEVEL_PROVEN => "proven",
-            LEVEL_FILES => "files",
-            _ => "hardware",
-        }
+        level_name(self.live.mesh.state().settings.level())
     }
 
     /// The root's "Make it an admin", as the service's cbb admin: the
@@ -1340,6 +1344,16 @@ fn deliver(ev: &Events, w: &Write) {
 /// an admin when the admin key the records name for it is one of the
 /// group's admins. Removed devices are not listed: the apps get no more
 /// of the group than they show.
+/// A key level's name: proven, hardware (the default) or files.
+fn level_name(level: u64) -> &'static str {
+    use cbb_core::records::body::{LEVEL_FILES, LEVEL_PROVEN};
+    match level {
+        LEVEL_PROVEN => "proven",
+        LEVEL_FILES => "files",
+        _ => "hardware",
+    }
+}
+
 fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::DeviceId) -> Value {
     use cbb_core::records::body::{ROLE_LEAF, ROLE_MEMBER, ROLE_PHONE, ROLE_WATCH};
     use cbb_core::records::eval::{DeviceState, Stop};
@@ -1383,6 +1397,8 @@ fn group_view(set: &cbb_core::records::RecordSet, me: &cbb_core::records::Device
         "update_needed": st.update_needed,
         "too_old": st.too_old,
         "change_arriving": st.first_missing.is_some() || st.list_missing.is_some(),
+        "key_level": level_name(st.settings.level()),
+        "incoming_ms": st.incoming_ms,
         "devices": devices,
     })
 }
@@ -1559,6 +1575,14 @@ mod tests {
         assert!(error(&m.manage(hubs.to_string().as_bytes(), sign, ctx(root))).contains("may not be a hub"));
         let none = json!({ "action": "hubs", "hubs": [], "public": b64(&root.0.public()) });
         assert!(error(&m.manage(none.to_string().as_bytes(), sign, ctx(root))).contains("1 to 16 hubs"));
+        // The group's view names the key level and the window for incoming
+        // copies, which an admin sets with a copies record.
+        let g = ok(&call("group", Value::Null));
+        assert_eq!(g["key_level"], "files", "the test's group keeps its keys in files");
+        assert_eq!(g["incoming_ms"], Value::Null);
+        let incoming = json!({ "action": "incoming", "incoming_ms": 120_000, "public": b64(&root.0.public()) });
+        assert_eq!(ok(&m.manage(incoming.to_string().as_bytes(), sign, ctx(root)))["incoming_ms"], 120_000);
+        assert_eq!(ok(&call("group", Value::Null))["incoming_ms"], 120_000);
 
         m.stop();
         assert_eq!(error(&call("devices", Value::Null)), "the member stopped");

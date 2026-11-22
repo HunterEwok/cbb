@@ -72,10 +72,13 @@ service's), `fetch` (a copy's images or files, fetched from the member it came f
 into `out`), `current`, `waiting`, `took` and `sends` (the button's rule, `cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
 `resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
 (`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
-update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
-hub}]}`: `admin` is whether the admin key the records name for the device is one of the
+update_needed, too_old, change_arriving, key_level, incoming_ms, devices[{device, name, os,
+role, admin, frozen, hub}]}`: `key_level` is `proven`, `hardware` or `files`, `incoming_ms` how
+long a copy from another device stays live as the newest `copies` record sets it (null for the
+default), `admin` is whether the admin key the records name for the device is one of the
 group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
-`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge,
+`rename`, `freeze`, `thaw` and `incoming` (`incoming_ms`, a `copies` record), written with the
+key `public` names, which the records judge,
 `mute` (`for_ms`), `unmute`, `sync_off`, `sync_on`, `paste` (`text`, `method`, `enter`,
 `kind`), `paste_off`, `actions_off` and `away_off`, commands for another device signed with that
 key and sent over the phone's connection to it, as the service sends them (the answer is that

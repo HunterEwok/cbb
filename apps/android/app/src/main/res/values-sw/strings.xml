@@ -62,6 +62,8 @@
     <string name="away_waits">Kila mahali kinasubiri wakati usawazishaji umezimwa</string>
     <string name="back">Rudi</string>
     <string name="badge_hub">kitovu</string>
+    <string name="before06_body">Simu hii iko katika kikundi kilichoundwa kabla ya 0.6, ambacho toleo hili halikiendeshi tena. Kiondoke kwenye simu hii, kisha unda kikundi kipya au ujiunge na kimoja. Hakuna kinachofutwa hadi uondoke.</string>
+    <string name="before06_title">Kikundi cha kabla ya 0.6</string>
     <string name="bug_allow">Ruhusu</string>
     <string name="bug_always">Ruhusu kila mara</string>
     <string name="bug_broke_restarted">Kuna kitu kimeharibika katika CBB. Kimeanza upya.</string>

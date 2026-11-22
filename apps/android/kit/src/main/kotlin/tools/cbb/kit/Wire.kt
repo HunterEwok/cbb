@@ -58,7 +58,7 @@ internal fun JsonObject.optBool(key: String): Boolean? =
     opt(key)?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.booleanOrNull ?: throw WireTypeException("$key: not a boolean") }
 
 internal fun JsonObject.optBytes(key: String): ByteArray? =
-    optString(key)?.let { Strict.base64(it) ?: throw WireTypeException("$key: not base64") }
+    optString(key)?.let { strictBase64(it) ?: throw WireTypeException("$key: not base64") }
 
 internal fun JsonObject.optObject(key: String): JsonObject? =
     opt(key)?.let { it as? JsonObject ?: throw WireTypeException("$key: not an object") }
@@ -70,5 +70,15 @@ internal fun JsonObject.optBytesList(key: String): List<ByteArray>? =
     optArray(key)?.map {
         val p = it as? JsonPrimitive ?: throw WireTypeException("$key: not a string")
         if (!p.isString) throw WireTypeException("$key: not a string")
-        Strict.base64(p.content) ?: throw WireTypeException("$key: not base64")
+        strictBase64(p.content) ?: throw WireTypeException("$key: not base64")
     }
+
+/** Standard base64 with padding in its one spelling, as Go's and the core's readers take it; null for any other text. */
+internal fun strictBase64(s: String): ByteArray? {
+    val b = try {
+        java.util.Base64.getDecoder().decode(s)
+    } catch (e: IllegalArgumentException) {
+        return null
+    }
+    return b.takeIf { java.util.Base64.getEncoder().encodeToString(it) == s }
+}

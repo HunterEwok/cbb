@@ -62,6 +62,8 @@
     <string name="away_waits">En todas partes espera mientras la sincronización está desactivada</string>
     <string name="back">Atrás</string>
     <string name="badge_hub">hub</string>
+    <string name="before06_body">Este teléfono está en un grupo creado antes de 0.6, que esta versión ya no ejecuta. Sal de él en este teléfono y luego crea un grupo nuevo o únete a uno. No se borra nada hasta que salgas.</string>
+    <string name="before06_title">Un grupo anterior a 0.6</string>
     <string name="bug_allow">Permitir</string>
     <string name="bug_always">Permitir siempre</string>
     <string name="bug_broke_restarted">Algo se rompió en CBB. Se ha vuelto a iniciar.</string>

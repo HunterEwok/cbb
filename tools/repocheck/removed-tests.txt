@@ -554,3 +554,134 @@ apps/android/kit/src/test/kotlin/tools/cbb/kit/PivTest.kt tlv D-125: the app no 
 apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeOffersTheTunnelKeyAndKeepsTheOffer D-123: a phone of a group of 0.5 runs no tunnel, so the kits and ffi no longer set its tunnel key or send a hub's offer; member's nettest a_member_reaches_its_hub_through_the_tunnel keeps the hello's tunnel key and the hub's offer
 apps/ios/CBBKit/Tests/CBBKitTests/TunnelTests.swift testNodeOffersTheTunnelKeyAndKeepsTheOffer D-123: a phone of a group of 0.5 runs no tunnel, so the kits and ffi no longer set its tunnel key or send a hub's offer; member's nettest a_member_reaches_its_hub_through_the_tunnel keeps the hello's tunnel key and the hub's offer
 ffi/src/member.rs paste_orders D-126: the member of 0.5 and its paste_order are gone; member::live::tests::a_phone_on_a_group_of_0_6_runs_the_member_of_0_6 checks the same cleaning and refusals of the member of 0.6's order
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt goFrames D-126: the frames and chunks of 0.5's member wire are gone with it; the member of 0.6 fetches images and files in the core, which nodesFetch and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt goChunks D-126: the frames and chunks of 0.5's member wire are gone with it; the member of 0.6 fetches images and files in the core, which nodesFetch and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ContentTest.kt frameLimits D-126: the frames and chunks of 0.5's member wire are gone with it; the member of 0.6 fetches images and files in the core, which nodesFetch and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/AndroidAttestationTest.kt rootRecordsEvidence D-126: the phone's group file of 0.5 recorded evidence itself; on 0.6 the member records it with the root's key (manage attest), which member::live and the core's attestation tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt generatorString D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt generator D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt vectors D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt wrongPassword D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt rejectsOwnAndLowOrderMessages D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt lowOrderVectors D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt prependLen D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CPaceTest.kt x25519Vectors D-126: 0.5's pairing in Kotlin (CPace) is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PairingTest.kt goPairing D-126: 0.5's pairing in Kotlin is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PairingTest.kt goJoinQR D-126: 0.5's pairing in Kotlin is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PairingTest.kt joinerShowsAndAnnouncesTheCode D-126: 0.5's pairing in Kotlin is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PairingTest.kt info D-126: 0.5's pairing in Kotlin is gone; 0.6 pairs in the core (cbb_window, cbb_joiner), which WindowTest and the core's pairing tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ComputerJoinTest.kt wrongCodeIsSpent D-126: 0.5's join of a computer's group in Kotlin is gone; 0.6 pairs in the core, which WindowTest and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ComputerJoinTest.kt computerMustProveTheCode D-126: 0.5's join of a computer's group in Kotlin is gone; 0.6 pairs in the core, which WindowTest and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TLSTest.kt membersSyncOverTLS D-126: 0.5's TLS transport in Kotlin is gone; the member of 0.6 runs its connections in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TLSTest.kt phoneJoinsOverTLS D-126: 0.5's TLS transport in Kotlin is gone; the member of 0.6 runs its connections in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TLSTest.kt refusals D-126: 0.5's TLS transport in Kotlin is gone; the member of 0.6 runs its connections in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt groupCAAndMember D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt adminCAAndRoot D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt renewal D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt derTime D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt derInteger D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt goMemberCertificates D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesTest.kt swiftCertificates D-126: 0.5's group CA and member certificates are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesFuzzTest.kt hugeLengths D-126: 0.5's certificates are gone; 0.6's records are the core's, fuzzed there
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesFuzzTest.kt mutatedMemberCertificates D-126: 0.5's certificates are gone; 0.6's records are the core's, fuzzed there
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesFuzzTest.kt mutatedAdminCAs D-126: 0.5's certificates are gone; 0.6's records are the core's, fuzzed there
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CertificatesFuzzTest.kt mutatedRoots D-126: 0.5's certificates are gone; 0.6's records are the core's, fuzzed there
+apps/android/kit/src/test/kotlin/tools/cbb/kit/ClockTest.kt aheadVectors D-126: 0.5's hybrid clock in Kotlin is gone; the member of 0.6 keeps the copies' order in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt commandRoundTrip D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt commandPassedOn D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt modeCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt phoneGroupModeCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt phoneGroupPasteCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt phoneGroupPasteCopyCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt messages D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt pasteCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt sealedCommand D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt commandsForGo D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt goCommands D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt goSealedCommands D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt goActions D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt actionCommands D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt cleanReason D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CommandsTest.kt mute D-126: 0.5's commands in Kotlin are gone; the member of 0.6 builds and checks commands in the core (cbb_member::orders), which member::live and TestFFI check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CredentialsTest.kt goCredentials D-126: 0.5's server credentials in Kotlin are gone; the member of 0.6 keeps the group's credentials itself
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CredentialsTest.kt signed D-126: 0.5's server credentials in Kotlin are gone; the member of 0.6 keeps the group's credentials itself
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CredentialsTest.kt rootStartsAPeriod D-126: 0.5's server credentials in Kotlin are gone; the member of 0.6 keeps the group's credentials itself
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodesSync D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodesExchangeRecords D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeRenewsAndSendsTheAdminCA D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt nodeSendsAndTakesCredentials D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt offerChecksAsGo D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt clock D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt aheadRefused D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EngineTest.kt engine D-126: 0.5's member node is gone; the member of 0.6 is checked by CoreMemberTest, member::live and TestFFI
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EntriesTest.kt keepsTheNewest D-126: 0.5's entry points file in Kotlin is gone; the member of 0.6 keeps the entry points
+apps/android/kit/src/test/kotlin/tools/cbb/kit/EntriesTest.kt wire D-126: 0.5's entry points file in Kotlin is gone; the member of 0.6 keeps the entry points
+apps/android/kit/src/test/kotlin/tools/cbb/kit/HubKindTest.kt forwardOnlyHub D-126: 0.5's records in Kotlin are gone; the core's records tests check which devices may be hubs
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt recordsGoInMessagesOfAboutOneMiB D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt goFrames D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt timestamps D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt bodies D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt events D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt reach D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/MemberTest.kt badMessages D-126: 0.5's member wire in Kotlin is gone; the member of 0.6 speaks in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt secondPhoneBecomesAdmin D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt signaturesPerAction D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt phoneWithoutAdmin D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt memberWithoutAdmin D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt wrongCode D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt joinerRefusesAWelcomeForAnotherKey D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt memberRefusesAJoinerKeyOrChainAsAComputerDoes D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt saveAndLoad D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt makePhoneAdmin D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt keyLevel D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt rename D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt watchActions D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt addWatch D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt makeAdmin D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/PhoneGroupTest.kt forGo D-126: 0.5's group file is gone; WindowTest checks the group file of 0.6 and one from before 0.6
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt devicesAndRevoke D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt deviceWithTwoKeys D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt refused D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt v2Vectors D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt alerts D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goAuthority D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goAdminPowers D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goEnvelopes D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goFreeze D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goHandover D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goHubOrder D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goRemovedAdmin D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goRemovedAdmins D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goRootMember D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goTakeover D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt goWatch D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecordsTest.kt recordsForGo D-126: 0.5's records in Kotlin are gone; 0.6's records are the core's, checked by its records tests
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt takeOver D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt claimWaits D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt handedOver D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt claimCancelled D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt takeoverDelay D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt takeOverKeepsSettings D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt oldRootKeyAfterTakeOver D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt takeOverRefused D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt welcomeAfterTakeOver D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt authorityRecords D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RootTest.kt takeOverForGo D-126: 0.5's takeover and handover are gone; on 0.6 the root changes only with the recovery key, which member::live and the core check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/SealedTest.kt copiesOpenOnlyForTheirReaders D-126: 0.5's sealed commands in Kotlin are gone; the member of 0.6 seals in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/SealedTest.kt blobsOpenWhole D-126: 0.5's sealed commands in Kotlin are gone; the member of 0.6 seals in the core
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt records D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt commands D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt manifests D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt generated D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt mutants D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/StrictTest.kt generatedFiles D-126: 0.5's strict parsers of records, commands and manifests in Kotlin are gone with what they parsed
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TunnelSettingsTest.kt groupPathOfAUserId D-126: 0.5's tunnel settings are gone (D-123); the member of 0.6 runs away from home itself, which AwayKitTest checks
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TunnelSettingsTest.kt userIds D-126: 0.5's tunnel settings are gone (D-123); the member of 0.6 runs away from home itself, which AwayKitTest checks
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TunnelSettingsTest.kt obfuscationBounds D-126: 0.5's tunnel settings are gone (D-123); the member of 0.6 runs away from home itself, which AwayKitTest checks
+apps/android/kit/src/test/kotlin/tools/cbb/kit/TunnelSettingsTest.kt nextWayOverVless D-126: 0.5's tunnel settings are gone (D-123); the member of 0.6 runs away from home itself, which AwayKitTest checks
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RecoveryTest.kt makeAndRemove D-126: the phone's group file of 0.5 made and removed the recovery key itself; on 0.6 the core writes it (cbb_group_new answers its sheet), which WindowTest and the core's recovery tests check
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CoreMemberTest.kt relayServesOnlyTheAnnouncedCaller D-126: the relay listener and its caller events were 0.5's (D-123); the member of 0.6 meets at the group's relay itself, which AwayKitTest's theRelayIsTheGroupsAndSaysWhyItIsNotConnected checks
+apps/android/kit/src/test/kotlin/tools/cbb/kit/CoreMemberTest.kt keepsTheTilesOrder D-126: the tiles' order was kept by the member of 0.5; the member of 0.6 answers that view is still moving to the records of 0.6, so the app shows the devices in the records' order
+apps/android/app/src/test/kotlin/tools/cbb/DangerousScreensTest.kt alerts D-126: the alerts card showed the conflicts and claims of 0.5's records; on 0.6 the member's notices show what the group stops, which NoticesCard draws
+apps/android/app/src/test/kotlin/tools/cbb/RecoveryTest.kt recoveryMadeIsTheNewestRecordForTheKey D-126: the time of the recovery key was read from 0.5's records; the records of 0.6 do not give it
+apps/android/app/src/test/kotlin/tools/cbb/KitTest.kt cpaceAgrees D-126: 0.5's pairing in Kotlin (CPace) is gone; the app reaches the core through the kit, which CoreMemberTest and WindowTest check

@@ -32,6 +32,10 @@ data class GroupState(
     /** A change of root is arriving: its records are not all here yet. */
     val changeArriving: Boolean,
     val devices: List<Device>,
+    /** The group's key level: proven, hardware or files (Records.KEY_LEVELS). */
+    val keyLevel: String = Records.HARDWARE,
+    /** How long a copy from another device stays live, as the newest copies record sets it; null for the default. */
+    val incomingMS: Long? = null,
 ) {
     /** This device's place in the group. */
     data class Me(
@@ -80,6 +84,8 @@ data class GroupState(
                 updateNeeded = o.optBool("update_needed") ?: false,
                 tooOld = o.optBool("too_old") ?: false,
                 changeArriving = o.optBool("change_arriving") ?: false,
+                keyLevel = o.optString("key_level") ?: Records.HARDWARE,
+                incomingMS = o.optLong("incoming_ms"),
                 devices = o.objects("devices").map {
                     Device(
                         device = it.optString("device") ?: "",

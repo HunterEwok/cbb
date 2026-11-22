@@ -3,91 +3,34 @@
 
 package tools.cbb.kit
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
 import java.io.File
-import java.time.Instant
 
 /**
- * A phone group (docs/protocol.md, sections 9 and 10) as this phone holds
- * it: the group CA, the phone's own member certificate, the computers it
- * admitted and the records. The phone is the root, which made the group,
- * an admin with an admin CA under the root, or a member without either.
- * The keys stay outside, in the Android Keystore. It is saved as JSON next
- * to the app's other data.
+ * The phone's group as the app notes it beside the member's own folder:
+ * the phone's device ID, the group's ID and whether the phone holds the
+ * root. The member keeps the group's set itself (CoreMember, D-126) and
+ * answers its state (CoreMember.group); the keys stay in the Android
+ * Keystore. It is saved as JSON next to the app's other data.
  */
-class PhoneGroup internal constructor(
+class PhoneGroup private constructor(
     /** This phone's device ID. */
     val device: String,
-    /** The group root CA, DER; path length 1. The group's first root, which names it for good. */
-    val groupCA: ByteArray,
-    /** This phone's member certificate, DER, from one of the roots or from memberIssuer. */
-    var memberCert: ByteArray,
+    /** The Group ID (hex) the member's set names. */
+    val group: String,
 ) {
-    /** The roots that took the group over from groupCA, in order, DER; the last is the current root (section 10, "Roots"). */
-    var roots: List<ByteArray> = emptyList()
-        internal set
-
-    /** The admin CA that issued memberCert, which the phone sends after it in TLS handshakes; null when a root did. */
-    var memberIssuer: ByteArray? = null
-        internal set
-
-    /** Whether this phone holds the current root's key: it made the group, or took it over. */
+    /** Whether this phone holds the current root's key: it made the group, or changed its root to itself. */
     var isRoot = true
         internal set
 
-    /** This phone's admin CA when it is an admin but not the root. */
-    var adminCA: ByteArray? = null
-        internal set
+    /** Whether the member's state names this phone an admin (GroupState.me.admin); set as the state arrives. */
+    @Volatile var admin = false
 
-    val computers = mutableListOf<Computer>()
+    /** Whether this phone may add and remove devices: the root and the admins. */
+    val isAdmin: Boolean get() = isRoot || admin
 
-    /** The group's signed device and revocation records; admins sign them, and they spread to every member. */
-    var records = RecordSet()
-        internal set
-
-    /**
-     * The admin CAs this phone, as the root, issued to computers, DER, by
-     * device ID: sent again to a computer that offers the same admin key
-     * (section 10, "A computer as admin").
-     */
-    val computerAdmins = mutableMapOf<String, ByteArray>()
-
-    /**
-     * The new root of this admin's claim to take the group over, DER, while
-     * the claim waits (docs/protocol.md, section 10, "Handing the group over"); its
-     * key stays in the Keystore until the claim takes effect or ends.
-     */
-    var claim: ByteArray? = null
-        internal set
-
-    /** The device of the root that claim takes the group over from, which the new root removes. */
-    var claimedFrom: String? = null
-        internal set
-
-    /** A computer this phone admitted. */
-    data class Computer(
-        val device: String,
-        val name: String,
-        /** "linux", "windows" or "macos", as its pairing Info says. */
-        val os: String,
-        val cert: ByteArray,
-        val admitted: Instant,
-        /**
-         * Its addresses on the home network from the QR code, the one that
-         * answered first: dialed when mDNS does not find it, as in another
-         * subnet (docs/protocol.md, section 9).
-         */
-        val addrs: List<String> = emptyList(),
-    ) {
-        override fun equals(other: Any?): Boolean =
-            other is Computer && device == other.device && name == other.name && os == other.os && cert.contentEquals(other.cert) &&
-                admitted == other.admitted && addrs == other.addrs
-
-        override fun hashCode(): Int = device.hashCode()
-    }
+    /** The group tag the computers publish. */
+    val tag: String get() = group.take(16)
 
     class Failure(message: String) : Exception(message)
 
@@ -101,745 +44,16 @@ class PhoneGroup internal constructor(
     /** The computer is a rootless install, which is never an admin (D-79). */
     class Rootless : Exception("it is installed without root")
 
-    /** An admin, or the root's own device, reads the copies: it is no hub that only passes them on. */
-    class ReadsCopies : Exception("it reads the copies")
-
     /** The group's key level does not let the device's keys be an admin or the root; the root sets another level first. */
     class BelowKeyLevel : Exception("the group's key level does not let these keys in")
-
-    /**
-     * On the records of 0.6: the Group ID (hex) the member's set names; null
-     * for a group of 0.5. Such a group has no certificates and no records
-     * here: the member keeps its set in its own folder and answers the
-     * group's state (CoreMember.group), and the app reads it from there.
-     */
-    var group06: String? = null
-        internal set
-
-    /** On 0.6: whether the member's state names this phone an admin (GroupState.me.admin); set as the state arrives. */
-    @Volatile var admin06 = false
-
-    /** Whether the group is on the records of 0.6. */
-    val isV06: Boolean get() = group06 != null
-
-    /** Whether this phone may admit devices, renew certificates and remove devices: the root and the admins. */
-    val isAdmin: Boolean get() = isRoot || adminCA != null || (isV06 && admin06)
-
-    /** The certificate chain this phone presents in TLS, leaf first. */
-    val memberChain: List<ByteArray> get() = listOf(memberCert) + listOfNotNull(memberIssuer)
-
-    /** The current root: the last of roots, or the group CA. */
-    val currentRoot: ByteArray get() = roots.lastOrNull() ?: groupCA
-
-    /** Every root the group had, the group CA first: member certificates and admin CAs from any of them verify. */
-    val trusted: List<ByteArray> get() = listOf(groupCA) + roots
-
-    /** The CA whose key signs for this phone: the current root, or its admin CA. */
-    internal val signingCA: ByteArray get() = adminCA ?: currentRoot
-
-    /** The home network addresses of the computers this phone admitted, by device ID, best first. */
-    val addresses: Map<String, List<String>> get() = computers.filter { it.addrs.isNotEmpty() }.associate { it.device to it.addrs }
-
-    /** The group tag the computers publish. */
-    val tag: String get() = group06?.take(16) ?: GroupCertificates.tag(groupCA)
-
-    /** The devices of the group, from the records. */
-    val devices: List<RecordSet.Device> get() = records.devices
-
-    /** Adds records from other members, then follows the roots they lead to when they differ from this phone's; returns the new records. */
-    fun add(rs: List<Member.Record>): List<Member.Record> {
-        val fresh = records.addAll(rs, groupCA)
-        adoptRoots()
-        return fresh
-    }
-
-    /**
-     * Takes the roots of the records when they differ from roots, compared by content, so a root the records do not
-     * name never stays trusted; an empty set says nothing yet.
-     */
-    fun adoptRoots() {
-        val path = records.roots
-        if (records.records.isNotEmpty() && (path.size != roots.size || path.zip(roots).any { (a, b) -> !a.contentEquals(b) })) roots = path
-    }
-
-    /** Signs body with caSigner, the root's own key or this phone's admin key, and adds it to the set. */
-    internal fun sign(body: Records.Body, caSigner: CertificateSigner): Member.Record {
-        if (records.groupCA == null) records.groupCA = groupCA
-        val r = records.sign(body, caSigner, if (isRoot) null else adminCA)
-        records.add(r, groupCA)
-        return r
-    }
-
-    /**
-     * Signs and adds a device record. A record that makes an admin gives it
-     * the powers of its role unless powers names them, and the root's record
-     * of its own device says that it holds the root.
-     */
-    internal fun record(
-        device: String,
-        name: String,
-        role: String,
-        key: ByteArray,
-        caSigner: CertificateSigner,
-        now: Instant,
-        admin: ByteArray? = null,
-        os: String? = null,
-        store: String? = null,
-        kind: String? = null,
-        proof: String? = null,
-        powers: List<String>? = null,
-        commands: List<String>? = null,
-        seal: ByteArray? = null,
-        forwardOnly: Boolean = false,
-        caps: List<String>? = null,
-    ): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        val b = Records.Body.of("device", caSigner, now)
-        b.device = device
-        b.name = name
-        b.role = role
-        b.caps = caps
-        b.os = os
-        b.key = key
-        b.admin = admin
-        b.store = store
-        b.kind = kind
-        b.proof = proof
-        b.seal = seal
-        b.forwardOnly = forwardOnly
-        if (admin != null) {
-            val (p, c) = Records.grants(role)
-            b.powers = powers ?: p
-            b.commands = commands ?: c
-        }
-        if (isRoot && device == this.device) b.holdsRoot = true
-        return sign(b, caSigner)
-    }
-
-    /** record for d again, with its powers when it is an admin. */
-    private fun recordAgain(d: RecordSet.Device, caSigner: CertificateSigner, now: Instant, name: String = d.name, store: String = d.store, kind: String? = d.kind, proof: String? = d.proof, admin: ByteArray? = d.adminKey): Member.Record =
-        record(
-            d.id, name, d.role, d.key, caSigner, now, admin, d.os, store, kind, proof,
-            d.powers.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
-            d.commands.takeIf { admin != null && admin.contentEqualsOrNull(d.adminKey) && it.isNotEmpty() },
-            d.seal,
-            d.forwardOnly,
-            d.caps,
-        )
-
-    /**
-     * Checks that this admin phone may claim the group when the root phone
-     * lost is gone (docs/protocol.md, section 10, "Handing the group over"),
-     * before the app makes a new root key: the core's member then signs the
-     * claim (CoreMember.claim), which waits the group's delay (72 hours unless
-     * the root set another), in which the root cancels it if it is still in
-     * use; [claimed] notes it, and CoreMember.finishTakeover and [becameRoot]
-     * then make this phone the root.
-     */
-    fun checkTakeOver(lost: String) {
-        if (adminCA == null || isRoot) throw Failure("this phone is no admin")
-        if (lost != records.rootDevice || lost == device) throw Failure("that phone does not hold the root")
-        checkClaim()
-    }
-
-    /**
-     * Whether the group's root handed the group to this phone's admin key
-     * (`cbb handover`, docs/protocol.md, section 10, "Handing the group
-     * over"), and this phone has not claimed it yet.
-     */
-    val handedToMe: Boolean
-        get() {
-            val ca = adminCA ?: return false
-            if (isRoot || claim != null) return false
-            val to = records.handedTo ?: return false
-            return runCatching { Records.keyHashOfCert(ca) }.getOrNull()?.contentEquals(to) == true
-        }
-
-    /**
-     * Checks that this phone may take the group the root handed to it: a
-     * claim, as in [checkTakeOver], that takes effect at once because the
-     * root signed a handover for this phone's admin key. The old root's
-     * device stays in the group.
-     */
-    fun checkHandedOver() {
-        if (!handedToMe) throw Failure("the group was not handed to this phone")
-        checkClaim()
-    }
-
-    private fun checkClaim() {
-        if (claim != null) throw Failure(CLAIM_WAITING)
-        val me = devices.firstOrNull { it.id == device }
-        if (me == null || !me.may("takeover")) throw Failure(NO_TAKEOVER)
-    }
-
-    /** Notes this phone's claim for newRoot, which the core's member signed, from the lost root's device lost (none for a handed group). */
-    fun claimed(newRoot: ByteArray, lost: String?) {
-        claim = newRoot
-        claimedFrom = lost
-    }
-
-    /** This phone's claim among rs, the member's records, to send on a connection the member does not make (a records-only one). */
-    fun claimRecord(rs: List<Member.Record>): Member.Record? {
-        val c = claim ?: return null
-        return rs.lastOrNull { r ->
-            val o = Wire.parse(r.body) ?: return@lastOrNull false
-            o.optString("type") == "claim" && o.optBytes("root")?.contentEquals(c) == true
-        }
-    }
-
-    /** The state of this phone's claim, as the records say ("pending", "effective", "cancelled", "void" and the others); null without one. */
-    val claimState: String?
-        get() {
-            val c = claim ?: return null
-            val k = runCatching { Records.keyHashOfCert(c) }.getOrNull() ?: return null
-            return records.claims.lastOrNull { it.root.contentEquals(k) }?.state
-        }
-
-    /** Drops this phone's claim, which the core's member said was cancelled or became void. */
-    fun dropClaim() {
-        claim = null
-        claimedFrom = null
-    }
-
-    /** Drops this phone's claim when the root cancelled it or it became void; reports whether it did. */
-    fun dropEndedClaim(): Boolean {
-        val st = claimState
-        if (st != "cancelled" && st != "void") return false
-        claim = null
-        claimedFrom = null
-        return true
-    }
-
-    /**
-     * Makes this phone the root once the core's member finished its claim
-     * (CoreMember.finishTakeover): cert is its member certificate from the
-     * new root, records the member's records, with those the new root
-     * signed. The phone signs with the new root key from then on and holds
-     * no admin CA.
-     */
-    fun becameRoot(cert: ByteArray, records: List<Member.Record>) {
-        add(records)
-        adoptRoots()
-        isRoot = true
-        memberCert = cert
-        memberIssuer = null
-        adminCA = null
-        claim = null
-        claimedFrom = null
-    }
-
-    /**
-     * Cancels claims, or ends a conflict, as the current root
-     * (docs/protocol.md, section 10, "Chains and numbers"): a resolve that voids the records with
-     * the IDs ids. It returns the record to send.
-     */
-    fun resolve(ids: List<ByteArray>, rootSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isRoot) throw Failure("only the root does that")
-        val b = Records.Body.of("resolve", rootSigner, now)
-        b.records = ids
-        return sign(b, rootSigner)
-    }
-
-    /** The group's key level: which keys may be its root, an admin or a hub. */
-    val keyLevel: String get() = records.keyLevel
-
-    /** How long a copy from another device stays live after it arrives, in milliseconds: written to the clipboard until then, never after. */
-    val incomingMS: Long get() = records.incomingMS
-
-    /**
-     * Sets how long a copy from another device stays live after it arrives
-     * (5 s to 1 h), as the root or an admin: a copies record
-     * (docs/protocol.md, section 10, "The copies setting"). It returns the
-     * record to send.
-     */
-    fun setIncoming(ms: Long, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        if (ms !in Records.INCOMING_BOUNDS) throw Failure(INVALID_INCOMING)
-        val b = Records.Body.of("copies", caSigner, now)
-        b.incomingMS = ms
-        return sign(b, caSigner)
-    }
-
-    /**
-     * Renews this phone's own member certificate when it is due; reports
-     * whether it did, after which the TLS identity must be made again. An
-     * admin issues it from its own admin CA, a phone without one cannot.
-     */
-    fun renewOwnCertificate(caSigner: CertificateSigner, now: Instant): Boolean {
-        if (!isAdmin || !GroupCertificates.isDue(memberCert, signingCA, now)) return false
-        if (runCatching { GroupCertificates.verifyMember(memberChain, trusted, now) }.getOrNull() != device) return false
-        memberCert = GroupCertificates.member(device, CertificateInfo(memberCert).publicKey, signingCA, caSigner, now)
-        memberIssuer = adminCA
-        return true
-    }
-
-    /** A renewed member certificate for a peer, DER, and the admin CA that issued it; null when a root did. */
-    class Renewal(val cert: ByteArray, val issuer: ByteArray? = null)
-
-    /**
-     * A renewed certificate for a peer's chain (leaf first) when it is due
-     * and this phone is an admin: the root issues it from its root, an admin
-     * from its admin CA, which the cert message carries, whoever issued the
-     * old one (as a removed admin did).
-     */
-    fun renewal(chain: List<ByteArray>, caSigner: CertificateSigner, now: Instant): Renewal? {
-        if (!isAdmin) return null
-        val cert = runCatching { GroupCertificates.renewal(chain, trusted, caSigner, now, adminCA) }.getOrNull() ?: return null
-        return Renewal(cert, adminCA)
-    }
-
-    /**
-     * Removes a device from the group: signs a revocation of every key it
-     * had, and of its admin key for an admin, which every member then
-     * refuses, and returns the record to send. What an admin signed before
-     * stays (docs/protocol.md, section 10, "Removals and freezes keep what the author
-     * saw"). The root phone is taken over instead (CoreMember.claim).
-     */
-    fun revoke(device: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        if (device == this.device) throw Failure("this phone cannot remove itself")
-        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (device == records.rootDevice) throw Failure("the root phone is removed by taking the group over")
-        val keys = d.keys.toMutableList()
-        d.adminKey?.let { a -> if (keys.none { it.contentEquals(a) }) keys.add(a) }
-        val b = Records.Body.of("revoke", caSigner, now)
-        b.keys = keys
-        val r = sign(b, caSigner)
-        computers.removeAll { it.device == device }
-        computerAdmins.remove(device)
-        return r
-    }
-
-    /**
-     * Gives a device another name: a device record like its newest one with
-     * that name, which names it everywhere, since the newest record of a
-     * device counts (section 10). An admin renames any device, itself and
-     * the root included. name is trimmed; it must have 1 to 64 bytes and no
-     * control characters.
-     */
-    fun rename(device: String, name: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        val n = name.trim()
-        if (n.isEmpty() || validName(n) != n) throw Failure(INVALID_NAME)
-        return recordAgain(d, caSigner, now, name = n)
-    }
-
-    /**
-     * Signs the device record that makes a computer that is no admin a hub
-     * that only passes the copies on (docs/protocol.md, section 11, "Two
-     * kinds of hub"): `forward_only`, which no key level limits; from then
-     * on no copy is sealed to it. null when its record says so already.
-     */
-    fun markForwardOnly(device: String, caSigner: CertificateSigner, now: Instant): Member.Record? {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (d.forwardOnly) return null
-        if (!d.can("hub")) throw Failure("not a member that may be a hub")
-        if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
-        if (d.store == Records.ROOTLESS) throw Rootless()
-        if (d.adminKey != null || device == records.rootDevice) throw ReadsCopies()
-        return record(d.id, d.name, d.role, d.key, caSigner, now, null, d.os, d.store, d.kind, d.proof, seal = d.seal, forwardOnly = true, caps = d.caps)
-    }
-
-    /** The key for sealed messages that the device record of to names, which an admin's commands for it are sealed to (section 15, "Sealed commands"); null when it has none. */
-    internal fun sealKey(to: String): ByteArray? = devices.firstOrNull { it.id == to }?.seal
-
-    /**
-     * A command that sets a computer's sync mode (docs/protocol.md,
-     * section 15), signed with this phone's root or admin key; the caller
-     * sends it to that computer alone.
-     */
-    fun modeCommand(to: String, mode: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.mode(to, mode, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * A paste command that puts text where the focus of the member to is
-     * (docs/protocol.md, section 15; design.md, "Remote paste"), by method
-     * "paste" or "type", then Enter when enter is set; signed as
-     * modeCommand.
-     */
-    fun pasteCommand(to: String, text: String, method: String, enter: Boolean, secret: Boolean, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.paste(to, text, method, enter, if (secret) "secret" else "text", tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * A paste command of the group's copy of images or files copyID, which
-     * this phone made just before (docs/protocol.md, section 15): the
-     * member to fetches it and pastes it with the paste keys.
-     */
-    fun pasteCopyCommand(to: String, copyID: String, enter: Boolean, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.paste(to, copyID, "paste", enter, "media", tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * An action command that runs the quick action name on the member to,
-     * signed with this phone's root or admin key; the member defines what
-     * it does.
-     */
-    fun actionCommand(to: String, name: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.action(to, name, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /** An actions-off command that turns every quick action off on the member to. */
-    fun actionsOffCommand(to: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.actionsOff(to, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * A mute command that keeps the copies of the member to from the whole group for forMS milliseconds, 0 for
-     * until an unmute command (design.md, "Muting a device"); any admin phone signs one.
-     */
-    fun muteCommand(to: String, forMS: Long, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.mute(to, forMS, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /** An unmute command that ends an admin's mute of the member to. */
-    fun unmuteCommand(to: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        return Commands.unmute(to, tag, device, now, caSigner, adminCA, seal = sealKey(to))
-    }
-
-    /**
-     * Unfreezes an admin computer that another admin froze (section 10,
-     * rule 4): a thaw record that ends every freeze of it. The root and the
-     * admin phones do it; Remove takes the computer out for good instead.
-     */
-    fun thaw(device: String, caSigner: CertificateSigner, now: Instant): Member.Record {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (!d.frozen || d.adminKey == null || d.freezes.isEmpty()) throw Failure("not frozen")
-        val b = Records.Body.of("thaw", caSigner, now)
-        b.records = d.freezes
-        return sign(b, caSigner)
-    }
-
-    /**
-     * Makes a phone or a computer an admin (section 10, "Admins"): the root
-     * issues an admin CA for the admin key the device's hello offered (a
-     * SubjectPublicKeyInfo) and signs its device record again, naming that CA.
-     * It returns the admin CA, for the admin message, and the record to send.
-     * Only the root makes admins. A phone joined as a member and keeps its
-     * store; for a computer, keyStore is where its hello says its keys live;
-     * one that keeps them in a file becomes an admin only with allowFileKey,
-     * else it throws FileKey, and a rootless install never (Rootless). A key
-     * the group already names for another device or a root is refused.
-     */
-    fun makeAdmin(
-        device: String,
-        adminKey: ByteArray,
-        rootSigner: CertificateSigner,
-        now: Instant,
-        keyStore: String? = null,
-        allowFileKey: Boolean = false,
-    ): Pair<ByteArray, Member.Record> {
-        if (!isRoot) throw Failure("only the root makes admins")
-        val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (device == this.device || device == records.rootDevice) throw Failure("the group's root is more than an admin")
-        val phone = d.role == "phone"
-        if (!phone && !d.can("admin")) throw Failure("not a member that may be an admin")
-        if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
-        if (d.adminKey != null) throw Failure("an admin already")
-        val hash = Records.keyHash(adminKey)
-        val rootKeys = (listOf(groupCA) + roots).map { Records.keyHashOfCert(it) }
-        if (devices.any { o -> o.adminKey?.contentEquals(hash) == true || o.keys.any { it.contentEquals(hash) } } ||
-            rootKeys.any { it.contentEquals(hash) }
-        ) {
-            throw Failure("the admin key belongs to another key of the group")
-        }
-        val proven = d.store == Records.PROVEN
-        val store = if (proven || phone) d.store else Records.storeOf(keyStore, d.role)
-        if (store == Records.ROOTLESS || d.store == Records.ROOTLESS) throw Rootless()
-        if (!Records.levelAllows(keyLevel, store, true)) throw BelowKeyLevel()
-        if (store == Records.FILE && !allowFileKey) throw FileKey()
-        val ca = GroupCertificates.adminCA(device, adminKey, currentRoot, rootSigner)
-        val r = record(
-            device, d.name, d.role, d.key, rootSigner, now, Records.keyHashOfCert(ca), d.os, store,
-            d.kind.takeIf { proven }, d.proof.takeIf { proven }, seal = d.seal, caps = d.caps,
-        )
-        computerAdmins[device] = ca
-        return ca to r
-    }
-
-    /**
-     * Takes the admin CA the root sent in the admin message when it made
-     * this member phone an admin (section 10, "Admins"):
-     * it must name this phone, certify adminKey (the SubjectPublicKeyInfo
-     * its hellos offered) and come from the group's current root. The phone
-     * is an admin from then on.
-     */
-    fun takeAdminCA(ca: ByteArray, adminKey: ByteArray) {
-        if (isRoot || adminCA != null) throw Failure("an admin already")
-        val info = runCatching { CertificateInfo(ca) }.getOrNull()
-        val fromRoot = runCatching { GroupCertificates.checkAdminCA(ca, currentRoot) }.isSuccess
-        if (info == null || !info.publicKey.contentEquals(adminKey) || info.commonName != "cbb admin $device" || !fromRoot) {
-            throw Failure("the admin CA is not for this phone's admin key")
-        }
-        adminCA = ca
-    }
-
-    /**
-     * Makes a watch an admin (section 10, "Watches"): the root issues an admin
-     * CA for the key the watch made in its Keystore or Secure Enclave
-     * (adminKey, a SubjectPublicKeyInfo) and signs the watch's device
-     * record, whose key and admin both name that CA, since a watch has no
-     * member key. device is the ID the watch picked, os "wearos" or
-     * "watchos". It returns the admin CA, for the watch, and the record to
-     * send. Only the root does it; the watch checked its lock screen before
-     * it made the key.
-     */
-    fun addWatch(
-        device: String,
-        name: String,
-        os: String,
-        adminKey: ByteArray,
-        rootSigner: CertificateSigner,
-        now: Instant,
-    ): Pair<ByteArray, Member.Record> {
-        if (!isRoot) throw Failure("only the root makes admins")
-        if (device.length != 32 || device.any { it !in "0123456789abcdef" } || os !in setOf("wearos", "watchos") || devices.any { it.id == device }) {
-            throw Failure(NOT_A_WATCH)
-        }
-        val n = name.trim()
-        if (n.isEmpty() || validName(n) != n) throw Failure(INVALID_NAME)
-        val ca = GroupCertificates.adminCA(device, adminKey, currentRoot, rootSigner)
-        val key = Records.keyHashOfCert(ca)
-        return ca to record(device, n, "watch", key, rootSigner, now, key, os, Records.HARDWARE)
-    }
-
-    /** What a watch of the group may do from its wrist (section 10, "Watches"). */
-    enum class WatchAction(val key: String) {
-        FREEZE("freeze"), REMOVE("remove"), PASTE_OFF("paste-off"), ACTIONS_OFF("actions-off"), AWAY_OFF("away-off"), ACTION("action");
-
-        companion object {
-            fun of(key: String?): WatchAction? = entries.firstOrNull { it.key == key }
-        }
-    }
-
-    /**
-     * What a watch may do to device: freeze it when it is an admin computer,
-     * remove it when it is no admin, and send a member the commands that
-     * turn things off or run a quick action. Nothing to the root, a phone or
-     * a watch.
-     */
-    fun watchActions(device: String): List<WatchAction> {
-        val d = devices.firstOrNull { it.id == device } ?: return emptyList()
-        if (device == records.rootDevice || d.role != "member") return emptyList()
-        val out = mutableListOf<WatchAction>()
-        if (d.adminKey != null && !d.frozen) out.add(WatchAction.FREEZE)
-        if (d.adminKey == null && !d.admin) out.add(WatchAction.REMOVE)
-        return out + listOf(WatchAction.PASTE_OFF, WatchAction.ACTIONS_OFF, WatchAction.AWAY_OFF, WatchAction.ACTION)
-    }
-
-    /**
-     * The body the watch with the device ID watch signs for action on device
-     * (name is the quick action's, for ACTION): the phone builds it, the
-     * watch shows what it says and signs it with its admin key, and
-     * watchRecord puts the two together. Any phone of the group builds it,
-     * admin or not: what counts is the watch's signature.
-     */
-    fun watchBody(action: WatchAction, device: String, watch: String, now: Instant, name: String? = null): ByteArray {
-        val w = devices.firstOrNull { it.id == watch && it.role == "watch" }
-        val ca = w?.adminKey
-        if (w == null || ca == null || !w.admin) throw Failure(NOT_A_WATCH)
-        val d = devices.firstOrNull { it.id == device }
-        if (d == null || action !in watchActions(device)) throw Failure(NOT_FOR_WATCH)
-        val s = BodyOnly
-        val r = when (action) {
-            WatchAction.FREEZE -> {
-                val admin = d.adminKey ?: throw Failure(NOT_FOR_WATCH)
-                val b = Records.Body("freeze", ca, now.toEpochMilli())
-                b.keys = listOf(admin)
-                return records.canonical(b)
-            }
-            WatchAction.REMOVE -> {
-                val b = Records.Body("revoke", ca, now.toEpochMilli())
-                b.keys = d.keys
-                return records.canonical(b)
-            }
-            WatchAction.PASTE_OFF -> Commands.pasteOff(device, tag, watch, now, s)
-            WatchAction.ACTIONS_OFF -> Commands.actionsOff(device, tag, watch, now, s)
-            WatchAction.AWAY_OFF -> Commands.awayOff(device, tag, watch, now, s)
-            WatchAction.ACTION -> {
-                if (name == null || !Commands.validActionName(name)) throw Failure(NOT_FOR_WATCH)
-                Commands.action(device, name, tag, watch, now, s)
-            }
-        }
-        return r.body
-    }
-
-    /** Signs nothing: the watch signs the body elsewhere. */
-    private object BodyOnly : CertificateSigner {
-        override val publicKeyDER = ByteArray(0)
-
-        override fun signature(data: ByteArray) = ByteArray(0)
-    }
-
-    /**
-     * Checks the attestation a device sent of its member key (section 17,
-     * "Evidence") and, on the root, returns a new device record with what
-     * it shows when that differs from the device's record; null when there
-     * is nothing to record. chain is the certificate chain the device
-     * presented, leaf first. Throws AndroidAttestation.Invalid for a proof
-     * of nothing.
-     */
-    fun evidence(
-        device: String,
-        chain: List<ByteArray>,
-        e: Member.Evidence,
-        rootSigner: CertificateSigner,
-        now: Instant,
-        roots: List<ByteArray>? = null,
-        revoked: Set<String> = emptySet(),
-    ): Member.Record? {
-        if (!isRoot || chain.isEmpty() || e.format != Member.Evidence.ANDROID || e.key != Member.Evidence.MEMBER) return null
-        val key = Records.keyHashOfCert(chain[0])
-        val d = devices.firstOrNull { it.id == device && it.key.contentEquals(key) } ?: return null
-        if (e.groupTag != null && e.groupTag != tag) throw AndroidAttestation.Invalid("an attestation made for another group")
-        val challenge = try {
-            Attestation.challenge(e.groupTag ?: "", ByteArray(0), e.salt)
-        } catch (x: IllegalArgumentException) {
-            throw AndroidAttestation.Invalid(x.message ?: "a bad salt")
-        }
-        val r = try {
-            AndroidAttestation.check(e.chain, CertificateInfo(chain[0]).publicKey, challenge, AndroidAttestation.Policy(revoked = revoked, roots = roots))
-        } catch (x: AndroidAttestation.Invalid) {
-            // Revoked: the keys may still be in hardware, as the hello
-            // says, but Google no longer vouches for the chain.
-            if (!x.revoked) throw x
-            if (d.store != Records.PROVEN) return null
-            return recordAgain(d, rootSigner, now, store = Records.HARDWARE, proof = null)
-        }
-        if (d.store == r.store && (d.kind ?: "") == r.kind) return null
-        val proof = if (r.store == Records.PROVEN) sha256(e.chain[0]).joinToString("") { "%02x".format(it) } else null
-        return recordAgain(d, rootSigner, now, store = r.store, kind = r.kind.ifEmpty { null }, proof = proof)
-    }
-
-    /** The admin CA this phone issued for an admin key a computer offers, while that computer is still listed as an admin. */
-    fun computerAdminCA(adminKey: ByteArray): ByteArray? {
-        val listed = devices.filter { it.admin }.map { it.id }.toSet()
-        return computerAdmins.entries.firstOrNull { (id, ca) ->
-            id in listed && runCatching { CertificateInfo(ca).publicKey }.getOrNull()?.contentEquals(adminKey) == true
-        }?.value
-    }
-
-    /**
-     * Admits a listening device over a pairing connection whose TLS
-     * handshake is done (section 6, "The joiner listens"): joinerCert is the
-     * device's certificate, already checked against the QR code's
-     * fingerprint, and sessionID the TLS exporter's output. The device gets
-     * a member certificate from this phone's CA and the group CA, never a
-     * key. A phone that sent an admin key becomes an admin when this phone is
-     * the root and makeAdmin is set: it gets an admin CA for that key. On
-     * success a computer is in computers, where one admitted again replaces
-     * its entry, and every device has its record. A computer keeps those of
-     * addrs that are on a home network, where the phone dialed it. With
-     * invitation, the device dialed this phone, the hub, with a remote
-     * invitation (section 12): code is unused and the device never becomes
-     * an admin.
-     */
-    fun admit(
-        t: FrameTransport,
-        code: String,
-        joinerCert: ByteArray,
-        sessionID: ByteArray,
-        caSigner: CertificateSigner,
-        now: Instant,
-        makeAdmin: Boolean = true,
-        addrs: List<String> = emptyList(),
-        invitation: PairingMember.Invitation? = null,
-    ): PairingMember.Admitted {
-        if (!isAdmin) throw Failure("this phone is no admin")
-        val first = groupCA
-        val later = roots
-        val root = currentRoot
-        val ca = signingCA
-        val issuer = adminCA
-        val canMakeAdmins = isRoot && invitation == null
-        var adminKey: ByteArray? = null
-        val taken = { dev: String -> dev == device || records.knows(dev) }
-        val pathRecords = records.pathRecords
-        val claimTimes = records.claimTimes
-        val admitted = PairingMember.admit(t, code, memberCert, joinerCert, sessionID, Pairing.MemberAD(device, tag), taken, invitation) { dev, publicKey, info ->
-            val cert = GroupCertificates.member(dev, publicKey, ca, caSigner, now)
-            val key = info.adminKey
-            val forAdmin = if (Pairing.Info.isPhone(info.os) && key != null && makeAdmin && canMakeAdmins) {
-                adminKey = key
-                GroupCertificates.adminCA(dev, key, root, caSigner)
-            } else {
-                null
-            }
-            // The records let the new device take its peers at once; a group
-            // never handed over leaves them out when they do not fit in a
-            // frame, and the device gets them from its peers.
-            var w = Pairing.Welcome(
-                cert, first, issuer, forAdmin, later.ifEmpty { null }, pathRecords.ifEmpty { null }, claimTimes = claimTimes.ifEmpty { null },
-            )
-            if (later.isEmpty() && Wire.encode(w.toJson()).size > Pairing.MAX_FRAME - Pairing.WELCOME_ROOM) {
-                w = Pairing.Welcome(cert, first, issuer, forAdmin)
-            }
-            w
-        }
-        val name = validName(admitted.info.name)
-        val key = Records.keyHashOfCert(admitted.cert)
-        if (Pairing.Info.isPhone(admitted.info.os)) {
-            record(admitted.device, name, "phone", key, caSigner, now, adminKey?.let { Records.keyHash(it) }, admitted.info.os, Records.HARDWARE,
-                seal = admitted.info.seal)
-            return admitted
-        }
-        computers.removeAll { it.device == admitted.device }
-        computers.add(Computer(admitted.device, admitted.info.name, admitted.info.os, admitted.cert, now, addrs.filter(JoinCode::isHome)))
-        record(admitted.device, name, "member", key, caSigner, now, os = admitted.info.os, seal = admitted.info.seal, caps = admitted.info.caps)
-        return admitted
-    }
-
-    /**
-     * Notes a computer the core admitted for this phone (CorePairing):
-     * its name, system and those of addrs that are on a home network, the
-     * one that answered first, for dialing it where mDNS does not find it.
-     * One admitted again replaces its entry. Its record reaches the group
-     * from the member.
-     */
-    fun noteComputer(device: String, name: String, os: String, addrs: List<String>, now: Instant) {
-        computers.removeAll { it.device == device }
-        computers.add(Computer(device, name, os, ByteArray(0), now, addrs.filter(JoinCode::isHome)))
-    }
 
     /** The group as JSON, to save it. */
     fun toJson(): ByteArray = Wire.encode(
         Wire.obj(
             "device" to Wire.str(device),
-            "group_ca" to Wire.bytes(groupCA),
-            "roots" to Wire.list(roots),
-            "member_cert" to Wire.bytes(memberCert),
-            "member_issuer" to Wire.bytes(memberIssuer),
             "is_root" to JsonPrimitive(isRoot),
-            "admin_ca" to Wire.bytes(adminCA),
-            "computers" to JsonArray(
-                computers.map {
-                    Wire.obj(
-                        "device" to Wire.str(it.device),
-                        "name" to Wire.str(it.name),
-                        "os" to Wire.str(it.os),
-                        "cert" to Wire.bytes(it.cert),
-                        "admitted_ms" to Wire.num(it.admitted.toEpochMilli()),
-                        "addrs" to JsonArray(it.addrs.map { a -> JsonPrimitive(a) }),
-                    )
-                },
-            ),
-            "records" to Wire.parse(records.toJson()),
-            "computer_admins" to JsonObject(computerAdmins.mapValues { Wire.bytes(it.value)!! }),
-            "claim" to Wire.bytes(claim),
-            "claimed_from" to Wire.str(claimedFrom),
-            "group06" to Wire.str(group06),
-            "admin06" to JsonPrimitive(admin06),
+            "group06" to Wire.str(group),
+            "admin06" to JsonPrimitive(admin),
         ),
     )
 
@@ -855,31 +69,8 @@ class PhoneGroup internal constructor(
     }
 
     companion object {
-        /**
-         * Creates a group: a root CA for caSigner's key, a member certificate
-         * for this phone's member key (a SubjectPublicKeyInfo), and the
-         * phone's own device record under name, with seal, the phone's public
-         * key for sealed messages, when it has one.
-         */
-        fun create(caSigner: CertificateSigner, memberKey: ByteArray, now: Instant, name: String = "Android", seal: ByteArray? = null): PhoneGroup {
-            val ca = GroupCertificates.groupCA(caSigner, now, pathLength = 1)
-            val device = SyncEngine.newID()
-            val cert = GroupCertificates.member(device, memberKey, ca, caSigner, now)
-            val g = PhoneGroup(device, ca, cert)
-            g.record(device, validName(name), "phone", Records.keyHash(memberKey), caSigner, now, os = "android", store = Records.HARDWARE, seal = seal)
-            return g
-        }
-
         /** The message of the Failure for a name that the records do not accept. */
         const val INVALID_NAME = "a device name has 1 to 64 bytes and no control characters"
-        const val NOT_A_WATCH = "the watch's request names a device ID or system that is not a new watch's, or the device is no watch of the group"
-        const val NOT_FOR_WATCH = "a watch may not do that to this device"
-        const val NO_TAKEOVER = "the root did not give this admin the power to take the group over"
-        const val CLAIM_WAITING = "this admin's claim to take the group over waits already"
-        const val INVALID_INCOMING = "how long an incoming copy stays live is 5 s to 1 h"
-
-        /** The record or command a watch signed: body, its signature (ECDSA with SHA-256, DER) and the watch's admin CA. */
-        fun watchRecord(body: ByteArray, signature: ByteArray, watchCA: ByteArray): Member.Record = Member.Record(body, signature, listOf(watchCA))
 
         /** A name that the records accept: 1 to 64 bytes without control characters, or "Android". */
         fun validName(s: String): String {
@@ -897,88 +88,40 @@ class PhoneGroup internal constructor(
         }
 
         /**
-         * The group a phone joins, from the welcome the admitting phone sent
-         * and PairingJoiner checked: a member of it, and an admin when the
-         * welcome carries its admin CA. The records arrive from the computers.
+         * A group this phone made (CorePairing.newGroup06, root) or joined
+         * (CorePairing.Joiner): its device and Group ID; the member keeps
+         * the set.
          */
-        fun joined(j: PairingJoiner.Joined): PhoneGroup {
-            val g = PhoneGroup(j.device, j.welcome.groupCA, j.welcome.cert)
-            g.memberIssuer = j.welcome.issuer
-            g.isRoot = false
-            g.adminCA = j.welcome.adminCA
-            // The records that lead to the roots stay with the group, so the roots are those its records name.
-            g.records.addAll(j.welcome.records.orEmpty(), j.welcome.groupCA)
-            g.records.takeClaimTimes(j.welcome.claimTimes.orEmpty())
-            g.roots = g.records.roots
-            return g
-        }
-
-        /**
-         * The group the core made with this phone's root key
-         * (CorePairing.newGroup): a member of it, and the root.
-         */
-        fun of(c: CorePairing.Group, root: Boolean): PhoneGroup {
-            val g = PhoneGroup(c.device, c.groupCA, c.cert)
-            g.memberIssuer = c.issuer
+        fun of(device: String, group: String, root: Boolean): PhoneGroup {
+            val g = PhoneGroup(device, group)
             g.isRoot = root
-            g.adminCA = if (root) null else c.adminCA
-            g.records = RecordSet.fromFile(c.groupCA, c.records)
-            // The records that lead to the roots stay with the group, so the roots are those its records name.
-            g.roots = g.records.roots.ifEmpty { c.roots }
             return g
         }
 
-        /**
-         * A group of 0.6 this phone made (CorePairing.newGroup06, root) or
-         * joined (CorePairing.Joiner): its device and Group ID; the member
-         * keeps the set.
-         */
-        fun of06(device: String, group: String, root: Boolean): PhoneGroup {
-            val g = PhoneGroup(device, ByteArray(0), ByteArray(0))
-            g.isRoot = root
-            g.group06 = group
-            return g
-        }
-
-        /** A group saved with toJson. */
+        /** A group saved with toJson; Failure for one made before 0.6, which names no Group ID. */
         fun fromJson(data: ByteArray): PhoneGroup {
             val o = Wire.parse(data) ?: throw Failure("not a saved group")
             try {
-                val g = PhoneGroup(
-                    o.optString("device") ?: throw Failure("no device"),
-                    o.optBytes("group_ca") ?: throw Failure("no group CA"),
-                    o.optBytes("member_cert") ?: throw Failure("no member certificate"),
-                )
-                g.roots = o.optBytesList("roots").orEmpty()
-                g.memberIssuer = o.optBytes("member_issuer")
-                g.isRoot = (o.opt("is_root") as? JsonPrimitive)?.booleanOrNull ?: true
-                g.adminCA = o.optBytes("admin_ca")
-                for (c in o.optArray("computers").orEmpty()) {
-                    val co = c as? JsonObject ?: continue
-                    g.computers.add(
-                        Computer(
-                            co.optString("device") ?: continue,
-                            co.optString("name") ?: "",
-                            co.optString("os") ?: "linux",
-                            co.optBytes("cert") ?: ByteArray(0),
-                            Instant.ofEpochMilli(co.optLong("admitted_ms") ?: 0),
-                            co.optArray("addrs").orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }.filter(JoinCode::isHome),
-                        ),
-                    )
-                }
-                o.optObject("records")?.let { g.records = RecordSet.fromJson(Wire.encode(it)) }
-                o.optObject("computer_admins")?.forEach { (k, _) -> o.optObject("computer_admins")!!.optBytes(k)?.let { g.computerAdmins[k] = it } }
-                g.claim = o.optBytes("claim")
-                g.claimedFrom = o.optString("claimed_from")
-                g.group06 = o.optString("group06")
-                g.admin06 = o.optBool("admin06") ?: false
+                val group = o.optString("group06") ?: throw Before06()
+                val g = PhoneGroup(o.optString("device") ?: throw Failure("no device"), group)
+                g.isRoot = (o.opt("is_root") as? JsonPrimitive)?.booleanOrNull() ?: true
+                g.admin = o.optBool("admin06") ?: false
                 return g
             } catch (e: WireTypeException) {
                 throw Failure("not a saved group: ${e.message}")
             }
         }
 
-        /** Reads a saved group; null when there is none. */
+        /**
+         * Reads a saved group; null when there is none. A group made before
+         * 0.6 is Before06: the app shows that a new group is needed, and
+         * the file stays until the person leaves it (D-126).
+         */
         fun load(file: File): PhoneGroup? = if (file.exists()) fromJson(file.readBytes()) else null
+
+        private fun JsonPrimitive.booleanOrNull(): Boolean? = content.toBooleanStrictOrNull().takeIf { !isString }
     }
+
+    /** The saved group was made before 0.6, which this version no longer runs (D-126). */
+    class Before06 : Exception("this group was made before 0.6: make a new group")
 }

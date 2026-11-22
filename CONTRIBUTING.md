@@ -298,10 +298,6 @@ Cross tests between Go and Swift: Swift tests write vectors that Go reads, and t
   `TestSwiftMemberAdmitsGoJoiner` (pairing over plain TCP); on macOS
   `CBB_SWIFT_INTEROP_TLS` runs the real-TLS pairing and member tests (see the
   `phone kit` job in `.github/workflows/ci.yml` for the keychain setup).
-- The Kotlin kit does the same: `CBB_INTEROP_OUT=<dir> ./gradlew -p kit test` writes the
-  same files, and `./gradlew -p kit interopScript` builds
-  `kit/build/interop/cbb-interop`, which plays the Android phone in those three
-  Go tests on Linux too (TLS from Conscrypt; the `Android kit` job runs them).
 
 The app (macOS with Xcode):
 

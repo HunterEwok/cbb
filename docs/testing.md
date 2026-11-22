@@ -52,7 +52,7 @@ watch's state, content hashes, join QR codes and a CPace exchange.
   `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
   core (`core/src/vectors.rs`).
 - Files named `swift-*.json` are written by the Swift kit (`CBB_INTEROP_OUT`) and read by
-  Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
+  Go.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
 - `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
@@ -67,9 +67,9 @@ becomes a vector here.
 
 ## Cross tests
 
-- The Swift kit's `cbb-interop` and the Kotlin kit's (built by `./gradlew -p kit
-  interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
-  over real TLS on macOS and with Conscrypt on Linux.
+- The Swift kit's `cbb-interop` plays the phone in Go's pairing and member tests: over plain
+  TCP on Linux and over real TLS on macOS. The Kotlin kit reads the Go vectors and joins
+  groups of 0.6 through the core (`CoreMemberTest`, `CorePairingTest`).
 - `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
   without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
   a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with

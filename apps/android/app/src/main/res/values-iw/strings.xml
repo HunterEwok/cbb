@@ -62,6 +62,8 @@
     <string name="away_waits">״בכל מקום״ ממתין כל עוד הסנכרון כבוי</string>
     <string name="back">חזרה</string>
     <string name="badge_hub">רכזת</string>
+    <string name="before06_body">הטלפון הזה נמצא בקבוצה שנוצרה לפני 0.6, וגרסה זו כבר לא מריצה אותה. צא ממנה בטלפון הזה, ואז צור קבוצה חדשה או הצטרף לאחת. שום דבר לא נמחק עד שתצא.</string>
+    <string name="before06_title">קבוצה מלפני 0.6</string>
     <string name="bug_allow">לאשר</string>
     <string name="bug_always">לאשר תמיד</string>
     <string name="bug_broke_restarted">משהו ב-CBB נשבר. הוא הופעל מחדש.</string>

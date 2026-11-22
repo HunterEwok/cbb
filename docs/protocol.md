@@ -1978,8 +1978,8 @@ a set of them into the group's state ("The state"), and it is written twice, in 
 (`internal/authority`, with the record set in `internal/group/records.go`) for the
 computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for
 `cbb` and, through the core's entry point ([core-api.md](core-api.md)), for both
-phone apps, which sign records in their kits (`Records.swift`, `Records.kt`, with the
-Secure Enclave or the Keystore) but evaluate none themselves. Go's release builds evaluate
+phone apps, which sign records with the Secure Enclave or the Keystore (`Records.swift`;
+the Android kit through the core's member, `CoreMember.act`) but evaluate none themselves. Go's release builds evaluate
 through the core as well. The vectors (`testdata/interop/v2-records.json`) and the
 differential run compare the whole state; why the records changed from version 1 and how
 they are tested is in [records-v2.md](records-v2.md).
@@ -4843,7 +4843,7 @@ a period with its server credentials, its hubs' and members' credentials, and se
 refuses. `cbb`'s core reads and checks them as Go does (`core/src/credential.rs`:
 the lists, the signatures and types, and a server's check), and passes the vectors; it
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
-(`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
+(`Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay
