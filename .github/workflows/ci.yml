@@ -2782,9 +2782,10 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Every test of the workspace under coverage, the core's records
-    # tests at their caps among them, takes about 49 minutes now, and the
-    # installer and update steps after it about 10.
-    timeout-minutes: 80
+    # tests at their caps among them; cargo-nextest runs the tests of every
+    # binary side by side (.config/nextest.toml). The optimized builds and
+    # the installers run beside it, in rustinstall.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2800,17 +2801,33 @@ jobs:
           rustup toolchain install stable --profile minimal --component llvm-tools-preview
           rustup default stable
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
-      - name: cargo-llvm-cov, for the tests' coverage
-        run: cargo install --locked cargo-llvm-cov@0.9.1
-      - name: cargo test (the interop vectors in testdata/interop too), with coverage
+      - name: cargo-llvm-cov and cargo-nextest, for the tests and their coverage
+        run: |
+          cargo install --locked cargo-llvm-cov@0.9.1
+          cargo install --locked cargo-nextest@0.9.151
+      - name: the workspace's tests (the interop vectors in testdata/interop too), with coverage
         env:
           CBB_FULL_SIZE: "1" # the records' tests at real size too
-        run: cargo llvm-cov --locked --workspace --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust.json"
+        run: cargo llvm-cov nextest --locked --workspace --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-rust
           path: coverage-rust.json
           retention-days: 7
+  rustinstall:
+    name: cbb (Rust), the optimized builds and the installers
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
       - name: the stack one change of root's verify needs, in the optimized builds a board may run
         run: |
           cargo test --locked --release -p cbb-core --features std,tls,web --test slhdsa the_stack_a_verify_needs
@@ -3507,7 +3524,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model, format]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, hooks, service-build, service, service-coverage, rustcheck, rust, rustinstall, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model, format]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

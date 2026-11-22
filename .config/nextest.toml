@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# cargo-nextest, which CI's cbb (Rust) job runs the workspace's tests with
+# (cargo llvm-cov nextest): it runs the tests of every binary side by side,
+# where cargo test runs one binary after another.
+
+[profile.default]
+# Every failing test is reported, not only the first.
+fail-fast = false
+# A test that runs long is named, as cargo test does after a minute.
+slow-timeout = "60s"
+
+# The tests that measure their own time run alone: tests of other binaries
+# beside them would slow what they measure.
+[[profile.default.overrides]]
+filter = 'binary(ceilings) | binary(set_cost) | test(=records::tests::many_removals_of_one_key_evaluate_quickly) | test(=join::tests::an_intro_is_checked_only_when_it_ends_in_its_sender)'
+threads-required = "num-cpus"

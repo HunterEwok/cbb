@@ -162,9 +162,11 @@ environment secret**.
 - **Android app**: the app and the Wear OS app built, unit-tested and linted;
 - **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
   `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
-- **cbb (Rust)**: the tests of the Rust workspace, the installers without the helper
-  (`get.sh --no-helper`, rootless) and `cbb update` there, and the tests of cbb without its
-  helper among other members;
+- **cbb (Rust)**: the tests of the Rust workspace under coverage, every test binary's beside
+  the others' (cargo-nextest, `.config/nextest.toml`);
+- **cbb (Rust), the optimized builds and the installers**: the stack a verify needs in the
+  optimized builds, the installers without the helper (`get.sh --no-helper`, rootless) and
+  `cbb update` there, and the tests of cbb without its helper among other members;
 - **service tests on the Rust cbb**: the build, six parts of `internal/service` and the part
   `others` at the same time, and their coverage (docs/testing.md, "Running tests in
   parallel");
