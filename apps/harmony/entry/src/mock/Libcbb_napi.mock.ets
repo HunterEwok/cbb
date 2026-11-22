@@ -7,10 +7,8 @@
 // why. Never part of a build for a phone.
 
 const ABI: number = 1;
-const NO_CORE: string = JSON.stringify({
-  'abi': ABI,
-  'error': { 'code': 1, 'name': 'previewer', 'message': 'The Previewer has no core.', 'details': 'previewer: libcbb_napi.so is a stand-in' }
-});
+const NO_CORE: string = '{"abi":1,"error":{"code":1,"name":"previewer","message":"The Previewer has no core.",' +
+  '"details":"previewer: libcbb_napi.so is a stand-in"}}';
 
 interface Made {
   handle: Object | null;
