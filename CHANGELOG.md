@@ -3037,6 +3037,18 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Swift kit's tests cover its 0.6 code: the records' levels, a hello's device, manifests
+  and names, notices and the list of a change of root, the reasons why a phone does not sync,
+  the home network's addresses, the keychain signer and the root phone's away calls; code
+  nothing calls any more went (the keychain identity of 0.5's TLS, sealing a command, a
+  manifest's and a signed body's own check).
+- The Kotlin kit is back above its coverage floor: code of 0.5 that nothing calls any more
+  went (its DER writer and reader, the blob's sealing and opening, a result's reason
+  cleaner), and tests cover the member's values, manifests, names, keys and the group file.
+- The Android emulator tests admit a computer as a group of 0.6 does: the phone opens its
+  pairing window and the computer joins with its six digits (`cbb pair -code`, D-119), which
+  the bench's helper lets the members reach (`adb forward` and a relay on the fleet's
+  gateway); they waited for the QR code of 0.5 that a computer no longer shows.
 - CI's differential run compares Go, the Rust core and the Kotlin kit: the iPhone kit's
   verdict test went with its own readers (D-126), and the run failed looking for its output.
   The Android emulator test of the phone as a hub checks the hub at home only, the

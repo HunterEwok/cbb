@@ -345,5 +345,45 @@ final class CoreMemberTests: XCTestCase {
             try rootKey.signature(digest: $0)
         })
     }
+
+    /// The root phone's calls for away from home and the group's servers, alone in its group: its first period of
+    /// server credentials is due, and the relay its root key sets renews them; it is no hub, so it serves none and is
+    /// named no forwarder; push and the notices answer, and the member port closes.
+    func testTheRootPhonesAwayCalls() throws {
+        let (phone, rootKey) = try rootPhone()
+        let m = phone.member
+        let pub = rootKey.publicKeyDER
+        let root = { (d: Data) throws -> Data in try rootKey.signature(digest: d) }
+        func refused(_ what: String, _ f: () throws -> Void, _ line: UInt = #line) {
+            XCTAssertThrowsError(try f(), what, line: line)
+        }
+        XCTAssertTrue(try m.periods().due, "the root phone's first period is due")
+        let pin = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+        refused("not a relay's key") { _ = try m.setRelays(["127.0.0.1:1 nope"], public: pub, sign: root) }
+        refused("default goes alone") { _ = try m.setRelays(["default", "127.0.0.1:1 \(pin)"], public: pub, sign: root) }
+        refused("a member key is no root key") { _ = try m.setRelays(["127.0.0.1:1 \(pin)"], public: phone.key.publicKeyDER) { try phone.key.signature(digest: $0) } }
+        XCTAssertEqual(try m.setRelays(["127.0.0.1:9 \(pin)"], public: pub, sign: root), ["127.0.0.1:9"])
+        XCTAssertEqual(try m.periods(), CoreMember.Periods(), "the relay's root key renewed the credentials")
+        XCTAssertEqual(try m.renewPeriod(public: pub, sign: root), CoreMember.Periods())
+        refused("the root is no hub") { _ = try m.nameForwarder("Root phone", forwarder: "127.0.0.1:1", key: pin, public: pub, sign: root) }
+        XCTAssertNil(try m.rootForwarder())
+        refused("a phone without an admin key is no hub") { _ = try m.serveAsHub(port: 0, addrs: ["127.0.0.1:9"]) }
+        refused("a phone that is no hub cannot stop being one") { _ = try m.stopHub() }
+        let on = try m.setAway(true)
+        XCTAssertEqual(try m.awayStatus()?.isOn, on?.isOn)
+        let off = try m.setAway(false)
+        XCTAssertTrue(off == nil || off?.isOn == false, "sync away from home is off: \(String(describing: off))")
+
+        if let face = try m.pushFace() { XCTAssertEqual(face.count, 16) }
+        XCTAssertThrowsError(try m.setPush(Data([1, 2, 3])), "bytes that are no push registration")
+        try m.setPush(nil)
+        XCTAssertEqual(try m.pushRenewals(), [])
+        try m.setEvidence([])
+        _ = try m.notices()
+        try m.rootChangeSeen()
+        _ = try m.listen(.home)
+        try m.unlisten(.home)
+        try m.unlisten()
+    }
 }
 #endif

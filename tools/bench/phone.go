@@ -175,6 +175,18 @@ type phoneHelper struct {
 	jobs    map[string]*phoneJob
 	nextJob int
 	fwd     *phoneForwarder
+	phone   []*phoneRelay
+}
+
+// phoneRelay lets the members reach a TCP port of the phone, its member
+// port, where its pairing window answers (D-119): adb forwards a port on
+// this computer's loopback to the phone's, a relay on the fleet network's
+// gateway passes connections there, and each member sends what it
+// addresses to the phone's own address at that port to the relay, so the
+// address in the window's QR code, which names the phone's, reaches it.
+type phoneRelay struct {
+	addr  string // the phone's address and port, as it names them
+	relay string // the relay on the gateway
 }
 
 // phoneForwarder is the run's forwarder for a hub on the phone. Its port
@@ -188,9 +200,10 @@ type phoneForwarder struct {
 	key  string
 }
 
-// phoneRequest is what a test asks: op is add, addr, forwarder, run, copy,
+// phoneRequest is what a test asks: op is add, addr, forwarder, phone, run, copy,
 // arrives, logs, start, output or stop. add with udp also publishes a UDP port, the same
-// number on this computer and in the container, for a hub's tunnel.
+// number on this computer and in the container, for a hub's tunnel; phone with addr,
+// the phone's own address and TCP port, lets every member reach it there.
 type phoneRequest struct {
 	Op      string `json:"op"`
 	UDP     bool   `json:"udp,omitempty"`
@@ -199,6 +212,7 @@ type phoneRequest struct {
 	Text    string `json:"text,omitempty"`
 	ID      string `json:"id,omitempty"`
 	Seconds int    `json:"seconds,omitempty"`
+	Addr    string `json:"addr,omitempty"`
 }
 
 type phoneAnswer struct {
@@ -302,9 +316,15 @@ func (h *phoneHelper) add(ctx context.Context, udp bool) (*Device, int, error) {
 	}
 	h.mu.Lock()
 	fwd := h.fwd
+	relays := append([]*phoneRelay(nil), h.phone...)
 	h.mu.Unlock()
 	if fwd != nil {
 		if err := fwd.reach(ctx, d); err != nil {
+			return nil, 0, err
+		}
+	}
+	for _, p := range relays {
+		if err := p.reach(ctx, d); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -342,6 +362,13 @@ func (h *phoneHelper) do(ctx context.Context, req phoneRequest, a *phoneAnswer) 
 			return err
 		}
 		a.Addr, a.Out = net.JoinHostPort(emulatorHost, fmt.Sprint(fwd.port)), fwd.key
+		return nil
+	case "phone":
+		p, err := h.phonePort(ctx, req.Addr)
+		if err != nil {
+			return err
+		}
+		a.Addr = p.relay
 		return nil
 	}
 	d, err := h.member(req.Dev)
@@ -404,6 +431,93 @@ func (h *phoneHelper) forwarder(ctx context.Context) (*phoneForwarder, error) {
 		}
 	}
 	return fwd, nil
+}
+
+// phonePort lets every member reach the phone's TCP port at addr, the
+// phone's own address and port ("10.0.2.15:8764"), once for each addr.
+func (h *phoneHelper) phonePort(ctx context.Context, addr string) (*phoneRelay, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || net.ParseIP(host).To4() == nil {
+		return nil, fmt.Errorf("the phone's address %q is no IPv4 address and port", addr)
+	}
+	h.mu.Lock()
+	for _, p := range h.phone {
+		if p.addr == addr {
+			h.mu.Unlock()
+			return p, nil
+		}
+	}
+	var first *Device
+	if len(h.members) > 0 {
+		first = h.members[0]
+	}
+	h.mu.Unlock()
+	if first == nil {
+		return nil, errors.New("no member runs yet")
+	}
+	adb := "adb"
+	if home := os.Getenv("ANDROID_HOME"); home != "" {
+		adb = filepath.Join(home, "platform-tools", "adb")
+	}
+	out, err := exec.CommandContext(ctx, adb, "forward", "tcp:0", "tcp:"+port).Output()
+	if err != nil {
+		return nil, fmt.Errorf("adb forward to the phone's port %s: %w", port, err)
+	}
+	local := net.JoinHostPort("127.0.0.1", strings.TrimSpace(string(out)))
+	at := fmt.Sprintf("{{with index .NetworkSettings.Networks %q}}{{.Gateway}}{{end}}", h.f.net)
+	gw, err := docker(ctx, "inspect", "-f", at, first.Container)
+	if err != nil {
+		return nil, err
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(strings.TrimSpace(gw), "0"))
+	if err != nil {
+		return nil, fmt.Errorf("a relay to the phone on the fleet's gateway %q: %w", gw, err)
+	}
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
+	go relayTo(ln, local)
+	p := &phoneRelay{addr: addr, relay: ln.Addr().String()}
+	h.mu.Lock()
+	members := append([]*Device(nil), h.members...)
+	h.phone = append(h.phone, p)
+	h.mu.Unlock()
+	for _, m := range members {
+		if err := p.reach(ctx, m); err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
+// relayTo passes each connection ln takes to the address to, both ways.
+func relayTo(ln net.Listener, to string) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer c.Close()
+			o, err := net.DialTimeout("tcp", to, 10*time.Second)
+			if err != nil {
+				return
+			}
+			defer o.Close()
+			done := make(chan struct{}, 2)
+			go func() { io.Copy(o, c); done <- struct{}{} }()
+			go func() { io.Copy(c, o); done <- struct{}{} }()
+			<-done
+		}()
+	}
+}
+
+// reach sends what d addresses to the phone's address and port to the relay.
+func (p *phoneRelay) reach(ctx context.Context, d *Device) error {
+	host, port, _ := net.SplitHostPort(p.addr)
+	_, err := Run(ctx, d, fmt.Sprintf("iptables -t nat -A OUTPUT -d %s -p tcp --dport %s -j DNAT --to-destination %s", host, port, p.relay), "")
+	return err
 }
 
 // reach sends what d addresses to 10.0.2.2 at the forwarder's port to the
