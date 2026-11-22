@@ -642,23 +642,6 @@ napi_value memberManageWatch(napi_env env, napi_callback_info info)
     });
 }
 
-// memberServers(handle, index: string): Promise<string>: the member keeps
-// the group's server credentials and may be a hub or meet the group at a
-// relay, with its keys for the servers in HUKS, listed in the file index.
-napi_value memberServers(napi_env env, napi_callback_info info)
-{
-    Args a(env, info);
-    Member *member = handleOf<Member>(env, a.v[0]);
-    const std::string index = stringOf(env, a.v[1]);
-    return laterString(env, [member, index]() {
-        if (!member)
-            return errorAnswer({"", "member: no handle"});
-        keys::setServerIndex(index);
-        size_t len = 0;
-        return take(cbb_member_servers(member->m, keys::serverKeys, nullptr, &len), len);
-    });
-}
-
 // memberStop(handle): Promise<void>. The member stays valid for the rest of
 // the process (cbb_member_stop), so the handle is not freed.
 napi_value memberStop(napi_env env, napi_callback_info info)
@@ -838,7 +821,6 @@ napi_value init(napi_env env, napi_value exports)
         {"memberCall", nullptr, memberCall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManage", nullptr, memberManage, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManageWatch", nullptr, memberManageWatch, nullptr, nullptr, nullptr, napi_default, nullptr},
-        {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNew", nullptr, inviteNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"inviteNext", nullptr, inviteNext, nullptr, nullptr, nullptr, napi_default, nullptr},

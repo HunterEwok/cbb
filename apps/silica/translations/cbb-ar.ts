@@ -608,6 +608,10 @@
         <translation>صِل الهاتف بشبكة Wi-Fi المنزلية لإضافة جهاز.</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>كل أماكن المفاتيح في هذا الـ YubiKey مستخدمة. استخدم YubiKey آخر أو الورقة.</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>لا يوجد YubiKey موصول. أدخله في منفذ USB-C وحاول مرة أخرى.</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>تعذّر على الهاتف حفظ المجموعة.</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>تعذّر على الهاتف حفظ الورقة.</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>لا يملك الهاتف مفتاحًا بعد.</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>يحتوي العنصر الآمن في الهاتف على مفتاح تالف.</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>يحمل هذا الـ YubiKey مفتاح استرداد بالفعل. استخدم YubiKey آخر.</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>لا يحمل هذا الـ YubiKey أي مفتاح استرداد.</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>يحمل هذا الـ YubiKey شيئًا آخر في المكان المخصص لمفتاح الاسترداد. استخدم YubiKey آخر.</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>يحمل هذا الـ YubiKey مفتاح الاسترداد لهذه المجموعة بالفعل.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>يحمل هذا الـ YubiKey مفتاحَي استرداد لهذه المجموعة. استخدم الورقة بدلًا منه.</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,76 +1514,100 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>يتيح مفتاح الاسترداد لحاسوب من المجموعة أو هاتف جديد الاستيلاء على المجموعة إذا فُقد هذا الهاتف. اسحب للأسفل لإنشائه.</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>الملف المحفوظ هو مفتاح المجموعة: انقله من الهاتف إلى ورق أو وحدة تخزين محفوظة في مكان آمن، ثم احذفه من هنا.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>رجوع</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>مفتاح استرداد CBB</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>متابعة</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>تم</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>لقد كتبته</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>الإبقاء على مفتاح المصنع</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>أدخل YubiKey في منفذ USB-C واكتب رمز PIN الخاص به.</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>إنشاء مفتاح استرداد جديد</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع الاستيلاء على مجموعتك.</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>إنشاء مفتاح استرداد</translation>
+        <source>Leave without saving</source>
+        <translation>الخروج دون حفظ</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>أدخل YubiKey في منفذ USB-C، واكتب رمز PIN الخاص به، ثم المسه عندما يومض.</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>هل تريد الخروج دون حفظ مفتاح الاسترداد؟</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>وضعه على YubiKey</translation>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.</translation>
     </message>
     <message>
         <source>Recovery key</source>
         <translation>مفتاح الاسترداد</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>إزالة مفتاح الاسترداد</translation>
+        <source>Save as PDF</source>
+        <translation>حفظ كـ PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>جارٍ إزالة مفتاح الاسترداد</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>احفظه على ورقة أو على YubiKey أو على كليهما. لا يمكن نقل المجموعة إلى جهاز رئيسي آخر إذا فُقد هذا الهاتف إلا به. لا يظهر إلا الآن.</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>استبدال مفتاح المصنع</translation>
+        <source>Save the group's recovery key</source>
+        <translation>احفظ مفتاح الاسترداد للمجموعة</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>جارٍ استبدال مفتاح الاسترداد</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>يحفظ YubiKey المفتاح نفسه الموجود في هذه الورقة، خلف رمز PIN ولمسة. إذا كان لا يزال يحمل مفتاح الإدارة الافتراضي من المصنع، فيمكن لأي شخص معرفة ذلك المفتاح ومسح مفتاح الاسترداد دون رمز PIN؛ ويمكن للتطبيق استبداله بمفتاح يحميه رمز PIN.</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>حُفظ باسم %1. هذا الملف هو مفتاح المجموعة: انقله من الهاتف إلى ورق أو وحدة تخزين محفوظة في مكان آمن، ثم احذفه من هنا.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>الرقم السري لـ YubiKey</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>لدى المجموعة مفتاح استرداد. به يستولي حاسوب من المجموعة أو هاتف جديد على المجموعة إذا فُقد هذا الهاتف.</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>مفتاح الاسترداد على YubiKey، الذي يحتفظ بمفتاح الإدارة الافتراضي من المصنع: يستطيع من يحمله مسح المفتاح دون رمز PIN. احتفظ بالورقة أيضًا.</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين.</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>اكتب المفتاح أو اطبع هذه الصفحة واحفظه في مكان آمن. يُعرض مرة واحدة فقط.</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>حُفظت الورقة في المستندات.</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>من دونه، فقدان هذا الهاتف يعني إنشاء مجموعة جديدة وضم كل جهاز إليها من جديد.</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>كتابته على ورقة</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>انسخ المفتاح أو احفظ هذه الصفحة، واحتفظ بها في مكان آمن.</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>كتابته على YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>جارٍ الكتابة على YubiKey. أبقِه موصولًا حتى تنتهي.</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1789,6 @@
     <message>
         <source>No time</source>
         <translation>لا وقت</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>لا يوجد</translation>
     </message>
     <message>
         <source>None yet</source>

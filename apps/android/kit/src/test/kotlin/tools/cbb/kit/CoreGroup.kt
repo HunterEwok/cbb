@@ -4,7 +4,6 @@
 package tools.cbb.kit
 
 import java.io.File
-import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.createTempDirectory
 import kotlin.test.fail
@@ -13,7 +12,6 @@ import kotlin.test.fail
 class CorePhone(
     val member: CoreMember,
     val device: String,
-    val cert: ByteArray,
     val key: SoftwareSigner,
     val events: CopyOnWriteArrayList<CoreMember.Event>,
 ) {
@@ -46,52 +44,77 @@ class CorePhone(
     /** The copy with [text] that became the group's here. */
     fun copy(text: String): CoreMember.Copy = next("the copy $text") { (it as? CoreMember.Event.CopyChanged)?.copy?.takeIf { c -> c.text == text } }
 
-    /** The hello of [device], once it came. */
-    fun peer(device: String): CoreMember.Peer = next("the hello of $device") { (it as? CoreMember.Event.PeerConnected)?.peer?.takeIf { p -> p.device == device } }
+    /** The member [device], once it is connected. */
+    fun peer(device: String): CoreMember.Peer {
+        var p: CoreMember.Peer? = null
+        until("the connection of $device") { p = member.peers().firstOrNull { it.device == device }; p != null }
+        return p!!
+    }
 
     /** The devices connected now. */
     fun connected(): Set<String> = member.peers().map { it.device }.toSet()
 }
 
 /**
- * A group of phones whose members run in the Rust core: the root phone ([root]) made it and certified the others, each with a
- * device record that seals the copies to it. [close] stops them and removes their folders.
+ * A group of 0.6 whose members run in the Rust core: the root phone ([root])
+ * made it, and the others joined by its home window, as the apps do. [close]
+ * stops them and removes their folders.
  */
 class CoreGroup(n: Int = 2) : AutoCloseable {
-    val ca = SoftwareSigner()
-    val g: PhoneGroup
+    /** The group's root key, which the root phone holds. */
+    val rootKey = SoftwareSigner()
     val phones: List<CorePhone>
     private val top: File = createTempDirectory("cbb-core-group").toFile()
 
     val root: CorePhone get() = phones[0]
 
     init {
-        val now = Instant.now()
-        val sealKey = Core.sealPublic(SEAL)
-        val rootKey = SoftwareSigner()
-        g = PhoneGroup.create(ca, rootKey.publicKeyDER, now, seal = sealKey)
-        val made = mutableListOf(Triple(g.device, g.memberCert, rootKey))
+        val key = SoftwareSigner()
+        val made = CorePairing.newGroup(File(top, "0"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, key.publicKeyDER, rootKey::signDigest)
+        val first = start(0, "Root phone", made.device, key)
+        val all = mutableListOf(first)
+        val port = first.member.listen(CoreMember.Listen.HOME)
+        first.port = port
         for (i in 1 until maxOf(n, 1)) {
             val k = SoftwareSigner()
-            val id = SyncEngine.newID()
-            val cert = GroupCertificates.member(id, k.publicKeyDER, g.groupCA, ca, now)
-            g.record(id, "Phone $i", "phone", Records.keyHash(k.publicKeyDER), ca, now, os = "android", store = Records.HARDWARE, seal = sealKey)
-            made += Triple(id, cert, k)
+            val w = CorePairing.Window(first.member, rootKey.publicKeyDER, listOf("127.0.0.1"), sign = rootKey::signDigest)
+            val j = CorePairing.Joiner(File(top, "$i").path, w.qr, "Phone $i", "android", k.publicKeyDER, k::signDigest)
+            try {
+                val done = finish("phone $i joining") { v -> j.next(v, 100).let { Triple(it.version, it.state, it.failure) to it } }
+                all += start(i, "Phone $i", done.device, k)
+            } finally {
+                j.close()
+                w.close()
+            }
         }
-        phones = made.mapIndexed { i, (id, cert, k) ->
-            val dir = File(top, "$i").apply { mkdirs() }
-            val events = CopyOnWriteArrayList<CoreMember.Event>()
-            val m = CoreMember.start(
-                CoreMember.Start(dir, if (i == 0) "Root phone" else "Phone $i", "android", "17", "0.6.0", device = id, publicKey = k.publicKeyDER,
-                    seal = SEAL, cert = cert, groupCA = g.groupCA, roots = g.trusted),
-                k::signDigest,
-            ) { e -> events.add(e) }
-            m.addRecords(g.records.records)
-            CorePhone(m, id, cert, k, events)
-        }
+        phones = all
     }
 
-    /** Phone [i] dials phone [hub], which listens as the group's hub, and both wait for the other's hello. */
+    private fun start(i: Int, name: String, device: String, k: SoftwareSigner): CorePhone {
+        val events = CopyOnWriteArrayList<CoreMember.Event>()
+        val m = CoreMember.start(
+            CoreMember.Start(File(top, "$i").apply { mkdirs() }, name, "android", "17", "0.6.0", device = device, publicKey = k.publicKeyDER),
+            k::signDigest,
+        ) { e -> events.add(e) }
+        return CorePhone(m, device, k, events)
+    }
+
+    /** Follows a pairing's states until done, failing on failed or after 15 s. */
+    private fun <T> finish(what: String, next: (Long) -> Pair<Triple<Long, String, Throwable?>, T>): T {
+        val deadline = System.nanoTime() + 15_000_000_000L
+        var version = 0L
+        while (System.nanoTime() < deadline) {
+            val (st, value) = next(version)
+            version = st.first
+            when (st.second) {
+                "done" -> return value
+                "failed" -> fail("$what failed: ${st.third}")
+            }
+        }
+        fail("$what did not end within 15 s")
+    }
+
+    /** Phone [i] dials phone [hub], which listens as the group's hub, and both wait until they are connected. */
     fun connect(i: Int, hub: Int) {
         val h = phones[hub]
         val port = h.port ?: h.member.listen(CoreMember.Listen.HOME).also { h.port = it }
@@ -103,10 +126,5 @@ class CoreGroup(n: Int = 2) : AutoCloseable {
     override fun close() {
         phones.forEach { it.member.close() }
         top.deleteRecursively()
-    }
-
-    companion object {
-        /** The core keeps the secret for sealed messages for the process, as an app runs one member with one secret: every phone of every test has it. */
-        val SEAL = ByteArray(32) { 9 }
     }
 }

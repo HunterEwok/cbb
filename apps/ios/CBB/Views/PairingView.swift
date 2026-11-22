@@ -53,7 +53,7 @@ struct WindowView: View {
             }
             .task { if await model.addByWindow() { dismiss() } }
             .fullScreenCover(item: Binding(get: { model.newSheet.map(ShownSheet.init) }, set: { if $0 == nil { model.newSheet = nil } })) { s in
-                RecoverySheetView(sheet: s.sheet, made: Date()) { model.newSheet = nil }
+                RecoverySheetView(sheet: s.sheet, group: model.group.groupTag, made: Date()) { model.newSheet = nil }
             }
         }
     }

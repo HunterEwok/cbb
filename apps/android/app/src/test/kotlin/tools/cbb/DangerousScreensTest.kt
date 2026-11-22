@@ -33,7 +33,6 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
 import tools.cbb.kit.Core
-import tools.cbb.kit.GroupAlert
 
 /**
  * The phone's part of the sheet of the dangerous screens (docs/testing.md,
@@ -109,24 +108,17 @@ class DangerousScreensTest(private val lang: String) {
     }
 
     @Test
-    fun alerts() {
-        val alerts = listOf(
-            GroupAlert(GroupAlert.Kind.SECRETS_STOPPED),
-            GroupAlert(GroupAlert.Kind.CLAIM_PENDING, names = listOf("Pixel"), devices = listOf("pixel"), leftMS = 70L * 3_600_000),
-            GroupAlert(GroupAlert.Kind.ADMINS, names = listOf("MacBook", "Windows PC"), devices = listOf("mac", "win")),
-            GroupAlert(GroupAlert.Kind.CLAIMS, names = listOf("Pixel", "iPad"), devices = listOf("pixel", "ipad")),
-            GroupAlert(GroupAlert.Kind.TWO_HISTORIES, names = listOf("Home server"), devices = listOf("srv")),
-        )
-        show { AlertList(alerts, isRoot = true, resolve = {}, remove = {}) }
-        shoot("alerts")
-    }
-
-    @Test
     fun recoverySheet() {
         // Not a key: the sheet's words in its layout, as the phone shows them once.
         val sheet = Core.RecoverySheet("CBB-RECOVERY-EXAMPLE-NOT-A-KEY", "ABCD-EFGH-IJKL-MNOP-QRST-UVWX-YZ23-4567", ByteArray(0))
         show { RecoverySheetDialog(sheet, Instant.parse("2026-11-12T09:00:00Z")) {} }
+        // First the choice of where to save it; the sheet shows once chosen.
+        shoot("recovery-choice")
+        compose.onNodeWithText(context.getString(R.string.recovery_write_sheet)).performClick()
+        compose.waitForIdle()
         shoot("recovery-sheet")
+        compose.onNodeWithText(context.getString(R.string.back)).performClick()
+        compose.waitForIdle()
         compose.onNodeWithText(context.getString(R.string.recovery_done)).performClick()
         compose.waitForIdle()
         shoot("recovery-kept")

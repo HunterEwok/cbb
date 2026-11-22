@@ -128,7 +128,7 @@ pub mod tunnel;
 mod update;
 mod update_os;
 pub mod uptime;
-mod view;
+pub mod view;
 #[cfg(feature = "tunnel")]
 mod vless;
 pub mod why;

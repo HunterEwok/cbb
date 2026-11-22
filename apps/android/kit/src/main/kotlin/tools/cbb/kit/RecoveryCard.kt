@@ -60,11 +60,14 @@ object RecoveryCard {
         /** The card holds no recovery key of cbb. */
         NO_KEY,
 
-        /** The card holds a recovery key already, which is never sealed again. */
+        /** The card holds this group's recovery key already, which is never sealed again. */
         HOLDS_ONE,
 
-        /** Something else is in the place cbb uses on the card. */
-        TAKEN,
+        /** Every retired PIV slot of the card is in use. */
+        NO_FREE_SLOT,
+
+        /** The card holds two recovery keys for the group, and cbb does not choose. */
+        TWO_SLOTS,
 
         /** The card's management key is one the app cannot use. */
         MANAGEMENT_KEY,
@@ -89,8 +92,9 @@ object RecoveryCard {
                 "PIN is blocked" in m -> Failure(Kind.BLOCKED, m, details)
                 "firmware 5.3" in m -> Failure(Kind.OLD_FIRMWARE, m, details)
                 "holds no recovery key" in m -> Failure(Kind.NO_KEY, m, details)
-                "already holds a recovery key" in m -> Failure(Kind.HOLDS_ONE, m, details)
-                "already holds something" in m -> Failure(Kind.TAKEN, m, details)
+                "already holds this group's recovery key" in m -> Failure(Kind.HOLDS_ONE, m, details)
+                "retired PIV slot" in m -> Failure(Kind.NO_FREE_SLOT, m, details)
+                "two recovery keys" in m || "more than one group" in m -> Failure(Kind.TWO_SLOTS, m, details)
                 "management key" in m -> Failure(Kind.MANAGEMENT_KEY, m, details)
                 else -> Failure(Kind.CARD, m, details)
             }
@@ -98,49 +102,41 @@ object RecoveryCard {
     }
 
     /**
-     * What sealing did: the card still has its factory management key
-     * ([warning] then says what to tell the person), or the app replaced it
-     * with a PIN-protected one.
+     * What sealing did: the retired slot that holds the key, and whether the
+     * card keeps its factory management key, which cbb never changes (D-127).
      */
-    data class Sealed(val defaultKey: Boolean, val replaced: Boolean, val warning: String?)
+    data class Sealed(val slot: Int, val defaultKey: Boolean)
 
     /**
-     * Whether the card can take the secret, with nothing written: true when
-     * it still has its factory management key, which the app tells the
-     * person before [seal] and asks whether to replace.
+     * Seals the recovery key's secret onto the card, in its first empty
+     * retired slot: sheet is the sheet's QR code or its text; group is the
+     * group's ID in hex, or its tag, whose slot it becomes.
      */
-    fun inspect(card: SmartCard, pin: String): Boolean = inspect(CardLink.Apdu(card), pin)
+    fun seal(card: SmartCard, pin: String, sheet: String, group: String): Sealed =
+        seal(CardLink.Apdu(card), pin, sheet, group)
 
-    fun inspect(card: CardLink, pin: String): Boolean =
-        run(card, Wire.obj("op" to Wire.str("inspect"), "pin" to Wire.str(pin))).optBool("default_key")
-            ?: throw Core.Mismatch("the core's answer to inspect has no default_key")
-
-    /**
-     * Seals the recovery key's secret onto the card: sheet is the sheet's QR
-     * code or its text; replaceDefault is the person's consent to replace a
-     * factory management key.
-     */
-    fun seal(card: SmartCard, pin: String, sheet: String, replaceDefault: Boolean): Sealed =
-        seal(CardLink.Apdu(card), pin, sheet, replaceDefault)
-
-    fun seal(card: CardLink, pin: String, sheet: String, replaceDefault: Boolean): Sealed {
+    fun seal(card: CardLink, pin: String, sheet: String, group: String): Sealed {
         val ok = run(
             card,
             Wire.obj(
                 "op" to Wire.str("seal"),
                 "pin" to Wire.str(pin),
                 "recovery" to Wire.obj("text" to Wire.str(sheet)),
-                "replace_default" to JsonPrimitive(replaceDefault),
+                "group" to Wire.str(group),
             ),
         )
-        return Sealed(ok.optBool("default_key") ?: false, ok.optBool("replaced") ?: false, ok.optString("warning"))
+        val slot = ok.optLong("slot") ?: throw Core.Mismatch("the core's answer to seal has no slot")
+        return Sealed(slot.toInt(), ok.optBool("default_key") ?: false)
     }
 
-    /** Opens the secret after the PIN and a touch, for a change of root; the caller drops it after that one use. */
-    fun open(card: SmartCard, pin: String): ByteArray = open(CardLink.Apdu(card), pin)
+    /**
+     * Opens the group's secret after the PIN and a touch, for a change of
+     * root; the caller drops it after that one use.
+     */
+    fun open(card: SmartCard, pin: String, group: String): ByteArray = open(CardLink.Apdu(card), pin, group)
 
-    fun open(card: CardLink, pin: String): ByteArray =
-        run(card, Wire.obj("op" to Wire.str("open"), "pin" to Wire.str(pin))).optBytes("secret")
+    fun open(card: CardLink, pin: String, group: String): ByteArray =
+        run(card, Wire.obj("op" to Wire.str("open"), "pin" to Wire.str(pin), "group" to Wire.str(group))).optBytes("secret")
             ?: throw Core.Mismatch("the core's answer to open has no secret")
 
     /** cbb_transmit_fn: one APDU to the card of the call; any other value than 0 when the card is gone. */

@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 // Start, the same on every phone (docs/apps.md, "Start"): no group yet. It
-// makes a new group, joins one by the phone's QR code (as an admin too),
-// joins by a remote invitation, or restores a group from its recovery sheet.
+// makes a new group, joins one by a group's window, or joins by a remote
+// invitation.
 
 import { router } from '@kit.ArkUI';
 import { app } from '../model/AppModel';

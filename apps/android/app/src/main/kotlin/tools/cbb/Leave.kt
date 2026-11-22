@@ -79,3 +79,21 @@ internal fun RemovedCard(model: AppModel) {
         LeaveButton(model)
     }
 }
+
+/**
+ * The app's folder holds a group made before 0.6, which this version no
+ * longer runs (D-126): what that means, and Leave, which alone deletes its
+ * keys and files, when the person chooses it.
+ */
+@Composable
+internal fun Before06Screen(model: AppModel) {
+    val palette = LocalPalette.current
+    Column(
+        Modifier.fillMaxWidth().padding(Tokens.spacingLarge),
+        verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium),
+    ) {
+        Text(stringResource(R.string.before06_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
+        Text(stringResource(R.string.before06_body), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
+        LeaveButton(model)
+    }
+}

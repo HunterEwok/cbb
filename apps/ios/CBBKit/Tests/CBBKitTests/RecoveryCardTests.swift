@@ -10,6 +10,8 @@ import XCTest
 /// refusal of the core, not a crash. The card's own steps are checked on
 /// the core's fake card (TestFFIPhoneYubiKey).
 final class RecoveryCardTests: XCTestCase {
+    private let group = "0123456789abcdef"
+
     /// A card that is gone before it answers.
     private final class Gone: SmartCard {
         var sent = 0
@@ -30,8 +32,10 @@ final class RecoveryCardTests: XCTestCase {
             ("the YubiKey's PIN is blocked: unblock it with its PUK (ykman piv access unblock-pin)", .blocked),
             ("cbb keeps the recovery key on a YubiKey 5 with firmware 5.3 or later", .oldFirmware),
             ("this YubiKey holds no recovery key of cbb", .noKey),
-            ("this YubiKey already holds a recovery key: cbb opens it and never seals it again; to start over, use another YubiKey", .holdsOne),
-            ("this YubiKey already holds something in the place cbb uses", .taken),
+            ("this YubiKey already holds this group's recovery key: cbb opens it and never seals it again", .holdsOne),
+            ("every retired PIV slot of this YubiKey is in use", .noFreeSlot),
+            ("this YubiKey holds two recovery keys for this group: cbb does not choose between them", .twoSlots),
+            ("this YubiKey holds the recovery keys of more than one group: open it on a device of the group", .twoSlots),
             ("set a PIN-protected management key in YubiKey Manager first", .managementKey),
             ("the YubiKey left the phone: hold it still until it is done (code 1)", .card),
         ]
@@ -47,7 +51,7 @@ final class RecoveryCardTests: XCTestCase {
 
     func testACardThatLeavesIsACardFailure() {
         let card = Gone()
-        XCTAssertThrowsError(try RecoveryCard.open(card, pin: "123456")) { error in
+        XCTAssertThrowsError(try RecoveryCard.open(card, pin: "123456", group: group)) { error in
             guard let f = error as? RecoveryCard.Failure else { return XCTFail("\(error)") }
             XCTAssertEqual(f.kind, .card)
             XCTAssertTrue(f.message.contains("left the phone"), f.message)
@@ -56,10 +60,10 @@ final class RecoveryCardTests: XCTestCase {
     }
 
     func testACardWithoutPIVIsRefused() {
-        XCTAssertThrowsError(try RecoveryCard.inspect(NoPIV(), pin: "123456")) { error in
+        XCTAssertThrowsError(try RecoveryCard.open(NoPIV(), pin: "123456", group: group)) { error in
             XCTAssertTrue(error is RecoveryCard.Failure, "\(error)")
         }
-        XCTAssertThrowsError(try RecoveryCard.seal(NoPIV(), pin: "123456", sheet: "a typo", replaceDefault: false)) { error in
+        XCTAssertThrowsError(try RecoveryCard.seal(NoPIV(), pin: "123456", sheet: "a typo", group: group)) { error in
             XCTAssertTrue(error is RecoveryCard.Failure, "\(error)")
         }
     }

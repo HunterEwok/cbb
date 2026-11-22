@@ -1924,14 +1924,14 @@ reads, refusals, and checks against a group.
 
 ### The recovery key on a YubiKey (0.6)
 
-Source: `core/src/sheet/yubikey.rs`; the card's commands are each device's own
-(`member/src/piv.rs`, the phone kits). A YubiKey 5 holds what the sheet holds: the version
-and the 32-byte secret. They are sealed to a P-256 key that the card made in PIV's retired slot
-0x95, which never leaves the card and does ECDH only after the PIN and a touch. The sealed bytes
-are the value of PIV's data object `5FC121`, which the card shows only after the PIN.
+Source: `core/src/sheet/yubikey.rs`; the card's commands are in `member/src/piv/recovery.rs`,
+which the phones reach through the core (`cbb_piv`, [core-api.md](core-api.md)). A YubiKey 5
+holds what the sheet holds: the version and the 32-byte secret. They are sealed to a P-256 key
+that the card made in one of PIV's retired slots (0x82 to 0x95), which never leaves the card
+and does ECDH only after the PIN and a touch.
 
-The value is `CBBR` ‖ the version (1 byte, 1) ‖ E (65 bytes, an uncompressed P-256 point) ‖ the
-ciphertext (49 bytes), 119 bytes in all.
+The sealed value is `CBBR` ‖ the version (1 byte, 1) ‖ E (65 bytes, an uncompressed P-256
+point) ‖ the ciphertext (49 bytes), 119 bytes in all.
 
 - **Sealing**, on the phone, from the sheet or when the group is made. The phone draws a fresh
   key e with its point E. Z is the x coordinate of e times the card's point. K =
@@ -1939,31 +1939,49 @@ ciphertext (49 bytes), 119 bytes in all.
   ciphertext is ChaCha20-Poly1305 under K, with a nonce of 12 zero bytes (K seals once), and
   associated data `cbb recovery yubikey v1` ‖ 0x00 ‖ the version byte ‖ the card's point. It seals
   the sheet's version character `1` and the secret.
-- **Opening.** The card gives Z for E after the PIN and a touch, and the device does the rest.
-  The secret serves one signing.
-- **Reading.** A value that does not start with `CBBR` is not cbb's, whatever follows: the card
-  holds something else in that place, and a device writes nothing over it. A later version is
-  "this YubiKey needs a newer cbb", and nothing else of it is read. cbb's prefix and version
-  with bytes that do not read, or a point off the curve, is damaged. A value that does not open
-  with the card's key, or opens to a secret whose K1 and K2 are not the group's recovery keys,
-  is another recovery key. A card key that is not a P-256 point is not one cbb uses.
-
-- **The management key.** Making the key and writing the object need the card's management
-  key. A device uses it as the card keeps it: one that the PIN protects (Yubico's PIN-protected
-  mode, the key in `PRINTED` 5FC109 and the flag in `ADMIN DATA` 5FFF00), one the person types,
-  or the factory key, of either kind (Triple DES or AES-192); a key derived from the PIN is
-  refused. The factory key is publicly known: with it anyone holding the card could write over
-  slot 0x95 and `5FC121` without the PIN. The secret cannot be read that way, but it can be
-  spoiled without a word. So before anything is written the device says that the card still has
-  its factory key and asks whether it may replace it. Only with the person's consent it writes,
-  in this order, `PRINTED` with a random key of the same kind, the flag in `ADMIN DATA` (its
-  other fields kept), then the key itself; until the last write the card still answers to its
-  factory key, so a failure in between leaves it usable and a second try finishes the change.
-  Without consent the card is sealed as it is and the device keeps the warning on screen.
-  Nothing else on the card changes, and a `PRINTED` that holds anything but such a key is left
-  alone, with the factory key. This is the one step in which a device changes the management
-  key (`member/src/piv/recovery.rs`: `inspect`, `seal`). The YubiKey and the sheet hold the same
-  secret: one lost or spoiled does no harm while the other is whole.
+- **The container.** The sealed value travels in the slot's own certificate object (`5FC10D`
+  for slot 0x82 up to `5FC120` for slot 0x95; tag 70 the certificate, 71 0x00, FE empty), as
+  a certificate that other PIV tools read and show: version 3, the card's point as its
+  P-256 key, subject and issuer the CN `cbb recovery ` followed by the group's tag (the first
+  8 bytes of the group's ID in 16 lowercase hex digits), valid from 1970 to 9999, key usage
+  digital signature, and the non-critical extension
+  `1.2.840.113556.1.8000.2554.16084.34999.32171.17779.49103.9600978.4690077` (cbb's own,
+  made from a UUID under Microsoft's arc for such identifiers), whose value is an OCTET STRING
+  of the sealed value. A throwaway key signs it and is dropped; nobody checks the signature,
+  since the certificate only carries the bytes and names the group. The certificate objects
+  read without the PIN, so a device finds the group's slot before asking for the PIN, and a
+  card can hold the recovery keys of several groups, each in its own slot.
+- **Choosing the slot.** The first slot from 0x95 down to 0x82 that holds neither a
+  certificate nor a key (GET METADATA answers 6A88 for an empty slot; 6A82 is taken the same
+  way). A slot that holds either is never touched, whoever put it there; a slot with a key but
+  no cbb certificate (another tool's, or a seal that stopped before its last write) stays
+  taken for good. When every slot is taken the card is refused ("every retired PIV slot of
+  this YubiKey is in use"); a card that holds this group's recovery key already is opened,
+  never sealed again. Before anything is written the firmware must be 5.3 or later (GET
+  VERSION). The writes go in this order: GENERATE in the slot (PIN policy always, touch
+  policy always, checked by GET METADATA), then the container, read back. Nothing is
+  overwritten, reset or deleted.
+- **Opening.** The device reads the 14 certificate objects without the PIN and keeps the
+  ones whose CN carries the group's tag: none is "this YubiKey holds no recovery key of
+  cbb", two are refused ("two recovery keys for this group"). The slot's key must be one cbb
+  asked for (P-256, made on the card, PIN and touch always) with the point the container
+  names; then the PIN, and the card gives Z for E after a touch, and the device does the rest.
+  The secret is checked against the group's recovery keys and serves one signing. A computer
+  that opens a card without naming the group (`cbb recovery -yubikey`) takes the one cbb
+  container on the one such card and refuses a card with several.
+- **Reading.** A value that does not start with `CBBR` is not cbb's, whatever follows. A later
+  version is "this YubiKey needs a newer cbb", and nothing else of it is read. cbb's prefix and
+  version with bytes that do not read, or a point off the curve, is damaged. A value that does
+  not open with the card's key, or opens to a secret whose K1 and K2 are not the group's
+  recovery keys, is another recovery key. A card key that is not a P-256 point is not one cbb
+  uses.
+- **The management key.** GENERATE and PUT DATA need the card's management key. A device uses
+  it as the card keeps it and never changes it (D-127): one that the PIN protects (Yubico's
+  PIN-protected mode, the key in `PRINTED` 5FC109 and the flag in `ADMIN DATA` 5FFF00) after
+  the PIN, quietly; the factory key, of either kind (Triple DES or AES-192), as it is; any
+  other key typed by the person, three tries at most. A key derived from the PIN is refused.
+  Nothing resets PIV. The YubiKey and the sheet hold the same secret: one lost or spoiled does
+  no harm while the other is whole.
 
 The vectors are in `testdata/format/sheet.json`, `yubikey`.
 
@@ -1978,8 +1996,8 @@ a set of them into the group's state ("The state"), and it is written twice, in 
 (`internal/authority`, with the record set in `internal/group/records.go`) for the
 computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for
 `cbb` and, through the core's entry point ([core-api.md](core-api.md)), for both
-phone apps, which sign records in their kits (`Records.swift`, `Records.kt`, with the
-Secure Enclave or the Keystore) but evaluate none themselves. Go's release builds evaluate
+phone apps, which sign records with the Secure Enclave or the Keystore (`Records.swift`;
+the Android kit through the core's member, `CoreMember.act`) but evaluate none themselves. Go's release builds evaluate
 through the core as well. The vectors (`testdata/interop/v2-records.json`) and the
 differential run compare the whole state; why the records changed from version 1 and how
 they are tested is in [records-v2.md](records-v2.md).
@@ -2906,8 +2924,8 @@ Nothing else on the card is changed, since it may be in use for other things. Ma
 needs the card's management key: the phones use the factory one with AES only (a YubiKey
 from firmware 5.7), and refuse a card whose management key is 3DES or that does not say;
 signing needs only the PIN. 0.6's recovery key on a YubiKey takes every kind of management key
-and replaces a factory one only by consent (section 9, "The recovery key on a YubiKey (0.6)");
-the phones take the same kinds once wave 5 moves them to the core.
+but one derived from the PIN, changes none, and goes in the first empty retired slot from 0x95
+down (section 9, "The recovery key on a YubiKey (0.6)").
 
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or
@@ -4843,7 +4861,7 @@ a period with its server credentials, its hubs' and members' credentials, and se
 refuses. `cbb`'s core reads and checks them as Go does (`core/src/credential.rs`:
 the lists, the signatures and types, and a server's check), and passes the vectors; it
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
-(`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
+(`Credentials.swift`: `ServerCredentials`, `CredentialStore`, and
 `CredentialRefresh`, which signs as Go's refresh does, the period on a root phone), keep them
 and pass them on through the phone's member in the Rust core (`send_credentials`, its
 `message` events), and pass the same vectors. A phone registers with a relay

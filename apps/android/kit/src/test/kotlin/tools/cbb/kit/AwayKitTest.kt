@@ -39,7 +39,7 @@ class AwayKitTest {
     private inner class Group {
         val rootKey = SoftwareSigner()
         val rKey = SoftwareSigner()
-        val made = CorePairing.newGroup06(File(top, "root"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, rKey.publicKeyDER, rootKey::signDigest)
+        val made = CorePairing.newGroup(File(top, "root"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, rKey.publicKeyDER, rootKey::signDigest)
         var r = member06(File(top, "root"), "Root phone", made.device, rKey)
         val rPort = r.listen(CoreMember.Listen.HOME)
         val aKey = SoftwareSigner()
@@ -232,7 +232,7 @@ class AwayKitTest {
     /** A member of 0.6 started on the set in dir. */
     private fun member06(dir: File, name: String, device: String, key: SoftwareSigner, peers: List<String> = emptyList()): CoreMember =
         CoreMember.start(
-            CoreMember.Start(dir, name, "android", device = device, publicKey = key.publicKeyDER, seal = CoreGroup.SEAL, cert = ByteArray(0), groupCA = ByteArray(0), peers = peers),
+            CoreMember.Start(dir, name, "android", device = device, publicKey = key.publicKeyDER, peers = peers),
             key::signDigest,
             events = { },
         ).also { members += it }

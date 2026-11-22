@@ -343,8 +343,8 @@ mod tests {
 
     #[test]
     fn piv_runs_over_ccid() {
-        // The member's own fake YubiKey behind a fake CCID reader: selecting
-        // PIV and reading the version go through the framing both ways.
+        // The member's own fake YubiKey behind a fake CCID reader: every
+        // command of sealing and opening goes through the framing both ways.
         struct Reader {
             card: crate::piv::recovery::tests::Yubi,
             out: VecDeque<Vec<u8>>,
@@ -377,7 +377,12 @@ mod tests {
             out: VecDeque::new(),
         })));
         let mut c = Ccid::new(r);
-        let i = crate::piv::recovery::inspect(&mut c, "123456").unwrap();
-        assert!(i.default_key);
+        // Sealing chains the certificate over 255 bytes (CLA 10); opening
+        // reads it back and has the card do ECDH.
+        let secret = [7u8; 32];
+        let tag = "0123456789abcdef";
+        let s = crate::piv::recovery::seal(&mut c, "123456", &secret, tag, &mut |_| None).unwrap();
+        assert!(s.default_key);
+        assert_eq!(*crate::piv::recovery::open(&mut c, "123456", Some(tag)).unwrap(), secret);
     }
 }

@@ -9,6 +9,14 @@ import Foundation
 public enum Media {
     /// The largest copy, all its parts together, that the group carries.
     public static let maxMedia: Int64 = 1 << 30
+    /// A blob's segment before sealing, and after (the core's
+    /// `copies::blob::SEGMENT` and `SEALED_SEGMENT`).
+    public static let segment = 64 << 10
+    public static let sealedSegment: Int64 = Int64(segment) + 16
+
+    /// The size of the sealed blob of n bytes of parts, as a fetch's limit
+    /// counts it (the core's `copies::blob::sealed_size`).
+    public static func blobSize(_ n: Int64) -> Int64 { (n + Int64(segment) - 1) / Int64(segment) * sealedSegment }
     public static let maxParts = 10_000
     public static let maxTypes = 8
     public static let maxPaths = 2 << 20

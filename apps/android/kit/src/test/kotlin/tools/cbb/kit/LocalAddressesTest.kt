@@ -33,12 +33,9 @@ class LocalAddressesTest {
         )) {
             assertFalse(LocalAddresses.isHomeIPv6(a), a)
         }
-        assertFalse(JoinCode.isHome("10.1.2.3.example.org:8764"))
-        assertFalse(JoinCode.isHome("[fd.example.org]:8764"))
-        assertTrue(JoinCode.isHome("[fd00::5]:8764"))
         // Whatever this machine has, at most four, IPv4 first, each one home.
         val now = LocalAddresses.current()
-        assertTrue(now.size <= JoinCode.MAX_ADDRS)
+        assertTrue(now.size <= LocalAddresses.MAX_ADDRS)
         assertTrue(now.all { LocalAddresses.isHomeIPv4(it) || LocalAddresses.isHomeIPv6(it) })
     }
 }

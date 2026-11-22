@@ -8,12 +8,15 @@ import java.net.Inet6Address
 import java.net.NetworkInterface
 
 /**
- * This device's addresses on the home network, for the join QR code a
- * phone shows (docs/protocol.md, section 6, "The joiner listens"): private
+ * This device's addresses on the home network, for the home window's QR code a
+ * phone shows (docs/protocol.md, "Pairing in 0.6"): private
  * IPv4 addresses first, then unique local IPv6 ones, never loopback,
  * link-local or a cellular carrier's address, at most four.
  */
 object LocalAddresses {
+    /** At most this many addresses are kept, as the window's QR code carries them. */
+    const val MAX_ADDRS = 4
+
     fun current(): List<String> {
         val all = runCatching { NetworkInterface.getNetworkInterfaces()?.toList().orEmpty() }.getOrDefault(emptyList())
         val v4 = mutableListOf<String>()
@@ -29,7 +32,7 @@ object LocalAddresses {
                 }
             }
         }
-        return (v4 + v6).take(JoinCode.MAX_ADDRS)
+        return (v4 + v6).take(MAX_ADDRS)
     }
 
     /** Whether an IPv4 address is a private one (RFC 1918). Only an address in its one spelling is judged ([octets]). */

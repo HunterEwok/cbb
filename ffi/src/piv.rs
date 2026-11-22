@@ -94,10 +94,10 @@ struct Args {
     /// With seal: the recovery key, as `change_root` takes it.
     #[serde(default)]
     recovery: Value,
-    /// With seal: the person agreed that cbb replaces the card's factory
-    /// management key by a PIN-protected one.
+    /// With seal and open: the group's ID in hex, or its first 16 hex
+    /// digits, which name its slot on the card.
     #[serde(default)]
-    replace_default: bool,
+    group: String,
     /// With seal: the card's management key, when it is not the
     /// factory one and not PIN-protected.
     #[serde(with = "certs::b64", default)]
@@ -117,16 +117,13 @@ fn b64(b: &[u8]) -> Value {
 /// a group of 0.6 goes (docs/protocol.md, "The recovery key on a YubiKey
 /// (0.6)"):
 ///
-/// - `inspect` checks that the card can take the secret, with nothing
-///   written: `{"default_key"}`, true when the card still has its factory
-///   management key, which the app tells the person before `seal`;
 /// - `seal` seals the `recovery` key's secret (the sheet's QR code or text,
-///   as `change_root` takes it) onto the card, replacing a factory
-///   management key only when `replace_default`:
-///   `{"default_key","replaced","warning"}`, warning null or the text the
-///   app shows;
-/// - `open` opens it after the PIN and a touch: `{"secret"}`, base64, which
-///   the app hands to `change_root` as `recovery` `{"secret"}` and drops.
+///   as `change_root` takes it) onto the card for the `group`, in the
+///   first empty retired slot from 95 down, with the management key as
+///   the card keeps it: `{"slot","default_key"}`;
+/// - `open` opens the `group`'s after the PIN and a touch: `{"secret"}`,
+///   base64, which the app hands to `change_root` as `recovery`
+///   `{"secret"}` and drops.
 pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
     answer((|| -> Result<Value> {
         let a: Args = serde_json::from_slice(request)
@@ -155,10 +152,6 @@ pub(crate) fn run(request: &[u8], f: TransmitFn, ctx: usize) -> Vec<u8> {
 /// One step (Args' op) on card.
 fn step(card: &mut dyn Card, a: &Args) -> Result<Value> {
     match a.op.as_str() {
-        "inspect" => {
-            let i = recovery::inspect(card, &a.pin)?;
-            Ok(json!({ "default_key": i.default_key }))
-        }
         "seal" => {
             let read = crate::member::live::recovery_read(&a.recovery)?;
             let typed = Zeroizing::new(a.management.clone());
@@ -171,24 +164,33 @@ fn step(card: &mut dyn Card, a: &Args) -> Result<Value> {
                 }
                 Some(Zeroizing::new(typed.to_vec()))
             };
-            let s = recovery::seal(card, &a.pin, &read.secret, &mut ask, a.replace_default)?;
-            Ok(json!({ "default_key": s.default_key, "replaced": s.replaced, "warning": s.warning }))
+            let s = recovery::seal(card, &a.pin, &read.secret, tag(a)?, &mut ask)?;
+            Ok(json!({ "slot": s.slot, "default_key": s.default_key }))
         }
         "open" => {
-            let secret = recovery::open(card, &a.pin)?;
+            let secret = recovery::open(card, &a.pin, Some(tag(a)?))?;
             Ok(json!({ "secret": b64(secret.as_ref()) }))
         }
         other => Err(Error::msg(format!("there is no YubiKey step {other:?}"))),
     }
 }
 
+/// The group's tag from Args' `group`: its first 16 hex digits.
+fn tag(a: &Args) -> Result<&str> {
+    let t = a.group.get(..cbb_core::sheet::yubikey::TAG_LEN).unwrap_or("");
+    if !cbb_core::sheet::yubikey::is_tag(t) || !a.group.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(Error::msg("the YubiKey request names no group"));
+    }
+    Ok(t)
+}
+
 /// A step on the card pcscd reaches (the transport `pcsc`, for a phone whose
-/// system runs pcscd, as Aurora OS does): `open` takes the one card with a
-/// key in slot 95, so that no other card is asked for the PIN; `inspect`
-/// and `seal` the one card that answers SELECT PIV.
+/// system runs pcscd, as Aurora OS does): `open` takes the one card with
+/// the group's recovery key, so that no other card is asked for the PIN;
+/// `seal` the one card that answers SELECT PIV.
 fn pcsc(a: &Args) -> Result<Value> {
     if a.op == "open" {
-        let secret = recovery::open_one(&a.pin)?;
+        let secret = recovery::open_one_of(&a.pin, Some(tag(a)?))?;
         return Ok(json!({ "secret": b64(secret.as_ref()) }));
     }
     let mut card = cbb_member::piv::one_piv_card()?;

@@ -119,6 +119,7 @@ fun Root(model: AppModel) {
                     AppModel.Phase.START -> StartScreen(model)
                     AppModel.Phase.JOINING -> JoinScreen(model)
                     AppModel.Phase.HOME -> HomeScreen(model)
+                    AppModel.Phase.BEFORE_06 -> Before06Screen(model)
                 }
             }
         }
@@ -778,8 +779,8 @@ private fun WatchSection(model: AppModel) {
     Section(stringResource(R.string.watch_title)) {
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
             watches.forEach { Text(it.name, fontWeight = FontWeight.SemiBold) }
-            // The watch signs nothing in a group of 0.6 (D-124).
-            val later = model.group.isV06
+            // The Wear OS watch does not join a group of 0.6 yet (D-124).
+            val later = !LiveGroup.WEAR_JOINS
             if (watches.isEmpty() && !later) {
                 Button(onClick = {
                     busy = true
@@ -1024,7 +1025,7 @@ private fun InviteFromAfar(model: AppModel) {
         Text(stringResource(R.string.invite_open_until, until), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
         QuietButton(stringResource(R.string.invite_share), onClick = { context.startActivity(Invitations.share(context, invite.file)) })
         QuietButton(stringResource(R.string.invite_cancel), onClick = model::cancelInvite)
-        invite.request?.let { req -> InviteAsk(req.info.name, req.info.os, req.fingerprint, model::answer) }
+        invite.request?.let { req -> InviteAsk(req.name, req.os, req.fingerprint, model::answer) }
     }
     model.inviteNote?.let { NoteText(it) }
 }

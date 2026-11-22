@@ -549,12 +549,10 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
 - Every phone app syncs through the same member: `cbb`'s node in the Rust core,
   which runs in the app's process (`ffi/`, docs/core-api.md, "The member"; D-86). The
   iPhone, Android and Aurora apps keep only what is theirs: their keys and the prompts that
-  unlock them, pairing, the records they sign, finding the computers on the network (Bonjour,
-  NSD) and handing their addresses in, the tunnel and the blind relay, and the answers to what
-  the member asks (renewals, admin CAs, the hub's offers, commands for the phone, the caller
-  of a relay's call). One implementation of the member protocol, the clipboard rule and the
-  button then serves every phone, and the cross tests drive it through the kits
-  (`cbb-interop`, `InteropMain`).
+  unlock them, the prompts before the records they sign, finding the computers on the network
+  (Bonjour, NSD) and handing their addresses in, and the tunnel. One implementation of the
+  member protocol, the records, the clipboard rule and the button then serves every phone, and
+  the kits' tests drive it through `ffi/`.
 
 ### Watches
 

@@ -2,6 +2,7 @@
   "src": [
     "pages/Start",
     "pages/Main",
+    "pages/Before06",
     "pages/Join",
     "pages/Invitation",
     "pages/Device",

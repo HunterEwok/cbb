@@ -13,7 +13,7 @@ real devices, and which level answers which question. The commands are in
 |---|---|---|---|
 | Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
 | Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
-| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or `cbb` | every push, in CI |
+| Cross tests | two implementations talk over a real connection | Go tests that start `cbb`, and the kits' tests that join groups of 0.6 through the core | every push, in CI |
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
 | App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `tray app`, `Android app` jobs and the Mac app's part of `test and build (macOS), homebrew, Mac app` | every push, in CI |
@@ -51,8 +51,8 @@ watch's state, content hashes, join QR codes and a CPace exchange.
 - The files named `go-*.json` and those without a prefix are written by Go tests with
   `-update` and read by the Swift kit, the Kotlin kit and, for what it implements, the lite
   core (`core/src/vectors.rs`).
-- Files named `swift-*.json` are written by the Swift kit (`CBB_INTEROP_OUT`) and read by
-  Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
+- Files named `swift-*.json` were written by the Swift kit of 0.5 and stay as they are: Go's
+  tests of the records of 0.5 read them until that code goes (D-126).
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
 - `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
@@ -67,9 +67,8 @@ becomes a vector here.
 
 ## Cross tests
 
-- The Swift kit's `cbb-interop` and the Kotlin kit's (built by `./gradlew -p kit
-  interopScript`) play the phone in Go's pairing and member tests: over plain TCP on Linux,
-  over real TLS on macOS and with Conscrypt on Linux.
+- The Swift and Kotlin kits join groups of 0.6 through the core and sync through its member
+  (`CoreMemberTests`, `CorePairingTests`, `WindowTests`; `CoreMemberTest`, `CorePairingTest`).
 - `TestAloneMember`, `TestAloneRemotePaste` and `TestAloneQuickActions` run the built cbb
   without its helper (`CBB_TEST_ALONE`) among Go members at home. Sync away from home runs only in
   a group of 0.6 (D-122): `member/tests/away_live.rs` and `away_hubs.rs` (the latter with

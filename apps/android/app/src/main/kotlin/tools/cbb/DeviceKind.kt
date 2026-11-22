@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import tools.cbb.kit.Pairing
 
 /** What a device is, for its icon and its type; the same kinds as the iPhone app's. */
 enum class DeviceKind(val form: String, @StringRes val title: Int) {
@@ -36,6 +35,9 @@ enum class DeviceKind(val form: String, @StringRes val title: Int) {
 
     companion object {
         fun of(form: String?): DeviceKind? = entries.firstOrNull { it.form == form }
+
+        /** The systems of phones with the app. */
+        val PHONE_OSES = setOf("ios", "android", "aurora", "sailfish", "harmonyos")
     }
 }
 
@@ -46,7 +48,7 @@ val LiveGroup.Device.kind: DeviceKind
         os == "none" -> DeviceKind.BOARD
         role == "watch" -> DeviceKind.WATCH
         os == "macos" -> DeviceKind.LAPTOP
-        Pairing.Info.isPhone(os ?: "") -> DeviceKind.PHONE
+        os in DeviceKind.PHONE_OSES -> DeviceKind.PHONE
         else -> DeviceKind.DESKTOP
     }
 

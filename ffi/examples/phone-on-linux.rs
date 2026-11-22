@@ -576,11 +576,13 @@ fn manage(m: *const cbb_ffi::member::Member, key: &SigningKey, public: &str, req
 mod card {
     //! A YubiKey 5 as far as the core's `cbb_piv` talks to it on a group of
     //! 0.6 (docs/protocol.md, "The recovery key on a YubiKey (0.6)"): GET
-    //! VERSION, GET METADATA of slots 95 and 9B, the PIN 123456, GET DATA and
-    //! PUT DATA, the management key's challenge and response (AES-192, the
-    //! factory key first), SET MANAGEMENT KEY, GENERATE in slot 95 and ECDH
-    //! with its key. What the card holds is kept in the file, so that a later
-    //! run reads the same card; the touch is not asked.
+    //! VERSION, GET METADATA of the retired slots (6A88 for an empty one, as
+    //! the firmware answers) and 9B, the PIN 123456, GET DATA (PRINTED after
+    //! the PIN, the certificate objects without it) and PUT DATA, chained
+    //! commands, the management key's challenge and response (AES-192, the
+    //! factory key), GENERATE in a retired slot and ECDH with its key. What
+    //! the card holds is kept in the file, so that a later run reads the
+    //! same card; the touch is not asked.
 
     use std::collections::BTreeMap;
     use std::sync::Mutex;
@@ -598,15 +600,20 @@ mod card {
     struct Held {
         /// PIV objects by their tag, hex.
         objects: BTreeMap<String, String>,
-        /// Slot 95: its private scalar and its PIN and touch policies.
-        slot: Option<(String, u8, u8)>,
+        /// The retired slots' keys by slot: the private scalar and the PIN
+        /// and touch policies.
+        slots: BTreeMap<u8, (String, u8, u8)>,
         /// The management key and whether it is the factory one.
         mgmt: (String, bool),
     }
 
     impl Default for Held {
         fn default() -> Held {
-            Held { objects: BTreeMap::new(), slot: None, mgmt: (STANDARD.encode(DEFAULT_MANAGEMENT_KEY), true) }
+            Held {
+                objects: BTreeMap::new(),
+                slots: BTreeMap::new(),
+                mgmt: (STANDARD.encode(DEFAULT_MANAGEMENT_KEY), true),
+            }
         }
     }
 
@@ -683,8 +690,8 @@ mod card {
         data
     }
 
-    fn scalar(h: &Held) -> Option<p256::SecretKey> {
-        let (k, _, _) = h.slot.as_ref()?;
+    fn scalar(h: &Held, slot: u8) -> Option<p256::SecretKey> {
+        let (k, _, _) = h.slots.get(&slot)?;
         p256::SecretKey::from_slice(&STANDARD.decode(k).ok()?).ok()
     }
 
@@ -709,13 +716,13 @@ mod card {
             _ if !s.selected => sw(vec![], 0x6d00),
             0xfd => sw(vec![5, 7, 1], 0x9000),
             0xf7 if p2 == 0x9b => sw([tlv(0x01, &[AES192]), tlv(0x05, &[u8::from(h.mgmt.1)])].concat(), 0x9000),
-            0xf7 if p2 == yk::SLOT => match (&h.slot, scalar(&h)) {
+            0xf7 if (0x82..=0x95).contains(&p2) => match (h.slots.get(&p2), scalar(&h, p2)) {
                 (Some((_, pin, touch)), Some(k)) => {
                     let point = k.public_key().to_sec1_point(false).as_bytes().to_vec();
                     let m = [tlv(0x01, &[P256]), tlv(0x02, &[*pin, *touch]), tlv(0x03, &[GENERATED])];
                     sw([&m[..], &[tlv(0x04, &tlv(0x86, &point))]].concat().concat(), 0x9000)
                 }
-                _ => sw(vec![], 0x6a82),
+                _ => sw(vec![], 0x6a88),
             },
             0xf7 => sw(vec![], 0x6a82),
             0x20 => {
@@ -726,7 +733,7 @@ mod card {
             }
             0xcb => {
                 let Some(tag) = data.get(2..5) else { return sw(vec![], 0x6a80) };
-                let secret = tag == yk::OBJECT || tag == [0x5f, 0xc1, 0x09];
+                let secret = tag == [0x5f, 0xc1, 0x09];
                 if secret && !s.verified {
                     return sw(vec![], 0x6982);
                 }
@@ -753,12 +760,12 @@ mod card {
                 s.authed = true;
                 sw(tlv(0x7c, &tlv(0x82, &cipher(&mgmt, challenge, true).unwrap())), 0x9000)
             }
-            0x87 if p2 == yk::SLOT && p1 == P256 => {
+            0x87 if p1 == P256 => {
                 // The PIN before each use of the key.
                 if !std::mem::take(&mut s.verified) {
                     return sw(vec![], 0x6982);
                 }
-                let Some(k) = scalar(&h) else { return sw(vec![], 0x6a82) };
+                let Some(k) = scalar(&h, p2) else { return sw(vec![], 0x6a82) };
                 let (outer, _) = read(&data, 0x7c).unwrap();
                 let (_, rest) = read(outer, 0x82).unwrap();
                 let (e, _) = read(rest, 0x85).unwrap();
@@ -768,16 +775,16 @@ mod card {
                 }
             }
             0x87 => sw(vec![], 0x6a86),
-            0x47 if p2 == yk::SLOT => {
-                if !s.authed {
+            0x47 if (0x82..=0x95).contains(&p2) => {
+                if !s.authed || h.slots.contains_key(&p2) {
                     return sw(vec![], 0x6982);
                 }
                 let (spec, _) = read(&data, 0xac).unwrap();
                 let (pin, touch) = (spec[5], spec[8]);
                 // A test's key, the same on every run.
-                let k = p256::SecretKey::from_slice(&[0x95; 32]).unwrap();
+                let k = p256::SecretKey::from_slice(&[p2; 32]).unwrap();
                 let point = k.public_key().to_sec1_point(false).as_bytes().to_vec();
-                h.slot = Some((STANDARD.encode(k.to_bytes()), pin, touch));
+                h.slots.insert(p2, (STANDARD.encode(k.to_bytes()), pin, touch));
                 save(&h);
                 let mut out = vec![0x7f];
                 out.extend(tlv(0x49, &tlv(0x86, &point)));
@@ -790,23 +797,8 @@ mod card {
                 }
                 let (tag, rest) = read(&data, 0x5c).unwrap();
                 let (v, _) = read(rest, 0x53).unwrap();
-                // An empty value deletes the object.
-                if v.is_empty() {
-                    h.objects.remove(&hex(tag));
-                } else {
-                    h.objects.insert(hex(tag), STANDARD.encode(v));
-                }
+                h.objects.insert(hex(tag), STANDARD.encode(v));
                 save(&h);
-                sw(vec![], 0x9000)
-            }
-            0xff => {
-                if !s.authed || data.len() < 3 || data[0] != AES192 || data[1] != 0x9b {
-                    return sw(vec![], 0x6982);
-                }
-                let key = &data[3..3 + usize::from(data[2])];
-                h.mgmt = (STANDARD.encode(key), false);
-                save(&h);
-                s.authed = false;
                 sw(vec![], 0x9000)
             }
             _ => sw(vec![], 0x6d00),

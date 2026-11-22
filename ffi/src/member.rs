@@ -26,20 +26,6 @@ pub(crate) mod live;
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;
 
-/// The app's keys for the servers, which `cbb_member_servers` takes: the
-/// member of 0.6 keeps the group's server credentials itself and calls it
-/// no more. It stays until the Harmony app, the call's last caller, drops
-/// it.
-pub type KeysFn = unsafe extern "C" fn(
-    ctx: *mut core::ffi::c_void,
-    op: i32,
-    name: *const u8,
-    name_len: usize,
-    digest: *const u8,
-    out: *mut u8,
-    out_len: *mut usize,
-) -> i32;
-
 fn yes() -> bool {
     true
 }
@@ -121,6 +107,25 @@ enum Event<'a> {
         off: bool,
         by: &'a str,
     },
+    /// The group's records changed what the app shows: the group as the
+    /// op `group` answers it.
+    State {
+        state: Value,
+    },
+    /// A notice about the group that was not there before, as the op
+    /// `notices` lists it.
+    Notice {
+        notice: Value,
+    },
+    /// The group's root changed by its recovery key (seq: how many roots
+    /// the group has had), from the old root's device to the new one's:
+    /// every device shows it until the person saw it (`root_change_seen`).
+    #[serde(rename = "root_changed")]
+    RootChanged {
+        from: &'a str,
+        to: &'a str,
+        seq: u64,
+    },
 }
 
 #[derive(Deserialize)]
@@ -161,10 +166,15 @@ struct Events {
 impl Events {
     fn send(&self, e: &Event<'_>) {
         if let Ok(b) = serde_json::to_vec(e) {
-            // SAFETY: the app gave a callback that stays valid, and may be
-            // called from any thread, until cbb_member_stop returns.
-            unsafe { (self.f)(self.ctx as *mut core::ffi::c_void, b.as_ptr(), b.len()) }
+            self.send_bytes(&b);
         }
+    }
+
+    /// An event already encoded, as send encodes one.
+    fn send_bytes(&self, b: &[u8]) {
+        // SAFETY: the app gave a callback that stays valid, and may be
+        // called from any thread, until cbb_member_stop returns.
+        unsafe { (self.f)(self.ctx as *mut core::ffi::c_void, b.as_ptr(), b.len()) }
     }
 }
 
@@ -197,13 +207,6 @@ impl Member {
 
     pub fn call(&self, request: &[u8]) -> Vec<u8> {
         self.0.call(request)
-    }
-
-    /// The member of 0.6 keeps the group's server credentials itself:
-    /// this answers that it serves none for the app (until the Harmony app,
-    /// its last caller, drops the call).
-    pub fn servers(&self, keys: KeysFn, ctx: usize) -> Vec<u8> {
-        self.0.servers(keys, ctx)
     }
 
     pub fn stop(&self) {

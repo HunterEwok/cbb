@@ -62,8 +62,6 @@ class GroupStateTest {
         assertEquals("recovery_not_saved", assertIs<CoreMember.Event.NoticeAdded>(ev("notice")).notice.kind)
         val r = assertIs<CoreMember.Event.RootChanged>(ev("root_changed"))
         assertEquals(Triple("01010101010101010101010101010101", "02020202020202020202020202020202", 2L), Triple(r.from, r.to, r.seq))
-        val k = assertIs<CoreMember.Event.NeedKey>(ev("need_key"))
-        assertEquals(7L to "spare_admin", k.token to k.kind)
         assertEquals(listOf<Byte>(4, 0, 1), assertIs<CoreMember.Event.KeyDone>(ev("key_done")).public.toList())
     }
 

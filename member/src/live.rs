@@ -67,6 +67,11 @@ pub struct Write {
 /// Gets each copy to write.
 pub type OnWrite = Box<dyn Fn(Write) + Send + Sync>;
 
+/// What the app learns when the group's records change: the set, under
+/// its lock (a phone's member tells its app of a change of root and of
+/// its notices).
+pub type OnRecords = Box<dyn Fn(&cbb_core::records::RecordSet) + Send + Sync>;
+
 /// What the service does on a group of 0.5 and does not do yet on the
 /// records of 0.6, while its parts move over: the cause of the error it
 /// answers with, which debug mode shows.
@@ -125,6 +130,7 @@ pub struct Live {
     pub board: Board,
     me: DeviceId,
     on_write: RwLock<Option<OnWrite>>,
+    on_records: RwLock<Option<OnRecords>>,
     kick: (Mutex<u64>, Condvar),
     redials: AtomicUsize,
     paused: AtomicBool,
@@ -208,6 +214,7 @@ impl Live {
             mesh,
             board,
             on_write: RwLock::new(None),
+            on_records: RwLock::new(None),
             kick: (Mutex::new(0), Condvar::new()),
             redials: AtomicUsize::new(0),
             paused: AtomicBool::new(false),
@@ -266,6 +273,9 @@ impl Live {
                 if l.mesh.own().admin.is_some() {
                     l.resign_soon();
                 }
+                if let Some(f) = &*l.on_records.read().unwrap() {
+                    f(set);
+                }
             }
         }));
         Ok(live)
@@ -286,6 +296,11 @@ impl Live {
     /// Sets what gets the copies to write.
     pub fn on_write(&self, f: OnWrite) {
         *self.on_write.write().unwrap() = Some(f);
+    }
+
+    /// Calls f with the set each time the group's records change.
+    pub fn on_records(&self, f: OnRecords) {
+        *self.on_records.write().unwrap() = Some(f);
     }
 
     /// The group's tag, which mDNS publishes.

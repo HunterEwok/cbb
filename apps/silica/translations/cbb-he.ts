@@ -608,6 +608,10 @@
         <translation>חברו את הטלפון ל-Wi-Fi הביתי כדי להוסיף מכשיר.</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>כל המקומות למפתחות ב-YubiKey הזה תפוסים. השתמשו ב-YubiKey אחר או בדף.</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>לא מחובר YubiKey. חברו אותו ליציאת ה-USB-C ונסו שוב.</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>הטלפון לא הצליח לשמור את הקבוצה.</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>הטלפון לא הצליח לשמור את הדף.</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>לטלפון עדיין אין מפתח.</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>הרכיב המאובטח של הטלפון מחזיק מפתח פגום.</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>ה-YubiKey הזה כבר מחזיק מפתח שחזור. השתמש ב-YubiKey אחר.</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>ה-YubiKey הזה לא מחזיק מפתח שחזור.</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>ה-YubiKey הזה מחזיק משהו אחר במקום שבו נשמר מפתח השחזור. השתמש ב-YubiKey אחר.</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>ב-YubiKey הזה כבר יש את מפתח השחזור של הקבוצה הזו.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>ב-YubiKey הזה יש שני מפתחות שחזור של הקבוצה הזו. השתמשו בדף במקומו.</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,76 +1514,100 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>מפתח שחזור מאפשר למחשב של הקבוצה או לטלפון חדש להשתלט על הקבוצה אם הטלפון הזה אובד. משכו למטה כדי ליצור אחד.</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>קובץ שנשמר הוא המפתח של הקבוצה: העבירו אותו מהטלפון לנייר או לכונן שנשמר במקום בטוח, ואז מחקו אותו כאן.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>חזרה</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>מפתח השחזור של CBB</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>המשך</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>סיום</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>רשמתי אותו</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>להשאיר את מפתח היצרן</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>חברו את ה-YubiKey ליציאת USB-C והקלידו את קוד ה-PIN שלו.</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>יצירת מפתח שחזור חדש</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להשתלט על הקבוצה שלך.</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>יצירת מפתח שחזור</translation>
+        <source>Leave without saving</source>
+        <translation>לצאת בלי לשמור</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>חברו את ה-YubiKey ליציאת ה-USB-C, הקלידו את קוד ה-PIN שלו וגעו בו כשהוא מהבהב.</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>לצאת בלי לשמור את מפתח השחזור?</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>לשים ב-YubiKey</translation>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</translation>
     </message>
     <message>
         <source>Recovery key</source>
         <translation>מפתח שחזור</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>הסרת מפתח השחזור</translation>
+        <source>Save as PDF</source>
+        <translation>שמירה כ-PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>מסיר את מפתח השחזור</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>שמרו אותו על דף, על YubiKey או בשניהם. רק בעזרתו הקבוצה יכולה לעבור למכשיר ראשי אחר אם הטלפון הזה יאבד. הוא מוצג רק עכשיו.</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>להחליף את מפתח היצרן</translation>
+        <source>Save the group's recovery key</source>
+        <translation>שמרו את מפתח השחזור של הקבוצה</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>מחליף את מפתח השחזור</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>ה-YubiKey שומר את אותו מפתח כמו הדף הזה, מאחורי קוד ה-PIN שלו ונגיעה. אם עדיין יש לו מפתח ניהול של היצרן, כל אחד יכול לברר את המפתח הזה ולמחוק את מפתח השחזור בלי קוד ה-PIN; האפליקציה יכולה להחליף אותו במפתח שקוד ה-PIN מגן עליו.</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>נשמר בשם %1. הקובץ הזה הוא המפתח של הקבוצה: העבירו אותו מהטלפון לנייר או לכונן שנשמר במקום בטוח, ואז מחקו אותו כאן.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>ה-PIN של ה-YubiKey</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>לקבוצה יש מפתח שחזור. בעזרתו מחשב של הקבוצה או טלפון חדש משתלטים על הקבוצה אם הטלפון הזה אובד.</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>מפתח השחזור נמצא על ה-YubiKey, שנשאר עם מפתח הניהול של היצרן: מי שמחזיק בו יכול למחוק את המפתח בלי קוד ה-PIN. שמור גם את הדף.</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים.</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>רשמו את המפתח או הדפיסו את הדף ושמרו אותו במקום בטוח. הוא מוצג פעם אחת בלבד.</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>הדף נשמר במסמכים.</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>בלעדיו, אובדן הטלפון הזה פירושו ליצור קבוצה חדשה ולצרף אליה מחדש כל מכשיר.</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>לכתוב על דף</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>העתיקו את המפתח או שמרו את הדף הזה, ושמרו עליו במקום בטוח.</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>לכתוב ל-YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>כותבים ל-YubiKey. השאירו אותו מחובר עד הסיום.</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1789,6 @@
     <message>
         <source>No time</source>
         <translation>ללא המתנה</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>אין</translation>
     </message>
     <message>
         <source>None yet</source>

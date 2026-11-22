@@ -62,7 +62,12 @@ that gets each event as JSON from the member's threads, and its request needs `d
 group's devices and keys; `device` must be the one the member key makes. `cbb_member_stop`
 stops it. Its events are `write`, `copy` (`{id, origin,
 age_ms, kind, text, media, key}`, the key the copy's ID), `mute` and `sync` (`{off, by}`: an admin
-turned the phone's sync off or on), `log` and `panic`. It carries out by itself the commands
+turned the phone's sync off or on), `state` (`{state}`, the group as `group` answers it, at
+each change of the records), `notice` (`{notice}`, one that was not there before, as `notices`
+lists it), `root_changed` (`{from, to, seq}`: the group's root changed by its recovery key,
+from the old root's device to the new one's, `seq` the number of roots the group has had;
+sent again each time the member starts until the app answers `root_change_seen`, kept in
+`root_seen.json`; a phone that joins sees no change), `log` and `panic`. It carries out by itself the commands
 an admin sends the phone that the records let through (`cbb_member::orders`, as the service's
 `live_command`): `mute`, `unmute` and the sync mode, kept in `mute.json` and `sync.json` and
 sent out in its next hello; it answers the paste, action and away switches with nothing to
@@ -72,10 +77,13 @@ service's), `fetch` (a copy's images or files, fetched from the member it came f
 into `out`), `current`, `waiting`, `took` and `sends` (the button's rule, `cbb_member::button`), `found`, `lost`, `listen` and `unlisten` for the home port, `pause`,
 `resume`, `wait`, `set_mute`, `sync`, `muted`, `peers`, `devices`, `why` and `group`, the state the apps show
 (`{group, root, root_device, me{device, role, admin, frozen, leaf}, stop, halted,
-update_needed, too_old, change_arriving, devices[{device, name, os, role, admin, frozen,
-hub}]}`: `admin` is whether the admin key the records name for the device is one of the
+update_needed, too_old, change_arriving, key_level, incoming_ms, devices[{device, name, os,
+role, admin, frozen, hub}]}`: `key_level` is `proven`, `hardware` or `files`, `incoming_ms` how
+long a copy from another device stays live as the newest `copies` record sets it (null for the
+default), `admin` is whether the admin key the records name for the device is one of the
 group's admins, and removed devices are not listed); `cbb_member_manage` takes `remove`,
-`rename`, `freeze` and `thaw`, written with the key `public` names, which the records judge,
+`rename`, `freeze`, `thaw` and `incoming` (`incoming_ms`, a `copies` record), written with the
+key `public` names, which the records judge,
 `mute` (`for_ms`), `unmute`, `sync_off`, `sync_on`, `paste` (`text`, `method`, `enter`,
 `kind`), `paste_off`, `actions_off` and `away_off`, commands for another device signed with that
 key and sent over the phone's connection to it, as the service sends them (the answer is that
@@ -124,8 +132,7 @@ without signing, each other device's outcome `stays`, `out`, `admin_kept`, `admi
 signs the new start with the app's new root key and answers `{seq}`, as `cbb recovery` does on
 a computer (`writers::recover`); `take_over`, `take_handed_over`, `recover`, `hand_over`,
 `takeover_delay` and `finish_takeover` answer that the root changes only with the recovery key.
-`TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else, and
-`cbb_member_servers`, answers that it does not work in this build yet, with the cause
+`TestFFIPhoneChangeRoot` changes a computer's group's root from a phone. Everything else answers that it does not work in this build yet, with the cause
 `not on the records of 0.6 yet` in its details, until its part moves over. A copy with
 images or files comes as a `write` of kind `media` and a `copy` event with its manifest
 (`media`), which the app fetches.
@@ -210,6 +217,9 @@ after the header, and an operation that answers more than once marks the last an
 | `peers` | phone | `all` (optional: the members offline too) | `{"peers"}`: `[{device, name, role, os, key_store, mode, muted, reach}]`, the connected members as the records and their hellos name them, `reach` the members each says it reaches |
 | `evidence` | phone | `evidence`: the attestations of the phone's keys | `{}`: every peer gets them after its hello (protocol.md, section 17) |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
+| `notices` | phone | none | `{"notices"}`: what the person should know about the group's records (docs/apps.md, "Notices"), `[{id, kind, args, dismissable}]`, `kind` one of `change_arriving`, `removals_waiting`, `root_room_waiting` (on the root phone, `args.percent` of its room taken by removals that wait, from half of it), `ack_owed` (`args.removals`, `args.days_left`), `frozen_holding` (`args.device`), `checkpoint_stuck` and `returned_after_removal` (`args.device`, the first device that counts again, and `args.devices`, how many), from the set's own notices (`RecordSet::change_arriving`, `removals_waiting`, `root_room_waiting`, `ack_owed`, `frozen_holding`, `stuck_checkpoints` and `notices`). Only `returned_after_removal`, by its record ID in base64, may be hidden |
+| `root_change_seen` | phone | none | `{}`: the person saw the change of root the event `root_changed` told of; it is not told again |
+| `dismiss` | phone | `id`: a notice's record ID, base64 | `{}`: the set keeps the notice dismissed (`RecordSet::dismiss`), saved with the group's records |
 | `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off`, `port` (the UDP port) and `addrs` (`ip:port`, reached from afar without the forwarder) for `hub` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, which the records must give an admin key, is one of the group's hubs, the Live hub the computers run (`member/src/live/away.rs`), which also serves the guests of invitations, or stops being one, handing its clients to the next hub in the order (protocol.md, section 11, "Stopping a hub"); only with the feature `tunnel`. With no `forwarder` the hub serves through the one the root set, and every away op answers it beside `away` as `root_forwarder` `{endpoint, key}`, null while the root set none |
 | `attest_status`, `attest` | phone | `keys` and `status` for `attest_status`: the mirror's `keys.json` and `attest-status.json` as the app fetched them | `{"pending", "revoked"?}`: `attest_status` takes the revocation list of Android attestations when it checks out against the release keys and is not older than the one kept (`attest-status.json`, protocol.md section 17, "Revoked attestations"), and answers how many certificates it revokes; `pending` is how many Android peers' evidence waits for the root key, which `cbb_member_manage`'s `attest` records (`member/src/phone_attest.rs`, the core's `cbb_core::attest`); only with the feature `tunnel` |
@@ -306,15 +316,15 @@ nothing came within about a second), and the core frames each APDU as CCID's
 touch (`cbb_member::piv::ccid`). With `pcsc` (a phone whose system runs pcscd, as Aurora OS
 does, which takes a YubiKey plugged into USB-C itself) the core is pcscd's client, as `cbb` is
 on a Linux computer, and never calls the function, which must still be one: `open` takes the
-one card with a key in slot 95, so that no other card is asked for the PIN, and `inspect` and
-`seal` the one card that answers PIV's SELECT; two such cards are refused. The card holds the recovery secret itself
-(protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`):
-`inspect` (`pin`) checks that the card can take it, with nothing written, and answers
-`{"default_key"}`, true while the card has its factory management key, which the app tells the
-person; `seal` (`pin`; `recovery`, the sheet's `{qr}` or `{text}`; `replace_default`, the
-person's consent to replace a factory key by a PIN-protected one; `management`, a changed
-key in base64) makes the card's key in slot 95 and writes the sealed secret in `5FC121`,
-answering `{"default_key", "replaced", "warning"}`; `open` (`pin`, then a touch) answers
+one card with the group's recovery key, so that no other card is asked for the PIN, and `seal`
+the one card that answers PIV's SELECT; two such cards are refused. The card holds the recovery
+secret itself (protocol.md, "The recovery key on a YubiKey (0.6)"; `cbb_member::piv::recovery`),
+in the first empty retired slot from 95 down, its certificate naming the group, so both steps
+take `group`, the group's ID in hex or its first 16 hex digits: `seal` (`pin`; `recovery`, the
+sheet's `{qr}` or `{text}`; `management`, a changed management key in base64, used only when
+the card's key is neither the factory one nor PIN-protected) makes the card's key and writes the
+container, answering `{"slot", "default_key"}` (the slot, and whether the card keeps its
+factory management key, which cbb never changes); `open` (`pin`, then a touch) answers
 `{"secret"}`, base64, which the app hands to manage's `change_root` as `recovery` and drops.
 `TestFFIPhoneYubiKey` seals a group's sheet on a fake YubiKey in `phone-on-linux`, opens it
 after the root is lost, over NFC and through a fake CCID reader, and changes the root with it.

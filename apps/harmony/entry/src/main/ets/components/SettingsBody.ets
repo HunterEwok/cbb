@@ -24,7 +24,6 @@ import { WhySection } from './WhySection';
 
 // The languages of the apps (docs/apps.md, Languages), '' for the phone's.
 const LANGUAGES: string[] = ['', 'en', 'zh-Hans', 'es', 'ru', 'ar', 'sw', 'he', 'hi'];
-const DELAY_HOURS: number[] = [0, 1, 24, 72, 168];
 const KEY_LEVELS: string[] = ['proven', 'hardware', 'files'];
 
 
@@ -199,23 +198,6 @@ export struct SettingsBody {
           }
           if (app.isRoot() && app.member.running) {
             Row() {
-              Text($r('app.string.settings_delay')).fontColor($r('app.color.text')).layoutWeight(1)
-              Select([
-                { value: t('settings_delay_0') } as SelectOption, { value: t('settings_delay_1h') } as SelectOption,
-                { value: t('settings_delay_1d') } as SelectOption, { value: t('settings_delay_3d') } as SelectOption,
-                { value: t('settings_delay_7d') } as SelectOption
-              ])
-                .selected(Math.max(DELAY_HOURS.indexOf(Math.round((app.member.rootView.delay_ms ?? 0) / 3600000)), 0))
-                .value([t('settings_delay_0'), t('settings_delay_1h'), t('settings_delay_1d'), t('settings_delay_3d'),
-                  t('settings_delay_7d')][Math.max(DELAY_HOURS.indexOf(Math.round((app.member.rootView.delay_ms ?? 0) / 3600000)), 0)])
-                .onSelect((index: number) => {
-                  if (DELAY_HOURS[index] * 3600000 !== app.member.rootView.delay_ms) {
-                    app.setTakeoverDelay(DELAY_HOURS[index]);
-                  }
-                })
-            }
-            .width('100%')
-            Row() {
               Column({ space: 2 }) {
                 Text($r('app.string.settings_key_level')).fontColor($r('app.color.text'))
                 if (app.belowLevel.length > 0) {
@@ -228,11 +210,11 @@ export struct SettingsBody {
                 { value: t('settings_level_proven') } as SelectOption, { value: t('settings_level_hardware') } as SelectOption,
                 { value: t('settings_level_files') } as SelectOption
               ])
-                .selected(Math.max(KEY_LEVELS.indexOf(app.member.rootView.key_level ?? 'hardware'), 0))
+                .selected(Math.max(KEY_LEVELS.indexOf(app.member.keyLevel), 0))
                 .value([t('settings_level_proven'), t('settings_level_hardware'),
-                  t('settings_level_files')][Math.max(KEY_LEVELS.indexOf(app.member.rootView.key_level ?? 'hardware'), 0)])
+                  t('settings_level_files')][Math.max(KEY_LEVELS.indexOf(app.member.keyLevel), 0)])
                 .onSelect((index: number) => {
-                  if (KEY_LEVELS[index] !== app.member.rootView.key_level) {
+                  if (KEY_LEVELS[index] !== app.member.keyLevel) {
                     app.setGroupKeyLevel(KEY_LEVELS[index]);
                   }
                 })
@@ -241,7 +223,7 @@ export struct SettingsBody {
             if (this.part.length === 0) {
               Row() {
                 Text($r('app.string.recovery_title')).fontColor($r('app.color.text')).layoutWeight(1)
-                Text(app.member.rootView.recovery === true ? t('recovery_made') : t('recovery_no')).fontColor($r('app.color.secondary'))
+                Text(t('recovery_made')).fontColor($r('app.color.secondary'))
               }
               .width('100%')
               .onClick(() => {
@@ -254,17 +236,8 @@ export struct SettingsBody {
               Column({ space: 6 }) {
                 Text($r('app.string.watch_admin_title')).fontColor($r('app.color.text'))
                 // The watch signs nothing in a group of 0.6 (D-124).
-                Text(app.isV06() ? $r('app.string.watch_later')
-                  : watch.admin ? $r('app.string.watch_made_admin') : $r('app.string.watch_admin_body'))
+                Text($r('app.string.watch_later'))
                   .fontSize(12).fontColor($r('app.color.secondary'))
-                if (!watch.admin && !app.isV06()) {
-                  Button($r('app.string.watch_make_admin'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
-                    .enabled(!watch.making && !app.busy)
-                    .onClick(() => {
-                      watch.makeAdmin();
-                    })
-                  BusyLine({ busy: watch.making })
-                }
               }
               .alignItems(HorizontalAlign.Start)
               .width('100%')

@@ -30,7 +30,7 @@ object Discovery {
      * value what follows the first "=". Unknown keys are ignored.
      */
     fun member(instance: String, txt: List<String>): FoundMember? {
-        if (!GroupCertificates.isDeviceID(instance)) return null
+        if (!Records.isDeviceID(instance)) return null
         val fields = mutableMapOf<String, String>()
         for (s in txt) {
             val i = s.indexOf('=')

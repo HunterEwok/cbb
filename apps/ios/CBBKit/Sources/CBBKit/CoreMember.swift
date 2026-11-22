@@ -24,40 +24,25 @@ public final class CoreMember: @unchecked Sendable {
         public var os: String
         public var osVersion: String
         public var version: String
-        /// Where the member key lives: hardware (the keychain, the Secure
-        /// Enclave) or file.
-        public var keyStore: String
         public var device: String
         /// The member key's public point, uncompressed.
         public var publicKey: Data
-        /// The secret for sealed messages (SealKey.secret).
-        public var seal: Data
-        public var cert: Data
-        public var issuer: Data?
-        public var groupCA: Data
-        public var roots: [Data]
         /// Members to dial at host:port besides those the app finds.
         public var peers: [String]
         /// Whether the core finds the members by mDNS itself; the apps find
         /// them with their own browsers and hand them in.
         public var mdns: Bool
-        /// The SubjectPublicKeyInfo of the phone's admin key, which the
-        /// hellos offer while it is no admin, for the root to make it one.
-        public var adminKey: Data?
 
         enum CodingKeys: String, CodingKey {
-            case dir, name, os, osVersion = "os_version", version, keyStore = "key_store", device, publicKey = "public", seal, cert, issuer
-            case groupCA = "group_ca", roots, peers, mdns, adminKey = "admin_key"
+            case dir, name, os, osVersion = "os_version", version, device, publicKey = "public", peers, mdns
         }
 
         /// publicKeyDER is the member key's SubjectPublicKeyInfo, as
         /// CertificateSigner gives it.
-        public init(dir: URL, name: String, os: String = "ios", osVersion: String = "", version: String = "", keyStore: String = "hardware",
-                    device: String, publicKeyDER: Data, seal: Data, cert: Data, issuer: Data?, groupCA: Data, roots: [Data],
-                    peers: [String] = [], mdns: Bool = false, adminKey: Data? = nil) throws {
-            (self.dir, self.name, self.os, self.osVersion, self.version, self.keyStore) = (dir.path, name, os, osVersion, version, keyStore)
-            (self.device, self.seal, self.cert, self.issuer, self.groupCA, self.roots) = (device, seal, cert, issuer, groupCA, roots)
-            (self.peers, self.mdns, self.adminKey) = (peers, mdns, adminKey)
+        public init(dir: URL, name: String, os: String = "ios", osVersion: String = "", version: String = "",
+                    device: String, publicKeyDER: Data, peers: [String] = [], mdns: Bool = false) throws {
+            (self.dir, self.name, self.os, self.osVersion, self.version) = (dir.path, name, os, osVersion, version)
+            (self.device, self.peers, self.mdns) = (device, peers, mdns)
             publicKey = try P256.Signing.PublicKey(derRepresentation: publicKeyDER).x963Representation
         }
     }
@@ -94,13 +79,6 @@ public final class CoreMember: @unchecked Sendable {
             media = try? c.decodeIfPresent(Media.Manifest.self, forKey: .media)
             unread = try c.decodeIfPresent(Bool.self, forKey: .unread) ?? false
             key = try c.decodeIfPresent(String.self, forKey: .key) ?? ""
-        }
-
-        /// The copy as the kit's event, for the code that reads one.
-        public var event: Member.Event {
-            var e = Member.Event(id: id, origin: origin, via: via, time: .zero, ageMS: ageMS, kind: kind, text: text, media: media)
-            e.unread = unread
-            return e
         }
     }
 
@@ -174,17 +152,6 @@ public final class CoreMember: @unchecked Sendable {
     }
 
     /// A message a peer sent that the core leaves to the app.
-    public enum Message: Sendable {
-        /// The admin CA the root issued for this phone's admin key.
-        case admin(ca: Data)
-        /// The group's server credentials it keeps.
-        case credentials([ServerCredentials.Credential])
-        /// An attestation of one of its keys.
-        case evidence(Member.Evidence)
-        /// A message this kit does not read, by its type.
-        case other(String)
-    }
-
     /// What the member tells the app, on the main actor's stream.
     public enum Event: Sendable {
         /// A text for the phone's clipboard, as the core's own clipboard
@@ -192,24 +159,7 @@ public final class CoreMember: @unchecked Sendable {
         case write(text: String, kind: Member.Kind, ttlMS: UInt64?)
         /// A copy that became the group's current one from another member.
         case copy(Copy)
-        case message(from: String, Message)
         case log(String)
-        /// An admin renewed this phone's certificate, or a takeover made a
-        /// new root: the app keeps them in its group file.
-        case identity(cert: Data, issuer: Data?, roots: [Data])
-        /// A peer whose hello the core took.
-        case peer(Peer)
-        /// A tunnel offer of the group's root or an admin.
-        case tunnel(from: String, offer: Member.TunnelOffer)
-        /// A command for this phone itself, which the app checks against
-        /// the records, carries out and answers with `answer(_:result:)`
-        /// within ten seconds, or the phone refuses it.
-        case command(token: UInt64, from: String, command: Member.Record)
-        /// A call to the relay's port from the loopback port port, whose
-        /// certificate names device: the app names the caller the relay
-        /// announced from there with `caller(_:device:)` within five
-        /// seconds, or the call is closed.
-        case caller(token: UInt64, port: UInt16, device: String)
         /// An admin muted this phone for forMS milliseconds (0 for until an
         /// admin lifts it), or ended its mute (muted false): the member
         /// carried the command out and keeps it.
@@ -226,9 +176,6 @@ public final class CoreMember: @unchecked Sendable {
         /// it and cannot turn it off, with "This wasn't me". from and to are
         /// the old and new root's devices, seq the change's step.
         case rootChanged(from: String, to: String, seq: UInt64)
-        /// The member needs a key of the phone's (kind spare_admin): the app
-        /// makes it and answers with `keyMade(_:public:)` and the token.
-        case needKey(token: UInt64, kind: String)
         /// The member no longer needs the key public (a point): the app may
         /// delete it.
         case keyDone(public: Data)
@@ -479,16 +426,6 @@ public final class CoreMember: @unchecked Sendable {
         return try await detached("fetch", A(id: id, max: max, out: out.path), as: R.self).parts
     }
 
-    /// How far the peers read the sealed blob of the group's copy id that
-    /// this phone made, and its size; zeros for a copy that is no longer
-    /// the group's or holds no bytes.
-    public func served(_ id: String) throws -> (served: Int64, size: Int64) {
-        struct A: Encodable { var id: String }
-        struct R: Decodable { var served: Int64, size: Int64 }
-        let r = try run("served", A(id: id), as: R.self)
-        return (r.served, r.size)
-    }
-
     /// Dials the member the app found as key at addrs (host:port); device
     /// is its device ID when known.
     public func found(_ key: String, addrs: [String], device: String? = nil) throws {
@@ -507,12 +444,6 @@ public final class CoreMember: @unchecked Sendable {
         /// The home network, while the phone is the hub: every address;
         /// the app publishes the port with r=phone.
         case home
-        /// The hub's tunnel, on the loopback address.
-        case tunnel
-        /// A blind relay's calls, on the loopback address: each is served
-        /// only when the app names its caller (the caller event) and its
-        /// certificate names the same device.
-        case relay
     }
 
     /// Opens a member port for what on port (0 for any); the port. A port
@@ -735,13 +666,6 @@ public final class CoreMember: @unchecked Sendable {
         try run("unlisten", A(kind: what))
     }
 
-    /// Answers a caller event: the device the relay announced from the
-    /// call's loopback port, nil for a call it did not announce.
-    public func caller(_ token: UInt64, device: String?) throws {
-        struct A: Encodable { var token: UInt64, device: String? }
-        try run("caller", A(token: token, device: device))
-    }
-
     /// Closes every connection and makes none until resume: the app went to
     /// the background.
     public func pause() throws { try run("pause") }
@@ -810,74 +734,11 @@ public final class CoreMember: @unchecked Sendable {
         return try run(op == nil ? "view" : "arrange", A(arrange: op, away: away), as: R.self).view
     }
 
-    /// The group's records the core holds.
-    public func records() throws -> [Member.Record] {
-        struct R: Decodable { var records: [Member.Record] }
-        return try run("records", Optional<Empty>.none, as: R.self).records
-    }
-
-    /// Takes records the app's root or admin key signed, keeps them and
-    /// sends them to every peer.
-    public func addRecords(_ records: [Member.Record]) throws {
-        guard !records.isEmpty else { return }
-        struct A: Encodable { var records: [Member.Record] }
-        try run("add_records", A(records: records))
-    }
-
-    /// Sends a command the app's admin key signed and waits for its result:
-    /// to its receiver, or to the group's hubs connected, which pass it on.
-    public func command(_ command: Member.Record, timeout: Duration = .seconds(10)) async throws -> Member.CommandResult {
-        struct A: Encodable, Sendable { var command: Member.Record, timeout_ms: Int64 }
-        struct R: Decodable, Sendable { var result: Member.CommandResult }
-        let ms = timeout.components.seconds * 1000
-        return try await detached("command", A(command: command, timeout_ms: ms), as: R.self).result
-    }
-
-    private struct Sent: Decodable { var sent: Bool }
-    private struct To: Decodable { var to: [String] }
-
-    /// Sends a renewed member certificate to the member to.
-    @discardableResult
-    public func sendCert(to: String, cert: Data, issuer: Data?) throws -> Bool {
-        struct A: Encodable { var to: String, cert: Data, issuer: Data? }
-        return try run("send_cert", A(to: to, cert: cert, issuer: issuer), as: Sent.self).sent
-    }
-
-    /// Sends a member the admin CA for the admin key its hello offers.
-    @discardableResult
-    public func sendAdminCA(to: String, ca: Data) throws -> Bool {
-        struct A: Encodable { var to: String, ca: Data }
-        return try run("send_admin_ca", A(to: to, ca: ca), as: Sent.self).sent
-    }
-
-    /// Sends the group's server credentials to the member to only (a peer
-    /// that just connected), or to every member but except (the one that
-    /// sent them); those it went to.
-    @discardableResult
-    public func sendCredentials(_ credentials: [ServerCredentials.Credential], to: String? = nil, except: String? = nil) throws -> [String] {
-        guard !credentials.isEmpty else { return [] }
-        struct A: Encodable { var credentials: [ServerCredentials.Credential], to: String?, except: String? }
-        return try run("send_credentials", A(credentials: credentials, to: to, except: except), as: To.self).to
-    }
-
-    /// Answers a command event: the result its sender gets.
-    public func answer(_ token: UInt64, result: Member.CommandResult) throws {
-        struct A: Encodable { var token: UInt64, status: String, reason: String }
-        try run("answer", A(token: token, status: result.status, reason: result.reason ?? ""))
-    }
-
     /// Sets the attestations of the phone's keys every peer gets after its
     /// hello.
     public func setEvidence(_ evidence: [Member.Evidence]) throws {
         struct A: Encodable { var evidence: [Member.Evidence] }
         try run("evidence", A(evidence: evidence))
-    }
-
-    /// Ends the connection to device with a goodbye; it is dialed again
-    /// later.
-    public func disconnect(_ device: String) throws {
-        struct A: Encodable { var device: String }
-        try run("disconnect", A(device: device))
     }
 
     /// The devices connected now, by ID.
@@ -904,18 +765,9 @@ public final class CoreMember: @unchecked Sendable {
         try run("dismiss", A(id: id))
     }
 
-    /// Tells the member the person kept the recovery key: "sheet" or
-    /// "yubikey".
-    public func recoverySaved(_ how: String) throws {
-        struct A: Encodable { var how: String }
-        try run("recovery_saved", A(how: how))
-    }
-
-    /// Answers `Event.needKey`: the app made the key public (DER).
-    public func keyMade(_ token: UInt64, public: Data) throws {
-        struct A: Encodable { var token: UInt64, `public`: Data }
-        try run("key_made", A(token: token, public: try Self.point(`public`)))
-    }
+    /// The person saw the change of root `Event.rootChanged` told of: the
+    /// member no longer tells of it, not even when it starts again.
+    public func rootChangeSeen() throws { try run("root_change_seen") }
 
     /// Who stays after a change of root with the recovery key, before
     /// anything is signed: the core writes the list; leaveOut are the
@@ -944,94 +796,17 @@ public final class CoreMember: @unchecked Sendable {
                             public: try Self.point(rootPublic)), sign: sign, as: R.self).seq ?? 0
     }
 
-    // MARK: Taking the group over
-
-    /// Where a claim to take the group over stands, as finish_takeover
-    /// answers.
-    public struct Takeover: Decodable, Sendable {
-        /// none, pending, cancelled, void, competing, disputed or effective.
-        public var state: String
-        /// How long the claim still waits, while pending.
-        public var leftMS: Int64
-        /// The phone's member certificate from the new root, once effective.
-        public var cert: Data?
-
-        enum CodingKeys: String, CodingKey { case state, leftMS = "left_ms", cert }
-
-        public init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            state = try c.decode(String.self, forKey: .state)
-            leftMS = try c.decodeIfPresent(Int64.self, forKey: .leftMS) ?? 0
-            cert = try c.decodeIfPresent(Data.self, forKey: .cert)
-        }
-    }
-
-    /// Who claims the group (docs/protocol.md, section 10, "Handing the
-    /// group over").
-    public enum Claim: String, Sendable {
-        /// An admin phone, from the lost root's device.
-        case takeOver = "take_over"
-        /// The admin phone the root handed the group to.
-        case takeHandedOver = "take_handed_over"
-        /// The group's recovery key, under its admin CA.
-        case recover
-    }
-
     /// The uncompressed point of a SubjectPublicKeyInfo, as the member's
     /// manage requests name a key.
     private static func point(_ der: Data) throws -> Data {
         try P256.Signing.PublicKey(derRepresentation: der).x963Representation
     }
 
-    /// A root CA for a new key of this phone, before a claim
-    /// (cbb_member_manage's root_ca): public is the new key, DER, which sign
-    /// signs a digest with. The app keeps the CA and the key until the
-    /// claim takes effect or ends.
-    public func rootCA(public: Data, sign: @escaping (Data) throws -> Data) throws -> Data {
-        struct A: Encodable { var action = "root_ca", `public`: Data }
-        struct R: Decodable { var root_ca: Data? }
-        guard let ca = try manage(A(public: try Self.point(`public`)), sign: sign, as: R.self).root_ca else {
-            throw Core.Mismatch(reason: "the member's root CA is missing")
-        }
-        return ca
-    }
-
-    /// Claims the group for rootCA, signed with the key public (DER) under
-    /// its CA ca (the admin key and admin CA, or the recovery key and its
-    /// CA); the member adds the claim to its records and sends it. lost is
-    /// the lost root's device for Claim.takeOver.
-    public func claim(_ kind: Claim, rootCA: Data, public: Data, ca: Data, sign: @escaping (Data) throws -> Data, lost: String? = nil) throws {
-        struct A: Encodable { var action: String, device: String?, root_ca: Data, `public`: Data, admin_ca: Data }
-        _ = try manage(A(action: kind.rawValue, device: lost, root_ca: rootCA, public: try Self.point(`public`), admin_ca: ca),
-                       sign: sign, as: Empty.self)
-    }
-
-    /// Finishes this phone's claim for rootCA once it took effect: the
-    /// member signs, with the new root key public (DER) through sign, the
-    /// phone's member certificate from the new root and the records a new
-    /// root starts with, adds and sends them. While the claim waits, or
-    /// after it ended, it signs nothing and only says where the claim
-    /// stands, so the app may ask again.
-    public func finishTakeover(rootCA: Data, public: Data, name: String, os: String = "ios", store: String, seal: Data?,
-                               sign: @escaping (Data) throws -> Data) throws -> Takeover {
-        struct A: Encodable { var action = "finish_takeover", root_ca: Data, `public`: Data, name: String, os: String, store: String, seal: Data? }
-        return try manage(A(root_ca: rootCA, public: try Self.point(`public`), name: name, os: os, store: store, seal: seal),
-                          sign: sign, as: Takeover.self)
-    }
-
     // The root's own records (cbb_core::root): the member builds and checks
     // each, signs it with the root key public (DER) through sign, adds it to
     // its records and sends it; the app then takes the member's records.
 
-    /// Sets how long a claim waits before it takes effect (0 to 7 days),
-    /// keeping the key level.
-    public func setTakeoverDelay(ms: Int64, public: Data, sign: @escaping (Data) throws -> Data) throws {
-        struct A: Encodable { var action = "takeover_delay", delay_ms: Int64, `public`: Data }
-        _ = try manage(A(delay_ms: ms, public: try Self.point(`public`)), sign: sign, as: Empty.self)
-    }
-
-    /// Sets the group's key level (proven, hardware or files), keeping the
-    /// takeover delay; never a level this phone's own keys do not pass. It
+    /// Sets the group's key level (proven, hardware or files); never a level this phone's own keys do not pass. It
     /// returns the admins and hubs whose keys the level would not let in, by
     /// device ID: they stay until the user removes them.
     @discardableResult
@@ -1065,24 +840,54 @@ public final class CoreMember: @unchecked Sendable {
         return (r.status ?? "", r.reason ?? "")
     }
 
-    /// Hands the group to the admin device, whose claim then takes effect at once.
-    public func handOver(to device: String, public: Data, sign: @escaping (Data) throws -> Data) throws {
-        struct A: Encodable { var action = "hand_over", device: String, `public`: Data }
-        _ = try manage(A(device: device, public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    /// Sets how long a copy from another device stays live on each member,
+    /// in milliseconds: a copies record, which any admin signs.
+    public func setIncoming(ms: Int64, public: Data, sign: @escaping (Data) throws -> Data) throws {
+        struct A: Encodable { var action = "incoming", incoming_ms: Int64, `public`: Data }
+        _ = try manage(A(incoming_ms: ms, public: try Self.point(`public`)), sign: sign, as: Empty.self)
     }
 
-    /// Makes the group's recovery key, which replaces the one before it, and
-    /// returns its sheet; nothing of the key stays in the core.
-    public func makeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws -> Core.RecoverySheet {
-        struct A: Encodable { var action = "make_recovery", `public`: Data }
-        return try manage(A(public: try Self.point(`public`)), sign: sign, as: Core.RecoverySheet.self)
+    /// The action of an admin or the root (cbb_member_manage, docs/core-api.md):
+    /// request names the action and its fields; the member adds the point of
+    /// the key public (DER), the phone's admin key or the root's, signs
+    /// through sign, and the records judge whether the key may. It answers
+    /// the action's own fields: for a command, its status and reason.
+    public func act(_ request: [String: ManageValue], public: Data, sign: @escaping (Data) throws -> Data) throws -> [String: ManageValue] {
+        var r = request
+        r["public"] = .string(try Self.point(`public`).base64EncodedString())
+        return try manage(r, sign: sign, as: [String: ManageValue].self)
     }
 
-    /// Removes the group's recovery key: the root revokes it, and a sheet
-    /// printed for it no longer works.
-    public func removeRecovery(public: Data, sign: @escaping (Data) throws -> Data) throws {
-        struct A: Encodable { var action = "remove_recovery", `public`: Data }
-        _ = try manage(A(public: try Self.point(`public`)), sign: sign, as: Empty.self)
+    /// A value of a manage request or answer, as JSON has it.
+    public enum ManageValue: Codable, Equatable, Sendable {
+        case string(String)
+        case int(Int64)
+        case bool(Bool)
+        case strings([String])
+        case other
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let b = try? c.decode(Bool.self) { self = .bool(b) }
+            else if let i = try? c.decode(Int64.self) { self = .int(i) }
+            else if let s = try? c.decode(String.self) { self = .string(s) }
+            else if let a = try? c.decode([String].self) { self = .strings(a) }
+            else { self = .other }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self {
+            case let .string(s): try c.encode(s)
+            case let .int(i): try c.encode(i)
+            case let .bool(b): try c.encode(b)
+            case let .strings(a): try c.encode(a)
+            case .other: try c.encodeNil()
+            }
+        }
+
+        /// The string, when it is one.
+        public var string: String? { if case let .string(s) = self { s } else { nil } }
     }
 
     /// The signer of one manage call, which the core calls during it only.
@@ -1091,7 +896,7 @@ public final class CoreMember: @unchecked Sendable {
         init(_ sign: @escaping (Data) throws -> Data) { self.sign = sign }
     }
 
-    /// Asks the member for an admin's change or a step of a takeover
+    /// Asks the member for an admin's or the root's change
     /// (cbb_member_manage), signed through sign during this call; decodes
     /// its answer's ok.
     func manage<A: Encodable, R: Decodable>(_ request: A, sign: @escaping (Data) throws -> Data, as _: R.Type) throws -> R {
@@ -1130,16 +935,6 @@ public final class CoreMember: @unchecked Sendable {
         var line: String?
         var copy: Copy?
         var from: String?
-        var message: WireMessage?
-        var cert: Data?
-        var issuer: Data?
-        var roots: [Data]?
-        var peer: Peer?
-        var offer: Member.TunnelOffer?
-        var token: UInt64?
-        var command: Member.Record?
-        var port: UInt16?
-        var device: String?
         var muted: Bool?
         var off: Bool?
         var for_ms: Int64?
@@ -1150,13 +945,6 @@ public final class CoreMember: @unchecked Sendable {
         var to: String?
         var seq: UInt64?
         var `public`: Data?
-    }
-
-    struct WireMessage: Decodable {
-        var t: String
-        var admin_ca: Data?
-        var credentials: [ServerCredentials.Credential]?
-        var evidence: Member.Evidence?
     }
 
     /// The event the core sent as JSON, nil for one this kit does not read.
@@ -1170,16 +958,6 @@ public final class CoreMember: @unchecked Sendable {
             return .write(text: text, kind: w.kind.flatMap(Member.Kind.init(rawValue:)) ?? .text, ttlMS: w.ttl_ms)
         case "log": return w.line.map { .log($0) }
         case "copy": return w.copy.map { .copy($0) }
-        case "identity":
-            guard let cert = w.cert else { return nil }
-            return .identity(cert: cert, issuer: w.issuer, roots: w.roots ?? [])
-        case "peer": return w.peer.map { .peer($0) }
-        case "tunnel":
-            guard let from = w.from, let offer = w.offer else { return nil }
-            return .tunnel(from: from, offer: offer)
-        case "command":
-            guard let token = w.token, let from = w.from, let command = w.command else { return nil }
-            return .command(token: token, from: from, command: command)
         case "mute":
             guard let muted = w.muted else { return nil }
             return .mute(muted: muted, forMS: w.for_ms ?? 0, by: w.by ?? "")
@@ -1189,22 +967,8 @@ public final class CoreMember: @unchecked Sendable {
         case "state": return w.state.map { .state($0) }
         case "notice": return w.notice.map { .notice($0) }
         case "root_changed": return .rootChanged(from: w.from ?? "", to: w.to ?? "", seq: w.seq ?? 0)
-        case "need_key":
-            guard let token = w.token, let kind = w.kind else { return nil }
-            return .needKey(token: token, kind: kind)
         case "key_done": return w.public.map { .keyDone(public: $0) }
         case "panic": return .panic(details: w.details ?? "")
-        case "caller":
-            guard let token = w.token, let port = w.port, let device = w.device else { return nil }
-            return .caller(token: token, port: port, device: device)
-        case "message":
-            guard let from = w.from, let m = w.message else { return nil }
-            switch m.t {
-            case "admin": return m.admin_ca.map { .message(from: from, .admin(ca: $0)) }
-            case "credentials": return m.credentials.map { .message(from: from, .credentials($0)) }
-            case "evidence": return m.evidence.map { .message(from: from, .evidence($0)) }
-            default: return .message(from: from, .other(m.t))
-            }
         default:
             return nil
         }

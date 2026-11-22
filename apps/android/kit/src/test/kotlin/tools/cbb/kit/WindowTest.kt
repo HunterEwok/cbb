@@ -43,17 +43,16 @@ class WindowTest {
         val root = SoftwareSigner()
         val key = SoftwareSigner()
         val dir = File(top, "root")
-        val made = CorePairing.newGroup06(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
+        val made = CorePairing.newGroup(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
         assertEquals(4, made.recoveryText.size)
         assertTrue(made.recoveryQR.isNotEmpty())
         // Once only.
         assertFailsWith<CorePairing.Failure> {
-            CorePairing.newGroup06(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
+            CorePairing.newGroup(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
         }
 
         val m = CoreMember.start(
-            CoreMember.Start(dir, "Root phone", "android", device = made.device, publicKey = key.publicKeyDER, seal = CoreGroup.SEAL,
-                cert = ByteArray(0), groupCA = ByteArray(0)),
+            CoreMember.Start(dir, "Root phone", "android", device = made.device, publicKey = key.publicKeyDER),
             key::signDigest,
             events = { },
         ).closed()
@@ -84,10 +83,9 @@ class WindowTest {
         val root = SoftwareSigner()
         val key = SoftwareSigner()
         val dir = File(top, "root")
-        val made = CorePairing.newGroup06(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
+        val made = CorePairing.newGroup(dir, "Root phone", "android", Records.HARDWARE, root.publicKeyDER, key.publicKeyDER, root::signDigest)
         val m = CoreMember.start(
-            CoreMember.Start(dir, "Root phone", "android", device = made.device, publicKey = key.publicKeyDER, seal = CoreGroup.SEAL,
-                cert = ByteArray(0), groupCA = ByteArray(0)),
+            CoreMember.Start(dir, "Root phone", "android", device = made.device, publicKey = key.publicKeyDER),
             key::signDigest,
             events = { },
         ).closed()
@@ -200,15 +198,25 @@ class WindowTest {
 
     @Test
     fun aGroupOf06KeepsItsIDsAndNoCertificates() {
-        val g = PhoneGroup.of06("0a".repeat(16), "1b".repeat(16), root = false)
-        g.admin06 = true
+        val g = PhoneGroup.of("0a".repeat(16), "1b".repeat(16), root = false)
+        g.admin = true
         val f = File(top, "group.json")
         g.save(f)
         val back = assertNotNull(PhoneGroup.load(f))
-        assertTrue(back.isV06 && back.isAdmin && !back.isRoot)
+        assertTrue(back.isAdmin && !back.isRoot)
         assertEquals("1b".repeat(8), back.tag)
         assertEquals("0a".repeat(16), back.device)
-        assertTrue(back.devices.isEmpty(), "the member keeps the set")
+    }
+
+    /** A group file from before 0.6 names no Group ID: loading it is Before06, and the file stays until the person leaves (D-126). */
+    @Test
+    fun aGroupFromBefore06IsNamedAndKept() {
+        val f = File(top, "old/group.json")
+        f.parentFile.mkdirs()
+        f.writeText("""{"device":"${"0a".repeat(16)}","is_root":true,"ca":"AAAA"}""")
+        assertFailsWith<PhoneGroup.Before06> { PhoneGroup.load(f) }
+        assertTrue(f.isFile, "loading deletes nothing")
+        assertEquals(null, PhoneGroup.load(File(top, "none.json")), "no file is no group")
     }
 
     @Test

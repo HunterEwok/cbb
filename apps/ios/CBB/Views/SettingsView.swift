@@ -486,22 +486,8 @@ extension SettingsView {
             ForEach(watches) { w in
                 Text(verbatim: w.name)
             }
-            if model.group.isV06 {
-                // The watch signs nothing in a group of 0.6 (D-124).
-                Text("In this group the watch shows the devices only: its emergency actions come with CBB 0.7.").font(.footnote).foregroundStyle(palette.textDim)
-            } else if watches.isEmpty {
-                Button {
-                    Task {
-                        switching = true
-                        await model.addWatch()
-                        switching = false
-                    }
-                } label: {
-                    Text("Make the watch an admin")
-                }
-                .disabled(switching)
-            }
-            if watches.isEmpty && !model.group.isV06 { TipView(SettingTip.watch) }
+            // The watch signs nothing in a group of 0.6 (D-124).
+            Text("In this group the watch shows the devices only: its emergency actions come with CBB 0.7.").font(.footnote).foregroundStyle(palette.textDim)
         } header: {
             Text("Apple Watch")
         }
@@ -645,8 +631,6 @@ struct SettingTip: Tip {
         message: Text("How long a copy from another device goes into the clipboard after it arrives."))
     static let securityLevel = SettingTip(id: "securityLevel", title: Text("Security level"),
         message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
-    static let watch = SettingTip(id: "watch", title: Text("The watch as an admin"),
-        message: Text("It can freeze an admin computer and turn remote paste and quick actions off. Open CBB on the watch first."))
 }
 
 /// "Why it does not sync" (docs/apps.md): the core's reasons for this

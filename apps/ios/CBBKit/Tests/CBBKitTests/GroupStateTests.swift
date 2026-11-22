@@ -68,9 +68,6 @@ final class GroupStateTests: XCTestCase {
         XCTAssertEqual(from, "01010101010101010101010101010101")
         XCTAssertEqual(to, "02020202020202020202020202020202")
         XCTAssertEqual(seq, 2)
-        guard case let .needKey(token, kind)? = try ev("need_key") else { return XCTFail("need_key") }
-        XCTAssertEqual(token, 7)
-        XCTAssertEqual(kind, "spare_admin")
         guard case let .keyDone(pub)? = try ev("key_done") else { return XCTFail("key_done") }
         XCTAssertEqual(pub, Data([4, 0, 1]))
         // A write event's kind still reads as the copy's kind.

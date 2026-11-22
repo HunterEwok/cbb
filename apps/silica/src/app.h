@@ -82,7 +82,7 @@ class App : public QObject
     // needs none, "unknown" until the TEE answered, "not_set", "set" or
     // "locked".
     Q_PROPERTY(QString adminPin READ adminPin NOTIFY adminPinChanged)
-    // The recovery sheet the root just made, shown once (makeRecovery):
+    // The recovery sheet of the group just made, shown once (makeGroup):
     // the key as groups of four and the QR code's modules, a string of '1'
     // (dark) and '0' a row; empty when there is none to show.
     Q_PROPERTY(QString recoveryText READ recoveryText NOTIFY recoveryChanged)
@@ -209,25 +209,26 @@ public:
     // The recovery key on a YubiKey plugged into the USB-C port, through the
     // system's pcscd (cbb_piv's transport pcsc; docs/apps.md): openCard
     // opens it after the PIN and a touch, for changeRoot's recovery
-    // {"secret"} (cardOpened); sealCard seals the sheet just shown onto it,
-    // replacing a factory management key only when replaceDefault
-    // (cardSealed).
+    // {"secret"} (cardOpened); sealCard seals the sheet just made onto it, in
+    // its first empty retired slot, with its management key as the card
+    // keeps it (cardSealed). Both name the group, whose slot it is.
     Q_INVOKABLE void openCard(const QString &pin);
-    Q_INVOKABLE void sealCard(const QString &pin, bool replaceDefault);
+    Q_INVOKABLE void sealCard(const QString &pin);
+    // Saves the sheet just made as a PDF in Documents and returns its path,
+    // empty when it could not (the error is shown).
+    Q_INVOKABLE QString saveSheet();
     // The root's decision on an alert: voids the records it names.
     Q_INVOKABLE void resolve(const QStringList &records);
     // The root's own records, built and signed in the core (cbb_core::root)
     // with the root key, off the GUI thread: how long a claim from a lost
     // root waits, in hours; which keys may be admins (proven, hardware or
     // files); handing the group to the admin device, whose claim then takes
-    // effect at once; making the recovery key, whose sheet recoveryText and
-    // recoveryModules show once, until forgetRecovery; and removing it.
+    // effect at once. forgetRecovery drops the sheet the new group showed
+    // (recoveryText, recoveryModules).
     Q_INVOKABLE void setTakeoverDelay(int hours);
     Q_INVOKABLE void setGroupKeyLevel(const QString &level);
     Q_INVOKABLE void handOver(const QString &device);
-    Q_INVOKABLE void makeRecovery();
     Q_INVOKABLE void forgetRecovery();
-    Q_INVOKABLE void removeRecovery();
     QString recoveryText() const { return m_recoveryText; }
     QStringList recoveryModules() const { return m_recoveryModules; }
     QStringList belowLevel() const { return m_belowLevel; }
@@ -257,7 +258,7 @@ signals:
     void changePreviewed(bool ok, const QVariantList &rows, bool waiting);
     void rootChangedHere(bool ok);
     void cardOpened(bool ok, const QString &secret);
-    void cardSealed(bool ok, bool defaultKey);
+    void cardSealed(bool ok);
     void claimChanged();
     void arrangementChanged();
     void adminPinChanged();

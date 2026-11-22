@@ -608,6 +608,10 @@
         <translation>请将手机连接到家中的 Wi-Fi 以添加设备。</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>这个 YubiKey 上存放密钥的位置都已占用。请换一个 YubiKey 或使用纸页。</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>没有插入 YubiKey。请把它插入 USB-C 接口后重试。</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>手机未能保存群组。</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>手机无法保存纸页。</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>手机还没有密钥。</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>手机的安全元件中有一个损坏的密钥。</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>此 YubiKey 已保存了一个恢复密钥。请使用另一个 YubiKey。</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>此 YubiKey 中没有恢复密钥。</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>此 YubiKey 在存放恢复密钥的位置保存了其他内容。请使用另一个 YubiKey。</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>这个 YubiKey 上已有本群组的恢复密钥。</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,76 +1514,100 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>恢复密钥可让群组中的电脑或新手机在此手机丢失时接管群组。下拉即可创建。</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>保存的文件就是群组的密钥：把它从手机转到纸上或妥善保管的存储设备上，然后在这里删除。</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>返回</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>CBB 恢复密钥</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>继续</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>完成</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>我已抄下</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>保留出厂密钥</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN 码。</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>创建新的恢复密钥</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能接管你的群组。</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>创建恢复密钥</translation>
+        <source>Leave without saving</source>
+        <translation>不保存并离开</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>把 YubiKey 插入 USB-C 接口，输入它的 PIN，在它闪烁时触摸它。</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>不保存恢复密钥就离开吗？</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>存入 YubiKey</translation>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</translation>
     </message>
     <message>
         <source>Recovery key</source>
         <translation>恢复密钥</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>移除恢复密钥</translation>
+        <source>Save as PDF</source>
+        <translation>存为 PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>正在移除恢复密钥</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>将它保存在纸上、YubiKey 上，或两者都保存。只有凭它，才能在这部手机丢失时把群组转到另一台主设备。它只在此时显示。</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>替换出厂密钥</translation>
+        <source>Save the group's recovery key</source>
+        <translation>保存群组的恢复密钥</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>正在替换恢复密钥</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>YubiKey 保存与这张纸相同的密钥，需输入 PIN 并触摸才能使用。如果它仍使用出厂管理密钥，任何人都能查到该密钥并在没有 PIN 的情况下删除恢复密钥；应用可以把它换成受 PIN 保护的密钥。</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>已保存为 %1。这个文件就是群组的密钥：把它从手机转到纸上或妥善保管的存储设备上，然后在这里删除。</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>YubiKey 的 PIN</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>群组已有恢复密钥。如果此手机丢失，群组中的电脑或新手机可凭它接管群组。</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>恢复密钥已存入 YubiKey，但它仍使用出厂管理密钥：持有它的人无需 PIN 就能删除该密钥。请同时保留这张纸。</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>请抄下密钥或打印此页，并妥善保管。它只显示一次。</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>纸页已保存到“文档”。</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>没有它，丢失这部手机就意味着要新建群组，并让每台设备重新加入。</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>写在纸上</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>把密钥抄下来或保存此页，并妥善保管。</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>写入 YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>正在写入 YubiKey。完成前请保持插入。</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1789,6 @@
     <message>
         <source>No time</source>
         <translation>不等待</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>无</translation>
     </message>
     <message>
         <source>None yet</source>

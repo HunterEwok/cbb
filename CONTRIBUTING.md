@@ -288,20 +288,8 @@ container; [docs/differential.md](docs/differential.md)):
 sh .github/differential.sh 1 20000 500 /tmp/differential
 ```
 
-Cross tests between Go and Swift: Swift tests write vectors that Go reads, and the other way.
-
-- `CBB_INTEROP_OUT=<dir> swift test -Xlinker -L<core>` writes fresh `swift-records.json`,
-  `swift-renewal.json` and `swift-admin.json`; then
-  `CBB_INTEROP_OUT=<dir> go test ./internal/group -run 'TestSwift'` reads them.
-  Without the variable Go reads the committed copies in `testdata/interop`.
-- `CBB_SWIFT_INTEROP=<path to cbb-interop>` runs
-  `TestSwiftMemberAdmitsGoJoiner` (pairing over plain TCP); on macOS
-  `CBB_SWIFT_INTEROP_TLS` runs the real-TLS pairing and member tests (see the
-  `phone kit` job in `.github/workflows/ci.yml` for the keychain setup).
-- The Kotlin kit does the same: `CBB_INTEROP_OUT=<dir> ./gradlew -p kit test` writes the
-  same files, and `./gradlew -p kit interopScript` builds
-  `kit/build/interop/cbb-interop`, which plays the Android phone in those three
-  Go tests on Linux too (TLS from Conscrypt; the `Android kit` job runs them).
+Go's tests of the records of 0.5 read the committed `testdata/interop/swift-*.json`, which
+the Swift kit of 0.5 wrote; the kit of 0.6 writes none (D-126).
 
 The app (macOS with Xcode):
 

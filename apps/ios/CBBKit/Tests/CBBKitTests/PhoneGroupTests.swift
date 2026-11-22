@@ -4,27 +4,34 @@
 import Foundation
 import XCTest
 
+/// The phone's note of its group beside the member's folder (PhoneGroup):
+/// saved and read back, none without a file, and a group from before 0.6
+/// said to be one.
 final class PhoneGroupTests: XCTestCase {
     func testCreateSaveLoad() throws {
-        let now = Date()
-        let ca = SoftwareSigner()
-        let g = try PhoneGroup.create(caSigner: ca, memberKey: SoftwareSigner().publicKeyDER, now: now)
-        XCTAssertEqual(try GroupCertificates.verifyMember(g.memberCert, groupCA: g.groupCA, now: now), g.device)
-        let root = try ParsedCertificate(der: g.groupCA)
-        XCTAssertTrue(root.isCA)
-        XCTAssertTrue(try CertificateInfo(der: g.groupCA).commonName?.hasPrefix("cbb group root ") == true)
-        XCTAssertEqual(g.tag.count, 16)
-
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cb-\(Member.newID())/group.json")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cb-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("group.json")
         XCTAssertNil(try PhoneGroup.load(from: url))
-        var saved = g
-        saved.computers.append(.init(device: Member.newID(), name: "pi", os: "linux", cert: Data([1]), admitted: now))
-        // A computer in another subnet is dialed at its home network addresses from the QR code.
-        let zero = Member.newID()
-        saved.computers.append(.init(device: zero, name: "rpi0w", os: "linux", cert: Data([2]), admitted: now,
-                                     addrs: ["192.168.20.5:8764", "203.0.113.7:8764", "[fd00::5]:8764", "[2001:db8::5]:8764"]))
-        XCTAssertEqual(saved.addresses, [zero: ["192.168.20.5:8764", "[fd00::5]:8764"]])
-        try saved.save(to: url)
-        XCTAssertEqual(try PhoneGroup.load(from: url), saved)
+        let group = String(repeating: "ab", count: 16)
+        var g = PhoneGroup.of06(device: String(repeating: "01", count: 16), group: group, root: false)
+        XCTAssertEqual(g.tag, String(group.prefix(16)))
+        XCTAssertFalse(g.isAdmin)
+        g.admin06 = true
+        XCTAssertTrue(g.isAdmin)
+        try g.save(to: url)
+        XCTAssertEqual(try PhoneGroup.load(from: url), g)
+        XCTAssertTrue(PhoneGroup.of06(device: g.device, group: group, root: true).isAdmin, "the root may add and remove devices")
+
+        // A group of 0.5 named no Group ID.
+        try Data(#"{"device":"0101","isRoot":true}"#.utf8).write(to: url)
+        XCTAssertThrowsError(try PhoneGroup.load(from: url)) { XCTAssertTrue($0 is PhoneGroup.Before06, "\($0)") }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "the file stays until the person leaves")
+    }
+
+    func testValidName() {
+        XCTAssertEqual(PhoneGroup.validName(""), "iPhone")
+        XCTAssertEqual(PhoneGroup.validName("a\u{7}b"), "ab")
+        XCTAssertEqual(PhoneGroup.validName(String(repeating: "\u{44F}", count: 40)).utf8.count, 64)
     }
 }

@@ -608,6 +608,10 @@
         <translation>Conecta el teléfono a la Wi-Fi de casa para añadir un dispositivo.</translation>
     </message>
     <message>
+        <source>Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.</source>
+        <translation>Todos los espacios para claves de esta YubiKey están en uso. Usa otra YubiKey o la hoja.</translation>
+    </message>
+    <message>
         <source>No YubiKey is plugged in. Plug it into the USB-C port and try again.</source>
         <translation>No hay ninguna YubiKey conectada. Conéctala al puerto USB-C e inténtalo de nuevo.</translation>
     </message>
@@ -704,6 +708,10 @@
         <translation>El teléfono no pudo guardar el grupo.</translation>
     </message>
     <message>
+        <source>The phone could not save the sheet.</source>
+        <translation>El teléfono no pudo guardar la hoja.</translation>
+    </message>
+    <message>
         <source>The phone has no key yet.</source>
         <translation>El teléfono aún no tiene clave.</translation>
     </message>
@@ -744,16 +752,16 @@
         <translation>El elemento seguro del teléfono guarda una clave dañada.</translation>
     </message>
     <message>
-        <source>This YubiKey holds a recovery key already. Use another YubiKey.</source>
-        <translation>Esta YubiKey ya guarda una clave de recuperación. Usa otra YubiKey.</translation>
-    </message>
-    <message>
         <source>This YubiKey holds no recovery key.</source>
         <translation>Esta YubiKey no contiene ninguna clave de recuperación.</translation>
     </message>
     <message>
-        <source>This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.</source>
-        <translation>Esta YubiKey guarda otra cosa en el lugar de la clave de recuperación. Usa otra YubiKey.</translation>
+        <source>This YubiKey holds this group's recovery key already.</source>
+        <translation>Esta YubiKey ya tiene la clave de recuperación de este grupo.</translation>
+    </message>
+    <message>
+        <source>This YubiKey holds two recovery keys for this group. Use the sheet instead.</source>
+        <translation>Esta YubiKey tiene dos claves de recuperación de este grupo. Usa la hoja.</translation>
     </message>
     <message>
         <source>This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.</source>
@@ -1506,76 +1514,100 @@
 <context>
     <name>RecoveryPage</name>
     <message>
-        <source>A recovery key lets a computer of the group or a new phone take the group over if this phone is lost. Pull down to make one.</source>
-        <translation>Una clave de recuperación permite que un ordenador del grupo o un teléfono nuevo tome el grupo si se pierde este teléfono. Desliza hacia abajo para crear una.</translation>
+        <source>A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Un archivo guardado es la clave del grupo: pásalo del teléfono al papel o a una unidad guardada en lugar seguro, y luego bórralo aquí.</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Atrás</translation>
+    </message>
+    <message>
+        <source>CBB recovery key</source>
+        <translation>Clave de recuperación de CBB</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Continuar</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Hecho</translation>
     </message>
     <message>
         <source>I wrote it down</source>
         <translation>Ya la anoté</translation>
     </message>
     <message>
-        <source>Keep its factory key</source>
-        <translation>Conservar su clave de fábrica</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>Inserta tu YubiKey en el puerto USB-C y escribe su PIN.</translation>
     </message>
     <message>
-        <source>Make a new recovery key</source>
-        <translation>Crear una nueva clave de recuperación</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
+        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede tomar tu grupo.</translation>
     </message>
     <message>
-        <source>Make a recovery key</source>
-        <translation>Crear una clave de recuperación</translation>
+        <source>Leave without saving</source>
+        <translation>Salir sin guardar</translation>
     </message>
     <message>
-        <source>Plug the YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Conecta la YubiKey al puerto USB-C, escribe su PIN y tócala cuando parpadee.</translation>
+        <source>Leave without saving the recovery key?</source>
+        <translation>¿Salir sin guardar la clave de recuperación?</translation>
     </message>
     <message>
-        <source>Put it on a YubiKey</source>
-        <translation>Guardarla en una YubiKey</translation>
+        <source>Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.</source>
+        <translation>Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</translation>
     </message>
     <message>
         <source>Recovery key</source>
         <translation>Clave de recuperación</translation>
     </message>
     <message>
-        <source>Remove the recovery key</source>
-        <translation>Eliminar la clave de recuperación</translation>
+        <source>Save as PDF</source>
+        <translation>Guardar como PDF</translation>
     </message>
     <message>
-        <source>Removing the recovery key</source>
-        <translation>Eliminando la clave de recuperación</translation>
+        <source>Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.</source>
+        <translation>Guárdala en una hoja, en una YubiKey o en ambas. Solo con ella el grupo puede pasar a otro dispositivo principal si pierdes este teléfono. Solo se muestra ahora.</translation>
     </message>
     <message>
-        <source>Replace its factory key</source>
-        <translation>Reemplazar su clave de fábrica</translation>
+        <source>Save the group's recovery key</source>
+        <translation>Guarda la clave de recuperación del grupo</translation>
     </message>
     <message>
-        <source>Replacing the recovery key</source>
-        <translation>Reemplazando la clave de recuperación</translation>
-    </message>
-    <message>
-        <source>The YubiKey keeps the same key as this sheet, behind its PIN and a touch. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.</source>
-        <translation>La YubiKey guarda la misma clave que esta hoja, tras su PIN y un toque. Si aún tiene su clave de administración de fábrica, cualquiera podría buscar esa clave y borrar la clave de recuperación sin el PIN; la app puede reemplazarla por una que proteja el PIN.</translation>
+        <source>Saved as %1. This file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.</source>
+        <translation>Guardada como %1. Este archivo es la clave del grupo: pásala del teléfono al papel o a una unidad guardada en lugar seguro, y luego bórrala aquí.</translation>
     </message>
     <message>
         <source>The YubiKey's PIN</source>
         <translation>El PIN de la YubiKey</translation>
     </message>
     <message>
-        <source>The group has a recovery key. With it a computer of the group or a new phone takes the group over if this phone is lost.</source>
-        <translation>El grupo tiene una clave de recuperación. Con ella, un ordenador del grupo o un teléfono nuevo toma el grupo si se pierde este teléfono.</translation>
-    </message>
-    <message>
-        <source>The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.</source>
-        <translation>La clave de recuperación está en la YubiKey, que conserva su clave de administración de fábrica: quien la tenga podría borrar la clave sin el PIN. Guarda también la hoja.</translation>
-    </message>
-    <message>
         <source>The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</source>
         <translation>La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos.</translation>
     </message>
     <message>
-        <source>Write the key down or print this page, and keep it safe. It is shown only once.</source>
-        <translation>Anota la clave o imprime esta página y guárdala en un lugar seguro. Solo se muestra una vez.</translation>
+        <source>The sheet is saved in Documents.</source>
+        <translation>La hoja está guardada en Documentos.</translation>
+    </message>
+    <message>
+        <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
+        <translation>Sin ella, perder este teléfono significa crear un grupo nuevo y unir de nuevo todos los dispositivos.</translation>
+    </message>
+    <message>
+        <source>Write on a sheet</source>
+        <translation>Escribir en una hoja</translation>
+    </message>
+    <message>
+        <source>Write the key down or save this page, and keep it safe.</source>
+        <translation>Copia la clave o guarda esta página, y guárdala en un lugar seguro.</translation>
+    </message>
+    <message>
+        <source>Write to YubiKey</source>
+        <translation>Escribir en la YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>Escribiendo en la YubiKey. Mantenla conectada hasta que termine.</translation>
     </message>
 </context>
 <context>
@@ -1757,10 +1789,6 @@
     <message>
         <source>No time</source>
         <translation>Nada</translation>
-    </message>
-    <message>
-        <source>None</source>
-        <translation>Ninguna</translation>
     </message>
     <message>
         <source>None yet</source>

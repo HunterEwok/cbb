@@ -12,8 +12,8 @@ struct WatchState: Codable, Equatable {
         /// An SF Symbol for its kind.
         var symbol: String
         var online: Bool
-        /// What this watch may do to it, as PhoneGroup.WatchAction's raw
-        /// values.
+        /// What this watch may do to it, by the actions' names; none on 0.6
+        /// (D-124).
         var can: [String]?
         /// The quick actions it has on, while it is connected.
         var actions: [String]?
@@ -99,7 +99,7 @@ struct WatchState: Codable, Equatable {
     static let signedKey = "signed", doneKey = "done"
 
     struct Ask: Codable, Equatable {
-        /// A PhoneGroup.WatchAction's raw value.
+        /// The name of the action.
         var action: String
         var device: String
         /// The quick action's name, for action.

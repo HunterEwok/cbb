@@ -50,10 +50,12 @@ export function cardFailure(f: Failure): Failure {
     shown = t('error_yubikey_old');
   } else if (d.includes('holds no recovery key')) {
     shown = t('error_yubikey_no_key');
-  } else if (d.includes('already holds a recovery key')) {
+  } else if (d.includes('already holds this group\'s recovery key')) {
     shown = t('error_yubikey_holds_one');
-  } else if (d.includes('already holds something')) {
-    shown = t('error_yubikey_taken');
+  } else if (d.includes('retired PIV slot')) {
+    shown = t('error_yubikey_no_free_slot');
+  } else if (d.includes('two recovery keys') || d.includes('more than one group')) {
+    shown = t('error_yubikey_two_slots');
   } else if (d.includes('management key')) {
     shown = t('error_yubikey_management_key');
   }

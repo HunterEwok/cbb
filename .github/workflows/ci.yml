@@ -1679,52 +1679,13 @@ jobs:
         run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
       - name: swift test (in the Swift container on Linux)
         if: env.KIT == 'true' && runner.os == 'Linux'
-        run: |
-          mkdir interop-out
-          docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
-            swift test -Xlinker -L/core
-            swift build -c release --product cbb-interop --static-swift-stdlib -Xlinker -L/core
-            cp "$(swift build -c release --show-bin-path)/cbb-interop" /src/cbb-interop'
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: env.KIT == 'true' && runner.os == 'Linux'
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the core and Go read what the Swift phone wrote
-        if: env.KIT == 'true' && runner.os == 'Linux'
-        run: |
-          # swift test just wrote testdata/interop/swift-member.json, and to
-          # interop-out the records it signed, a certificate it renewed and
-          # what an admin phone makes.
-          cargo test --locked -p cbb-core --lib vectors::swift_member_frames
-          CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
+        run: docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit swift:6.2-noble swift test -Xlinker -L/core
       - name: swift test
         if: env.KIT == 'true' && runner.os == 'macOS'
         working-directory: apps/ios/CBBKit
         run: |
           swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
           cp "$(swift test --show-codecov-path)" "$GITHUB_WORKSPACE/coverage-swift-kit.json"
-          swift build --product cbb-interop -Xlinker -L"$RUNNER_TEMP/core"
-          cp "$(swift build --show-bin-path)/cbb-interop" "$GITHUB_WORKSPACE/cbb-interop"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
-        if: env.KIT == 'true' && runner.os == 'macOS'
-        run: |
-          # The computer is the Rust cbb, with cbb-helper beside it, both
-          # built for tests (testhooks: the tests' hooks, never a release's).
-          cargo build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          # A throwaway keychain for the tool's identity, unlocked and the default.
-          security create-keychain -p ci ci.keychain
-          security list-keychains -d user -s ci.keychain
-          security default-keychain -s ci.keychain
-          security unlock-keychain -p ci ci.keychain
-          security set-keychain-settings ci.keychain
-          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the Rust build into this pull request's cache
         if: env.KIT == 'true' && runner.os == 'macOS'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
@@ -2094,31 +2055,12 @@ jobs:
         run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: the protocol core's tests
         working-directory: apps/android
-        # The kit writes what it signs for the Go tests, as the Swift kit does.
-        run: CBB_INTEROP_OUT="$GITHUB_WORKSPACE/interop-out" ./gradlew --no-daemon -p kit test jacocoTestReport
+        run: ./gradlew --no-daemon -p kit test jacocoTestReport
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-kotlin-kit
           path: apps/android/kit/build/reports/jacoco/test/jacocoTestReport.xml
           retention-days: 7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Go reads what the Kotlin kit signed
-        run: CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
-      - name: the Kotlin kit pairs both ways with the computers' cbb and syncs with it over TLS
-        # The Kotlin twin of cbb-interop plays the phone; Conscrypt
-        # gives it TLS 1.3 on Linux as on Android.
-        run: |
-          (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
-          tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          # The computer is the Rust cbb, with cbb-helper beside it, both
-          # built for tests (testhooks: the tests' hooks, never a release's).
-          rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member --features testhooks
-          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
-          CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
 
   android:
     name: Android app

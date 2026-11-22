@@ -21,8 +21,7 @@ import (
 // rootPhoneWithLaptop runs a phone's app (phone-on-linux) as the root of a
 // group of 0.6 of its own, which a laptop joins by its home window, and
 // returns the phone, its directory, the laptop and their device IDs. The
-// Live member keeps the group's server credentials itself, so the app
-// starts no servers (cbb_member_servers).
+// Live member keeps the group's server credentials itself.
 func rootPhoneWithLaptop(t *testing.T, h *hub) (next func(string) string, in io.Writer, dir string, laptop *testService, phoneID, laptopID string) {
 	t.Helper()
 	return rootPhoneWithLaptopArgs(t, h)

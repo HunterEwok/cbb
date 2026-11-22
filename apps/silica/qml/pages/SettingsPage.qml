@@ -147,7 +147,7 @@ Page {
             ValueButton {
                 visible: app.root && app.member.running
                 label: qsTr("Recovery key")
-                value: app.member.rootView.recovery ? qsTr("Made") : qsTr("None")
+                value: qsTr("Made")
                 onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
             }
             Button {

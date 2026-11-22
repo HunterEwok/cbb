@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The recovery secret on a fake YubiKey 5: sealed and opened with each kind
+//! The recovery secret on a fake YubiKey 5: sealed into the first empty
+//! retired slot from 95 down and opened by the group's tag, with each kind
 //! of management key, and every stop before the card is written.
 
 use std::collections::HashMap;
@@ -20,7 +21,8 @@ fn wrong_key(n: u8) -> Vec<u8> {
 const PIN: &str = "123456";
 const GENERATE: u8 = 0x47;
 const PUT_DATA: u8 = 0xdb;
-const SET_KEY: u8 = 0xff;
+const TAG: &str = "0123456789abcdef";
+const TAG_B: &str = "fedcba9876543210";
 
 fn ok(mut data: Vec<u8>) -> Vec<u8> {
     data.extend_from_slice(&[0x90, 0x00]);
@@ -31,35 +33,44 @@ fn sw(w: u16) -> Vec<u8> {
     w.to_be_bytes().to_vec()
 }
 
+fn cert_object(slot: u8) -> [u8; 3] {
+    super::super::cert_object(slot)
+}
+
 /// A YubiKey 5 as far as cbb talks to it: GET VERSION, GET METADATA of
-/// slots 95 and 9B, the PIN, GET DATA and PUT DATA (5FC121 and 5FC109 need
-/// the PIN), the management key's challenge and response, GENERATE in slot
-/// 95 and ECDH with its key after a touch. writes lists the INS of every
-/// command that changed the card.
+/// the retired slots and 9B (an empty slot answers 6A88, as firmware 5.x
+/// does), the PIN, GET DATA (PRINTED needs the PIN, the certificate
+/// objects do not) and PUT DATA, chained commands (CLA 10), the management
+/// key's challenge and response, GENERATE in a retired slot and ECDH with
+/// its key after a touch. writes lists the INS of every command that
+/// changed the card.
 pub(crate) struct Yubi {
     version: Option<[u8; 3]>,
-    slot: Option<Slot>,
+    slots: HashMap<u8, Slot>,
     objects: HashMap<[u8; 3], Vec<u8>>,
     mgmt: (u8, Vec<u8>, bool),
     /// GENERATE takes these policies whatever it is asked (a card that
     /// ignores them); None follows the command.
     forced_policy: Option<(u8, u8)>,
+    /// The status word of an empty slot's metadata.
+    empty_sw: u16,
     verified: bool,
     authed: bool,
     witness: Option<Vec<u8>>,
     writes: Vec<u8>,
     /// The objects PUT DATA wrote, in order.
     put: Vec<[u8; 3]>,
-    /// A command that fails, without effect: its INS and, for PUT DATA,
-    /// the object.
-    fail: Option<(u8, Option<[u8; 3]>)>,
-    /// Once SET MANAGEMENT KEY failed, PUT DATA fails too.
-    fail_after_set: bool,
-    set_failed: bool,
+    /// The slots GENERATE made a key in, in order.
+    generated: Vec<u8>,
+    /// The data of a chain so far.
+    chain: Vec<u8>,
+    /// PUT DATA fails without effect, as a card pulled out mid-way.
+    fail_put: bool,
     touches: u32,
     made: u8,
 }
 
+#[derive(Clone)]
 struct Slot {
     key: p256::SecretKey,
     policy: (u8, u8),
@@ -81,25 +92,34 @@ impl Yubi {
         let alg = if version >= [5, 7, 0] { ALG_AES192 } else { ALG_3DES };
         Yubi {
             version: Some(version),
-            slot: None,
+            slots: HashMap::new(),
             objects: HashMap::new(),
             mgmt: (alg, super::super::factory_management_key().to_vec(), true),
             forced_policy: None,
+            empty_sw: 0x6a88,
             verified: false,
             authed: false,
             witness: None,
             writes: Vec::new(),
             put: Vec::new(),
-            fail: None,
-            fail_after_set: false,
-            set_failed: false,
+            generated: Vec::new(),
+            chain: Vec::new(),
+            fail_put: false,
             touches: 0,
             made: 1,
         }
     }
 
-    fn slot_metadata(&self) -> Vec<u8> {
-        let Some(s) = &self.slot else { return sw(0x6a82) };
+    /// Another tool's key in slot, with or without a certificate.
+    fn foreign(&mut self, slot: u8, cert: bool) {
+        self.slots.insert(slot, Slot { key: scalar(200 - slot), policy: (1, 1), origin: 2 });
+        if cert {
+            self.objects.insert(cert_object(slot), tlv(0x70, &[0x30, 3, 1, 2, 3]));
+        }
+    }
+
+    fn slot_metadata(&self, slot: u8) -> Vec<u8> {
+        let Some(s) = self.slots.get(&slot) else { return sw(self.empty_sw) };
         let p = point(&s.key);
         ok([
             tlv(0x01, &[ALG_P256]),
@@ -111,8 +131,15 @@ impl Yubi {
     }
 
     pub(crate) fn handle(&mut self, apdu: &[u8]) -> Vec<u8> {
-        let (ins, p1, p2) = (apdu[1], apdu[2], apdu[3]);
-        let data = if apdu.len() > 5 { &apdu[5..5 + usize::from(apdu[4])] } else { &[][..] };
+        let (cla, ins, p1, p2) = (apdu[0], apdu[1], apdu[2], apdu[3]);
+        let part = if apdu.len() > 5 { &apdu[5..5 + usize::from(apdu[4])] } else { &[][..] };
+        if cla == 0x10 {
+            self.chain.extend_from_slice(part);
+            return ok(vec![]);
+        }
+        let mut data = std::mem::take(&mut self.chain);
+        data.extend_from_slice(part);
+        let data = data.as_slice();
         match ins {
             0xa4 => ok(vec![]),
             0xfd => match self.version {
@@ -120,7 +147,7 @@ impl Yubi {
                 None => sw(0x6d00),
             },
             0xf7 => match p2 {
-                yk::SLOT => self.slot_metadata(),
+                0x82..=0x95 => self.slot_metadata(p2),
                 SLOT_MGMT => ok([tlv(0x01, &[self.mgmt.0]), tlv(0x05, &[u8::from(self.mgmt.2)])].concat()),
                 _ => sw(0x6a82),
             },
@@ -134,7 +161,7 @@ impl Yubi {
             }
             0xcb => {
                 let tag: [u8; 3] = data[2..5].try_into().unwrap();
-                if (tag == yk::OBJECT || tag == PRINTED) && !self.verified {
+                if tag == PRINTED && !self.verified {
                     return sw(0x6982);
                 }
                 match self.objects.get(&tag) {
@@ -143,8 +170,8 @@ impl Yubi {
                 }
             }
             0x87 if p2 == SLOT_MGMT => self.challenge(p1, data),
-            0x87 if p2 == yk::SLOT && p1 == ALG_P256 => {
-                let Some(s) = &self.slot else { return sw(0x6a82) };
+            0x87 if p1 == ALG_P256 => {
+                let Some(s) = self.slots.get(&p2) else { return sw(0x6a82) };
                 if !self.verified {
                     return sw(0x6982);
                 }
@@ -159,13 +186,17 @@ impl Yubi {
                 if !self.authed {
                     return sw(0x6982);
                 }
+                assert!((0x82..=0x95).contains(&p2), "GENERATE outside the retired slots");
+                assert!(!self.slots.contains_key(&p2), "GENERATE over a key in slot {p2:02x}");
                 self.writes.push(ins);
+                self.generated.push(p2);
                 let (spec, _) = read_tlv(data, 0xac).unwrap();
                 let asked = (spec[5], spec[8]);
                 self.made += 1;
                 let key = scalar(self.made);
                 let p = point(&key);
-                self.slot = Some(Slot { key, policy: self.forced_policy.unwrap_or(asked), origin: ORIGIN_GENERATED });
+                self.slots
+                    .insert(p2, Slot { key, policy: self.forced_policy.unwrap_or(asked), origin: ORIGIN_GENERATED });
                 let mut out = vec![0x7f];
                 out.extend(tlv(0x49, &tlv(0x86, &p)));
                 ok(out)
@@ -176,36 +207,14 @@ impl Yubi {
                 }
                 let (tag, rest) = read_tlv(data, 0x5c).unwrap();
                 let tag: [u8; 3] = tag.try_into().unwrap();
-                if self.fail == Some((ins, Some(tag))) || (self.fail_after_set && self.set_failed) {
+                assert!(!self.objects.contains_key(&tag), "PUT DATA over {tag:02x?}");
+                if self.fail_put {
                     return sw(0x6581);
                 }
                 self.writes.push(ins);
                 self.put.push(tag);
                 let (v, _) = read_tlv(rest, 0x53).unwrap();
-                // An empty value deletes the object.
-                if v.is_empty() {
-                    self.objects.remove(&tag);
-                } else {
-                    self.objects.insert(tag, v.to_vec());
-                }
-                ok(vec![])
-            }
-            SET_KEY => {
-                if !self.authed {
-                    return sw(0x6982);
-                }
-                if self.fail == Some((ins, None)) {
-                    self.set_failed = true;
-                    return sw(0x6581);
-                }
-                assert_eq!((p1, p2), (0xff, 0xff), "no touch asked for the management key");
-                assert_eq!(data[1], SLOT_MGMT);
-                let key = data[3..3 + usize::from(data[2])].to_vec();
-                assert_eq!(data[0], self.mgmt.0, "the key keeps its kind");
-                self.writes.push(ins);
-                self.mgmt = (data[0], key, false);
-                // The card asks for the new key from here on.
-                self.authed = false;
+                self.objects.insert(tag, v.to_vec());
                 ok(vec![])
             }
             _ => sw(0x6d00),
@@ -234,7 +243,9 @@ impl Yubi {
     }
 }
 
-struct Shared(std::sync::Arc<std::sync::Mutex<Yubi>>);
+type Y = std::sync::Arc<std::sync::Mutex<Yubi>>;
+
+struct Shared(Y);
 
 impl Card for Shared {
     fn transmit(&mut self, apdu: &[u8]) -> crate::error::Result<Vec<u8>> {
@@ -242,7 +253,7 @@ impl Card for Shared {
     }
 }
 
-fn card(y: Yubi) -> (Shared, std::sync::Arc<std::sync::Mutex<Yubi>>) {
+fn card(y: Yubi) -> (Shared, Y) {
     let a = std::sync::Arc::new(std::sync::Mutex::new(y));
     (Shared(a.clone()), a)
 }
@@ -251,30 +262,49 @@ fn secret() -> [u8; 32] {
     core::array::from_fn(|i| i as u8 ^ 0xa5)
 }
 
+fn secret_b() -> [u8; 32] {
+    core::array::from_fn(|i| i as u8 ^ 0x5a)
+}
+
 fn never(_: u8) -> Option<Zeroizing<Vec<u8>>> {
     panic!("the default or protected key needs nobody to type it")
 }
 
+/// A new connection, as a later signing has.
+fn fresh(y: &Y) {
+    let mut g = y.lock().unwrap();
+    (g.verified, g.authed) = (false, false);
+}
+
 /// Opens with a new connection, as a later signing does.
-fn reopen(y: &std::sync::Arc<std::sync::Mutex<Yubi>>) -> Result<Zeroizing<[u8; 32]>> {
-    {
-        let mut g = y.lock().unwrap();
-        g.verified = false;
-        g.authed = false;
-    }
-    open(&mut Shared(y.clone()), PIN)
+fn reopen(y: &Y) -> Result<Zeroizing<[u8; 32]>> {
+    reopen_for(y, Some(TAG))
+}
+
+fn reopen_for(y: &Y, tag: Option<&str>) -> Result<Zeroizing<[u8; 32]>> {
+    fresh(y);
+    open(&mut Shared(y.clone()), PIN, tag)
+}
+
+fn seal_on(y: &Y, s: &[u8; 32], tag: &str) -> Result<Sealed> {
+    fresh(y);
+    seal(&mut Shared(y.clone()), PIN, s, tag, &mut never)
 }
 
 #[test]
 fn seals_and_opens_with_the_default_key() {
     for v in [[5, 4, 3], [5, 7, 2]] {
         let (mut c, y) = card(Yubi::new(v));
-        assert_eq!(
-            seal(&mut c, PIN, &secret(), &mut never, false).unwrap(),
-            Sealed { default_key: true, replaced: false, warning: Some(DEFAULT_KEY) }
-        );
-        assert_eq!(y.lock().unwrap().writes, vec![GENERATE, PUT_DATA], "{v:?}");
-        assert_eq!(y.lock().unwrap().objects[&yk::OBJECT].len(), yk::LEN);
+        assert_eq!(seal(&mut c, PIN, &secret(), TAG, &mut never).unwrap(), Sealed { slot: 0x95, default_key: true });
+        {
+            let g = y.lock().unwrap();
+            assert_eq!(g.writes, vec![GENERATE, PUT_DATA], "{v:?}");
+            assert_eq!(g.put, vec![cert_object(0x95)], "{v:?}");
+            assert_eq!(g.mgmt, (g.mgmt.0, super::super::factory_management_key().to_vec(), true), "the key changed");
+            let (der, _) = read_tlv(&g.objects[&cert_object(0x95)], 0x70).unwrap();
+            let c = yk::read_container(der).unwrap();
+            assert_eq!((c.tag.as_str(), c.object.len()), (TAG, yk::LEN));
+        }
         assert_eq!(*reopen(&y).unwrap(), secret(), "{v:?}");
         assert_eq!(y.lock().unwrap().touches, 1);
     }
@@ -288,10 +318,7 @@ fn seals_with_a_pin_protected_key() {
     y.objects.insert(ADMIN_DATA, tlv(0x80, &tlv(0x81, &[0x02])));
     y.objects.insert(PRINTED, tlv(0x88, &tlv(0x89, &key)));
     let (mut c, y) = card(y);
-    assert_eq!(
-        seal(&mut c, PIN, &secret(), &mut never, true).unwrap(),
-        Sealed { default_key: false, replaced: false, warning: None }
-    );
+    assert_eq!(seal(&mut c, PIN, &secret(), TAG, &mut never).unwrap(), Sealed { slot: 0x95, default_key: false });
     assert_eq!(*reopen(&y).unwrap(), secret());
 }
 
@@ -306,11 +333,100 @@ fn asks_for_a_changed_key_three_times_at_most() {
         asked.push(n);
         Some(Zeroizing::new(if n == 3 { key.clone() } else { wrong_key(7) }))
     };
-    assert_eq!(
-        seal(&mut c, PIN, &secret(), &mut ask, true).unwrap(),
-        Sealed { default_key: false, replaced: false, warning: None }
-    );
+    assert_eq!(seal(&mut c, PIN, &secret(), TAG, &mut ask).unwrap(), Sealed { slot: 0x95, default_key: false });
     assert_eq!(asked, vec![1, 2, 3]);
+    assert_eq!(*reopen(&y).unwrap(), secret());
+}
+
+/// The owner's card: release keys in slots 82 and 83, with their
+/// certificates. cbb takes 95 and leaves both as they were.
+#[test]
+fn slots_in_use_are_never_touched() {
+    let mut y = Yubi::new([5, 7, 2]);
+    y.foreign(0x82, true);
+    y.foreign(0x83, true);
+    let before = (y.objects.clone(), point(&y.slots[&0x82].key), point(&y.slots[&0x83].key));
+    let (_, y) = card(y);
+    assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x95);
+    let g = y.lock().unwrap();
+    assert_eq!(g.objects[&cert_object(0x82)], before.0[&cert_object(0x82)]);
+    assert_eq!(g.objects[&cert_object(0x83)], before.0[&cert_object(0x83)]);
+    assert_eq!((point(&g.slots[&0x82].key), point(&g.slots[&0x83].key)), (before.1, before.2));
+    drop(g);
+    // From 95 down: a key without a certificate (95), a certificate
+    // without a key (94) and both (93) keep their slots; 92 is the first
+    // empty one.
+    let mut y = Yubi::new([5, 7, 2]);
+    y.foreign(0x95, false);
+    y.objects.insert(cert_object(0x94), tlv(0x70, &[0x30, 0]));
+    y.foreign(0x93, true);
+    let (_, y) = card(y);
+    assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x92);
+    assert_eq!(y.lock().unwrap().generated, vec![0x92]);
+    assert_eq!(*reopen(&y).unwrap(), secret());
+}
+
+/// GET METADATA of an empty slot: 6A88 on the real firmware, 6A82 on some
+/// cards; both mean empty.
+#[test]
+fn an_empty_slot_is_6a88_or_6a82() {
+    for empty in [0x6a88, 0x6a82] {
+        let mut y = Yubi::new([5, 7, 2]);
+        y.empty_sw = empty;
+        let (_, y) = card(y);
+        assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x95, "{empty:04x}");
+        assert_eq!(*reopen(&y).unwrap(), secret(), "{empty:04x}");
+    }
+}
+
+#[test]
+fn two_groups_share_a_card_in_two_slots() {
+    let (_, y) = card(Yubi::new([5, 7, 2]));
+    assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x95);
+    assert_eq!(seal_on(&y, &secret_b(), TAG_B).unwrap().slot, 0x94);
+    assert_eq!(*reopen_for(&y, Some(TAG)).unwrap(), secret());
+    assert_eq!(*reopen_for(&y, Some(TAG_B)).unwrap(), secret_b());
+    // Without the group, cbb does not choose.
+    assert_eq!(reopen_for(&y, None).unwrap_err().to_string(), GROUPS);
+    // A group that is not there.
+    assert_eq!(reopen_for(&y, Some("00000000000000aa")).unwrap_err().to_string(), NONE);
+}
+
+#[test]
+fn two_slots_for_one_group_open_neither() {
+    let (_, y) = card(Yubi::new([5, 7, 2]));
+    seal_on(&y, &secret(), TAG).unwrap();
+    {
+        let mut g = y.lock().unwrap();
+        let (s, o) = (g.slots[&0x95].clone(), g.objects[&cert_object(0x95)].clone());
+        g.slots.insert(0x90, s);
+        g.objects.insert(cert_object(0x90), o);
+    }
+    assert_eq!(reopen(&y).unwrap_err().to_string(), TWO_SLOTS);
+    // Without the group named too: both name the same group.
+    assert_eq!(reopen_for(&y, None).unwrap_err().to_string(), TWO_SLOTS);
+    assert_eq!(y.lock().unwrap().touches, 0);
+    assert!(!y.lock().unwrap().verified, "asked for the PIN");
+}
+
+/// A seal that stops between GENERATE and the container (the card refuses
+/// PUT DATA) leaves a key without cbb's certificate: that slot is taken
+/// for good, nothing opens there, and the next seal goes one slot down.
+#[test]
+fn a_seal_that_stops_before_the_certificate_leaves_its_slot_taken() {
+    let mut y = Yubi::new([5, 7, 2]);
+    y.fail_put = true;
+    let (_, y) = card(y);
+    assert!(seal_on(&y, &secret(), TAG).is_err());
+    {
+        let g = y.lock().unwrap();
+        assert!(g.slots.contains_key(&0x95), "no key made");
+        assert!(!g.objects.contains_key(&cert_object(0x95)), "a certificate written");
+    }
+    assert_eq!(reopen(&y).unwrap_err().to_string(), NONE);
+    y.lock().unwrap().fail_put = false;
+    assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x94);
+    assert_eq!(y.lock().unwrap().generated, vec![0x95, 0x94]);
     assert_eq!(*reopen(&y).unwrap(), secret());
 }
 
@@ -319,44 +435,33 @@ fn asks_for_a_changed_key_three_times_at_most() {
 /// after would show here.
 #[test]
 fn every_stop_comes_before_any_write() {
-    let foreign = || Slot { key: scalar(200), policy: (1, 1), origin: 2 };
     let sealed_one = {
-        let (mut c, y) = card(Yubi::new([5, 4, 3]));
-        seal(&mut c, PIN, &secret(), &mut never, false).unwrap();
+        let (_, y) = card(Yubi::new([5, 4, 3]));
+        seal_on(&y, &secret(), TAG).unwrap();
         let g = y.lock().unwrap();
-        (g.objects[&yk::OBJECT].clone(), Slot { key: g.slot.as_ref().unwrap().key.clone(), policy: (3, 2), origin: 1 })
+        (g.objects[&cert_object(0x95)].clone(), g.slots[&0x95].clone())
     };
     type Setup = Box<dyn Fn(&mut Yubi)>;
     let cases: Vec<(&str, Setup, &str)> = vec![
-        ("a key in slot 95", Box::new(move |y| y.slot = Some(foreign())), TAKEN),
         (
-            "another program's 5FC121",
-            Box::new(|y| {
-                y.objects.insert(yk::OBJECT, vec![0x30, 3, 1, 2, 3]);
-            }),
-            TAKEN,
-        ),
-        (
-            "cbb's object without its key",
+            "a card that holds this group's recovery key",
             Box::new({
-                let o = sealed_one.0.clone();
+                let (o, s) = sealed_one.clone();
                 move |y| {
-                    y.objects.insert(yk::OBJECT, o.clone());
-                }
-            }),
-            TAKEN,
-        ),
-        (
-            "a card that holds a recovery key",
-            Box::new({
-                let o = sealed_one.0.clone();
-                let k = sealed_one.1.key.clone();
-                move |y| {
-                    y.objects.insert(yk::OBJECT, o.clone());
-                    y.slot = Some(Slot { key: k.clone(), policy: (3, 2), origin: 1 });
+                    y.objects.insert(cert_object(0x91), o.clone());
+                    y.slots.insert(0x91, s.clone());
                 }
             }),
             HOLDS_ONE,
+        ),
+        (
+            "every retired slot in use",
+            Box::new(|y| {
+                for slot in 0x82..=0x95 {
+                    y.foreign(slot, slot % 2 == 0);
+                }
+            }),
+            super::super::NO_FREE_SLOT,
         ),
         ("firmware 5.2.7", Box::new(|y| y.version = Some([5, 2, 7])), FIRMWARE),
         ("firmware 4.3.7", Box::new(|y| y.version = Some([4, 3, 7])), FIRMWARE),
@@ -374,20 +479,19 @@ fn every_stop_comes_before_any_write() {
     for (name, setup, want) in cases {
         let mut y = Yubi::new([5, 4, 3]);
         setup(&mut y);
-        let before = (y.slot.as_ref().map(|s| point(&s.key)), y.objects.clone());
+        let before = (y.slots.keys().copied().collect::<std::collections::BTreeSet<_>>(), y.objects.clone());
         let (mut c, y) = card(y);
         let mut wrong = |_: u8| Some(Zeroizing::new(wrong_key(6)));
-        // With consent to replace a factory key too: the stops come first.
-        let consent = name != "three wrong management keys";
-        let err = seal(&mut c, PIN, &secret(), &mut wrong, consent).unwrap_err().to_string();
+        let err = seal(&mut c, PIN, &secret(), TAG, &mut wrong).unwrap_err().to_string();
         assert_eq!(err, want, "{name}");
         let g = y.lock().unwrap();
         assert!(g.writes.is_empty(), "{name}: {:?}", g.writes);
-        assert_eq!((g.slot.as_ref().map(|s| point(&s.key)), g.objects.clone()), before, "{name}");
+        assert_eq!((g.slots.keys().copied().collect(), g.objects.clone()), before, "{name}");
     }
-    // A wrong PIN stops too, before anything is written.
+    // A wrong PIN and a tag that is not one stop too.
     let (mut c, y) = card(Yubi::new([5, 4, 3]));
-    assert!(seal(&mut c, "654321", &secret(), &mut never, true).is_err());
+    assert!(seal(&mut c, "654321", &secret(), TAG, &mut never).is_err());
+    assert!(seal(&mut c, PIN, &secret(), "0123", &mut never).is_err());
     assert!(y.lock().unwrap().writes.is_empty());
 }
 
@@ -396,10 +500,25 @@ fn a_key_made_without_the_policies_is_not_written_to() {
     let mut y = Yubi::new([5, 4, 3]);
     y.forced_policy = Some((2, 1));
     let (mut c, y) = card(y);
-    assert_eq!(seal(&mut c, PIN, &secret(), &mut never, false).unwrap_err().to_string(), NOT_AS_ASKED);
+    assert_eq!(seal(&mut c, PIN, &secret(), TAG, &mut never).unwrap_err().to_string(), NOT_AS_ASKED);
     // GENERATE wrote the key; nothing came after it.
     assert_eq!(y.lock().unwrap().writes, vec![GENERATE]);
-    assert!(!y.lock().unwrap().objects.contains_key(&yk::OBJECT));
+    assert!(!y.lock().unwrap().objects.contains_key(&cert_object(0x95)));
+    // The key without cbb's certificate keeps the slot taken: a second try
+    // goes to 94.
+    y.lock().unwrap().forced_policy = None;
+    assert_eq!(seal_on(&y, &secret(), TAG).unwrap().slot, 0x94);
+}
+
+/// A container whose object is changed by f, put back in slot 95.
+fn with_object(y: &Y, f: impl Fn(&mut [u8; yk::LEN])) {
+    let mut g = y.lock().unwrap();
+    let (der, _) = read_tlv(&g.objects[&cert_object(0x95)], 0x70).unwrap();
+    let c = yk::read_container(der).unwrap();
+    let mut o: [u8; yk::LEN] = c.object.try_into().unwrap();
+    f(&mut o);
+    let cert = yk::container(&c.tag, &c.point, &o).unwrap();
+    g.objects.insert(cert_object(0x95), tlv(0x70, &cert));
 }
 
 #[test]
@@ -407,33 +526,37 @@ fn opening_refuses_what_is_not_ours_before_the_touch() {
     let sealed_by = |made: u8| {
         let mut y = Yubi::new([5, 4, 3]);
         y.made = made;
-        let (mut c, y) = card(y);
-        seal(&mut c, PIN, &secret(), &mut never, false).unwrap();
+        let (_, y) = card(y);
+        seal_on(&y, &secret(), TAG).unwrap();
         y
     };
     let sealed = || sealed_by(1);
-    // Nothing there.
-    let (_, y) = card(Yubi::new([5, 4, 3]));
+    // Nothing there; another tool's certificate is not cbb's.
+    let mut empty = Yubi::new([5, 4, 3]);
+    empty.foreign(0x95, true);
+    let (_, y) = card(empty);
     assert_eq!(reopen(&y).unwrap_err().to_string(), NONE);
     // A later version: nothing else is read and the card is not touched.
     let y = sealed();
-    y.lock().unwrap().objects.get_mut(&yk::OBJECT).unwrap()[4] = 2;
+    with_object(&y, |o| o[4] = 2);
     assert_eq!(reopen(&y).unwrap_err().to_string(), "this YubiKey needs a newer cbb");
     assert_eq!(y.lock().unwrap().touches, 0);
-    // Another program's object beside a key.
+    // A key in the slot that cbb did not ask for.
     let y = sealed();
-    y.lock().unwrap().objects.insert(yk::OBJECT, vec![1, 2, 3]);
-    assert_eq!(reopen(&y).unwrap_err().to_string(), TAKEN);
-    // A key in slot 95 that cbb did not ask for.
-    let y = sealed();
-    y.lock().unwrap().slot.as_mut().unwrap().policy = (1, 1);
-    assert_eq!(reopen(&y).unwrap_err().to_string(), TAKEN);
+    y.lock().unwrap().slots.get_mut(&0x95).unwrap().policy = (1, 1);
+    assert_eq!(reopen(&y).unwrap_err().to_string(), NOT_AS_ASKED);
     assert_eq!(y.lock().unwrap().touches, 0);
+    // A container that names another key than the slot's.
+    let y = sealed();
+    y.lock().unwrap().slots.get_mut(&0x95).unwrap().key = scalar(99);
+    assert_eq!(reopen(&y).unwrap_err().to_string(), NOT_AS_ASKED);
     // An object sealed to another card's key.
     let y = sealed();
     let other = sealed_by(50);
-    let o = other.lock().unwrap().objects[&yk::OBJECT].clone();
-    y.lock().unwrap().objects.insert(yk::OBJECT, o);
+    let o = other.lock().unwrap().objects[&cert_object(0x95)].clone();
+    let (der, _) = read_tlv(&o, 0x70).unwrap();
+    let theirs: [u8; yk::LEN] = yk::read_container(der).unwrap().object.try_into().unwrap();
+    with_object(&y, |o| *o = theirs);
     assert_eq!(reopen(&y).unwrap_err().to_string(), "this YubiKey holds another recovery key");
     // Old firmware.
     let y = sealed();
@@ -460,133 +583,11 @@ fn the_management_key_ciphers_are_the_standard_ones() {
     assert!(cipher(ALG_3DES, &key[..16], &plain[..8], true).is_none());
 }
 
-/// An object of another use of the card (slot 82's certificate), which
-/// nothing cbb does may change.
-const OTHER: [u8; 3] = [0x5f, 0xc1, 0x0d];
-
-fn other_use(y: &mut Yubi) {
-    y.objects.insert(OTHER, vec![0x70, 3, 9, 9, 9]);
-}
-
-/// The card answers as PIN-protected with the key PRINTED holds.
-fn protected_now(y: &std::sync::Arc<std::sync::Mutex<Yubi>>) {
-    let mut g = y.lock().unwrap();
-    g.verified = true;
-    g.authed = false;
-    let key = g.mgmt.1.clone();
-    assert!(!g.mgmt.2, "the card still reports its factory key");
-    assert_ne!(key, super::super::factory_management_key().to_vec(), "the key is the factory one");
-    assert_eq!(g.objects[&PRINTED], tlv(0x88, &tlv(0x89, &key)), "PRINTED does not hold the new key");
-    drop(g);
-    let mut c = Shared(y.clone());
-    assert!(matches!(management(&mut c).unwrap(), Management::Protected(_)));
-    assert_eq!(unlock(&mut c, &mut never).unwrap(), None, "the card does not open with its protected key");
-}
-
-#[test]
-fn inspect_tells_a_factory_key_before_anything_is_written() {
-    let (mut c, y) = card(Yubi::new([5, 7, 2]));
-    assert_eq!(inspect(&mut c, PIN).unwrap(), Inspected { default_key: true });
-    assert!(y.lock().unwrap().writes.is_empty());
-    let key: Vec<u8> = (1..=24).collect();
-    let mut p = Yubi::new([5, 7, 2]);
-    p.mgmt = (ALG_AES192, key.clone(), false);
-    p.objects.insert(ADMIN_DATA, tlv(0x80, &tlv(0x81, &[0x02])));
-    p.objects.insert(PRINTED, tlv(0x88, &tlv(0x89, &key)));
-    let (mut c, _) = card(p);
-    assert_eq!(inspect(&mut c, PIN).unwrap(), Inspected { default_key: false });
-}
-
-#[test]
-fn a_factory_key_is_replaced_by_consent_and_kept_pin_protected() {
-    for v in [[5, 4, 3], [5, 7, 2]] {
-        let mut y = Yubi::new(v);
-        other_use(&mut y);
-        // ADMIN DATA another tool wrote: the PUK flag and a timestamp stay.
-        y.objects.insert(ADMIN_DATA, tlv(0x80, &[tlv(0x81, &[0x01]), tlv(0x83, &[1, 2, 3, 4])].concat()));
-        let (mut c, y) = card(y);
-        assert_eq!(
-            seal(&mut c, PIN, &secret(), &mut never, true).unwrap(),
-            Sealed { default_key: false, replaced: true, warning: None },
-            "{v:?}"
-        );
-        {
-            let g = y.lock().unwrap();
-            assert_eq!(g.writes, vec![PUT_DATA, PUT_DATA, SET_KEY, GENERATE, PUT_DATA], "{v:?}");
-            assert_eq!(g.put, vec![PRINTED, ADMIN_DATA, yk::OBJECT], "{v:?}");
-            assert_eq!(g.objects[&ADMIN_DATA], tlv(0x80, &[tlv(0x81, &[0x03]), tlv(0x83, &[1, 2, 3, 4])].concat()));
-            assert_eq!(g.objects[&OTHER], vec![0x70, 3, 9, 9, 9], "another use of the card changed");
-        }
-        protected_now(&y);
-        assert_eq!(*reopen(&y).unwrap(), secret(), "{v:?}");
-    }
-}
-
-#[test]
-fn without_consent_the_factory_key_stays_and_the_warning_goes_back() {
-    let mut y = Yubi::new([5, 7, 2]);
-    other_use(&mut y);
-    let (mut c, y) = card(y);
-    let sealed = seal(&mut c, PIN, &secret(), &mut never, false).unwrap();
-    assert_eq!(sealed, Sealed { default_key: true, replaced: false, warning: Some(DEFAULT_KEY) });
-    let g = y.lock().unwrap();
-    assert_eq!(g.writes, vec![GENERATE, PUT_DATA]);
-    assert_eq!(g.mgmt, (ALG_AES192, super::super::factory_management_key().to_vec(), true));
-    assert!(!g.objects.contains_key(&PRINTED) && !g.objects.contains_key(&ADMIN_DATA));
-    assert_eq!(g.objects[&OTHER], vec![0x70, 3, 9, 9, 9]);
-}
-
-#[test]
-fn printed_holding_something_else_keeps_the_factory_key() {
-    let mut y = Yubi::new([5, 7, 2]);
-    y.objects.insert(PRINTED, vec![0x01, 0x02]);
-    let (mut c, y) = card(y);
-    let sealed = seal(&mut c, PIN, &secret(), &mut never, true).unwrap();
-    assert_eq!(sealed, Sealed { default_key: true, replaced: false, warning: Some(PRINTED_TAKEN) });
-    let g = y.lock().unwrap();
-    assert_eq!(g.objects[&PRINTED], vec![0x01, 0x02]);
-    assert_eq!(g.writes, vec![GENERATE, PUT_DATA]);
-}
-
-/// A write of the change that fails leaves the card on its factory key,
-/// which GET METADATA still reports: nothing is sealed, and a second try
-/// replaces the key and seals.
-#[test]
-fn a_change_that_fails_halfway_leaves_the_card_usable() {
-    for fail in [(PUT_DATA, Some(PRINTED)), (PUT_DATA, Some(ADMIN_DATA)), (SET_KEY, None)] {
-        let mut y = Yubi::new([5, 7, 2]);
-        other_use(&mut y);
-        y.fail = Some(fail);
-        let (mut c, y) = card(y);
-        assert!(seal(&mut c, PIN, &secret(), &mut never, true).is_err(), "{fail:?}");
-        {
-            let mut g = y.lock().unwrap();
-            assert_eq!(
-                g.mgmt,
-                (ALG_AES192, super::super::factory_management_key().to_vec(), true),
-                "{fail:?}: the key changed"
-            );
-            assert!(g.slot.is_none() && !g.objects.contains_key(&yk::OBJECT), "{fail:?}: sealed after a failure");
-            assert_eq!(g.objects[&OTHER], vec![0x70, 3, 9, 9, 9]);
-            g.fail = None;
-            g.verified = false;
-            g.authed = false;
-        }
-        // The card opens with the key it reports.
-        let mut c = Shared(y.clone());
-        assert!(matches!(management(&mut c).unwrap(), Management::Default(_)), "{fail:?}");
-        let sealed = seal(&mut c, PIN, &secret(), &mut never, true).unwrap();
-        assert_eq!(sealed, Sealed { default_key: false, replaced: true, warning: None }, "{fail:?}");
-        protected_now(&y);
-        assert_eq!(*reopen(&y).unwrap(), secret(), "{fail:?}");
-    }
-}
-
 #[test]
 fn the_texts_for_the_caller_name_what_they_warn_of() {
-    assert!(DEFAULT_KEY.contains("factory management key") && DEFAULT_KEY.contains("PIN"));
     assert!(DUPLICATES.contains("YubiKey") && DUPLICATES.contains("sheet"));
-    assert!(PRINTED_TAKEN.contains("management key"));
+    assert!(TWO_SLOTS.contains("two") && GROUPS.contains("group"));
+    assert!(super::super::NO_FREE_SLOT.contains("slot"));
 }
 
 #[test]
@@ -595,56 +596,32 @@ fn the_factory_management_key_is_yubicos() {
     assert_eq!(hex, "0102030405060708".repeat(3));
 }
 
-/// A failed SET MANAGEMENT KEY puts PRINTED and ADMIN DATA back as they
-/// were, absent or with another tool's fields; when that fails too, the
-/// error says so.
-#[test]
-fn a_failed_key_change_puts_the_protected_place_back() {
-    let other_admin = tlv(0x80, &[tlv(0x81, &[0x01]), tlv(0x83, &[1, 2, 3, 4])].concat());
-    for admin in [None, Some(other_admin)] {
-        let mut y = Yubi::new([5, 7, 2]);
-        if let Some(a) = &admin {
-            y.objects.insert(ADMIN_DATA, a.clone());
-        }
-        y.fail = Some((SET_KEY, None));
-        let (mut c, y) = card(y);
-        let err = seal(&mut c, PIN, &secret(), &mut never, true).unwrap_err().to_string();
-        assert!(!err.contains("could not put back"), "{err}");
-        let g = y.lock().unwrap();
-        assert!(!g.objects.contains_key(&PRINTED), "PRINTED left behind");
-        assert_eq!(g.objects.get(&ADMIN_DATA), admin.as_ref(), "ADMIN DATA not put back");
-        assert_eq!(g.mgmt, (ALG_AES192, super::super::factory_management_key().to_vec(), true));
-    }
-    let mut y = Yubi::new([5, 7, 2]);
-    y.fail = Some((SET_KEY, None));
-    y.fail_after_set = true;
-    let (mut c, _) = card(y);
-    let err = seal(&mut c, PIN, &secret(), &mut never, true).unwrap_err().to_string();
-    assert!(err.contains("could not put back"), "{err}");
-}
-
 #[test]
 fn the_recovery_opens_the_one_card_with_a_key_in_slot_95() {
-    let sealed = || {
-        let (mut c, y) = card(Yubi::new([5, 4, 3]));
-        seal(&mut c, PIN, &secret(), &mut never, false).unwrap();
+    let sealed = |tag: &str| {
+        let (_, y) = card(Yubi::new([5, 4, 3]));
+        seal_on(&y, &secret(), tag).unwrap();
         let mut g = y.lock().unwrap();
         (g.verified, g.authed, g.touches) = (false, false, 0);
         drop(g);
         y
     };
-    let boxed = |y: &std::sync::Arc<std::sync::Mutex<Yubi>>| -> Box<dyn Card> { Box::new(Shared(y.clone())) };
+    let boxed = |y: &Y| -> Box<dyn Card> { Box::new(Shared(y.clone())) };
     // Another card beside it is not asked for the PIN.
-    let (other, empty) = (sealed(), card(Yubi::new([5, 7, 2])).1);
-    let got = open_among(vec![boxed(&empty), boxed(&other)], PIN).unwrap();
+    let (other, empty) = (sealed(TAG), card(Yubi::new([5, 7, 2])).1);
+    let got = open_among(vec![boxed(&empty), boxed(&other)], PIN, None).unwrap();
     assert_eq!(*got, secret());
     assert!(!empty.lock().unwrap().verified, "the card without cbb's key was asked for the PIN");
     assert_eq!(other.lock().unwrap().touches, 1);
     // Two cards with a key there: neither is opened.
-    let (a, b) = (sealed(), sealed());
-    assert_eq!(open_among(vec![boxed(&a), boxed(&b)], PIN).unwrap_err().to_string(), super::super::TWO_CARDS);
+    let (a, b) = (sealed(TAG), sealed(TAG));
+    assert_eq!(open_among(vec![boxed(&a), boxed(&b)], PIN, None).unwrap_err().to_string(), super::super::TWO_CARDS);
     assert!(!a.lock().unwrap().verified && !b.lock().unwrap().verified);
+    // With the group named, the other group's card is passed over.
+    let (a, b) = (sealed(TAG), sealed(TAG_B));
+    assert_eq!(*open_among(vec![boxed(&a), boxed(&b)], PIN, Some(TAG_B)).unwrap(), secret());
+    assert!(!a.lock().unwrap().verified, "the other group's card was asked for the PIN");
     // A card without it, and no card at all.
-    assert_eq!(open_among(vec![boxed(&empty)], PIN).unwrap_err().to_string(), NONE);
-    assert_eq!(open_among(Vec::new(), PIN).unwrap_err().to_string(), super::super::NO_CARD);
+    assert_eq!(open_among(vec![boxed(&empty)], PIN, None).unwrap_err().to_string(), NONE);
+    assert_eq!(open_among(Vec::new(), PIN, None).unwrap_err().to_string(), super::super::NO_CARD);
 }

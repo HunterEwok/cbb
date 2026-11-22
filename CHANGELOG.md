@@ -16,14 +16,22 @@ the release before it ([versions and compatibility](docs/reference/compatibility
 made with 0.5 is set up again once. The details follow.
 
 ### Added
+- ffi's group of 0.6 names its key level and the window for incoming copies (`key_level`,
+  `incoming_ms`), and the manage action `incoming` sets that window from a phone.
+- Right after a group is made the root phone offers where to save its recovery key: "Write on
+  a sheet", which shows the sheet and prints it or saves it with the system's own tools, with
+  the warning that a saved file is the group's key, and "Write to YubiKey", which waits for the
+  key plugged in or held to the phone, then asks its PIN and writes it (no touch is needed to
+  write; the key asks for one when it is used). Both are allowed, and
+  leaving without either asks first.
 - A phone in a group of 0.6 changes the group's root to itself with the recovery key, from
   the sheet's QR code or text or from the secret a YubiKey opens, after showing who stays
   (the manage actions `change_preview` and `change_root`, as `cbb recovery` on a computer);
   the root phone seals the sheet's secret onto a YubiKey through the core (`cbb_piv`'s
-  `inspect`, `seal` and `open`). Restoring a group on a new phone that is in no group yet
+  `seal` and `open`, each naming the group). Restoring a group on a new phone that is in no group yet
   comes with 0.7 (D-125). Every phone app has the screen ("Move the group to this phone"):
   the iPhone, Android and HarmonyOS apps take the sheet or a YubiKey over NFC and seal the
-  sheet onto a YubiKey after asking whether its factory management key is replaced; the
+  sheet onto a YubiKey; the
   Aurora app takes the sheet or a YubiKey on USB-C. The iPhone and Android kits' own PIV code and their restore
   on the Start screen are gone: the core speaks PIV for them.
   `cbb_piv` also reaches a YubiKey plugged into the phone's USB-C port: with the transport
@@ -33,6 +41,15 @@ made with 0.5 is set up again once. The details follow.
   one plugged in when iOS shows it through CryptoTokenKit, and otherwise stays with NFC. The
   Aurora app reaches a YubiKey plugged into USB-C through the system's pcscd, the core being its
   client (`cbb_piv`'s transport `pcsc`).
+- A phone's member in a group of 0.6 answers the tiles to draw and the person's order of them
+  (`view`, `arrange`, kept in `arrangement.json`, with why's reasons as the view's warnings),
+  and the group's notices from its records, one of which the person may hide (`notices`,
+  `dismiss`). It tells its app of each change of the records (event `state`), of each new
+  notice (`notice`) and of a change of root (`root_changed`, again at each start until the
+  app answers `root_change_seen`), so every phone shows that the main device changed.
+  The kits' calls that nothing in 0.6 answers are gone: `served`, `caller`,
+  `key_made` with the event `need_key`, `recovery_saved`, and the iPhone kit's member ports for
+  a tunnel and a relay.
 - A phone's member in a group of 0.6 registers for push as a computer's member takes it:
   it keeps the signed entry points, reads its face toward the push service from them
   (`push_face`), sends its registration, message `push`, to every member it connects to
@@ -346,16 +363,18 @@ made with 0.5 is set up again once. The details follow.
   mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
   both carry a version, and a later one says the sheet needs a newer cbb.
 - The 0.6 recovery secret on a YubiKey 5 (firmware 5.3 or later): sealed to a P-256 key the
-  card makes in retired PIV slot 95, which needs the PIN and a touch for every use, and kept
-  in the PIN-protected object 5FC121 (`cbb_core::sheet::yubikey`, the card's commands in
-  `cbb`). cbb never overwrites anything on the card: a key or a value already in either place
-  stops it before the first write. A card still on its factory management key, which anyone
-  could use to spoil the recovery key without the PIN, is named before anything is written,
-  and cbb replaces that key by a random PIN-protected one only when the person agrees; without
-  consent it seals as it is and keeps the warning. `cbb recovery -yubikey` on a group of 0.6
-  opens it after the PIN and a touch, on the one card with a key in slot 95 (another card is
-  never asked for the PIN), checks it against the group's recovery key and changes the root
-  with it, as from the sheet.
+  card makes in the first empty retired PIV slot from 95 down to 82, which needs the PIN and a
+  touch for every use, and kept in that slot's certificate object, in a certificate whose name
+  carries the group's tag (`cbb_core::sheet::yubikey`, the card's commands in `cbb`), so one
+  card holds the recovery keys of several groups and the group's slot is found without the
+  PIN. cbb never overwrites anything on the card: a slot that holds a key or a certificate is
+  never touched, and every retired slot in use stops it before the first write. The card's
+  management key is used as the card keeps it and never changed: a PIN-protected one quietly,
+  the factory one as it is, any other typed (D-127). An empty slot's answer 6A88, which
+  YubiKey firmware gives, reads as empty. `cbb recovery -yubikey` on a group of 0.6 opens it
+  after the PIN and a touch, on the one card with cbb's recovery key (another card is never
+  asked for the PIN), checks it against the group's recovery key and changes the root with
+  it, as from the sheet.
 - One table of the format's bounds (`cbb_core::bounds`, `testdata/format/bounds.json`): each
   limit with its value, whether a later version may change it, the widest case it allows and
   the rule that refuses one more. Tests keep it complete: every number of the format is in it,
@@ -2896,6 +2915,20 @@ made with 0.5 is set up again once. The details follow.
   (apps/zxnext/README.md, "Install"). `.cbb pair` refuses settings too long for its command.
 
 ### Removed
+- The Android app's and kit's code of 0.5 (D-126): the credentials, commands, takeover,
+  renewals, proofs, sealing and joining of a computer, with their tests and the kit's
+  interop player (`InteropMain`, `interopScript`). A phone with a group from before 0.6
+  shows a screen that says so and offers Leave, which alone deletes the old files; it never
+  deletes them by itself.
+- Making and removing the recovery key on the Android root phone: on a group of 0.6 the key is
+  part of the group's ID and its sheet is shown once when the group is made, so Settings only
+  says so; a lost sheet means a new group.
+- The HarmonyOS app's code of 0.5 (D-126): the certificates and admin CAs it kept, commands
+  for the phone, alerts and their decisions, the takeover and handing the group over, the
+  takeover delay, the user's own forwarder and relay, making and removing the recovery key, the
+  key for sealed messages and the servers' keys in HUKS, with `cbb_member_servers` and its
+  keys callback in ffi. A group from before 0.6 opens a page that says a new group is needed
+  and offers Leave, which alone deletes its files, now with `epochs.json` among them.
 - `cbb`'s member of a group made before 0.6 (D-126): the service runs only the member of 0.6,
   and a state folder with a group made before 0.6 (its `identity.json` or `records.json`, and
   no `group.cbor`) moves aside into `before-0.6` at the start, as on the phones. Gone with it:
@@ -2997,6 +3030,9 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Aurora app keeps the core's own words when a YubiKey refuses: they go to the error's
+  details (shown in a debug build or with `CBB_ERROR_DETAILS=1`, logged always) under the
+  message in the user's words, which had replaced them and left the step unknown.
 - A device that joins with six digits no longer dials a member whose pairing window just
   closed: mDNS may still serve that member's old announcement for a moment, and the browse
   now drops a device whose newer announcement shows no window, or that leaves.

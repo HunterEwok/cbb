@@ -120,7 +120,7 @@ public enum Releases {
     }
 
     /// The body of attest-status.json: the serial numbers Google's list
-    /// revokes, as AndroidAttestation.Policy takes them.
+    /// revokes, as the core's check of an Android key takes them.
     public struct Status: Decodable, Equatable, Sendable {
         public var seq: UInt64
         public var time_ms: Int64

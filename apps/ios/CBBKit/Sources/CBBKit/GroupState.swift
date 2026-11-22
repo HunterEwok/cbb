@@ -27,6 +27,11 @@ public struct GroupState: Decodable, Equatable, Sendable {
     public var tooOld: Bool
     /// A change of root is arriving: its records are not all here yet.
     public var changeArriving: Bool
+    /// The group's key level (Records.keyLevels).
+    public var keyLevel: String
+    /// How long a copy from another device stays live, in milliseconds;
+    /// nil while no copies record sets it.
+    public var incomingMS: Int64?
     public var devices: [Device]
 
     /// This device's place in the group.
@@ -88,6 +93,8 @@ public struct GroupState: Decodable, Equatable, Sendable {
         case updateNeeded = "update_needed"
         case tooOld = "too_old"
         case changeArriving = "change_arriving"
+        case keyLevel = "key_level"
+        case incomingMS = "incoming_ms"
     }
 
     public init(from decoder: Decoder) throws {
@@ -101,6 +108,8 @@ public struct GroupState: Decodable, Equatable, Sendable {
         updateNeeded = try c.decodeIfPresent(Bool.self, forKey: .updateNeeded) ?? false
         tooOld = try c.decodeIfPresent(Bool.self, forKey: .tooOld) ?? false
         changeArriving = try c.decodeIfPresent(Bool.self, forKey: .changeArriving) ?? false
+        keyLevel = try c.decodeIfPresent(String.self, forKey: .keyLevel) ?? Records.hardware
+        incomingMS = try c.decodeIfPresent(Int64.self, forKey: .incomingMS)
         devices = try c.decodeIfPresent([Device].self, forKey: .devices) ?? []
     }
 

@@ -73,21 +73,6 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 /*
- * The app's keys for the servers, by name: the member of 0.6 keeps the
- * group's server credentials itself and calls them no more. op 0 answers 0
- * when the app holds the key name, 1 writes its public point (SEC1, 65
- * bytes) to out, 2 its signature (DER) of the 32-byte digest, 3 drops every
- * key but those name lists; out has room for 72 bytes.
- */
-typedef int32_t (*cbb_keys_fn)(void *ctx, int32_t op, const uint8_t *name, size_t name_len, const uint8_t *digest,
-                               uint8_t *out, size_t *out_len);
-/*
- * The member of 0.6 serves the group's servers itself: this answers that it
- * does not serve them for the app, an {"error"} whose details say "not on
- * the records of 0.6 yet". It stays until the Harmony app drops the call.
- */
-uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, size_t *answer_len);
-/*
  * Stops the member. It stays valid for the rest of the process: another
  * thread may still call it, and a call after the stop answers that the
  * member stopped; stopping it again does nothing.
@@ -98,7 +83,7 @@ void cbb_member_stop(cbb_member *m);
  * the key public names (the phone's admin key, or the root's key) through
  * sign, called during this call only (src/member/live.rs, manage): request
  * is {"action","public",...} (docs/core-api.md, "The member"). action
- * remove, rename, freeze, thaw (records the records judge); mute, unmute,
+ * remove, rename, freeze, thaw, incoming (records the records judge); mute, unmute,
  * sync_off, sync_on, paste, paste_off, actions_off, away_off (commands for
  * another device, answered {"status","reason"}); on the root relay, period,
  * forwarder, hubs, make_admin, key_level, add_watch and attest;
@@ -125,15 +110,16 @@ typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, u
 /*
  * One step with the group's recovery key on a YubiKey (src/piv.rs; docs/protocol.md,
  * "The recovery key on a YubiKey (0.6)"): the core speaks PIV and transmit
- * carries each APDU, during this call only. request is {"op",...}: "inspect"
- * {"pin"} answers {"default_key"}; "seal" {"pin","recovery","replace_default",
- * "management"} seals the sheet's secret (recovery as manage's change_root
- * takes it) and answers {"default_key","replaced","warning"}; "open" {"pin"}
- * answers {"secret"}, base64, for change_root's recovery. "transport" is
+ * carries each APDU, during this call only. request is {"op",...} with
+ * "group", the group's ID in hex or its first 16 hex digits: "seal"
+ * {"pin","recovery","management"} seals the sheet's secret (recovery as
+ * manage's change_root takes it) into the first empty retired slot from 95
+ * down and answers {"slot","default_key"}; "open" {"pin"} opens the group's
+ * and answers {"secret"}, base64, for change_root's recovery. "transport" is
  * "apdu" (the default) or "ccid_bulk", as cbb_transmit_fn says, or "pcsc"
  * on a system that runs pcscd (Aurora OS): the core is the PC/SC client
  * and never calls transmit, which must still be a function; open takes the
- * one card with cbb's key, inspect and seal the one card that has PIV.
+ * one card with the group's key, seal the one card that has PIV.
  */
 uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
 

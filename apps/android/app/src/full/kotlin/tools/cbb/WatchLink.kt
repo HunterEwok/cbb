@@ -107,7 +107,7 @@ object WatchLink {
     fun state(model: AppModel): WatchState {
         val home = model.phase == AppModel.Phase.HOME
         // In a group of 0.6 the watch signs nothing (D-124): no actions.
-        val signs = !model.group.isV06
+        val signs = false
         return state(model, home, signs)
     }
 

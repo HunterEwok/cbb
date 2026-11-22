@@ -14,8 +14,9 @@ import (
 
 // TestFFIPhoneYubiKey: on a group of 0.6 a phone whose app has no PIV of its
 // own seals the recovery sheet's secret onto a YubiKey through the core
-// (cbb_piv's inspect and seal), as the root phone does when the group is
-// made; once the root is lost, the phone opens the card with its PIN
+// (cbb_piv's seal, into the first empty retired slot, its certificate
+// naming the group), as the root phone does when the group is made; once
+// the root is lost, the phone opens the group's slot with its PIN
 // (cbb_piv's open) and changes the root with the secret it gave
 // (docs/protocol.md, "The recovery key on a YubiKey (0.6)"), over NFC or
 // over the CCID interface of a YubiKey on USB-C.
@@ -41,29 +42,35 @@ func TestFFIPhoneYubiKey(t *testing.T) {
 		return next("PIV ")
 	}
 	qr := map[string]any{"qr": sheet}
+	// The group's tag, as the app names its group: the first 16 hex
+	// digits of its ID; the core takes the whole ID too.
+	const group = "0123456789abcdef00112233"
 
-	if got := piv(map[string]any{"op": "inspect", "pin": "000000"}); !strings.Contains(got, "PIN") {
+	if got := piv(map[string]any{"op": "seal", "pin": "000000", "recovery": qr, "group": group}); !strings.Contains(got, "PIN") {
 		t.Fatalf("a wrong PIN: %s", got)
 	}
-	if got := piv(map[string]any{"op": "inspect", "pin": "123456"}); !strings.Contains(got, `"default_key":true`) {
-		t.Fatalf("a card with its factory key: %s", got)
+	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr}); !strings.Contains(got, "names no group") {
+		t.Fatalf("sealing for no group: %s", got)
 	}
-	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": map[string]any{"text": "a typo"}}); !strings.Contains(got, "error") {
+	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": map[string]any{"text": "a typo"}, "group": group}); !strings.Contains(got, "error") {
 		t.Fatalf("sealing what is no sheet: %s", got)
 	}
-	if got := piv(map[string]any{"op": "open", "pin": "123456"}); !strings.Contains(got, "error") {
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "group": group}); !strings.Contains(got, "no recovery key") {
 		t.Fatalf("opening a card that holds nothing: %s", got)
 	}
-	got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr, "replace_default": true})
-	if !strings.Contains(got, `"replaced":true`) || !strings.Contains(got, `"warning":null`) {
+	got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr, "group": group})
+	if !strings.Contains(got, `"slot":149`) || !strings.Contains(got, `"default_key":true`) {
 		t.Fatalf("sealing: %s", got)
 	}
-	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr}); !strings.Contains(got, "error") {
-		t.Fatalf("sealing a card that holds one already: %s", got)
+	if got := piv(map[string]any{"op": "seal", "pin": "123456", "recovery": qr, "group": group}); !strings.Contains(got, "already holds") {
+		t.Fatalf("sealing a card that holds the group's already: %s", got)
 	}
 
 	pi.stop()
-	if got := piv(map[string]any{"op": "open", "pin": "000000"}); !strings.Contains(got, "PIN") {
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "group": "fedcba9876543210"}); !strings.Contains(got, "no recovery key") {
+		t.Fatalf("opening another group's: %s", got)
+	}
+	if got := piv(map[string]any{"op": "open", "pin": "000000", "group": group}); !strings.Contains(got, "PIN") {
 		t.Fatalf("opening with a wrong PIN: %s", got)
 	}
 	var opened struct {
@@ -71,22 +78,22 @@ func TestFFIPhoneYubiKey(t *testing.T) {
 			Secret string `json:"secret"`
 		} `json:"ok"`
 	}
-	got = piv(map[string]any{"op": "open", "pin": "123456"})
+	got = piv(map[string]any{"op": "open", "pin": "123456", "group": group})
 	if err := json.Unmarshal([]byte(got), &opened); err != nil || opened.OK.Secret == "" {
 		t.Fatalf("opening: %s", got)
 	}
 	// A YubiKey on USB-C: the app moves the bytes of its CCID interface
 	// and the core frames them, through a time extension for the touch.
-	if got := piv(map[string]any{"op": "open", "pin": "123456", "transport": "ccid_bulk"}); !strings.Contains(got, opened.OK.Secret) {
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "group": group, "transport": "ccid_bulk"}); !strings.Contains(got, opened.OK.Secret) {
 		t.Fatalf("opening over CCID: %s", got)
 	}
-	if got := piv(map[string]any{"op": "open", "pin": "123456", "transport": "lightning"}); !strings.Contains(got, "no YubiKey transport") {
+	if got := piv(map[string]any{"op": "open", "pin": "123456", "group": group, "transport": "lightning"}); !strings.Contains(got, "no YubiKey transport") {
 		t.Errorf("a transport there is none of: %s", got)
 	}
 	// A phone whose system runs pcscd (Aurora OS): the core is the PC/SC
 	// client, and the app's callback is not called.
-	for _, op := range []string{"open", "inspect"} {
-		if got := piv(map[string]any{"op": op, "pin": "123456", "transport": "pcsc"}); !strings.Contains(got, "needs pcscd") {
+	for _, op := range []string{"open", "seal"} {
+		if got := piv(map[string]any{"op": op, "pin": "123456", "recovery": qr, "group": group, "transport": "pcsc"}); !strings.Contains(got, "needs pcscd") {
 			t.Errorf("%s over pcsc without pcscd: %s", op, got)
 		}
 	}

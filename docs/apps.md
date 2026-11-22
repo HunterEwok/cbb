@@ -44,7 +44,10 @@ they look, so both apps are built to the same plan.
    On 0.6 (every phone app) the new device always dials
    (docs/protocol.md, section 6, "The window and who dials"). **Add a device** on a phone
    without a group makes a group of 0.6 first (`CorePairing.newGroup06`: a new root key, the
-   set kept where the member runs) and shows its recovery sheet once; on the root phone, or a
+   set kept where the member runs) and shows its recovery sheet once. The recovery key is part
+   of the group's ID, so nothing makes a new one or removes it later: Settings on the root only
+   says so, and a lost sheet means that the main device can never change, so the way out is a
+   new group (D-126). On the root phone, or a
    phone the records name an admin, it then opens the home window: its QR code and six digits
    on screen, announced by NSD (Bonjour on the iPhone) with `p=1`, `f` and `i` (never the
    digits), open for five minutes. **Join a group** opens the camera and dials the window of the
@@ -94,21 +97,16 @@ they look, so both apps are built to the same plan.
    iPhone). A tap turns sync on this phone on or off; on Android a long press opens the app
    (iOS gives a control no long press of its own), and without a group the tile opens the
    app. On the iPhone, **Share → Copy Beyond Borders** (from any app, and from the
-   text selection menu's Share) sends the text or the link at once: the share extension
-   dials the group's computers with the phone's member key, which it shares with the app
-   through an app group and a keychain access group (both need the Apple developer
-   account; a debug build signed ad hoc has neither, and its extension says there is no
-   group). Share takes an image or files too, up to 50 MB together: the extension stays
-   until a computer fetched them from the phone, at most a minute.
+   text selection menu's Share) takes the text, the link, an image or files, up to 50 MB
+   together: on 0.6 the share extension runs no member of its own, so it puts them in a queue
+   in the app group's folder (`ShareQueue`), says that CBB sends them the next time it is
+   opened, and the app sends them to the group when it starts or comes to the front. The app
+   group needs the Apple developer account; a debug build signed ad hoc has none, and its
+   extension says there is no group. Sending straight from the extension comes with 0.7.
 
-   When the group's records show a likely thief, a card above the button says so
-   (`GroupAlerts` in the kits, from the core's state; docs/protocol.md, section 10,
-   "Stopping the exchange"): what is stopped (all but the records, or the secrets), why (two
-   admins acting against each other, two claims or a disputed one, a key that signed two
-   histories), a claim to take the group over with the time left, and a newer version of
-   the records that this app cannot read. On the group's root the card offers the decision
-   under Face ID or the fingerprint: remove the device of a claim or one of the two admins,
-   or void both histories; on any other device it says that the root decides.
+   What stops the group (two admins acting against each other, a key that signed two
+   histories, records this app cannot read) shows in "Why it does not sync", as the core's
+   reasons; a phone of 0.6 shows no alerts card of its own (D-126).
 
    **Muting** (docs/design.md, "Muting a device"): on an admin phone a device's card
    has "Mute" with the house's times ("Until an admin unmutes it" for the last), a `mute` command
@@ -1217,11 +1215,12 @@ Rust core, which does the protocol, the pairing, sync, the member's view of the 
 tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
 `ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
 system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
-joining by the phone's QR code, always as a member, or by an invitation, restoring), Home with the tiles
-or the list, a device's page with the admin's actions, adding a device by its QR code,
-invitations, the recovery key, the takeover, the arrangement and collections, and Settings
-with the error details, the notifications, the root's settings and, under the advanced
-settings, why it does not sync and the lab.
+joining by a group's window or by an invitation), Home with the tiles or the list, a device's
+page with the admin's actions, the home window for adding a device, invitations, the recovery
+key, changing the root with it, the arrangement and collections, and Settings with the error
+details, the notifications, the root's settings and, under the advanced settings, why it does
+not sync and the lab. A group from before 0.6 opens a page that says a new group is needed and
+offers Leave, which alone deletes its files (D-126).
 
 - **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
   asking; the admin key (the root's in a group the phone made) only after the user's face,
@@ -1249,13 +1248,13 @@ settings, why it does not sync and the lab.
   as Aurora does.
 - **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
   group without a computer the root or an admin phone is the hub itself (Settings, "This phone
-  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  as the hub"), registered with the forwarder the group's root set, its tunnel hidden for
   strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
-  user read what it learns. In a group of 0.6 that relay is the group's, which the root phone
-  sets (the manage action `relay`) and the other phones show read-only. The core runs both (`cbb_member_servers`, docs/core-api.md), with
-  the server and period keys in HUKS; the root phone signs the next period of the group's
-  server credentials (docs/protocol.md, section 18) with the root key when it renews the
-  certificates, after the face, fingerprint or PIN.
+  user read what it learns. That relay is the group's, which the root phone sets (the manage
+  action `relay`) and the other phones show read-only. The member of 0.6 runs both and keeps
+  the group's server credentials itself; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it is due, after
+  the face, fingerprint or PIN.
 - **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
   sends of its member key, with the revocation list the app fetches from the mirror once a
   day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
@@ -1263,7 +1262,7 @@ settings, why it does not sync and the lab.
 - **YubiKey**: on a group of 0.6 the card holds the recovery secret (docs/protocol.md, "The
   recovery key on a YubiKey (0.6)"): the root phone seals the sheet's secret onto it and a
   phone in the group opens it with the PIN to change the root. HarmonyOS has no PIV of its
-  own, so the core speaks it (`cbb_piv`'s `inspect`, `seal` and `open`, docs/core-api.md) and
+  own, so the core speaks it (`cbb_piv`'s `seal` and `open`, docs/core-api.md) and
   the app only carries each APDU to the card's IsoDep tag in NFC reader mode
   (`ohos.permission.NFC_TAG`, `common/YubiKey.ets`), or, for a YubiKey plugged into the
   USB-C port, moves the bytes of its CCID interface through `usbManager` after asking for the
@@ -1465,52 +1464,26 @@ the app on real devices.
 - `apps/ios/` — the app (SwiftUI): `project.yml` describes the Xcode project for XcodeGen
   (`cd apps/ios && xcodegen generate`; the generated project is not committed), built and
   tested on an iPhone simulator in CI without signing; and
-  `apps/ios/CBBKit`, the Swift package with the protocol core (CPace, the pairing
-  frames, the join QR code, the member protocol and the phone's sync engine). It has no UI
-  and runs on Linux too; its tests check it against the vectors that the Go tests write to
-  `testdata/interop/` (`go test ./internal/group ./internal/phone -update` regenerates
-  Go's; the member protocol's and pairing's are fixed), and CI runs it against the Rust `cbb`:
-  pairing and a member connection over real TLS on macOS (`internal/service`, `TestSwift`).
+  `apps/ios/CBBKit`, the Swift package around the Rust core (`CoreMember`, `CorePairing`,
+  Bonjour, the share's media, the recovery card's bytes). It has no UI and runs on Linux
+  too; its tests drive the core's member and pairing (`CoreMemberTests`, `CorePairingTests`,
+  `WindowTests`).
 - The app finds the members by browsing `_cbb._tcp` (CBBKit's
   `BonjourBrowser` on iOS) and hands their addresses to its member in the Rust core
   (`CoreMember`, docs/core-api.md, "The member"), which keeps one connection to each member
   of its group. iOS asks once for local network access: the Info.plist lists
   `_cbb._tcp` under `NSBonjourServices` and explains the use in
   `NSLocalNetworkUsageDescription`.
-- A phone joins another phone's group from its Start screen ("I already use Copy Beyond Borders on
-  another phone"):
-  it listens on a port the system picks, the core running the TLS, and shows the join QR
-  code with its home network addresses (`LocalAddresses`) and its six digits. While it
-  waits it announces itself by Bonjour (NsdManager on Android, mDNS through the core on
-  Aurora) with the TXT `j=1` and its fingerprint (`Discovery.joinerTXT`), so that a computer
-  of the group admits it by the digits typed there (`cbb pair -qr`). An admin phone scans it
-  in "Add a device". The Start screen has one button for it on every phone, "Join a group",
-  answered by any admin of the group, which admits the phone as a member; the root makes it
-  an admin later ("Make it an admin" on its device page). The phones make the group, admit and join through the Rust core's admission (each kit's
-  `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*` and
-  `cbb_invite_*`). An
-  admin phone that removes the root
-  phone takes the group over (docs/records-v2.md) through its member in the Rust core, as the
-  Aurora app does (docs/core-api.md, `cbb_member_manage`): it makes a new root key in the
-  Secure Enclave behind Face ID, the member makes its root CA (`CoreMember.rootCA`) and
-  signs a claim with the phone's admin key (`CoreMember.claim`, after the kit's
-  `PhoneGroup.checkTakeOver`). The claim waits as long as the root decided (72 hours by
-  default, `setTakeoverDelay`), and the root's phone may cancel it (`resolve`). Once the wait
-  is over the app finishes the takeover by itself (`CoreMember.finishTakeover`, which signs
-  nothing while the claim waits, then `PhoneGroup.becameRoot`): as the new root the member
-  signs the phone's certificate from it, its own record, keeps the other admins and removes
-  the lost phone. The kit keeps the records file and asks the Rust core
-  what it says (`RecordSet`, docs/core-api.md, "The record set"); the Android kit does the
-  same, with its root key in the Keystore behind BiometricPrompt.
-- A phone joins a computer's group as it joins a phone's: "Join a group" shows its QR code
-  and six digits, and the root or an admin computer types the digits after "+" (`cbb pair
-  -qr`, with `-admin` on the root to make the phone an admin).
-- When the root hands the group to this phone (`cbb handover` on the root computer, a
-  `handover` record naming this phone's admin key, which `group_view` reports as `handed_to`),
-  Home shows "The group is yours to take". Its button makes a new root key (the Secure Enclave
-  or the Keystore, behind Face ID or BiometricPrompt), signs the claim with the admin key
-  (the member's `take_handed_over`), which takes effect at once, and finishes the takeover as after a lost
-  root; the computer is not removed.
+- A phone joins a group from its Start screen with "Join a group": it scans the QR code an
+  admin of the group shows in "Add a device" (a phone's "+", a computer's "Add a device"), or
+  types the six digits under it, which it finds on the home network by Bonjour (NsdManager
+  on Android, mDNS through the core on Aurora). The window admits the phone as a member; the
+  root makes it an admin later ("Make it an admin" on its device page) when the phone offered
+  an admin key while it joined. The phones make the group, admit and join through the Rust
+  core (each kit's `CorePairing` over ffi's `cbb_group_new`, `cbb_window_*`, `cbb_joiner_*`
+  and `cbb_invite_*`), and every record a phone signs is written by the core after Face ID or
+  the system's biometrics (`CoreMember.act`, docs/core-api.md, `cbb_member_manage`). On 0.6
+  nothing takes the group over or hands it on: only the recovery key changes the root.
 - On a group of 0.6 a phone still in the group changes the root to itself with the
   recovery key ("Move the group to this phone" in its settings; the member's `change_preview`
   and `change_root`, docs/core-api.md, docs/protocol.md, section 10, rule 33). The screen
@@ -1521,12 +1494,22 @@ the app on real devices.
   new root's window, and restoring on a phone in no group comes with 0.7 (D-125).
 - The recovery key on a YubiKey, over NFC or USB-C (docs/protocol.md, section 9, "The
   recovery key on a YubiKey (0.6)"; `cbb_piv`, docs/core-api.md): the core speaks PIV and the
-  app only carries the card's bytes (the kits' `RecoveryCard`). The root phone's sheet page has
-  "Put it on a YubiKey": after the PIN, the app asks the card first (`inspect`), and when it
-  still has its factory management key, which anyone could use to erase the recovery key
-  without the PIN, says so and lets the person choose to replace it by a random key the PIN
-  protects or to keep it; then the card held to the phone or plugged in seals the sheet's
-  secret behind the PIN and a touch (`seal`). A YubiKey older than firmware 5.3, or one whose
+  app only carries the card's bytes (the kits' `RecoveryCard`). Right after a group is made the
+  root phone does not show the sheet at once: it offers "Write on a sheet" and "Write to
+  YubiKey", both allowed, and leaving without either asks first ("Leave without saving the
+  recovery key?"), since without the key a lost phone means a new group. The sheet, once
+  chosen, prints or saves with the system's own tools (Android's printing and its "Save as
+  PDF", the iPhone's printing and Save to Files, HarmonyOS's printing and its save picker,
+  a PDF in Documents on Aurora OS), with the warning that a saved file is the group's key, to
+  be copied off the phone. "Write to YubiKey" first waits for the key ("Insert your YubiKey or
+  hold it to the phone": USB-C and NFC at once on Android and HarmonyOS, the first found
+  taking the step; USB-C only on Aurora OS; on the iPhone a key plugged in is found by itself
+  and "Scan with NFC" opens the system's NFC sheet after the PIN), then asks its PIN (over NFC,
+  holding it to the phone again), and the core seals the sheet's secret into the card's first
+  empty retired slot (`seal`, naming the group), with its management key as
+  the card keeps it, never asked about (D-127). Sealing needs no touch: the key's touch
+  policy asks for one only when it is used, so while it writes the screen says "Writing to
+  the YubiKey" and then the result. A YubiKey older than firmware 5.3, or one whose
   management key the app cannot use, takes the sheet only. The change-root screen's "Use a
   YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
   `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap
