@@ -140,49 +140,5 @@ public enum KeychainIdentity {
         #endif
         SecItemDelete(inGroup(query) as CFDictionary)
     }
-
-    /// Stores the key (unless it is in the keychain already, as a Secure
-    /// Enclave key is) and the certificate under label, and returns the
-    /// identity they make.
-    public static func identity(certificate der: Data, key: SecKey, label: String, storeKey: Bool = true) throws -> SecIdentity {
-        guard let cert = SecCertificateCreateWithData(nil, der as CFData) else { throw Failure.noIdentity }
-        // On macOS a tool without entitlements may only use the file
-        // keychain; the app on iOS uses the data protection keychain.
-        #if os(macOS)
-        let where_: [CFString: Any] = [kSecUseDataProtectionKeychain: false]
-        #else
-        // TLS finds the identity while the phone is locked, after the
-        // first unlock, as the member key signs then.
-        let where_: [CFString: Any] = [kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        #endif
-        if storeKey {
-            let item: [CFString: Any] = [kSecClass: kSecClassKey, kSecValueRef: key, kSecAttrLabel: label]
-            let add = item.merging(where_) { a, _ in a }
-            let status = SecItemAdd(inGroup(add) as CFDictionary, nil)
-            guard status == errSecSuccess || status == errSecDuplicateItem else { throw Failure.keychain(status) }
-        }
-        let item: [CFString: Any] = [kSecClass: kSecClassCertificate, kSecValueRef: cert, kSecAttrLabel: label]
-        let add = item.merging(where_) { a, _ in a }
-        let status = SecItemAdd(inGroup(add) as CFDictionary, nil)
-        guard status == errSecSuccess || status == errSecDuplicateItem else { throw Failure.keychain(status) }
-        #if !os(macOS)
-        // A certificate stored before was readable only while unlocked.
-        if status == errSecDuplicateItem {
-            SecItemUpdate(inGroup([kSecClass: kSecClassCertificate, kSecAttrLabel: label]) as CFDictionary, where_ as CFDictionary)
-        }
-        #endif
-        #if os(macOS)
-        var identity: SecIdentity?
-        let s = SecIdentityCreateWithCertificate(nil, cert, &identity)
-        guard s == errSecSuccess, let identity else { throw Failure.keychain(s) }
-        return identity
-        #else
-        removePublicKeys(label: label)
-        var out: CFTypeRef?
-        let s = SecItemCopyMatching(inGroup([kSecClass: kSecClassIdentity, kSecAttrLabel: label, kSecReturnRef: true]) as CFDictionary, &out)
-        guard s == errSecSuccess, let out else { throw Failure.keychain(s) }
-        return out as! SecIdentity
-        #endif
-    }
 }
 #endif
