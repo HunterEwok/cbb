@@ -3,98 +3,64 @@
 import CBBKit
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Settings' recovery key, on the root phone (docs/protocol.md, section 10,
-/// "The recovery key"): whether the group has one and since when, making a
-/// new one, which shows its sheet once, and removing it.
+/// "The recovery key"): on a group of 0.6 the key is part of the group and
+/// its sheet is shown once, when the group is made, so Settings only says so.
 struct RecoverySection: View {
-    @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
-    /// The sheet just made, while it shows; nothing keeps it after.
-    @State private var sheet: Core.RecoverySheet?
-    @State private var askingReplace = false
-    @State private var askingRemove = false
 
     var body: some View {
         Section {
-            if let made = model.recoveryMade {
-                Text("Made on \(made.formatted(date: .long, time: .omitted)).")
-                Button { askingReplace = true } label: { Text("Make a new recovery key") }
-                Button(role: .destructive) { askingRemove = true } label: { Text("Remove the recovery key") }
-            } else {
-                Text("None yet.").foregroundStyle(palette.textDim)
-                Button { make() } label: { Text("Make a recovery key") }
-            }
+            Text("Made with the group, and its sheet was shown once. Without the sheet the group's main device cannot change: if the sheet is lost, make a new group.")
+                .foregroundStyle(palette.textDim)
         } header: {
             Text("Recovery key")
-        } footer: {
-            Text("A sheet to print and keep away from your phones. If the group's main phone is lost, another device of the group takes the group over with it.")
         }
         .listRowBackground(palette.surface)
-        .alert(Text("Make a new recovery key?"), isPresented: $askingReplace) {
-            Button { make() } label: { Text("Make a new one") }
-            Button(role: .cancel) {} label: { Text("Cancel") }
-        } message: {
-            Text("The sheet printed for the old key stops working.")
-        }
-        .alert(Text("Remove the recovery key?"), isPresented: $askingRemove) {
-            Button(role: .destructive) { Task { await model.removeRecovery() } } label: { Text("Remove") }
-            Button(role: .cancel) {} label: { Text("Cancel") }
-        } message: {
-            Text("The sheet printed for it stops working. Without a recovery key, losing every phone with this group loses the group.")
-        }
-        .fullScreenCover(item: Binding(get: { sheet.map(Shown.init) }, set: { if $0 == nil { sheet = nil } })) { shown in
-            RecoverySheetView(sheet: shown.sheet, made: Date()) { sheet = nil }
-        }
-    }
-
-    private func make() {
-        Task { sheet = await model.makeRecovery() }
-    }
-
-    private struct Shown: Identifiable {
-        let sheet: Core.RecoverySheet
-        var id: String { sheet.qr }
     }
 }
 
-/// The recovery sheet, shown once: its QR code and text, printing it or
-/// saving it as a PDF, and closing it, after which the phone has no copy.
+/// The group's recovery key, shown once after the group is made (docs/apps.md,
+/// "The recovery sheet (0.6)"): the person writes it on a sheet (printed or
+/// saved to Files), onto a YubiKey, or both; leaving with neither asks first.
+/// The phone keeps no copy once the view closes.
 struct RecoverySheetView: View {
     let sheet: Core.RecoverySheet
+    /// The group's tag, which names the YubiKey's slot.
+    let group: String?
     let made: Date
     let done: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var phase
     @Environment(\.themeStyle) private var style
-    @State private var pdf: URL?
-    @State private var askingDone = false
-    @State private var failure: String?
-    @State private var askingCard = false
-    @State private var pin = ""
-    @State private var onCard = false
     @EnvironmentObject private var model: AppModel
+
+    private enum Step { case choice, sheet, yubikey }
+    @State private var step = Step.choice
+    @State private var pdf: URL?
+    @State private var failure: String?
+    /// The sheet was seen; printing or saving it counts as kept.
+    @State private var sheetSeen = false
+    @State private var kept = false
+    @State private var onCard = false
+    @State private var saving = false
+    @State private var askingDone = false
+    @State private var askingUnsaved = false
+    @State private var pin = ""
+    /// A YubiKey is plugged into the USB-C port: the PIN then goes to it,
+    /// and no NFC sheet is needed.
+    @State private var plugged = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Tokens.spacingLarge) {
-                    Text("Print this sheet or save it as a PDF now. It shows only this once.")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(palette.textDim)
-                    RecoveryPage(sheet: sheet, made: made)
-                        .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
-                        .privacySensitive()
-                    Button { print() } label: { Label { Text("Print") } icon: { Image(systemName: "printer") } }
-                        .buttonStyle(GlassButtonStyle())
-                    if let pdf {
-                        ShareLink(item: pdf) { Label { Text("Save as PDF") } icon: { Image(systemName: "square.and.arrow.down") } }
-                            .buttonStyle(GlassButtonStyle())
-                    }
-                    if YubiKeyNfc.available, !onCard {
-                        Button { askingCard = true } label: { Label { Text("Put it on a YubiKey") } icon: { Image(systemName: "key") } }
-                            .buttonStyle(GlassButtonStyle())
-                            .disabled(model.busy)
+                    switch step {
+                    case .choice: choice
+                    case .sheet: sheetStep
+                    case .yubikey: yubikeyStep
                     }
                     if let m = model.message {
                         Text(m).multilineTextAlignment(.center).foregroundStyle(palette.textDim)
@@ -109,23 +75,35 @@ struct RecoverySheetView: View {
             .navigationTitle(Text("Recovery key"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { askingDone = true } label: { Text("Done") }
+                if step == .choice {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button { leave() } label: { Text("Done") }
+                    }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { back() } label: { Text("Back") }
+                    }
                 }
-            }
-            .alert(Text("Put the recovery key on a YubiKey?"), isPresented: $askingCard) {
-                YubiKeyPinField(pin: $pin)
-                Button { seal(replaceDefault: true) } label: { Text("Replace its factory key, then hold it") }.disabled(!YubiKeyPinField.fits(pin))
-                Button { seal(replaceDefault: false) } label: { Text("Keep its key, then hold it") }.disabled(!YubiKeyPinField.fits(pin))
-                Button(role: .cancel) { pin = "" } label: { Text("Cancel") }
-            } message: {
-                Text("The YubiKey keeps the same key as this sheet, behind its PIN and a touch. Type its PIN, then hold it to the phone or plug it into the USB-C port. If it still has its factory management key, anyone could look that key up and erase the recovery key without the PIN; the app can replace it with one the PIN protects.")
             }
             .alert(Text("Did you keep the sheet?"), isPresented: $askingDone) {
                 Button { close() } label: { Text("I kept it") }
                 Button(role: .cancel) {} label: { Text("Back") }
             } message: {
                 Text("This phone forgets the key now. To get a sheet again, make a new recovery key.")
+            }
+            .alert(Text("Leave without saving the recovery key?"), isPresented: $askingUnsaved) {
+                Button(role: .destructive) { close() } label: { Text("Leave without saving") }
+                Button(role: .cancel) {} label: { Text("Back") }
+            } message: {
+                Text("Without it, losing this phone means making a new group and joining every device to it again.")
+            }
+            .fileExporter(isPresented: $saving, document: pdf.flatMap { try? PDFFile(url: $0) }, contentType: .pdf,
+                          defaultFilename: String(localized: "CBB recovery key", bundle: .app)) { result in
+                switch result {
+                case .success: kept = true
+                case let .failure(error):
+                    failure = AppModel.describe(error, summary: String(localized: "Could not make the PDF.", bundle: .app))
+                }
             }
         }
         .interactiveDismissDisabled()
@@ -147,6 +125,88 @@ struct RecoverySheetView: View {
         }
     }
 
+    /// The first step: the sheet, the YubiKey, or both.
+    @ViewBuilder private var choice: some View {
+        Text("Save the group's recovery key").font(.title2.weight(.bold)).multilineTextAlignment(.center)
+        Text("Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.")
+            .multilineTextAlignment(.center)
+            .foregroundStyle(palette.textDim)
+        Button { step = .sheet; sheetSeen = true } label: { Label { Text("Write on a sheet") } icon: { Image(systemName: "doc.text") } }
+            .buttonStyle(GlassButtonStyle())
+        Button { step = .yubikey; failure = nil; model.message = nil } label: { Label { Text("Write to YubiKey") } icon: { Image(systemName: "key") } }
+            .buttonStyle(GlassButtonStyle())
+            .disabled(onCard || model.busy || group == nil)
+    }
+
+    /// The sheet: printing it, or saving it as a PDF to Files.
+    @ViewBuilder private var sheetStep: some View {
+        Text("Print this sheet or save it as a PDF now. It shows only this once.")
+            .multilineTextAlignment(.center)
+            .foregroundStyle(palette.textDim)
+        RecoveryPage(sheet: sheet, made: made)
+            .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
+            .privacySensitive()
+        Button { print() } label: { Label { Text("Print") } icon: { Image(systemName: "printer") } }
+            .buttonStyle(GlassButtonStyle())
+            .disabled(pdf == nil)
+        Button { saving = true } label: { Label { Text("Save to Files") } icon: { Image(systemName: "folder") } }
+            .buttonStyle(GlassButtonStyle())
+            .disabled(pdf == nil)
+        Text("A saved file is the group's key: copy it off the phone to paper or a drive kept safe, then delete it here.")
+            .multilineTextAlignment(.center)
+            .foregroundStyle(palette.textDim)
+    }
+
+    /// The YubiKey: one plugged in is found by itself and takes the PIN;
+    /// otherwise the PIN comes first and Scan with NFC opens the system's
+    /// NFC sheet.
+    @ViewBuilder private var yubikeyStep: some View {
+        Text("Insert your YubiKey or hold it to the phone.")
+            .multilineTextAlignment(.center)
+            .foregroundStyle(palette.textDim)
+        YubiKeyPinField(pin: $pin)
+            .onSubmit { seal() }
+            .submitLabel(.go)
+            .padding(Tokens.spacingMedium)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
+        if plugged {
+            Text("Type the YubiKey's PIN.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(palette.textDim)
+            Button { seal() } label: { Text("Continue") }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(!YubiKeyPinField.fits(pin) || model.busy)
+        } else if YubiKeyNfc.available {
+            Button { seal() } label: { Label { Text("Scan with NFC") } icon: { Image(systemName: "wave.3.right") } }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(!YubiKeyPinField.fits(pin) || model.busy)
+        }
+        // A key plugged in while this step shows is found within a second.
+        Color.clear.frame(height: 0).task(id: step) {
+            while !Task.isCancelled, step == .yubikey {
+                plugged = await model.yubiKeyPlugged()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func back() {
+        step = .choice
+        pin = ""
+    }
+
+    /// Done on the choice: a key written somewhere closes; a sheet only
+    /// looked at asks whether it was kept; nothing saved asks first.
+    private func leave() {
+        if onCard || kept {
+            close()
+        } else if sheetSeen {
+            askingDone = true
+        } else {
+            askingUnsaved = true
+        }
+    }
+
     private func makePDF() {
         do {
             pdf = try RecoveryPage.pdf(sheet: sheet, made: made)
@@ -163,15 +223,23 @@ struct RecoverySheetView: View {
         info.jobName = String(localized: "CBB recovery key", bundle: .app)
         c.printInfo = info
         c.printingItem = pdf
-        c.present(animated: true)
+        c.present(animated: true) { _, completed, _ in
+            if completed { kept = true }
+        }
     }
 
-    /// Seals this sheet's key onto a YubiKey, with the person's answer
-    /// about its factory management key.
-    private func seal(replaceDefault: Bool) {
+    /// Seals this sheet's key onto the YubiKey, in the group's slot.
+    private func seal() {
+        guard YubiKeyPinField.fits(pin), let group else { return }
         let pin = pin
         self.pin = ""
-        Task { onCard = await model.sealOnCard(sheet: sheet.qr, pin: pin, replaceDefault: replaceDefault) }
+        failure = nil
+        Task {
+            if await model.sealOnCard(sheet: sheet.qr, pin: pin, group: group) {
+                onCard = true
+                step = .choice
+            }
+        }
     }
 
     /// Forgets the key: the PDF goes, and the sheet with the view.
@@ -180,6 +248,21 @@ struct RecoverySheetView: View {
         pdf = nil
         done()
     }
+}
+
+/// The sheet's PDF as Files saves it.
+private struct PDFFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.pdf] }
+    let data: Data
+
+    init(url: URL) throws { data = try Data(contentsOf: url) }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let d = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+        data = d
+    }
+
+    func fileWrapper(configuration _: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
 /// The page that is printed: black on white, the QR code, the key in groups

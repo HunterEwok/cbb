@@ -198,7 +198,7 @@ internal fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, model
             foundUsb?.let { usb ->
                 YubiKeyPinDialog(
                     stringResource(R.string.yubikey_write),
-                    stringResource(if (usb) R.string.yubikey_pin_then_touch else R.string.yubikey_pin_then_hold),
+                    stringResource(if (usb) R.string.yubikey_pin_type else R.string.yubikey_pin_then_hold),
                     dismiss = { foundUsb = null },
                 ) { pin -> seal(pin, usb) }
             }

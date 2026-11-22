@@ -493,9 +493,10 @@
     {"name": "yubikey_opened", "value": "La YubiKey abrió la clave de recuperación."},
     {"name": "yubikey_pin", "value": "El PIN de la YubiKey"},
     {"name": "yubikey_pin_then_hold", "value": "Escribe el PIN de la YubiKey y vuelve a acercarla al teléfono."},
-    {"name": "yubikey_pin_then_touch", "value": "Escribe el PIN de la YubiKey y tócala cuando parpadee."},
+    {"name": "yubikey_pin_type", "value": "Escribe el PIN de la YubiKey."},
     {"name": "yubikey_sealed", "value": "La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos."},
     {"name": "yubikey_touch_usb", "value": "Toca la YubiKey cuando parpadee y mantenla conectada hasta que desaparezca este mensaje."},
-    {"name": "yubikey_write", "value": "Escribir en la YubiKey"}
+    {"name": "yubikey_write", "value": "Escribir en la YubiKey"},
+    {"name": "yubikey_writing", "value": "Escribiendo en la YubiKey. Mantenla conectada hasta que termine."}
   ]
 }

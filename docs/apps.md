@@ -1530,10 +1530,12 @@ the app on real devices.
   be copied off the phone. "Write to YubiKey" first waits for the key ("Insert your YubiKey or
   hold it to the phone": USB-C and NFC at once on Android and HarmonyOS, the first found
   taking the step; USB-C only on Aurora OS; on the iPhone a key plugged in is found by itself
-  and "Scan with NFC" opens the system's NFC sheet after the PIN), then asks its PIN, then the
-  touch (over NFC, holding it to the phone again), and the core seals the sheet's secret into
-  the card's first empty retired slot (`seal`, naming the group), with its management key as
-  the card keeps it, never asked about (D-127). A YubiKey older than firmware 5.3, or one whose
+  and "Scan with NFC" opens the system's NFC sheet after the PIN), then asks its PIN (over NFC,
+  holding it to the phone again), and the core seals the sheet's secret into the card's first
+  empty retired slot (`seal`, naming the group), with its management key as
+  the card keeps it, never asked about (D-127). Sealing needs no touch: the key's touch
+  policy asks for one only when it is used, so while it writes the screen says "Writing to
+  the YubiKey" and then the result. A YubiKey older than firmware 5.3, or one whose
   management key the app cannot use, takes the sheet only. The change-root screen's "Use a
   YubiKey instead" opens the secret with the PIN and a touch (`open`) and hands it to
   `change_root`. A YubiKey plugged in already is used; otherwise the phone waits for a tap

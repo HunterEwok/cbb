@@ -1538,8 +1538,8 @@
         <translation>मैंने लिख लिया</translation>
     </message>
     <message>
-        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>YubiKey को USB-C पोर्ट में लगाएँ, उसका PIN लिखें, फिर उसके टिमटिमाने पर उसे छुएँ।</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>अपनी YubiKey को USB-C पोर्ट में लगाएँ और उसका PIN टाइप करें।</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
@@ -1590,10 +1590,6 @@
         <translation>शीट Documents में सहेजी गई है।</translation>
     </message>
     <message>
-        <source>Touch the YubiKey when it blinks.</source>
-        <translation>YubiKey टिमटिमाए तो उसे छुएँ।</translation>
-    </message>
-    <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
         <translation>इसके बिना, यह फ़ोन खोने का मतलब है नया समूह बनाना और हर डिवाइस को फिर से उससे जोड़ना।</translation>
     </message>
@@ -1608,6 +1604,10 @@
     <message>
         <source>Write to YubiKey</source>
         <translation>YubiKey पर लिखें</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>YubiKey पर लिखा जा रहा है। पूरा होने तक इसे लगा रहने दें।</translation>
     </message>
 </context>
 <context>

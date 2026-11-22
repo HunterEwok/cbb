@@ -493,9 +493,10 @@
     {"name": "yubikey_opened", "value": "YubiKey imefungua ufunguo wa urejeshaji."},
     {"name": "yubikey_pin", "value": "PIN ya YubiKey"},
     {"name": "yubikey_pin_then_hold", "value": "Andika PIN ya YubiKey, kisha uisogeze tena karibu na simu."},
-    {"name": "yubikey_pin_then_touch", "value": "Andika PIN ya YubiKey, kisha iguse inapomweka."},
+    {"name": "yubikey_pin_type", "value": "Andika PIN ya YubiKey."},
     {"name": "yubikey_sealed", "value": "Ufunguo wa urejeshaji uko kwenye YubiKey. YubiKey na karatasi vina ufunguo uleule: hifadhi vyote viwili, mahali tofauti."},
     {"name": "yubikey_touch_usb", "value": "Gusa YubiKey inapomweka, na uiache imechomekwa hadi ujumbe huu uondoke."},
-    {"name": "yubikey_write", "value": "Andika kwenye YubiKey"}
+    {"name": "yubikey_write", "value": "Andika kwenye YubiKey"},
+    {"name": "yubikey_writing", "value": "Inaandika kwenye YubiKey. Iache imechomekwa hadi imalize."}
   ]
 }

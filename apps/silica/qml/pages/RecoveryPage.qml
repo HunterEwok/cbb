@@ -87,7 +87,7 @@ Page {
                         ? qsTr("Save it on a sheet, on a YubiKey, or both. Only with it can the group move to another main device if this phone is lost. It is shown only now.")
                         : page.step === "sheet"
                           ? qsTr("Write the key down or save this page, and keep it safe.")
-                          : qsTr("Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.")
+                          : qsTr("Insert your YubiKey into the USB-C port and type its PIN.")
             }
 
             // The choice: both are allowed, one after the other.
@@ -194,7 +194,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
-                text: qsTr("Touch the YubiKey when it blinks.")
+                text: qsTr("Writing to the YubiKey. Keep it plugged in until it is done.")
             }
             Label {
                 visible: page.shown && page.step === "yubikey" && page.sealed

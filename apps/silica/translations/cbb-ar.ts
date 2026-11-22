@@ -1538,8 +1538,8 @@
         <translation>لقد كتبته</translation>
     </message>
     <message>
-        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>أدخل YubiKey في منفذ USB-C، واكتب رقمه السري، ثم المسه عندما يومض.</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>أدخل YubiKey في منفذ USB-C واكتب رمز PIN الخاص به.</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
@@ -1590,10 +1590,6 @@
         <translation>حُفظت الورقة في المستندات.</translation>
     </message>
     <message>
-        <source>Touch the YubiKey when it blinks.</source>
-        <translation>المس YubiKey عندما يومض.</translation>
-    </message>
-    <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
         <translation>من دونه، فقدان هذا الهاتف يعني إنشاء مجموعة جديدة وضم كل جهاز إليها من جديد.</translation>
     </message>
@@ -1608,6 +1604,10 @@
     <message>
         <source>Write to YubiKey</source>
         <translation>كتابته على YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>جارٍ الكتابة على YubiKey. أبقِه موصولًا حتى تنتهي.</translation>
     </message>
 </context>
 <context>

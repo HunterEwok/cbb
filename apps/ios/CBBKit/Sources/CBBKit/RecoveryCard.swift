@@ -26,10 +26,12 @@ public enum RecoveryCard {
         case oldFirmware
         /// The card holds no recovery key of cbb.
         case noKey
-        /// The card holds a recovery key already, which is never sealed again.
+        /// The card holds this group's recovery key already, which is never sealed again.
         case holdsOne
-        /// Something else is in the place cbb uses on the card.
-        case taken
+        /// Every retired PIV slot of the card is in use.
+        case noFreeSlot
+        /// The card holds two recovery keys for the group, and cbb does not choose.
+        case twoSlots
         /// The card's management key is one the app cannot use.
         case managementKey
         /// The card left, refused, or its answer does not parse.
@@ -61,10 +63,12 @@ public enum RecoveryCard {
                 f = Failure(kind: .oldFirmware, message: m, details: details)
             } else if m.contains("holds no recovery key") {
                 f = Failure(kind: .noKey, message: m, details: details)
-            } else if m.contains("already holds a recovery key") {
+            } else if m.contains("already holds this group's recovery key") {
                 f = Failure(kind: .holdsOne, message: m, details: details)
-            } else if m.contains("already holds something") {
-                f = Failure(kind: .taken, message: m, details: details)
+            } else if m.contains("retired PIV slot") {
+                f = Failure(kind: .noFreeSlot, message: m, details: details)
+            } else if m.contains("two recovery keys") || m.contains("more than one group") {
+                f = Failure(kind: .twoSlots, message: m, details: details)
             } else if m.contains("management key") {
                 f = Failure(kind: .managementKey, message: m, details: details)
             }
@@ -72,42 +76,32 @@ public enum RecoveryCard {
         }
     }
 
-    /// What sealing did: the card still has its factory management key
-    /// (warning then says what to tell the person), or the app replaced it
-    /// with a PIN-protected one.
+    /// What sealing did: the retired PIV slot that took the key (0x95 down
+    /// to 0x82), and whether the card still has its factory management key,
+    /// which cbb uses as it is and never changes.
     public struct Sealed: Decodable, Equatable, Sendable {
+        public var slot: Int
         public var defaultKey: Bool
-        public var replaced: Bool
-        public var warning: String?
 
         enum CodingKeys: String, CodingKey {
-            case defaultKey = "default_key", replaced, warning
+            case slot, defaultKey = "default_key"
         }
     }
 
-    /// Whether the card can take the secret, with nothing written: true when
-    /// it still has its factory management key, which the app tells the
-    /// person before seal and asks whether to replace.
-    public static func inspect(_ card: SmartCard, pin: String) throws -> Bool {
-        struct A: Encodable { var op = "inspect", pin: String }
-        struct R: Decodable { var default_key: Bool }
-        return try run(card, A(pin: pin), as: R.self).default_key
+    /// Seals the recovery key's secret onto the card, into the first empty
+    /// retired slot: sheet is the sheet's QR code or its text; group is the
+    /// group's ID in hex (or its first 16 hex digits), which names the slot.
+    public static func seal(_ card: SmartCard, pin: String, sheet: String, group: String) throws -> Sealed {
+        struct A: Encodable { var op = "seal", pin: String, recovery: [String: String], group: String }
+        return try run(card, A(pin: pin, recovery: ["text": sheet], group: group), as: Sealed.self)
     }
 
-    /// Seals the recovery key's secret onto the card: sheet is the sheet's QR
-    /// code or its text; replaceDefault is the person's consent to replace a
-    /// factory management key.
-    public static func seal(_ card: SmartCard, pin: String, sheet: String, replaceDefault: Bool) throws -> Sealed {
-        struct A: Encodable { var op = "seal", pin: String, recovery: [String: String], replace_default: Bool }
-        return try run(card, A(pin: pin, recovery: ["text": sheet], replace_default: replaceDefault), as: Sealed.self)
-    }
-
-    /// Opens the secret after the PIN and a touch, for a change of root
-    /// (RecoveryInput.secret); the caller drops it after that one use.
-    public static func open(_ card: SmartCard, pin: String) throws -> Data {
-        struct A: Encodable { var op = "open", pin: String }
+    /// Opens the group's secret after the PIN and a touch, for a change of
+    /// root (RecoveryInput.secret); the caller drops it after that one use.
+    public static func open(_ card: SmartCard, pin: String, group: String) throws -> Data {
+        struct A: Encodable { var op = "open", pin: String, group: String }
         struct R: Decodable { var secret: Data }
-        return try run(card, A(pin: pin), as: R.self).secret
+        return try run(card, A(pin: pin, group: group), as: R.self).secret
     }
 
     private struct Reply<R: Decodable>: Decodable {

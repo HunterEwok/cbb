@@ -1053,13 +1053,14 @@ class AppModel(private val app: Context) {
 
     /**
      * Seals the recovery key of sheet (its QR code) onto the YubiKey found,
-     * after its PIN, into its first empty retired slot: on USB it asks for
-     * the touch, over NFC to hold it to the phone again. It returns what to
+     * after its PIN, into its first empty retired slot: on USB it says the
+     * key is being written (sealing needs no touch), over NFC to hold it to
+     * the phone again. It returns what to
      * tell the person, and whether the key is on the card.
      */
     suspend fun sealOnCard(sheet: String, pin: String, usb: Boolean): Pair<Note, Boolean> = try {
-        cardPrompt = if (usb) R.string.yubikey_touch_usb else R.string.yubikey_hold
-        val sealed = group.sealOnCard(sheet, pin) { cardPrompt = R.string.yubikey_touch_usb }
+        cardPrompt = if (usb) R.string.yubikey_writing else R.string.yubikey_hold
+        val sealed = group.sealOnCard(sheet, pin) { cardPrompt = R.string.yubikey_writing }
         Log.i(TAG, "yubikey: sealed in slot ${sealed.slot.toString(16)}, factory management key ${sealed.defaultKey}")
         Note(R.string.yubikey_sealed) to true
     } catch (e: CancellationException) {

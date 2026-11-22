@@ -701,8 +701,9 @@
     <string name="yubikey_opened">YubiKey ने रिकवरी कुंजी खोल दी।</string>
     <string name="yubikey_pin">YubiKey का PIN</string>
     <string name="yubikey_pin_then_hold">YubiKey का PIN लिखें, फिर उसे दोबारा फ़ोन के पास लाएँ।</string>
-    <string name="yubikey_pin_then_touch">YubiKey का PIN लिखें, फिर उसके टिमटिमाने पर उसे छुएँ।</string>
+    <string name="yubikey_pin_type">YubiKey का PIN टाइप करें।</string>
     <string name="yubikey_sealed">रिकवरी कुंजी YubiKey पर है। YubiKey और शीट में एक ही कुंजी है: दोनों को अलग-अलग जगह रखें।</string>
     <string name="yubikey_touch_usb">YubiKey के चमकने पर उसे छुएँ, और यह संदेश जाने तक उसे लगाए रखें।</string>
     <string name="yubikey_write">YubiKey पर लिखें</string>
+    <string name="yubikey_writing">YubiKey पर लिखा जा रहा है। पूरा होने तक इसे लगा रहने दें।</string>
 </resources>

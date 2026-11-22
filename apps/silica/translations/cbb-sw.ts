@@ -1538,8 +1538,8 @@
         <translation>Nimeuandika</translation>
     </message>
     <message>
-        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Chomeka YubiKey kwenye mlango wa USB-C, andika PIN yake, kisha iguse inapomweka.</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>Chomeka YubiKey yako kwenye mlango wa USB-C kisha uandike PIN yake.</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
@@ -1590,10 +1590,6 @@
         <translation>Karatasi imehifadhiwa kwenye Nyaraka.</translation>
     </message>
     <message>
-        <source>Touch the YubiKey when it blinks.</source>
-        <translation>Gusa YubiKey inapomweka.</translation>
-    </message>
-    <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
         <translation>Bila huo, kupoteza simu hii kunamaanisha kuunda kikundi kipya na kuunganisha kila kifaa tena.</translation>
     </message>
@@ -1608,6 +1604,10 @@
     <message>
         <source>Write to YubiKey</source>
         <translation>Andika kwenye YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>Inaandika kwenye YubiKey. Iache imechomekwa hadi imalize.</translation>
     </message>
 </context>
 <context>

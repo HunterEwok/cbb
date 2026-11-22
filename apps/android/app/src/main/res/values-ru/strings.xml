@@ -701,8 +701,9 @@
     <string name="yubikey_opened">YubiKey открыл ключ восстановления.</string>
     <string name="yubikey_pin">PIN YubiKey</string>
     <string name="yubikey_pin_then_hold">Введите PIN YubiKey, затем снова поднесите ключ к телефону.</string>
-    <string name="yubikey_pin_then_touch">Введите PIN YubiKey, затем коснитесь ключа, когда он замигает.</string>
+    <string name="yubikey_pin_type">Введите PIN YubiKey.</string>
     <string name="yubikey_sealed">Ключ восстановления на YubiKey. YubiKey и лист хранят один и тот же ключ: храните оба, в разных местах.</string>
     <string name="yubikey_touch_usb">Коснитесь YubiKey, когда он замигает, и не вынимайте его, пока это сообщение не исчезнет.</string>
     <string name="yubikey_write">Записать на YubiKey</string>
+    <string name="yubikey_writing">Идёт запись на YubiKey. Не вынимайте его, пока она не закончится.</string>
 </resources>

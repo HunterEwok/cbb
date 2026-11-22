@@ -701,8 +701,9 @@
     <string name="yubikey_opened">فتح YubiKey مفتاح الاسترداد.</string>
     <string name="yubikey_pin">الرقم السري لـ YubiKey</string>
     <string name="yubikey_pin_then_hold">اكتب الرقم السري لـ YubiKey، ثم قرّبه من الهاتف مرة أخرى.</string>
-    <string name="yubikey_pin_then_touch">اكتب الرقم السري لـ YubiKey، ثم المسه عندما يومض.</string>
+    <string name="yubikey_pin_type">اكتب رمز PIN الخاص بـ YubiKey.</string>
     <string name="yubikey_sealed">مفتاح الاسترداد على YubiKey. يحمل YubiKey والورقة المفتاح نفسه: احتفظ بكليهما في مكانين مختلفين.</string>
     <string name="yubikey_touch_usb">المس YubiKey عندما يومض، وأبقِه موصولًا حتى تختفي هذه الرسالة.</string>
     <string name="yubikey_write">كتابته على YubiKey</string>
+    <string name="yubikey_writing">جارٍ الكتابة على YubiKey. أبقِه موصولًا حتى تنتهي.</string>
 </resources>

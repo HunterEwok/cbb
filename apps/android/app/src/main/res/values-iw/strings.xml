@@ -701,8 +701,9 @@
     <string name="yubikey_opened">ה-YubiKey פתח את מפתח השחזור.</string>
     <string name="yubikey_pin">ה-PIN של ה-YubiKey</string>
     <string name="yubikey_pin_then_hold">הקלידו את ה-PIN של ה-YubiKey, ואז קרבו אותו שוב לטלפון.</string>
-    <string name="yubikey_pin_then_touch">הקלידו את ה-PIN של ה-YubiKey, ואז געו בו כשהוא מהבהב.</string>
+    <string name="yubikey_pin_type">הקלידו את קוד ה-PIN של ה-YubiKey.</string>
     <string name="yubikey_sealed">מפתח השחזור נמצא על ה-YubiKey. ה-YubiKey והדף מחזיקים באותו מפתח: שמור את שניהם, במקומות שונים.</string>
     <string name="yubikey_touch_usb">געו ב-YubiKey כשהוא מהבהב, והשאירו אותו מחובר עד שההודעה הזו תיעלם.</string>
     <string name="yubikey_write">לכתוב ל-YubiKey</string>
+    <string name="yubikey_writing">כותבים ל-YubiKey. השאירו אותו מחובר עד הסיום.</string>
 </resources>

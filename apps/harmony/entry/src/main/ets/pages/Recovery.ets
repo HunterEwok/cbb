@@ -124,9 +124,9 @@ struct Recovery {
   async seal(): Promise<void> {
     const pin = this.pin;
     this.pin = '';
-    this.note = this.usb ? t('yubikey_touch_usb') : t('yubikey_hold');
+    this.note = this.usb ? t('yubikey_writing') : t('yubikey_hold');
     const said = await app.sealOnCard(this.context(), pin, () => {
-      this.note = t('yubikey_touch_usb');
+      this.note = t('yubikey_writing');
     });
     this.note = said;
     this.step = 'choice';
@@ -215,7 +215,7 @@ struct Recovery {
           })
         } else if (this.step === 'pin') {
           Text(t('yubikey_write')).fontWeight(FontWeight.Medium).fontColor($r('app.color.text'))
-          Text(this.usb ? t('yubikey_pin_then_touch') : t('yubikey_pin_then_hold')).fontColor($r('app.color.text'))
+          Text(this.usb ? t('yubikey_pin_type') : t('yubikey_pin_then_hold')).fontColor($r('app.color.text'))
           TextInput({ placeholder: t('yubikey_pin'), text: this.pin })
             .type(InputType.Password)
             .maxLength(8)

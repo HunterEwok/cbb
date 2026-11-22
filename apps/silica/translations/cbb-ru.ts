@@ -1538,8 +1538,8 @@
         <translation>Я записал ключ</translation>
     </message>
     <message>
-        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>Вставьте YubiKey в порт USB-C, введите его PIN и коснитесь ключа, когда он замигает.</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>Вставьте YubiKey в порт USB-C и введите его PIN.</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
@@ -1590,10 +1590,6 @@
         <translation>Лист сохранён в «Документы».</translation>
     </message>
     <message>
-        <source>Touch the YubiKey when it blinks.</source>
-        <translation>Коснитесь YubiKey, когда он замигает.</translation>
-    </message>
-    <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
         <translation>Без него потеря этого телефона означает, что придётся создать новую группу и заново подключить к ней все устройства.</translation>
     </message>
@@ -1608,6 +1604,10 @@
     <message>
         <source>Write to YubiKey</source>
         <translation>Записать на YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>Идёт запись на YubiKey. Не вынимайте его, пока она не закончится.</translation>
     </message>
 </context>
 <context>

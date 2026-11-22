@@ -705,8 +705,9 @@
     <string name="yubikey_opened">The YubiKey opened the recovery key.</string>
     <string name="yubikey_pin">The YubiKey\'s PIN</string>
     <string name="yubikey_pin_then_hold">Type the YubiKey\'s PIN, then hold the YubiKey to the phone again.</string>
-    <string name="yubikey_pin_then_touch">Type the YubiKey\'s PIN, then touch the YubiKey when it blinks.</string>
+    <string name="yubikey_pin_type">Type the YubiKey\'s PIN.</string>
     <string name="yubikey_sealed">The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.</string>
     <string name="yubikey_touch_usb">Touch the YubiKey when it blinks, and keep it plugged in until this message goes.</string>
     <string name="yubikey_write">Write to YubiKey</string>
+    <string name="yubikey_writing">Writing to the YubiKey. Keep it plugged in until it is done.</string>
 </resources>

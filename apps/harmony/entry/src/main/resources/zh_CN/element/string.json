@@ -493,9 +493,10 @@
     {"name": "yubikey_opened", "value": "YubiKey 已打开恢复密钥。"},
     {"name": "yubikey_pin", "value": "YubiKey 的 PIN"},
     {"name": "yubikey_pin_then_hold", "value": "输入 YubiKey 的 PIN，然后再次将它靠近手机。"},
-    {"name": "yubikey_pin_then_touch", "value": "输入 YubiKey 的 PIN，然后在它闪烁时触摸它。"},
+    {"name": "yubikey_pin_type", "value": "输入 YubiKey 的 PIN 码。"},
     {"name": "yubikey_sealed", "value": "恢复密钥已存入 YubiKey。YubiKey 和这张纸保存的是同一个密钥：请把两者分开保存。"},
     {"name": "yubikey_touch_usb", "value": "YubiKey 闪烁时请触摸它，并保持插入，直到此消息消失。"},
-    {"name": "yubikey_write", "value": "写入 YubiKey"}
+    {"name": "yubikey_write", "value": "写入 YubiKey"},
+    {"name": "yubikey_writing", "value": "正在写入 YubiKey。完成前请保持插入。"}
   ]
 }

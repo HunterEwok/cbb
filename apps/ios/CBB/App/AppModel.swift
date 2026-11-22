@@ -1423,35 +1423,25 @@ final class AppModel: ObservableObject {
         devices = group.devices
     }
 
-    /// Makes the group's recovery key and returns its sheet to show once;
-    /// nil, with the message set, when it failed.
-    func makeRecovery() async -> Core.RecoverySheet? {
-        defer { recoveryMade = group.recoveryMade }
-        do {
-            return try await group.makeRecovery()
-        } catch {
-            message = Self.describe(error)
-            return nil
-        }
-    }
+    /// Whether a YubiKey is plugged into the USB-C port now (CryptoTokenKit).
+    func yubiKeyPlugged() async -> Bool { await YubiKeyUsb.pluggedSlot() != nil }
 
-    /// Seals the recovery sheet just made onto a YubiKey held to the phone
-    /// or plugged in (Core NFC or CryptoTokenKit; docs/protocol.md, "The recovery key on a YubiKey (0.6)"),
-    /// after its PIN; replaceDefault is the person's consent to replace the
-    /// card's factory management key. True once the card holds it.
-    func sealOnCard(sheet: String, pin: String, replaceDefault: Bool) async -> Bool {
+    /// Seals the recovery sheet just made onto a YubiKey plugged in or held
+    /// to the phone (CryptoTokenKit or Core NFC; docs/protocol.md, "The
+    /// recovery key on a YubiKey (0.6)"), after its PIN, into the first empty
+    /// retired slot for group. Sealing needs no touch. True once the card
+    /// holds it.
+    func sealOnCard(sheet: String, pin: String, group: String) async -> Bool {
         do {
             let sealed = try await YubiKeys.withCard(
                 prompt: String(localized: "Hold the YubiKey to the top of the phone.", bundle: .app),
                 done: String(localized: "The recovery key is on the YubiKey.", bundle: .app),
-                plugged: { self.message = String(localized: "Touch the YubiKey when it blinks, and keep it plugged in until this message goes.", bundle: .app) }
+                plugged: { self.message = String(localized: "Writing to the YubiKey. Keep it plugged in until it is done.", bundle: .app) }
             ) { (card: SmartCard) throws -> RecoveryCard.Sealed in
-                try RecoveryCard.seal(card, pin: pin, sheet: sheet, replaceDefault: replaceDefault)
+                try RecoveryCard.seal(card, pin: pin, sheet: sheet, group: group)
             }
-            message = sealed.defaultKey
-                ? String(localized: "The recovery key is on the YubiKey, which keeps its factory management key: whoever holds it could erase the key without the PIN. Keep the sheet too.", bundle: .app)
-                : String(localized: "The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.", bundle: .app)
-            log.info("yubikey: sealed, factory key \(sealed.defaultKey, privacy: .public), replaced \(sealed.replaced, privacy: .public)")
+            message = String(localized: "The recovery key is on the YubiKey. The YubiKey and the sheet hold the same key: keep both, in different places.", bundle: .app)
+            log.info("yubikey: sealed in slot \(String(sealed.slot, radix: 16), privacy: .public), factory management key \(sealed.defaultKey, privacy: .public)")
             return true
         } catch is CancellationError {
             return false
@@ -1464,13 +1454,17 @@ final class AppModel: ObservableObject {
     /// Opens the recovery secret on a YubiKey held to the phone, after its
     /// PIN and a touch, for one change of root; nil when it did not.
     func openCard(pin: String) async -> Data? {
+        guard let group = group.groupTag else {
+            message = Self.describe(LiveGroup.Failure.noGroup)
+            return nil
+        }
         do {
             let secret = try await YubiKeys.withCard(
                 prompt: String(localized: "Hold the YubiKey with the recovery key to the top of the phone.", bundle: .app),
                 done: String(localized: "The YubiKey opened the recovery key.", bundle: .app),
                 plugged: { self.message = String(localized: "Touch the YubiKey when it blinks, and keep it plugged in until this message goes.", bundle: .app) }
             ) { (card: SmartCard) throws -> Data in
-                try RecoveryCard.open(card, pin: pin)
+                try RecoveryCard.open(card, pin: pin, group: group)
             }
             message = nil
             return secret
@@ -1480,17 +1474,6 @@ final class AppModel: ObservableObject {
             message = Self.describe(error)
             return nil
         }
-    }
-
-    /// Removes the group's recovery key.
-    func removeRecovery() async {
-        do {
-            try await group.removeRecovery()
-            message = String(localized: "The recovery key is removed. A sheet printed for it no longer works.", bundle: .app)
-        } catch {
-            message = Self.describe(error)
-        }
-        recoveryMade = group.recoveryMade
     }
 
     /// How long a copy from another device stays live after it arrives, in
@@ -1701,8 +1684,9 @@ final class AppModel: ObservableObject {
             case .blocked: shown = String(localized: "The YubiKey's PIN is blocked. Unblock it with its PUK in Yubico Authenticator, then try again.", bundle: .app)
             case .oldFirmware: shown = String(localized: "This YubiKey is older than firmware 5.3, which the recovery key needs. Use the printed sheet instead.", bundle: .app)
             case .noKey: shown = String(localized: "This YubiKey holds no recovery key.", bundle: .app)
-            case .holdsOne: shown = String(localized: "This YubiKey holds a recovery key already. Use another YubiKey.", bundle: .app)
-            case .taken: shown = String(localized: "This YubiKey holds something else in the place the recovery key goes. Use another YubiKey.", bundle: .app)
+            case .holdsOne: shown = String(localized: "This YubiKey holds this group's recovery key already.", bundle: .app)
+            case .noFreeSlot: shown = String(localized: "Every place for keys on this YubiKey is in use. Use another YubiKey or the sheet.", bundle: .app)
+            case .twoSlots: shown = String(localized: "This YubiKey holds two recovery keys for this group. Use the sheet instead.", bundle: .app)
             case .managementKey: shown = String(localized: "The app cannot use this YubiKey's management key. Use the printed sheet instead.", bundle: .app)
             case .card: shown = String(localized: "The YubiKey did not answer as expected. Hold it still to the phone and try again.", bundle: .app)
             }

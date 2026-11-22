@@ -701,8 +701,9 @@
     <string name="yubikey_opened">La YubiKey abrió la clave de recuperación.</string>
     <string name="yubikey_pin">El PIN de la YubiKey</string>
     <string name="yubikey_pin_then_hold">Escribe el PIN de la YubiKey y vuelve a acercarla al teléfono.</string>
-    <string name="yubikey_pin_then_touch">Escribe el PIN de la YubiKey y tócala cuando parpadee.</string>
+    <string name="yubikey_pin_type">Escribe el PIN de la YubiKey.</string>
     <string name="yubikey_sealed">La clave de recuperación está en la YubiKey. La YubiKey y la hoja guardan la misma clave: guarda ambas en lugares distintos.</string>
     <string name="yubikey_touch_usb">Toca la YubiKey cuando parpadee y mantenla conectada hasta que desaparezca este mensaje.</string>
     <string name="yubikey_write">Escribir en la YubiKey</string>
+    <string name="yubikey_writing">Escribiendo en la YubiKey. Mantenla conectada hasta que termine.</string>
 </resources>

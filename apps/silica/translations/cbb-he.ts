@@ -1538,8 +1538,8 @@
         <translation>רשמתי אותו</translation>
     </message>
     <message>
-        <source>Insert your YubiKey into the USB-C port, type its PIN, then touch it when it blinks.</source>
-        <translation>חברו את ה-YubiKey ליציאת ה-USB-C, הקלידו את ה-PIN שלו וגעו בו כשהוא מהבהב.</translation>
+        <source>Insert your YubiKey into the USB-C port and type its PIN.</source>
+        <translation>חברו את ה-YubiKey ליציאת USB-C והקלידו את קוד ה-PIN שלו.</translation>
     </message>
     <message>
         <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
@@ -1590,10 +1590,6 @@
         <translation>הדף נשמר במסמכים.</translation>
     </message>
     <message>
-        <source>Touch the YubiKey when it blinks.</source>
-        <translation>געו ב-YubiKey כשהוא מהבהב.</translation>
-    </message>
-    <message>
         <source>Without it, losing this phone means making a new group and joining every device to it again.</source>
         <translation>בלעדיו, אובדן הטלפון הזה פירושו ליצור קבוצה חדשה ולצרף אליה מחדש כל מכשיר.</translation>
     </message>
@@ -1608,6 +1604,10 @@
     <message>
         <source>Write to YubiKey</source>
         <translation>לכתוב ל-YubiKey</translation>
+    </message>
+    <message>
+        <source>Writing to the YubiKey. Keep it plugged in until it is done.</source>
+        <translation>כותבים ל-YubiKey. השאירו אותו מחובר עד הסיום.</translation>
     </message>
 </context>
 <context>
