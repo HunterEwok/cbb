@@ -18,6 +18,18 @@ import (
 	"github.com/HunterEwok/cbb/internal/forward"
 )
 
+// phoneOnLinuxBin is the phone app's example phone-on-linux, as
+// CBB_PHONE_ON_LINUX names it; the test skips without it, as the phone
+// helpers do.
+func phoneOnLinuxBin(t *testing.T) string {
+	t.Helper()
+	bin := os.Getenv("CBB_PHONE_ON_LINUX")
+	if bin == "" {
+		t.Skip("CBB_PHONE_ON_LINUX is not set")
+	}
+	return bin
+}
+
 // rootPhoneWithLaptop runs a phone's app (phone-on-linux) as the root of a
 // group of 0.6 of its own, which a laptop joins by its home window, and
 // returns the phone, its directory, the laptop and their device IDs. The
@@ -121,12 +133,8 @@ func TestFFIPhoneHub(t *testing.T) {
 		<-served
 	}()
 
-	bin := os.Getenv("CBB_PHONE_ON_LINUX")
-	if bin == "" {
-		t.Skip("CBB_PHONE_ON_LINUX is not set")
-	}
 	var h hub
-	pi, next, in := adminPhone(t, bin, &h)
+	pi, next, in := adminPhone(t, phoneOnLinuxBin(t), &h)
 	var phoneID string
 	for _, d := range pi.devices(t) {
 		if d.Name == "member phone" {

@@ -875,3 +875,54 @@ apps/ios/CBBKit/Tests/CBBKitTests/TunnelSettingsTests.swift testUserIDs D-126: t
 internal/service/root_test.go TestRootHandover D-117: an admin's claim on the root and its wait are gone with the records of 0.5; the root changes only with the recovery key, which TestRecovery and TestFFIPhoneChangeRoot check
 internal/service/service_test.go TestBrokenIdentity D-126: identity.json is gone with the member of 0.5; TestBrokenGroupFiles checks the same refusal on damaged group files of 0.6
 internal/service/alone_test.go TestEmbassyJoiner D-119: the ESP32's network code joins only as a device that waits for the phone to dial it, which 0.6 has no more; it joins groups of 0.6 by a pairing window in 0.7, with its test against cbb, and TestFFIJoiner checks joining a window through the core meanwhile
+apps/desktop/admit_test.go TestAdmitByQR D-119: the tray app admits no device by its QR code, since no device waits to be dialed in 0.6; TestOpenWindow checks "+" opening a pairing window
+apps/desktop/admit_test.go TestReadQR D-119: the tray app reads no QR code of a waiting device any more; TestOpenWindow checks the window's QR code and digits it shows
+apps/ios/CBBTests/AppModelTests.swift testRead D-119: the iPhone app reads no join QR code of a device that waits; testJoinByWindowRefusesOtherCodes checks what it takes
+apps/ios/CBBTests/AppModelTests.swift testReadGoJoinText D-119: the join text of a waiting computer is gone; testJoinByWindowRefusesOtherCodes checks that other codes are refused
+apps/ios/CBBTests/AppModelTests.swift testScanGoesHome D-119: scanning a waiting device is gone; testJoinByWindowGoesHome checks that joining a window goes home
+apps/ios/CBBTests/AppModelTests.swift testTheMoreTellingFailure D-119: the failures of the old admission are gone; testJoinByWindowRefusesOtherCodes checks the window's refusals
+internal/forward/budget_test.go TestMemoryChargesTheSource D-122: the forwarder keeps no records of 0.5 to charge; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/budget_test.go TestMemoryChargesTheWideNetwork D-122: the forwarder keeps no records of 0.5 to charge; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/budget_test.go TestMemoryKeepsEveryEnvelope D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/budget_test.go TestMemoryKeepsGroupsThatAreAway D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords and TestRegistrationRemembersVersions check what it keeps
+internal/forward/forward_test.go TestRegistrationByMemberKey D-122: a hub registers by the hubs' credential of 0.6 alone; TestRegistrationNeedsTheHubsCredential checks it
+internal/forward/forward_test.go TestRegistrationNeedsAnAdmin D-122: a hub registers by the hubs' credential of 0.6 alone; TestRegistrationNeedsTheHubsCredential checks it
+internal/forward/forward_test.go TestRegistrationRemembersRemovals D-122: removals travel in the credentials of 0.6; TestRegistrationRemembersVersions checks what the forwarder remembers
+internal/forward/forward_test.go TestRegistrationUnderVerifiedRoot D-122: the root's key comes with the first period's key in 0.6; TestRegistrationUnderFirstPeriodKey checks it
+internal/forward/memory_test.go TestMemoryBoundsGroupAndTotal D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/memory_test.go TestMemoryKeepIsLinear D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/memory_test.go TestMemoryKeepsRegisteredGroups D-122: the forwarder keeps no records of 0.5; TestRegistrationRemembersVersions checks what it keeps
+internal/forward/memory_test.go TestMemoryMergesByID D-122: the forwarder keeps no records of 0.5 to merge; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/memory_test.go TestRegistrationKeepsBoundedRecords D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/provider_test.go TestMemoryChargesTheProvider D-122: the forwarder keeps no records of 0.5 to charge; TestRegistrationKeepsNoRecords checks it keeps none
+internal/forward/provider_test.go TestMemoryHoldsAwayGroupsByProvider D-122: the forwarder keeps no records of 0.5; TestRegistrationKeepsNoRecords checks it keeps none
+internal/relay/cost_test.go TestRecordBytesBounded D-122: the relay keeps no records of 0.5; the Rust relayd's a_refused_registration_leaves_nothing checks what it keeps
+internal/relay/cost_test.go TestRecordBytesChargedToTheSource D-122: the relay keeps no records of 0.5; the Rust relayd's a_refused_registration_leaves_nothing checks what it keeps
+internal/relay/credential_test.go TestCredentialedRelay D-122: the Go relay of 0.5 is gone; the Rust relayd's registers_again_for_a_new_period and waits_for_its_credentials check registration by credential
+internal/relay/fuzz_test.go FuzzRelayWire D-122: the Go relay's wire of 0.5 is gone; the Rust relay_wire fuzz target (member/fuzz) and random_frames_are_read_exactly read its frames
+internal/relay/member_test.go TestAsk D-122: the Go relay of 0.5 is gone; the Rust relayd's a_request_has_one_deadline checks a request
+internal/relay/member_test.go TestCallsBounded D-122: the Go relay of 0.5 is gone; the Rust relayd's a_request_has_one_deadline checks its bound
+internal/relay/nolog_test.go TestNoLogs D-122: the Go relay of 0.5 is gone; the Rust relayd's its_log_names_no_device checks its log
+internal/relay/onlycbb_test.go TestRelayDialsNothing D-122: the Go relay of 0.5 is gone; the Rust relayd's a_dial_reaches_no_address checks it
+internal/relay/refused_test.go TestRefusedRegistrationLeavesState D-122: the Go relay of 0.5 is gone; the Rust relayd's a_refused_registration_leaves_nothing checks it
+internal/relay/relay_test.go TestGroupsApart D-122: the Go relay of 0.5 is gone; the Rust relayd's groups_apart checks it
+internal/relay/relay_test.go TestManyDevicesThroughRelay D-122: the Go relay of 0.5 is gone; the Rust members_of_0_6_meet_at_the_groups_relay and TestAwayThroughRelay check meetings at the relay
+internal/relay/relay_test.go TestOpenRelay D-122: the Go relay of 0.5 is gone; the Rust relayd's tests check the relay of 0.6
+internal/relay/relay_test.go TestRefused D-122: the Go relay of 0.5 is gone; the Rust relayd's a_refused_registration_leaves_nothing checks a refusal
+internal/relay/relay_test.go TestRefusedGroupsList D-122: the Go relay of 0.5 is gone; the Rust relayd's a_device_left_out_goes checks a refused device
+internal/relay/relay_test.go TestRemovedAdmin D-122: the Go relay of 0.5 is gone; the Rust relayd's a_device_left_out_goes checks a removed device
+internal/relay/relay_test.go TestRemovedDevice D-122: the Go relay of 0.5 is gone; the Rust relayd's a_device_left_out_goes checks it
+internal/relay/relay_test.go TestThroughRelay D-122: the Go relay of 0.5 is gone; TestAwayThroughRelay and the Rust members_of_0_6_meet_at_the_groups_relay check syncing through the relay
+internal/service/evidence_tpm_test.go TestRootInTPMCountsAsFiles D-118: the root's key level follows where its keys of 0.6 are; TestRootKeyLevelFollowsItsStore checks it
+internal/tunnel/rustphone_test.go TestRustPhoneRelay D-123: the phones' own relay link is gone; the Rust members_of_0_6_meet_at_the_groups_relay checks devices meeting at the relay
+internal/tunnel/rustphone_test.go TestRustPhoneRelayCredentials D-123: the phones' own relay link is gone; the Rust waits_for_its_credentials checks registration by credentials
+member/src/nettest/away.rs two_devices_meet_at_a_relay D-122: the relay of 0.5 is gone; members_of_0_6_meet_at_the_groups_relay checks a meeting at the relay of 0.6
+member/src/nettest/relay.rs registers_with_credentials D-122: registration of 0.5 is gone; waits_for_its_credentials and registers_again_for_a_new_period check it on 0.6
+member/src/nettest/relayd.rs records_that_refuse D-122: the relay keeps no records of 0.5; a_device_left_out_goes checks a refused device
+member/src/relayd/tests.rs record_caps_of_wide_network_and_provider D-122: the relay keeps no records of 0.5; a_refused_registration_leaves_nothing checks what it keeps
+member/src/relayd/tests.rs records_verified_once D-122: the relay keeps no records of 0.5 to verify; a_refused_registration_leaves_nothing checks what it keeps
+member/src/relayd/wire.rs notes_as_go_writes_them D-122: the Go relay's notes of 0.5 are gone; the_relays_messages_read_as_it_writes_them checks the wire of 0.6
+member/tests/control_admin.rs admits_by_qr_code D-119: no device waits to be dialed in 0.6; a_qr_admission_is_gone checks the refusal
+member/tests/control_admin.rs an_admin_takes_the_group_over D-117: the root changes only with the recovery key; an_admin_does_not_take_the_group_over checks it
+member/tests/control_admin.rs the_window_refuses_wrong_codes D-120: the home window of 0.6 refuses wrong codes; wrong_digits_let_nothing_in, wrong_digits_count_and_the_third_closes_the_window and a_closed_window_refuses_the_joiner check it
+apps/android/kit/src/test/kotlin/tools/cbb/kit/RustTunnelTest.kt refusals D-123: the app's own tunnel and its RustTunnel calls are gone; AwayKitTest.theMemberRefusesABadHub checks the Live member's refusals
