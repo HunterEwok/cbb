@@ -272,8 +272,8 @@ var (
 	hubKeyAhead = 3 * 24 * time.Hour
 )
 
-// errBroken is what the service says while its group file is damaged.
-const errBroken = "this device's group file (identity.json in the service's state directory) is damaged, so the service does not start the group; restore the file from a backup, or leave the group (cbb leave) and join again"
+// errBroken is what the service says while its group files do not open.
+const errBroken = "this device's group files (group.cbor and the keys beside it in the service's state directory) do not open, so the service does not start the group; restore them from a backup, or leave the group (cbb leave) and join again"
 
 // ErrLeft and ErrRestart are how a service ends after cbb leave and after
 // an admin's restart, for systemd to start it again.
@@ -1486,12 +1486,13 @@ func TestFallbackDial(t *testing.T) {
 	}
 }
 
-// A damaged identity file keeps the service running without its group: it
-// says what is wrong and refuses everything, so nothing writes over it.
-func TestBrokenIdentity(t *testing.T) {
+// Damaged group files keep the service running without its group: it
+// says what is wrong and refuses everything, so nothing writes over them.
+func TestBrokenGroupFiles(t *testing.T) {
 	var h hub
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, group.FileName), []byte(`{"version":1,"devi`), 0o600); err != nil {
+	const damaged = "\xa1\x01"
+	if err := os.WriteFile(filepath.Join(dir, "group.cbor"), []byte(damaged), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s := startIn(t, &h, &testService{name: "a", dir: dir, os: group.OSLinux})
@@ -1500,13 +1501,13 @@ func TestBrokenIdentity(t *testing.T) {
 		_, err := c.Do(&control.Message{Header: control.Header{Op: op}})
 		c.Close()
 		var re *control.RequestError
-		if !errors.As(err, &re) || re.Msg != errBroken || !strings.Contains(re.Detail, group.FileName) {
+		if !errors.As(err, &re) || re.Msg != errBroken || re.Detail == "" {
 			t.Fatalf("%s: %v (%#v)", op, err, re)
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(dir, group.FileName))
-	if err != nil || string(data) != `{"version":1,"devi` {
-		t.Fatalf("the identity file changed: %q, %v", data, err)
+	data, err := os.ReadFile(filepath.Join(dir, "group.cbor"))
+	if err != nil || string(data) != damaged {
+		t.Fatalf("the group file changed: %q, %v", data, err)
 	}
 }
 

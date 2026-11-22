@@ -872,3 +872,5 @@ apps/ios/CBBKit/Tests/CBBKitTests/ComputerAdminTests.swift testWire D-126: the p
 apps/ios/CBBKit/Tests/CBBKitTests/ContentTests.swift testGoFrames D-126: the frames and chunks of 0.5's member wire are gone with it; the member of 0.6 fetches images and files in the core, which CoreMemberTests.testNodesFetch and TestFFI check
 apps/ios/CBBKit/Tests/CBBKitTests/TunnelSettingsTests.swift testGroupPathOfAUserID D-126: the kit's VLESS settings of 0.5 are gone (D-123); the core's vless::group_path makes the path, checked by its vless tests
 apps/ios/CBBKit/Tests/CBBKitTests/TunnelSettingsTests.swift testUserIDs D-126: the kit's VLESS settings of 0.5 are gone (D-123); the core checks VLESS user IDs, checked by its vless tests
+internal/service/root_test.go TestRootHandover D-117: an admin's claim on the root and its wait are gone with the records of 0.5; the root changes only with the recovery key, which TestRecovery and TestFFIPhoneChangeRoot check
+internal/service/service_test.go TestBrokenIdentity D-126: identity.json is gone with the member of 0.5; TestBrokenGroupFiles checks the same refusal on damaged group files of 0.6
