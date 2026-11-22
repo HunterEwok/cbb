@@ -191,6 +191,16 @@ impl Live {
     /// with its offer confirming the tag, and its tunnel takes the keys.
     fn tunnel_from(&self, peer: &DeviceId, msg: &[u8]) {
         let Some(away) = self.away.get() else { return };
+        // A hub that is starting has not made its keys for the period yet:
+        // the client's `tunnel` waits until it serves (a client asks as soon
+        // as it sees this device is a hub, which can be before).
+        if away.hub_settings().is_some()
+            && self.hub.lock().unwrap().is_none()
+            && !self.standing_by.load(std::sync::atomic::Ordering::SeqCst)
+        {
+            self.early_tunnels.lock().unwrap().insert(*peer, msg.to_vec());
+            return;
+        }
         let Ok((key, confirm)) = cbb_core::hubkey::read(msg) else { return };
         let Some(psk) = self.mesh.tunnel_psk(peer, true) else { return };
         let tag = match away.tunnel_from(peer, key, &confirm, psk) {
@@ -584,36 +594,30 @@ fn serve_hub(w: &Weak<Live>) {
                     l.logf("cbb: the hub stopped");
                 }
             }
-            (Some(s), None) => {
+            (Some(_), None) if away.rotate_live(&l.hub_period(&away)).1 => {
                 // The keys for the period are made before the hub listens,
                 // so that its first clients get the offer it serves with.
-                // A client that took an offer before them (its `tunnel`
-                // came as soon as it saw this device is a hub) connects
-                // again and takes the new one.
-                let (changed, switched) = away.rotate_live(&l.hub_period(&away));
-                if changed {
-                    let connected = l.mesh.connected();
-                    for d in away.held_devices().iter().filter(|d| connected.contains(d)) {
-                        l.mesh.disconnect(d);
-                    }
-                }
-                if !switched {
-                    match l.start_hub(&away, s) {
-                        Ok(r) => {
-                            l.note_own_forwarder(&away);
-                            *l.hub.lock().unwrap() = Some(r);
-                            // A hub that moves away, ordered before it
-                            // served, serves its clients but tells the other
-                            // hubs nothing: it said it stopped, so that the
-                            // new one serves.
-                            if l.handoff.lock().unwrap().is_none() {
-                                l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
-                            }
-                        }
-                        Err(e) => away.failed(Some(&e)),
-                    }
-                }
             }
+            (Some(s), None) => match l.start_hub(&away, s) {
+                Ok(r) => {
+                    l.note_own_forwarder(&away);
+                    *l.hub.lock().unwrap() = Some(r);
+                    // A hub that moves away, ordered before it served,
+                    // serves its clients but tells the other hubs nothing:
+                    // it said it stopped, so that the new one serves.
+                    if l.handoff.lock().unwrap().is_none() {
+                        l.hubs_say(None, cbb_core::hubkey::HubSays::Serving);
+                    }
+                    // The clients that asked while it started get the offer
+                    // it serves with now.
+                    let early = std::mem::take(&mut *l.early_tunnels.lock().unwrap());
+                    let connected = l.mesh.connected();
+                    for (peer, msg) in early.iter().filter(|(p, _)| connected.contains(p)) {
+                        l.tunnel_from(peer, msg);
+                    }
+                }
+                Err(e) => away.failed(Some(&e)),
+            },
             (Some(_), Some((h, report))) => {
                 // A new period of the forwarder's face: the next key, and
                 // the hub serves with it once due, starting again.

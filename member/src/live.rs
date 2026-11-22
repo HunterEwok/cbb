@@ -161,6 +161,10 @@ pub struct Live {
     /// Whether this hub stands by, a hub above it serving.
     #[cfg(feature = "tunnel")]
     standing_by: std::sync::atomic::AtomicBool,
+    /// The `tunnel` each client sent while this hub was starting, answered
+    /// once it serves, with its keys for the period made.
+    #[cfg(feature = "tunnel")]
+    early_tunnels: Mutex<HashMap<DeviceId, Vec<u8>>>,
     /// The hub this one moves to, while it still serves its clients away
     /// from home (`Live::hand_hub_to`).
     #[cfg(feature = "tunnel")]
@@ -235,6 +239,8 @@ impl Live {
             toward: Mutex::new(HashMap::new()),
             #[cfg(feature = "tunnel")]
             standing_by: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tunnel")]
+            early_tunnels: Mutex::new(HashMap::new()),
             #[cfg(feature = "tunnel")]
             handoff: Mutex::new(None),
             resigning: std::sync::atomic::AtomicBool::new(false),
