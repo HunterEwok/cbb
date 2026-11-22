@@ -218,8 +218,10 @@ fn a_registered_device_gets_its_copies_and_events_by_push() {
     let face = face(&a).unwrap();
 
     // b registers with a and c over its connections to them, as a phone's
-    // app does: its own registration, with the face b reads itself.
-    assert_eq!(b.push_face(), Some(face), "b's own face toward the push service");
+    // app does: its own registration, with the face b reads itself. b
+    // reads it once a's entry points reach it too, which can come after
+    // the faces.
+    until("b's own face toward the push service", 20, || b.push_face() == Some(face));
     let key = [8; 32];
     let first = registration(1, face, key);
     assert!(b.set_own_push(Some(b"not a frame".to_vec())).is_err(), "a registration members refuse");
