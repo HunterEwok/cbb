@@ -1144,7 +1144,11 @@ function openAdd() {
   $("admit-admin-row").hidden = !me?.root;
   $("admit-admin").checked = false;
   const dlg = $("add-dialog");
-  dlg.onclose = () => closeWindow();
+  // A close event comes as a task of its own: one that arrives after the
+  // dialog opened again belongs to the window before and must not end this one.
+  dlg.onclose = () => {
+    if (!dlg.open) closeWindow();
+  };
   dlg.showModal();
   if (me?.admin) openWindow(false);
 }

@@ -3184,6 +3184,8 @@ with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The tray app's Add a device dialog closes by itself when the device joins after it was
+  cancelled and opened again at once; the first close used to end the new pairing window.
 - The iPhone, Android, HarmonyOS and Aurora apps join with a remote invitation of 0.6
   (`cbb://join#`, from `cbb invite` or an admin phone): their screen read only the invitation
   of 0.5 and said the text was no invitation. The screen no longer shows a group, a hub or an
