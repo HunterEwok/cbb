@@ -910,16 +910,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 bytes</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 caracteres por segundo</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(sin verificar)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -930,16 +922,8 @@
         <translation>Mientras es visible, un dispositivo nuevo encuentra este teléfono como “CBB keyboard” en sus ajustes de Bluetooth.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>También lo necesita un texto con un salto de línea: el teclado escribe un salto de línea como Intro.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>Actuar como teclado Bluetooth</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>Un administrador del grupo escribe entonces un texto a través de este teléfono en el dispositivo al que está conectado, desde su propia app o con cbb paste. Este teléfono muestra quién pegó y guarda un registro de los últimos pegados sin su texto.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -958,28 +942,12 @@
         <translation>Preparando…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>Últimos pegados</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>Permitir que un pegado pulse Intro</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>Permitir que los administradores del grupo peguen allí</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>Hacer visible este teléfono</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>No hay ningún dispositivo conectado. Conéctate a este teléfono desde el dispositivo, en sus ajustes de Bluetooth.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>Pegado remoto</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1012,14 +980,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>Visible durante %1 s</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>falló</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>rechazado</translation>
     </message>
 </context>
 <context>
@@ -1284,10 +1244,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 del grupo está en la galería</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>Pegado desde %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>

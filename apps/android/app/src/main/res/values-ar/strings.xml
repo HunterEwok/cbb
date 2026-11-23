@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">تغيير للجهاز الرئيسي في الطريق بالفعل، ولم تصل كل سجلاته بعد. اتصل بأجهزتك أولًا؛ ولا تكتب فوقه إلا إذا كان ذلك التغيير لن يصل أبدًا، مثلًا لأن الهاتف الذي أجراه قد فُقد.</string>
     <string name="change_root_who_stays">من يبقى في المجموعة</string>
     <string name="channel_events">أحداث المجموعة</string>
-    <string name="channel_pastes">عمليات اللصق عن بُعد</string>
     <string name="channel_push">عندما يكون التطبيق مغلقًا</string>
     <string name="channel_sync">جارٍ المزامنة مع حواسيبك</string>
     <string name="close">إغلاق</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">الإنجليزية (الولايات المتحدة)</string>
     <string name="keyboard_no_hosts">لا توجد أجهزة مقترنة بعد. اجعل هذا الهاتف مرئيًا، ثم أضفه على الجهاز، في إعدادات Bluetooth الخاصة به.</string>
     <string name="keyboard_no_permission">لا يُسمح لـCBB باستخدام البلوتوث بعد.</string>
-    <string name="keyboard_pastes">كتابة اللصق عن بُعد هناك</string>
-    <string name="keyboard_pastes_body">عندها يذهب لصق المشرف إلى ذلك الجهاز بدلًا من هذا الهاتف. يجب تشغيل اللصق عن بُعد أعلاه؛ والنص الذي فيه سطر جديد يحتاج إلى السماح بـEnter.</string>
     <string name="keyboard_pick_host">اختر الجهاز الذي تكتب عليه.</string>
     <string name="keyboard_rate">السرعة</string>
     <string name="keyboard_rate_value">%1$d حرفًا في الثانية</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">نص</string>
     <string name="paste_type">كتابته مفتاحًا مفتاحًا</string>
     <string name="pasted">تم اللصق.</string>
-    <string name="pasted_from">لُصق من %1$s</string>
     <string name="pause_eight">لمدة 8 ساعات</string>
     <string name="pause_ever">حتى أشغّلها</string>
     <string name="pause_for_a_time">اختر المدة</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">في الانتظار: يعمل المُرحِّل أثناء مزامنة التطبيق.</string>
     <string name="relay_title">مُرحِّل أعمى</string>
     <string name="relay_with">عند المُرحِّل؛ أجهزة المجموعة هناك: %1$d.</string>
-    <string name="remote_paste">اللصق عن بُعد</string>
-    <string name="remote_paste_body">بعدها يضع مشرف في المجموعة نصًا في حقل النص الذي عليه التركيز على هذا الهاتف، من تطبيقه أو بـcbb paste. يعرض هذا الهاتف من لصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها. ليس على شاشة القفل أبدًا.</string>
-    <string name="remote_paste_enter">السماح للّصق بضغط Enter</string>
-    <string name="remote_paste_needs_service">يلصق عبر خدمة \"مزامنة الحافظة\"، وهي متوقفة: شغّلها في إعدادات إمكانية الوصول في النظام.</string>
-    <string name="remote_paste_needs_service_tv">يلصق عبر خدمة إمكانية الوصول في CBB، وهي متوقفة: شغّلها في إعدادات التلفاز، ضمن إمكانية الوصول.</string>
-    <string name="remote_paste_service_stopped">خدمة إمكانية الوصول مفعّلة في الإعدادات، لكن النظام أوقفها. أوقفها ثم شغّلها مرة أخرى هناك.</string>
-    <string name="remote_paste_switch">السماح لمشرفي المجموعة باللصق هنا</string>
     <string name="remove">إزالة</string>
     <string name="remove_body">لن يتزامن بعد الآن مع أجهزتك. لإضافته مرة أخرى، امسح رمز QR الخاص به من جديد.</string>
     <string name="remove_device">إزالة %1$s</string>

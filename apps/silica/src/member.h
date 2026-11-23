@@ -13,7 +13,6 @@
 
 #include <QByteArray>
 #include <QDateTime>
-#include <QHash>
 #include <QImage>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -153,10 +152,6 @@ signals:
     void awayChanged();
     // The images or files of a copy are in folder, for a notification.
     void saved(const QString &folder, int count);
-    // A paste or paste-off command an admin signed for this phone, checked
-    // and opened (the member's check_command answer, with the event's
-    // token): the receiver carries it out and answers.
-    void commandArrived(const QJsonObject &checked);
     // Something in the member broke (docs/core-api.md, "Panics"): details
     // say what and where. The app shows it and starts the member again.
     void panicked(const QString &details);
@@ -169,17 +164,10 @@ public:
     // (null for none): {tiles, online, others, custom}; empty with failure
     // set when there is no member or the change does not fit.
     QJsonObject view(const QJsonValue &op, Failure *failure) const;
-    // Answers the command of the token: done, refused or failed, and why
-    // (in English: the sender's log shows it).
-    void answer(double token, const QString &status, const QString &reason);
 
 private:
     Q_INVOKABLE void event(const QByteArray &json);
     void write(const QString &text, bool secret, qint64 ttlMs);
-    // A command for the phone itself (docs/protocol.md, section 15) that
-    // the node passed on: checked with the records, not carried out before
-    // and signed after the member started.
-    void command(double token, const QString &from, const QJsonObject &record);
     void pollPeers();
     // A device's name as the member's devices list it, else its ID.
     QString deviceName(const QString &id) const;
@@ -237,8 +225,4 @@ private:
     QString m_awayError;
     // The core's last error message, so that each is shown and logged once.
     QString m_awayFailure;
-    // The commands carried out, by ID, until they expire.
-    static const int maxCommands = 4096;
-    QHash<QString, qint64> m_seen;
-    qint64 m_startedMs = 0;
 };

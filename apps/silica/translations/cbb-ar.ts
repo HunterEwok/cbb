@@ -910,16 +910,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 بايت</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 حرفًا في الثانية</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(غير موثّق)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -930,16 +922,8 @@
         <translation>أثناء ظهوره، يجد الجهاز الجديد هذا الهاتف باسم “CBB keyboard” في إعدادات البلوتوث.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>يحتاجه أيضًا النص الذي فيه سطر جديد: تكتب لوحة المفاتيح السطر الجديد على أنه Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>العمل كلوحة مفاتيح بلوتوث</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>عندها يكتب مشرف المجموعة نصًا عبر هذا الهاتف على الجهاز المتصل به، من تطبيقه أو باستخدام cbb paste. يعرض هذا الهاتف من قام باللصق، ويحتفظ بسجل لآخر عمليات اللصق دون نصها.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -958,28 +942,12 @@
         <translation>جارٍ التحضير…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>آخر عمليات اللصق</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>السماح للصق بالضغط على Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>السماح لمشرفي المجموعة باللصق هناك</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>اجعل هذا الهاتف مرئيًا</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>لا يوجد جهاز متصل. اتصل بهذا الهاتف من الجهاز، من إعدادات البلوتوث فيه.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>اللصق عن بُعد</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1012,14 +980,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>مرئي لمدة %1 ث</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>فشل</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>مرفوض</translation>
     </message>
 </context>
 <context>
@@ -1284,10 +1244,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 من المجموعة في المعرض</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>تم اللصق من %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>

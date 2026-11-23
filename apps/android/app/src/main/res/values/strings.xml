@@ -91,7 +91,6 @@
     <string name="change_root_waiting_body">A change of the main device is already on its way, and its records have not all arrived. Connect to your devices first; write over it only if that change will never arrive, for example because the phone that made it is lost.</string>
     <string name="change_root_who_stays">Who stays in the group</string>
     <string name="channel_events">The group\'s events</string>
-    <string name="channel_pastes">Remote pastes</string>
     <string name="channel_push">While the app is closed</string>
     <string name="channel_sync">Syncing with your computers</string>
     <string name="close">Close</string>
@@ -271,8 +270,6 @@
     <string name="keyboard_layout_us">English (US)</string>
     <string name="keyboard_no_hosts">No paired devices yet. Make this phone visible, then add it on the device, in its Bluetooth settings.</string>
     <string name="keyboard_no_permission">CBB may not use Bluetooth yet.</string>
-    <string name="keyboard_pastes">Type remote pastes there</string>
-    <string name="keyboard_pastes_body">A paste from an admin then goes to that device instead of this phone. Remote paste must be on above; a text with a line break needs Enter allowed.</string>
     <string name="keyboard_pick_host">Pick the device to type into.</string>
     <string name="keyboard_rate">Speed</string>
     <string name="keyboard_rate_value">%1$d characters a second</string>
@@ -384,7 +381,6 @@
     <string name="paste_text">Text</string>
     <string name="paste_type">Type it key by key</string>
     <string name="pasted">Pasted.</string>
-    <string name="pasted_from">Pasted from %1$s</string>
     <string name="pause_eight">For 8 hours</string>
     <string name="pause_ever">Until I turn it on</string>
     <string name="pause_for_a_time">pick for how long</string>
@@ -481,13 +477,6 @@
     <string name="relay_paused">Waiting: the relay works while the app syncs.</string>
     <string name="relay_title">Blind relay</string>
     <string name="relay_with">At the relay; devices of the group there: %1$d.</string>
-    <string name="remote_paste">Remote paste</string>
-    <string name="remote_paste_body">An admin of the group then puts a text into the text field that has the focus on this phone, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text. Never on the lock screen.</string>
-    <string name="remote_paste_enter">Let a paste press Enter</string>
-    <string name="remote_paste_needs_service">It pastes through the service \"Clipboard sync\", which is off: turn it on in the system\'s accessibility settings.</string>
-    <string name="remote_paste_needs_service_tv">It pastes through CBB\'s accessibility service, which is off: turn it on in the TV\'s settings, under Accessibility.</string>
-    <string name="remote_paste_service_stopped">The accessibility service is on in the settings, but the system stopped it. Turn it off and on again there.</string>
-    <string name="remote_paste_switch">Let the group\'s admins paste here</string>
     <string name="remove">Remove</string>
     <string name="remove_body">It will no longer sync with your devices. To add it again, scan its QR code again.</string>
     <string name="remove_device">Remove %1$s</string>

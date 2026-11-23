@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 071a5fc1eda6 -->
+<!-- source: c835f2b0a44e -->
 # 远程粘贴
 
 适合想把一段文本放进另一台设备上某个应用的人：把密码输入电视的登录表单，把命令输入服务器的终端，把地址输入房间另一头的电脑。由群组的管理员发送文本，它会落到该设备当前获得焦点的地方，以粘贴或逐键输入的方式出现。
@@ -14,10 +14,11 @@
 | FreeBSD | `sudo cbb paste-receive on` | X11 和 wlroots 桌面（sway、Hyprland）上获得焦点的应用；不支持 GNOME，因为那里没有任何办法得知屏幕是否已锁定 |
 | Windows | 在以管理员身份打开的终端中运行 `cbb paste-receive on` | 获得焦点的窗口 |
 | Mac | `sudo cbb paste-receive on`，并打开 Mac 应用，在“系统设置”、“隐私与安全性”、“辅助功能”中允许它 | 获得焦点的应用 |
-| Android 手机或电视 | 设置，“Let the group's admins paste here”，并开启应用的无障碍服务 | 另一个应用中获得焦点的文本框 |
 | 没有桌面的小设备 | `sudo cbb paste-receive on`；加上 `-console` 时还包括文本控制台 | 正在使用的 tmux 窗格 |
 
-`-enter`（在手机上是“Let a paste press Enter”）让一次粘贴在文本之后按下 Enter。不加它的话，包含换行的文本会被拒绝，因为在不把粘贴当作一个整体接收的终端里，换行可能会把它前面的内容当作命令执行。
+在此版本中，手机不接收远程粘贴，只发送。
+
+`-enter` 让一次粘贴在文本之后按下 Enter。不加它的话，包含换行的文本会被拒绝，因为在不把粘贴当作一个整体接收的终端里，换行可能会把它前面的内容当作命令执行。
 
 在 GNOME 和 KDE 上，第一次粘贴会弹出系统的屏幕远程控制对话框；允许一次，之后就会记住。要跳过这个对话框，请安装 uinput 辅助程序：加上 `--uinput` 重新安装（`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`），它会添加一个虚拟键盘，只为屏幕前的用户按下 Shift+Insert 和 Enter。
 
@@ -55,7 +56,7 @@ cbb paste -on DEVICE -enter -secret < pass.txt  # presses Enter after it; kept a
 ## 安全
 
 - 在远程粘贴开启期间，你群组的任何管理员都可以像坐在你的键盘前一样向你的设备输入内容。只在需要的地方开启它，并保持管理员名单简短。
-- 每台设备会保留最近 100 次粘贴的日志：谁发送的、何时发送，但绝不记录文本。Android 还会在通知中显示发送者。
+- 每台设备会保留最近 100 次粘贴的日志：谁发送的、何时发送，但绝不记录文本。
 - 任何管理员都可以在另一台设备或所有设备上关闭远程粘贴，比如手机丢失时：`cbb paste-receive off -on DEVICE` 或 `-all`。只有设备自己的用户才能重新开启它。
 
 各项限制见[限制与有效期](../reference/limits.md#remote-paste-and-quick-actions)；其内部运作方式见[设计文档](../design.md#remote-paste)。

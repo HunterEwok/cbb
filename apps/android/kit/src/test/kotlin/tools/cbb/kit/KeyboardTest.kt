@@ -60,7 +60,7 @@ class KeyboardTest {
 
     @Test
     fun settings() {
-        val s = Keyboard.Settings(on = true, host = "AA:BB:CC:00:11:22", layout = Keyboard.Layout.RU, rate = 40, pastes = true)
+        val s = Keyboard.Settings(on = true, host = "AA:BB:CC:00:11:22", layout = Keyboard.Layout.RU, rate = 40)
         assertEquals(s, Keyboard.Settings.decode(s.encode()))
         assertEquals(Keyboard.Settings(), Keyboard.Settings.decode("not json".toByteArray()))
         // A wrong address goes, a rate is kept within the limits, an unknown layout is US.

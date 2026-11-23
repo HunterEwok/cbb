@@ -910,16 +910,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 байт</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 символов в секунду</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(не проверено)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -930,16 +922,8 @@
         <translation>Пока телефон виден, новое устройство найдёт его в своих настройках Bluetooth как «CBB keyboard».</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>Это нужно и для текста с переводом строки: клавиатура набирает перевод строки как Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>Работать как Bluetooth-клавиатура</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>Тогда админ группы набирает текст через этот телефон на устройстве, к которому он подключён, из своего приложения или командой cbb paste. Телефон показывает, кто вставил, и хранит журнал последних вставок без их текста.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -958,28 +942,12 @@
         <translation>Подготовка…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>Последние вставки</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>Разрешить вставке нажимать Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>Разрешить админам группы вставлять туда</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>Сделать телефон видимым</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>Ни одно устройство не подключено. Подключитесь к этому телефону с устройства, в его настройках Bluetooth.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>Удалённая вставка</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1012,14 +980,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>Виден ещё %1 с</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>не удалось</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>отклонено</translation>
     </message>
 </context>
 <context>
@@ -1284,10 +1244,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 из группы — в Галерее</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>Вставлено с %1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>

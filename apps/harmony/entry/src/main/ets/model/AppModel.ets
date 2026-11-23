@@ -25,7 +25,6 @@ import { Join } from './Join';
 import { Joiner, PairWindow } from './Pairing06';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
-import { Paste } from './Paste';
 
 // The root's duties (the attestations, the next period of the server
 // keys) are due days ahead, so a look every few hours, and one a minute
@@ -130,10 +129,8 @@ export class AppModel {
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
   readonly bugs: Bugs = new Bugs();
-  // The lab (docs/apps.md, "The lab"): the phone as a Bluetooth keyboard,
-  // which also types an admin's remote paste.
+  // The lab (docs/apps.md, "The lab"): the phone as a Bluetooth keyboard.
   readonly keyboard: Keyboard = new Keyboard();
-  readonly paste: Paste = new Paste();
 
   private dir: string = '';
   private prefs: preferences.Preferences | undefined = undefined;
@@ -167,10 +164,6 @@ export class AppModel {
     // broke, the details only in debug mode (Errors.shown).
     this.member.onPanic = (details: string) => {
       this.panicked(details);
-    };
-    this.paste.init(prefs, this.keyboard);
-    this.paste.pasted = (name: string) => {
-      this.events.post(t('pasted_from', name));
     };
     this.member.onSaved = (folder: string, count: number) => {
       this.events.post(count === 1 ? t('notify_saved_one') : t('notify_saved', count));
@@ -730,7 +723,6 @@ export class AppModel {
     Errors.log(`group: left ${this.membership?.groupTag() ?? ''}`);
     this.membership = undefined;
     this.events.forget();
-    this.paste.forgetLog();
     this.show('');
     // A phone that joined again with its old member key would share it with
     // its old device record, and removing that record revokes the key; the

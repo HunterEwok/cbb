@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">שינוי של המכשיר הראשי כבר בדרך, ולא כל הרשומות שלו הגיעו. התחברו קודם למכשירים שלכם; כתבו מעליו רק אם השינוי הזה לא יגיע לעולם, למשל כי הטלפון שיצר אותו אבד.</string>
     <string name="change_root_who_stays">מי נשאר בקבוצה</string>
     <string name="channel_events">אירועי הקבוצה</string>
-    <string name="channel_pastes">הדבקות מרחוק</string>
     <string name="channel_push">כשהאפליקציה סגורה</string>
     <string name="channel_sync">מסנכרן עם המחשבים שלכם</string>
     <string name="close">סגירה</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">אנגלית (ארה״ב)</string>
     <string name="keyboard_no_hosts">עדיין אין מכשירים מצומדים. הפכו את הטלפון הזה לגלוי, ואז הוסיפו אותו במכשיר, בהגדרות ה-Bluetooth שלו.</string>
     <string name="keyboard_no_permission">CBB עדיין לא רשאית להשתמש ב־Bluetooth.</string>
-    <string name="keyboard_pastes">הקלדת הדבקות מרחוק שם</string>
-    <string name="keyboard_pastes_body">הדבקה של מנהל תגיע אז למכשיר הזה במקום לטלפון הזה. ההדבקה מרחוק צריכה להיות מופעלת למעלה; טקסט עם ירידת שורה צריך היתר ל־Enter.</string>
     <string name="keyboard_pick_host">בחרו את המכשיר שבו להקליד.</string>
     <string name="keyboard_rate">מהירות</string>
     <string name="keyboard_rate_value">%1$d תווים בשנייה</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">טקסט</string>
     <string name="paste_type">הקלדה מקש אחר מקש</string>
     <string name="pasted">הודבק.</string>
-    <string name="pasted_from">הודבק מ-%1$s</string>
     <string name="pause_eight">למשך 8 שעות</string>
     <string name="pause_ever">עד שאפעיל</string>
     <string name="pause_for_a_time">בחרו לכמה זמן</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">ממתין: הממסר עובד בזמן שהיישום מסנכרן.</string>
     <string name="relay_title">ממסר עיוור</string>
     <string name="relay_with">בממסר; מכשירי הקבוצה שם: %1$d.</string>
-    <string name="remote_paste">הדבקה מרחוק</string>
-    <string name="remote_paste_body">מנהל בקבוצה מכניס אז טקסט לשדה הטקסט שבפוקוס בטלפון הזה, מהאפליקציה שלו או עם cbb paste. הטלפון הזה מציג מי הדביק, ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן. אף פעם לא במסך הנעילה.</string>
-    <string name="remote_paste_enter">לאפשר להדבקה ללחוץ Enter</string>
-    <string name="remote_paste_needs_service">הוא מדביק דרך השירות \"סנכרון הלוח\", שכבוי: הפעילו אותו בהגדרות הנגישות של המערכת.</string>
-    <string name="remote_paste_needs_service_tv">הוא מדביק דרך שירות הנגישות של CBB, שכבוי: הפעילו אותו בהגדרות הטלוויזיה, תחת נגישות.</string>
-    <string name="remote_paste_service_stopped">שירות הנגישות מופעל בהגדרות, אבל המערכת עצרה אותו. כבו והפעילו אותו שוב שם.</string>
-    <string name="remote_paste_switch">לאפשר למנהלי הקבוצה להדביק כאן</string>
     <string name="remove">הסרה</string>
     <string name="remove_body">הוא לא יסתנכרן עוד עם המכשירים שלכם. כדי להוסיף אותו שוב, סרקו שוב את קוד ה-QR שלו.</string>
     <string name="remove_device">הסרת %1$s</string>

@@ -910,16 +910,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 字节</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>每秒 %1 个字符</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>（未验证）</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -930,16 +922,8 @@
         <translation>在可见期间，新设备可以在其蓝牙设置中找到名为“CBB keyboard”的这部手机。</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>含换行的文本也需要它：键盘会把换行输入为回车键。</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>充当蓝牙键盘</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>群组的管理员随后可以通过这部手机，在它所连接的设备上输入文本，可从自己的应用或用 cbb paste。这部手机会显示是谁粘贴的，并保留最近粘贴的记录，不含其文本。</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -958,28 +942,12 @@
         <translation>正在准备…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>最近的粘贴</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>允许粘贴按下回车键</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>允许群组的管理员在那里粘贴</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>让这部手机可被发现</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>没有已连接的设备。请在该设备的蓝牙设置中连接这部手机。</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>远程粘贴</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1012,14 +980,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>可见，剩余 %1 秒</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>失败</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>已拒绝</translation>
     </message>
 </context>
 <context>
@@ -1284,10 +1244,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>来自群组的%1已存入图库</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>来自 %1 的粘贴</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>

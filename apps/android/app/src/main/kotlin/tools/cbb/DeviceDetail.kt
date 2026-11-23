@@ -228,7 +228,7 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var acting by remember { mutableStateOf(false) }
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        // Members and Android and Aurora phones take pastes; iPhones cannot.
+        // Members take pastes; the phones take none in 0.6.
         if (d.takesPaste) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }

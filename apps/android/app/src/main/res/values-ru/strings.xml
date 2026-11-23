@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">Смена главного устройства уже в пути, и её записи пришли не все. Сначала подключитесь к своим устройствам; записывайте поверх, только если та смена никогда не придёт, например потому что телефон, который её сделал, потерян.</string>
     <string name="change_root_who_stays">Кто остаётся в группе</string>
     <string name="channel_events">События группы</string>
-    <string name="channel_pastes">Удалённые вставки</string>
     <string name="channel_push">Когда приложение закрыто</string>
     <string name="channel_sync">Синхронизация с компьютерами</string>
     <string name="close">Закрыть</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">Английская (США)</string>
     <string name="keyboard_no_hosts">Сопряжённых устройств пока нет. Сделайте телефон видимым, потом добавьте его на устройстве, в настройках Bluetooth.</string>
     <string name="keyboard_no_permission">CBB пока не может пользоваться Bluetooth.</string>
-    <string name="keyboard_pastes">Печатать туда удалённые вставки</string>
-    <string name="keyboard_pastes_body">Вставка от админа тогда идёт на это устройство, а не в телефон. Удалённая вставка выше должна быть включена; для текста с переводом строки нужно разрешить Enter.</string>
     <string name="keyboard_pick_host">Выберите, куда печатать.</string>
     <string name="keyboard_rate">Скорость</string>
     <string name="keyboard_rate_value">%1$d знаков в секунду</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">Текст</string>
     <string name="paste_type">Набрать по клавишам</string>
     <string name="pasted">Вставлено.</string>
-    <string name="pasted_from">Вставлено с устройства %1$s</string>
     <string name="pause_eight">На 8 часов</string>
     <string name="pause_ever">Пока не включу</string>
     <string name="pause_for_a_time">выбрать, на сколько</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">Ожидание: релей работает, пока приложение синхронизирует.</string>
     <string name="relay_title">Слепой релей</string>
     <string name="relay_with">На релее, устройств группы там: %1$d.</string>
-    <string name="remote_paste">Удалённая вставка</string>
-    <string name="remote_paste_body">Тогда админ группы сможет вставить текст в поле ввода с фокусом на этом телефоне: из своего приложения или командой cbb paste. Телефон покажет, кто вставил, и сохранит журнал последних вставок без самого текста. На экране блокировки вставка не работает.</string>
-    <string name="remote_paste_enter">Разрешить вставке нажимать Enter</string>
-    <string name="remote_paste_needs_service">Вставка идёт через службу «Синхронизация буфера», а она выключена. Включите её в настройках специальных возможностей.</string>
-    <string name="remote_paste_needs_service_tv">Вставка идёт через службу специальных возможностей CBB, а она выключена. Включите её в настройках телевизора, в разделе «Специальные возможности».</string>
-    <string name="remote_paste_service_stopped">Служба специальных возможностей включена в настройках, но система её остановила. Выключите её там и включите снова.</string>
-    <string name="remote_paste_switch">Разрешить админам группы вставлять сюда</string>
     <string name="remove">Удалить</string>
     <string name="remove_body">Он больше не будет синхронизироваться с вашими устройствами. Чтобы вернуть его, отсканируйте его QR-код снова.</string>
     <string name="remove_device">Удалить %1$s</string>

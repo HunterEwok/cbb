@@ -41,7 +41,7 @@ import tools.cbb.kit.Keyboard
 /**
  * This phone as a Bluetooth keyboard (BluetoothKeyboard): the switch, the
  * host among the paired devices, the host's layout and the typing speed,
- * whether remote pastes go there, and a button that types the clipboard.
+ * and a button that types the clipboard.
  * A phone whose maker left the profile out says so, with the underlying
  * error when error details are on.
  */
@@ -146,11 +146,6 @@ internal fun KeyboardSection(keyboard: BluetoothKeyboard, details: Boolean) {
         }
         HorizontalDivider(color = palette.grid)
         Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) { change(set.copy(pastes = !set.pastes)) }, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.keyboard_pastes), modifier = Modifier.weight(1f))
-                Switch(checked = set.pastes, onCheckedChange = null)
-            }
-            Tip(R.string.keyboard_pastes_body)
             TextButton(
                 enabled = state is BluetoothKeyboard.State.Connected,
                 onClick = {

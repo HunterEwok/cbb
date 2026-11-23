@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">Mabadiliko ya kifaa kikuu tayari yako njiani, na rekodi zake hazijafika zote. Unganisha vifaa vyako kwanza; andika juu yake tu ikiwa mabadiliko hayo hayatafika kamwe, kwa mfano kwa sababu simu iliyoyafanya imepotea.</string>
     <string name="change_root_who_stays">Nani anabaki kwenye kikundi</string>
     <string name="channel_events">Matukio ya kikundi</string>
-    <string name="channel_pastes">Mabandiko ya mbali</string>
     <string name="channel_push">Programu ikiwa imefungwa</string>
     <string name="channel_sync">Inasawazisha na kompyuta zako</string>
     <string name="close">Funga</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">Kiingereza (Marekani)</string>
     <string name="keyboard_no_hosts">Bado hakuna vifaa vilivyooanishwa. Fanya simu hii ionekane, kisha uiongeze kwenye kifaa, katika mipangilio yake ya Bluetooth.</string>
     <string name="keyboard_no_permission">CBB bado hairuhusiwi kutumia Bluetooth.</string>
-    <string name="keyboard_pastes">Andika mabandiko ya mbali huko</string>
-    <string name="keyboard_pastes_body">Kisha ubandikaji wa msimamizi huenda kwenye kifaa hicho badala ya simu hii. Kubandika kwa mbali lazima kuwashwe hapo juu; maandishi yenye kuvunja mstari yanahitaji Enter kuruhusiwa.</string>
     <string name="keyboard_pick_host">Chagua kifaa cha kuandikia.</string>
     <string name="keyboard_rate">Kasi</string>
     <string name="keyboard_rate_value">herufi %1$d kwa sekunde</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">Maandishi</string>
     <string name="paste_type">Iandike kitufe kwa kitufe</string>
     <string name="pasted">Imebandikwa.</string>
-    <string name="pasted_from">Imebandikwa kutoka %1$s</string>
     <string name="pause_eight">Kwa saa 8</string>
     <string name="pause_ever">Hadi nitakapowasha</string>
     <string name="pause_for_a_time">chagua kwa muda gani</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">Inasubiri: kipitishi hufanya kazi wakati programu inasawazisha.</string>
     <string name="relay_title">Relei pofu</string>
     <string name="relay_with">Kwenye relei; vifaa vya kikundi vilivyopo: %1$d.</string>
-    <string name="remote_paste">Kubandika kwa mbali</string>
-    <string name="remote_paste_body">Kisha msimamizi wa kikundi huweka maandishi kwenye sehemu ya maandishi iliyo na lengo kwenye simu hii, kutoka programu yake au kwa cbb paste. Simu hii huonyesha aliyebandika, na huhifadhi kumbukumbu ya ubandikaji wa mwisho bila maandishi yake. Kamwe si kwenye skrini iliyofungwa.</string>
-    <string name="remote_paste_enter">Ruhusu kubandika kubonyeze Enter</string>
-    <string name="remote_paste_needs_service">Hubandika kupitia huduma \"Usawazishaji wa ubao wa kunakili\", ambayo imezimwa: iwashe katika mipangilio ya ufikivu ya mfumo.</string>
-    <string name="remote_paste_needs_service_tv">Hubandika kupitia huduma ya ufikivu ya CBB, ambayo imezimwa: iwashe katika mipangilio ya TV, chini ya Ufikivu.</string>
-    <string name="remote_paste_service_stopped">Huduma ya ufikivu imewashwa katika mipangilio, lakini mfumo uliisimamisha. Izime na uiwashe tena huko.</string>
-    <string name="remote_paste_switch">Ruhusu wasimamizi wa kikundi kubandika hapa</string>
     <string name="remove">Ondoa</string>
     <string name="remove_body">Hakitasawazisha tena na vifaa vyako. Ili kukiongeza tena, changanua msimbo wake wa QR tena.</string>
     <string name="remove_device">Ondoa %1$s</string>

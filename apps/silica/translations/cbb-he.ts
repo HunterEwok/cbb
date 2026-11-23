@@ -910,16 +910,8 @@
 <context>
     <name>KeyboardPage</name>
     <message>
-        <source>%1 bytes</source>
-        <translation>%1 בתים</translation>
-    </message>
-    <message>
         <source>%1 characters a second</source>
         <translation>%1 תווים בשנייה</translation>
-    </message>
-    <message>
-        <source>(unverified)</source>
-        <translation>(לא מאומת)</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -930,16 +922,8 @@
         <translation>כל עוד הטלפון גלוי, מכשיר חדש מוצא אותו בהגדרות הבלוטות' שלו בשם “CBB keyboard”.</translation>
     </message>
     <message>
-        <source>A text with a line break needs it too: the keyboard types a line break as Enter.</source>
-        <translation>גם טקסט עם מעבר שורה צריך את זה: המקלדת מקלידה מעבר שורה כ־Enter.</translation>
-    </message>
-    <message>
         <source>Act as a Bluetooth keyboard</source>
         <translation>שימוש כמקלדת בלוטות'</translation>
-    </message>
-    <message>
-        <source>An admin of the group then types a text through this phone into the device it is connected to, from its own app or with cbb paste. This phone shows who pasted, and keeps a log of the last pastes without their text.</source>
-        <translation>מנהל הקבוצה מקליד אז טקסט דרך הטלפון הזה במכשיר שהוא מחובר אליו, מהאפליקציה שלו או עם cbb paste. הטלפון מראה מי הדביק ושומר יומן של ההדבקות האחרונות בלי הטקסט שלהן.</translation>
     </message>
     <message>
         <source>Bluetooth keyboard</source>
@@ -958,28 +942,12 @@
         <translation>מתכונן…</translation>
     </message>
     <message>
-        <source>Last pastes</source>
-        <translation>הדבקות אחרונות</translation>
-    </message>
-    <message>
-        <source>Let a paste press Enter</source>
-        <translation>לאפשר להדבקה ללחוץ Enter</translation>
-    </message>
-    <message>
-        <source>Let the group's admins paste there</source>
-        <translation>לאפשר למנהלי הקבוצה להדביק שם</translation>
-    </message>
-    <message>
         <source>Make this phone visible</source>
         <translation>הפיכת הטלפון לגלוי</translation>
     </message>
     <message>
         <source>No device is connected. Connect to this phone from the device, in its Bluetooth settings.</source>
         <translation>אין מכשיר מחובר. התחברו לטלפון הזה מהמכשיר, בהגדרות הבלוטות' שלו.</translation>
-    </message>
-    <message>
-        <source>Remote paste</source>
-        <translation>הדבקה מרחוק</translation>
     </message>
     <message>
         <source>Russian</source>
@@ -1012,14 +980,6 @@
     <message>
         <source>Visible for %1 s</source>
         <translation>גלוי עוד %1 שנ'</translation>
-    </message>
-    <message>
-        <source>failed</source>
-        <translation>נכשל</translation>
-    </message>
-    <message>
-        <source>refused</source>
-        <translation>נדחה</translation>
     </message>
 </context>
 <context>
@@ -1284,10 +1244,6 @@
     <message>
         <source>%1 from the group is in the gallery</source>
         <translation>%1 מהקבוצה נמצא בגלריה</translation>
-    </message>
-    <message>
-        <source>Pasted from %1</source>
-        <translation>הודבק מ־%1</translation>
     </message>
     <message>
         <source>Saved %1 from the group in Downloads</source>

@@ -34,7 +34,7 @@ import java.util.concurrent.Executors
  * the HID Device profile types a text into a TV, a tablet, a console or a
  * computer the phone is paired with, which needs nothing installed. The
  * user picks the host among the paired devices and the layout active on
- * it; remote pastes may go there instead of this phone's focused field.
+ * it.
  *
  * Only one app at a time can be a HID device, and the Bluetooth stack
  * forgets the registration when it restarts, so it registers again then.

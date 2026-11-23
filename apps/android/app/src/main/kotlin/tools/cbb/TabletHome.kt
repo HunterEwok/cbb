@@ -88,7 +88,7 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
     NOTIFICATIONS(R.string.notifications, "🔔"),
     RECOVERY(R.string.recovery_title, "🔑"),
     AWAY(R.string.away_title, "🌐"),
-    PASTE(R.string.remote_paste, "⌨"),
+    SHARE(R.string.send_share, "⇪"),
     GROUP(R.string.group, "👥"),
     WHY(R.string.why_screen, "?"),
     ABOUT(R.string.about, "ⓘ"),
@@ -99,7 +99,8 @@ internal enum class SettingsPart(@StringRes val title: Int, val symbol: String) 
         val home = model.phase == AppModel.Phase.HOME
         return when (this) {
             LOOK, ABOUT -> true
-            NOTIFICATIONS, PASTE, GROUP, WHY -> home
+            NOTIFICATIONS, GROUP, WHY -> home
+            SHARE -> home && !model.isTv
             RECOVERY -> home
             AWAY -> home && (model.hub != null || model.blindRelay != null)
         }
@@ -661,9 +662,9 @@ internal fun Modifier.chosen(d: LiveGroup.Device): Modifier {
     return border(2.dp, LocalPalette.current.accent, RoundedCornerShape(LocalStyle.current.radiusTile)).semantics { selected = true }
 }
 
-/** Whether it takes remote paste: members, and Android and Aurora phones; iPhones and iPads cannot. */
+/** Whether it takes remote paste: members; the phones take none in 0.6. */
 internal val LiveGroup.Device.takesPaste: Boolean
-    get() = !isSelf && (role == "member" || (role == "phone" && os in setOf("android", "aurora", "sailfish")))
+    get() = !isSelf && role == "member"
 
 /** The widest a part of Settings stands beside the sidebar, for lines a person reads at a glance. */
 private val readableWidth = 640.dp

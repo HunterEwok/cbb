@@ -2989,6 +2989,11 @@ with 0.5 is set up again once. The details follow.
   `strict-generated-*.json`) and the field list of `tools/difffuzz`'s verdicts.
   `docs/protocol.md`, section 15, describes the commands of 0.6 alone ([format](docs/format.md),
   section 6), and the `command` fuzz target reads them (D-130).
+- Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
+  Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
+  paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote
+  pastes there", and the admin apps offer "Paste on it" for computers only. The phones still
+  send remote pastes to computers.
 - The specification of the records of 0.5 (`docs/records-v2.md`, and the part of
   `docs/protocol.md`, section 10, that described them); section 10 now gives for the records of
   0.6 who signs what, the admins and watches, the hubs table, the copies setting, voiding two

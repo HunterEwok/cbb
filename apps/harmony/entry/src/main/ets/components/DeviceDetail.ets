@@ -16,10 +16,9 @@ import { Device as DeviceInfo } from '../model/Member';
 
 import { BusyLine, ErrorText, NORMAL_BUTTON, PageTitle } from './Common';
 
-// Members take remote pastes, and the phones that type them on a keyboard
-// or into their own focus; an iPhone cannot.
+// Members take remote pastes; the phones take none in 0.6.
 export function takesPastes(d: DeviceInfo): boolean {
-  return d.role === 'member' || (d.role === 'phone' && ['android', 'aurora', 'harmonyos'].includes(d.os ?? ''));
+  return d.role === 'member';
 }
 
 @ComponentV2

@@ -261,9 +261,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /** This phone as a Bluetooth keyboard for a TV, a tablet or a computer near it. */
     val keyboard = BluetoothKeyboard(context, file.parentFile!!)
 
-    /** This phone as a remote paste target: its switches, limits and log. */
-    val pastes = PasteReceiver(context, file.parentFile!!, keyboard)
-
     /**
      * The sync mode: own, shared, receive or send; shared when there is
      * none, as a new device syncs. Sync turned off for a while (own with
@@ -949,8 +946,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         SealedFile(File(file.parentFile, "seal-secret"), "cbb.seal").delete()
         nodeDir.deleteRecursively()
         File(context.filesDir, "attest-status").deleteRecursively()
-        pastes.turnOff()
-        pastes.forgetLog()
         for (alias in listOf(Keys.ROOT, Keys.ADMIN, Keys.MEMBER)) runCatching { Keys.remove(alias) }
         runCatching { Keys.clearPeriodKeys() }
         Log.i(TAG, "this phone left its group: its keys and the group's files are deleted")

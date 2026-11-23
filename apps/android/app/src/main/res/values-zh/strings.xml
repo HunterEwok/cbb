@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">一次主设备更换已在途中，其记录尚未全部到达。请先连接你的设备；只有在那次更换永远不会到达时才覆盖它，例如发起它的手机已丢失。</string>
     <string name="change_root_who_stays">谁留在群组里</string>
     <string name="channel_events">群组事件</string>
-    <string name="channel_pastes">远程粘贴记录</string>
     <string name="channel_push">应用关闭时</string>
     <string name="channel_sync">正在与你的电脑同步</string>
     <string name="close">关闭</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">英语（美国）</string>
     <string name="keyboard_no_hosts">还没有配对的设备。让这部手机可被发现，然后在那台设备的蓝牙设置中添加它。</string>
     <string name="keyboard_no_permission">CBB 暂时无法使用蓝牙。</string>
-    <string name="keyboard_pastes">在那里输入远程粘贴</string>
-    <string name="keyboard_pastes_body">此后管理员的粘贴会发到该设备，而不是这部手机。必须先在上方打开远程粘贴；带换行的文本需要允许回车。</string>
     <string name="keyboard_pick_host">选择要输入文字的设备。</string>
     <string name="keyboard_rate">速度</string>
     <string name="keyboard_rate_value">每秒 %1$d 个字符</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">文本</string>
     <string name="paste_type">逐键输入</string>
     <string name="pasted">已粘贴。</string>
-    <string name="pasted_from">粘贴自 %1$s</string>
     <string name="pause_eight">8 小时</string>
     <string name="pause_ever">直到我开启</string>
     <string name="pause_for_a_time">选择时长</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">等待中：应用同步时中继才工作。</string>
     <string name="relay_title">盲中继</string>
     <string name="relay_with">在中继处；群组在那里的设备：%1$d。</string>
-    <string name="remote_paste">远程粘贴</string>
-    <string name="remote_paste_body">之后群组的管理员可以从自己的应用或用 cbb paste，把文本放进这部手机上当前有焦点的文本框。这部手机会显示是谁粘贴的，并保留最近几次粘贴的记录（不含文本）。锁屏时从不粘贴。</string>
-    <string name="remote_paste_enter">允许粘贴时按回车</string>
-    <string name="remote_paste_needs_service">它通过“剪贴板同步”服务粘贴，但该服务已关闭：请在系统的无障碍设置中开启。</string>
-    <string name="remote_paste_needs_service_tv">它通过 CBB 的无障碍服务粘贴，但该服务已关闭：请在电视设置的“无障碍”中开启。</string>
-    <string name="remote_paste_service_stopped">无障碍服务在设置中已开启，但系统停止了它。请在那里将它关闭再重新开启。</string>
-    <string name="remote_paste_switch">允许群组管理员在此粘贴</string>
     <string name="remove">移除</string>
     <string name="remove_body">它将不再与你的设备同步。要再次添加，请重新扫描它的二维码。</string>
     <string name="remove_device">移除 %1$s</string>

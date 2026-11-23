@@ -133,15 +133,13 @@ object Keyboard {
     /**
      * What the phone's user set for its Bluetooth keyboard: whether it is
      * on, the host by its Bluetooth address, the layout active on the host,
-     * characters a second, and whether remote pastes go to the host rather
-     * than into this phone's focused field.
+     * and characters a second.
      */
     data class Settings(
         val on: Boolean = false,
         val host: String? = null,
         val layout: Layout = Layout.US,
         val rate: Int = DEFAULT_RATE,
-        val pastes: Boolean = false,
     ) {
         fun encode(): ByteArray {
             val fields = mutableListOf<Pair<String, JsonElement?>>(
@@ -150,7 +148,6 @@ object Keyboard {
                 "rate" to Wire.num(rate.toLong()),
             )
             host?.let { fields += "host" to Wire.str(it) }
-            if (pastes) fields += "pastes" to JsonPrimitive(true)
             return Wire.encode(Wire.obj(*fields.toTypedArray()))
         }
 
@@ -166,7 +163,6 @@ object Keyboard {
                         host = o.optString("host")?.takeIf { ADDRESS.matches(it) },
                         layout = Layout.of(o.optString("layout")) ?: Layout.US,
                         rate = (o.optLong("rate") ?: DEFAULT_RATE.toLong()).coerceIn(MIN_RATE.toLong(), MAX_RATE.toLong()).toInt(),
-                        pastes = o.optBool("pastes") == true,
                     )
                 } catch (e: WireTypeException) {
                     Settings()

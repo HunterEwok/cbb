@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">मुख्य डिवाइस का एक बदलाव पहले से रास्ते में है, और उसके सारे रिकॉर्ड अभी नहीं आए हैं। पहले अपने डिवाइस से जुड़ें; उसके ऊपर तभी लिखें जब वह बदलाव कभी नहीं आएगा, जैसे कि उसे करने वाला फ़ोन खो गया हो।</string>
     <string name="change_root_who_stays">समूह में कौन रहेगा</string>
     <string name="channel_events">समूह की घटनाएँ</string>
-    <string name="channel_pastes">रिमोट पेस्ट</string>
     <string name="channel_push">ऐप बंद होने पर</string>
     <string name="channel_sync">आपके कंप्यूटरों के साथ सिंक हो रहा है</string>
     <string name="close">बंद करें</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">अंग्रेज़ी (US)</string>
     <string name="keyboard_no_hosts">अभी कोई पेयर किया हुआ डिवाइस नहीं। इस फ़ोन को दिखने योग्य बनाएँ, फिर उस डिवाइस की Bluetooth सेटिंग्स में इसे जोड़ें।</string>
     <string name="keyboard_no_permission">CBB अभी ब्लूटूथ का उपयोग नहीं कर सकता।</string>
-    <string name="keyboard_pastes">रिमोट पेस्ट वहाँ टाइप करें</string>
-    <string name="keyboard_pastes_body">तब एडमिन का पेस्ट इस फ़ोन के बजाय उस डिवाइस पर जाता है। ऊपर रिमोट पेस्ट चालू होना चाहिए; लाइन ब्रेक वाले टेक्स्ट के लिए Enter की अनुमति चाहिए।</string>
     <string name="keyboard_pick_host">वह डिवाइस चुनें जिस पर टाइप करना है।</string>
     <string name="keyboard_rate">गति</string>
     <string name="keyboard_rate_value">%1$d अक्षर प्रति सेकंड</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">टेक्स्ट</string>
     <string name="paste_type">इसे एक-एक कुंजी से टाइप करें</string>
     <string name="pasted">पेस्ट किया गया।</string>
-    <string name="pasted_from">%1$s से पेस्ट किया गया</string>
     <string name="pause_eight">8 घंटे के लिए</string>
     <string name="pause_ever">जब तक मैं चालू न करूँ</string>
     <string name="pause_for_a_time">कितनी देर के लिए, चुनें</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">इंतज़ार: ऐप के सिंक करते समय रिले काम करता है।</string>
     <string name="relay_title">ब्लाइंड रिले</string>
     <string name="relay_with">रिले पर; वहाँ समूह के डिवाइस: %1$d।</string>
-    <string name="remote_paste">रिमोट पेस्ट</string>
-    <string name="remote_paste_body">तब समूह का कोई एडमिन अपने ऐप से या cbb paste से इस फ़ोन पर फ़ोकस वाले टेक्स्ट फ़ील्ड में टेक्स्ट डालता है। यह फ़ोन दिखाता है कि किसने पेस्ट किया, और पिछले पेस्ट का लॉग उनके टेक्स्ट के बिना रखता है। लॉक स्क्रीन पर कभी नहीं।</string>
-    <string name="remote_paste_enter">पेस्ट को Enter दबाने दें</string>
-    <string name="remote_paste_needs_service">यह \"क्लिपबोर्ड सिंक\" सेवा के ज़रिए पेस्ट करता है, जो बंद है: इसे सिस्टम की सुलभता सेटिंग्स में चालू करें।</string>
-    <string name="remote_paste_needs_service_tv">यह CBB की सुलभता सेवा के ज़रिए पेस्ट करता है, जो बंद है: इसे टीवी की सेटिंग्स में, सुलभता के अंतर्गत चालू करें।</string>
-    <string name="remote_paste_service_stopped">सुलभता सेवा सेटिंग्स में चालू है, पर सिस्टम ने उसे रोक दिया। वहाँ इसे बंद करके फिर चालू करें।</string>
-    <string name="remote_paste_switch">समूह के एडमिन को यहाँ पेस्ट करने दें</string>
     <string name="remove">हटाएँ</string>
     <string name="remove_body">यह अब आपके डिवाइसों के साथ सिंक नहीं करेगा। इसे फिर जोड़ने के लिए, इसका QR कोड फिर से स्कैन करें।</string>
     <string name="remove_device">%1$s हटाएँ</string>

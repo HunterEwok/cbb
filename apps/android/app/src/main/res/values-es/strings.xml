@@ -89,7 +89,6 @@
     <string name="change_root_waiting_body">Ya hay un cambio del dispositivo principal en camino y no han llegado todos sus registros. Conéctate primero a tus dispositivos; escribe encima solo si ese cambio nunca va a llegar, por ejemplo porque se perdió el teléfono que lo hizo.</string>
     <string name="change_root_who_stays">Quién se queda en el grupo</string>
     <string name="channel_events">Eventos del grupo</string>
-    <string name="channel_pastes">Pegados remotos</string>
     <string name="channel_push">Con la app cerrada</string>
     <string name="channel_sync">Sincronizando con tus ordenadores</string>
     <string name="close">Cerrar</string>
@@ -268,8 +267,6 @@
     <string name="keyboard_layout_us">Inglés (EE. UU.)</string>
     <string name="keyboard_no_hosts">Aún no hay dispositivos emparejados. Haz visible este teléfono y añádelo en el dispositivo, en sus ajustes de Bluetooth.</string>
     <string name="keyboard_no_permission">CBB aún no puede usar el Bluetooth.</string>
-    <string name="keyboard_pastes">Escribir allí los pegados remotos</string>
-    <string name="keyboard_pastes_body">Un pegado de un administrador va entonces a ese dispositivo en lugar de a este teléfono. El pegado remoto debe estar activado arriba; un texto con salto de línea necesita permitir Intro.</string>
     <string name="keyboard_pick_host">Elige el dispositivo en el que escribir.</string>
     <string name="keyboard_rate">Velocidad</string>
     <string name="keyboard_rate_value">%1$d caracteres por segundo</string>
@@ -381,7 +378,6 @@
     <string name="paste_text">Texto</string>
     <string name="paste_type">Escribirlo tecla a tecla</string>
     <string name="pasted">Pegado.</string>
-    <string name="pasted_from">Pegado desde %1$s</string>
     <string name="pause_eight">Durante 8 horas</string>
     <string name="pause_ever">Hasta que lo active</string>
     <string name="pause_for_a_time">elige durante cuánto tiempo</string>
@@ -478,13 +474,6 @@
     <string name="relay_paused">Esperando: el relé funciona mientras la app sincroniza.</string>
     <string name="relay_title">Relé ciego</string>
     <string name="relay_with">En el relé; dispositivos del grupo allí: %1$d.</string>
-    <string name="remote_paste">Pegado remoto</string>
-    <string name="remote_paste_body">Entonces un administrador del grupo pone un texto en el campo de texto que tiene el foco en este teléfono, desde su propia app o con cbb paste. Este teléfono muestra quién pegó y guarda un registro de los últimos pegados sin su texto. Nunca en la pantalla de bloqueo.</string>
-    <string name="remote_paste_enter">Permitir que un pegado pulse Intro</string>
-    <string name="remote_paste_needs_service">Pega mediante el servicio \"Sincronización del portapapeles\", que está desactivado: actívalo en los ajustes de accesibilidad del sistema.</string>
-    <string name="remote_paste_needs_service_tv">Pega mediante el servicio de accesibilidad de CBB, que está desactivado: actívalo en los ajustes del televisor, en Accesibilidad.</string>
-    <string name="remote_paste_service_stopped">El servicio de accesibilidad está activado en los ajustes, pero el sistema lo detuvo. Desactívalo y vuelve a activarlo allí.</string>
-    <string name="remote_paste_switch">Permitir que los administradores del grupo peguen aquí</string>
     <string name="remove">Quitar</string>
     <string name="remove_body">Ya no se sincronizará con tus dispositivos. Para añadirlo de nuevo, vuelve a escanear su código QR.</string>
     <string name="remove_device">Quitar %1$s</string>

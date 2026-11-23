@@ -817,24 +817,9 @@ accessibility service until "Allow restricted settings" is chosen in the app's A
 F-Droid or Google Play skips it. Google Play allows the service only with its accessibility
 declaration; the GitHub and F-Droid builds have it from the start.
 
-**Remote paste onto the phone** (docs/design.md, "Remote paste"). The same service is the
-phone's paste target, once the phone's user turned remote paste on in Settings ("Let the
-group's admins paste here", and apart from it "Let a paste press Enter"). A `paste` command
-an admin signed (`PasteReceiver`, with the switches, the limits per sender and the log of
-the last 100 pastes without their text, as on a computer) goes into the text field that has
-the input focus in another app:
-
-- **paste**: the text goes on the clipboard, marked sensitive for a secret, and the field gets
-  `ACTION_PASTE`, or `ACTION_SET_TEXT` where it takes no paste. After half a second the
-  clipboard gets its item back, unless something else was copied meanwhile. The service's
-  own copy detection ignores that moment, so the text is not sent to the group.
-- **type**: the text replaces the field's selection through `ACTION_SET_TEXT`, and the cursor
-  goes after it.
-- **Enter**: `ACTION_IME_ENTER`, from Android 11.
-
-It refuses while the phone is locked, when no editable field has the focus, and while the
-service is off. Settings say so and open the accessibility settings. A notification names
-the sender.
+A phone takes no remote paste in 0.6: the member answers a `paste` command that this does
+not work on a phone yet (docs/protocol.md, section 15), and the phones' switches for it come
+back with 0.7.
 
 **Sending with one tap, without the service** (and always as well):
 
@@ -887,11 +872,8 @@ focus, with a ring in the accent colour around the focused one. The app tells a 
   as a plain member, without an admin key, as a TV has no fingerprint or face to guard one;
   its hello says `tv`.
 - **Receive only.** It starts in the receive sync mode and never sends copies of its own:
-  the accessibility service there is only the remote paste target, and the settings leave
-  out sending copies by themselves, the question before Share, and the watch.
-- **Remote paste.** An admin pastes into the field that has the focus, as on a phone, once
-  remote paste and the accessibility service are on. When no field has the focus, the
-  paste is refused with a hint to open a search or text field with the remote first.
+  the settings leave out sending copies by themselves, the accessibility service, the
+  question before Share, and the watch.
 
 What the TV's system allows:
 
@@ -934,10 +916,6 @@ phone is paired with, and nothing is installed there. Settings, Bluetooth keyboa
 - **Speed**: 10, 20 or 40 characters a second; slow devices drop keys typed too fast. A text
   is at most 4096 characters.
 - **Type the clipboard** types the phone's clipboard on the connected device.
-- **Type remote pastes there** sends remote pastes from the group's admins to that device
-  instead of this phone's focused field. Remote paste must be on. Keys there go straight in,
-  so a line break presses Enter, and a text with one is refused unless Enter is allowed, as
-  for a typed paste on a computer. The phone answers `done` once typing has started.
 
 The phone needs Android's "Nearby devices" permission (`BLUETOOTH_CONNECT` and
 `BLUETOOTH_ADVERTISE`, Android 12 and later). Some makers leave the profile out of their
@@ -969,14 +947,7 @@ call (`cbb_core::keyboard`). Settings, Bluetooth keyboard has the switch, **Make
 visible** (two minutes, as "CBB keyboard"), the device's layout, the speed (10, 20 or 40) and
 **Type the clipboard**; the main page's pull-down menu types the clipboard too while a device
 is connected. Aurora's own pairing dialog asks about a new device, so the app has no agent.
-It is also the Aurora app's remote paste target (`src/pastereceiver.cpp`), since Aurora lets
-no app put keys into another one: with **Let the group's admins paste there** on, on the same
-page, an admin's `paste` command is typed on the connected device. The member passes the
-command to the app, which checks and opens it through the node (`check_command`, the
-paste's text cleaned as the computers clean it), keeps the replay cache, the limits per
-sender (one a second, 30 a minute) and the log of the last pastes without their text, and
-refuses a text with a line break unless **Let a paste press Enter** is on; `paste-off`
-turns the switch off. The package manager takes the `Bluetooth` permission for a regular
+The package manager takes the `Bluetooth` permission for a regular
 app; not yet tried on the phone: whether the sandbox lets BlueZ call the app's objects.
 
 ## A computer as a TV's remote
@@ -1234,12 +1205,10 @@ offers Leave, which alone deletes its files (D-126).
   user to save them where they choose.
 - **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
   phone's own code for joining is drawn from the core's modules.
-- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+- **Remote paste**: an admin phone pastes on a computer from the device's
   page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
   system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
-  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
-  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
-  as Aurora does.
+  signs the paste command (`cbb_member_manage`, `paste`).
 - **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
   group without a computer the root or an admin phone is the hub itself (Settings, "This phone
   as the hub"), registered with the forwarder the group's root set, its tunnel hidden for

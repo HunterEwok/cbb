@@ -10,7 +10,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -96,7 +95,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
-import tools.cbb.kit.RemotePaste
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -534,17 +532,14 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
             model.hub?.let { HubSection(model, it) }
             model.blindRelay?.let { BlindRelaySection(model, it) }
         }
-        if (more(SettingsPart.PASTE)) {
-            if (!model.isTv) ShareAsk(model)
-            RemotePasteSection(model.group.pastes, model.isTv)
-        }
+        if (more(SettingsPart.SHARE) && !model.isTv) ShareAsk(model)
         if (more(SettingsPart.GROUP)) {
             model.ttlMS?.let { LifetimeSection(model, it) }
             model.keyLevel?.let { KeyLevelSection(model, it) }
         }
         // The lab: what works but is no promise of 1.0 (docs/apps.md,
         // "The lab"). A TV has nothing near it to type into.
-        if (more(SettingsPart.PASTE) && !model.isTv) {
+        if (more(SettingsPart.SHARE) && !model.isTv) {
             Text(
                 stringResource(R.string.lab),
                 style = MaterialTheme.typography.titleMedium,
@@ -706,56 +701,6 @@ private fun AutoSend() {
                         )
                     }) { Text(stringResource(R.string.app_info), color = palette.accent) }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Remote paste on this phone (docs/design.md, "Remote paste"): the switch
- * that lets the group's admins paste into the focused text field, the one
- * for Enter, and the accessibility service it needs.
- */
-@Composable
-private fun RemotePasteSection(pastes: PasteReceiver, tv: Boolean) {
-    val palette = LocalPalette.current
-    val context = LocalContext.current
-    var set by remember { mutableStateOf(pastes.settings) }
-    var service by remember { mutableStateOf(CopyWatcher.isOn(context)) }
-    // On in the settings, but not running: the system stopped it, as Android TV 14 does.
-    var stopped by remember { mutableStateOf(service && CopyWatcher.running == null) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        set = pastes.settings
-        service = CopyWatcher.isOn(context)
-        stopped = service && CopyWatcher.running == null
-    }
-    fun change(new: RemotePaste.Settings) {
-        runCatching { pastes.settings = new }.onFailure { Log.e("cbb", "saving the remote paste switches", it) }
-        set = pastes.settings
-    }
-    Section(stringResource(R.string.remote_paste)) {
-        Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-            Row(Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) { change(RemotePaste.Settings(on = !set.on)) }, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.remote_paste_switch), modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Switch(checked = set.on, onCheckedChange = null)
-            }
-            if (set.on) {
-                Row(Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) { change(set.copy(enter = !set.enter)) }, verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.remote_paste_enter), modifier = Modifier.weight(1f))
-                    Switch(checked = set.enter, onCheckedChange = null)
-                }
-            }
-            Tip(R.string.remote_paste_body)
-            if (set.on && (!service || stopped)) {
-                val why = when {
-                    stopped -> R.string.remote_paste_service_stopped
-                    tv -> R.string.remote_paste_needs_service_tv
-                    else -> R.string.remote_paste_needs_service
-                }
-                Text(stringResource(why), style = MaterialTheme.typography.bodyMedium, color = palette.danger)
-                TextButton(onClick = {
-                    context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Text(stringResource(R.string.open_accessibility), color = palette.accent) }
             }
         }
     }

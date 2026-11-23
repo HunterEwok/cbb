@@ -515,33 +515,6 @@ void BleKeyboard::type(const QString &text)
     begin(reports);
 }
 
-QString BleKeyboard::typeRemote(const QString &text, bool *refused)
-{
-    *refused = true;
-    if (!on())
-        return QStringLiteral("this phone types remote pastes on its Bluetooth keyboard, which is off; its user turns it "
-                              "on in the app's settings");
-    if (text.size() > maxChars)
-        return QStringLiteral("the text is longer than the %1 characters a keyboard types").arg(maxChars);
-    if (m_listening == 0) {
-        *refused = false;
-        return QStringLiteral("this phone's Bluetooth keyboard is not connected to a device");
-    }
-    if (m_typing.isActive())
-        return QStringLiteral("this phone's Bluetooth keyboard is typing another text; send it again in a moment");
-    QString untypeable;
-    Failure failure;
-    const QList<QByteArray> reports = reportsFor(text, &untypeable, &failure);
-    if (!failure.isNull()) {
-        *refused = false;
-        return failure.details.isEmpty() ? failure.message : failure.details;
-    }
-    if (!untypeable.isEmpty())
-        return QStringLiteral("the host's layout (%1) has no key for %2").arg(layout(), untypeable);
-    begin(reports);
-    return QString();
-}
-
 QList<QByteArray> BleKeyboard::reportsFor(const QString &text, QString *untypeable, Failure *failure) const
 {
     const QJsonObject k = Core::call(QStringLiteral("keyboard"),

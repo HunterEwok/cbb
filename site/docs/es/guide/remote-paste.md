@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 071a5fc1eda6 -->
+<!-- source: c835f2b0a44e -->
 # Pegado remoto
 
 Para quien quiere poner un texto en una app de otro dispositivo: una contraseña en el formulario de inicio de sesión de un televisor, un comando en la terminal de un servidor, una dirección en un ordenador al otro lado de la habitación. Un administrador del grupo envía el texto, y aterriza donde esté el foco de ese dispositivo, pegado o escrito tecla a tecla.
@@ -14,10 +14,11 @@ El pegado remoto está desactivado en cada dispositivo hasta que su propio usuar
 | FreeBSD | `sudo cbb paste-receive on` | la app con el foco en X11 y en los escritorios wlroots (sway, Hyprland); no en GNOME, porque allí nada indica si su pantalla está bloqueada |
 | Windows | `cbb paste-receive on` en una terminal abierta como administrador | la ventana que tiene el foco |
 | Mac | `sudo cbb paste-receive on`, y la app del Mac abierta y permitida en Ajustes del Sistema, Privacidad y seguridad, Accesibilidad | la app que tiene el foco |
-| Teléfono o televisor Android | Ajustes, «Let the group's admins paste here», y el servicio de accesibilidad de la app activado | el campo de texto que tiene el foco en otra app |
 | Un dispositivo pequeño sin escritorio | `sudo cbb paste-receive on`; con `-console`, también la consola de texto | el panel de tmux en uso |
 
-`-enter` (en un teléfono, «Let a paste press Enter») permite que un pegado pulse Intro después del texto. Sin él, se rechaza un texto con un salto de línea, porque un salto de línea puede ejecutar como un comando lo que va antes de él en cualquier terminal que no tome el pegado como una sola pieza.
+Un teléfono no recibe pegados remotos en esta versión; los envía.
+
+`-enter` permite que un pegado pulse Intro después del texto. Sin él, se rechaza un texto con un salto de línea, porque un salto de línea puede ejecutar como un comando lo que va antes de él en cualquier terminal que no tome el pegado como una sola pieza.
 
 En GNOME y KDE, el primer pegado abre el cuadro de diálogo del sistema para el control remoto de la pantalla; permítelo una vez y se recuerda. Para saltarte el cuadro de diálogo, instala el ayudante uinput: instala de nuevo con `--uinput` (`curl -fsSL https://github.com/HunterEwok/cbb/releases/latest/download/get.sh | sudo sh -s -- --uinput`), lo que añade un teclado virtual que solo pulsa Mayús+Insert e Intro para el usuario que está ante la pantalla.
 
@@ -55,7 +56,7 @@ La respuesta que recibe el remitente dice cuál fue el motivo.
 ## Seguridad
 
 - Cualquier administrador de tu grupo puede escribir en tu dispositivo mientras el pegado remoto está activado, como si estuviera ante tu teclado. Actívalo solo donde lo necesites y mantén corta la lista de administradores.
-- Cada dispositivo guarda un registro de sus últimos 100 pegados: quién los envió y cuándo, nunca el texto. Android además nombra al remitente en una notificación.
+- Cada dispositivo guarda un registro de sus últimos 100 pegados: quién los envió y cuándo, nunca el texto.
 - Cualquier administrador puede desactivar el pegado remoto en otro dispositivo o en todos, por ejemplo cuando se pierde un teléfono: `cbb paste-receive off -on DEVICE` o `-all`. Solo el usuario del propio dispositivo vuelve a activarlo.
 
 Los límites están en [límites y duraciones](../reference/limits.md#remote-paste-and-quick-actions); cómo funciona por dentro está en el [diseño](../design.md#remote-paste).
