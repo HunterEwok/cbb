@@ -984,17 +984,19 @@ joins with one Join button (`cbb_joiner_new`, `ffi/src/joiner.rs`).
   fingerprint of its TLS key, nothing secret. A phone scans it and dials the addresses in turn,
   and goes on only with the member whose key in the handshake has that fingerprint; any other
   key is refused before message 64.
-- While the window is open the member announces it by mDNS (section 3): `v=1`, `g=<tag>`, `p=1`
-  and `f=<fingerprint>`. A device without a camera (Aurora) browses for such a window for up to
-  10 s and MUST refuse when more than one announces itself; it dials the one, its addresses and
-  `f` in place of the QR code's. The announcement is not authenticated, and needs not be: both
-  persons compare the code, and the fingerprint only keeps the session to the device announced.
-- Both ends then show the code the session commits to ("The short code" above), each person
-  answers, and the session goes on only after both said "they match". The member writes the
-  joiner's record by the admission rules (`join::decide::joiner_record`): at home a member or a
-  phone reads, sends and takes secrets, a watch only reads, and a small device without a screen
-  joins only by its own invitation. A phone joins as a member of the group with role `phone`;
-  the root makes it an admin later, from the admin key its hellos offer.
+- While the window is open the member announces it by mDNS (section 3): `v=1`, `g=<tag>`, `p=1`,
+  `f=<fingerprint>` and `i=<window ID>`. A device without a camera (Aurora, a computer with
+  `cbb pair -code`, the ZX Spectrum Next) takes the six digits its person types, browses for
+  such a window for up to 10 s and MUST refuse when more than one announces itself, since the
+  digits fit one and each other would be one more guess; it dials the one, checks its key
+  against `f` and builds the invitation from `i` and the digits. The announcement is not
+  authenticated, and needs not be: the digits are CPace's password, so a window that does not
+  hold them fails at `Ta`.
+- Nobody compares a code on two screens: the session goes on once CPace confirmed. The member
+  writes the joiner's record by the admission rules (`join::decide::joiner_record`): at home a
+  member or a phone reads, sends and takes secrets, a watch only reads, and a small device
+  without a screen joins only by its own invitation. A phone joins as a member of the group with
+  role `phone`; the root makes it an admin later, from the admin key its hellos offer.
 
 ## 7. The join QR code
 

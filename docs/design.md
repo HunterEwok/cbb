@@ -18,7 +18,7 @@ what it must do and what it deliberately does not.
 In order of priority, when two of them conflict:
 
 1. **Security.** Only the group's own devices read a copy. Every connection is mutually
-   authenticated TLS 1.3 under the group's certificates; joining needs the user at both
+   authenticated TLS 1.3 by keys the group's records name; joining needs the user at both
    devices; a lost device is removed in one step.
 2. **Privacy.** No accounts, no telemetry, no server that reads the clipboard. The servers a
    group may use away from home (a forwarder, a blind relay) learn as little as the
@@ -133,10 +133,10 @@ The few ideas the rest follows from:
 - **One port at home, one tunnel away** (D-5, D-11, D-38). At home the members find each
   other by mDNS on one TCP port; away from home they reach a hub through the group's own
   WireGuard star, optionally through a forwarder or a blind relay that hold no keys.
-- **One protocol, two members, four readers**: the member protocol runs in Go (the service)
-  and in the Rust core, which `cbb` and every phone app run (D-86); the Swift and
-  Kotlin kits still read and write the records, pairing and certificates themselves. All four
-  are held together by shared interop vectors in `testdata/interop`.
+- **One member, one rule**: the member protocol, pairing and the records run in the Rust
+  core, which `cbb` and every phone app run (D-86); Go (`cbb-helper`, the forwarder, the end
+  to end tests) and the Swift and Kotlin kits keep only what is theirs. Shared vectors in
+  `testdata/interop` and `testdata/format` hold them together.
 - **Copies sealed end to end** (D-84). The device that copies seals each copy to the devices
   of the group that read copies and signs it, so the members that pass it on, a hub among
   them, carry it without reading or changing it, and the forwarder and the relay see even
@@ -248,15 +248,15 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   core's admission plays the exchange (`Admission::accept`, `TestAloneRootWindow`). A computer becomes an admin
   only with the admin key it offered, with its proof over the pairing session, when it
   paired with the root: the root keeps that key by device (`offered.json`) and `make_admin`
-  writes it into the device's record, so no admin CA travels (D-118). The root changes only
+  writes it into the device's record (D-118). The root changes only
   with the group's recovery key (rule 33, D-117): `take_over`, `takeover_delay` and
   `hand_over` answer an error that points to `cbb recovery`, and an admin keeps its rights
   (`TestAloneTakeover`). `recover` takes the sheet's text or its QR code's
   (`cbb_core::sheet`), checks it against the group's recovery keys, leaves out the devices
   `-leave` names, makes a new root key and writes the change of root with both halves of the
   recovery key, then restarts to sign with the new key; a device the records name the root
-  already is refused, and the other members follow the new root (`TestAloneRecovery`). A
-  recovery key on a YubiKey is not done yet on 0.6.
+  already is refused, and the other members follow the new root (`TestAloneRecovery`). With
+  `-yubikey` it opens the secret sealed on the card instead (`cbb_core::sheet::yubikey`).
 - **The hub.** On the records of 0.6 (`member/src/live/away.rs`; docs/protocol.md, section
   11) a device the records allow a hub (named in the root's hubs record, or an admin) becomes
   one with `cbb global hub` or a `hub` command: the state in `tunnel.json` becomes a hub's,
@@ -331,9 +331,8 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   the mirror at the relay's address (at most every ten minutes) and, unless the relay showed
   a key it does not know, moves to the next address `entries.json` or DNS gives, keeping it in
   `tunnel.json` (`TestAloneRelayProject`). A Rust hub registers with its forwarder with the
-  period's hubs' credential once it lists the hub's server key (Go's `hubCredentials`),
-  showing the server key's certificate in place of its member certificate and the records,
-  and registers again at once when a newer one comes; it serves its clients with a key of
+  period's hubs' credential once it lists the hub's server key, showing the server key's
+  certificate and that credential alone, and registers again at once when a newer one comes; it serves its clients with a key of
   its own for each period, which its offers carry ahead of time (Go's `rotateHubKey`,
   `TestAloneHubCredential`). A Rust hub makes remote invitations as Go's does
   (`member/src/away/invite.rs`): a guest key and preshared key in the invitation, a guest
@@ -511,22 +510,23 @@ is not built yet (roadmap item 10); the design:
 ### The phone apps
 
 The phone apps hold keys, sign, run CPace and accept connections, and in a group that an app
-creates the phone is the root of the group (D-33 to D-36; the wire side is section 9 of
+creates the phone is the root of the group (D-34 to D-36, D-105; the wire side is section 9 of
 [protocol.md](protocol.md)):
 
-- The app creates the group CA in the Secure Enclave (iPhone) or StrongBox/Keystore
-  (Android): a P-256 key that cannot be exported. Only the admin phones issue member
-  certificates; a computer holds CA keys only when the root phone makes it an admin, so a
-  stolen computer cannot add devices.
-- The first computer joins the phone, not the other way round: `cbb pair` shows a QR code
-  with its addresses, its certificate fingerprint and a fresh code, and listens; the app
-  scans it, dials the computer, checks the fingerprint and runs CPace with that code, with
-  the phone in the admitting role, then issues its certificate. No profile for the user to
-  check: the app trusts its own group's CA.
-- Every computer is then a member without CA keys; computers still publish themselves. A
-  small device takes part the same way.
-- Certificate renewal (every two years) and revocation need an admin phone. Losing one is
-  covered by a second admin phone, which is an equal admin with a key of its own; see
+- The app creates the group's first root key in the Secure Enclave (iPhone), StrongBox or
+  Keystore (Android) or HUKS (HarmonyOS): a P-256 key that cannot be exported, which signs
+  only after the user's presence. Only the root and the admins it names admit devices; a
+  computer holds an admin key only when the root makes it an admin, so a stolen computer
+  cannot add devices.
+- A new device joins the phone: "Add a device" opens a home window on the phone and shows its
+  six digits and QR code; a phone scans the code, and a computer types the digits
+  (`cbb pair -code`) and finds the window by mDNS; the two run CPace with the window's secret,
+  and the phone sends the Welcome with the new device's record (protocol section 6, "The
+  window and who dials").
+- Every computer is then a member without an admin key; computers still publish themselves.
+  A small device takes part the same way.
+- Removing a device needs the root or an admin. Losing the root phone is covered by the
+  recovery key, and a second admin phone is an equal admin with a key of its own; see
   "Admin phones, the devices list and revocation" below.
 - The app syncs while it is open and through its "Sync clipboard" action (Back Tap or the
   Action button on the iPhone); on Android a foreground service receives by itself, and an
@@ -544,10 +544,11 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
 
 ### Watches
 
-Steps 1 and 2 done in 0.4, step 3 and the admin key in 0.6; prompt delivery on the iPhone
-needs push notifications, not built yet (the Apple developer account is there). Decided on 2026-10-24: a watch is never
-the group's root, but it carries notifications, a switch for sync away from home and the
-emergency actions, with an admin key of its own.
+Decided on 2026-10-24: a watch is never the group's root, but it carries notifications, a
+switch for sync away from home and the emergency actions, with an admin key of its own. In
+0.6 the root phone adds a watch with its key (`add_watch`, D-124) and the watch shows the
+group, but nothing signs on the wrist: the emergency actions below come with 0.7, and the
+watch apps say so instead of offering them.
 
 #### Why not the root
 
@@ -563,7 +564,7 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
 
 1. **Notifications.** The phone app notifies of the group's events, and iOS and Wear OS show
    them on the watch: a device added or removed, an admin made, frozen or unfrozen, the group
-   taken over, a certificate close to expiry that did not renew, the hub unreachable while
+   root changed, the hub unreachable while
    away from home, a remote paste received or refused. Each is a setting.
 2. **Sync away from home.** A switch on the watch turns the phone's own away mode on and off,
    as the app's switch does (the Live member's `away`).
@@ -575,16 +576,17 @@ the iPhone's key already sits in the Secure Enclave behind Face ID, so the group
 #### The watch's admin key
 
 A key in the watch's Secure Enclave (on Wear OS, the watch's Keystore, where a key in the
-TEE is enough and StrongBox is not required), which the root certifies as an admin CA once,
-as it does an admin phone. A watch without a passcode, or with wrist detection off, is not
-certified; the key is usable only while the watch is unlocked, and the watch checks wrist
+TEE is enough and StrongBox is not required), which the root names as the admin key of the
+watch's device record once (D-124), whose member key nobody keeps, so that nothing is ever
+signed as the watch's member. A watch without a passcode, or with wrist detection off, is not
+added; the key is usable only while the watch is unlocked, and the watch checks wrist
 detection before each signature. The watch's device record has its
 own role, `watch`. A watch on the wrist stays unlocked without asking for Face ID or a
 fingerprint at each signature, so it signs the emergency actions above and nothing else: it
 freezes admin computers (D-60) and removes ordinary devices, but never removes an admin,
-makes one, admits devices, renews certificates or takes the group over. Any admin can freeze
+makes one, admits devices or changes the root. Any admin can freeze
 a watch like an admin computer; removing one takes the root or an admin phone.
-Every receiver checks these limits, in Go, Rust, Swift and Kotlin, with interop vectors.
+Every receiver checks these limits in the core's rules (`AdminKind::Watch`).
 
 Turning sync away from home on stays a decision on each device (D-45); a signed command only
 turns it off, as any admin turns remote paste off (D-59).
@@ -700,49 +702,41 @@ sync away from home, the admins, and remote paste.
   joins it (section 6 of the protocol, "The window and who dials"). In a group a computer created, `cbb new`
   on the first computer creates it, and every further computer joins with `cbb pair` on the
   root or an admin, which shows a six-digit code to type on the new computer.
-- **Creating the group**: `cbb new`, or the first `cbb pair`, on a
-  computer that is in no group creates it: the root CA. That computer is
-  the group's root; any computer, a Mac included, may create a group.
-- **Root CA**: ECDSA P-256, valid 20 years, path length 1, so it certifies the admins' admin
-  CAs (path length 0) as well as members.
-  Every member has its own P-256
-  key and a certificate from the group CA, valid 2 years and renewed when less than 240 days
-  remain. Its `NotBefore` is the CA's, and members check certificates with their own clock but
-  never earlier than the CA's start, so a Raspberry Pi that boots with a clock years behind
-  real time still accepts them; expired certificates are rejected. The root and the admins
-  admit new devices. TLS 1.3 only, with the ALPN protocol
-  `cbb/4`; a client checks that the server's certificate names the device it found in
-  discovery.
-- **End of a CA's life**: certificates end no later than their CA. A member certificate that
-  already ends with its CA is not renewed again; replacing a CA after 20 years works like
-  the replacement after a revocation.
-- **Identity file**: each device keeps its device ID, its key, its certificates and, on the
-  root and the admins, their CA keys (or the handles of keys in the TPM) in one file, `identity.json` in the service's state
-  directory, readable only by the service. It is replaced in one step, so a crash leaves the
-  old identity or the new one.
-- **Joining a computer from an admin**: `cbb pair` on the root or an admin computer shows a
-  six-digit code and opens a pairing
-  window for five minutes (one attempt at a time, closed after a success or the third failed
-  attempt; an attempt that has started may finish after the five minutes). On the new device
-  the user runs `cbb pair -code` and types the code (it is read from the terminal or standard input, never
-  from the command line, where other users of the machine could read it). The new device
-  connects to the member's port with
-  the ALPN protocol `cbb-pair/3` and presents a self-signed certificate for the key
-  it will keep. The two run the CPace password-authenticated key exchange
-  (CPACE-X25519-SHA512) with the code, bound to the TLS session by an exporter and to both
-  certificates, and confirm the key, the new device first. An attacker gets one guess per
-  attempt and no offline attack; a relay between two TLS sessions fails. An attempt that
-  reaches the exchange and does not succeed counts as a failure. The new member then
-  receives, over the TLS session that CPace authenticated, a certificate for the key it
-  presented, the group CA and the group state, and checks the member's certificate against
-  that CA. Sending the certificate is the point of no return:
-  the window then records the device and closes, and reports whether the device confirmed
-  that it stored its identity. Errors travel as short codes, never as text, so a device that
-  has not proved it knows the code cannot put words in front of the user. The five minutes
-  count the time the machine sleeps.
+- **Creating the group**: `cbb new`, or the first `cbb pair`, on a computer that is in no
+  group creates it: the group's first root key, the recovery key and the root's first records.
+  That computer is the group's root; any computer, a Mac included, may create a group.
+- **Keys, not certificates** (D-105): every member has its own P-256 member key, and the
+  group's records say which keys are its devices, which are admins and which is the root
+  (protocol section 10). TLS 1.3 only, with the ALPN protocol `cbb/4`; each side presents its
+  member key in a fixed key container that no reader takes as a certificate, and a member
+  takes a peer only when the records name its key and no removal does. A client checks that
+  the key is the device it found in discovery. Nothing expires with a clock: a Raspberry Pi
+  that boots with a clock years behind real time still connects.
+- **Identity**: each device keeps its member key (or the handle of a key in the TPM or the
+  Secure Enclave) and, on the root and the admins, their root or admin key in `identity.json`,
+  readable only by the service in its state directory, beside the group's records. Each file is replaced in one
+  step, so a crash leaves the old one or the new one.
+- **Joining a computer from an admin**: `cbb pair` on the root or an admin computer opens a
+  home window for five minutes and shows its six digits and its QR code (one attempt at a
+  time, closed after a success or the third failed attempt). On the new device the user runs
+  `cbb pair -code` and types the digits (read from the terminal or standard input, never from
+  the command line, where other users of the machine could read them); it finds the window by
+  mDNS. The new device connects to the member's port with the ALPN protocol `cbb-pair/3` and
+  presents the key container of the key it will keep. The two run the CPace
+  password-authenticated key exchange (CPACE-X25519-SHA512) with the window's secret, bound to
+  the TLS session by an exporter and to both keys, and confirm it, the new device first. An
+  attacker gets one guess per attempt and no offline attack; a relay between two TLS sessions
+  fails. An attempt that reaches the exchange and does not succeed counts as a failure. The
+  new member then receives, over the TLS session that CPace authenticated, the Welcome: the
+  group's records with its own record, the root and recovery keys and the others' keys, under a
+  tag of the exchange, and checks them (protocol section 6, "Pairing in 0.6"). Sending the
+  Welcome is the point of no return: the window then records the device and closes, and
+  reports whether the device confirmed that it stored its identity. Errors travel as short
+  codes, never as text, so a device that has not proved it knows the secret cannot put words in
+  front of the user.
 - **Devices and revocation**: `cbb status` lists the members;
-  `cbb remove <name>` removes one. Revocations are signed records that only grow and
-  spread to every member, which then refuse the revoked keys. The records and the list are
+  `cbb remove <name>` removes one. A removal is a signed record that spreads to every
+  member, which then refuses the removed key. The records and the list are
   described in "Admin phones, the devices list and revocation" below.
 - **Leaving the group** (D-83): `sudo cbb leave` takes a computer out of its group. The
   service stops the group, deletes the group's files from its state directory
@@ -752,8 +746,8 @@ sync away from home, the admins, and remote paste.
   files, the logs of remote pastes and actions, `attest-status.json`, a group left before
   0.6), turns remote paste and the quick actions off, and restarts in no group, from which
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
-  settings stay. The group's root leaves only alone; otherwise it hands the group over
-  first. A removed device and one whose group file is damaged leave the same way; a removed
+  settings stay. The group's root leaves only alone: while the group has other devices it
+  removes them first. A removed device and one whose group file is damaged leave the same way; a removed
   device need not learn that it was removed, since the group refuses it and gives it no
   records (protocol section 10, "Exchange in the member protocol").
   `cbb leave` does it through the service, or by
@@ -977,8 +971,8 @@ prompt, and the service checks that confirmation itself, never what the caller s
   five minutes. None of them lets a device in, sends copies anywhere new or lets anything type
   on this computer.
 - **What cannot be undone, changes who holds the group, or lets another device in for good**
-  (making a group, leaving it, taking it over, handing it on, recovering its root, making a
-  device an admin, the key level and the takeover delay; admitting a device, by its code or
+  (making a group, leaving it, recovering its root, making a device an admin, the key level;
+  admitting a device, by its code or
   an invitation, joining a group, a hub and sync away from home; taking remote pastes, and
   pairing a Bluetooth keyboard or a TV's remote): a confirmation each time.
   The service lists the everyday operations by name (`confirm::KEPT`); any other, also one
@@ -1306,8 +1300,8 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
   routing). A client's tunnel admits only the hub's address. Nothing forwards packets between
   peers; the hub passes clipboard events at the member protocol level, as every member
   already forwards events to its peers.
-- Inside the tunnel the member protocol runs unchanged, with mutual TLS 1.3 and the group's
-  certificates: a valid WireGuard key alone gets no further than the TLS handshake.
+- Inside the tunnel the member protocol runs unchanged, with mutual TLS 1.3 by the member
+  keys the records name: a valid WireGuard key alone gets no further than the TLS handshake.
 - Each client has its own WireGuard preshared key, random and handed over at home, so that
   traffic recorded today stays protected against a future quantum computer (WireGuard alone
   is not post-quantum secure).
@@ -1374,12 +1368,12 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   at home or at the group's relay and take its offer there, and then the old hub tells them
   it moved (`cbb global move` on a computer); a client away with neither home nor a relay
   loses the hub until it meets the new one (D-122; docs/protocol.md, section 11).
-- **Losing the phone.** When the root phone that is the hub is lost, the admin phone that
-  takes the group over (the core's `take_over`, docs/core-api.md) becomes its hub too, and the clients take
-  its offer because the records no longer make the lost phone an admin. Clients at home learn
-  the new hub there; a client far away cannot learn it from a lost phone and joins again
-  with a new remote invitation. That is one more reason for a second phone as an admin,
-  which the app already suggests.
+- **Losing the phone.** When the phone that is the hub is lost, another hub of the group
+  serves, or another admin phone becomes the hub, and the clients take its offer when they
+  meet it at home or at the group's relay; once the lost phone is removed, the records no
+  longer let it serve. A client far away that meets neither joins again with a new remote
+  invitation. That is one more reason for a second phone as an admin, which the app already
+  suggests. A lost root phone is replaced with the recovery key (D-117).
 - **What it does not change.** The rules above hold: a star around the hub, the member TLS
   inside the tunnel, the project's forwarder only passing packets. The phone reads the copies
   as the group's reader it is, and the copies it passes on stay sealed to the others.
@@ -1394,7 +1388,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, the computers first, then the phones (D-96; docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
 | A network blocks WireGuard | AmneziaWG, then VLESS; the hub's setting in every app, the phone hub's too | VLESS for the phone hub's own registration is not yet tried against a real forwarder |
-| The root phone that is the hub is lost | an admin phone takes over and is the hub; devices far away are invited again | |
+| The phone that is the hub is lost | another hub, or another admin phone, serves; a lost root is replaced with the recovery key; devices far away that meet neither are invited again | |
 
 ##### What runs
 
@@ -1489,8 +1483,7 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   knows a period's tag, so its removal starts a new period. Its state is the open connections
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
-  restart. The files of earlier versions, one per group with its roots and removals, are
-  deleted. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
+  restart. Built in Go (the forwarder, with its own reader of the format, `internal/blind`)
   and in the Rust hub, which the phones run too; a hub registers once the credential lists
   its server key, and shows that credential alone (`cbb-forward/3`, D-106).
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
@@ -1506,14 +1499,12 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   timing and sizes of packets: any forwarder has to know which hub a client's packets go to.
   From a registration with a credential it also learns the period's tag, the hub's server
   key, the credential's key hashes, padded, its version, expiry and period key, none of which
-  outlives the period (D-67, D-75); from one with records, the group tag, the hub's member certificate (its device ID, its validity and
-  its admin CA if it has one), the group's root certificates and authority records. It also
+  outlives the period (D-67, D-75). It also
   learns the group's obfuscation settings and, with VLESS, the group's VLESS user ID; and from the
   number of clients that send packets, roughly how many devices are away from home. It does
   not learn the texts, the devices' names, or which client address is which device. This
   metadata is accepted by design (owner decision, 2026-10-24): it reveals that a group
-  exists and how busy it is, never what it syncs, and hiding it would need certificate-less
-  registration or a chain of relays. It logs none of it; what it knows lives in memory while the
+  exists and how busy it is, never what it syncs, and hiding it would need a chain of relays. It logs none of it; what it knows lives in memory while the
   connections last, but for the credentials' versions above. The clients' addresses cannot be hidden from it, since they are where its
   answers go; a chain of relays in the manner of Tor would hide them at a cost in speed and
   complexity that the project does not take on.
@@ -1530,18 +1521,17 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   there, not before; the private key never leaves it and never appears in a QR code.
 - A device gets the hub's public key and addresses, the forwarder's address and port, and
   its preshared key inside the member TLS, at home, when it joins or later on request; its
-  public key reaches the hub the same way, in its hello. The hub admits a key only from a
-  member connection, for the device ID and certificate chain of that connection, so the
-  member certificate binds the key and no extra signed record is needed (one would ask the
-  root phone for Face ID for every device and add nothing the certificate does not prove).
+  public key reaches the hub the same way, in message `tunnel`. The hub admits a key only from
+  a member connection, for the device whose member key the records name on that connection,
+  so the connection binds the key and no extra signed record is needed (one would ask the
+  root phone for Face ID for every device and add nothing the connection does not prove).
   The wire format is in [protocol.md](protocol.md), section 11.
-- Removing a device (the revocation records) makes the hub drop its key at once. A new
+- Removing a device (its removal record) makes the hub drop its key at once. A new
   preshared key can be issued through the tunnel at any time.
 - A device joins with the six-digit code only where no stranger can try it: on the home
   network, or through a path the user already controls (see "Joining from another
   network"). The code is short, so the open internet never reaches that pairing: there
-  anyone could try it, and before it joins a device has neither a certificate nor a
-  tunnel. The usual order is: the device joins at home, meets the hub at home and hands it
+  anyone could try it, and before it joins a device has neither a record nor a tunnel. The usual order is: the device joins at home, meets the hub at home and hands it
   its key, and from then on syncs from anywhere. Keys and preshared keys can be renewed
   later through the tunnel, since the member TLS runs inside it.
 
@@ -1581,37 +1571,30 @@ devices alike.
   the usual way; its text or its file (`.cbbinvite`) is the fallback for a computer and for a
   channel that carries no picture. It is never typed. On a phone, Start's Join with an
   invitation scans it, and the invitation waits on its own screen to be accepted or
-  declined; on a computer, `cbb pair -invite` takes the file or the text. It holds the
-  group's tag, the hub's WireGuard public key and addresses (and the forwarder's, with its
-  way over VLESS for networks that let no UDP through), a one-time WireGuard key pair with
-  its preshared key for a guest tunnel, a 128-bit one-time secret and the time it expires.
-  It serves one device once, for at most a day (an hour by default), and the admin can
-  cancel it.
+  declined; on a computer, `cbb pair -invite` takes the file or the text. The invitation
+  (`cbb://join#...`) names no hub and no group: it holds a one-time ID and a 256-bit secret,
+  a guest path with the hub's key and addresses (and the forwarder's, with its way over VLESS
+  for networks that let no UDP through), a one-time WireGuard key pair with its preshared key
+  for a guest tunnel and the obfuscation settings, and the profile of the device it is for, a
+  computer or a phone. It serves one device once, for at most a day (an hour by default), and
+  the admin can cancel it.
   - An admin that is not the hub hands the guest key to the hub inside member TLS before
-    the invitation is used, and keeps the pairing window and its CA key; the hub passes the
-    guest's pairing bytes to it. The hub adds the guest key as a peer that reaches only the
-    pairing service inside the tunnel, never the members' sync, and drops it after one use,
-    at expiry, or after three failed attempts. A packet without that key gets no answer, as
-    for any unknown WireGuard key.
-  - The new device opens the guest tunnel and pairs with the hub with CPace on the secret,
-    the same exchange as at home. The hub then shows the admin who made the invitation the
-    device's name, system and key fingerprint; nothing is admitted until the admin
-    confirms (Face ID on a phone, a question in the terminal for `cbb invite`), and the
-    admin signs its certificate as for any other device. In a phone group whose hub holds
-    no CA keys the request goes to the admin phone through the hub, inside member TLS, at
-    home or through the phone's own tunnel.
-  - On the records of 0.6 the invitation (`cbb://join#...`) names no hub and no group: its
-    guest path holds the hub's key and addresses, the guest key pair and the obfuscation
-    settings, and the guest dials the hub at the hub's guest address `fd00:cbc::1`, which
-    only guests reach. Once the device proved the secret the admin confirms it, and only
-    then is its record written; it is invited as a computer or as a phone.
-  - With its certificate the device offers its own tunnel key in its first hello through
-    the guest tunnel; the hub admits it, drops the guest peer, and the device reconnects
-    with its own key as an ordinary client. The guest stays for a day after the admission
-    until then, and the device keeps the invitation and tries again, so a device that
-    starts late or loses its network right after the join still gets through.
+    the invitation is used, and keeps the pairing; the hub passes the guest's pairing bytes
+    to it. The hub adds the guest key as a peer that reaches only the pairing service at the
+    hub's guest address `fd00:cbc::1` inside the tunnel, never the members' sync, and drops it
+    after one use, at expiry, or after three failed attempts. A packet without that key gets
+    no answer, as for any unknown WireGuard key.
+  - The new device opens the guest tunnel and pairs with CPace on the secret, the same
+    exchange as at home. The admin who made the invitation then sees the device's name,
+    system and key fingerprint; nothing is admitted until the admin confirms (Face ID on a
+    phone, a question in the terminal for `cbb invite`), and only then is its record written.
+  - Once admitted, the device offers its own tunnel key through the guest tunnel; the hub
+    admits it, drops the guest peer, and the device reconnects with its own key as an
+    ordinary client. The guest stays for a day after the admission until then, and the device
+    keeps the invitation and tries again, so a device that starts late or loses its network
+    right after the join still gets through.
   - Why it is safe over the internet: without the guest key nobody reaches the hub at all;
-    the 128-bit secret makes guessing hopeless and CPace allows no offline attack; the
+    the 256-bit secret makes guessing hopeless and CPace allows no offline attack; the
     guest reaches nothing but the pairing; and the admin's confirmation names the device,
     so an invitation stolen and used first is seen and refused. The invitation is a secret
     until it is used, so the user passes it only through a channel they trust; the app says
@@ -1663,8 +1646,8 @@ relay, or a hub.
   for notes: which of its group's devices are on the relay, and calls. The device with the
   lower pseudonym dials the other through the relay; the relay calls the other, joins the two
   connections once it answers, and copies the bytes. Member TLS then runs end to end
-  between the two devices, and the answering device checks that the certificate is the
-  caller's, so the relay cannot pose as a device.
+  between the two devices, and the answering device checks that the key is the caller's, so
+  the relay cannot pose as a device.
 - The relay sees which devices of a group are online, which of them talk, when and how
   much; it cannot read the clipboard or pose as a device. It knows a device only by a
   pseudonym, the hash of its server key, under the period's tag; all of it changes each
@@ -1867,7 +1850,7 @@ with their names, systems and dates:
 - **Periods.** The group lives in periods of about 30 days. For each, the root signs inside
   the group a fresh tag for the servers and a fresh period key, and every device signs with
   its member key a fresh server key, the only key it shows the servers in that period. A
-  removal or a takeover starts a new period at once, since a removed device knows the tag.
+  removal or a change of root starts a new period at once, since a removed device knows the tag.
 - **The hubs' credential**, signed by the period key: padded hashes of the hubs' and the
   admins' server keys. The forwarder takes the first period key it sees for a tag, then only
   that one and the newest version, so a member that is no hub cannot take the hub's place.
@@ -1898,12 +1881,11 @@ with their names, systems and dates:
 Researched and decided for 0.6 (D-75). Even with the credentials the servers see something; from the
 most to the least revealing: the addresses of the hub and its clients, their online times
 and the volume; a stable pseudonym per device; the group tag; how many devices there are;
-when the root changes; the root certificate. Decided:
+when the root changes; the root key. Decided:
 
-- **The forwarder stores nothing about a group.** Before 0.6 `cbb forward` kept a file per
-  group with its tag, root certificates and removals (device IDs and dates); now only a
-  keyed hash of each period's tag, the version of its newest credential and a hash of its
-  period key remain, enough to refuse an older credential. The relay keeps pseudonyms, not
+- **The forwarder stores nothing about a group** but a keyed hash of each period's tag, the
+  version of its newest credential and a hash of its period key, enough to refuse an older
+  credential. The relay keeps pseudonyms, not
   device IDs.
 - **Padding.** The credentials' lists are padded to 4, 8, 16 and up to 256 entries, so the
   count of devices shows only roughly.
@@ -1921,41 +1903,37 @@ when the root changes; the root certificate. Decided:
 ### Admin phones, the devices list and revocation
 
 A user may have several phones, for example an iPhone and an Android phone. All of them join
-the one group, and any of them can be an **admin**: it admits devices, renews certificates
-and revokes devices, so losing one phone loses nothing. Every app shows the whole group, and
-an admin removes a device in two taps. The wire format is in section 10 of
+the one group, and any of them can be an **admin**: it admits and removes devices as far as
+the root lets it, so losing one phone loses nothing. Every app shows the whole group, and an
+admin removes a device in two taps. The wire format is in section 10 of
 [protocol.md](protocol.md).
 
-**Keys and certificates.** No key ever leaves the Secure Enclave or StrongBox where it was
-made, so two phones cannot share one CA key. Instead:
+**Keys.** No key ever leaves the Secure Enclave, StrongBox or HUKS where it was made, so two
+phones never share a key. Instead:
 
-- The first phone's app creates the **group root CA**, as section 9 of the protocol says,
-  but with path length 1, so it can certify one level of CAs below it.
-- Every admin phone, the first one included, has an **admin CA** of its own: a key in its
-  Secure Enclave or StrongBox, certified by the root as a CA with path length 0. Admin keys
-  sign only when the user confirms with Face ID, Touch ID, the fingerprint or the passcode,
-  so a locked phone in a thief's hand signs nothing. Aurora OS gives an app none of these,
-  so its app asks for a PIN of its own, which the TEE checks and counts (D-94).
-- Each phone also has a separate member key and certificate, as every member has, for its
-  everyday connections; that key needs no confirmation.
-- A member certificate comes from whichever admin admitted the device. Members present
-  their certificate with the admin CA's certificate in the TLS handshake and check peers
-  against the group root, so a certificate from any admin is valid everywhere.
-- Making a second phone an admin: the second phone joins as a member, as every device does
-  (the first phone scans its QR code in "Add a device"); its hellos offer the public key of
-  its admin key, and the first phone's "Make it an admin" signs its admin CA certificate with
-  the root key. There is one button to join, never one to join as an admin. From then on
-  both are equal, with one exception: only the root key can make further admins. If the root phone is lost, the remaining admin
-  **becomes the root** (below).
+- The phone that makes the group holds its **root key** (protocol section 9). The group's
+  **recovery key**, on paper or a YubiKey, is the only way to change the root.
+- Every admin phone has an **admin key** of its own, which the root names in that phone's
+  device record with its powers (`admit`, `manage`, `remove`, `remove-admins`, `freeze`,
+  `thaw`, `hub`). Root and admin keys sign only when the user confirms with Face ID, Touch
+  ID, the fingerprint or the passcode, so a locked phone in a thief's hand signs nothing.
+  Aurora OS gives an app none of these, so its app asks for a PIN of its own, which the TEE
+  checks and counts (D-94).
+- Each phone also has a separate member key, as every member has, for its everyday
+  connections; that key needs no confirmation. Members present it in the TLS handshake and
+  take a peer whose key the records name (D-105).
+- Making a second phone an admin: the second phone joins as a member, as every device does;
+  its hellos offer the public key of its admin key, and "Make it an admin" on the root phone
+  writes that key into its device record. There is one button to join, never one to join as
+  an admin. Only the root makes admins.
 
-**The devices list.** Every admission produces a signed **device record**: the device ID,
-its name, its role and system ("Computers, admins and the operating system" below), the hash of its key, whether it is an admin,
-who admitted it and when. Revocations are signed **revocation records**. Both kinds form one
-set that only grows: every member keeps the set and gives it to every peer it meets, so all
-members, and every app, show the same list. Merging two sets is their union, and what the
-list says follows from the set alone, never from the order in which records arrived, so the
-group always converges. The list is small (a few hundred bytes per device) and spreads with
-the member protocol; nothing else stores it.
+**The devices list.** Every admission produces a signed **device record**: the device's key,
+its name, its role and system ("Computers, admins and the operating system" below), its rights
+and, for an admin, its admin key and powers. A removal is a signed `revoke` record. The records
+form one set that every member keeps and gives to every peer it meets, so all members, and
+every app, show the same list. What the list says follows from the set alone, never from the
+order in which records arrived, so the group always converges; the set stays within fixed
+rooms per signer, and the root's checkpoints settle what it keeps (protocol section 10).
 
 Every app and the command line show it:
 
@@ -1968,46 +1946,36 @@ Every app and the command line show it:
 - The Mac app and the tray app on Linux and Windows show the same list from the same
   records.
 
-**Revoking a device.** An admin signs a revocation record naming the device's keys: its
-member key and, for an admin phone, its admin key. The record spreads to every member that
-is on, and each refuses the revoked keys at once: running connections with that device are
-closed, and new handshakes fail. A revoked admin key also voids every certificate it issued,
-except those the record lists as kept: when an admin revokes another admin, its app lists
-the devices that the revoked one admitted and keeps them, so they stay in the group, and
-renews their certificates from its own admin CA as they connect. A device the thief admits
-afterwards is not on the list and is refused. A member that was off gets the record from the
-first member it meets.
+**Removing a device.** The root or an admin signs a removal naming the device's keys: its
+member key and, for an admin, its admin key. The record spreads to every member that is on,
+and each refuses the removed keys at once: running connections with that device are closed,
+and new handshakes fail. The devices a removed admin admitted stay as far as the root's
+checkpoint keeps them, which the root's writer writes before the removal (protocol section 10,
+"Checkpoints"). A member that
+was off gets the record from the first member it meets. A removed device need not learn that
+it was removed: the group refuses it and gives it no records. An admin key whose device stays
+silent for 35 days loses its rights (`records::set::ADMIN_SILENCE_MS`).
 
-**Losing a phone.** On the remaining admin phone: Devices, the lost phone, "Remove". That
-revokes both of the lost phone's keys and keeps every device it had admitted. If the lost
-phone held the root key, the remaining phone also **becomes the root**: it creates a new
-root CA, certifies its own admin CA under it, and signs a root record that hands the group
-over from the old root to the new one; members that receive the record verify it with the
-trust they have, then trust the new root alone, and the remaining admin renews their
-certificates from it. Members that were off follow when they come back, as with any record,
-so no device has to be paired again. A thief who knows the lost phone's passcode can act as
-an admin until the phone is removed; when two admins revoke each other, both lose admin
-rights (the rule depends only on the set of records), and the user starts the group anew from
-the phone in hand.
+**Losing a phone.** On the root phone or another admin phone: Devices, the lost phone,
+"Remove". If the lost phone held the root key, the user changes the root with the group's
+recovery key on a phone or a computer in hand (`cbb recover`, the apps' change-root screen):
+it makes a new root key, the change is signed by both halves of the recovery key, and the new
+root re-issues the devices the person keeps, so no device has to be paired again; the old
+root's admin keys lose their rights for good (protocol section 10, "A change of root"). A thief
+who knows the lost phone's passcode can act as an admin until the phone is removed.
 
-**A computer as admin.** The root phone can also make a computer of its group an admin, as it
-does a second phone, for a user who would rather admit and remove devices from a terminal. Every computer of a phone
-group keeps an admin key next to its identity and offers its public key in the member
-protocol; "Make it an admin" on the root phone certifies it as an admin CA and sends that to
-the computer. From then on the computer admits computers with `cbb pair`, removes
-devices with `cbb remove` and renews certificates, as an admin phone does; it makes no
-admins and never removes the root phone. Its key is a file, so a thief with the computer can
-act as an admin until another admin removes it; that is the price of the convenience, and
-why it is a choice, not the default.
+**A computer as admin.** The root can also make a computer of its group an admin, for a user
+who would rather admit and remove devices from a terminal. A computer offers an admin key
+when it pairs with the root, and `cbb admin` or "Make it an admin" on the root writes it into
+the computer's record (D-118). From then on the computer admits devices with `cbb pair` and
+removes them with `cbb remove`, as far as its powers go; it makes no admins and never removes
+the root. Its key is a file where the computer has no TPM, so a thief with the computer can act
+as an admin until another admin removes it; that is the price of the convenience, and why it
+is a choice, not the default.
 
 **Groups that a computer created** have a root and admins as a phone group has, and any
 device but the root is removed by a record ("Computers, admins and the operating system"
 below).
-
-**Built in this order:** the Go side first, since it needs no phone: the records, their
-exchange in the member protocol, refusing revoked keys, the devices list and `cbb remove`,
-and members that verify certificates through an admin CA. Then the apps: the root and admin
-CAs, the Devices screen, making an admin, and the root record.
 
 ### Members, capabilities, admins and the operating system
 
@@ -2025,8 +1993,7 @@ in the pairing Info, in its hello and in its device record: `linux`, `windows`, 
 | `watch`  | a watch, through its phone                  | signs the commands that turn things off                         |
 
 A member's **capabilities** (protocol.md, section 4, "Capabilities") say what it can do
-beyond syncing: `admin` (it can hold an admin key; only the root's admin CA makes it an
-admin), `dials` (it dials the other members; of two that dial, the lower device ID does)
+beyond syncing: `admin` (it can hold an admin key; only the root makes it an admin), `dials` (it dials the other members; of two that dial, the lower device ID does)
 and `hub` (it may be chosen as the group's hub). Its device record names them, and its
 hello and its pairing Info say them.
 
@@ -2038,7 +2005,7 @@ hello and its pairing Info say them.
 
 Publishing on every network is a local setting of the device, not a capability. The Mac is
 a member like the others. A phone with the app, an iPhone or an Android phone, has its own
-key and member certificate and the role `phone`. `cbb status` and the Devices screens of the
+member key and the role `phone`. `cbb status` and the Devices screens of the
 apps show each device's system (Linux, Windows, macOS, iOS, Android, or "device" for
 firmware) and mark the root and the admins. A device's record takes its `os` from the
 pairing Info; when a device's hello states another `os` than its record, an admin that
@@ -2052,27 +2019,26 @@ that do not dial (no `dials` among their capabilities); phones dial everyone. Th
 firewall on every system, with the user's consent.
 
 **Keys: the creator and the admins.** Any computer can create a group, a Mac included.
-Every new group gets a root CA with path length 1, as a group a phone creates has, and the
-creating computer holds its key and is the group's **root**. Every other computer gets
-only its member certificate: no CA key reaches it by joining. Each computer keeps an
-admin key next to its identity and offers it in its hello, as a computer of a phone group
-does today ("A computer as admin" above); the root makes a member an **admin** on request,
-with `cbb admin <name>` on the root computer or "Make it an admin" on a root phone, by
-certifying that key as an admin CA. An admin admits devices, renews certificates, signs
-records and removes devices; only the root makes admins.
+Every new group gets a root key and a recovery key, as a group a phone creates has, and the
+creating computer holds the root key and is the group's **root**. Every other computer gets
+only its member key: no root or admin key reaches it by joining. A computer offers an admin
+key when it pairs with the root ("A computer as admin" above); the root makes it an
+**admin** with `cbb admin <name>` on the root computer or "Make it an admin" on a root phone,
+by writing that key into its device record with a computer's powers (`AdminKind::Computer`:
+admit, manage, remove, freeze, hubs). An admin admits devices, signs records and removes
+devices as far as its powers go; only the root makes admins.
 
-**Removing a device.** Every device except the root is removed with a revocation record, as
-in a phone group, without a new group:
+**Removing a device.** Every device except the root is removed with a removal record, as in
+a phone group, without a new group:
 
-- a member that is no admin: its member key is revoked, and that is all;
-- an admin: its member key and its admin key are revoked, and the listed devices are kept:
-  those it admitted, and the others too, since any admin renews any device's certificate. Only the root or an admin phone removes an admin; another admin computer freezes it
-  ("Who may remove an admin" below). The group's root stays;
-- the root computer: another admin claims the group (a `claim` record, which takes effect
-  after the root's delay unless the root cancels it), as an admin phone does when the root phone is lost (`cbb takeover <name>`). This
-  is open to admin computers in a group whose root is a computer; in a phone group they
-  still never take over. A group whose root is gone and has no other admin must be made
-  anew, so `cbb pair` suggests making a second admin.
+- a member that is no admin: its member key is removed, and that is all;
+- an admin: its member key and its admin key are removed, and the devices it admitted stay as
+  far as the root's checkpoint keeps them. Only the root or an admin phone removes an admin
+  (the power `remove-admins`); an admin computer freezes it ("Who may remove an admin"
+  below). The group's root stays;
+- the root: nobody removes it. A lost root is replaced with the group's recovery key (`cbb
+  recover`, the apps' change-root screen), on any device the person has in hand; no admin
+  takes the group over (D-117).
 
 ### Who may remove an admin
 
@@ -2083,24 +2049,12 @@ fingerprint. So the question is what an admin computer may do to another admin.
 
 **The rule.** The root and the admin phones remove any admin (`cbb remove` on the root, Remove
 in the apps). An admin computer removes ordinary devices only; it never removes the root or
-another admin, and hands the group over only from a lost root computer (below). Instead, **any admin freezes another admin
-computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
+another admin. Instead, **any admin freezes another admin computer** (`cbb freeze <name>`): from then on the frozen admin is no admin, nothing it signs
 counts beyond the records it signed before, its connections are refused, it gets no records
 and so learns nothing of the group until it is unfrozen and connects again, and it cannot
 paste. The root or an admin phone then decides: Unfreeze in the apps (`cbb unfreeze` on a
 root computer) makes it an admin again, Remove takes it out for good. Nobody freezes the
 root or an admin phone. How the records say it is in protocol section 10, "Removals and freezes keep what the author saw".
-
-**Taking over from a lost root computer.** In a group whose root is a computer, the root key
-sits in a file just as an admin computer's key does, so a stolen admin computer is no
-weaker than the root; and if the root is lost and only admin computers are left, the group
-has no other way on. So there, and only there, an admin computer may hand the group over
-(`cbb takeover`), and the records limit it: the takeover counts only while the old root's
-own records leave that admin standing. If the old root is still there, it removes the
-admin and the takeover stops counting, so a thief cannot take a group from a root that is
-still in use. The others refuse the old root's connections after the takeover but still
-exchange records with it, so that it hears of the takeover (`cbb status` names the admin)
-and its removal of that admin reaches them, before or after it heard. A frozen admin computer does not take over until the old root thaws it. In a phone's group an admin computer never takes over.
 
 **Why freezing, and not one of the two simpler rules.**
 
@@ -2144,8 +2098,7 @@ does not, the screen's own session.
 
 #### Who may paste where
 
-A device in a group trusts its admins: they already admit it, renew its certificate and
-remove it. Still, typing into a device is more than syncing a clipboard, so **remote paste
+A device in a group trusts its admins: they already admit it and remove it. Still, typing into a device is more than syncing a clipboard, so **remote paste
 is off on every device until its own user turns it on there** (`cbb paste-receive on`, a
 switch in the apps; D-59). Once it is on, every admin may paste on it with no further
 consent. The admins are the root and admin phones, the admin computers of a phone group,
@@ -2573,8 +2526,8 @@ builds for aarch64, armv7 and x86-64 with stable Rust; mips and mipsle are Tier 
   the service takes a list of interfaces (`CBB_INTERFACES`) for mDNS and the member port, by default the devices of the
   `lan` zone. Avahi, already installed on many routers, keeps working: `cbb` shares port
   5353 with it as it does on desktop Linux.
-- **Time.** Many routers have no clock that runs while they are off, and certificates need
-  the right time, so the service starts after NTP has set the clock: a hook in
+- **Time.** Many routers have no clock that runs while they are off, and the copies'
+  lifetimes and the keys statements' age need the right time, so the service starts after NTP has set the clock: a hook in
   `/etc/hotplug.d/ntp` leaves a flag in `/var/state`, as dnsmasq does.
 - **The member port and WAN.** The listener checks the interface each connection arrives
   on, so the member port refuses WAN even when the firewall is opened by mistake; binding to
@@ -2823,15 +2776,15 @@ defence, is in [threat-model.md](threat-model.md). In short:
 |----------------------------------------------------------------|----------------------------------------------------------------------------|
 | Someone on the home network reads the traffic                  | TLS 1.3 everywhere                                                         |
 | Someone guesses or intercepts the pairing code of a computer   | CPace inside TLS: one online guess per attempt, at most three per pairing window, no offline attack; the joining device spends the code on one attempt, and never takes it from the command line |
-| A device impersonates a member                                 | mutual TLS with the group CA; members and phones dial discovered addresses and check the peer's certificate, so an impostor gets no text |
-| A device is lost or stolen                                     | `cbb remove` or "Remove" in the apps: a revocation record that every member and the hub obey at once; any admin freezes a stolen admin computer; an admin takes over from a lost root without pairing anything again ([if a device is lost](guide/lost-device.md)) |
+| A device impersonates a member                                 | mutual TLS by member keys; members and phones dial discovered addresses and take the peer only when the records name its key, so an impostor gets no text |
+| A device is lost or stolen                                     | `cbb remove` or "Remove" in the apps: a removal record that every member and the hub obey at once; any admin freezes a stolen admin computer; the recovery key replaces a lost root without pairing anything again ([if a device is lost](guide/lost-device.md)) |
 | A member is compromised                                        | it can read the group clipboard, by design. No device changes its system trust for the group |
 | A bug in the network code                                      | memory-safe language; the service runs as an unprivileged user in a systemd sandbox (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateDevices`, no capabilities, restricted address families and system calls) |
 | A local user abuses the console helper                         | the helper listens on nothing; the control socket admits only root and the `cbb` group; single-line injection by default with control characters removed |
 | Requests from outside the home network                         | the service accepts connections only from private, unique-local and link-local addresses, checked in the program and by systemd; away from home only through the group's WireGuard tunnel, whose port drops every packet without a key from the group's records |
 | Someone copies a computer's keys                               | the identity and tunnel files are readable only by the service; whoever copies them can act as that device until it is removed, so removing it makes every member and the hub refuse it at once. A Linux computer with a TPM keeps its member, admin and tunnel keys there, a Windows PC with a TPM and a Mac with a Secure Enclave their member and admin keys; every device shows where its keys are ([roadmap.md](roadmap.md#device-keys-in-hardware)) |
 | Someone on the internet reads or traces the traffic           | the member TLS inside the group's own WireGuard tunnel, a preshared key per client, chunk frames padded to 16 KiB; clients talk only to the hub; the project's forwarder holds no keys and passes each packet only to its own group's hub |
-| An admin orders a paste on a member                           | off until the target's user turns it on, Enter and root consoles separately; any admin turns it off everywhere; only admins send; the command is signed and expires in 30 seconds, and the target checks the signature, the revocations and a replay cache; control characters removed; a notification and a log on the target; a rate limit; a phone signs only behind Face ID or the fingerprint; a stolen admin computer is frozen by any other admin and removed by the root or an admin phone (see "Who may remove an admin") |
+| An admin orders a paste on a member                           | off until the target's user turns it on, Enter and root consoles separately; any admin turns it off everywhere; only admins send; the command is signed and expires in 30 seconds, and the target checks the signature, the removals and a replay cache; control characters removed; a notification and a log on the target; a rate limit; a phone signs only behind Face ID or the fingerprint; a stolen admin computer is frozen by any other admin and removed by the root or an admin phone (see "Who may remove an admin") |
 | A compromised dependency or build                              | few dependencies, `govulncheck` and OSV-Scanner, actions pinned to commit SHAs, release builds in CI with checksums and build provenance |
 
 ### Device keys in hardware
