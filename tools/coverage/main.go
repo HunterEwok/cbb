@@ -100,17 +100,32 @@ var testFakes = []string{
 	"internal/vless/vlesstest",
 }
 
-// rustTestOnly are the files of core/src that only tests compile (a
-// #[cfg(test)] module under a name of its own, which llvm-cov does not leave
-// out as it does tests.rs): the interop vectors' checks and the verdicts of
-// tools/difffuzz.
-var rustTestOnly = []string{"/core/src/vectors.rs", "/core/src/verdicts.rs"}
+// rustTestOnly are the files and directories of core/src and member/src
+// that only tests compile (a #[cfg(test)] module under a name of its own,
+// which llvm-cov does not leave out as it does tests.rs): the interop
+// vectors' checks, the verdicts of tools/difffuzz, the simulation, the
+// long rule checks, the power-loss checks, the tests' kit and mutants, and
+// the service's network tests.
+var rustTestOnly = []string{
+	"/core/src/vectors.rs", "/core/src/verdicts.rs", "/core/src/sim/", "/core/src/longrules.rs",
+	"/core/src/powerloss.rs", "/core/src/testkit.rs", "/core/src/msg/mutants.rs", "/member/src/nettest/",
+}
+
+// testOnly tells a file that only tests compile.
+func testOnly(f string) bool {
+	return slices.ContainsFunc(rustTestOnly, func(t string) bool {
+		if strings.HasSuffix(t, "/") {
+			return strings.Contains(f, t)
+		}
+		return strings.HasSuffix(f, t)
+	})
+}
 
 // llvmParts says which files of an llvm-cov export count for each part.
 var llvmParts = map[string]func(file string) bool{
 	"rust-core": func(f string) bool {
 		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/") &&
-			!slices.ContainsFunc(rustTestOnly, func(t string) bool { return strings.HasSuffix(f, t) })
+			!testOnly(f)
 	},
 	"rust-member": inMember,
 	// rust-service is member/src again, measured with Go's tests of the
@@ -122,7 +137,7 @@ var llvmParts = map[string]func(file string) bool{
 }
 
 func inMember(f string) bool {
-	return strings.Contains(f, "/member/src/") && !strings.Contains(f, "/tests/")
+	return strings.Contains(f, "/member/src/") && !strings.Contains(f, "/tests/") && !testOnly(f)
 }
 
 type tally struct{ total, covered int }

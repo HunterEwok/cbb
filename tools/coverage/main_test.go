@@ -170,3 +170,26 @@ func TestBranches(t *testing.T) {
 		t.Error("a core without its own target")
 	}
 }
+
+// The files only tests compile count in no part.
+func TestTestOnlyFiles(t *testing.T) {
+	for f, want := range map[string]bool{
+		"/w/core/src/sim/mod.rs":          true,
+		"/w/core/src/vectors.rs":          true,
+		"/w/core/src/msg/mutants.rs":      true,
+		"/w/member/src/nettest/relay.rs":  true,
+		"/w/core/src/msg/mod.rs":          false,
+		"/w/core/src/simple.rs":           false,
+		"/w/member/src/relayd/command.rs": false,
+	} {
+		if testOnly(f) != want {
+			t.Errorf("testOnly(%q) = %v", f, !want)
+		}
+	}
+	if llvmParts["rust-core"]("/w/core/src/sim/mod.rs") || llvmParts["rust-member"]("/w/member/src/nettest/relay.rs") {
+		t.Error("a test-only file counts")
+	}
+	if !llvmParts["rust-member"]("/w/member/src/lib.rs") {
+		t.Error("lib.rs does not count")
+	}
+}
