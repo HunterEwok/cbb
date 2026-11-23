@@ -670,6 +670,19 @@ jobs:
           mkdir -p freebsd-bin
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
+      - name: the runner's own load while the FreeBSD machine runs
+        # The machine's processor can stand still under the runner's KVM
+        # (steal, or the host's exits), which the guest counts as user time;
+        # the runner sees it: its steal time and KVM's exits, every 30 s.
+        run: |
+          (
+            sudo dmesg | grep -i 'split.lock' || echo "no split lock in dmesg"
+            while sleep 30; do
+              date -u +%T
+              grep -E '^cpu ' /proc/stat
+              sudo cat /sys/kernel/debug/kvm/exits 2>/dev/null || true
+            done
+          ) >"$RUNNER_TEMP/runner-load.log" 2>&1 &
       - name: go test in a FreeBSD 15.1 virtual machine
         uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b # v1.6.0
         with:
@@ -696,9 +709,15 @@ jobs:
             sysctl kern.timecounter.hardware kern.timecounter.choice kern.eventtimer.timer || true
             go test -run '^$' -bench 'Hash8K$' -benchtime 2000x crypto/sha256 || true
             go test -run '^$' -bench '^BenchmarkNow$' -benchtime 200000x time || true
-            # The release package alone, timed, before the suite runs it
-            # beside the others.
-            /usr/bin/time go test -count=1 ./internal/release </dev/null || true
+            # The release package alone took over 10 minutes here in a run,
+            # user time equal to real time, where a Mac takes 13 s: the short
+            # runs above last milliseconds and miss a processor that stands
+            # still now and then. The same hashes over 10 s each, and where
+            # the release test spends its time.
+            go test -run '^$' -bench 'Hash8K$|Hash1K$' -benchtime 10s crypto/sha256 || true
+            go test -c -o /tmp/release.test ./internal/release
+            /usr/bin/time /tmp/release.test -test.run 'TestCheckErrors$' -test.timeout 4m -test.cpuprofile /tmp/cpu.out </dev/null || true
+            go tool pprof -top -nodecount 25 /tmp/release.test /tmp/cpu.out || true
             # What uses the processors while the suite runs, every five
             # minutes, so a slow run shows what it waited behind.
             (while sleep 300; do date; top -b -d1 -o cpu 12 | tail -n 16; done) &
@@ -798,6 +817,9 @@ jobs:
       - name: how QEMU ran the machine (-enable-kvm or accel=kvm under KVM)
         if: always()
         run: ps -ww -o args= -C qemu-system-x86_64 || true
+      - name: the runner's load while the machine ran
+        if: always()
+        run: cat "$RUNNER_TEMP/runner-load.log" || true
 
   openwrt:
     name: OpenWrt
