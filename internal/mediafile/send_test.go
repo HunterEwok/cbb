@@ -11,14 +11,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/HunterEwok/cbb/internal/clip"
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
 // service listens on a socket in a temporary folder and gives what one
-// client sends, in order.
-func service(t *testing.T) (string, <-chan []*control.Message) {
+// client sends, in order. Its dial connects that client and returns once
+// the service took the connection: on Windows a connection closed before
+// it is accepted can leave the accepted end waiting for ever.
+func service(t *testing.T) (func() *control.Client, <-chan []*control.Message) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "s")
 	l, err := net.Listen("unix", path)
@@ -26,9 +29,11 @@ func service(t *testing.T) (string, <-chan []*control.Message) {
 		t.Skip("no Unix sockets:", err)
 	}
 	t.Cleanup(func() { l.Close() })
+	accepted := make(chan struct{})
 	got := make(chan []*control.Message, 1)
 	go func() {
 		c, err := l.Accept()
+		close(accepted)
 		if err != nil {
 			got <- nil
 			return
@@ -45,7 +50,20 @@ func service(t *testing.T) (string, <-chan []*control.Message) {
 			ms = append(ms, m)
 		}
 	}()
-	return path, got
+	dial := func() *control.Client {
+		t.Helper()
+		c, err := control.Dial(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-accepted:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the service did not take the connection")
+		}
+		return c
+	}
+	return dial, got
 }
 
 func TestSend(t *testing.T) {
@@ -61,11 +79,8 @@ func TestSend(t *testing.T) {
 	if n := Size(parts); n != int64(len(big))+2 {
 		t.Errorf("Size = %d", n)
 	}
-	path, got := service(t)
-	c, err := control.Dial(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dial, got := service(t)
+	c := dial()
 	if err := Send(c, control.OpCopyMedia, parts, "text"); err != nil {
 		t.Fatal(err)
 	}
@@ -108,11 +123,8 @@ func TestSendFails(t *testing.T) {
 		"a file that is gone":     {Part: control.Part{Path: "x", Size: 2}, File: filepath.Join(dir, "gone")},
 		"a file that got shorter": {Part: control.Part{Path: "x", Size: 10}, File: short},
 	} {
-		path, got := service(t)
-		c, err := control.Dial(path)
-		if err != nil {
-			t.Fatal(err)
-		}
+		dial, got := service(t)
+		c := dial()
 		if err := Send(c, control.OpCopyMedia, []Part{part}, ""); err == nil {
 			t.Errorf("%s was sent", name)
 		}
@@ -120,11 +132,8 @@ func TestSendFails(t *testing.T) {
 		<-got
 	}
 	// A closed connection fails at once.
-	path, got := service(t)
-	c, err := control.Dial(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dial, got := service(t)
+	c := dial()
 	c.Close()
 	<-got
 	if err := Send(c, control.OpCopyMedia, nil, ""); err == nil {
