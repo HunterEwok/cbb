@@ -38,7 +38,7 @@
     <string name="away_ask_title">开启“随处”？</string>
     <string name="away_body">手机不在家庭网络中时，会通过你自己的中心节点的 WireGuard 隧道同步，中心节点是用 cbb global hub 设置的群组电脑；它的端口可从互联网访问，但只能通过带有群组密钥的 WireGuard 访问。中心节点会在这部手机下次在家连接时响应它。数据不会发往其他任何地方，没有隧道就没有连接。关闭后会忘记这部手机的隧道密钥。</string>
     <string name="away_connected">已通过隧道连接到中心节点。</string>
-    <string name="away_connected_to">已通过隧道连接到中心节点 %1$s。</string>
+    <string name="away_connected_to">已通过隧道连接到中枢 %1$s。</string>
     <string name="away_connecting">正在通过隧道连接中心节点…</string>
     <string name="away_error">中心节点在隧道中没有响应。</string>
     <string name="away_is_off">“随处”已关闭</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">这部手机的群组密钥由旧版应用生成。请在这部手机上离开群组并重新设置。</string>
     <string name="error_paste_refused">设备未粘贴。</string>
     <string name="error_refused">电脑拒绝了。请在它上面再次运行 cbb pair。</string>
-    <string name="error_root_leaves">这部手机持有群组的根，而群组还有其他设备。请先移除它们，或让管理员手机接管群组。</string>
+    <string name="error_root_leaves">这部手机是群组的主设备，而群组还有其他设备。请先移除它们，或让管理员手机把群组移到自己这里。</string>
     <string name="error_rootless">这台电脑以无 root 方式安装，因此它的任何程序都能读取它的密钥。它永远不能成为管理员。</string>
     <string name="error_timed_out">五分钟内没有手机扫描代码。请重试。</string>
     <string name="error_too_many_codes">错误代码次数过多。请用新代码重试。</string>
@@ -151,11 +151,11 @@
     <string name="error_yubikey_two_slots">这个 YubiKey 上有本群组的两个恢复密钥。请改用纸页。</string>
     <string name="error_yubikey_usb_denied">未允许手机通过 USB 使用 YubiKey。请重新插入并允许。</string>
     <string name="error_yubikey_wrong_pin">PIN 错误。连续三次错误后 YubiKey 会锁定其 PIN。</string>
-    <string name="event_added">%1$s 已加入群组。</string>
-    <string name="event_frozen">%1$s 已被冻结：在管理员解冻它之前，其他设备会拒绝它。</string>
+    <string name="event_added">%1$s 加入了群组。</string>
+    <string name="event_frozen">%1$s 已被冻结：在管理员解冻前，其他设备会拒绝它。</string>
     <string name="event_made_admin">%1$s 现在是管理员。</string>
-    <string name="event_removed">%1$s 已从群组中移除。</string>
-    <string name="event_taken_over">%1$s 接管了群组：它现在持有群组的根。</string>
+    <string name="event_removed">%1$s 已被移出群组。</string>
+    <string name="event_taken_over">%1$s 已把群组移到自己这里：现在它是群组的主设备。</string>
     <string name="event_unfrozen">%1$s 已解冻。</string>
     <string name="fetched">已从电脑获取。</string>
     <string name="files_saved">已保存到“下载”中的 CBB 文件夹。</string>
@@ -178,8 +178,8 @@
     <string name="hub_entries_stale">项目的入口列表已过期，转发器在这部手机已知的方式上都没有响应。请在群组的电脑上更新 CBB，或在那里用 cbb global entries import 导入新列表；这部手机与群组相遇时，群组会将其传递过来。</string>
     <string name="hub_failed">转发器不接受这部手机。请检查它的地址和密钥。</string>
     <string name="hub_forwarder">转发器</string>
-    <string name="hub_forwarder_by_root">群组的根设备为这个中心节点设置转发器；离家的设备通过它连接到这部手机。</string>
-    <string name="hub_forwarder_none_by_root">群组的根设备没有为这部手机设置转发器，因此它只在家中充当中心节点。</string>
+    <string name="hub_forwarder_by_root">群组的主设备为这个中心节点设置转发器；离家的设备通过它连接到这部手机。</string>
+    <string name="hub_forwarder_none_by_root">群组的主设备没有为这部手机设置转发器，因此它只在家中充当中心节点。</string>
     <string name="hub_home_background">这部手机是中心节点，在后台也是。</string>
     <string name="hub_home_note">这部手机是中心节点：应用打开时同步正常工作。</string>
     <string name="hub_home_only">仅限家中的中心节点：添加转发器即可离家同步。</string>
@@ -289,7 +289,7 @@
     <string name="layout_orbit">轨道</string>
     <string name="layout_tiles">磁贴</string>
     <string name="leave_footer">删除这里的本机密钥和群组数据；设置会保留。</string>
-    <string name="leave_footer_root">这部手机持有群组的根：只有在群组没有其他设备时才能离开。</string>
+    <string name="leave_footer_root">这部手机是群组的主设备：只有在群组没有其他设备时才能离开。</string>
     <string name="leave_group">离开群组</string>
     <string name="leave_question">离开群组？</string>
     <string name="leave_text">这部手机的密钥和这里的群组数据会被删除，远程粘贴会被关闭；其他设置保留。之后它可以重新加入此群组或其他群组。在管理员将它移除之前，群组仍会列出它。</string>
@@ -301,7 +301,7 @@
     <string name="make_admin_body">之后它就可以用 cbb pair 和 cbb remove 添加和移除设备。它的密钥存放在电脑上的一个文件中：任何复制该文件的人都能以管理员身份行事，直到另一位管理员将其移除。只对你妥善保管的电脑这样做。</string>
     <string name="make_admin_files_body">之后群组允许文件中的密钥成为管理员和中心节点（设置，管理员密钥）。</string>
     <string name="make_admin_hardware_body">之后它就可以用 cbb pair 和 cbb remove 添加和移除设备。它的密钥存放在硬件中，永远不会离开硬件。</string>
-    <string name="make_admin_phone_body">之后它可以添加和移除设备，如果这部手机丢了，还能接管群组。</string>
+    <string name="make_admin_phone_body">之后它可以添加和移除设备，如果这部手机丢了，还能把群组移到自己这里。</string>
     <string name="make_admin_title">让 %1$s 成为管理员？</string>
     <string name="menu">菜单</string>
     <string name="more">更多</string>
@@ -343,7 +343,7 @@
     <string name="notify_devices">有设备加入或被移除</string>
     <string name="notify_frozen">有设备被冻结或解冻</string>
     <string name="notify_hub">离家时中心节点没有响应</string>
-    <string name="notify_takeover">群组已被接管</string>
+    <string name="notify_takeover">群组已移到另一台设备</string>
     <string name="offline">离线</string>
     <string name="online">在线</string>
     <string name="online_count">%2$d 台中 %1$d 台在线</string>
@@ -371,13 +371,13 @@
     <string name="pause_for_a_time">选择时长</string>
     <string name="pause_hour">1 小时</string>
     <string name="pause_quarter">15 分钟</string>
-    <string name="period_overdue">群组用于离家同步的密钥已过期：在这部手机用根密钥续期之前，它的中继和中心节点不接受任何设备。</string>
+    <string name="period_overdue">群组用于离家同步的密钥已过期：在这部手机用主设备密钥续期之前，它的中继和中心节点不接受任何设备。</string>
     <string name="push_copy">复制</string>
     <string name="push_copy_waits">有复制内容在等待。请打开应用。</string>
     <string name="push_event_joined">有设备加入了你的群组。请打开应用查看。</string>
     <string name="push_event_own">此设备的记录已更改。请打开应用核实。</string>
     <string name="push_event_removed">有设备被移出你的群组。请打开应用核实。</string>
-    <string name="push_event_root">你的群组的根设备已更改。请打开应用核实。</string>
+    <string name="push_event_root">你的群组的主设备已更改。请打开应用核实。</string>
     <string name="push_event_stopped">你的群组已停止。请打开应用核实。</string>
     <string name="push_event_waiting">有设备正在等待加入你的群组。请打开应用。</string>
     <string name="push_neutral">你的群组有新内容。请打开应用。</string>
@@ -408,7 +408,7 @@
     <string name="reason_unfreeze">解冻管理员电脑</string>
     <string name="reason_unmute">取消设备静音</string>
     <string name="recovery_06">随群组一起生成，它的那张纸只显示过一次。没有这张纸就无法更换群组的主设备：如果纸丢了，请新建一个群组。</string>
-    <string name="recovery_body">一张要打印出来并与手机分开保管的纸。如果群组的主手机丢失，群组中的另一台设备可以用它接管群组。</string>
+    <string name="recovery_body">一张要打印出来并与手机分开保管的纸。如果群组的主手机丢失，群组中的另一台设备可以用它把群组移到自己这里。</string>
     <string name="recovery_done">完成</string>
     <string name="recovery_done_body">这部手机现在会忘记该密钥。要再次获取恢复单，请生成新的恢复密钥。</string>
     <string name="recovery_done_title">你保存好那张纸了吗？</string>
@@ -417,7 +417,7 @@
     <string name="recovery_leave_unsaved">不保存并离开</string>
     <string name="recovery_made">创建于 %1$s。</string>
     <string name="recovery_page_how">要把群组移到群组中的另一台设备：在手机上，在设置中选择“把群组移到这部手机”并扫描二维码；在电脑上，运行 cbb recovery 并输入密钥。</string>
-    <string name="recovery_page_keep">请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能接管你的群组。</string>
+    <string name="recovery_page_keep">请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能把你的群组移到那台设备。</string>
     <string name="recovery_page_title">CBB 恢复密钥</string>
     <string name="recovery_print">打印或存为 PDF</string>
     <string name="recovery_print_failed">无法打印这张纸。</string>
@@ -435,7 +435,7 @@
     <string name="relay_ask_title">在此中继相遇？</string>
     <string name="relay_bad">按 cbb relay 打印的格式填写中继的地址（含端口）和密钥，或两者都留空。</string>
     <string name="relay_body">用于没有自己中心节点的群组：应用同步时，设备在中继处相遇，例如用 cbb relay 搭建的中继。剪贴板在设备之间保持加密，但中继会知道哪些设备在线及其地址，以及哪些设备彼此通信、何时以及通信多少。两个字段都留空即可停止。</string>
-    <string name="relay_by_root">群组的根设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。</string>
+    <string name="relay_by_root">群组的主设备为所有设备设置中继；离家同步开启时，这部手机在那里与其他设备会合。</string>
     <string name="relay_connecting">正在连接中继…</string>
     <string name="relay_failed">中继不接受这部手机。请检查它的地址和密钥。</string>
     <string name="relay_key">中继密钥，44 个字符</string>
@@ -447,7 +447,7 @@
     <string name="relay_with">在中继处；群组在那里的设备：%1$d。</string>
     <string name="remove">移除</string>
     <string name="remove_body">它将不再与你的设备同步。要再次添加，请重新扫描它的二维码。</string>
-    <string name="remove_root_body">它创建了群组。这部手机用新密钥接管群组，其他设备会跟随它。</string>
+    <string name="remove_root_body">它创建了群组。这部手机用新密钥把群组移到自己这里，其他设备会跟随它。</string>
     <string name="remove_title">移除 %1$s？</string>
     <string name="removed">已移除。从现在起其他设备会拒绝它。</string>
     <string name="removed_self_text">群组的设备现在拒绝它。离开群组即可删除这里的密钥；之后它可以重新加入群组。</string>
@@ -462,7 +462,7 @@
     <string name="role_member">成员</string>
     <string name="role_member_rootless">成员，无 root</string>
     <string name="role_phone">手机应用</string>
-    <string name="root">根</string>
+    <string name="root">主设备</string>
     <string name="root_changed_body">%1$s 现在是群组的主设备，取代了 %2$s。</string>
     <string name="root_changed_here">这部手机现在是群组的主设备。其他设备一连接就会得知。</string>
     <string name="root_changed_not_me">不是我做的</string>
@@ -497,7 +497,7 @@
     <string name="swapped">已发送。</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
-    <string name="sync_off_until">同步关闭至 %1$s</string>
+    <string name="sync_off_until">同步已关闭，直到 %1$s</string>
     <string name="sync_on">同步已开启</string>
     <string name="sync_turn_off">关闭同步</string>
     <string name="sync_turn_on">开启同步</string>
@@ -544,7 +544,7 @@
     <string name="update">更新</string>
     <string name="update_auto">自动更新</string>
     <string name="update_auto_body">应用每天检查一次项目签名的新版本并安装。和任何下载一样，检查时会向 GitHub 透露此设备的地址。</string>
-    <string name="update_available">CBB %1$s 可用。</string>
+    <string name="update_available">CBB %1$s 已可用。</string>
     <string name="update_check">检查更新</string>
     <string name="update_checking">正在检查新版本…</string>
     <string name="update_failed">更新失败；应用保持原样。</string>

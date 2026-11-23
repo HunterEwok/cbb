@@ -126,13 +126,19 @@ func TestCheckAppStrings(t *testing.T) {
 	if got := checkAppStrings(map[string][]byte{"README.md": nil}); got != nil {
 		t.Errorf("a tree without apps/l10n: %q", got)
 	}
-	contents := map[string][]byte{"apps/l10n/en.json": []byte(`{"Paste": {"in": ["tray"]}}`)}
+	contents := map[string][]byte{
+		"apps/l10n/en.json":    []byte(`{"Paste": {"in": ["tray"]}}`),
+		"apps/l10n/terms.json": []byte(`{"terms": [{"concept": "paste", "langs": {"en": {"use": "paste", "avoid": ["\\binsert\\b"]}}}]}`),
+	}
 	for _, l := range installerLanguages {
 		contents["apps/l10n/"+l+".json"] = []byte(`{"Paste": "` + l + `"}`)
 	}
 	src := checkAppStrings(contents)
 	if len(src) == 0 || !strings.Contains(strings.Join(src, "\n"), "apps/desktop/frontend/l10n/ru.json:1: not what tools/strings makes") {
 		t.Fatalf("a missing generated file: %q", src)
+	}
+	if !strings.Contains(strings.Join(src, "\n"), "tools/strings/vale/styles/en/Terms.yml:1: not what tools/strings makes") {
+		t.Errorf("a missing Vale rule: %q", src)
 	}
 	contents["apps/l10n/ru.json"] = []byte(`{}`)
 	if got := strings.Join(checkAppStrings(contents), "\n"); !strings.Contains(got, `no translation of "Paste"`) {

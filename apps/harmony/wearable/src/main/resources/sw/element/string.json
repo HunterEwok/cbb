@@ -7,7 +7,7 @@
     {"name": "act_remove", "value": "Ondoa kwenye kikundi"},
     {"name": "ask_actions_off", "value": "Uzime kila kitendo cha haraka kwenye %1$s?"},
     {"name": "ask_away_off", "value": "Uzime kusawazisha ukiwa mbali na nyumbani kwenye %1$s?"},
-    {"name": "ask_freeze", "value": "Gandisha %1$s? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi mzizi ukifungue."},
+    {"name": "ask_freeze", "value": "Gandisha %1$s? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi kifaa kikuu kikifungue."},
     {"name": "ask_paste_off", "value": "Uzime kubandika kwa mbali kwenye %1$s?"},
     {"name": "ask_remove", "value": "Uondoe %1$s kwenye kikundi?"},
     {"name": "away", "value": "Kila mahali"},

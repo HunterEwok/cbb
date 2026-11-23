@@ -4,13 +4,15 @@
 // Command strings writes the apps' translations from their one source,
 // apps/l10n/<language>.json (tools/strings/catalog): the String Catalogs,
 // Android's strings.xml, the Aurora app's Qt files and the tray app's
-// l10n. It also puts the source itself in order (sorted by ID, one string
-// a line), so a new string may go anywhere in it.
+// l10n, and Vale's rules from the termbase, apps/l10n/terms.json. It also
+// puts the source itself in order (sorted by ID, one string a line), so a
+// new string may go anywhere in it.
 //
 //	go run ./tools/strings          rewrite the source and the generated files
 //	go run ./tools/strings -check   fail if any of them is out of date
+//	go run ./tools/strings -lint    check the strings' words (docs/apps.md, "Words in the apps")
 //
-// tools/repocheck runs the same check.
+// tools/repocheck runs the same check as -check; CI runs -lint.
 package main
 
 import (
@@ -25,13 +27,37 @@ import (
 
 func main() {
 	check := flag.Bool("check", false, "report the files that are out of date instead of writing them")
+	lintFlag := flag.Bool("lint", false, "check the strings' words: the termbase, one translation for one English text, and Vale's rules")
 	flag.Parse()
 	src, err := catalog.Load(os.ReadFile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	terms, err := catalog.LoadTerms(os.ReadFile)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if *lintFlag {
+		problems, err := lint(src, terms)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		for _, p := range problems {
+			fmt.Fprintln(os.Stderr, p)
+		}
+		if len(problems) > 0 {
+			fmt.Fprintf(os.Stderr, "%d problems in the apps' strings\n", len(problems))
+			os.Exit(1)
+		}
+		return
+	}
 	files := src.Generate()
+	for n, b := range terms.Generate() {
+		files[n] = b
+	}
 	names := make([]string, 0, len(files))
 	for n := range files {
 		names = append(names, n)

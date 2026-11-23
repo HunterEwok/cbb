@@ -32,7 +32,7 @@
     <string name="arrange_done_long">Terminar de ordenar</string>
     <string name="arrange_menu">Menú de ordenar: %1$s</string>
     <string name="arrange_reset">Volver al orden del grupo</string>
-    <string name="auto_send_body">Android deja leer el portapapeles a una app solo mientras está en primer plano. Activa CBB en Accesibilidad y lo que copies irá a tus ordenadores sin tocar nada; Android dirá entonces \"CBB ha pegado desde el portapapeles\" cada vez. Sin eso, usa el mosaico Enviar portapapeles, el botón Enviar de la notificación o Compartir.</string>
+    <string name="auto_send_body">Android deja leer el portapapeles a una app solo mientras está en primer plano. Activa CBB en Accesibilidad y lo que copies irá a tus ordenadores sin tocar nada; Android dirá entonces «CBB ha pegado desde el portapapeles» cada vez. Sin eso, usa el mosaico Enviar portapapeles, el botón Enviar de la notificación o Compartir.</string>
     <string name="auto_send_off">Desactivado</string>
     <string name="auto_send_on">Activado</string>
     <string name="away_ask_title">¿Activar En todas partes?</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">La clave de grupo de este teléfono la creó una versión anterior de la app. Abandona el grupo en este teléfono y vuelve a configurarlo.</string>
     <string name="error_paste_refused">El dispositivo no pegó.</string>
     <string name="error_refused">El ordenador lo rechazó. Vuelve a ejecutar cbb pair en él.</string>
-    <string name="error_root_leaves">Este teléfono tiene la raíz del grupo, y el grupo tiene otros dispositivos. Quítalos antes, o deja que un teléfono administrador tome el grupo.</string>
+    <string name="error_root_leaves">Este teléfono es el dispositivo principal del grupo, y el grupo tiene otros dispositivos. Quítalos antes, o deja que un teléfono administrador se pase el grupo.</string>
     <string name="error_rootless">Este ordenador está instalado sin root, así que cualquiera de sus programas puede leer sus claves. Nunca puede ser administrador.</string>
     <string name="error_timed_out">Ningún teléfono escaneó el código en cinco minutos. Vuelve a intentarlo.</string>
     <string name="error_too_many_codes">Demasiados códigos incorrectos. Vuelve a intentarlo con un código nuevo.</string>
@@ -152,10 +152,10 @@
     <string name="error_yubikey_usb_denied">No se permitió al teléfono usar la YubiKey por USB. Vuelve a conectarla y permítelo.</string>
     <string name="error_yubikey_wrong_pin">PIN incorrecto. Tras tres intentos fallidos la YubiKey bloquea su PIN.</string>
     <string name="event_added">%1$s se unió al grupo.</string>
-    <string name="event_frozen">%1$s fue congelado: los demás lo rechazan hasta que un administrador lo descongele.</string>
-    <string name="event_made_admin">%1$s ahora es administrador.</string>
+    <string name="event_frozen">%1$s fue congelado: los demás lo rechazan hasta que un admin lo descongele.</string>
+    <string name="event_made_admin">%1$s ahora es admin.</string>
     <string name="event_removed">%1$s se quitó del grupo.</string>
-    <string name="event_taken_over">%1$s tomó el grupo: ahora tiene la raíz del grupo.</string>
+    <string name="event_taken_over">%1$s se pasó el grupo: ahora es el dispositivo principal del grupo.</string>
     <string name="event_unfrozen">%1$s fue descongelado.</string>
     <string name="fetched">Obtenido de los ordenadores.</string>
     <string name="files_saved">Guardado en Descargas, en la carpeta CBB.</string>
@@ -178,8 +178,8 @@
     <string name="hub_entries_stale">La lista de puntos de entrada del proyecto está desactualizada, y el reenviador no responde por las vías que conoce este teléfono. Actualiza CBB en un ordenador del grupo, o importa allí una lista nueva con cbb global entries import; el grupo la transmite cuando este teléfono se encuentra con él.</string>
     <string name="hub_failed">El reenviador no acepta este teléfono. Revisa su dirección y su clave.</string>
     <string name="hub_forwarder">Reenviador</string>
-    <string name="hub_forwarder_by_root">La raíz del grupo configura el reenviador de este hub; los dispositivos fuera de casa llegan a este teléfono a través de él.</string>
-    <string name="hub_forwarder_none_by_root">La raíz del grupo no configuró ningún reenviador para este teléfono, así que funciona como hub solo en casa.</string>
+    <string name="hub_forwarder_by_root">El dispositivo principal del grupo configura el reenviador de este hub; los dispositivos fuera de casa llegan a este teléfono a través de él.</string>
+    <string name="hub_forwarder_none_by_root">El dispositivo principal del grupo no configuró ningún reenviador para este teléfono, así que funciona como hub solo en casa.</string>
     <string name="hub_home_background">Este teléfono es el hub, también en segundo plano.</string>
     <string name="hub_home_note">Este teléfono es el hub: la sincronización funciona mientras la app está abierta.</string>
     <string name="hub_home_only">Solo el hub de casa: añade un reenviador para sincronizar fuera de casa.</string>
@@ -289,7 +289,7 @@
     <string name="layout_orbit">Órbita</string>
     <string name="layout_tiles">Mosaicos</string>
     <string name="leave_footer">Borra aquí las claves de este teléfono y los datos del grupo; los ajustes se mantienen.</string>
-    <string name="leave_footer_root">Este teléfono tiene la raíz del grupo: solo sale cuando el grupo no tiene otros dispositivos.</string>
+    <string name="leave_footer_root">Este teléfono es el dispositivo principal del grupo: solo sale cuando el grupo no tiene otros dispositivos.</string>
     <string name="leave_group">Abandonar el grupo</string>
     <string name="leave_question">¿Abandonar el grupo?</string>
     <string name="leave_text">Se borran las claves de este teléfono y los datos del grupo que hay aquí, y se desactiva el pegado remoto; los demás ajustes se mantienen. Después puede volver a unirse a este grupo o a otro. El grupo lo sigue mostrando hasta que un administrador lo quite.</string>
@@ -301,7 +301,7 @@
     <string name="make_admin_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en un archivo del ordenador: quien copie ese archivo puede actuar como administrador hasta que otro administrador lo quite. Hazlo solo con un ordenador que mantengas seguro.</string>
     <string name="make_admin_files_body">Entonces el grupo permite que las claves en archivos sean administradores y hubs (Ajustes, Claves de administrador).</string>
     <string name="make_admin_hardware_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en su hardware, que nunca las deja salir.</string>
-    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y quedarse con el grupo si se pierde este teléfono.</string>
+    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y pasarse el grupo si se pierde este teléfono.</string>
     <string name="make_admin_title">¿Hacer administrador a %1$s?</string>
     <string name="menu">Menú</string>
     <string name="more">Más</string>
@@ -343,7 +343,7 @@
     <string name="notify_devices">Un dispositivo se unió o fue eliminado</string>
     <string name="notify_frozen">Un dispositivo fue congelado o descongelado</string>
     <string name="notify_hub">El hub no responde fuera de casa</string>
-    <string name="notify_takeover">El grupo fue tomado</string>
+    <string name="notify_takeover">El grupo pasó a otro dispositivo</string>
     <string name="offline">desconectado</string>
     <string name="online">en línea</string>
     <string name="online_count">%1$d de %2$d en línea</string>
@@ -371,13 +371,13 @@
     <string name="pause_for_a_time">elige durante cuánto tiempo</string>
     <string name="pause_hour">Durante una hora</string>
     <string name="pause_quarter">Durante 15 minutos</string>
-    <string name="period_overdue">Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave raíz.</string>
+    <string name="period_overdue">Las claves del grupo para sincronizar fuera de casa han caducado: su relé y sus hubs no aceptan ningún dispositivo hasta que este teléfono las renueve con la clave del dispositivo principal.</string>
     <string name="push_copy">Copiar</string>
     <string name="push_copy_waits">Hay una copia esperando. Abre la app.</string>
     <string name="push_event_joined">Un dispositivo se unió a tu grupo. Abre la app para verlo.</string>
     <string name="push_event_own">Cambió el registro de este dispositivo. Abre la app para comprobarlo.</string>
     <string name="push_event_removed">Se quitó un dispositivo de tu grupo. Abre la app para comprobarlo.</string>
-    <string name="push_event_root">Cambió la raíz de tu grupo. Abre la app para comprobarlo.</string>
+    <string name="push_event_root">Cambió el dispositivo principal de tu grupo. Abre la app para comprobarlo.</string>
     <string name="push_event_stopped">Tu grupo se detuvo. Abre la app para comprobarlo.</string>
     <string name="push_event_waiting">Un dispositivo espera unirse a tu grupo. Abre la app.</string>
     <string name="push_neutral">Hay algo nuevo en tu grupo. Abre la app.</string>
@@ -408,7 +408,7 @@
     <string name="reason_unfreeze">Descongelar un ordenador de administrador</string>
     <string name="reason_unmute">Quitar el silencio a un dispositivo</string>
     <string name="recovery_06">Se creó con el grupo y su hoja se mostró una sola vez. Sin la hoja no se puede cambiar el dispositivo principal del grupo: si pierdes la hoja, crea un grupo nuevo.</string>
-    <string name="recovery_body">Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo toma el grupo con ella.</string>
+    <string name="recovery_body">Una hoja para imprimir y guardar lejos de tus teléfonos. Si se pierde el teléfono principal del grupo, otro dispositivo del grupo se pasa el grupo con ella.</string>
     <string name="recovery_done">Hecho</string>
     <string name="recovery_done_body">Este teléfono olvida ahora la clave. Para obtener otra hoja, crea una clave de recuperación nueva.</string>
     <string name="recovery_done_title">¿Guardaste la hoja?</string>
@@ -417,7 +417,7 @@
     <string name="recovery_leave_unsaved">Salir sin guardar</string>
     <string name="recovery_made">Creada el %1$s.</string>
     <string name="recovery_page_how">Para mover el grupo a otro de sus dispositivos: en un teléfono, elige Mover el grupo a este teléfono en sus ajustes y escanea el código; en un ordenador, ejecuta cbb recovery y escribe la clave.</string>
-    <string name="recovery_page_keep">Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede tomar tu grupo.</string>
+    <string name="recovery_page_keep">Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo.</string>
     <string name="recovery_page_title">Clave de recuperación de CBB</string>
     <string name="recovery_print">Imprimir o guardar como PDF</string>
     <string name="recovery_print_failed">No se pudo imprimir la hoja.</string>
@@ -435,7 +435,7 @@
     <string name="relay_ask_title">¿Encontrarse en este relé?</string>
     <string name="relay_bad">Indica la dirección del relé con su puerto y su clave, tal como los imprime cbb relay, o deja ambos vacíos.</string>
     <string name="relay_body">Para un grupo sin hub propio: los dispositivos se encuentran en un relé, como uno montado con cbb relay, mientras la app sincroniza. El portapapeles sigue cifrado entre los dispositivos, pero el relé sabe cuáles están en línea y sus direcciones, y cuáles hablan entre sí, cuándo y cuánto. Deja ambos campos vacíos para dejar de usarlo.</string>
-    <string name="relay_by_root">La raíz del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada.</string>
+    <string name="relay_by_root">El dispositivo principal del grupo configura el relé para todos los dispositivos; este teléfono se encuentra allí con los demás mientras la sincronización fuera de casa está activada.</string>
     <string name="relay_connecting">Conectando con el relé…</string>
     <string name="relay_failed">El relé no acepta este teléfono. Revisa su dirección y su clave.</string>
     <string name="relay_key">Clave del relé, 44 caracteres</string>
@@ -447,7 +447,7 @@
     <string name="relay_with">En el relé; dispositivos del grupo allí: %1$d.</string>
     <string name="remove">Quitar</string>
     <string name="remove_body">Ya no se sincronizará con tus dispositivos. Para añadirlo de nuevo, vuelve a escanear su código QR.</string>
-    <string name="remove_root_body">Creó el grupo. Este teléfono toma el grupo con una clave nueva, y los demás dispositivos lo siguen.</string>
+    <string name="remove_root_body">Creó el grupo. Este teléfono se pasa el grupo con una clave nueva, y los demás dispositivos lo siguen.</string>
     <string name="remove_title">¿Quitar %1$s?</string>
     <string name="removed">Quitado. Los demás dispositivos lo rechazan a partir de ahora.</string>
     <string name="removed_self_text">Los dispositivos del grupo lo rechazan ahora. Abandona el grupo para borrar sus claves aquí; después podrá unirse de nuevo a un grupo.</string>
@@ -462,7 +462,7 @@
     <string name="role_member">Miembro</string>
     <string name="role_member_rootless">Miembro, sin root</string>
     <string name="role_phone">App del teléfono</string>
-    <string name="root">raíz</string>
+    <string name="root">dispositivo principal</string>
     <string name="root_changed_body">%1$s es ahora el dispositivo principal del grupo, en lugar de %2$s.</string>
     <string name="root_changed_here">Este teléfono es ahora el dispositivo principal del grupo. Los demás dispositivos se enteran en cuanto se conectan.</string>
     <string name="root_changed_not_me">No fui yo</string>
@@ -482,7 +482,7 @@
     <string name="share_allow">Permitir</string>
     <string name="share_allowed_none">Ninguna: el teléfono pregunta a cada app.</string>
     <string name="share_always">Siempre para esta app</string>
-    <string name="share_ask_body">Compartir, el menú de selección y la entrada cbb send permiten a cualquier app pasarle un texto a CBB o iniciar una sincronización, así que el teléfono pregunta antes. \"Siempre para esta app\" deja pasar a esa app sin preguntar.</string>
+    <string name="share_ask_body">Compartir, el menú de selección y la entrada cbb send permiten a cualquier app pasarle un texto a CBB o iniciar una sincronización, así que el teléfono pregunta antes. «Siempre para esta app» deja pasar a esa app sin preguntar.</string>
     <string name="share_ask_switch">Apps que envían sin preguntar</string>
     <string name="share_confirm_body">%1$s pasó a CBB un texto de %2$d caracteres. Va a todos los ordenadores del grupo.</string>
     <string name="share_confirm_title">¿Enviar este texto a tus ordenadores?</string>
@@ -497,7 +497,7 @@
     <string name="swapped">Enviado.</string>
     <string name="sync">Sincronizar</string>
     <string name="sync_off">La sincronización está desactivada</string>
-    <string name="sync_off_until">La sincronización está desactivada hasta %1$s</string>
+    <string name="sync_off_until">La sincronización está desactivada hasta las %1$s</string>
     <string name="sync_on">La sincronización está activada</string>
     <string name="sync_turn_off">desactivar la sincronización</string>
     <string name="sync_turn_on">activar la sincronización</string>

@@ -284,7 +284,7 @@ struct RecoveryPage: View {
                 Spacer()
             }
             Text(rows).font(.system(.body, design: .monospaced).weight(.semibold)).textSelection(.disabled)
-            Text("Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.")
+            Text("Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.")
             Text("To move the group to another device of it: on a phone, choose Move the group to this phone in its settings and scan the code; on a computer, run cbb recovery and type the key.")
         }
         .foregroundStyle(.black)

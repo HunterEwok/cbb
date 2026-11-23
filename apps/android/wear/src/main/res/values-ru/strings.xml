@@ -4,13 +4,13 @@
 <resources>
     <string name="act_actions_off">Выключить быстрые действия</string>
     <string name="act_away_off">Выключить синхронизацию вне дома</string>
-    <string name="act_freeze">Заморозить этого админа</string>
+    <string name="act_freeze">Заморозить этого администратора</string>
     <string name="act_paste_off">Выключить удалённую вставку</string>
     <string name="act_remove">Удалить из группы</string>
     <string name="ask_action">Запустить %1$s на %2$s?</string>
     <string name="ask_actions_off">Выключить все быстрые действия на %1$s?</string>
     <string name="ask_away_off">Выключить синхронизацию вне дома на %1$s?</string>
-    <string name="ask_freeze">Заморозить %1$s? Он останется админом по имени, но ничего из подписанного им не будет действовать, пока корень его не разморозит.</string>
+    <string name="ask_freeze">Заморозить %1$s? Он останется администратором по имени, но ничего из подписанного им не будет действовать, пока главное устройство его не разморозит.</string>
     <string name="ask_paste_off">Выключить удалённую вставку на %1$s?</string>
     <string name="ask_remove">Удалить %1$s из группы?</string>
     <string name="away">Везде</string>
@@ -23,7 +23,7 @@
     <string name="done">Готово.</string>
     <string name="latest">Последнее</string>
     <string name="no_answer">Телефон не ответил. Попробуйте снова.</string>
-    <string name="no_group">Откройте CBB на телефоне, чтобы создать группу или войти в неё.</string>
+    <string name="no_group">Откройте CBB на телефоне, чтобы создать группу или вступить в неё.</string>
     <string name="no_phone">Телефон не подключён. Поднесите его ближе и попробуйте снова.</string>
     <string name="not_done">Телефон этого не сделал. Попробуйте снова.</string>
     <string name="not_done_because">Телефон этого не сделал.</string>
@@ -33,7 +33,7 @@
     <string name="online_count">%1$d из %2$d в сети</string>
     <string name="stale">По последним данным с телефона.</string>
     <string name="sync">Синхронизация</string>
-    <string name="watch_admin">Эти часы админ группы.</string>
+    <string name="watch_admin">Эти часы администратор группы.</string>
     <string name="watch_later">В этой группе часы только показывают устройства: экстренные действия с часов появятся в CBB 0.7.</string>
     <string name="watch_phone">Телефон этих часов</string>
 </resources>

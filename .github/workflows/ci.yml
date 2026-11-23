@@ -105,6 +105,8 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: go run ./tools/repocheck -tests-since "$BASE"
+      - name: the apps' words, by the termbase and Vale
+        run: go run ./tools/strings -lint
       - name: design tokens up to date and readable
         run: go run ./tools/tokens -check
       - name: app icon up to date

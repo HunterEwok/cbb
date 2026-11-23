@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه في الأعلى.</translation>
+        <translation>لا يحتوي تخطيط الجهاز على مفتاح لـ: %1. اختر تخطيطه أعلاه.</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -684,12 +684,12 @@
         <translation>انضم %1 إلى المجموعة.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>استولى %1 على المجموعة: أصبح يحمل جذر المجموعة الآن.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>نقل %1 المجموعة إليه: أصبح الآن الجهاز الرئيسي للمجموعة.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>جُمّد %1: يرفضه الآخرون حتى يُلغي مشرف تجميده.</translation>
+        <translation>جُمّد %1: يرفضه الآخرون حتى يلغي مشرف تجميده.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -931,7 +931,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>متصل بـ %1.</translation>
+        <translation>متصل بـ%1.</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -1215,24 +1215,24 @@
         <translation>إنشاء مجموعة</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، يستولي هاتف مشرف على المجموعة.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>اجعل هاتفًا آخر مشرفًا قريبًا: إذا فُقد هذا الهاتف، ينقل هاتف مشرف المجموعة إليه.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>يُحفظ مفتاح جذر المجموعة في ملف على الهاتف: أي شخص ينسخه يمكنه التصرف كجذر المجموعة.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>يُحفظ مفتاح الجهاز الرئيسي في ملف على الهاتف: أي شخص ينسخه يمكنه التصرف كالجهاز الرئيسي للمجموعة.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>يُنشأ مفتاح جذر المجموعة في العنصر الآمن للهاتف ولا يغادره أبدًا.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>يُنشأ مفتاح الجهاز الرئيسي في العنصر الآمن للهاتف ولا يغادره أبدًا.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>ليس لهذا الجهاز شريحة آمنة للمفاتيح أو مستشعر موثوق للبصمة أو للوجه: فهو كجهاز رئيسي للمجموعة يحميها أقل من هاتف لديه الاثنان.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>يصبح هذا الهاتف جذر المجموعة: يضيف الأجهزة الأخرى عبر رموز QR الخاصة بها ويجعل الهواتف التي تطلب ذلك مشرفين.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>يصبح هذا الهاتف الجهاز الرئيسي للمجموعة: يضيف الأجهزة الأخرى عبر رموز QR الخاصة بها ويجعل الهواتف التي تطلب ذلك مشرفين.</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>أدخل YubiKey في منفذ USB-C واكتب رمز PIN الخاص به.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع الاستيلاء على مجموعتك.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع نقل مجموعتك إلى ذلك الجهاز.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>إعدادات متقدمة</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>هاتف آخر يستولي على المجموعة</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>هاتف آخر ينقل المجموعة إليه</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>جارٍ مغادرة المجموعة</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>مغادرة المجموعة وحذف مفتاح جذرها</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>مغادرة المجموعة وحذف مفتاح الجهاز الرئيسي</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>حاسوب</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>الجهاز الرئيسي</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>الجهاز الرئيسي ومشرف</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>عضو</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>هاتف</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>الجذر</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>الجذر ومشرف</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>مجمَّد</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>الجذر</translation>
+        <source>main device</source>
+        <translation>الجهاز الرئيسي</translation>
     </message>
     <message>
         <source>this phone</source>

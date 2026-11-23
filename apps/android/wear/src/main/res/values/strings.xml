@@ -11,7 +11,7 @@
     <string name="ask_action">Run %1$s on %2$s?</string>
     <string name="ask_actions_off">Turn every quick action off on %1$s?</string>
     <string name="ask_away_off">Turn sync away from home off on %1$s?</string>
-    <string name="ask_freeze">Freeze %1$s? It stays an admin in name, but nothing it signs counts until the root unfreezes it.</string>
+    <string name="ask_freeze">Freeze %1$s? It stays an admin in name, but nothing it signs counts until the main device unfreezes it.</string>
     <string name="ask_paste_off">Turn remote paste off on %1$s?</string>
     <string name="ask_remove">Remove %1$s from the group?</string>
     <string name="away">Everywhere</string>

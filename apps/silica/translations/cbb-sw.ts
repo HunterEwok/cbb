@@ -684,8 +684,8 @@
         <translation>%1 amejiunga na kikundi.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 imechukua kikundi: sasa ndiyo inashikilia mzizi wa kikundi.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 kimehamishia kikundi kwake: sasa ndicho kifaa kikuu cha kikundi.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -1215,24 +1215,24 @@
         <translation>Unda kikundi</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itachukua kikundi.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>Ifanye simu nyingine kuwa msimamizi hivi karibuni: simu hii ikipotea, simu ya msimamizi itahamishia kikundi kwake.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>Ufunguo wa mzizi wa kikundi unahifadhiwa kwenye faili kwenye simu: yeyote anayeunakili anaweza kutenda kama mzizi wa kikundi.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>Ufunguo wa kifaa kikuu unahifadhiwa kwenye faili kwenye simu: yeyote anayeunakili anaweza kutenda kama kifaa kikuu cha kikundi.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>Ufunguo wa mzizi wa kikundi unaundwa kwenye kipengele salama cha simu na hautoki humo kamwe.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>Ufunguo wa kifaa kikuu unaundwa kwenye kipengele salama cha simu na hautoki humo kamwe.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>Simu hii inakuwa mzizi wa kikundi: inaongeza vifaa vingine kwa misimbo yao ya QR na kuzifanya simu zinazoomba kuwa wasimamizi.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Simu hii inakuwa kifaa kikuu cha kikundi: inaongeza vifaa vingine kwa misimbo yao ya QR na kuzifanya simu zinazoomba kuwa wasimamizi.</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>Chomeka YubiKey yako kwenye mlango wa USB-C kisha uandike PIN yake.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuchukua kikundi chako.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuhamishia kikundi chako kwenye kifaa hicho.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>Mipangilio ya kina</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>Simu nyingine inachukua kikundi</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>Simu nyingine inahamishia kikundi kwake</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>Inaondoka kwenye kikundi</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Inaondoka kwenye kikundi na kufuta ufunguo wake wa mzizi</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>Inaondoka kwenye kikundi na kufuta ufunguo wa kifaa kikuu</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>Kompyuta</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>Kifaa kikuu</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>Kifaa kikuu na msimamizi</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>Mwanachama</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>Simu</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>Mzizi</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>Mzizi na msimamizi</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>imegandishwa</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>mzizi</translation>
+        <source>main device</source>
+        <translation>kifaa kikuu</translation>
     </message>
     <message>
         <source>this phone</source>

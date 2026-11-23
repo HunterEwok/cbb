@@ -33,7 +33,7 @@
     <string name="arrange_done_long">Done arranging</string>
     <string name="arrange_menu">Arrange menu: %1$s</string>
     <string name="arrange_reset">Back to the group\'s order</string>
-    <string name="auto_send_body">Android lets an app read the clipboard only while it is in front. Turn CBB on in Accessibility, and what you copy goes to your computers without a tap; Android then says \"CBB pasted from your clipboard\" each time. Without it, use the Send clipboard tile, the notification\'s Send button, or Share.</string>
+    <string name="auto_send_body">Android lets an app read the clipboard only while it is in front. Turn CBB on in Accessibility, and what you copy goes to your computers without a tap; Android then says “CBB pasted from your clipboard” each time. Without it, use the Send clipboard tile, the notification\'s Send button, or Share.</string>
     <string name="auto_send_off">Off</string>
     <string name="auto_send_on">On</string>
     <string name="away_ask_title">Turn Everywhere on?</string>
@@ -135,7 +135,7 @@
     <string name="error_old_key">This phone\'s group key was made by an earlier version of the app. Leave the group on this phone and set it up again.</string>
     <string name="error_paste_refused">The device did not paste.</string>
     <string name="error_refused">The computer refused. Run cbb pair on it again.</string>
-    <string name="error_root_leaves">This phone holds the group\'s root, and the group has other devices. Remove them first, or let an admin phone take the group over.</string>
+    <string name="error_root_leaves">This phone is the group\'s main device, and the group has other devices. Remove them first, or let an admin phone move the group to itself.</string>
     <string name="error_rootless">This computer is installed without root, so any of its programs can read its keys. It can never be an admin.</string>
     <string name="error_timed_out">No phone scanned the code in five minutes. Try again.</string>
     <string name="error_too_many_codes">Too many wrong codes. Try again with a new code.</string>
@@ -157,7 +157,7 @@
     <string name="event_frozen">%1$s was frozen: the others refuse it until an admin unfreezes it.</string>
     <string name="event_made_admin">%1$s is an admin now.</string>
     <string name="event_removed">%1$s was removed from the group.</string>
-    <string name="event_taken_over">%1$s took the group over: it holds the group\'s root now.</string>
+    <string name="event_taken_over">%1$s moved the group to itself: it is the group\'s main device now.</string>
     <string name="event_unfrozen">%1$s was unfrozen.</string>
     <string name="fetched">Fetched from the computers.</string>
     <string name="files_saved">Saved in Downloads, in the folder CBB.</string>
@@ -181,8 +181,8 @@
     <string name="hub_entries_stale">The list of the project\'s entry points is out of date, and the forwarder does not answer on the ways this phone knows. Update CBB on a computer of the group, or import a new list there with cbb global entries import; the group passes it on when this phone meets it.</string>
     <string name="hub_failed">The forwarder does not take this phone. Check its address and key.</string>
     <string name="hub_forwarder">Forwarder</string>
-    <string name="hub_forwarder_by_root">The group\'s root sets this hub\'s forwarder; devices away from home reach this phone through it.</string>
-    <string name="hub_forwarder_none_by_root">The group\'s root set no forwarder for this phone, so it serves as the hub at home only.</string>
+    <string name="hub_forwarder_by_root">The group\'s main device sets this hub\'s forwarder; devices away from home reach this phone through it.</string>
+    <string name="hub_forwarder_none_by_root">The group\'s main device set no forwarder for this phone, so it serves as the hub at home only.</string>
     <string name="hub_home_background">This phone is the hub, in the background too.</string>
     <string name="hub_home_note">This phone is the hub: sync works while the app is open.</string>
     <string name="hub_home_only">The hub at home only: add a forwarder for sync away from home.</string>
@@ -292,7 +292,7 @@
     <string name="layout_orbit">Orbit</string>
     <string name="layout_tiles">Tiles</string>
     <string name="leave_footer">Deletes this phone\'s keys and the group\'s data here; the settings stay.</string>
-    <string name="leave_footer_root">This phone holds the group\'s root: it leaves only once the group has no other devices.</string>
+    <string name="leave_footer_root">This phone is the group\'s main device: it leaves only once the group has no other devices.</string>
     <string name="leave_group">Leave the group</string>
     <string name="leave_question">Leave the group?</string>
     <string name="leave_text">This phone\'s keys and the group\'s data here are deleted, and remote paste is turned off; the other settings stay. It can then join this group again or another one. The group keeps listing it until an admin removes it.</string>
@@ -304,7 +304,7 @@
     <string name="make_admin_body">It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.</string>
     <string name="make_admin_files_body">The group then lets keys in files be admins and hubs (Settings, Admin keys).</string>
     <string name="make_admin_hardware_body">It can then add and remove devices with cbb pair and cbb remove. Its keys are in its hardware, which never lets them out.</string>
-    <string name="make_admin_phone_body">It can then add and remove devices, and take the group over if this phone is lost.</string>
+    <string name="make_admin_phone_body">It can then add and remove devices, and move the group to itself if this phone is lost.</string>
     <string name="make_admin_title">Make %1$s an admin?</string>
     <string name="menu">Menu</string>
     <string name="more">More</string>
@@ -346,7 +346,7 @@
     <string name="notify_devices">A device joined or was removed</string>
     <string name="notify_frozen">A device was frozen or unfrozen</string>
     <string name="notify_hub">The hub does not answer away from home</string>
-    <string name="notify_takeover">The group was taken over</string>
+    <string name="notify_takeover">The group moved to another device</string>
     <string name="offline">offline</string>
     <string name="online">online</string>
     <string name="online_count">%1$d of %2$d online</string>
@@ -374,13 +374,13 @@
     <string name="pause_for_a_time">pick for how long</string>
     <string name="pause_hour">For an hour</string>
     <string name="pause_quarter">For 15 minutes</string>
-    <string name="period_overdue">The group\'s keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root\'s key.</string>
+    <string name="period_overdue">The group\'s keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device\'s key.</string>
     <string name="push_copy">Copy</string>
     <string name="push_copy_waits">A copy is waiting. Open the app.</string>
     <string name="push_event_joined">A device joined your group. Open the app to see it.</string>
     <string name="push_event_own">This device\'s record changed. Open the app to check.</string>
     <string name="push_event_removed">A device was removed from your group. Open the app to check.</string>
-    <string name="push_event_root">Your group\'s root changed. Open the app to check.</string>
+    <string name="push_event_root">Your group\'s main device changed. Open the app to check.</string>
     <string name="push_event_stopped">Your group stopped. Open the app to check.</string>
     <string name="push_event_waiting">A device is waiting to join your group. Open the app.</string>
     <string name="push_neutral">New in your group. Open the app.</string>
@@ -411,7 +411,7 @@
     <string name="reason_unfreeze">Unfreeze an admin computer</string>
     <string name="reason_unmute">Unmute a device</string>
     <string name="recovery_06">Made with the group, and its sheet was shown once. Without the sheet the group\'s main device cannot change: if the sheet is lost, make a new group.</string>
-    <string name="recovery_body">A sheet to print and keep away from your phones. If the group\'s main phone is lost, another device of the group takes the group over with it.</string>
+    <string name="recovery_body">A sheet to print and keep away from your phones. If the group\'s main phone is lost, another device of the group moves the group to itself with it.</string>
     <string name="recovery_done">Done</string>
     <string name="recovery_done_body">This phone forgets the key now. To get a sheet again, make a new recovery key.</string>
     <string name="recovery_done_title">Did you keep the sheet?</string>
@@ -420,7 +420,7 @@
     <string name="recovery_leave_unsaved">Leave without saving</string>
     <string name="recovery_made">Made on %1$s.</string>
     <string name="recovery_page_how">To move the group to another device of it: on a phone, choose Move the group to this phone in its settings and scan the code; on a computer, run cbb recovery and type the key.</string>
-    <string name="recovery_page_keep">Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</string>
+    <string name="recovery_page_keep">Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</string>
     <string name="recovery_page_title">CBB recovery key</string>
     <string name="recovery_print">Print or save as PDF</string>
     <string name="recovery_print_failed">Could not print the sheet.</string>
@@ -438,7 +438,7 @@
     <string name="relay_ask_title">Meet at this relay?</string>
     <string name="relay_bad">Give the relay\'s address with its port and its key, as cbb relay prints them, or leave both empty.</string>
     <string name="relay_body">For a group without a hub of its own: the devices meet at a relay, such as one set up with cbb relay, while the app syncs. The clipboard stays encrypted between the devices, but the relay learns which of them are online and their addresses, and which talk to each other, when and how much. Leave both fields empty to stop.</string>
-    <string name="relay_by_root">The group\'s root sets the relay for every device; this phone meets the others there while sync away from home is on.</string>
+    <string name="relay_by_root">The group\'s main device sets the relay for every device; this phone meets the others there while sync away from home is on.</string>
     <string name="relay_connecting">Connecting to the relay…</string>
     <string name="relay_failed">The relay does not take this phone. Check its address and key.</string>
     <string name="relay_key">Relay key, 44 characters</string>
@@ -450,7 +450,7 @@
     <string name="relay_with">At the relay; devices of the group there: %1$d.</string>
     <string name="remove">Remove</string>
     <string name="remove_body">It will no longer sync with your devices. To add it again, scan its QR code again.</string>
-    <string name="remove_root_body">It made the group. This phone takes the group over with a new key, and the other devices follow it.</string>
+    <string name="remove_root_body">It made the group. This phone moves the group to itself with a new key, and the other devices follow it.</string>
     <string name="remove_title">Remove %1$s?</string>
     <string name="removed">Removed. The other devices refuse it from now on.</string>
     <string name="removed_self_text">The group\'s devices refuse it now. Leave the group to delete its keys here; then it can join a group again.</string>
@@ -465,7 +465,7 @@
     <string name="role_member">Member</string>
     <string name="role_member_rootless">Member, rootless</string>
     <string name="role_phone">Phone app</string>
-    <string name="root">root</string>
+    <string name="root">main device</string>
     <string name="root_changed_body">%1$s is now the group\'s main device, in place of %2$s.</string>
     <string name="root_changed_here">This phone is now the group\'s main device. The other devices hear of it as soon as they connect.</string>
     <string name="root_changed_not_me">This wasn\'t me</string>
@@ -486,7 +486,7 @@
     <string name="share_allow">Allow</string>
     <string name="share_allowed_none">None: the phone asks every app.</string>
     <string name="share_always">Always for this app</string>
-    <string name="share_ask_body">Share, the selection menu and the cbb send entry let any app hand CBB a text or start a sync, so the phone asks first. \"Always for this app\" lets that one app go without asking.</string>
+    <string name="share_ask_body">Share, the selection menu and the cbb send entry let any app hand CBB a text or start a sync, so the phone asks first. “Always for this app” lets that one app go without asking.</string>
     <string name="share_ask_switch">Apps that send without asking</string>
     <string name="share_confirm_body">%1$s handed CBB a text of %2$d characters. It goes to every computer of the group.</string>
     <string name="share_confirm_title">Send this text to your computers?</string>

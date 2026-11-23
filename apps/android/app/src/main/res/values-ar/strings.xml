@@ -32,7 +32,7 @@
     <string name="arrange_done_long">إنهاء الترتيب</string>
     <string name="arrange_menu">قائمة الترتيب: %1$s</string>
     <string name="arrange_reset">العودة إلى ترتيب المجموعة</string>
-    <string name="auto_send_body">لا يسمح Android للتطبيق بقراءة الحافظة إلا وهو في الواجهة. شغّل CBB في تسهيلات الاستخدام، فيذهب ما تنسخه إلى حواسيبك دون لمس؛ وسيقول Android حينها \"لصق CBB من الحافظة\" في كل مرة. دون ذلك، استخدم مربع «إرسال الحافظة» أو زر «إرسال» في الإشعار أو «مشاركة».</string>
+    <string name="auto_send_body">لا يسمح Android للتطبيق بقراءة الحافظة إلا وهو في الواجهة. شغّل CBB في تسهيلات الاستخدام، فيذهب ما تنسخه إلى حواسيبك دون لمس؛ وسيقول Android حينها «لصق CBB من الحافظة» في كل مرة. دون ذلك، استخدم مربع «إرسال الحافظة» أو زر «إرسال» في الإشعار أو «مشاركة».</string>
     <string name="auto_send_off">متوقف</string>
     <string name="auto_send_on">يعمل</string>
     <string name="away_ask_title">تشغيل «في كل مكان»؟</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">أنشأ إصدار أقدم من التطبيق مفتاح المجموعة لهذا الهاتف. غادر المجموعة على هذا الهاتف وأعد إعداده.</string>
     <string name="error_paste_refused">لم يلصق الجهاز.</string>
     <string name="error_refused">رفض الحاسوب. شغّل cbb pair عليه مرة أخرى.</string>
-    <string name="error_root_leaves">يحمل هذا الهاتف جذر المجموعة، وللمجموعة أجهزة أخرى. أزلها أولًا، أو دع هاتفًا مشرفًا يتولى المجموعة.</string>
+    <string name="error_root_leaves">هذا الهاتف هو الجهاز الرئيسي للمجموعة، وللمجموعة أجهزة أخرى. أزلها أولًا، أو دع هاتفًا مشرفًا ينقل المجموعة إليه.</string>
     <string name="error_rootless">ثُبّت هذا الحاسوب دون root، لذا يمكن لأي من برامجه قراءة مفاتيحه. لا يمكن أن يكون مشرفًا أبدًا.</string>
     <string name="error_timed_out">لم يمسح أي هاتف الرمز خلال خمس دقائق. حاول مرة أخرى.</string>
     <string name="error_too_many_codes">رموز خاطئة كثيرة جدًا. حاول مرة أخرى برمز جديد.</string>
@@ -155,7 +155,7 @@
     <string name="event_frozen">جُمّد %1$s: يرفضه الآخرون حتى يلغي مشرف تجميده.</string>
     <string name="event_made_admin">أصبح %1$s مشرفًا الآن.</string>
     <string name="event_removed">أُزيل %1$s من المجموعة.</string>
-    <string name="event_taken_over">تولّى %1$s المجموعة: يحمل جذر المجموعة الآن.</string>
+    <string name="event_taken_over">نقل %1$s المجموعة إليه: أصبح الآن الجهاز الرئيسي للمجموعة.</string>
     <string name="event_unfrozen">أُلغي تجميد %1$s.</string>
     <string name="fetched">جُلب من الحواسيب.</string>
     <string name="files_saved">حُفظ في التنزيلات، في المجلد CBB.</string>
@@ -178,8 +178,8 @@
     <string name="hub_entries_stale">قائمة نقاط دخول المشروع قديمة، ولا يُجيب مُعيد التوجيه على الطرق التي يعرفها هذا الهاتف. حدّث CBB على حاسوب من المجموعة، أو استورد قائمة جديدة هناك باستخدام cbb global entries import؛ وتنقلها المجموعة عندما يلتقي بها هذا الهاتف.</string>
     <string name="hub_failed">لا يقبل مُعيد التوجيه هذا الهاتف. تحقق من عنوانه ومفتاحه.</string>
     <string name="hub_forwarder">مُعيد التوجيه</string>
-    <string name="hub_forwarder_by_root">يعيّن جذر المجموعة مُعيد التوجيه لهذا المحور؛ وتصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف من خلاله.</string>
-    <string name="hub_forwarder_none_by_root">لم يعيّن جذر المجموعة مُعيد توجيه لهذا الهاتف، لذا يعمل محورًا في المنزل فقط.</string>
+    <string name="hub_forwarder_by_root">يعيّن الجهاز الرئيسي للمجموعة مُعيد التوجيه لهذا المحور؛ وتصل الأجهزة البعيدة عن المنزل إلى هذا الهاتف من خلاله.</string>
+    <string name="hub_forwarder_none_by_root">لم يعيّن الجهاز الرئيسي للمجموعة مُعيد توجيه لهذا الهاتف، لذا يعمل محورًا في المنزل فقط.</string>
     <string name="hub_home_background">هذا الهاتف هو المحور، في الخلفية أيضًا.</string>
     <string name="hub_home_note">هذا الهاتف هو المحور: تعمل المزامنة ما دام التطبيق مفتوحًا.</string>
     <string name="hub_home_only">المحور في المنزل فقط: أضف مُعيد توجيه للمزامنة بعيدًا عن المنزل.</string>
@@ -289,7 +289,7 @@
     <string name="layout_orbit">مدار</string>
     <string name="layout_tiles">مربعات</string>
     <string name="leave_footer">يحذف مفاتيح هذا الهاتف وبيانات المجموعة هنا؛ وتبقى الإعدادات.</string>
-    <string name="leave_footer_root">يحمل هذا الهاتف جذر المجموعة: لا يغادر إلا عندما لا يبقى في المجموعة أجهزة أخرى.</string>
+    <string name="leave_footer_root">هذا الهاتف هو الجهاز الرئيسي للمجموعة: لا يغادر إلا عندما لا يبقى في المجموعة أجهزة أخرى.</string>
     <string name="leave_group">مغادرة المجموعة</string>
     <string name="leave_question">مغادرة المجموعة؟</string>
     <string name="leave_text">تُحذف مفاتيح هذا الهاتف وبيانات المجموعة هنا، ويُوقف اللصق عن بُعد؛ وتبقى الإعدادات الأخرى. يمكنه بعد ذلك الانضمام إلى هذه المجموعة مرة أخرى أو إلى أخرى. تواصل المجموعة إدراجه حتى يزيله مشرف.</string>
@@ -301,7 +301,7 @@
     <string name="make_admin_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في ملف على الحاسوب: من ينسخ هذا الملف يمكنه التصرف كمشرف حتى يزيله مشرف آخر. افعل هذا فقط لحاسوب تحافظ على أمانه.</string>
     <string name="make_admin_files_body">تسمح المجموعة عندها للمفاتيح في الملفات بأن تكون مشرفين ومحاور (الإعدادات، مفاتيح المشرفين).</string>
     <string name="make_admin_hardware_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في عتاده الذي لا يسمح بخروجها أبدًا.</string>
-    <string name="make_admin_phone_body">سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن تولّي المجموعة إذا ضاع هذا الهاتف.</string>
+    <string name="make_admin_phone_body">سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن نقل المجموعة إليه إذا ضاع هذا الهاتف.</string>
     <string name="make_admin_title">جعل %1$s مشرفًا؟</string>
     <string name="menu">القائمة</string>
     <string name="more">المزيد</string>
@@ -343,7 +343,7 @@
     <string name="notify_devices">انضم جهاز أو أُزيل</string>
     <string name="notify_frozen">جُمّد جهاز أو أُلغي تجميده</string>
     <string name="notify_hub">لا يُجيب المحور بعيدًا عن المنزل</string>
-    <string name="notify_takeover">تم تولّي المجموعة</string>
+    <string name="notify_takeover">انتقلت المجموعة إلى جهاز آخر</string>
     <string name="offline">غير متصل</string>
     <string name="online">متصل</string>
     <string name="online_count">%1$d من %2$d متصل</string>
@@ -371,13 +371,13 @@
     <string name="pause_for_a_time">اختر المدة</string>
     <string name="pause_hour">لمدة ساعة</string>
     <string name="pause_quarter">لمدة 15 دقيقة</string>
-    <string name="period_overdue">انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجذر.</string>
+    <string name="period_overdue">انتهت صلاحية مفاتيح المجموعة للمزامنة بعيدًا عن المنزل: لا يقبل المُرحِّل والمحاور أي جهاز حتى يجددها هذا الهاتف بمفتاح الجهاز الرئيسي.</string>
     <string name="push_copy">نسخ</string>
     <string name="push_copy_waits">هناك نسخ بانتظارك. افتح التطبيق.</string>
     <string name="push_event_joined">انضم جهاز إلى مجموعتك. افتح التطبيق لرؤيته.</string>
     <string name="push_event_own">تغيّر سجل هذا الجهاز. افتح التطبيق للتحقق.</string>
     <string name="push_event_removed">أُزيل جهاز من مجموعتك. افتح التطبيق للتحقق.</string>
-    <string name="push_event_root">تغيّر جذر مجموعتك. افتح التطبيق للتحقق.</string>
+    <string name="push_event_root">تغيّر الجهاز الرئيسي لمجموعتك. افتح التطبيق للتحقق.</string>
     <string name="push_event_stopped">توقفت مجموعتك. افتح التطبيق للتحقق.</string>
     <string name="push_event_waiting">جهاز ينتظر الانضمام إلى مجموعتك. افتح التطبيق.</string>
     <string name="push_neutral">هناك جديد في مجموعتك. افتح التطبيق.</string>
@@ -408,7 +408,7 @@
     <string name="reason_unfreeze">إلغاء تجميد حاسوب مشرف</string>
     <string name="reason_unmute">إلغاء كتم جهاز</string>
     <string name="recovery_06">أُنشئ مع المجموعة، وعُرضت ورقته مرة واحدة فقط. بدون الورقة لا يمكن تغيير الجهاز الرئيسي للمجموعة: إذا فُقدت الورقة، أنشئ مجموعة جديدة.</string>
-    <string name="recovery_body">ورقة تطبعها وتحفظها بعيدًا عن هواتفك. إذا فُقد الهاتف الرئيسي للمجموعة، يتولى جهاز آخر من المجموعة أمرها بها.</string>
+    <string name="recovery_body">ورقة تطبعها وتحفظها بعيدًا عن هواتفك. إذا فُقد الهاتف الرئيسي للمجموعة، ينقل جهاز آخر من المجموعة المجموعة إليه بها.</string>
     <string name="recovery_done">تم</string>
     <string name="recovery_done_body">ينسى هذا الهاتف المفتاح الآن. للحصول على ورقة مرة أخرى، أنشئ مفتاح استرداد جديدًا.</string>
     <string name="recovery_done_title">هل احتفظت بالورقة؟</string>
@@ -417,7 +417,7 @@
     <string name="recovery_leave_unsaved">الخروج دون حفظ</string>
     <string name="recovery_made">أُنشئ في %1$s.</string>
     <string name="recovery_page_how">لنقل المجموعة إلى جهاز آخر منها: على الهاتف، اختر «نقل المجموعة إلى هذا الهاتف» في إعداداته وامسح الرمز؛ وعلى الكمبيوتر، شغّل cbb recovery واكتب المفتاح.</string>
-    <string name="recovery_page_keep">احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع الاستيلاء على مجموعتك.</string>
+    <string name="recovery_page_keep">احفظ هذه الورقة في مكان آمن بعيدًا عن هواتفك. أي شخص يملكها ويملك جهازًا من المجموعة يستطيع نقل مجموعتك إلى ذلك الجهاز.</string>
     <string name="recovery_page_title">مفتاح استرداد CBB</string>
     <string name="recovery_print">طباعة أو حفظ كـ PDF</string>
     <string name="recovery_print_failed">تعذّرت طباعة الورقة.</string>
@@ -435,7 +435,7 @@
     <string name="relay_ask_title">الالتقاء عند هذا المُرحِّل؟</string>
     <string name="relay_bad">أدخل عنوان المُرحِّل مع منفذه ومفتاحه، كما يطبعهما cbb relay، أو اترك الاثنين فارغين.</string>
     <string name="relay_body">لمجموعة ليس لها محور خاص بها: تلتقي الأجهزة عند مُرحِّل، مثل مُرحِّل مُعدّ باستخدام cbb relay، أثناء مزامنة التطبيق. تبقى الحافظة مشفّرة بين الأجهزة، لكن المُرحِّل يعرف أيّها متصل وعناوينها، وأيّها يتحدث مع الآخر، ومتى وبأي قدر. اترك الحقلين فارغين للإيقاف.</string>
-    <string name="relay_by_root">يعيّن جذر المجموعة المُرحِّل لكل الأجهزة؛ ويلتقي هذا الهاتف بالأجهزة الأخرى هناك ما دامت المزامنة خارج المنزل مفعّلة.</string>
+    <string name="relay_by_root">يعيّن الجهاز الرئيسي للمجموعة المُرحِّل لكل الأجهزة؛ ويلتقي هذا الهاتف بالأجهزة الأخرى هناك ما دامت المزامنة خارج المنزل مفعّلة.</string>
     <string name="relay_connecting">جارٍ الاتصال بالمُرحِّل…</string>
     <string name="relay_failed">لا يقبل المُرحِّل هذا الهاتف. تحقق من عنوانه ومفتاحه.</string>
     <string name="relay_key">مفتاح المُرحِّل، 44 حرفًا</string>
@@ -447,7 +447,7 @@
     <string name="relay_with">عند المُرحِّل؛ أجهزة المجموعة هناك: %1$d.</string>
     <string name="remove">إزالة</string>
     <string name="remove_body">لن يتزامن بعد الآن مع أجهزتك. لإضافته مرة أخرى، امسح رمز QR الخاص به من جديد.</string>
-    <string name="remove_root_body">هو من أنشأ المجموعة. يتولى هذا الهاتف المجموعة بمفتاح جديد، وتتبعه الأجهزة الأخرى.</string>
+    <string name="remove_root_body">هو من أنشأ المجموعة. ينقل هذا الهاتف المجموعة إليه بمفتاح جديد، وتتبعه الأجهزة الأخرى.</string>
     <string name="remove_title">إزالة %1$s؟</string>
     <string name="removed">أُزيل. ترفضه الأجهزة الأخرى من الآن فصاعدًا.</string>
     <string name="removed_self_text">ترفضه أجهزة المجموعة الآن. غادر المجموعة لحذف مفاتيحه هنا؛ ثم يمكنه الانضمام إلى مجموعة مرة أخرى.</string>
@@ -462,7 +462,7 @@
     <string name="role_member">عضو</string>
     <string name="role_member_rootless">عضو، بلا صلاحيات root</string>
     <string name="role_phone">تطبيق الهاتف</string>
-    <string name="root">الجذر</string>
+    <string name="root">الجهاز الرئيسي</string>
     <string name="root_changed_body">أصبح %1$s الآن الجهاز الرئيسي للمجموعة بدلًا من %2$s.</string>
     <string name="root_changed_here">هذا الهاتف هو الآن الجهاز الرئيسي للمجموعة. تعلم الأجهزة الأخرى بذلك فور اتصالها.</string>
     <string name="root_changed_not_me">لم أكن أنا</string>
@@ -482,7 +482,7 @@
     <string name="share_allow">سماح</string>
     <string name="share_allowed_none">لا شيء: يسأل الهاتف كل تطبيق.</string>
     <string name="share_always">دائمًا لهذا التطبيق</string>
-    <string name="share_ask_body">تتيح المشاركة وقائمة التحديد وإدخال cbb send لأي تطبيق أن يسلّم CBB نصًا أو يبدأ مزامنة، لذا يسأل الهاتف أولًا. \"دائمًا لهذا التطبيق\" يترك ذلك التطبيق يمرّ دون سؤال.</string>
+    <string name="share_ask_body">تتيح المشاركة وقائمة التحديد وإدخال cbb send لأي تطبيق أن يسلّم CBB نصًا أو يبدأ مزامنة، لذا يسأل الهاتف أولًا. «دائمًا لهذا التطبيق» يترك ذلك التطبيق يمرّ دون سؤال.</string>
     <string name="share_ask_switch">تطبيقات ترسل دون سؤال</string>
     <string name="share_confirm_body">سلّم %1$s إلى CBB نصًا من %2$d حرفًا. يذهب إلى كل حاسوب في المجموعة.</string>
     <string name="share_confirm_title">إرسال هذا النص إلى حواسيبك؟</string>
@@ -544,7 +544,7 @@
     <string name="update">التحديثات</string>
     <string name="update_auto">التحديث تلقائيًا</string>
     <string name="update_auto_body">مرة في اليوم يتحقق التطبيق من إصدار وقّعه المشروع ويثبّته. يُعلم التحقق GitHub بعنوان هذا الجهاز، كما يفعل أي تنزيل.</string>
-    <string name="update_available">CBB %1$s متاح.</string>
+    <string name="update_available">يتوفر CBB %1$s.</string>
     <string name="update_check">التحقق من التحديثات</string>
     <string name="update_checking">جارٍ البحث عن إصدار أحدث…</string>
     <string name="update_failed">فشل التحديث؛ يبقى التطبيق كما هو.</string>

@@ -47,7 +47,7 @@ enum GroupEvent: Equatable {
         case let .madeAdmin(n): String(localized: "\(n) is an admin now.", bundle: .app)
         case let .frozen(n): String(localized: "\(n) was frozen: the others refuse it until an admin unfreezes it.", bundle: .app)
         case let .unfrozen(n): String(localized: "\(n) was unfrozen.", bundle: .app)
-        case let .takenOver(n): String(localized: "\(n) took the group over: it holds the group's root now.", bundle: .app)
+        case let .takenOver(n): String(localized: "\(n) moved the group to itself: it is the group's main device now.", bundle: .app)
         case .hubUnreachable: String(localized: "The hub does not answer through the tunnel.", bundle: .app)
         }
     }

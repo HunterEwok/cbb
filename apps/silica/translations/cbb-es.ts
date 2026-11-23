@@ -684,8 +684,8 @@
         <translation>%1 se unió al grupo.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 tomó el control del grupo: ahora tiene la raíz del grupo.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 se pasó el grupo: ahora es el dispositivo principal del grupo.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -693,7 +693,7 @@
     </message>
     <message>
         <source>%1 was removed from the group.</source>
-        <translation>%1 fue eliminado del grupo.</translation>
+        <translation>%1 se quitó del grupo.</translation>
     </message>
     <message>
         <source>%1 was unfrozen.</source>
@@ -1215,24 +1215,24 @@
         <translation>Crear un grupo</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>Haz admin a otro teléfono pronto: si pierdes este, un teléfono admin toma el control del grupo.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>Haz administrador a otro teléfono pronto: si pierdes este, un teléfono administrador se pasa el grupo.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>La clave raíz del grupo se guarda en un archivo del teléfono: quien la copie puede actuar como la raíz del grupo.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>La clave del dispositivo principal se guarda en un archivo del teléfono: quien la copie puede actuar como el dispositivo principal del grupo.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>La clave raíz del grupo se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>La clave del dispositivo principal se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>Este teléfono pasa a ser la raíz del grupo: añade los demás dispositivos por sus códigos QR y hace admins a los teléfonos que lo piden.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Este teléfono pasa a ser el dispositivo principal del grupo: añade los demás dispositivos por sus códigos QR y hace administradores a los teléfonos que lo piden.</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>Inserta tu YubiKey en el puerto USB-C y escribe su PIN.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede tomar tu grupo.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>Guarda esta hoja en un lugar seguro, lejos de tus teléfonos. Cualquiera que la tenga y un dispositivo del grupo puede pasar tu grupo a ese dispositivo.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>Ajustes avanzados</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>Otro teléfono toma el control del grupo</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>Otro teléfono se pasa el grupo</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>Saliendo del grupo</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Saliendo del grupo y borrando su clave raíz</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>Saliendo del grupo y borrando la clave del dispositivo principal</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>Ordenador</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>Dispositivo principal</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>Dispositivo principal y administrador</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>Miembro</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>Teléfono</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>Raíz</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>Raíz y admin</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>congelado</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>raíz</translation>
+        <source>main device</source>
+        <translation>dispositivo principal</translation>
     </message>
     <message>
         <source>this phone</source>

@@ -31,7 +31,7 @@
     </message>
     <message>
         <source>Move to %1</source>
-        <translation>移到“%1”</translation>
+        <translation>移到 %1</translation>
     </message>
     <message>
         <source>Move to end</source>
@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>该设备的键盘布局没有这些字符的按键：%1。请在上方选择它的布局。</translation>
+        <translation>设备的布局中没有以下字符的按键：%1。请在上方选择它的布局。</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -684,8 +684,8 @@
         <translation>%1 加入了群组。</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 接管了群组：现在由它持有群组的根。</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 已把群组移到自己这里：现在它是群组的主设备。</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -1215,24 +1215,24 @@
         <translation>创建群组</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以接管群组。</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>请尽快将另一台手机设为管理员：如果这台手机丢失，管理员手机可以把群组移到自己这里。</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>群组的根密钥保存在手机上的一个文件中：任何复制它的人都可以充当群组的根。</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>主设备密钥保存在手机上的一个文件中：任何复制它的人都可以充当群组的主设备。</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>群组的根密钥在手机的安全元件中生成，永不离开。</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>主设备密钥在手机的安全元件中生成，永不离开。</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>这台手机将成为群组的根：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>这台手机将成为群组的主设备：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>将 YubiKey 插入 USB-C 接口，然后输入其 PIN 码。</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能接管你的群组。</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>请把这张纸保存在安全的地方，与手机分开。任何拿到它并拥有群组中一台设备的人都能把你的群组移到那台设备。</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>高级设置</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>另一台手机接管群组</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>另一台手机把群组移到自己这里</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>正在退出群组</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>正在退出群组并删除其根密钥</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>正在退出群组并删除主设备密钥</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>电脑</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>主设备</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>主设备和管理员</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>成员</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>手机</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>根</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>根和管理员</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>已冻结</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>根</translation>
+        <source>main device</source>
+        <translation>主设备</translation>
     </message>
     <message>
         <source>this phone</source>

@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>डिवाइस के लेआउट में इनके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
+        <translation>डिवाइस के लेआउट में इसके लिए कोई कुंजी नहीं है: %1। ऊपर उसका लेआउट चुनें।</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -684,12 +684,12 @@
         <translation>%1 समूह में शामिल हुआ।</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 ने समूह सँभाल लिया: अब समूह का रूट इसके पास है।</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 ने समूह अपने पास ले लिया: अब यह समूह का मुख्य डिवाइस है।</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 को फ़्रीज़ कर दिया गया: जब तक कोई एडमिन इसे अनफ़्रीज़ न करे, बाकी इसे मना करेंगे।</translation>
+        <translation>%1 फ़्रीज़ कर दिया गया: जब तक कोई एडमिन उसे अनफ़्रीज़ न करे, बाकी उसे ठुकराते हैं।</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -697,7 +697,7 @@
     </message>
     <message>
         <source>%1 was unfrozen.</source>
-        <translation>%1 को अनफ़्रीज़ कर दिया गया।</translation>
+        <translation>%1 अनफ़्रीज़ कर दिया गया।</translation>
     </message>
 </context>
 <context>
@@ -931,7 +931,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>%1 से कनेक्ट है।</translation>
+        <translation>%1 से जुड़ा।</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -1215,24 +1215,24 @@
         <translation>समूह बनाएँ</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह सँभाल लेगा।</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>जल्द ही किसी दूसरे फ़ोन को एडमिन बनाएँ: अगर यह फ़ोन खो जाए, तो एडमिन फ़ोन समूह को अपने पास ले आएगा।</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>समूह की रूट कुंजी फ़ोन पर एक फ़ाइल में रखी जाती है: जो भी इसे कॉपी करे, वह समूह के रूट की तरह काम कर सकता है।</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>मुख्य डिवाइस की कुंजी फ़ोन पर एक फ़ाइल में रखी जाती है: जो भी इसे कॉपी करे, वह समूह के मुख्य डिवाइस की तरह काम कर सकता है।</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>समूह की रूट कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>मुख्य डिवाइस की कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>यह फ़ोन समूह का रूट बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>यह फ़ोन समूह का मुख्य डिवाइस बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>अपनी YubiKey को USB-C पोर्ट में लगाएँ और उसका PIN टाइप करें।</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपका समूह ले सकता है।</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>इस शीट को अपने फ़ोनों से दूर किसी सुरक्षित जगह रखें। जिसके पास यह और समूह का कोई डिवाइस हो, वह आपके समूह को उस डिवाइस पर ले जा सकता है।</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>उन्नत सेटिंग्स</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>कोई दूसरा फ़ोन समूह सँभाल लेता है</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>कोई दूसरा फ़ोन समूह को अपने पास ले आता है</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>समूह छोड़ा जा रहा है</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>समूह छोड़ रहा है और उसकी रूट कुंजी मिटा रहा है</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>समूह छोड़ रहा है और मुख्य डिवाइस की कुंजी मिटा रहा है</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>कंप्यूटर</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>मुख्य डिवाइस</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>मुख्य डिवाइस और एडमिन</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>सदस्य</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>फ़ोन</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>रूट</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>रूट और एडमिन</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>फ़्रीज़</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>रूट</translation>
+        <source>main device</source>
+        <translation>मुख्य डिवाइस</translation>
     </message>
     <message>
         <source>this phone</source>

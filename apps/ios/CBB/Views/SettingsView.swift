@@ -186,7 +186,7 @@ struct SettingsView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Security level")
-                    Text("Root, admins, hubs").font(.caption).foregroundStyle(palette.textDim)
+                    Text("Main device, admins, hubs").font(.caption).foregroundStyle(palette.textDim)
                 }
             }
             TipView(SettingTip.securityLevel)
@@ -273,8 +273,8 @@ struct SettingsView: View {
                 }
                 // The forwarder is the group's root's setting: shown, not edited.
                 Text(hub.forwarder != nil
-                     ? "The group's root sets this hub's forwarder; devices away from home reach this phone through it."
-                     : "The group's root set no forwarder for this phone, so it serves as the hub at home only.")
+                     ? "The group's main device sets this hub's forwarder; devices away from home reach this phone through it."
+                     : "The group's main device set no forwarder for this phone, so it serves as the hub at home only.")
                     .font(.footnote)
                     .foregroundStyle(palette.textDim)
                 if let fw = hub.forwarder {
@@ -376,7 +376,7 @@ extension SettingsView {
             }
             // The root key renews the group's server credentials when the app opens.
             if relay.periodOverdue {
-                Text("The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the root's key.")
+                Text("The group's keys for sync away from home have expired: its relay and hubs take no device until this phone renews them with the main device's key.")
                     .font(.caption)
                     .foregroundStyle(palette.textDim)
             }
@@ -402,7 +402,7 @@ extension SettingsView {
                 }
                 .disabled(switching || (relayAddress == (relay.relay?.endpoint ?? "") && relayKey == (relay.relay?.pin ?? "")))
             } else {
-                Text("The group's root sets the relay for every device; this phone meets the others there while sync away from home is on.")
+                Text("The group's main device sets the relay for every device; this phone meets the others there while sync away from home is on.")
                     .font(.caption).foregroundStyle(palette.textDim)
             }
             if let note = model.relayNote {
@@ -659,7 +659,7 @@ private struct NotifyToggle: View {
         case .devices: Text("A device joined or was removed")
         case .admins: Text("A device became an admin")
         case .frozen: Text("A device was frozen or unfrozen")
-        case .takeover: Text("The group was taken over")
+        case .takeover: Text("The group moved to another device")
         case .hub: Text("The hub does not answer away from home")
         }
     }

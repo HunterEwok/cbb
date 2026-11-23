@@ -247,7 +247,7 @@ func (d *Desk) requestHeader(h control.Header, payload []byte) (*control.Message
 // CreateGroup makes a new group with this computer as its root, as cbb
 // new does as the administrator.
 func (d *Desk) CreateGroup() {
-	d.admin([]string{"new"}, false, "The group is made: this computer is its root. Add a device with the + button.")
+	d.admin([]string{"new"}, false, "The group is made: this computer is its main device. Add a device with the + button.")
 }
 
 // Rename, Remove, MakeAdmin, Freeze, Unfreeze, MakeHub, StopHub, SetAway and SetSync change the group:
@@ -338,7 +338,7 @@ func (d *Desk) Resolve() {
 // its QR code's text, as cbb recovery does as the administrator with the
 // key on its standard input; this computer is the group's main device at once.
 func (d *Desk) Recover(key string) {
-	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "This computer is the group's root now.")
+	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "This computer is the group's main device now.")
 }
 
 // Update installs the newest signed release the group passed around, as

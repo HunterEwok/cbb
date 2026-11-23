@@ -1387,6 +1387,11 @@ the app on real devices.
   the catalogs; `tools/repocheck` fails when a catalog differs from what it makes, when a
   translation is missing, or when a translation's format directives (`%@`, `%1$s`, `%1`)
   are not the English text's.
+- The words follow one termbase, `apps/l10n/terms.json` (D-133): for each concept the word
+  every language uses (the main device, an admin, the relay, the forwarder, joining a
+  group, a YubiKey held to the phone) and the words it does not use. `go run ./tools/strings
+  -lint`, a step of CI, checks the strings against it, as described under "Words in the
+  apps" below.
 - English is the source language, translated into the languages of the website: Chinese
   (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
   dates use the platform's formatters.
@@ -1395,6 +1400,37 @@ the app on real devices.
 - The language follows the system, with an in-app choice (System or one of the eight) in
   Settings, and on the Start screen when the system's language has no translation.
   Arabic and Hebrew lay the screens out right to left, the tray app too.
+
+### Words in the apps
+
+The apps say what the platforms say. A label names the action with a verb ("Move the group
+to this phone", not "OK"); a dialog's title and its button agree; a sentence is short and
+plain, with no slang or colloquial words. Where the platform names an
+action itself, the apps use its word: a YubiKey is inserted over USB-C, held to the phone
+for NFC (the phones' own NFC sheets) and touched when it blinks (Yubico Authenticator's
+wording). Apple's Human Interface Guidelines ("Writing"), Material Design ("Writing"), the
+Microsoft Writing Style Guide and the platforms' published translations decide a dispute.
+
+`go run ./tools/strings -lint` checks every language's strings, and CI runs it:
+
+- **The termbase**, `apps/l10n/terms.json`. Each concept gives each language its word
+  (`use`), a pattern that finds it (`find`) and the patterns of the words it does not use
+  (`avoid`, with `except` for a phrase where such a word means something else). Where the
+  English names a concept, a translation must name it too, by its `find`.
+- **Vale** ([vale.sh](https://vale.sh), at the version `tools/strings/lint.go` names, which
+  `go run` builds and checks against Go's checksum database, so nothing is installed). The
+  tool writes each language's strings to a file, one paragraph a string, and runs Vale with
+  `tools/strings/vale/vale.ini`: the termbase's `avoid` words, made into
+  `tools/strings/vale/styles/<language>/Terms.yml` by `go run ./tools/strings`, and the
+  rules of `tools/strings/vale/styles/Cbb` for every language (one character for an
+  ellipsis, the language's quotes, one space between words).
+- **One English text, one translation.** Strings whose English is the same but for the
+  platform's directives (`%@`, `%s`, `%1$s`, `%1`) are translated alike. A string whose ID
+  names its place in brackets gives the same English another translation, and must then
+  differ from the plain string in some language.
+
+A new concept goes into the termbase with its word in each language that has one; then
+`go run ./tools/strings` writes the rules and `-lint` shows every string to change.
 
 ## Themes
 

@@ -1623,7 +1623,7 @@ final class AppModel: ObservableObject {
                 return String(localized: "The code did not match. Scan the device's code again.", bundle: .app)
             }
             if f.message.contains("add it as an admin") {
-                return String(localized: "This phone asks to join as an admin, which only the group's root phone can grant. Scan it with the root phone, or join on it without asking to be an admin.", bundle: .app)
+                return String(localized: "This phone asks to join as an admin, which only the group's main device can grant. Scan it with the main device, or join on it without asking to be an admin.", bundle: .app)
             }
             return String(localized: "The device refused to join. Try again on it.", bundle: .app)
         }
@@ -1644,7 +1644,7 @@ final class AppModel: ObservableObject {
                 return String(localized: "The group's hub did not answer. Check that the invitation is still valid and that the hub is on, then try again.", bundle: .app)
             case let .rootLeaves(others):
                 let names = others.formatted(.list(type: .and))
-                return String(localized: "This phone holds the group's root, and the group has other devices: \(names). Remove them first, or let an admin phone take the group over.", bundle: .app)
+                return String(localized: "This phone is the group's main device, and the group has other devices: \(names). Remove them first, or let an admin phone move the group to itself.", bundle: .app)
             default: break
             }
         }

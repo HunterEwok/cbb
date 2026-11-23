@@ -36,8 +36,25 @@ func checkAppStrings(contents map[string][]byte) []string {
 		}
 		return out
 	}
+	files := src.Generate()
+	terms, err := catalog.LoadTerms(func(name string) ([]byte, error) {
+		if b, ok := contents[name]; ok {
+			return b, nil
+		}
+		return nil, fmt.Errorf("%s: %w", name, fs.ErrNotExist)
+	})
+	if err != nil {
+		var out []string
+		for _, line := range strings.Split(err.Error(), "\n") {
+			out = append(out, line+" (apps/l10n, tools/strings)")
+		}
+		return out
+	}
+	for name, b := range terms.Generate() {
+		files[name] = b
+	}
 	var out []string
-	for name, want := range src.Generate() {
+	for name, want := range files {
 		if !bytes.Equal(contents[name], want) {
 			out = append(out, fmt.Sprintf("%s:1: not what tools/strings makes of apps/l10n: edit apps/l10n and run go run ./tools/strings", name))
 		}

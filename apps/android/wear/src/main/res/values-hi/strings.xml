@@ -10,7 +10,7 @@
     <string name="ask_action">%2$s पर %1$s चलाएँ?</string>
     <string name="ask_actions_off">%1$s पर हर त्वरित क्रिया बंद करें?</string>
     <string name="ask_away_off">%1$s पर घर से दूर सिंक बंद करें?</string>
-    <string name="ask_freeze">%1$s को फ़्रीज़ करें? वह नाम के लिए एडमिन रहता है, पर रूट के अनफ़्रीज़ करने तक उसके किसी हस्ताक्षर की गिनती नहीं होती।</string>
+    <string name="ask_freeze">%1$s को फ़्रीज़ करें? वह नाम के लिए एडमिन रहता है, पर मुख्य डिवाइस के अनफ़्रीज़ करने तक उसके किसी हस्ताक्षर की गिनती नहीं होती।</string>
     <string name="ask_paste_off">%1$s पर रिमोट पेस्ट बंद करें?</string>
     <string name="ask_remove">%1$s को समूह से हटाएँ?</string>
     <string name="away">हर जगह</string>

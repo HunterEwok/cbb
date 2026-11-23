@@ -85,7 +85,7 @@ extension Control.Device {
     var standing: LocalizedStringKey? {
         if isSelf { return admin ? "This Mac · admin" : "This Mac" }
         if frozen { return "frozen" }
-        if root { return "root" }
+        if root { return "main device" }
         if admin { return "admin" }
         return nil
     }

@@ -10,7 +10,7 @@
     <string name="ask_action">Uendeshe %1$s kwenye %2$s?</string>
     <string name="ask_actions_off">Uzime kila kitendo cha haraka kwenye %1$s?</string>
     <string name="ask_away_off">Uzime kusawazisha ukiwa mbali na nyumbani kwenye %1$s?</string>
-    <string name="ask_freeze">Gandisha %1$s? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi mzizi ukifungue.</string>
+    <string name="ask_freeze">Gandisha %1$s? Kinabaki msimamizi kwa jina, lakini hakuna kitu kinachotia sahihi kinachohesabika hadi kifaa kikuu kikifungue.</string>
     <string name="ask_paste_off">Uzime kubandika kwa mbali kwenye %1$s?</string>
     <string name="ask_remove">Uondoe %1$s kwenye kikundi?</string>
     <string name="away">Kila mahali</string>

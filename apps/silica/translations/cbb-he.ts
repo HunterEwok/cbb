@@ -684,8 +684,8 @@
         <translation>%1 הצטרף לקבוצה.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 השתלט על הקבוצה: השורש של הקבוצה אצלו עכשיו.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 העביר אליו את הקבוצה: עכשיו הוא המכשיר הראשי של הקבוצה.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
@@ -931,7 +931,7 @@
     </message>
     <message>
         <source>Connected to %1.</source>
-        <translation>מחובר אל %1.</translation>
+        <translation>מחובר ל-%1.</translation>
     </message>
     <message>
         <source>English (US)</source>
@@ -1215,24 +1215,24 @@
         <translation>יצירת קבוצה</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל ישתלט על הקבוצה.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>הפכו בקרוב טלפון נוסף למנהל: אם הטלפון הזה יאבד, טלפון מנהל יעביר אליו את הקבוצה.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>מפתח השורש של הקבוצה נשמר בקובץ בטלפון: כל מי שמעתיק אותו יכול לפעול כשורש של הקבוצה.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>המפתח של המכשיר הראשי נשמר בקובץ בטלפון: כל מי שמעתיק אותו יכול לפעול כמכשיר הראשי של הקבוצה.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>מפתח השורש של הקבוצה נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>המפתח של המכשיר הראשי נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>הטלפון הזה הופך לשורש של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>הטלפון הזה הופך למכשיר הראשי של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>חברו את ה-YubiKey ליציאת USB-C והקלידו את קוד ה-PIN שלו.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להשתלט על הקבוצה שלך.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלך למכשיר הזה.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1497,8 +1497,8 @@
         <translation>הגדרות מתקדמות</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>טלפון אחר משתלט על הקבוצה</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>טלפון אחר מעביר אליו את הקבוצה</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1585,8 +1585,8 @@
         <translation>יוצא מהקבוצה</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>עוזב את הקבוצה ומוחק את מפתח השורש שלה</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>עוזב את הקבוצה ומוחק את המפתח של המכשיר הראשי</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1978,6 +1978,14 @@
         <translation>מחשב</translation>
     </message>
     <message>
+        <source>Main device</source>
+        <translation>מכשיר ראשי</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>מכשיר ראשי ומנהל</translation>
+    </message>
+    <message>
         <source>Member</source>
         <translation>חבר</translation>
     </message>
@@ -1996,14 +2004,6 @@
     <message>
         <source>Phone</source>
         <translation>טלפון</translation>
-    </message>
-    <message>
-        <source>Root</source>
-        <translation>שורש</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>שורש ומנהל</translation>
     </message>
     <message>
         <source>This phone</source>
@@ -2026,8 +2026,8 @@
         <translation>מוקפא</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>שורש</translation>
+        <source>main device</source>
+        <translation>מכשיר ראשי</translation>
     </message>
     <message>
         <source>this phone</source>

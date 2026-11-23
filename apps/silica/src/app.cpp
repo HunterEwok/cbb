@@ -761,7 +761,7 @@ QString App::saveSheet()
                 p.fillRect(left + (col + 4) * cell, y + (row + 4) * cell, cell, cell, Qt::black);
     y += cell * (count + 8) + 60;
     text(m_recoveryText, 14, true, true);
-    text(QCoreApplication::translate("RecoveryPage", "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over."), 11, false, false);
+    text(QCoreApplication::translate("RecoveryPage", "Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device."), 11, false, false);
     p.end();
     Errors::log(QStringLiteral("recovery: the sheet saved as a PDF in Documents"));
     return path;

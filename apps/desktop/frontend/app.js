@@ -193,10 +193,10 @@ function noHub(d, me) {
   if (never) return t(never);
   if (!can(d, "hub")) return t("This device is never a hub.");
   if (d.store === "rootless") return t("It runs without administrator rights, so it is never a hub.");
-  if (d.frozen) return t("It is frozen: the root unfreezes it first.");
+  if (d.frozen) return t("It is frozen: the main device unfreezes it first.");
   // A hub that reads the copies is the root or an admin; an admin makes any
   // other computer a hub that only passes them on.
-  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's root or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
+  if (d.self && (!d.may_hub || d.forward_only)) return t("Only the group's main device or an admin is a hub that reads the copies; an admin makes this computer a hub that only passes them on.");
   if (!d.self && !me?.admin) return t("Only an admin makes another device a hub.");
   return "";
 }
@@ -370,7 +370,7 @@ function renderAlerts(st) {
     if (!root) {
       const d = document.createElement("p");
       d.className = "dim";
-      d.textContent = t("The group's root decides.");
+      d.textContent = t("The group's main device decides.");
       box.append(d);
       continue;
     }
@@ -434,12 +434,12 @@ function alertLines(st) {
   if (st.muted) out.push({ text: st.muted_until_ms
     ? t("An admin muted this computer until %s: its copies do not reach the group.", clock(st.muted_until_ms))
     : t("An admin muted this computer: its copies do not reach the group until an admin unmutes it."), unmute: true, remove: [] });
-  if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides."), remove: [] });
+  if (st.stop === "full") out.push({ text: t("The group is stopped: its devices exchange only their records, no clipboard, until the group's main device decides."), remove: [] });
   if (st.stop === "secrets") out.push({ text: t("The group sends no secrets until its owner decides."), remove: [] });
   for (const c of st.conflicts ?? []) {
     const who = c.devices?.length ? c.devices.join(", ") : t("devices unknown here");
     if (c.kind === "two_histories") out.push({ text: t("%s signed two histories with one key, as a stolen key or a restore from a backup would.", who), resolve: true, remove: [] });
-    if (c.kind === "admins") out.push({ text: t("Admins removed or froze each other without seeing it: %s. The root removes one of them.", who), remove: c.devices ?? [] });
+    if (c.kind === "admins") out.push({ text: t("Admins removed or froze each other without seeing it: %s. The main device removes one of them.", who), remove: c.devices ?? [] });
   }
   if (st.newer > 0) out.push({ text: t("The group holds %d records of a later version: update CBB to read them.", st.newer), newer: true, remove: [] });
   return out;
@@ -809,7 +809,7 @@ function renderDetail() {
   if (d.muted) lines.push([t("Copies"), muteUntil(d.muted_until_ms)]);
   if (!d.online && d.last_seen_ms) lines.push([t("Last seen"), new Date(d.last_seen_ms).toLocaleString(lang)]);
   lines.push([t("Device ID"), d.id, true]);
-  const badges = [d.self && t("This computer"), d.root && t("root"), d.admin && !d.root && t("admin"), d.hub && t("hub"), d.frozen && t("frozen")].filter(Boolean);
+  const badges = [d.self && t("This computer"), d.root && t("main device"), d.admin && !d.root && t("admin"), d.hub && t("hub"), d.frozen && t("frozen")].filter(Boolean);
 
   const me = state.devices.find((x) => x.self);
   const busy = state.busy ? "disabled" : "";
@@ -966,7 +966,7 @@ async function deviceAction(action) {
       await act("Unmute", d.id);
       break;
     case "freeze":
-      if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
+      if (await ask(t("Freeze %s?", d.name), t("For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it."), t("Freeze"))) await act("Freeze", d.id);
       break;
     case "unfreeze":
       if (await ask(t("Unfreeze %s?", d.name), t("Unfreeze it only if it is in safe hands; otherwise remove it."), t("Unfreeze"))) await act("Unfreeze", d.id);

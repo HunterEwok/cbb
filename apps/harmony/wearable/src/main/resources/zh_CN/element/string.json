@@ -7,7 +7,7 @@
     {"name": "act_remove", "value": "从群组中移除"},
     {"name": "ask_actions_off", "value": "关闭 %1$s 上的所有快捷操作？"},
     {"name": "ask_away_off", "value": "关闭 %1$s 上的离家同步？"},
-    {"name": "ask_freeze", "value": "冻结 %1$s？它名义上仍是管理员，但在根设备解冻它之前，它签署的任何内容都无效。"},
+    {"name": "ask_freeze", "value": "冻结 %1$s？它名义上仍是管理员，但在主设备解冻它之前，它签署的任何内容都无效。"},
     {"name": "ask_paste_off", "value": "关闭 %1$s 上的远程粘贴？"},
     {"name": "ask_remove", "value": "从群组中移除 %1$s？"},
     {"name": "away", "value": "随处"},

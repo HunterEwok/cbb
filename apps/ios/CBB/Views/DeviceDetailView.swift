@@ -59,7 +59,7 @@ struct DeviceDetailView: View {
             } label: { Text("Remove") }
         } message: {
             if device?.isRoot == true {
-                Text("It made the group. This phone takes the group over with a new key, and the other devices follow it.")
+                Text("It made the group. This phone moves the group to itself with a new key, and the other devices follow it.")
             } else {
                 Text("It will no longer sync with your devices. To add it again, scan its QR code again.")
             }
@@ -70,7 +70,7 @@ struct DeviceDetailView: View {
             } label: { Text("Make it an admin") }
         } message: {
             if device?.role == "phone" {
-                Text("It can then add and remove devices, and take the group over if this phone is lost.")
+                Text("It can then add and remove devices, and move the group to itself if this phone is lost.")
             } else if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
                     + Text(verbatim: " ")

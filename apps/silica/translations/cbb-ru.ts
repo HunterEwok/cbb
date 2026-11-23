@@ -93,7 +93,7 @@
     </message>
     <message>
         <source>The device's layout has no key for: %1. Pick its layout above.</source>
-        <translation>В раскладке устройства нет клавиши для: %1. Выберите его раскладку выше.</translation>
+        <translation>В раскладке устройства нет клавиш для: %1. Выберите его раскладку выше.</translation>
     </message>
     <message>
         <source>The phone could not advertise the keyboard.</source>
@@ -361,11 +361,11 @@
     </message>
     <message>
         <source>Make an admin</source>
-        <translation>Сделать админом</translation>
+        <translation>Сделать администратором</translation>
     </message>
     <message>
         <source>Making %1 an admin</source>
-        <translation>%1 становится админом</translation>
+        <translation>%1 становится администратором</translation>
     </message>
     <message>
         <source>More</source>
@@ -506,15 +506,15 @@
     </message>
     <message>
         <source>Only an admin makes an invitation: an admin phone here, or cbb invite on an admin computer.</source>
-        <translation>Приглашение делает только админ: телефон-админ здесь или cbb invite на компьютере-админе.</translation>
+        <translation>Приглашение делает только администратор: телефон-администратор здесь или cbb invite на компьютере-администраторе.</translation>
     </message>
     <message>
         <source>Only an admin of the group adds devices.</source>
-        <translation>Добавлять устройства может только админ группы.</translation>
+        <translation>Добавлять устройства может только администратор группы.</translation>
     </message>
     <message>
         <source>Only an admin of the group changes its devices.</source>
-        <translation>Менять устройства группы может только её админ.</translation>
+        <translation>Менять устройства группы может только её администратор.</translation>
     </message>
     <message>
         <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
@@ -677,19 +677,19 @@
     <name>Events</name>
     <message>
         <source>%1 is an admin now.</source>
-        <translation>%1 теперь админ.</translation>
+        <translation>%1 теперь администратор.</translation>
     </message>
     <message>
         <source>%1 joined the group.</source>
         <translation>%1 вступил в группу.</translation>
     </message>
     <message>
-        <source>%1 took the group over: it holds the group's root now.</source>
-        <translation>%1 забрал группу: теперь корень группы у него.</translation>
+        <source>%1 moved the group to itself: it is the group's main device now.</source>
+        <translation>%1 перенёс группу на себя: теперь это главное устройство группы.</translation>
     </message>
     <message>
         <source>%1 was frozen: the others refuse it until an admin unfreezes it.</source>
-        <translation>%1 заморожен: остальные отказывают ему, пока админ его не разморозит.</translation>
+        <translation>%1 заморожен: остальные его не принимают, пока администратор его не разморозит.</translation>
     </message>
     <message>
         <source>%1 was removed from the group.</source>
@@ -884,7 +884,7 @@
     <name>JoinWindowPage</name>
     <message>
         <source>Join a group</source>
-        <translation>Войти в группу</translation>
+        <translation>Вступить в группу</translation>
     </message>
     <message>
         <source>Looking for the group's phone on this network…</source>
@@ -911,7 +911,7 @@
     <name>KeyboardPage</name>
     <message>
         <source>%1 characters a second</source>
-        <translation>%1 символов в секунду</translation>
+        <translation>%1 знаков в секунду</translation>
     </message>
     <message>
         <source>A device is connected.</source>
@@ -1002,11 +1002,11 @@
     </message>
     <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
-        <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
+        <translation>Администратор заглушил этот телефон до %1: его копии не доходят до группы.</translation>
     </message>
     <message>
         <source>An admin muted this phone: its copies do not reach the group until an admin unmutes it.</source>
-        <translation>Админ заглушил этот телефон: его копии не доходят до группы, пока админ не включит его.</translation>
+        <translation>Администратор заглушил этот телефон: его копии не доходят до группы, пока администратор не включит его.</translation>
     </message>
     <message>
         <source>At home: syncing directly.</source>
@@ -1054,7 +1054,7 @@
     </message>
     <message>
         <source>Join a group</source>
-        <translation>Войти в группу</translation>
+        <translation>Вступить в группу</translation>
     </message>
     <message>
         <source>Join with an invitation</source>
@@ -1078,7 +1078,7 @@
     </message>
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
-        <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
+        <translation>Сделайте второй телефон администратором: добавьте его в группу, затем откройте его здесь и нажмите «Сделать администратором». Нажмите, чтобы закрыть.</translation>
     </message>
     <message>
         <source>Needs attention</source>
@@ -1138,7 +1138,7 @@
     </message>
     <message>
         <source>This phone is in a group made before 0.6, which this version no longer runs. Leave it on this phone, then make a new group or join one. Nothing is deleted until you leave.</source>
-        <translation>Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или войдите в другую. Пока вы не выйдете, ничего не удаляется.</translation>
+        <translation>Этот телефон в группе, созданной до версии 0.6, а эта версия её больше не запускает. Выйдите из неё на этом телефоне, затем создайте новую группу или вступите в другую. Пока вы не выйдете, ничего не удаляется.</translation>
     </message>
     <message>
         <source>Turn Everywhere off</source>
@@ -1189,7 +1189,7 @@
     </message>
     <message>
         <source>An admin muted this phone, so its copies stay on it.</source>
-        <translation>Админ заглушил этот телефон, поэтому его копии остаются на нём.</translation>
+        <translation>Администратор заглушил этот телефон, поэтому его копии остаются на нём.</translation>
     </message>
     <message>
         <source>An image</source>
@@ -1215,24 +1215,24 @@
         <translation>Создать группу</translation>
     </message>
     <message>
-        <source>Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.</source>
-        <translation>Вскоре сделайте админом ещё один телефон: если этот телефон потеряется, телефон-админ заберёт группу.</translation>
+        <source>Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.</source>
+        <translation>Вскоре сделайте администратором ещё один телефон: если этот телефон потеряется, телефон-администратор перенесёт группу на себя.</translation>
     </message>
     <message>
-        <source>The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.</source>
-        <translation>Корневой ключ группы хранится в файле на телефоне: любой, кто его скопирует, сможет действовать как корень группы.</translation>
+        <source>The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.</source>
+        <translation>Ключ главного устройства хранится в файле на телефоне: любой, кто его скопирует, сможет действовать как главное устройство группы.</translation>
     </message>
     <message>
-        <source>The group's root key is made in the phone's secure element and never leaves it.</source>
-        <translation>Корневой ключ группы создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
+        <source>The main device's key is made in the phone's secure element and never leaves it.</source>
+        <translation>Ключ главного устройства создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
     </message>
     <message>
         <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
         <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
     </message>
     <message>
-        <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
-        <translation>Этот телефон станет корнем группы: он добавляет остальные устройства по их QR-кодам и делает админами телефоны, которые об этом просят.</translation>
+        <source>This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
+        <translation>Этот телефон станет главным устройством группы: он добавляет остальные устройства по их QR-кодам и делает администраторами телефоны, которые об этом просят.</translation>
     </message>
 </context>
 <context>
@@ -1379,8 +1379,8 @@
         <translation>Вставьте YubiKey в порт USB-C и введите его PIN.</translation>
     </message>
     <message>
-        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can take your group over.</source>
-        <translation>Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может забрать вашу группу.</translation>
+        <source>Keep this sheet somewhere safe, away from your phones. Anyone who has it and a device of the group can move your group to that device.</source>
+        <translation>Храните этот лист в надёжном месте, отдельно от телефонов. Любой, у кого есть он и устройство группы, может перенести вашу группу на это устройство.</translation>
     </message>
     <message>
         <source>Leave without saving</source>
@@ -1478,7 +1478,7 @@
     </message>
     <message>
         <source>A device becomes an admin</source>
-        <translation>Устройство становится админом</translation>
+        <translation>Устройство становится администратором</translation>
     </message>
     <message>
         <source>A device is frozen or unfrozen</source>
@@ -1497,8 +1497,8 @@
         <translation>Дополнительные настройки</translation>
     </message>
     <message>
-        <source>Another phone takes the group over</source>
-        <translation>Другой телефон забирает группу</translation>
+        <source>Another phone moves the group to itself</source>
+        <translation>Другой телефон переносит группу на себя</translation>
     </message>
     <message>
         <source>Applies when the app starts again</source>
@@ -1542,11 +1542,11 @@
     </message>
     <message>
         <source>Hardware</source>
-        <translation>Железо</translation>
+        <translation>Оборудование</translation>
     </message>
     <message>
         <source>Hardware or a file</source>
-        <translation>Железо или файл</translation>
+        <translation>Оборудование или файл</translation>
     </message>
     <message>
         <source>In a file on the phone</source>
@@ -1566,7 +1566,7 @@
     </message>
     <message>
         <source>Keys an admin may keep</source>
-        <translation>Какие ключи может хранить админ</translation>
+        <translation>Какие ключи может хранить администратор</translation>
     </message>
     <message>
         <source>Lab</source>
@@ -1585,8 +1585,8 @@
         <translation>Выход из группы</translation>
     </message>
     <message>
-        <source>Leaving the group and deleting its root key</source>
-        <translation>Выход из группы и удаление её корневого ключа</translation>
+        <source>Leaving the group and deleting the main device's key</source>
+        <translation>Выход из группы и удаление ключа главного устройства</translation>
     </message>
     <message>
         <source>Made</source>
@@ -1618,7 +1618,7 @@
     </message>
     <message>
         <source>Proven hardware only</source>
-        <translation>Только проверенное железо</translation>
+        <translation>Только проверенное оборудование</translation>
     </message>
     <message>
         <source>Puts the error itself under each error message</source>
@@ -1646,7 +1646,7 @@
     </message>
     <message>
         <source>Some admins keep weaker keys; they stay until removed</source>
-        <translation>У некоторых админов ключи слабее; они остаются, пока их не удалят</translation>
+        <translation>У некоторых администраторов ключи слабее; они остаются, пока их не удалят</translation>
     </message>
     <message>
         <source>System</source>
@@ -1909,7 +1909,7 @@
     </message>
     <message>
         <source>Two admins disagree about a device: the group waits for its main device.</source>
-        <translation>Два админа расходятся во мнении об устройстве: группа ждёт решения главного устройства.</translation>
+        <translation>Два администратора расходятся во мнении об устройстве: группа ждёт решения главного устройства.</translation>
     </message>
     <message>
         <source>Unmute it from a trusted device of the group.</source>
@@ -1963,11 +1963,11 @@
     <name>devices</name>
     <message>
         <source>Admin</source>
-        <translation>Админ</translation>
+        <translation>Администратор</translation>
     </message>
     <message>
         <source>Admin, frozen by another admin</source>
-        <translation>Админ, заморожен другим админом</translation>
+        <translation>Администратор, заморожен другим администратором</translation>
     </message>
     <message>
         <source>Board</source>
@@ -1976,6 +1976,14 @@
     <message>
         <source>Computer</source>
         <translation>Компьютер</translation>
+    </message>
+    <message>
+        <source>Main device</source>
+        <translation>Главное устройство</translation>
+    </message>
+    <message>
+        <source>Main device and admin</source>
+        <translation>Главное устройство и администратор</translation>
     </message>
     <message>
         <source>Member</source>
@@ -1998,14 +2006,6 @@
         <translation>Телефон</translation>
     </message>
     <message>
-        <source>Root</source>
-        <translation>Корень</translation>
-    </message>
-    <message>
-        <source>Root and admin</source>
-        <translation>Корень и админ</translation>
-    </message>
-    <message>
         <source>This phone</source>
         <translation>Этот телефон</translation>
     </message>
@@ -2015,7 +2015,7 @@
     </message>
     <message>
         <source>admin</source>
-        <translation>админ</translation>
+        <translation>администратор</translation>
     </message>
     <message>
         <source>device</source>
@@ -2026,8 +2026,8 @@
         <translation>заморожен</translation>
     </message>
     <message>
-        <source>root</source>
-        <translation>корень</translation>
+        <source>main device</source>
+        <translation>главное устройство</translation>
     </message>
     <message>
         <source>this phone</source>

@@ -306,7 +306,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Хабу нужна синхронизация вне дома, а на этом Mac она выключена, поэтому сначала она включится. Вне дома ваши устройства будут связываться с группой через этот Mac, через форвардер проекта на cbb.tools."
+            "value": "Хабу нужна синхронизация вне дома, а на этом Mac она выключена, поэтому сначала она включится. Вне дома ваши устройства будут связываться с группой через этот Mac, через сервер пересылки проекта на cbb.tools."
           }
         },
         "sw": {
@@ -444,7 +444,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Хаб, который читает копии, — это админ. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
+            "value": "Хаб, который читает копии, — это администратор. Хаб, который только пересылает, прочитать их не может: они запечатаны только для ваших других устройств, поэтому его ключам не нужно оборудование."
           }
         },
         "sw": {
@@ -829,48 +829,48 @@
         }
       }
     },
-    "Admins removed or froze each other without seeing it: %@. The root removes one of them.": {
+    "Admins removed or froze each other without seeing it: %@. The main device removes one of them.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أزال مشرفون بعضهم بعضًا أو جمّدوا بعضهم دون أن يروا ذلك: %@. يزيل الجذر أحدهم."
+            "value": "أزال مشرفون بعضهم بعضًا أو جمّدوا بعضهم دون أن يروا ذلك: %@. يزيل الجهاز الرئيسي أحدهم."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unos administradores se eliminaron o congelaron entre sí sin verlo: %@. La raíz elimina a uno de ellos."
+            "value": "Unos administradores se eliminaron o congelaron entre sí sin verlo: %@. El dispositivo principal elimina a uno de ellos."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "מנהלים הסירו או הקפיאו זה את זה בלי לראות: %@. השורש מסיר אחד מהם."
+            "value": "מנהלים הסירו או הקפיאו זה את זה בלי לראות: %@. המכשיר הראשי מסיר אחד מהם."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "एडमिन ने बिना देखे एक-दूसरे को हटाया या फ़्रीज़ किया: %@। रूट उनमें से एक को हटाता है।"
+            "value": "एडमिन ने बिना देखे एक-दूसरे को हटाया या फ़्रीज़ किया: %@। मुख्य डिवाइस उनमें से एक को हटाता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Админы удалили или заморозили друг друга, не зная об этом: %@. Корень удаляет одного из них."
+            "value": "Администраторы удалили или заморозили друг друга, не зная об этом: %@. Главное устройство удаляет одного из них."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wasimamizi waliondoana au kugandishana bila kuona: %@. Mzizi humwondoa mmoja wao."
+            "value": "Wasimamizi waliondoana au kugandishana bila kuona: %@. Kifaa kikuu humwondoa mmoja wao."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有管理员在互不知情的情况下互相移除或冻结：%@。由根设备移除其中一个。"
+            "value": "有管理员在互不知情的情况下互相移除或冻结：%@。由主设备移除其中一个。"
           }
         }
       }
@@ -996,7 +996,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Принять как админа: только для своего телефона."
+            "value": "Принять как администратора: только для своего телефона."
           }
         },
         "sw": {
@@ -1502,7 +1502,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Админ заглушил этот Mac до %@: его копии не доходят до группы."
+            "value": "Администратор заглушил этот Mac до %@: его копии не доходят до группы."
           }
         },
         "sw": {
@@ -1548,7 +1548,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Админ заглушил этот Mac: его копии не доходят до группы, пока админ не включит его."
+            "value": "Администратор заглушил этот Mac: его копии не доходят до группы, пока администратор не включит его."
           }
         },
         "sw": {
@@ -1594,7 +1594,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Это снимает админ группы."
+            "value": "Это снимает администратор группы."
           }
         },
         "sw": {
@@ -1640,7 +1640,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вставка админа идёт туда, где фокус клавиатуры этого Mac, пока приложение открыто. Включается командой cbb paste-receive on."
+            "value": "Вставка администратора идёт туда, где фокус клавиатуры этого Mac, пока приложение открыто. Включается командой cbb paste-receive on."
           }
         },
         "sw": {
@@ -2698,7 +2698,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сменить форвардер"
+            "value": "Сменить сервер пересылки"
           }
         },
         "sw": {
@@ -2744,7 +2744,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сменить форвардер…"
+            "value": "Сменить сервер пересылки…"
           }
         },
         "sw": {
@@ -4371,48 +4371,48 @@
         }
       }
     },
-    "For a stolen admin computer: it changes nothing more and the others refuse it until the root unfreezes or removes it.": {
+    "For a stolen admin computer: it changes nothing more and the others refuse it until the main device unfreezes or removes it.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لحاسوب مشرف مسروق: لا يغيّر شيئًا بعد ذلك ويرفضه الآخرون حتى يلغي الجذر تجميده أو يزيله."
+            "value": "لحاسوب مشرف مسروق: لا يغيّر شيئًا بعد ذلك ويرفضه الآخرون حتى يلغي الجهاز الرئيسي تجميده أو يزيله."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para un ordenador de administrador robado: ya no cambia nada y los demás lo rechazan hasta que la raíz lo descongele o lo quite."
+            "value": "Para un ordenador de administrador robado: ya no cambia nada y los demás lo rechazan hasta que el dispositivo principal lo descongele o lo quite."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "למחשב מנהל שנגנב: הוא לא משנה עוד דבר והאחרים דוחים אותו עד שהשורש יפשיר או יסיר אותו."
+            "value": "למחשב מנהל שנגנב: הוא לא משנה עוד דבר והאחרים דוחים אותו עד שהמכשיר הראשי יפשיר או יסיר אותו."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "चोरी हुए एडमिन कंप्यूटर के लिए: वह आगे कुछ नहीं बदलता और बाकी उसे तब तक ठुकराते हैं जब तक रूट उसे अनफ़्रीज़ न करे या हटा न दे।"
+            "value": "चोरी हुए एडमिन कंप्यूटर के लिए: वह आगे कुछ नहीं बदलता और बाकी उसे तब तक ठुकराते हैं जब तक मुख्य डिवाइस उसे अनफ़्रीज़ न करे या हटा न दे।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Для украденного админского компьютера: он больше ничего не меняет, и остальные отказываются с ним работать, пока создатель группы не разморозит или не удалит его."
+            "value": "Для украденного компьютера-администратора: он больше ничего не меняет, и остальные отказываются с ним работать, пока главное устройство не разморозит или не удалит его."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kwa kompyuta ya msimamizi iliyoibiwa: haibadilishi chochote tena na vingine huikataa hadi mzizi uifungue au uiondoe."
+            "value": "Kwa kompyuta ya msimamizi iliyoibiwa: haibadilishi chochote tena na vingine huikataa hadi kifaa kikuu kiifungue au kiiondoe."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "用于被盗的管理员电脑：它不能再更改任何内容，其他设备会拒绝它，直到根设备解冻或移除它。"
+            "value": "用于被盗的管理员电脑：它不能再更改任何内容，其他设备会拒绝它，直到主设备解冻或移除它。"
           }
         }
       }
@@ -4492,7 +4492,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Форвардер"
+            "value": "Сервер пересылки"
           }
         },
         "sw": {
@@ -4860,7 +4860,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "В группе телефона отсканируйте показанный QR-код приложением на телефоне. В группе компьютеров выполните это на этом Mac или другом админе и введите показанный код на новом компьютере:"
+            "value": "В группе телефона отсканируйте показанный QR-код приложением на телефоне. В группе компьютеров выполните это на этом Mac или другом администраторе и введите показанный код на новом компьютере:"
           }
         },
         "sw": {
@@ -4873,52 +4873,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在手机的群组中，用手机应用扫描它显示的二维码。在电脑群组中，在这台 Mac 或其他管理员上运行以下命令，并在新电脑上输入它显示的代码："
-          }
-        }
-      }
-    },
-    "In the CBB app on the phone, tap \"Connect a new device\" and scan this code:": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "في تطبيق CBB على الهاتف، اضغط \"توصيل جهاز جديد\" وامسح هذا الرمز:"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En la app CBB del teléfono, toca \"Conectar un dispositivo nuevo\" y escanea este código:"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ביישום CBB בטלפון, הקישו על \"חיבור מכשיר חדש\" וסרקו את הקוד הזה:"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "फ़ोन पर CBB ऐप में, \"नया डिवाइस जोड़ें\" टैप करें और यह कोड स्कैन करें:"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "В приложении CBB на телефоне нажмите «Подключить новое устройство» и отсканируйте этот код:"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Katika programu ya CBB kwenye simu, gusa \"Unganisha kifaa kipya\" na uchanganue msimbo huu:"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在手机上的 CBB 应用中，点按“连接新设备”并扫描此代码："
           }
         }
       }
@@ -5044,7 +4998,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда он сможет добавлять и удалять устройства. Его ключи хранятся в железе телефона и никогда его не покидают."
+            "value": "Тогда он сможет добавлять и удалять устройства. Его ключи хранятся в оборудовании телефона и никогда его не покидают."
           }
         },
         "sw": {
@@ -5182,7 +5136,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Теперь это админ."
+            "value": "Теперь это администратор."
           }
         },
         "sw": {
@@ -5199,48 +5153,48 @@
         }
       }
     },
-    "It is frozen: the root unfreezes it first.": {
+    "It is frozen: the main device unfreezes it first.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنه مجمّد: يجب أن يلغي الجذر تجميده أولًا."
+            "value": "إنه مجمّد: يجب أن يلغي الجهاز الرئيسي تجميده أولًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Está congelado: primero la raíz lo descongela."
+            "value": "Está congelado: primero el dispositivo principal lo descongela."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הוא מוקפא: השורש צריך להפשיר אותו קודם."
+            "value": "הוא מוקפא: המכשיר הראשי צריך להפשיר אותו קודם."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "यह फ़्रीज़ है: पहले रूट इसे अनफ़्रीज़ करे।"
+            "value": "यह फ़्रीज़ है: पहले मुख्य डिवाइस इसे अनफ़्रीज़ करे।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Он заморожен: сначала корень должен его разморозить."
+            "value": "Он заморожен: сначала главное устройство должно его разморозить."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kimegandishwa: mzizi ukifungue kwanza."
+            "value": "Kimegandishwa: kifaa kikuu kikifungue kwanza."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "它已被冻结：需要根设备先解冻它。"
+            "value": "它已被冻结：需要主设备先解冻它。"
           }
         }
       }
@@ -5320,7 +5274,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Устройство вошло в группу."
+            "value": "Устройство вступило в группу."
           }
         },
         "sw": {
@@ -5504,7 +5458,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Участники группы его не принимают. Выйдите здесь из группы, чтобы снова войти в эту группу или в другую."
+            "value": "Участники группы его не принимают. Выйдите здесь из группы, чтобы снова вступить в эту группу или в другую."
           }
         },
         "sw": {
@@ -5596,7 +5550,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Войти в группу"
+            "value": "Вступить в группу"
           }
         },
         "sw": {
@@ -5642,7 +5596,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Войти в группу телефона"
+            "value": "Вступить в группу телефона"
           }
         },
         "sw": {
@@ -5688,7 +5642,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac вошёл в группу."
+            "value": "Mac вступил в группу."
           }
         },
         "sw": {
@@ -6148,7 +6102,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вы вышли из группы. Этот Mac может снова войти в группу."
+            "value": "Вы вышли из группы. Этот Mac может снова вступить в группу."
           }
         },
         "sw": {
@@ -6516,7 +6470,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сделать %@ админом?"
+            "value": "Сделать %@ администратором?"
           }
         },
         "sw": {
@@ -6700,7 +6654,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сделать админом"
+            "value": "Сделать администратором"
           }
         },
         "sw": {
@@ -7344,7 +7298,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Заглушено, пока админ не включит"
+            "value": "Заглушено, пока администратор не включит"
           }
         },
         "sw": {
@@ -8390,19 +8344,19 @@
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "במחשב החדש, בחר \"הצטרף לקבוצה\" והקלד את שש הספרות האלה. טלפון חדש סורק את הקוד הזה."
+            "value": "במחשב החדש, בחר „הצטרף לקבוצה” והקלד את שש הספרות האלה. טלפון חדש סורק את הקוד הזה."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "नए कंप्यूटर पर \"समूह से जुड़ें\" चुनें और ये छह अंक टाइप करें। नया फ़ोन यह कोड स्कैन करता है।"
+            "value": "नए कंप्यूटर पर “समूह से जुड़ें” चुनें और ये छह अंक टाइप करें। नया फ़ोन यह कोड स्कैन करता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На новом компьютере выберите «Войти в группу» и введите эти шесть цифр. Новый телефон сканирует этот код."
+            "value": "На новом компьютере выберите «Вступить в группу» и введите эти шесть цифр. Новый телефон сканирует этот код."
           }
         },
         "sw": {
@@ -8540,7 +8494,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Сделать хабом другое устройство может только админ."
+            "value": "Сделать хабом другое устройство может только администратор."
           }
         },
         "sw": {
@@ -8557,94 +8511,94 @@
         }
       }
     },
-    "Only the group's root or an admin is a hub: make it an admin first.": {
+    "Only the group's main device or an admin is a hub: make it an admin first.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جذر المجموعة أو المشرف وحده يكون محورًا: اجعله مشرفًا أولًا."
+            "value": "الجهاز الرئيسي للمجموعة أو المشرف وحده يكون محورًا: اجعله مشرفًا أولًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo la raíz del grupo o un administrador es un hub: primero hazlo administrador."
+            "value": "Solo el dispositivo principal del grupo o un administrador es un hub: primero hazlo administrador."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "רק השורש של הקבוצה או מנהל יכולים להיות רכזת: הפכו אותו קודם למנהל."
+            "value": "רק המכשיר הראשי של הקבוצה או מנהל יכולים להיות רכזת: הפכו אותו קודם למנהל."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "केवल समूह का रूट या एडमिन ही हब होता है: पहले इसे एडमिन बनाएँ।"
+            "value": "केवल समूह का मुख्य डिवाइस या एडमिन ही हब होता है: पहले इसे एडमिन बनाएँ।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Хабом бывает только корень группы или админ: сначала сделайте его админом."
+            "value": "Хабом бывает только главное устройство группы или администратор: сначала сделайте его администратором."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mzizi wa kikundi au msimamizi pekee ndiye kitovu: kifanye msimamizi kwanza."
+            "value": "Kifaa kikuu cha kikundi au msimamizi pekee ndicho kitovu: kifanye msimamizi kwanza."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只有群组的根设备或管理员才能成为中心节点：请先将它设为管理员。"
+            "value": "只有群组的主设备或管理员才能成为中心节点：请先将它设为管理员。"
           }
         }
       }
     },
-    "Only the group's root or an admin is a hub: the root makes this Mac an admin first.": {
+    "Only the group's main device or an admin is a hub: the main device makes this Mac an admin first.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جذر المجموعة أو المشرف وحده يكون محورًا: يجعل الجذر هذا الـ Mac مشرفًا أولًا."
+            "value": "الجهاز الرئيسي للمجموعة أو المشرف وحده يكون محورًا: يجعل الجهاز الرئيسي هذا الـ Mac مشرفًا أولًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo la raíz del grupo o un administrador es un hub: primero la raíz hace administrador a este Mac."
+            "value": "Solo el dispositivo principal del grupo o un administrador es un hub: primero el dispositivo principal hace administrador a este Mac."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "רק השורש של הקבוצה או מנהל יכולים להיות רכזת: השורש הופך קודם את ה-Mac הזה למנהל."
+            "value": "רק המכשיר הראשי של הקבוצה או מנהל יכולים להיות רכזת: המכשיר הראשי הופך קודם את ה-Mac הזה למנהל."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "केवल समूह का रूट या एडमिन ही हब होता है: पहले रूट इस Mac को एडमिन बनाता है।"
+            "value": "केवल समूह का मुख्य डिवाइस या एडमिन ही हब होता है: पहले मुख्य डिवाइस इस Mac को एडमिन बनाता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Хабом бывает только корень группы или админ: сначала корень должен сделать этот Mac админом."
+            "value": "Хабом бывает только главное устройство группы или администратор: сначала главное устройство должно сделать этот Mac администратором."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mzizi wa kikundi au msimamizi pekee ndiye kitovu: mzizi hufanya Mac hii kuwa msimamizi kwanza."
+            "value": "Kifaa kikuu cha kikundi au msimamizi pekee ndicho kitovu: kifaa kikuu hufanya Mac hii kuwa msimamizi kwanza."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只有群组的根设备或管理员才能成为中心节点：需要根设备先将这台 Mac 设为管理员。"
+            "value": "只有群组的主设备或管理员才能成为中心节点：需要主设备先将这台 Mac 设为管理员。"
           }
         }
       }
@@ -12743,94 +12697,94 @@
         }
       }
     },
-    "The group is made: this Mac is its root. Add a device with the + button.": {
+    "The group is made: this Mac is its main device. Add a device with the + button.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أُنشئت المجموعة: هذا الـ Mac جذرها. أضف جهازًا بالزر +."
+            "value": "أُنشئت المجموعة: هذا الـ Mac جهازها الرئيسي. أضف جهازًا بالزر +."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El grupo está creado: este Mac es su raíz. Añade un dispositivo con el botón +."
+            "value": "El grupo está creado: este Mac es su dispositivo principal. Añade un dispositivo con el botón +."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקבוצה נוצרה: ה-Mac הזה הוא השורש שלה. הוסיפו מכשיר עם הכפתור +."
+            "value": "הקבוצה נוצרה: ה-Mac הזה הוא המכשיר הראשי שלה. הוסיפו מכשיר עם הכפתור +."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह बन गया: यह Mac उसका रूट है। + बटन से कोई डिवाइस जोड़ें।"
+            "value": "समूह बन गया: यह Mac उसका मुख्य डिवाइस है। + बटन से कोई डिवाइस जोड़ें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Группа создана: этот Mac — её корень. Добавьте устройство кнопкой +."
+            "value": "Группа создана: этот Mac — её главное устройство. Добавьте устройство кнопкой +."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kikundi kimeundwa: Mac hii ndiyo mzizi wake. Ongeza kifaa kwa kitufe cha +."
+            "value": "Kikundi kimeundwa: Mac hii ndiyo kifaa kikuu chake. Ongeza kifaa kwa kitufe cha +."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组已创建：这台 Mac 是它的根设备。用 + 按钮添加设备。"
+            "value": "群组已创建：这台 Mac是它的主设备。用 + 按钮添加设备。"
           }
         }
       }
     },
-    "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.": {
+    "The group is stopped: its devices exchange only their records, no clipboard, until the group's main device decides.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المجموعة متوقفة: تتبادل أجهزتها سجلاتها فقط، دون حافظة، حتى يقرر جذر المجموعة."
+            "value": "المجموعة متوقفة: تتبادل أجهزتها سجلاتها فقط، دون حافظة، حتى يقرر الجهاز الرئيسي للمجموعة."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que la raíz del grupo decida."
+            "value": "El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que el dispositivo principal del grupo decida."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח, עד שהשורש של הקבוצה יחליט."
+            "value": "הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח, עד שהמכשיר הראשי של הקבוצה יחליט."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "समूह रुका हुआ है: जब तक समूह का रूट निर्णय न ले, उसके डिवाइस केवल अपने रिकॉर्ड का आदान-प्रदान करते हैं, क्लिपबोर्ड का नहीं।"
+            "value": "समूह रुका हुआ है: जब तक समूह का मुख्य डिवाइस निर्णय न ले, उसके डिवाइस केवल अपने रिकॉर्ड का आदान-प्रदान करते हैं, क्लिपबोर्ड का नहीं।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Группа остановлена: устройства обмениваются только записями, без буфера обмена, пока корень группы не решит."
+            "value": "Группа остановлена: устройства обмениваются только записями, без буфера обмена, пока главное устройство группы не решит."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue."
+            "value": "Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi kifaa kikuu cha kikundi kiamue."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "群组已停止：在群组根设备做出决定之前，其设备只交换记录，不交换剪贴板。"
+            "value": "群组已停止：在群组主设备做出决定之前，其设备只交换记录，不交换剪贴板。"
           }
         }
       }
@@ -13065,6 +13019,52 @@
         }
       }
     },
+    "The group's main device decides.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقرر الجهاز الرئيسي للمجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decide el dispositivo principal del grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הראשי של הקבוצה מחליט."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह का मुख्य डिवाइस निर्णय लेता है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Решает главное устройство группы."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kikuu cha kikundi huamua."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由群组的主设备决定。"
+          }
+        }
+      }
+    },
     "The group's owner decides on its alerts.": {
       "localizations": {
         "ar": {
@@ -13199,52 +13199,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "群组的恢复密钥被使用了两次，因此群组已永久停止。"
-          }
-        }
-      }
-    },
-    "The group's root decides.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يقرر جذر المجموعة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Decide la raíz del grupo."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "השורש של הקבוצה מחליט."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह का रूट निर्णय लेता है।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Решает корень группы."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mzizi wa kikundi huamua."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "由群组的根设备决定。"
           }
         }
       }
@@ -13554,7 +13508,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Список точек входа проекта устарел, а форвардер не отвечает ни одним путём, известным этому Mac. Обновите CBB на компьютере группы или импортируйте там новый список командой cbb global entries import: группа передаст его дальше."
+            "value": "Список точек входа проекта устарел, а сервер пересылки не отвечает ни одним путём, известным этому Mac. Обновите CBB на компьютере группы или импортируйте там новый список командой cbb global entries import: группа передаст его дальше."
           }
         },
         "sw": {
@@ -13738,7 +13692,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Форвардер проекта"
+            "value": "Сервер пересылки проекта"
           }
         },
         "sw": {
@@ -14152,7 +14106,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот Mac не админ группы: добавьте устройство на телефоне или на компьютере-админе."
+            "value": "Этот Mac не администратор группы: добавьте устройство на телефоне или на компьютере-администраторе."
           }
         },
         "sw": {
@@ -14198,7 +14152,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот Mac не админ группы: устройства добавляет и удаляет телефон или админский компьютер."
+            "value": "Этот Mac не администратор группы: устройства добавляет и удаляет телефон или компьютер-администратор."
           }
         },
         "sw": {
@@ -14215,48 +14169,48 @@
         }
       }
     },
-    "This Mac is the group's root now.": {
+    "This Mac is the group's main device now.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أصبح هذا الـMac الآن جذر المجموعة."
+            "value": "أصبح هذا الـ Mac الآن الجهاز الرئيسي للمجموعة."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ahora este Mac es la raíz del grupo."
+            "value": "Ahora este Mac es el dispositivo principal del grupo."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "ה-Mac הזה הוא עכשיו השורש של הקבוצה."
+            "value": "ה-Mac הזה הוא עכשיו המכשיר הראשי של הקבוצה."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "अब यह Mac समूह का रूट है।"
+            "value": "अब यह Mac समूह का मुख्य डिवाइस है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Теперь этот Mac — корень группы."
+            "value": "Теперь этот Mac — главное устройство группы."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mac hii sasa ndiyo mzizi wa kikundi."
+            "value": "Mac hii sasa ndiyo kifaa kikuu cha kikundi."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这台 Mac 现在是群组的根。"
+            "value": "这台 Mac现在是群组的主设备。"
           }
         }
       }
@@ -14382,7 +14336,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Этот Mac · админ"
+            "value": "Этот Mac · администратор"
           }
         },
         "sw": {
@@ -14474,7 +14428,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключи этого Mac и файлы группы на нём удаляются, удалённая вставка и быстрые действия выключаются, остальные настройки остаются. Потом он может войти в эту группу или в другую. В списке группы он остаётся, пока его не удалит админ."
+            "value": "Ключи этого Mac и файлы группы на нём удаляются, удалённая вставка и быстрые действия выключаются, остальные настройки остаются. Потом он может вступить в эту группу или в другую. В списке группы он остаётся, пока его не удалит администратор."
           }
         },
         "sw": {
@@ -15578,7 +15532,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Два админа расходятся во мнении об устройстве: группа ждёт решения главного устройства."
+            "value": "Два администратора расходятся во мнении об устройстве: группа ждёт решения главного устройства."
           }
         },
         "sw": {
@@ -16176,7 +16130,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Пока админ не включит"
+            "value": "Пока администратор не включит"
           }
         },
         "sw": {
@@ -16590,7 +16544,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "С ключом восстановления группы этот Mac становится главным устройством, например когда прежнее потеряно. Сначала войдите в группу, затем перенесите её сюда в настройках."
+            "value": "С ключом восстановления группы этот Mac становится главным устройством, например когда прежнее потеряно. Сначала вступите в группу, затем перенесите её сюда в настройках."
           }
         },
         "sw": {
@@ -16774,7 +16728,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools."
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через сервер пересылки проекта на cbb.tools."
           }
         },
         "sw": {
@@ -16820,7 +16774,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Вне дома ваши устройства будут связываться с группой через него, через пересыльщик проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
+            "value": "Вне дома ваши устройства будут связываться с группой через него, через сервер пересылки проекта на cbb.tools. Синхронизация вне дома должна быть уже включена на нём: включает её только его пользователь."
           }
         },
         "sw": {
@@ -16866,7 +16820,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Тогда ваши устройства сначала попробуют AmneziaWG, а там, где UDP не проходит, дойдут до хаба через VLESS к его форвардеру; форвардер должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
+            "value": "Тогда ваши устройства сначала попробуют AmneziaWG, а там, где UDP не проходит, дойдут до хаба через VLESS к его серверу пересылки; сервер пересылки должен принимать VLESS. Новые настройки устройства получат, когда в следующий раз встретят хаб дома; до тех пор вне дома они до него не дойдут."
           }
         },
         "sw": {
@@ -16912,7 +16866,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Адрес и ключ своего форвардера, как их печатает cbb forward, или форвардер проекта на cbb.tools."
+            "value": "Адрес и ключ своего сервера пересылки, как их печатает cbb forward, или сервер пересылки проекта на cbb.tools."
           }
         },
         "sw": {
@@ -16958,7 +16912,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "админ"
+            "value": "администратор"
           }
         },
         "sw": {
@@ -17096,7 +17050,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "коллекция, %1$lld из %2$lld в сети"
+            "value": "коллекция, %lld из %lld в сети"
           }
         },
         "sw": {
@@ -17142,7 +17096,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "коллекция, %1$lld из %2$lld в сети, требует внимания"
+            "value": "коллекция, %lld из %lld в сети, требует внимания"
           }
         },
         "sw": {
@@ -17389,6 +17343,52 @@
         }
       }
     },
+    "main device": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجهاز الرئيسي"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dispositivo principal"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר ראשי"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य डिवाइस"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "главное устройство"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kifaa kikuu"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主设备"
+          }
+        }
+      }
+    },
     "muted": {
       "localizations": {
         "ar": {
@@ -17569,52 +17569,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在线"
-          }
-        }
-      }
-    },
-    "root": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الجذر"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "raíz"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "שורש"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रूट"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "создатель группы"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "mzizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "根"
           }
         }
       }

@@ -32,7 +32,7 @@
     <string name="arrange_done_long">סיום הסידור</string>
     <string name="arrange_menu">תפריט סידור: %1$s</string>
     <string name="arrange_reset">חזרה לסדר של הקבוצה</string>
-    <string name="auto_send_body">Android מתיר לאפליקציה לקרוא את הלוח רק כשהיא בחזית. הפעילו את CBB בנגישות, ומה שתעתיקו יגיע למחשבים שלכם בלי הקשה; Android יאמר אז \"CBB הדביקה מהלוח\" בכל פעם. בלי זה, השתמשו באריח שליחת הלוח, בכפתור השליחה בהתראה או בשיתוף.</string>
+    <string name="auto_send_body">Android מתיר לאפליקציה לקרוא את הלוח רק כשהיא בחזית. הפעילו את CBB בנגישות, ומה שתעתיקו יגיע למחשבים שלכם בלי הקשה; Android יאמר אז „CBB הדביקה מהלוח” בכל פעם. בלי זה, השתמשו באריח שליחת הלוח, בכפתור השליחה בהתראה או בשיתוף.</string>
     <string name="auto_send_off">כבוי</string>
     <string name="auto_send_on">פועל</string>
     <string name="away_ask_title">להפעיל את ״בכל מקום״?</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">מפתח הקבוצה של הטלפון הזה נוצר בגרסה קודמת של היישום. עזבו את הקבוצה בטלפון הזה והגדירו אותו מחדש.</string>
     <string name="error_paste_refused">המכשיר לא הדביק.</string>
     <string name="error_refused">המחשב סירב. הריצו שוב cbb pair בו.</string>
-    <string name="error_root_leaves">הטלפון הזה מחזיק את השורש של הקבוצה, ולקבוצה יש מכשירים אחרים. הסירו אותם קודם, או תנו לטלפון מנהל להשתלט על הקבוצה.</string>
+    <string name="error_root_leaves">הטלפון הזה הוא המכשיר הראשי של הקבוצה, ולקבוצה יש מכשירים אחרים. הסירו אותם קודם, או תנו לטלפון מנהל להעביר אליו את הקבוצה.</string>
     <string name="error_rootless">המחשב הזה מותקן ללא root, ולכן כל אחת מהתוכנות שלו יכולה לקרוא את המפתחות שלו. הוא לעולם לא יכול להיות מנהל.</string>
     <string name="error_timed_out">אף טלפון לא סרק את הקוד בתוך חמש דקות. נסו שוב.</string>
     <string name="error_too_many_codes">יותר מדי קודים שגויים. נסו שוב עם קוד חדש.</string>
@@ -153,9 +153,9 @@
     <string name="error_yubikey_wrong_pin">PIN שגוי. אחרי שלושה ניסיונות שגויים ה-YubiKey חוסם את ה-PIN שלו.</string>
     <string name="event_added">%1$s הצטרף לקבוצה.</string>
     <string name="event_frozen">%1$s הוקפא: האחרים דוחים אותו עד שמנהל יפשיר אותו.</string>
-    <string name="event_made_admin">%1$s הוא עכשיו מנהל.</string>
+    <string name="event_made_admin">%1$s מנהל עכשיו.</string>
     <string name="event_removed">%1$s הוסר מהקבוצה.</string>
-    <string name="event_taken_over">%1$s השתלט על הקבוצה: הוא מחזיק עכשיו את השורש של הקבוצה.</string>
+    <string name="event_taken_over">%1$s העביר אליו את הקבוצה: עכשיו הוא המכשיר הראשי של הקבוצה.</string>
     <string name="event_unfrozen">%1$s הופשר.</string>
     <string name="fetched">הובא מהמחשבים.</string>
     <string name="files_saved">נשמר בהורדות, בתיקייה CBB.</string>
@@ -178,8 +178,8 @@
     <string name="hub_entries_stale">רשימת נקודות הכניסה של הפרויקט מיושנת, והמעביר לא עונה בדרכים שהטלפון הזה מכיר. עדכנו את CBB במחשב של הקבוצה, או ייבאו שם רשימה חדשה עם cbb global entries import; הקבוצה מעבירה אותה כשהטלפון הזה פוגש אותה.</string>
     <string name="hub_failed">המעביר לא מקבל את הטלפון הזה. בדקו את הכתובת והמפתח שלו.</string>
     <string name="hub_forwarder">מעביר</string>
-    <string name="hub_forwarder_by_root">השורש של הקבוצה מגדיר את המעביר של הרכזת הזו; מכשירים מחוץ לבית מגיעים לטלפון הזה דרכו.</string>
-    <string name="hub_forwarder_none_by_root">השורש של הקבוצה לא הגדיר מעביר לטלפון הזה, ולכן הוא משמש רכזת בבית בלבד.</string>
+    <string name="hub_forwarder_by_root">המכשיר הראשי של הקבוצה מגדיר את המעביר של הרכזת הזו; מכשירים מחוץ לבית מגיעים לטלפון הזה דרכו.</string>
+    <string name="hub_forwarder_none_by_root">המכשיר הראשי של הקבוצה לא הגדיר מעביר לטלפון הזה, ולכן הוא משמש רכזת בבית בלבד.</string>
     <string name="hub_home_background">הטלפון הזה הוא הרכזת, גם ברקע.</string>
     <string name="hub_home_note">הטלפון הזה הוא הרכזת: הסנכרון עובד כל עוד היישום פתוח.</string>
     <string name="hub_home_only">רק הרכזת בבית: הוסיפו מעביר לסנכרון מחוץ לבית.</string>
@@ -289,7 +289,7 @@
     <string name="layout_orbit">מסלול</string>
     <string name="layout_tiles">אריחים</string>
     <string name="leave_footer">מוחק כאן את המפתחות של הטלפון הזה ואת נתוני הקבוצה; ההגדרות נשארות.</string>
-    <string name="leave_footer_root">הטלפון הזה מחזיק את השורש של הקבוצה: הוא יעזוב רק כשלקבוצה לא יהיו מכשירים אחרים.</string>
+    <string name="leave_footer_root">הטלפון הזה הוא המכשיר הראשי של הקבוצה: הוא יעזוב רק כשלקבוצה לא יהיו מכשירים אחרים.</string>
     <string name="leave_group">עזיבת הקבוצה</string>
     <string name="leave_question">לעזוב את הקבוצה?</string>
     <string name="leave_text">המפתחות של הטלפון הזה ונתוני הקבוצה כאן נמחקים, והדבקה מרחוק נכבית; שאר ההגדרות נשארות. אז הוא יכול להצטרף שוב לקבוצה הזו או לאחרת. הקבוצה ממשיכה להציג אותו עד שמנהל יסיר אותו.</string>
@@ -301,7 +301,7 @@
     <string name="make_admin_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בקובץ במחשב: מי שמעתיק את הקובץ הזה יכול לפעול כמנהל עד שמנהל אחר יסיר אותו. עשו זאת רק למחשב שאתם שומרים עליו.</string>
     <string name="make_admin_files_body">אז הקבוצה מאפשרת למפתחות בקבצים להיות מנהלים ורכזות (הגדרות, מפתחות מנהל).</string>
     <string name="make_admin_hardware_body">אז הוא יוכל להוסיף ולהסיר מכשירים עם cbb pair ו-cbb remove. המפתחות שלו בחומרה שלו, שלעולם לא מוציאה אותם.</string>
-    <string name="make_admin_phone_body">אז הוא יוכל להוסיף ולהסיר מכשירים, ולקחת את הקבוצה אם הטלפון הזה יאבד.</string>
+    <string name="make_admin_phone_body">אז הוא יוכל להוסיף ולהסיר מכשירים, ולהעביר אליו את הקבוצה אם הטלפון הזה יאבד.</string>
     <string name="make_admin_title">להפוך את %1$s למנהל?</string>
     <string name="menu">תפריט</string>
     <string name="more">עוד</string>
@@ -343,7 +343,7 @@
     <string name="notify_devices">מכשיר הצטרף או הוסר</string>
     <string name="notify_frozen">מכשיר הוקפא או שוחרר מהקפאה</string>
     <string name="notify_hub">הרכזת לא עונה מחוץ לבית</string>
-    <string name="notify_takeover">השתלטו על הקבוצה</string>
+    <string name="notify_takeover">הקבוצה עברה למכשיר אחר</string>
     <string name="offline">לא מחובר</string>
     <string name="online">מחובר</string>
     <string name="online_count">%1$d מתוך %2$d מחוברים</string>
@@ -371,13 +371,13 @@
     <string name="pause_for_a_time">בחרו לכמה זמן</string>
     <string name="pause_hour">למשך שעה</string>
     <string name="pause_quarter">למשך 15 דקות</string>
-    <string name="period_overdue">תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח השורש.</string>
+    <string name="period_overdue">תוקף המפתחות של הקבוצה לסנכרון מחוץ לבית פג: הממסר והרכזות שלה לא מקבלים אף מכשיר עד שהטלפון הזה יחדש אותם במפתח של המכשיר הראשי.</string>
     <string name="push_copy">העתקה</string>
     <string name="push_copy_waits">העתקה ממתינה. פתחו את האפליקציה.</string>
     <string name="push_event_joined">מכשיר הצטרף לקבוצה שלך. פתחו את האפליקציה כדי לראות אותו.</string>
     <string name="push_event_own">הרשומה של מכשיר זה השתנתה. פתחו את האפליקציה כדי לבדוק.</string>
     <string name="push_event_removed">מכשיר הוסר מהקבוצה שלך. פתחו את האפליקציה כדי לבדוק.</string>
-    <string name="push_event_root">השורש של הקבוצה שלך השתנה. פתחו את האפליקציה כדי לבדוק.</string>
+    <string name="push_event_root">המכשיר הראשי של הקבוצה שלך השתנה. פתחו את האפליקציה כדי לבדוק.</string>
     <string name="push_event_stopped">הקבוצה שלך נעצרה. פתחו את האפליקציה כדי לבדוק.</string>
     <string name="push_event_waiting">מכשיר ממתין להצטרף לקבוצה שלך. פתחו את האפליקציה.</string>
     <string name="push_neutral">יש משהו חדש בקבוצה שלך. פתחו את האפליקציה.</string>
@@ -408,7 +408,7 @@
     <string name="reason_unfreeze">הפשרת מחשב מנהל</string>
     <string name="reason_unmute">ביטול השתקה של מכשיר</string>
     <string name="recovery_06">נוצר יחד עם הקבוצה, והדף שלו הוצג פעם אחת בלבד. בלי הדף אי אפשר להחליף את המכשיר הראשי של הקבוצה: אם הדף אבד, צור קבוצה חדשה.</string>
-    <string name="recovery_body">דף להדפסה ולשמירה הרחק מהטלפונים שלך. אם הטלפון הראשי של הקבוצה אבד, מכשיר אחר בקבוצה משתלט על הקבוצה בעזרתו.</string>
+    <string name="recovery_body">דף להדפסה ולשמירה הרחק מהטלפונים שלך. אם הטלפון הראשי של הקבוצה אבד, מכשיר אחר בקבוצה מעביר אליו את הקבוצה בעזרתו.</string>
     <string name="recovery_done">סיום</string>
     <string name="recovery_done_body">הטלפון הזה שוכח עכשיו את המפתח. כדי לקבל דף שוב, צרו מפתח שחזור חדש.</string>
     <string name="recovery_done_title">שמרתם את הדף?</string>
@@ -417,7 +417,7 @@
     <string name="recovery_leave_unsaved">לצאת בלי לשמור</string>
     <string name="recovery_made">נוצר ב-%1$s.</string>
     <string name="recovery_page_how">כדי להעביר את הקבוצה למכשיר אחר שלה: בטלפון, בחר בהגדרות שלו \'העבר את הקבוצה לטלפון הזה\' וסרוק את הקוד; במחשב, הרץ cbb recovery והקלד את המפתח.</string>
-    <string name="recovery_page_keep">שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להשתלט על הקבוצה שלך.</string>
+    <string name="recovery_page_keep">שמור את הדף הזה במקום בטוח, הרחק מהטלפונים שלך. כל מי שמחזיק בו ובמכשיר של הקבוצה יכול להעביר את הקבוצה שלך למכשיר הזה.</string>
     <string name="recovery_page_title">מפתח השחזור של CBB</string>
     <string name="recovery_print">הדפסה או שמירה כ-PDF</string>
     <string name="recovery_print_failed">לא ניתן היה להדפיס את הדף.</string>
@@ -435,7 +435,7 @@
     <string name="relay_ask_title">להיפגש בממסר הזה?</string>
     <string name="relay_bad">הזינו את כתובת הממסר עם הפורט ואת המפתח שלו, כפי ש-cbb relay מדפיס אותם, או השאירו את שניהם ריקים.</string>
     <string name="relay_body">לקבוצה בלי רכזת משלה: המכשירים נפגשים בממסר, כמו כזה שהוקם עם cbb relay, בזמן שהיישום מסנכרן. הלוח נשאר מוצפן בין המכשירים, אבל הממסר יודע אילו מהם מחוברים ואת הכתובות שלהם, ואילו מדברים זה עם זה, מתי וכמה. השאירו את שני השדות ריקים כדי להפסיק.</string>
-    <string name="relay_by_root">השורש של הקבוצה מגדיר את הממסר לכל המכשירים; הטלפון הזה פוגש שם את האחרים כל עוד הסנכרון מחוץ לבית פועל.</string>
+    <string name="relay_by_root">המכשיר הראשי של הקבוצה מגדיר את הממסר לכל המכשירים; הטלפון הזה פוגש שם את האחרים כל עוד הסנכרון מחוץ לבית פועל.</string>
     <string name="relay_connecting">מתחבר לממסר…</string>
     <string name="relay_failed">הממסר לא מקבל את הטלפון הזה. בדקו את הכתובת והמפתח שלו.</string>
     <string name="relay_key">מפתח הממסר, 44 תווים</string>
@@ -447,7 +447,7 @@
     <string name="relay_with">בממסר; מכשירי הקבוצה שם: %1$d.</string>
     <string name="remove">הסרה</string>
     <string name="remove_body">הוא לא יסתנכרן עוד עם המכשירים שלכם. כדי להוסיף אותו שוב, סרקו שוב את קוד ה-QR שלו.</string>
-    <string name="remove_root_body">הוא יצר את הקבוצה. הטלפון הזה משתלט על הקבוצה עם מפתח חדש, והמכשירים האחרים הולכים אחריו.</string>
+    <string name="remove_root_body">הוא יצר את הקבוצה. הטלפון הזה מעביר אליו את הקבוצה עם מפתח חדש, והמכשירים האחרים הולכים אחריו.</string>
     <string name="remove_title">להסיר את %1$s?</string>
     <string name="removed">הוסר. המכשירים האחרים דוחים אותו מעכשיו.</string>
     <string name="removed_self_text">מכשירי הקבוצה דוחים אותו עכשיו. עזבו את הקבוצה כדי למחוק את המפתחות שלו כאן; אחר כך הוא יוכל להצטרף שוב לקבוצה.</string>
@@ -462,7 +462,7 @@
     <string name="role_member">חבר</string>
     <string name="role_member_rootless">חבר, ללא root</string>
     <string name="role_phone">יישום הטלפון</string>
-    <string name="root">שורש</string>
+    <string name="root">מכשיר ראשי</string>
     <string name="root_changed_body">%1$s הוא עכשיו המכשיר הראשי של הקבוצה, במקום %2$s.</string>
     <string name="root_changed_here">הטלפון הזה הוא עכשיו המכשיר הראשי של הקבוצה. המכשירים האחרים יידעו על כך ברגע שיתחברו.</string>
     <string name="root_changed_not_me">זה לא הייתי אני</string>
@@ -482,7 +482,7 @@
     <string name="share_allow">התרה</string>
     <string name="share_allowed_none">אין: הטלפון שואל כל יישום.</string>
     <string name="share_always">תמיד לאפליקציה הזו</string>
-    <string name="share_ask_body">שיתוף, תפריט הבחירה והרשומה cbb send מאפשרים לכל יישום להעביר ל-CBB טקסט או להתחיל סנכרון, ולכן הטלפון שואל קודם. \"תמיד עבור היישום הזה\" מאפשר ליישום הזה לעבור בלי לשאול.</string>
+    <string name="share_ask_body">שיתוף, תפריט הבחירה והרשומה cbb send מאפשרים לכל יישום להעביר ל-CBB טקסט או להתחיל סנכרון, ולכן הטלפון שואל קודם. „תמיד עבור היישום הזה” מאפשר ליישום הזה לעבור בלי לשאול.</string>
     <string name="share_ask_switch">אפליקציות ששולחות בלי לשאול</string>
     <string name="share_confirm_body">%1$s העביר ל-CBB טקסט של %2$d תווים. הוא הולך לכל מחשב בקבוצה.</string>
     <string name="share_confirm_title">לשלוח את הטקסט הזה למחשבים שלכם?</string>
@@ -544,7 +544,7 @@
     <string name="update">עדכונים</string>
     <string name="update_auto">עדכון אוטומטי</string>
     <string name="update_auto_body">פעם ביום היישום בודק אם יש גרסה שהפרויקט חתם עליה ומתקין אותה. הבדיקה מגלה ל-GitHub את הכתובת של המכשיר הזה, כמו כל הורדה.</string>
-    <string name="update_available">CBB %1$s זמינה.</string>
+    <string name="update_available">CBB %1$s זמין.</string>
     <string name="update_check">בדיקת עדכונים</string>
     <string name="update_checking">מחפש גרסה חדשה יותר…</string>
     <string name="update_failed">העדכון נכשל; היישום נשאר כמו שהוא.</string>

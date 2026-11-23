@@ -1,0 +1,18 @@
+# Made by go run ./tools/strings from apps/l10n/terms.json: edit that file, not this one.
+extends: substitution
+message: "Use '%s' here, not '%s' (apps/l10n/terms.json)."
+level: error
+ignorecase: true
+nonword: true
+swap:
+  '\broots?\b': 'main device'
+  '\bclaim(?:s|ed|ing)?\b': 'move the group'
+  '\b(?:take|takes|taken|taking|took)\s+(?:\w+\s+)?group\s+over\b': 'move the group'
+  '\b(?:group|it)\s+(?:was|is)\s+taken\s+over\b': 'move the group'
+  '\byours\s+to\s+take\b': 'move the group'
+  '\btap on\b': 'tap'
+  '\bclick on\b': 'tap'
+exceptions:
+  - 'without root'
+  - 'by root'
+  - 'as root'

@@ -36,7 +36,7 @@ struct GroupAlerts: View {
                         }
                         .disabled(model.busy)
                     } else if line.resolve || !line.remove.isEmpty {
-                        Text("The group's root decides.").font(.callout).foregroundStyle(palette.textDim)
+                        Text("The group's main device decides.").font(.callout).foregroundStyle(palette.textDim)
                     }
                 }
             }
@@ -62,7 +62,7 @@ struct GroupAlerts: View {
         var out: [Line] = []
         switch st.stop {
         case "full":
-            out.append(Line(text: String(localized: "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.")))
+            out.append(Line(text: String(localized: "The group is stopped: its devices exchange only their records, no clipboard, until the group's main device decides.")))
         case "secrets":
             out.append(Line(text: String(localized: "The group sends no secrets until its owner decides.")))
         default:
@@ -74,7 +74,7 @@ struct GroupAlerts: View {
             case "two_histories":
                 out.append(Line(text: String(localized: "\(who) signed two histories with one key, as a stolen key or a restore from a backup would."), resolve: true))
             case "admins":
-                out.append(Line(text: String(localized: "Admins removed or froze each other without seeing it: \(who). The root removes one of them."), remove: c.devices))
+                out.append(Line(text: String(localized: "Admins removed or froze each other without seeing it: \(who). The main device removes one of them."), remove: c.devices))
             default:
                 break
             }

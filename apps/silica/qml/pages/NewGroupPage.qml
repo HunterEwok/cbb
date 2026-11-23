@@ -31,7 +31,7 @@ Dialog {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
-                text: qsTr("This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.")
+                text: qsTr("This phone becomes the group's main device: it adds the other devices by their QR codes and makes the phones that ask admins.")
             }
             Label {
                 x: Theme.horizontalPageMargin
@@ -40,8 +40,8 @@ Dialog {
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.secondaryHighlightColor
                 text: app.keyLevel === "hardware"
-                      ? qsTr("The group's root key is made in the phone's secure element and never leaves it.")
-                      : qsTr("The group's root key is kept in a file on the phone: anyone who copies it can act as the group's root.")
+                      ? qsTr("The main device's key is made in the phone's secure element and never leaves it.")
+                      : qsTr("The main device's key is kept in a file on the phone: anyone who copies it can act as the group's main device.")
             }
             Label {
                 x: Theme.horizontalPageMargin
@@ -49,7 +49,7 @@ Dialog {
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.secondaryHighlightColor
-                text: qsTr("Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.")
+                text: qsTr("Make another phone an admin soon: if this phone is lost, an admin phone moves the group to itself.")
             }
             // The rights follow how the keys are kept (docs/apps.md, "Big
             // screens"): Aurora gives an app no fingerprint, so its keys

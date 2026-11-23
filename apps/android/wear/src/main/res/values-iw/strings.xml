@@ -10,7 +10,7 @@
     <string name="ask_action">להפעיל את %1$s ב-%2$s?</string>
     <string name="ask_actions_off">לכבות את כל הפעולות המהירות ב-%1$s?</string>
     <string name="ask_away_off">לכבות את הסנכרון מחוץ לבית ב-%1$s?</string>
-    <string name="ask_freeze">להקפיא את %1$s? הוא נשאר מנהל בשם, אבל שום דבר שהוא חותם עליו לא נחשב עד שהשורש יפשיר אותו.</string>
+    <string name="ask_freeze">להקפיא את %1$s? הוא נשאר מנהל בשם, אבל שום דבר שהוא חותם עליו לא נחשב עד שהמכשיר הראשי יפשיר אותו.</string>
     <string name="ask_paste_off">לכבות הדבקה מרחוק ב-%1$s?</string>
     <string name="ask_remove">להסיר את %1$s מהקבוצה?</string>
     <string name="away">בכל מקום</string>

@@ -32,7 +32,7 @@
     <string name="arrange_done_long">Maliza kupanga</string>
     <string name="arrange_menu">Menyu ya kupanga: %1$s</string>
     <string name="arrange_reset">Rudi kwenye mpangilio wa kikundi</string>
-    <string name="auto_send_body">Android huruhusu programu kusoma ubao wa kunakili tu ikiwa mbele. Washa CBB katika Ufikivu, na unachonakili huenda kwenye kompyuta zako bila kugusa; kisha Android husema \"CBB imebandika kutoka ubao wako wa kunakili\" kila mara. Bila hiyo, tumia kigae cha Tuma ubao wa kunakili, kitufe cha Tuma cha arifa, au Shiriki.</string>
+    <string name="auto_send_body">Android huruhusu programu kusoma ubao wa kunakili tu ikiwa mbele. Washa CBB katika Ufikivu, na unachonakili huenda kwenye kompyuta zako bila kugusa; kisha Android husema “CBB imebandika kutoka ubao wako wa kunakili” kila mara. Bila hiyo, tumia kigae cha Tuma ubao wa kunakili, kitufe cha Tuma cha arifa, au Shiriki.</string>
     <string name="auto_send_off">Kimezimwa</string>
     <string name="auto_send_on">Kimewashwa</string>
     <string name="away_ask_title">Uwashe Kila mahali?</string>
@@ -133,7 +133,7 @@
     <string name="error_old_key">Ufunguo wa kikundi wa simu hii uliundwa na toleo la awali la programu. Ondoka kwenye kikundi kwenye simu hii na uiweke upya.</string>
     <string name="error_paste_refused">Kifaa hakikubandika.</string>
     <string name="error_refused">Kompyuta ilikataa. Endesha cbb pair kwenye kompyuta hiyo tena.</string>
-    <string name="error_root_leaves">Simu hii inashikilia mzizi wa kikundi, na kikundi kina vifaa vingine. Viondoe kwanza, au acha simu ya msimamizi ichukue kikundi.</string>
+    <string name="error_root_leaves">Simu hii ndiyo kifaa kikuu cha kikundi, na kikundi kina vifaa vingine. Viondoe kwanza, au acha simu ya msimamizi ihamishie kikundi kwake.</string>
     <string name="error_rootless">Kompyuta hii imesakinishwa bila root, kwa hivyo programu yake yoyote inaweza kusoma funguo zake. Haiwezi kamwe kuwa msimamizi.</string>
     <string name="error_timed_out">Hakuna simu iliyochanganua msimbo ndani ya dakika tano. Jaribu tena.</string>
     <string name="error_too_many_codes">Misimbo mingi mno isiyo sahihi. Jaribu tena kwa msimbo mpya.</string>
@@ -151,12 +151,12 @@
     <string name="error_yubikey_two_slots">YubiKey hii ina funguo mbili za urejeshaji za kikundi hiki. Tumia karatasi badala yake.</string>
     <string name="error_yubikey_usb_denied">Simu haikuruhusiwa kutumia YubiKey kupitia USB. Ichomeke tena na uruhusu.</string>
     <string name="error_yubikey_wrong_pin">PIN si sahihi. Baada ya majaribio matatu yasiyo sahihi YubiKey huzuia PIN yake.</string>
-    <string name="event_added">%1$s kimejiunga na kikundi.</string>
-    <string name="event_frozen">%1$s kimegandishwa: vingine vinakikataa hadi msimamizi akifungue.</string>
+    <string name="event_added">%1$s amejiunga na kikundi.</string>
+    <string name="event_frozen">%1$s imegandishwa: vingine vinakikataa hadi msimamizi akiyeyushe.</string>
     <string name="event_made_admin">%1$s sasa ni msimamizi.</string>
-    <string name="event_removed">%1$s kimeondolewa kwenye kikundi.</string>
-    <string name="event_taken_over">%1$s kimechukua kikundi: sasa kinashikilia mzizi wa kikundi.</string>
-    <string name="event_unfrozen">Ugandishaji wa %1$s umefunguliwa.</string>
+    <string name="event_removed">%1$s ameondolewa kwenye kikundi.</string>
+    <string name="event_taken_over">%1$s kimehamishia kikundi kwake: sasa ndicho kifaa kikuu cha kikundi.</string>
+    <string name="event_unfrozen">%1$s imeyeyushwa.</string>
     <string name="fetched">Imeletwa kutoka kwa kompyuta.</string>
     <string name="files_saved">Imehifadhiwa katika Vipakuliwa, kwenye folda CBB.</string>
     <string name="files_sent">Imetumwa kwenye kompyuta, ambazo zinaileta kutoka simu hii sasa.</string>
@@ -178,8 +178,8 @@
     <string name="hub_entries_stale">Orodha ya milango ya kuingilia ya mradi imepitwa na wakati, na kisambazaji hakijibu kwa njia ambazo simu hii inazijua. Sasisha CBB kwenye kompyuta ya kikundi, au ingiza orodha mpya huko kwa cbb global entries import; kikundi huipitisha simu hii inapokutana nacho.</string>
     <string name="hub_failed">Kisambazaji hakiikubali simu hii. Kagua anwani na ufunguo wake.</string>
     <string name="hub_forwarder">Kisambazaji</string>
-    <string name="hub_forwarder_by_root">Mzizi wa kikundi huweka kisambazaji cha kitovu hiki; vifaa vilivyo mbali na nyumbani hufikia simu hii kupitia kisambazaji hicho.</string>
-    <string name="hub_forwarder_none_by_root">Mzizi wa kikundi haukuweka kisambazaji kwa simu hii, kwa hivyo inatumika kama kitovu cha nyumbani pekee.</string>
+    <string name="hub_forwarder_by_root">Kifaa kikuu cha kikundi huweka kisambazaji cha kitovu hiki; vifaa vilivyo mbali na nyumbani hufikia simu hii kupitia kisambazaji hicho.</string>
+    <string name="hub_forwarder_none_by_root">Kifaa kikuu cha kikundi hakikuweka kisambazaji kwa simu hii, kwa hivyo inatumika kama kitovu cha nyumbani pekee.</string>
     <string name="hub_home_background">Simu hii ndiyo kitovu, hata chinichini.</string>
     <string name="hub_home_note">Simu hii ndiyo kitovu: usawazishaji hufanya kazi wakati programu iko wazi.</string>
     <string name="hub_home_only">Kitovu cha nyumbani pekee: ongeza kisambazaji ili kusawazisha ukiwa mbali na nyumbani.</string>
@@ -257,7 +257,7 @@
     <string name="keyboard_no_permission">CBB bado hairuhusiwi kutumia Bluetooth.</string>
     <string name="keyboard_pick_host">Chagua kifaa cha kuandikia.</string>
     <string name="keyboard_rate">Kasi</string>
-    <string name="keyboard_rate_value">herufi %1$d kwa sekunde</string>
+    <string name="keyboard_rate_value">Herufi %1$d kwa sekunde</string>
     <string name="keyboard_refused">Mfumo haukuruhusu simu hii kuwa kibodi. Huenda programu nyingine ndiyo kibodi ya simu sasa: izime huko.</string>
     <string name="keyboard_sdp_description">Huandika kile CBB inachotuma</string>
     <string name="keyboard_sdp_name">Kibodi ya CBB</string>
@@ -289,7 +289,7 @@
     <string name="layout_orbit">Obiti</string>
     <string name="layout_tiles">Vigae</string>
     <string name="leave_footer">Hufuta funguo za simu hii na data ya kikundi hapa; mipangilio inabaki.</string>
-    <string name="leave_footer_root">Simu hii inashikilia mzizi wa kikundi: inaondoka tu kikundi kisipokuwa na vifaa vingine.</string>
+    <string name="leave_footer_root">Simu hii ndiyo kifaa kikuu cha kikundi: inaondoka tu kikundi kisipokuwa na vifaa vingine.</string>
     <string name="leave_group">Ondoka kwenye kikundi</string>
     <string name="leave_question">Uondoke kwenye kikundi?</string>
     <string name="leave_text">Funguo za simu hii na data ya kikundi iliyo hapa zinafutwa, na kubandika kwa mbali kunazimwa; mipangilio mingine inabaki. Kisha inaweza kujiunga tena na kikundi hiki au kingine. Kikundi kinaendelea kuiorodhesha hadi msimamizi aiondoe.</string>
@@ -301,7 +301,7 @@
     <string name="make_admin_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye faili kwenye kompyuta: yeyote anayenakili faili hilo anaweza kutenda kama msimamizi hadi msimamizi mwingine akiondoe. Fanya hivi tu kwa kompyuta unayoilinda.</string>
     <string name="make_admin_files_body">Kisha kikundi huruhusu funguo zilizo kwenye faili kuwa wasimamizi na vitovu (Mipangilio, Funguo za msimamizi).</string>
     <string name="make_admin_hardware_body">Kisha kitaweza kuongeza na kuondoa vifaa kwa cbb pair na cbb remove. Funguo zake ziko kwenye maunzi yake, ambayo hayaziachi zitoke kamwe.</string>
-    <string name="make_admin_phone_body">Kisha itaweza kuongeza na kuondoa vifaa, na kuchukua kikundi simu hii ikipotea.</string>
+    <string name="make_admin_phone_body">Kisha itaweza kuongeza na kuondoa vifaa, na kuhamishia kikundi kwake simu hii ikipotea.</string>
     <string name="make_admin_title">Ufanye %1$s kuwa msimamizi?</string>
     <string name="menu">Menyu</string>
     <string name="more">Zaidi</string>
@@ -343,7 +343,7 @@
     <string name="notify_devices">Kifaa kimejiunga au kimeondolewa</string>
     <string name="notify_frozen">Kifaa kimegandishwa au kimeachiliwa</string>
     <string name="notify_hub">Kitovu hakijibu ukiwa mbali na nyumbani</string>
-    <string name="notify_takeover">Kikundi kimechukuliwa</string>
+    <string name="notify_takeover">Kikundi kimehamia kifaa kingine</string>
     <string name="offline">nje ya mtandao</string>
     <string name="online">mtandaoni</string>
     <string name="online_count">%1$d kati ya %2$d mtandaoni</string>
@@ -371,13 +371,13 @@
     <string name="pause_for_a_time">chagua kwa muda gani</string>
     <string name="pause_hour">Kwa saa moja</string>
     <string name="pause_quarter">Kwa dakika 15</string>
-    <string name="period_overdue">Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa mzizi.</string>
+    <string name="period_overdue">Funguo za kikundi za usawazishaji ukiwa mbali na nyumbani zimeisha muda: relei na vitovu vyake havipokei kifaa chochote hadi simu hii izisasishe kwa ufunguo wa kifaa kikuu.</string>
     <string name="push_copy">Nakili</string>
     <string name="push_copy_waits">Nakala inasubiri. Fungua programu.</string>
     <string name="push_event_joined">Kifaa kimejiunga na kikundi chako. Fungua programu kukiona.</string>
     <string name="push_event_own">Rekodi ya kifaa hiki imebadilika. Fungua programu kuhakikisha.</string>
     <string name="push_event_removed">Kifaa kimeondolewa kwenye kikundi chako. Fungua programu kuhakikisha.</string>
-    <string name="push_event_root">Mzizi wa kikundi chako umebadilika. Fungua programu kuhakikisha.</string>
+    <string name="push_event_root">Kifaa kikuu cha kikundi chako kimebadilika. Fungua programu kuhakikisha.</string>
     <string name="push_event_stopped">Kikundi chako kimesimama. Fungua programu kuhakikisha.</string>
     <string name="push_event_waiting">Kifaa kinasubiri kujiunga na kikundi chako. Fungua programu.</string>
     <string name="push_neutral">Kuna jambo jipya katika kikundi chako. Fungua programu.</string>
@@ -408,7 +408,7 @@
     <string name="reason_unfreeze">Fungua ugandishaji wa kompyuta ya msimamizi</string>
     <string name="reason_unmute">Ondoa unyamazishaji wa kifaa</string>
     <string name="recovery_06">Ulitengenezwa pamoja na kikundi, na karatasi yake ilionyeshwa mara moja tu. Bila karatasi hiyo kifaa kikuu cha kikundi hakiwezi kubadilishwa: karatasi ikipotea, unda kikundi kipya.</string>
-    <string name="recovery_body">Karatasi ya kuchapisha na kuweka mbali na simu zako. Simu kuu ya kikundi ikipotea, kifaa kingine cha kikundi kinachukua kikundi kwa karatasi hii.</string>
+    <string name="recovery_body">Karatasi ya kuchapisha na kuweka mbali na simu zako. Simu kuu ya kikundi ikipotea, kifaa kingine cha kikundi kinahamishia kikundi kwake kwa karatasi hii.</string>
     <string name="recovery_done">Imekamilika</string>
     <string name="recovery_done_body">Simu hii inasahau ufunguo sasa. Ili kupata karatasi tena, unda ufunguo mpya wa urejeshaji.</string>
     <string name="recovery_done_title">Je, uliihifadhi karatasi?</string>
@@ -417,7 +417,7 @@
     <string name="recovery_leave_unsaved">Toka bila kuhifadhi</string>
     <string name="recovery_made">Iliundwa %1$s.</string>
     <string name="recovery_page_how">Kuhamisha kikundi kwenda kifaa kingine chake: kwenye simu, chagua Hamisha kikundi kwenda simu hii katika mipangilio yake na uchanganue msimbo; kwenye kompyuta, endesha cbb recovery na uandike ufunguo.</string>
-    <string name="recovery_page_keep">Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuchukua kikundi chako.</string>
+    <string name="recovery_page_keep">Weka karatasi hii mahali salama, mbali na simu zako. Yeyote aliye nayo pamoja na kifaa cha kikundi anaweza kuhamishia kikundi chako kwenye kifaa hicho.</string>
     <string name="recovery_page_title">Ufunguo wa urejeshaji wa CBB</string>
     <string name="recovery_print">Chapisha au hifadhi kama PDF</string>
     <string name="recovery_print_failed">Haikuweza kuchapisha karatasi.</string>
@@ -435,7 +435,7 @@
     <string name="relay_ask_title">Mkutane kwenye kipitishi hiki?</string>
     <string name="relay_bad">Weka anwani ya kipitishi pamoja na lango lake na ufunguo wake, kama cbb relay inavyozichapisha, au acha zote mbili tupu.</string>
     <string name="relay_body">Kwa kikundi kisicho na kitovu chake: vifaa hukutana kwenye kipitishi, kama kile kilichowekwa kwa cbb relay, wakati programu inasawazisha. Ubao wa kunakili unabaki umesimbwa kati ya vifaa, lakini kipitishi hujua vipi viko mtandaoni na anwani zake, na vipi vinazungumza, lini na kwa kiasi gani. Acha sehemu zote mbili tupu ili kusimamisha.</string>
-    <string name="relay_by_root">Mzizi wa kikundi huweka relei kwa kila kifaa; simu hii hukutana na vingine huko wakati usawazishaji ukiwa mbali na nyumbani umewashwa.</string>
+    <string name="relay_by_root">Kifaa kikuu cha kikundi huweka relei kwa kila kifaa; simu hii hukutana na vingine huko wakati usawazishaji ukiwa mbali na nyumbani umewashwa.</string>
     <string name="relay_connecting">Inaunganisha na kipitishi…</string>
     <string name="relay_failed">Kipitishi hakiikubali simu hii. Kagua anwani na ufunguo wake.</string>
     <string name="relay_key">Ufunguo wa kipitishi, herufi 44</string>
@@ -447,7 +447,7 @@
     <string name="relay_with">Kwenye relei; vifaa vya kikundi vilivyopo: %1$d.</string>
     <string name="remove">Ondoa</string>
     <string name="remove_body">Hakitasawazisha tena na vifaa vyako. Ili kukiongeza tena, changanua msimbo wake wa QR tena.</string>
-    <string name="remove_root_body">Kiliunda kikundi. Simu hii inachukua kikundi kwa ufunguo mpya, na vifaa vingine vinaifuata.</string>
+    <string name="remove_root_body">Kiliunda kikundi. Simu hii inahamishia kikundi kwake kwa ufunguo mpya, na vifaa vingine vinaifuata.</string>
     <string name="remove_title">Uondoe %1$s?</string>
     <string name="removed">Kimeondolewa. Vifaa vingine vinakikataa kuanzia sasa.</string>
     <string name="removed_self_text">Vifaa vya kikundi vinakikataa sasa. Ondoka kwenye kikundi ili kufuta funguo zake hapa; kisha kinaweza kujiunga na kikundi tena.</string>
@@ -462,7 +462,7 @@
     <string name="role_member">Mwanachama</string>
     <string name="role_member_rootless">Mwanachama, bila root</string>
     <string name="role_phone">Programu ya simu</string>
-    <string name="root">mzizi</string>
+    <string name="root">kifaa kikuu</string>
     <string name="root_changed_body">%1$s sasa ni kifaa kikuu cha kikundi, mahali pa %2$s.</string>
     <string name="root_changed_here">Simu hii sasa ni kifaa kikuu cha kikundi. Vifaa vingine vitajua mara tu vinapounganishwa.</string>
     <string name="root_changed_not_me">Si mimi</string>
@@ -482,7 +482,7 @@
     <string name="share_allow">Ruhusu</string>
     <string name="share_allowed_none">Hakuna: simu huuliza kila programu.</string>
     <string name="share_always">Kila wakati kwa programu hii</string>
-    <string name="share_ask_body">Shiriki, menyu ya uteuzi na kipengee cha cbb send huruhusu programu yoyote kuipa CBB maandishi au kuanzisha usawazishaji, kwa hivyo simu huuliza kwanza. \"Daima kwa programu hii\" huiruhusu programu hiyo bila kuuliza.</string>
+    <string name="share_ask_body">Shiriki, menyu ya uteuzi na kipengee cha cbb send huruhusu programu yoyote kuipa CBB maandishi au kuanzisha usawazishaji, kwa hivyo simu huuliza kwanza. “Daima kwa programu hii” huiruhusu programu hiyo bila kuuliza.</string>
     <string name="share_ask_switch">Programu zinazotuma bila kuuliza</string>
     <string name="share_confirm_body">%1$s kimeipa CBB maandishi ya herufi %2$d. Yanaenda kwa kila kompyuta ya kikundi.</string>
     <string name="share_confirm_title">Utume maandishi haya kwenye kompyuta zako?</string>

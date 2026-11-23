@@ -16,6 +16,11 @@ the same release ([versions and compatibility](docs/reference/compatibility.md))
 with 0.5 is set up again once. The details follow.
 
 ### Added
+- The apps' words follow a termbase, `apps/l10n/terms.json`, and `go run ./tools/strings -lint`
+  checks them in CI: a translation names each concept the English names by the termbase's word,
+  Vale's rules (the termbase's banned words, one-character ellipses, the language's quotes) pass
+  on every language, and one English text has one translation (D-133;
+  [apps](docs/apps.md), "Words in the apps").
 - docs/format.md: the wire format of 0.6 byte by byte, written from the core's tables: the CBOR
   profile, keys, envelopes, every record, statement, command, grant, credential, message and copy,
   pairing, the key container, the ceilings and the registries. The code's "format section N"
@@ -2187,6 +2192,11 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The apps call the group's root the main device on every screen, in every language, and a
+  move by the recovery key "moving the group" rather than taking it over. The Russian
+  strings drop their colloquial words for an admin, the relay, the forwarder, joining a group
+  and hardware for the termbase's, and a YubiKey is held to the phone, not pressed on it, for
+  NFC; a text the platforms show alike reads alike on all of them (D-133).
 - The Mac and the tray app call the recovery by the phones' name: "Move the group to this
   Mac" (or "this computer"), and say that the device becomes the group's main device, not
   its root.

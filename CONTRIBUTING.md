@@ -121,6 +121,7 @@ go run ./tools/prcheck -base origin/main   # the branch's authors and co-authors
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
 go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts, string.json and tray l10n
+go run ./tools/strings -lint   # the apps' words: the termbase apps/l10n/terms.json and Vale (docs/apps.md, "Words in the apps")
 go run ./tools/icon -check     # the apps' icons
 sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
@@ -355,4 +356,11 @@ and Qt. When Xcode adds a new key to a catalog, move it into the source.
 ```sh
 go run ./tools/strings          # sort the source and write the apps' files
 go run ./tools/strings -check   # what tools/repocheck checks too
+go run ./tools/strings -lint    # the words: the termbase and Vale, as CI checks them
 ```
+
+The words follow the termbase, `apps/l10n/terms.json`: for each concept the word each
+language uses and the words it does not. `-lint` checks every string against it, runs
+Vale's rules on every language and fails when one English text has two translations
+([apps](docs/apps.md), "Words in the apps"). It needs only Go: `go run` builds the Vale it
+names once and keeps it in the build cache.

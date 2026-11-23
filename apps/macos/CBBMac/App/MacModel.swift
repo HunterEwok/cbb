@@ -256,7 +256,7 @@ final class MacModel: ObservableObject {
     /// Makes a new group with this Mac as its root, as cbb new does as the
     /// administrator.
     func createGroup() async {
-        await admin(["new"], done: String(localized: "The group is made: this Mac is its root. Add a device with the + button."))
+        await admin(["new"], done: String(localized: "The group is made: this Mac is its main device. Add a device with the + button."))
     }
 
     /// Installs the newest signed release the group passed around, as cbb
@@ -269,7 +269,7 @@ final class MacModel: ObservableObject {
     func recover(_ key: String) async {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        await admin(["recovery"], input: key + "\n", done: String(localized: "This Mac is the group's root now."))
+        await admin(["recovery"], input: key + "\n", done: String(localized: "This Mac is the group's main device now."))
     }
 
     func rename(_ id: String, to name: String) async {

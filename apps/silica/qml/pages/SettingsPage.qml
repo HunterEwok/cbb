@@ -68,7 +68,7 @@ Page {
                     { kind: "devices", text: qsTr("Devices join or leave") },
                     { kind: "admins", text: qsTr("A device becomes an admin") },
                     { kind: "frozen", text: qsTr("A device is frozen or unfrozen") },
-                    { kind: "takeover", text: qsTr("Another phone takes the group over") }
+                    { kind: "takeover", text: qsTr("Another phone moves the group to itself") }
                 ]
                 TextSwitch {
                     text: modelData.text
@@ -220,7 +220,7 @@ Page {
                 visible: app.group !== ""
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Leave the group")
-                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting its root key")
+                onClicked: remorse.execute(app.root ? qsTr("Leaving the group and deleting the main device's key")
                                                     : qsTr("Leaving the group"), function() { app.leave(); pageStack.pop() })
             }
 
