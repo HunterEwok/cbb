@@ -1412,6 +1412,7 @@ final class AppModel: ObservableObject {
             message = nil
             return secret
         } catch is CancellationError {
+            message = nil
             return nil
         } catch {
             message = Self.describe(error)

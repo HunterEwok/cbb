@@ -357,12 +357,13 @@ is in software gets the same big-screen layout with a computer's rights.
     are online with the two switches (the house and the globe, which go under the count when
     the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
     and each collection, each with its count (a collection's menu renames or ungroups it);
-    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    **Settings**: Appearance, Notifications, the recovery key (on the root; elsewhere "Move the
+    group to this phone"), away from home
     (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
     not sync, and About with leaving the group. A part opens in the detail column; there is no
     switch for the advanced settings, each has its own part. In portrait the sidebar folds
     away behind its button, and "+" moves to the detail's toolbar.
-  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
     orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
     toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
     (growing with the text size, at most 520), and the chosen tile is outlined; when the window
@@ -398,7 +399,7 @@ is in software gets the same big-screen layout with a computer's rights.
     behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
     and the details (as in landscape); else it slides in from the edge behind ☰ (as in
     portrait). A short line at its foot names the keys.
-  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+  - **The devices**: the alerts and the last copy that came, then the section's devices as tiles (the default), a list or
     orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
     with + beside it on an admin. A tap chooses a device: its details stand at the trailing
     edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;

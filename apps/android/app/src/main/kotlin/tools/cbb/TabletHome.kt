@@ -464,6 +464,7 @@ private fun DeviceSection(
         LostPhoneCard(model)
         model.message?.let { NoteText(it, dim = true) }
         FallbackSend(model)
+        LastReceived(model)
         // The orbit keeps the group's order; Arrange mode, a search and the other sections show tiles.
         if (section == TabletSection.All && layout == DeviceLayout.ORBIT && !arrange.on && !search.active) {
             Orbit(model.devices, selected, select = { select(it) }, modifier = Modifier.weight(1f).fillMaxWidth())

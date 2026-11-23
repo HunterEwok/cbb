@@ -288,6 +288,7 @@ struct PadDevices: View {
         VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
             AlertsCard()
             FallbackPaste()
+            LastReceived()
             if let message = model.message {
                 Text(message).foregroundStyle(palette.textDim)
             }

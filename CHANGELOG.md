@@ -26,6 +26,10 @@ with 0.5 is set up again once. The details follow.
   main device changed, with "This wasn't me", and Aurora's "OK" on that card is kept by the
   member (`root_change_seen`), so it does not come back when the app starts again
   ([apps](docs/apps.md), "Notices").
+- On the iPhone and iPad, "Move the group to this phone" shows why a step failed (a key that
+  does not fit, a YubiKey refused) in its own sheet, and the iPad's sidebar offers it on a
+  phone that is not the main device. The iPad and Android tablets show the last copy that came,
+  with Copy, as the phones do.
 - The apps' plan describes the phones' invitation screen as it is: it warns to join only an
   invitation one asked for, since an invitation of 0.6 names no group, hub or expiry before
   the phone joins ([apps](docs/apps.md)).

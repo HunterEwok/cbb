@@ -493,7 +493,8 @@ enum SettingsPart: String, CaseIterable, Hashable {
     /// Whether the part has anything on this device.
     @MainActor func shown(_ model: AppModel) -> Bool {
         switch self {
-        case .recovery: model.isRoot
+        // The root's recovery key, or moving the group to this phone.
+        case .recovery: model.isRoot || model.phase == .home
         case .away: model.away != nil || model.blindRelay != nil
         case .group: (model.isAdmin && model.phase == .home) || model.keyLevel != nil
         default: true
