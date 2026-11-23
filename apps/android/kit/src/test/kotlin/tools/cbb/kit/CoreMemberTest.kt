@@ -148,4 +148,37 @@ class CoreMemberTest {
         m.setTtl(null, 30_000, pub, g.rootKey::signDigest)
         assertEquals(120_000L to 30_000L, m.group().let { it.ttlMS to it.secretTtlMS }, "a left-out lifetime keeps its value")
     }
+
+    /**
+     * The notices and the change of root with the recovery key (docs/core-api.md, "The member"): a new group tells
+     * nothing and takes a hidden notice; once the root is lost, the phone shows who stays, refuses to leave itself
+     * out, and becomes the root with its new root key.
+     */
+    @Test
+    fun changesTheRootWithTheRecoveryKey() {
+        val g = group(2)
+        val phone = g.phones[1]
+        val m = phone.member
+        assertTrue(m.notices().isEmpty(), "a new group tells nothing")
+        assertFailsWith<Core.Refusal> { m.dismiss("AAAA") }
+        m.dismiss(java.util.Base64.getEncoder().encodeToString(ByteArray(32) { 9 }))
+        assertTrue(m.notices().isEmpty())
+        m.rootChangeSeen()
+        m.setEvidence(emptyList())
+
+        g.root.member.close()
+        val sheet = RecoveryInput.Qr(g.recovery)
+        val preview = m.changePreview(sheet, listOf("Root phone"))
+        assertTrue(!preview.waiting)
+        assertEquals(mapOf("Root phone" to "out"), preview.rows.associate { it.name to it.outcome }, "every other device, with what the change does to it")
+        val newRoot = SoftwareSigner()
+        assertFailsWith<Core.Refusal>("the phone that becomes the root stays") {
+            m.changeRoot(sheet, listOf("Phone 1"), newRoot.publicKeyDER, newRoot::signDigest)
+        }
+        assertTrue(m.changeRoot(sheet, listOf("Root phone"), newRoot.publicKeyDER, newRoot::signDigest) > 0)
+        phone.until("the phone as the root") { m.group().rootDevice == phone.device }
+        assertFailsWith<Core.Refusal>("the root changes the root no more") {
+            m.changeRoot(sheet, emptyList(), newRoot.publicKeyDER, newRoot::signDigest)
+        }
+    }
 }

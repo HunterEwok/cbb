@@ -108,6 +108,11 @@ class ContentTest {
         val big = store.put(ByteArray(40), blob = true)
         assertEquals(null, store.open(two))
         assertEquals(40L, store.open(big)!!.size)
+        // A served blob reads from any offset.
+        store.open(store.put(ByteArray(6) { i -> i.toByte() }, blob = true))!!.use { source ->
+            assertContentEquals(byteArrayOf(2, 3, 4), source.read(2, 3))
+        }
+        assertEquals("the copy is 12 bytes, more than the limit of 10", Content.TooLarge(12, 10).message)
     }
 
 }

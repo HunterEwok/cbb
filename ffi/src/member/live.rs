@@ -169,7 +169,9 @@ struct ManageArgs {
     /// its admin key is `key`, a SubjectPublicKeyInfo in base64.
     #[serde(default)]
     os: String,
-    #[serde(with = "certs::b64")]
+    /// The signing key's SubjectPublicKeyInfo in base64; absent for a step
+    /// that signs nothing, as change_preview.
+    #[serde(default, with = "certs::b64")]
     public: Vec<u8>,
 }
 
@@ -1651,6 +1653,18 @@ mod tests {
     fn error(answer: &[u8]) -> String {
         let v: Value = serde_json::from_slice(answer).unwrap();
         v["error"]["message"].as_str().unwrap_or_else(|| panic!("no error: {v}")).to_string()
+    }
+
+    /// A step that signs nothing, as the preview of a change of root, comes
+    /// without a key, as the apps send it.
+    #[test]
+    fn a_step_that_signs_nothing_needs_no_key() {
+        let a: ManageArgs =
+            serde_json::from_str(r#"{"action":"change_preview","recovery":{"qr":"x"},"leave_out":["pc"]}"#).unwrap();
+        assert!(a.public.is_empty());
+        assert_eq!(a.leave_out, ["pc"]);
+        let a: ManageArgs = serde_json::from_str(r#"{"action":"rename","public":"AQI="}"#).unwrap();
+        assert_eq!(a.public, [1, 2]);
     }
 
     #[test]

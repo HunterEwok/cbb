@@ -64,6 +64,9 @@ class CoreGroup(n: Int = 2) : AutoCloseable {
     /** The group's root key, which the root phone holds. */
     val rootKey = SoftwareSigner()
     val phones: List<CorePhone>
+
+    /** The text of the recovery sheet's QR code, which the app shows once when it makes the group. */
+    val recovery: String
     private val top: File = createTempDirectory("cbb-core-group").toFile()
 
     val root: CorePhone get() = phones[0]
@@ -71,6 +74,7 @@ class CoreGroup(n: Int = 2) : AutoCloseable {
     init {
         val key = SoftwareSigner()
         val made = CorePairing.newGroup(File(top, "0"), "Root phone", "android", Records.HARDWARE, rootKey.publicKeyDER, key.publicKeyDER, rootKey::signDigest)
+        recovery = made.recoveryQR
         val first = start(0, "Root phone", made.device, key)
         val all = mutableListOf(first)
         val port = first.member.listen(CoreMember.Listen.HOME)

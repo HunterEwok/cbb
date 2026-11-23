@@ -129,7 +129,7 @@ answered `{device, name}`; a watch signs nothing in 0.6, so `watch_actions` answ
 changes the group's root to itself with the recovery key (D-117, D-125): `recovery` is the
 sheet's `{qr}` or `{text}`, or `{secret}`, the 32 bytes in base64 that `cbb_piv`'s `open` gave
 from a YubiKey, checked against the group's recovery key; `change_preview` (`recovery`,
-`leave_out`: names or device IDs) answers `{rows: [{device, name, os, outcome}], waiting}`
+`leave_out`: names or device IDs; no `public`) answers `{rows: [{device, name, os, outcome}], waiting}`
 without signing, each other device's outcome `stays`, `out`, `admin_kept`, `admin_lost`,
 `frozen` or `removed_earlier`, and `change_root` (the same, and `drop_hubs`, `over_waiting`)
 signs the new start with the app's new root key and answers `{seq}`, as `cbb recovery` does on
