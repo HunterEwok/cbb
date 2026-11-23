@@ -967,52 +967,6 @@
         }
       }
     },
-    "Admit it as an admin: it may then add, remove and renew devices and take the group over after the takeover delay. Only for your own phone.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اقبله مشرفًا: يمكنه حينها إضافة الأجهزة وإزالتها وتجديدها والاستيلاء على المجموعة بعد مهلة الاستيلاء. لهاتفك أنت فقط."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Admitirlo como administrador: podrá añadir, eliminar y renovar dispositivos y tomar el grupo tras el plazo de toma de control. Solo para tu propio teléfono."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "קבלה כמנהל: הוא יוכל להוסיף, להסיר ולחדש מכשירים ולהשתלט על הקבוצה אחרי זמן ההשתלטות. רק לטלפון שלכם."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "इसे एडमिन के रूप में शामिल करें: तब यह डिवाइस जोड़, हटा और नवीनीकृत कर सकेगा और टेकओवर की देरी के बाद समूह ले सकेगा। केवल अपने फ़ोन के लिए।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Принять как админа: он сможет добавлять, удалять и продлевать устройства и после задержки забрать группу себе. Только для своего телефона."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kikubali kama msimamizi: kitaweza kuongeza, kuondoa na kusasisha vifaa na kuchukua kikundi baada ya muda wa kuchukua. Kwa simu yako mwenyewe tu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "作为管理员接纳：之后它可以添加、移除和续期设备，并在接管等待期后接管群组。仅限你自己的手机。"
-          }
-        }
-      }
-    },
     "Admit it as an admin: only for your own phone.": {
       "localizations": {
         "ar": {
@@ -2941,98 +2895,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "请检查网络连接；CBB 会自动重试。"
-          }
-        }
-      }
-    },
-    "Claim": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مطالبة"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reclamar"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "תביעה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "दावा करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Забрать"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "申领"
-          }
-        }
-      }
-    },
-    "Claim the group with its recovery key": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المطالبة بالمجموعة بمفتاح استردادها"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reclamar el grupo con su clave de recuperación"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "תביעת הקבוצה עם מפתח השחזור שלה"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी कुंजी से समूह पर दावा करें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Забрать группу ключом восстановления"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai kikundi kwa ufunguo wake wa urejeshaji"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用恢复密钥申领群组"
           }
         }
       }
@@ -6993,6 +6855,52 @@
         }
       }
     },
+    "Move": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقل"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העברה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ले आएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенести"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hamisha"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移过来"
+          }
+        }
+      }
+    },
     "Move earlier": {
       "localizations": {
         "ar": {
@@ -7127,6 +7035,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "用群组的恢复密钥把群组移到新的主设备。"
+          }
+        }
+      }
+    },
+    "Move the group to this Mac": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقل المجموعة إلى جهاز Mac هذا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pasar el grupo a este Mac"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להעביר את הקבוצה ל-Mac הזה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह को इस Mac पर ले आएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенести группу на этот Mac"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hamishia kikundi kwenye Mac hii"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把群组移到这台 Mac"
           }
         }
       }
@@ -13801,52 +13755,6 @@
         }
       }
     },
-    "The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يطالب مفتاح الاسترداد بمجموعة فُقدت كل هواتفها. انضم إلى تلك المجموعة أولًا، ثم طالب بها في الإعدادات."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La clave de recuperación reclama un grupo cuyos teléfonos se han perdido todos. Únete antes a ese grupo y luego reclámalo en Ajustes."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "מפתח השחזור תובע קבוצה שכל הטלפונים שלה אבדו. הצטרפו קודם לקבוצה הזו, ואז תבעו אותה בהגדרות."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "रिकवरी कुंजी ऐसे समूह पर दावा करती है जिसके सभी फ़ोन खो गए हैं। पहले उस समूह से जुड़ें, फिर सेटिंग्स में उस पर दावा करें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ключ восстановления забирает группу, все телефоны которой потеряны. Сначала войдите в эту группу, затем заберите её в настройках."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ufunguo wa urejeshaji unadai kikundi ambacho simu zake zote zimepotea. Jiunge na kikundi hicho kwanza, kisha ukidai katika Mipangilio."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "该恢复密钥声明的群组，其手机已全部丢失。请先加入该群组，然后在“设置”中声明。"
-          }
-        }
-      }
-    },
     "The service answered something unexpected.": {
       "localizations": {
         "ar": {
@@ -15733,48 +15641,48 @@
         }
       }
     },
-    "Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's root at once.": {
+    "Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's main device at once.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب المفتاح من الورقة، أو الصق نص رمز QR الخاص بها. يصبح هذا الـMac جذر المجموعة فورًا."
+            "value": "اكتب المفتاح من الورقة، أو الصق نص رمز QR الخاص بها. يصبح جهاز Mac هذا الجهاز الرئيسي للمجموعة فورًا."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribe la clave de la hoja, o pega el texto de su código QR. Este Mac pasa a ser la raíz del grupo al instante."
+            "value": "Escribe la clave de la hoja, o pega el texto de su código QR. Este Mac pasa a ser el dispositivo principal del grupo al instante."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "הקלידו את המפתח מהדף, או הדביקו את הטקסט של קוד ה-QR שלו. ה-Mac הזה הופך מיד לשורש של הקבוצה."
+            "value": "הקלידו את המפתח מהדף, או הדביקו את הטקסט של קוד ה-QR שלו. ה-Mac הזה הופך מיד למכשיר הראשי של הקבוצה."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "शीट से कुंजी लिखें, या उसके QR कोड का टेक्स्ट पेस्ट करें। यह Mac तुरंत समूह का रूट बन जाता है।"
+            "value": "शीट से कुंजी लिखें, या उसके QR कोड का टेक्स्ट पेस्ट करें। यह Mac तुरंत समूह का मुख्य डिवाइस बन जाता है।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Введите ключ с листа или вставьте текст его QR-кода. Этот Mac сразу станет корнем группы."
+            "value": "Введите ключ с листа или вставьте текст его QR-кода. Этот Mac сразу станет главным устройством группы."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Andika ufunguo kutoka kwenye karatasi, au bandika maandishi ya msimbo wake wa QR. Mac hii inakuwa mzizi wa kikundi mara moja."
+            "value": "Andika ufunguo kutoka kwenye karatasi, au bandika maandishi ya msimbo wake wa QR. Mac hii inakuwa kifaa kikuu cha kikundi mara moja."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "输入恢复单上的密钥，或粘贴其二维码的文本。这台 Mac 会立即成为群组的根。"
+            "value": "输入恢复单上的密钥，或粘贴其二维码的文本。这台 Mac 会立即成为群组的主设备。"
           }
         }
       }
@@ -16649,6 +16557,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "为什么不同步"
+          }
+        }
+      }
+    },
+    "With the group's recovery key, this Mac becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بمفتاح استرداد المجموعة، يصبح جهاز Mac هذا الجهاز الرئيسي، مثلًا عند فقدان الجهاز السابق. انضم إلى المجموعة أولًا، ثم انقلها إلى هنا من الإعدادات."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con la clave de recuperación del grupo, este Mac pasa a ser el dispositivo principal, por ejemplo cuando se pierde el anterior. Únete primero al grupo y después pásalo aquí en Ajustes."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בעזרת מפתח השחזור של הקבוצה, ה-Mac הזה הופך למכשיר הראשי, למשל כשהקודם אבד. הצטרפו קודם לקבוצה, ואז העבירו אותה לכאן בהגדרות."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह की रिकवरी कुंजी से यह Mac मुख्य डिवाइस बन जाता है, जैसे जब पुराना खो जाए। पहले समूह में शामिल हों, फिर सेटिंग्स में समूह को यहाँ ले आएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "С ключом восстановления группы этот Mac становится главным устройством, например когда прежнее потеряно. Сначала войдите в группу, затем перенесите её сюда в настройках."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwa ufunguo wa urejeshaji wa kikundi, Mac hii inakuwa kifaa kikuu, kwa mfano kifaa cha zamani kikipotea. Jiunge na kikundi kwanza, kisha ukihamishie hapa kwenye Mipangilio."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用群组的恢复密钥，这台 Mac 可以成为主设备，例如旧的主设备丢失时。请先加入群组，然后在设置中把群组移到这里。"
           }
         }
       }

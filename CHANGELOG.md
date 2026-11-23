@@ -2187,6 +2187,9 @@ with 0.5 is set up again once. The details follow.
   copy or paste.
 
 ### Changed
+- The Mac and the tray app call the recovery by the phones' name: "Move the group to this
+  Mac" (or "this computer"), and say that the device becomes the group's main device, not
+  its root.
 - CI installs the Python packages of the format vectors' generator from
   `testdata/format/requirements.txt`, pinned by hash, and Dependabot keeps them current.
 - A phone's one button swaps instead of picking a direction (D-128): what the phone's
@@ -3003,6 +3006,9 @@ with 0.5 is set up again once. The details follow.
   (`member_client`, `member_server`, `member_or_pair_server`, `restore_client`,
   `pair_admitter`, the external pairing configurations and `check_member`); members of 0.6
   speak TLS by key (`cbb_core::tls::bykey`) (D-130).
+- 27 app strings no screen showed any more (58 string resources of Android and HarmonyOS),
+  among them the alerts and recovery-key dialogs of 0.5 and the Mac's admission note about
+  the takeover delay.
 - Remote paste onto the phones until 0.7: the member of 0.6 hands a phone no paste, so the
   Android, Aurora and HarmonyOS apps no longer offer the switches "Let the group's admins
   paste" and "Let a paste press Enter", the log of pastes or the keyboard's "Type remote

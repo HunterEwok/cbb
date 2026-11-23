@@ -336,7 +336,7 @@ func (d *Desk) Resolve() {
 
 // Recover claims the group with its recovery key, typed from the sheet or
 // its QR code's text, as cbb recovery does as the administrator with the
-// key on its standard input; this computer is the group's root at once.
+// key on its standard input; this computer is the group's main device at once.
 func (d *Desk) Recover(key string) {
 	d.adminWith([]string{"recovery"}, strings.TrimSpace(key)+"\n", "This computer is the group's root now.")
 }

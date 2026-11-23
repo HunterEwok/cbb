@@ -145,8 +145,9 @@ struct StartView: View {
     }
 }
 
-/// Claims a group whose phones are all lost with its recovery key; this Mac
-/// must be in that group, so out of a group it says so.
+/// Moves the group to this Mac with its recovery key, for example when the
+/// phone that was its main device is lost; this Mac must be in that group,
+/// so out of a group it says so.
 struct RecoverySheet: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.dismiss) private var dismiss
@@ -155,16 +156,16 @@ struct RecoverySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
-            Text("Recovery key").font(.title2.weight(.semibold))
+            Text("Move the group to this Mac").font(.title2.weight(.semibold))
             if model.inGroup {
-                Text("Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's root at once.")
+                Text("Type the key from the sheet, or paste its QR code's text. This Mac becomes the group's main device at once.")
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
                 TextField(text: $key) { Text("Recovery key") }
                     .font(.system(.body, design: .monospaced))
                     .textFieldStyle(.roundedBorder)
             } else {
-                Text("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings.")
+                Text("With the group's recovery key, this Mac becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings.")
                     .foregroundStyle(palette.textDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -176,7 +177,7 @@ struct RecoverySheet: View {
                         let k = key
                         dismiss()
                         Task { await model.recover(k) }
-                    } label: { Text("Claim") }
+                    } label: { Text("Move") }
                         .keyboardShortcut(.defaultAction)
                         .disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.busy)
                 }

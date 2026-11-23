@@ -116,7 +116,7 @@ struct SettingsView: View {
                     }
                     .help(Text("An admin's paste goes where this Mac's keyboard focus is, while this app is open. Turn it on with cbb paste-receive on."))
                     if model.inGroup {
-                        Button { recovering = true } label: { Text("Claim the group with its recovery key") }
+                        Button { recovering = true } label: { Text("Move the group to this Mac") }
                     }
                 } header: { Text("Advanced") }
             }

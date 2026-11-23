@@ -263,9 +263,9 @@ final class MacModel: ObservableObject {
     /// update does as the administrator.
     func update() async { await admin(["update"], done: String(localized: "CBB is updated.")) }
 
-    /// Claims the group with its recovery key, typed from the sheet or its
-    /// QR code's text, on cbb recovery's standard input; this Mac is the
-    /// group's root at once.
+    /// Moves the group to this Mac with its recovery key, typed from the
+    /// sheet or its QR code's text, on cbb recovery's standard input; this
+    /// Mac is the group's main device at once.
     func recover(_ key: String) async {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }

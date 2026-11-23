@@ -1244,14 +1244,15 @@ async function invite() {
   await refresh();
 }
 
-// The recovery key claims a group whose every phone is lost; this computer
-// must be in the group.
+// The recovery key moves the group to this computer, for example when the
+// phone that was its main device is lost; this computer must be in the
+// group.
 async function recovery() {
   if (!state.status?.group) {
-    await ask(t("Recovery key"), t("The recovery key claims a group whose phones are all lost. Join that group first, then claim it in Settings."), t("OK"));
+    await ask(t("Move the group to this computer"), t("With the group's recovery key, this computer becomes the main device, for example when the old one is lost. Join the group first, then move it here in Settings."), t("OK"));
     return;
   }
-  const key = await ask(t("Claim the group with its recovery key?"), t("Type the key from the sheet, or paste its QR code's text. This computer becomes the group's root at once."), t("Claim"), "");
+  const key = await ask(t("Move the group to this computer?"), t("Type the key from the sheet, or paste its QR code's text. This computer becomes the group's main device at once."), t("Move"), "");
   if (key?.trim()) await act("Recover", key.trim());
 }
 
