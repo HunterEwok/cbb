@@ -804,7 +804,7 @@ sync away from home, the admins, and remote paste.
   group tag do not follow a laptop around and its port answers nobody there. A network is
   told by the IPv4 networks of the interface (its IPv6 networks when it has none, since ISPs
   change IPv6 prefixes) and the link-layer address of its default gateway, read from the
-  system's ARP table (`internal/netid`), so the same `192.168.1.0/24` behind a café's router
+  system's ARP table (`member/src/networks.rs`), so the same `192.168.1.0/24` behind a café's router
   is another network. Just after a link comes up, before the gateway's address is in the
   table, the addresses alone count. `networks.json` in the state directory keeps a random key
   and, for at most 64 networks, an HMAC of each under that key, which says nothing about

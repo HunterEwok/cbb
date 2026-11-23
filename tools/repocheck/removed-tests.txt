@@ -1335,3 +1335,9 @@ internal/seal/seal_test.go TestVectors D-130: Go's sealing served the copies of 
 member/src/nettest/props.rs members_agree_in_any_order D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs
 member/src/nettest/props.rs the_clock_moves_forward D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs
 member/src/nettest/races.rs one_engine_from_many_threads D-130: the sync engine of 0.5, which no member runs; the board of 0.6 keeps the group's copy, tested in member/src/board.rs
+internal/actions/actions_test.go TestCheck D-130: Go's checks of a signed action command served the Go service of 0.5; the Rust cbb decides, tested in member/src/actions.rs
+internal/actions/command_unix_test.go TestCheckOwn D-130: Go's check of a user's own action served the Go service's cbb action add of 0.5; the Rust cbb checks it, tested in member/src/actions.rs
+internal/actions/system_linux_test.go TestGrant D-130: Go's polkit rule for the presets served the Go service of 0.5; the Rust cbb writes it
+internal/netid/netid_test.go TestID D-130: Go's network IDs served the Go service of 0.5, and nothing builds internal/netid now; the Rust cbb's are tested in member/src/networks.rs
+internal/netid/netid_test.go TestIDVectors D-130: Go's network IDs served the Go service of 0.5; member/src/networks.rs checks the Rust IDs against the same testdata/interop/go-netid.json
+internal/netid/netid_linux_test.go TestARP D-130: Go's reading of the ARP table served the Go service of 0.5; member/src/networks.rs reads it in the Rust cbb

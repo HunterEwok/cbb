@@ -85,11 +85,13 @@ func goProduct(rel string) bool {
 }
 
 // testFakes are the packages that only tests use: servers, devices and
-// networks played for them.
+// networks played for them, and the mDNS browser with which the tests and
+// the bench see what the Rust cbb publishes.
 var testFakes = []string{
 	"internal/attest/attesttest",
 	"internal/blekeyboard/bluetest",
 	"internal/ei/eitest",
+	"internal/mdns",
 	"internal/relay",
 	"internal/testnet",
 	"internal/tpmkey/tpmtest",

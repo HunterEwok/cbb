@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The networks where this device met its group, as Go's networks.go and
-//! internal/netid (docs/design.md, "Known networks"): it was created or
-//! joined there, opened a pairing window there, or a member connection
-//! came up there. Only on those does it publish itself by mDNS and take
+//! The networks where this device met its group (docs/design.md, "Known
+//! networks"): it was created or joined there, opened a pairing window
+//! there, or a member connection came up there. Only on those does it publish itself by mDNS and take
 //! connections on the member port; elsewhere, in a café or a hotel, it only
 //! browses, so that its device ID and group tag do not follow it around.
 //! networks.json keeps a random key and the networks' IDs under it, in Go's
@@ -328,7 +327,7 @@ pub fn published_addr(a: IpAddr) -> bool {
     }
 }
 
-/// A network's identity, as Go's netid.ID: an HMAC under key of the
+/// A network's identity: an HMAC under key of the
 /// interface's IPv4 networks (its IPv6 networks when it has none, as ISPs
 /// change IPv6 prefixes) and gw, the link-layer address of its gateway or
 /// "", so that the list says nothing about the networks.
@@ -384,7 +383,7 @@ fn system_interfaces() -> Vec<Interface> {
 }
 
 /// The link-layer address of each interface's IPv4 default gateway, by
-/// index, as Go's netid.Gateways: from /proc/net/route and /proc/net/arp on
+/// index: from /proc/net/route and /proc/net/arp on
 /// Linux, none elsewhere.
 fn gateways() -> HashMap<u32, String> {
     let (Ok(routes), Ok(arp)) = (std::fs::read_to_string("/proc/net/route"), std::fs::read_to_string("/proc/net/arp"))
@@ -452,8 +451,8 @@ mod tests {
 
     #[test]
     fn ids_as_go() {
-        // The values Go's netid.ID gives for the same networks
-        // (testdata/interop/go-netid.json, written by Go's TestIDVectors).
+        // The IDs of testdata/interop/go-netid.json, which Go's reading of
+        // the same networks gives.
         #[derive(Deserialize)]
         struct Case {
             prefixes: Vec<String>,

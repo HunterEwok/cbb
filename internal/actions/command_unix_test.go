@@ -24,21 +24,3 @@ func TestRunCommand(t *testing.T) {
 		t.Errorf("a missing program: %v", err)
 	}
 }
-
-func TestCheckOwn(t *testing.T) {
-	for _, c := range []struct {
-		name    string
-		command []string
-		ok      bool
-	}{
-		{"backup", []string{"/usr/bin/backup"}, true},
-		{"reboot", []string{"/sbin/reboot"}, false},
-		{"backup", []string{"backup"}, false},
-		{"backup", nil, false},
-		{"-backup", []string{"/usr/bin/backup"}, false},
-	} {
-		if err := CheckOwn(c.name, c.command); (err == nil) != c.ok {
-			t.Errorf("%s %v: %v", c.name, c.command, err)
-		}
-	}
-}
